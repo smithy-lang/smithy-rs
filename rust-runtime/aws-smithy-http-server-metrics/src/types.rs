@@ -37,6 +37,7 @@ use http_02 as http;
 pub(crate) type RequestBody = hyper_014::Body;
 
 pub(crate) type ResponseBody = aws_smithy_http_server::body::BoxBody;
+pub(crate) type GenericHttpRequest<B> = http::Request<B>;
 pub type HttpRequest = http::Request<RequestBody>; // pub because needed in macro
 pub(crate) type HttpResponse = http::Response<ResponseBody>;
 pub(crate) type HttpRequestParts = http::request::Parts;

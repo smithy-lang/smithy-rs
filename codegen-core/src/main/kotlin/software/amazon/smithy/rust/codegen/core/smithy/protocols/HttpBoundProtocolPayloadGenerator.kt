@@ -17,6 +17,7 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -66,6 +67,8 @@ class HttpBoundProtocolPayloadGenerator(
     private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)
     private val codegenScope =
         arrayOf(
+            "Blob" to RuntimeType.blob(runtimeConfig),
+            "Bytes" to RuntimeType.Bytes,
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "BuildError" to runtimeConfig.operationBuildError(),
             "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
@@ -308,11 +311,12 @@ class HttpBoundProtocolPayloadGenerator(
         val ref = if (payloadMetadata.takesOwnership) "" else "&"
         val serializer =
             protocolFunctions.serializeFn(member, fnNameSuffix = "http_payload") { fnName ->
+                val targetShape = model.expectShape(member.target)
                 val outputT =
-                    if (member.isStreaming(model)) {
-                        symbolProvider.toSymbol(member)
-                    } else {
-                        RuntimeType.ByteSlab.toSymbol()
+                    when {
+                        member.isStreaming(model) -> symbolProvider.toSymbol(member)
+                        targetShape is BlobShape -> RuntimeType.Bytes.toSymbol()
+                        else -> RuntimeType.ByteSlab.toSymbol()
                     }
                 rustBlockTemplate(
                     "pub fn $fnName(payload: $ref#{Member}) -> #{Result}<#{outputT}, #{BuildError}>",
@@ -332,9 +336,12 @@ class HttpBoundProtocolPayloadGenerator(
                             ")};",
                             *codegenScope,
                         ) {
-                            when (val targetShape = model.expectShape(member.target)) {
+                            when (targetShape) {
+                                // Return empty bytes.
+                                is BlobShape -> rustTemplate("#{Bytes}::new()", *codegenScope)
+
                                 // Return an empty `Vec<u8>`.
-                                is StringShape, is BlobShape, is DocumentShape ->
+                                is StringShape, is DocumentShape ->
                                     rust(
                                         """
                                         Vec::new()
@@ -379,8 +386,8 @@ class HttpBoundProtocolPayloadGenerator(
                     // Return the `ByteStream`.
                     rust(payloadName)
                 } else {
-                    // Convert the `Blob` into a `Vec<u8>` and return it.
-                    rust("$payloadName.into_inner()")
+                    // Convert the `Blob` into `Bytes` and return it.
+                    rustTemplate("#{Blob}::from($payloadName).into_bytes()", *codegenScope)
                 }
             }
 

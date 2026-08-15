@@ -355,7 +355,7 @@ class EventStreamUnmarshallerGenerator(
             conditionalBlock("Some(", ")", member.isOptional) {
                 when (target) {
                     is BlobShape -> {
-                        rustTemplate("#{Blob}::new(message.payload().as_ref())", *codegenScope)
+                        rustTemplate("#{Blob}::from_maybe_shared(message.payload().clone())", *codegenScope)
                     }
 
                     is StringShape -> {
