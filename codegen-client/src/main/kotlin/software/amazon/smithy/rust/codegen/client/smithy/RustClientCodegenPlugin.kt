@@ -20,8 +20,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.customizations.NoAuthDe
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.SensitiveOutputDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.StaticSdkFeatureTrackerDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.customizations.TypeRegistryDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.TelemetryInputCaptureDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.TypeRegistryDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RequiredCustomizations
