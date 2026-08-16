@@ -166,7 +166,9 @@ jobs:
     name: Test the SDK
     needs: generate
     runs-on: ${{ matrix.test.runner }}
-    timeout-minutes: 45
+    # Defaults to 45 minutes; individual matrix entries can request more via
+    # `timeout` so that one slow action doesn't loosen the guard for the others.
+    timeout-minutes: ${{ matrix.test.timeout || 45 }}
     # To avoid repeating setup boilerplate, we have the actual test commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
@@ -176,6 +178,12 @@ jobs:
         test:
         - action: check-aws-config
           runner: smithy_ubuntu-latest_8-core
+          # This action runs `cargo hack` over aws-config's feature powerset, so
+          # its runtime doubles with every feature added to the crate. Adding
+          # `legacy-client` (#4755) took it from 80 to 160 feature combinations
+          # and pushed it past the default 45 minutes: observed runs have
+          # completed in ~43.5 minutes and been killed at the 45 minute cap.
+          timeout: 60
         - action: check-aws-sdk-canary
           runner: smithy_ubuntu-latest_8-core
         - action: check-aws-sdk-cargo-deny
