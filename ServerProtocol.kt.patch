@@ -1,0 +1,39 @@
+--- /tmp/orig.kt	2026-08-17 08:32:00.837433615 +0000
++++ codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/protocol/ServerProtocol.kt	2026-08-17 08:32:00.901102729 +0000
+@@ -365,9 +365,15 @@
+             .resolve("protocol::rpc_v2_cbor::router::RpcV2CborRouter")
+ 
+     /**
+-     * The RPC v2 CBOR router keys its map by `"{service}.{operationName}"`, where `operationName`
+-     * is the verbatim Smithy operation shape name (e.g. `getFoo`) - matching the URI that the
+-     * spec-compliant client generates. See https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html.
++     * The RPC v2 CBOR router keys its map by `"{service}/operation/{operationName}"`, where
++     * `operationName` is the verbatim Smithy operation shape name (e.g. `getFoo`) - matching the
++     * URI that the spec-compliant client generates.
++     * See https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html.
++     *
++     * The key format mirrors the request URI's tail on purpose: the router extracts the lookup
++     * key as a verbatim slice of the request path (`{service}/operation/{operation}`), so no key
++     * string is composed (or allocated) per request. Changing this format requires a matching
++     * change in `aws-smithy-http-server`'s `rpc_v2_cbor::router`.
+      */
+     override fun serverRouterRequestSpec(
+         operationShape: OperationShape,
+@@ -375,7 +381,7 @@
+         serviceName: String,
+         requestSpecModule: RuntimeType,
+     ) = writable {
+-        rust("$serviceName.${operationShape.id.name}".dq())
++        rust("$serviceName/operation/${operationShape.id.name}".dq())
+     }
+ 
+     /**
+@@ -406,7 +412,7 @@
+         if (verbatimOperationName == capitalizedOperationName) {
+             return emptyList()
+         }
+-        return listOf(writable { rust("$serviceName.$capitalizedOperationName".dq()) })
++        return listOf(writable { rust("$serviceName/operation/$capitalizedOperationName".dq()) })
+     }
+ 
+     override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType = RuntimeType.StaticStr
