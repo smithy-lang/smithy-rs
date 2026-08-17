@@ -5,13 +5,21 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.protocols
 
+import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
+import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import kotlin.io.path.pathString
 
 class ProtocolFunctionsTest {
     private val testModel =
@@ -85,16 +93,86 @@ class ProtocolFunctionsTest {
         """.asSmithyModel()
 
     @Test
+    fun `protocol functions preserve the default module`() {
+        val codegenContext = testCodegenContext(testModel)
+        val serializeFn =
+            ProtocolFunctions(codegenContext)
+                .serializeFn(testModel.lookup("test#SomeStruct1")) { fnName ->
+                    rust("pub fn $fnName() -> usize { 42 }")
+                }
+        val parseErrorMetadata =
+            RestJson(codegenContext)
+                .parseHttpErrorMetadata(testModel.lookup("test#Op1"))
+        val crossOperationFn =
+            ProtocolFunctions.crossOperationFn("cross_operation") { fnName ->
+                rust("pub fn $fnName() -> usize { 43 }")
+            }
+
+        serializeFn.render() shouldBe "crate::protocol_serde::shape_some_struct1::ser_some_struct1"
+        parseErrorMetadata.render() shouldBe "crate::protocol_serde::parse_http_error_metadata"
+        crossOperationFn.render() shouldBe "crate::protocol_serde::cross_operation"
+
+        val project = TestWorkspace.testProject()
+        project.lib {
+            unitTest("uses_default_protocol_module") {
+                rustTemplate(
+                    """
+                    assert_eq!(42, #{serializeFn}());
+                    assert_eq!(43, #{crossOperationFn}());
+                    """,
+                    "serializeFn" to serializeFn,
+                    "crossOperationFn" to crossOperationFn,
+                )
+            }
+        }
+        project.compileAndTest()
+
+        val generatedFiles = project.generatedFiles().map { it.pathString }
+        generatedFiles shouldContain "src/protocol_serde.rs"
+        generatedFiles shouldContain "src/protocol_serde/shape_some_struct1.rs"
+        generatedFiles shouldNotContain "src/wire.rs"
+    }
+
+    @Test
     fun `protocol functions can use an arbitrary module`() {
         val module = RustModule.private("wire")
         val codegenContext = testCodegenContext(testModel, protocolSerdeModule = module)
+        val serializeFn =
+            ProtocolFunctions(codegenContext)
+                .serializeFn(testModel.lookup("test#SomeStruct1")) { fnName ->
+                    rust("pub fn $fnName() -> usize { 42 }")
+                }
+        val parseErrorMetadata =
+            RestJson(codegenContext)
+                .parseHttpErrorMetadata(testModel.lookup("test#Op1"))
+        val crossOperationFn =
+            ProtocolFunctions.crossOperationFn(module, "cross_operation") { fnName ->
+                rust("pub fn $fnName() -> usize { 43 }")
+            }
 
-        ProtocolFunctions(codegenContext)
-            .serializeFn(testModel.lookup("test#SomeStruct1")) {}
-            .render() shouldBe "crate::wire::shape_some_struct1::ser_some_struct1"
-        RestJson(codegenContext)
-            .parseHttpErrorMetadata(testModel.lookup("test#Op1"))
-            .render() shouldBe "crate::wire::parse_http_error_metadata"
+        serializeFn.render() shouldBe "crate::wire::shape_some_struct1::ser_some_struct1"
+        parseErrorMetadata.render() shouldBe "crate::wire::parse_http_error_metadata"
+        crossOperationFn.render() shouldBe "crate::wire::cross_operation"
+
+        val project = TestWorkspace.testProject()
+        project.lib {
+            unitTest("uses_custom_protocol_module") {
+                rustTemplate(
+                    """
+                    assert_eq!(42, #{serializeFn}());
+                    assert_eq!(43, #{crossOperationFn}());
+                    """,
+                    "serializeFn" to serializeFn,
+                    "crossOperationFn" to crossOperationFn,
+                )
+            }
+        }
+        project.compileAndTest()
+
+        val generatedFiles = project.generatedFiles().map { it.pathString }
+        generatedFiles shouldContain "src/wire.rs"
+        generatedFiles shouldContain "src/wire/shape_some_struct1.rs"
+        generatedFiles shouldNotContain "src/protocol_serde.rs"
     }
 
     @Test
