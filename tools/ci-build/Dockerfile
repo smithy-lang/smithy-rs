@@ -128,7 +128,7 @@ RUN cargo install --locked --path tools/ci-build/changelogger && \
 FROM install_rust AS cargo_tools
 ARG cargo_deny_version=0.16.4
 ARG cargo_udeps_version=0.1.56
-ARG cargo_hack_version=0.6.27
+ARG cargo_hack_version=0.6.31
 ARG cargo_minimal_versions_version=0.1.27
 ARG cargo_check_external_types_version=0.5.0
 ARG maturin_version=1.5.1
@@ -138,8 +138,10 @@ ARG cargo_component_version=0.20.0
 ARG cargo_semver_checks_version=0.46.0
 ARG cargo_mdbook_version=0.4.37
 ARG cargo_mdbook_mermaid_version=0.13.0
+ARG cargo_nextest_version=0.9.140
 ARG rust_nightly_version
 RUN cargo install cargo-deny --locked --version ${cargo_deny_version} && \
+    cargo install cargo-nextest --locked --version ${cargo_nextest_version} && \
     cargo +${rust_nightly_version} install cargo-udeps --locked --version ${cargo_udeps_version} && \
     cargo install cargo-hack --locked --version ${cargo_hack_version} && \
     cargo install cargo-minimal-versions --locked --version ${cargo_minimal_versions_version} && \
