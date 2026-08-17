@@ -2,7 +2,7 @@
 name = "aws-smithy-http-client"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "HTTP client abstractions for generated smithy clients"
-version = "1.3.0"
+version = "1.4.0"
 license = "Apache-2.0"
 edition = "2021"
 repository = "https://github.com/smithy-lang/smithy-rs"
@@ -39,7 +39,14 @@ wire-mock = [
     "hyper-util?/service",
     "hyper-util?/server-graceful",
     "tokio/macros",
+    "tokio/io-util",
+    "tokio/net",
+    "tokio/rt",
+    "tokio/sync",
+    "tokio/time",
     "dep:http-body-util",
+    "dep:httparse",
+    "dep:socket2",
 ]
 
 test-util = [
@@ -115,6 +122,8 @@ serde = { version = "1.0.228", features = ["derive"], optional = true }
 serde_json = { version = "1.0.146", features = ["preserve_order"], optional = true }
 indexmap = { version = "2.10.0", features = ["serde"], optional = true }
 http-body-util = { version = "0.1.3", optional = true }
+httparse = { version = "1.10.1", optional = true }
+socket2 = { version = "0.6", optional = true }
 # end test util stack
 
 [dev-dependencies]
