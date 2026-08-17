@@ -104,10 +104,6 @@ pub async fn main() {
     let config = PokemonServiceConfig::builder()
         // Set up shared state and middlewares.
         .layer(AddExtensionLayer::new(Arc::new(State::default())))
-        // Handle `/ping` health check requests.
-        .layer(AlbHealthCheckLayer::from_handler("/ping", |_req| async {
-            StatusCode::OK
-        }))
         // Add server request IDs.
         .layer(ServerRequestIdProviderLayer::new())
         .http_plugin(http_plugins)
@@ -142,6 +138,16 @@ pub async fn main() {
         .build();
 
     let service = metrics_layer.layer(app);
+
+    // Handle out-of-band health check requests at `/health` by returning a `200 OK`.
+    //
+    // This layer is applied in "A position", wrapping the router so that health checks are answered
+    // before routing, rather than being dispatched as a modeled operation. `/health` is intentionally
+    // not part of the Smithy model; contrast this with the modeled `CheckHealth` operation at `/ping`.
+    //
+    // See <https://smithy-lang.github.io/smithy-rs/design/server/middleware.html> for the difference
+    // between A and B position middleware.
+    let service = AlbHealthCheckLayer::from_handler("/health", |_req| async { StatusCode::OK }).layer(service);
 
     // Using `IntoMakeServiceWithConnectInfo`, rather than `into_make_service`, to adjoin the `SocketAddr`
     // connection info.
