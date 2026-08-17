@@ -130,12 +130,12 @@ class ProtocolFunctionsTest {
         val generatedFiles = project.generatedFiles().map { it.pathString }
         generatedFiles shouldContain "src/protocol_serde.rs"
         generatedFiles shouldContain "src/protocol_serde/shape_some_struct1.rs"
-        generatedFiles shouldNotContain "src/wire.rs"
+        generatedFiles shouldNotContain "src/protocol_serde_cbor.rs"
     }
 
     @Test
     fun `protocol functions can use an arbitrary module`() {
-        val module = RustModule.private("wire")
+        val module = RustModule.private("protocol_serde_cbor")
         val codegenContext = testCodegenContext(testModel, protocolSerdeModule = module)
         val serializeFn =
             ProtocolFunctions(codegenContext)
@@ -150,9 +150,9 @@ class ProtocolFunctionsTest {
                 rust("pub fn $fnName() -> usize { 43 }")
             }
 
-        serializeFn.render() shouldBe "crate::wire::shape_some_struct1::ser_some_struct1"
-        parseErrorMetadata.render() shouldBe "crate::wire::parse_http_error_metadata"
-        crossOperationFn.render() shouldBe "crate::wire::cross_operation"
+        serializeFn.render() shouldBe "crate::protocol_serde_cbor::shape_some_struct1::ser_some_struct1"
+        parseErrorMetadata.render() shouldBe "crate::protocol_serde_cbor::parse_http_error_metadata"
+        crossOperationFn.render() shouldBe "crate::protocol_serde_cbor::cross_operation"
 
         val project = TestWorkspace.testProject()
         project.lib {
@@ -170,8 +170,8 @@ class ProtocolFunctionsTest {
         project.compileAndTest()
 
         val generatedFiles = project.generatedFiles().map { it.pathString }
-        generatedFiles shouldContain "src/wire.rs"
-        generatedFiles shouldContain "src/wire/shape_some_struct1.rs"
+        generatedFiles shouldContain "src/protocol_serde_cbor.rs"
+        generatedFiles shouldContain "src/protocol_serde_cbor/shape_some_struct1.rs"
         generatedFiles shouldNotContain "src/protocol_serde.rs"
     }
 
