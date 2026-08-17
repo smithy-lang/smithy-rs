@@ -245,7 +245,9 @@ jobs:
     name: Test the SDK / ${{ matrix.test.label || matrix.test.action }}
     needs: generate
     runs-on: ${{ matrix.test.runner }}
-    timeout-minutes: 45
+    # Defaults to 45 minutes; individual matrix entries can request more via
+    # `timeout` so that one slow action doesn't loosen the guard for the others.
+    timeout-minutes: ${{ matrix.test.timeout || 45 }}
     # To avoid repeating setup boilerplate, we have the actual test commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
@@ -274,6 +276,12 @@ jobs:
           action-arguments: featureset 4/4
           label: check-aws-config-featureset-4
           runner: smithy_ubuntu-latest_8-core
+          # This action runs `cargo hack` over aws-config's feature powerset, so
+          # its runtime doubles with every feature added to the crate. Adding
+          # `legacy-client` (#4755) took it from 80 to 160 feature combinations
+          # and pushed it past the default 45 minutes: observed runs have
+          # completed in ~43.5 minutes and been killed at the 45 minute cap.
+          timeout: 60
         - action: check-aws-sdk-canary
           runner: smithy_ubuntu-latest_8-core
         # Split into docs and types legs; they use different toolchains, so no extra compilation
@@ -391,6 +399,52 @@ jobs:
       if: needs.detect-changes.outputs.rust == 'true'
       shell: bash
       run: tools/ci-scripts/test-windows.sh
+
+  # aws-config is not part of the `aws/rust-runtime` workspace and depends on
+  # generated SDK crates (STS, SSO, ...), so `test-rust-windows` (which tests the
+  # runtime workspaces from a bare checkout) cannot cover it. This job supplies
+  # the generated SDK from the `generate` job's smoketest artifact and runs the
+  # aws-config tests natively on Windows. It runs in parallel with the other
+  # jobs that depend on `generate` (e.g. `test-sdk`).
+  test-rust-windows-aws-config:
+    name: aws-config Tests on Windows
+    needs: generate
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      # Disable incremental compilation to reduce disk space use
+      CARGO_INCREMENTAL: 0
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.git_ref }}
+      # Pinned to the commit hash of v2.7.3
+    - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84
+      with:
+        shared-key: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
+        workspaces: aws/rust-runtime/aws-config
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ env.rust_version }}
+        components: ${{ env.rust_toolchain_components }}
+    # aws-config builds against the generated SDK produced by the `generate` job.
+    # We can't use the Linux Docker build image here, so download the smoketest
+    # SDK artifact directly and place it where aws-config's path dependencies
+    # expect it (mirrors the `mv` in the Linux `check-aws-config` script).
+    - name: Download generated SDK (smoketest) artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: artifacts-generate-aws-sdk-smoketest
+        path: artifacts-generate-aws-sdk-smoketest
+    - name: Extract generated SDK to aws/sdk/build/aws-sdk
+      shell: bash
+      run: |
+        tar xfz artifacts-generate-aws-sdk-smoketest/artifacts-generate-aws-sdk-smoketest.tar.gz
+        mkdir -p aws/sdk/build
+        mv aws-sdk-smoketest aws/sdk/build/aws-sdk
+    - name: Run aws-config tests
+      shell: bash
+      run: tools/ci-scripts/test-windows-aws-config.sh
 
   # We make sure that smithy-rs can be compiled on platforms that are not
   # natively supported by GitHub actions. We run as many tests as we can on
@@ -613,6 +667,7 @@ jobs:
     - test-sdk
     - test-sdk-full
     - test-rust-windows
+    - test-rust-windows-aws-config
     - test-exotic-platform-support
     # Run this job even if its dependency jobs fail
     if: always()
