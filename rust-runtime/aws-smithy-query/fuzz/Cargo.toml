@@ -1,0 +1,22 @@
+[package]
+name = "aws-smithy-query-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+
+[dependencies]
+aws-smithy-query = { path = ".." }
+aws-smithy-schema = { path = "../../aws-smithy-schema" }
+aws-smithy-types = { path = "../../aws-smithy-types" }
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+
+[[bin]]
+name = "schema_query_serialize"
+path = "fuzz_targets/schema_query_serialize.rs"
+doc = false

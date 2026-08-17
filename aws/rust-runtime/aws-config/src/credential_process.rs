@@ -288,13 +288,10 @@ mod test {
         assert_eq!(creds.account_id().unwrap().as_str(), "123456789001");
         assert_eq!(
             creds.expiry(),
-            Some(
-                SystemTime::try_from(
-                    OffsetDateTime::parse("2022-05-02T18:36:00+00:00", &Rfc3339)
-                        .expect("static datetime")
-                )
-                .expect("static datetime")
-            )
+            Some(SystemTime::from(
+                OffsetDateTime::parse("2022-05-02T18:36:00+00:00", &Rfc3339)
+                    .expect("static datetime"),
+            ))
         );
     }
 

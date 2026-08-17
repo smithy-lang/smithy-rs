@@ -64,6 +64,7 @@ open class EventStreamMarshallerGenerator(
     private val codegenScope =
         arrayOf(
             *preludeScope,
+            "Blob" to RuntimeType.blob(runtimeConfig),
             "Bytes" to RuntimeType.Bytes,
             "MarshallMessage" to smithyEventStream.resolve("frame::MarshallMessage"),
             "Message" to smithyTypes.resolve("event_stream::Message"),
@@ -248,7 +249,7 @@ open class EventStreamMarshallerGenerator(
                 }
             renderMarshallEventPayload(inner, unionMember, eventStruct, serializerFn)
         } else {
-            rust("Vec::new()")
+            rustTemplate("#{Bytes}::new()", *codegenScope)
         }
     }
 
@@ -291,7 +292,7 @@ open class EventStreamMarshallerGenerator(
             is ShortShape -> "Int16($inputName)"
             is IntegerShape -> "Int32($inputName)"
             is LongShape -> "Int64($inputName)"
-            is BlobShape -> "ByteArray($inputName.into_inner().into())"
+            is BlobShape -> "ByteArray(#{Blob}::from($inputName).into_bytes())"
             is EnumShape -> "String($inputName.to_string().into())"
             is StringShape -> "String($inputName.into())"
             is TimestampShape -> "Timestamp($inputName.into())"
@@ -306,21 +307,25 @@ open class EventStreamMarshallerGenerator(
     ) {
         val optional = symbolProvider.toSymbol(member).isOptional()
         if (target is BlobShape || target is StringShape) {
-            data class PayloadContext(val conversionFn: String, val contentType: String)
-
-            val ctx =
+            val contentType =
                 when (target) {
-                    is BlobShape -> PayloadContext("into_inner", "application/octet-stream")
-                    is StringShape -> PayloadContext("into_bytes", "text/plain")
+                    is BlobShape -> "application/octet-stream"
+                    is StringShape -> "text/plain"
                     else -> throw IllegalStateException("unreachable")
                 }
-            addStringHeader(":content-type", "${ctx.contentType.dq()}.into()")
+            addStringHeader(":content-type", "${contentType.dq()}.into()")
             handleOptional(
                 optional,
                 inputExpr,
                 "inner_payload",
-                { input -> rust("$input.${ctx.conversionFn}()") },
-                { rust("Vec::new()") },
+                { input ->
+                    when (target) {
+                        is BlobShape -> rustTemplate("#{Blob}::from($input).into_bytes()", *codegenScope)
+                        is StringShape -> rustTemplate("#{Bytes}::from($input.into_bytes())", *codegenScope)
+                        else -> throw IllegalStateException("unreachable")
+                    }
+                },
+                { rustTemplate("#{Bytes}::new()", *codegenScope) },
             )
         } else {
             addStringHeader(":content-type", "${payloadContentType.dq()}.into()")
@@ -340,7 +345,7 @@ open class EventStreamMarshallerGenerator(
                                 let mut ser = codec.create_serializer();
                                 #{ShapeSerializer}::write_struct(&mut *ser, #{Target}::SCHEMA, &$input)
                                     .map_err(|err| #{Error}::marshalling(format!("{err}")))?;
-                                #{PayloadSerializer}::finish_boxed(ser)
+                                #{Bytes}::from(#{PayloadSerializer}::finish_boxed(ser))
                             }
                             """,
                             "Target" to targetSymbol,
@@ -360,8 +365,10 @@ open class EventStreamMarshallerGenerator(
                 { input ->
                     rustTemplate(
                         """
-                        #{serializerFn}(&$input)
-                            .map_err(|err| #{Error}::marshalling(format!("{err}")))?
+                        #{Bytes}::from(
+                            #{serializerFn}(&$input)
+                                .map_err(|err| #{Error}::marshalling(format!("{err}")))?
+                        )
                         """,
                         "serializerFn" to serializerFn,
                         *codegenScope,

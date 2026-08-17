@@ -29,6 +29,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.setDefault
 import software.amazon.smithy.rust.codegen.core.smithy.symbolBuilder
+import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
@@ -159,7 +160,7 @@ class UnconstrainedShapeSymbolProvider(
                 //       trait targeting a collection shape that can reach a constrained shape.
                 //
                 // 2. When generating members for unconstrained unions. See [UnconstrainedUnionGenerator].
-                if (shape.targetCanReachConstrainedShape(model, base)) {
+                if (!shape.isEventStream(model) && shape.targetCanReachConstrainedShape(model, base)) {
                     val targetShape = model.expectShape(shape.target)
                     val targetSymbol = this.toSymbol(targetShape)
                     // Handle boxing first, so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.

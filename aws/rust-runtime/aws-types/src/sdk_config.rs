@@ -14,6 +14,7 @@ use crate::docs_for;
 use crate::endpoint_config::AccountIdEndpointMode;
 use crate::origin::Origin;
 use crate::region::{Region, SigningRegionSet};
+use crate::sdk_ua_metadata::FrameworkMetadata;
 use crate::service_config::LoadServiceConfig;
 use aws_credential_types::provider::token::SharedTokenProvider;
 pub use aws_credential_types::provider::SharedCredentialsProvider;
@@ -108,6 +109,7 @@ signature is valid for. Use `*` for a universal signature valid in all regions.
 #[derive(Debug, Clone)]
 pub struct SdkConfig {
     app_name: Option<AppName>,
+    framework_metadata: Vec<FrameworkMetadata>,
     auth_scheme_preference: Option<AuthSchemePreference>,
     sigv4a_signing_region_set: Option<SigningRegionSet>,
     identity_cache: Option<SharedIdentityCache>,
@@ -142,6 +144,7 @@ pub struct SdkConfig {
 #[derive(Debug, Default)]
 pub struct Builder {
     app_name: Option<AppName>,
+    framework_metadata: Vec<FrameworkMetadata>,
     auth_scheme_preference: Option<AuthSchemePreference>,
     sigv4a_signing_region_set: Option<SigningRegionSet>,
     identity_cache: Option<SharedIdentityCache>,
@@ -625,6 +628,32 @@ impl Builder {
         self
     }
 
+    /// Appends framework metadata to the user agent.
+    ///
+    /// This _optional_ metadata identifies a software framework or third-party library that is
+    /// being used with the SDK. It is rendered into the user agent (as `lib/{name}/{version}`) so
+    /// that libraries built on top of the AWS SDK can self-identify in the requests they make.
+    /// Each call appends another entry rather than replacing previous ones.
+    ///
+    /// Entries are de-duplicated on `(name, version)`, rendered in first-seen order, and the total
+    /// number of unique entries included in the user agent is capped (currently at 10); additional
+    /// entries beyond the cap are dropped with a warning.
+    pub fn framework_metadata(mut self, framework_metadata: FrameworkMetadata) -> Self {
+        self.framework_metadata.push(framework_metadata);
+        self
+    }
+
+    /// Sets the framework metadata for the user agent, replacing any previously set entries.
+    ///
+    /// See [`Builder::framework_metadata`] for details on framework metadata.
+    pub fn set_framework_metadata(
+        &mut self,
+        framework_metadata: impl IntoIterator<Item = FrameworkMetadata>,
+    ) -> &mut Self {
+        self.framework_metadata = framework_metadata.into_iter().collect();
+        self
+    }
+
     /// Sets the HTTP client to use when making requests.
     ///
     /// ## Examples
@@ -887,6 +916,7 @@ impl Builder {
     pub fn build(self) -> SdkConfig {
         SdkConfig {
             app_name: self.app_name,
+            framework_metadata: self.framework_metadata,
             auth_scheme_preference: self.auth_scheme_preference,
             sigv4a_signing_region_set: self.sigv4a_signing_region_set,
             identity_cache: self.identity_cache,
@@ -1052,6 +1082,11 @@ impl SdkConfig {
         self.app_name.as_ref()
     }
 
+    /// Configured framework metadata
+    pub fn framework_metadata(&self) -> &[FrameworkMetadata] {
+        &self.framework_metadata
+    }
+
     /// Configured HTTP client
     pub fn http_client(&self) -> Option<SharedHttpClient> {
         self.http_client.clone()
@@ -1136,6 +1171,7 @@ impl SdkConfig {
     pub fn into_builder(self) -> Builder {
         Builder {
             app_name: self.app_name,
+            framework_metadata: self.framework_metadata,
             auth_scheme_preference: self.auth_scheme_preference,
             sigv4a_signing_region_set: self.sigv4a_signing_region_set,
             identity_cache: self.identity_cache,

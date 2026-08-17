@@ -218,7 +218,7 @@ pub fn serialize_fuzz_value(value: &FuzzValue, ser: &mut dyn ShapeSerializer) {
             let _ = ser.write_string(&STRING, v);
         }
         FuzzValue::Blob(v) => {
-            let _ = ser.write_blob(&BLOB, &aws_smithy_types::Blob::new(v.clone()));
+            let _ = ser.write_blob(&BLOB, v);
         }
         FuzzValue::StringList(items) => {
             let _ = ser.write_list(&STRING_LIST_SCHEMA, &|ser| {
@@ -247,7 +247,7 @@ pub fn serialize_fuzz_value(value: &FuzzValue, ser: &mut dyn ShapeSerializer) {
         FuzzValue::BlobList(items) => {
             let _ = ser.write_list(&BLOB_LIST_SCHEMA, &|ser| {
                 for item in items {
-                    ser.write_blob(&BLOB, &aws_smithy_types::Blob::new(item.clone()))?;
+                    ser.write_blob(&BLOB, item)?;
                 }
                 Ok(())
             });

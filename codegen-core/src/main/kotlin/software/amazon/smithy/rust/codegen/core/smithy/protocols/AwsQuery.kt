@@ -35,6 +35,8 @@ class AwsQueryBindingResolver(private val model: Model) :
         val error = model.expectShape(errorShape.toShapeId())
         return error.getTrait<AwsQueryErrorTrait>()?.code ?: errorShape.toShapeId().name
     }
+
+    override fun isRpcProtocol() = true
 }
 
 class AwsQueryProtocol(private val codegenContext: CodegenContext) : Protocol {

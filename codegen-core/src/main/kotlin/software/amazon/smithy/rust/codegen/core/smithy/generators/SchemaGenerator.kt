@@ -31,6 +31,7 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
+import software.amazon.smithy.model.traits.XmlNamespaceTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
@@ -43,6 +44,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
@@ -225,7 +228,7 @@ class SchemaGenerator(
                     val memberName = symbolProvider.toMemberName(member)
                     val memberSymbol = symbolProvider.toSymbol(member)
                     val memberSchemaRef = "${schemaPrefix}_MEMBER_${constantName(memberName)}"
-                    val writeCall = writeMethodForShape(target, memberSchemaRef)
+                    val writeCall = writeMethodForShape(target, memberSchemaRef, member)
                     if (memberSymbol.isOptional()) {
                         rust(
                             """
@@ -345,48 +348,91 @@ class SchemaGenerator(
                 } else {
                     "ser.write_string(&$memberSchemaRef, $varName)?;"
                 }
-            is BlobShape -> "ser.write_blob(&$memberSchemaRef, $varName)?;"
+            is BlobShape -> "ser.write_blob(&$memberSchemaRef, $varName.as_ref())?;"
             is TimestampShape -> "ser.write_timestamp(&$memberSchemaRef, $varName)?;"
             is StructureShape -> "ser.write_struct(&$memberSchemaRef, $varName)?;"
             is ListShape -> {
                 val elementTarget = model.expectShape(target.member.target)
-                // Use helpers for simple non-enum element types
-                when (elementTarget) {
-                    is StringShape -> if (!isStringEnum(elementTarget)) "ser.write_string_list(&$memberSchemaRef, $varName)?;" else null
-                    is BlobShape -> "ser.write_blob_list(&$memberSchemaRef, $varName)?;"
-                    is IntegerShape, is IntEnumShape -> "ser.write_integer_list(&$memberSchemaRef, $varName)?;"
-                    is LongShape -> "ser.write_long_list(&$memberSchemaRef, $varName)?;"
-                    else -> null
-                } ?: run {
-                    val elementWrite = elementWriteExpr(elementTarget, "item")
-                    """
-                    ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
-                        for item in $varName {
-                            $elementWrite
+                val isSparse = target.hasTrait(SparseTrait::class.java)
+                // Specialized helpers (write_*_list) take `&[T]`, but sparse
+                // lists generate as `&[Option<T>]`, so we can only use them
+                // for non-sparse lists. Sparse lists fall through to the
+                // generic write_list path below, which destructures
+                // `Option<T>` per element and emits write_null for None.
+                val helperExpr =
+                    if (isSparse) {
+                        null
+                    } else {
+                        when (elementTarget) {
+                            is StringShape -> if (!isStringEnum(elementTarget)) "ser.write_string_list(&$memberSchemaRef, $varName)?;" else null
+                            is BlobShape -> "ser.write_blob_list(&$memberSchemaRef, $varName)?;"
+                            is IntegerShape, is IntEnumShape -> "ser.write_integer_list(&$memberSchemaRef, $varName)?;"
+                            is LongShape -> "ser.write_long_list(&$memberSchemaRef, $varName)?;"
+                            else -> null
                         }
-                        Ok(())
-                    })?;
-                    """
+                    }
+                helperExpr ?: run {
+                    val elementWrite = elementWriteExpr(elementTarget, "item")
+                    if (isSparse) {
+                        """
+                        ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                            for item in $varName {
+                                match item {
+                                    Some(item) => { $elementWrite }
+                                    None => { ser.write_null(&::aws_smithy_schema::prelude::STRING)?; }
+                                }
+                            }
+                            Ok(())
+                        })?;
+                        """
+                    } else {
+                        """
+                        ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                            for item in $varName {
+                                $elementWrite
+                            }
+                            Ok(())
+                        })?;
+                        """
+                    }
                 }
             }
             is MapShape -> {
                 val keyTarget = model.expectShape(target.key.target)
                 val valueTarget = model.expectShape(target.value.target)
-                // Use helper for non-enum string key, string value maps
-                if (!isStringEnum(keyTarget) && valueTarget is StringShape && !isStringEnum(valueTarget)) {
+                val isSparse = target.hasTrait(SparseTrait::class.java)
+                // The string-string map helper takes `&HashMap<String, String>`.
+                // Sparse maps have `Option<String>` values, so the helper
+                // doesn't apply.
+                if (!isSparse && !isStringEnum(keyTarget) && valueTarget is StringShape && !isStringEnum(valueTarget)) {
                     "ser.write_string_string_map(&$memberSchemaRef, $varName)?;"
                 } else {
                     val keyExpr = if (isStringEnum(keyTarget)) "key.as_str()" else "key"
                     val valueWrite = mapValueWriteExpr(valueTarget, "value")
-                    """
-                    ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
-                        for (key, value) in $varName {
-                            ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
-                            $valueWrite
-                        }
-                        Ok(())
-                    })?;
-                    """
+                    if (isSparse) {
+                        """
+                        ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                            for (key, value) in $varName {
+                                ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
+                                match value {
+                                    Some(value) => { $valueWrite }
+                                    None => { ser.write_null(&::aws_smithy_schema::prelude::STRING)?; }
+                                }
+                            }
+                            Ok(())
+                        })?;
+                        """
+                    } else {
+                        """
+                        ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                            for (key, value) in $varName {
+                                ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
+                                $valueWrite
+                            }
+                            Ok(())
+                        })?;
+                        """
+                    }
                 }
             }
             is UnionShape -> "ser.write_struct(&$memberSchemaRef, $varName)?;"
@@ -455,8 +501,21 @@ class SchemaGenerator(
     private fun writeMethodForShape(
         target: Shape,
         memberSchemaRef: String,
-    ): String =
-        when (target) {
+        member: software.amazon.smithy.model.shapes.MemberShape? = null,
+    ): String {
+        // For @httpPayload struct/union members, pass the target's own SCHEMA so
+        // codecs use its proper name (with @xmlName, etc.) instead of the member
+        // schema's member_name. JSON output is unchanged (no member_name → no
+        // field-key prefix); XML now emits the correct root element name.
+        val isHttpPayload =
+            member?.hasTrait(software.amazon.smithy.model.traits.HttpPayloadTrait::class.java) == true
+        val structSchemaRef =
+            if (isHttpPayload) {
+                "${symbolProvider.toSymbol(target).fullName}::SCHEMA"
+            } else {
+                "&$memberSchemaRef"
+            }
+        return when (target) {
             is BooleanShape -> "ser.write_boolean(&$memberSchemaRef, *val)?;"
             is ByteShape -> "ser.write_byte(&$memberSchemaRef, *val)?;"
             is ShortShape -> "ser.write_short(&$memberSchemaRef, *val)?;"
@@ -478,7 +537,7 @@ class SchemaGenerator(
                 if (target.hasTrait(StreamingTrait::class.java)) {
                     "// streaming blob is serialized as the HTTP body by the protocol, not the codec"
                 } else {
-                    "ser.write_blob(&$memberSchemaRef, val)?;"
+                    "ser.write_blob(&$memberSchemaRef, val.as_ref())?;"
                 }
 
             is TimestampShape -> "ser.write_timestamp(&$memberSchemaRef, val)?;"
@@ -543,10 +602,11 @@ class SchemaGenerator(
                 }
             }
 
-            is StructureShape -> "ser.write_struct(&$memberSchemaRef, val)?;"
-            is UnionShape -> "ser.write_struct(&$memberSchemaRef, val)?;"
+            is StructureShape -> "ser.write_struct($structSchemaRef, val)?;"
+            is UnionShape -> "ser.write_struct($structSchemaRef, val)?;"
             else -> "todo!(\"schema: unsupported shape type for serialization\");"
         }
+    }
 
     /** Returns a write expression for a list element (no member name needed). */
     private fun elementWriteExpr(
@@ -572,7 +632,7 @@ class SchemaGenerator(
                     "ser.write_string(&$prelude::STRING, $varName)?;"
                 }
 
-            is BlobShape -> "ser.write_blob(&$prelude::BLOB, $varName)?;"
+            is BlobShape -> "ser.write_blob(&$prelude::BLOB, $varName.as_ref())?;"
             is TimestampShape -> "ser.write_timestamp(&$prelude::TIMESTAMP, $varName)?;"
             is DocumentShape -> "ser.write_document(&$prelude::DOCUMENT, $varName)?;"
             is StructureShape -> {
@@ -616,14 +676,29 @@ class SchemaGenerator(
             is ListShape -> {
                 val elementTarget = model.expectShape(target.member.target)
                 val elementWrite = elementWriteExpr(elementTarget, "item")
-                """
-                ser.write_list(&::aws_smithy_schema::prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
-                    for item in $varName {
-                        $elementWrite
-                    }
-                    Ok(())
-                })?;
-                """
+                val isSparse = target.hasTrait(SparseTrait::class.java)
+                if (isSparse) {
+                    """
+                    ser.write_list(&::aws_smithy_schema::prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                        for item in $varName {
+                            match item {
+                                Some(item) => { $elementWrite }
+                                None => { ser.write_null(&::aws_smithy_schema::prelude::STRING)?; }
+                            }
+                        }
+                        Ok(())
+                    })?;
+                    """
+                } else {
+                    """
+                    ser.write_list(&::aws_smithy_schema::prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                        for item in $varName {
+                            $elementWrite
+                        }
+                        Ok(())
+                    })?;
+                    """
+                }
             }
 
             is UnionShape -> {
@@ -659,7 +734,7 @@ class SchemaGenerator(
                     "ser.write_string(&$prelude::STRING, $varName)?;"
                 }
 
-            is BlobShape -> "ser.write_blob(&$prelude::BLOB, $varName)?;"
+            is BlobShape -> "ser.write_blob(&$prelude::BLOB, $varName.as_ref())?;"
             is TimestampShape -> "ser.write_timestamp(&$prelude::TIMESTAMP, $varName)?;"
             is DocumentShape -> "ser.write_document(&$prelude::DOCUMENT, $varName)?;"
             is StructureShape -> {
@@ -702,14 +777,29 @@ class SchemaGenerator(
             is ListShape -> {
                 val elementTarget = model.expectShape(target.member.target)
                 val elementWrite = elementWriteExpr(elementTarget, "item")
-                """
-                ser.write_list(&$prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
-                    for item in $varName {
-                        $elementWrite
-                    }
-                    Ok(())
-                })?;
-                """
+                val isSparse = target.hasTrait(SparseTrait::class.java)
+                if (isSparse) {
+                    """
+                    ser.write_list(&$prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                        for item in $varName {
+                            match item {
+                                Some(item) => { $elementWrite }
+                                None => { ser.write_null(&$prelude::STRING)?; }
+                            }
+                        }
+                        Ok(())
+                    })?;
+                    """
+                } else {
+                    """
+                    ser.write_list(&$prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                        for item in $varName {
+                            $elementWrite
+                        }
+                        Ok(())
+                    })?;
+                    """
+                }
             }
 
             is UnionShape -> {
@@ -910,6 +1000,46 @@ class SchemaGenerator(
                         member.memberName != "_request_id"
                 }
             if (hasBodyMembers) {
+                // Error types may legitimately receive an empty wire body
+                // (e.g., S3's `HeadObject` 404 returns an empty document and
+                // signals `NotFound` via status code + headers only). The
+                // legacy XML codegen short-circuited on `inp.is_empty()` for
+                // error parsers; mirror that here for `@error`-marked structs
+                // so an empty body deserializes into a default-built error
+                // (its `meta` / `_request_id` are populated by the caller).
+                // For non-error structs the body deserializer is invoked
+                // unconditionally — an empty body falls through to the
+                // codec's empty-input handling, which surfaces the
+                // malformed-response error rather than silently accepting
+                // it. This matches both the legacy XML strictness and
+                // JSON's `{}` semantics.
+                val isError = structShape.hasTrait(software.amazon.smithy.model.traits.ErrorTrait::class.java)
+                val bodyParamName = if (isError) "body" else "_body"
+                val errorEmptyBodyShortcut: Writable =
+                    if (isError) {
+                        writable {
+                            if (BuilderGenerator.hasFallibleBuilder(structShape, symbolProvider)) {
+                                rust(
+                                    """
+                                    if body.is_empty() {
+                                        return Self::builder().build()
+                                            .map_err(|e| aws_smithy_schema::serde::SerdeError::Custom { message: e.to_string() });
+                                    }
+                                    """,
+                                )
+                            } else {
+                                rust(
+                                    """
+                                    if body.is_empty() {
+                                        return Ok(Self::builder().build());
+                                    }
+                                    """,
+                                )
+                            }
+                        }
+                    } else {
+                        writable {}
+                    }
                 writer.rustTemplate(
                     """
                     impl $structName {
@@ -918,8 +1048,9 @@ class SchemaGenerator(
                             deserializer: &mut dyn #{ShapeDeserializer},
                             _headers: &#{Headers},
                             _status: u16,
-                            _body: &[u8],
+                            $bodyParamName: &[u8],
                         ) -> ::std::result::Result<Self, #{SerdeError}> {
+                            #{ErrorEmptyBodyShortcut}
                             Self::deserialize(deserializer)
                         }
                     }
@@ -927,6 +1058,7 @@ class SchemaGenerator(
                     "ShapeDeserializer" to smithySchema.resolve("serde::ShapeDeserializer"),
                     "SerdeError" to smithySchema.resolve("serde::SerdeError"),
                     "Headers" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("http::Headers"),
+                    "ErrorEmptyBodyShortcut" to errorEmptyBodyShortcut,
                 )
             } else {
                 // No body members — skip body deserialization. Per the Smithy HTTP binding spec,
@@ -963,7 +1095,6 @@ class SchemaGenerator(
         }
 
         val headersParam = if (headerMembers.isNotEmpty() || prefixMember != null) "headers" else "_headers"
-        val bodyParam = if (hasPayloadHandling) "body" else "_body"
         // Check if there are any body members (non-HTTP-bound, non-synthetic, non-streaming)
         val hasBodyMembers =
             structShape.allMembers.values.any { member ->
@@ -973,6 +1104,14 @@ class SchemaGenerator(
                     !member.isStreaming(model) &&
                     member.memberName != "_request_id"
             }
+        // Error structs with body members need access to `body` to short-
+        // circuit on empty wire bodies (matching the legacy
+        // `if inp.is_empty() { return Ok(builder); }` behavior). Otherwise
+        // `body` is only referenced for `@httpPayload` handling.
+        val isErrorWithBodyMembers =
+            hasBodyMembers &&
+                structShape.hasTrait(software.amazon.smithy.model.traits.ErrorTrait::class.java)
+        val bodyParam = if (hasPayloadHandling || isErrorWithBodyMembers) "body" else "_body"
         val deserializerParam = if (isRawPayload || !hasBodyMembers) "_deserializer" else "deserializer"
 
         writer.rustTemplate(
@@ -1175,9 +1314,11 @@ class SchemaGenerator(
                             map.insert(suffix.to_string(), val.to_string());
                         }
                     }
-                    if !map.is_empty() {
-                        builder.${prefixMember.memberName} = Some(map);
-                    }
+                    // Per the Smithy spec, an `@httpPrefixHeaders`-bound map
+                    // member is always populated on the output (an empty map
+                    // when no matching headers are present). Don't guard with
+                    // `!map.is_empty()`.
+                    builder.${prefixMember.memberName} = Some(map);
                 }
                 """,
             )
@@ -1300,9 +1441,41 @@ class SchemaGenerator(
                         },
                 )
             } else {
-                // Now deserialize body members
+                // Now deserialize body members. For `@error`-marked structs
+                // an empty wire body is legitimate (see path 1 above for
+                // rationale) — short-circuit before invoking the
+                // deserializer so we surface the error variant built from
+                // headers/defaults rather than failing the whole error
+                // parse.
+                val isError = structShape.hasTrait(software.amazon.smithy.model.traits.ErrorTrait::class.java)
+                val errorEmptyBodyShortcut: Writable =
+                    if (isError) {
+                        writable {
+                            if (BuilderGenerator.hasFallibleBuilder(structShape, symbolProvider)) {
+                                rust(
+                                    """
+                                    if body.is_empty() {
+                                        return builder.build()
+                                            .map_err(|e| aws_smithy_schema::serde::SerdeError::Custom { message: e.to_string() });
+                                    }
+                                    """,
+                                )
+                            } else {
+                                rust(
+                                    """
+                                    if body.is_empty() {
+                                        return Ok(builder.build());
+                                    }
+                                    """,
+                                )
+                            }
+                        }
+                    } else {
+                        writable {}
+                    }
                 writer.rustTemplate(
                     """
+                    #{ErrorEmptyBodyShortcut}
                     ##[allow(unused_variables, unreachable_code, clippy::single_match, clippy::match_single_binding, clippy::diverging_sub_expression)]
                     deserializer.read_struct(&${schemaPrefix}_SCHEMA, &mut |member, deser| {
                         match member.member_index() {
@@ -1317,6 +1490,7 @@ class SchemaGenerator(
                     """,
                     "ShapeDeserializer" to smithySchema.resolve("serde::ShapeDeserializer"),
                     "SerdeError" to smithySchema.resolve("serde::SerdeError"),
+                    "ErrorEmptyBodyShortcut" to errorEmptyBodyShortcut,
                     "buildExpr" to
                         writable {
                             if (BuilderGenerator.hasFallibleBuilder(structShape, symbolProvider)) {
@@ -1640,6 +1814,49 @@ class SchemaGenerator(
     }
 
     /**
+     * Returns the full trait setter chain to append after a member schema's
+     * `Schema::new_member(...)` constructor:
+     *
+     *  - `traitSetterChain(member)`: all known serde traits set directly on
+     *    the member shape (e.g., `@xmlName`, `@httpHeader`).
+     *  - `@timestampFormat` propagated from the target shape when the member
+     *    doesn't carry it itself and the target is a timestamp.
+     *  - `@mediaType` propagated from the target shape when the member doesn't
+     *    carry it itself.
+     *
+     * Used for struct/union members, list members, map keys, and map values —
+     * any [MemberShape] that gets emitted as a `_MEMBER` / `_KEY` / `_VALUE`
+     * schema constant. Mirrors Smithy semantics that target-shape traits apply
+     * transitively unless overridden by the member.
+     */
+    private fun memberTraitChain(member: software.amazon.smithy.model.shapes.MemberShape): String {
+        val target = model.expectShape(member.target)
+        val baseChain = traitSetterChain(member)
+        val targetTimestampFormat =
+            if (
+                target is software.amazon.smithy.model.shapes.TimestampShape &&
+                !member.hasTrait(TimestampFormatTrait::class.java) &&
+                target.hasTrait(TimestampFormatTrait::class.java)
+            ) {
+                knownTraitSetter(target.expectTrait(TimestampFormatTrait::class.java)) ?: ""
+            } else {
+                ""
+            }
+        val targetMediaType =
+            if (
+                !member.hasTrait(software.amazon.smithy.model.traits.MediaTypeTrait::class.java) &&
+                target.hasTrait(software.amazon.smithy.model.traits.MediaTypeTrait::class.java)
+            ) {
+                knownTraitSetter(
+                    target.expectTrait(software.amazon.smithy.model.traits.MediaTypeTrait::class.java),
+                ) ?: ""
+            } else {
+                ""
+            }
+        return baseChain + targetTimestampFormat + targetMediaType
+    }
+
+    /**
      * If this shape is an operation input, returns a `.with_http(...)` chain
      * for the operation's `@http` trait. The `@http` trait is operation-level
      * but is included on the input schema for convenience so the protocol
@@ -1660,6 +1877,189 @@ class SchemaGenerator(
         }
         return ""
     }
+
+    /**
+     * If this shape is the output of an operation carrying the AWS
+     * S3 `S3UnwrappedXmlOutputTrait` customization, returns a
+     * `.with_xml_unwrapped_output()` chain.
+     *
+     * The trait is operation-level but its effect (the XML wire format
+     * omits the outer wrapper element) only matters for the OUTPUT
+     * struct's deserialization, so we surface it on the output schema.
+     * The XML codec reads `schema.xml_unwrapped_output()` when
+     * deserializing; other codecs ignore it. Schema-level metadata
+     * (rather than codegen-level body wrapping) keeps runtime protocol
+     * swap unaffected.
+     */
+    private fun s3UnwrappedXmlOutputChain(shape: Shape): String {
+        val operationIndex = software.amazon.smithy.model.knowledge.OperationIndex.of(model)
+        for (operation in model.operationShapes) {
+            if (operationIndex.getOutputShape(operation).orElse(null)?.id == shape.id &&
+                operation.hasTrait(software.amazon.smithy.aws.traits.customizations.S3UnwrappedXmlOutputTrait::class.java)
+            ) {
+                return "\n    .with_xml_unwrapped_output()"
+            }
+        }
+        return ""
+    }
+
+    /**
+     * If this shape is the input of any operation AND every member is
+     * HTTP-bound (i.e., carries one of `@httpHeader`, `@httpQuery`,
+     * `@httpLabel`, `@httpPrefixHeaders`, `@httpQueryParams`, or scalar
+     * `@httpPayload`) — equivalently, no member serializes to the request
+     * body — returns `.with_no_body_members()`.
+     *
+     * The runtime uses this signal to skip body-codec invocation entirely
+     * on the SER path: no XML/JSON wrapper element is opened, no
+     * `serialize_members` re-entry through the codec proxy fires, and the
+     * empty body bytes are never collected. Saves ~15-20% on header-only
+     * SER operations like S3 PutObject / CopyObject.
+     *
+     * The semantics intentionally mirror the runtime's existing inline
+     * `has_body_members` computation in
+     * `HttpBindingProtocol::serialize_request_with_body` so that
+     * codegen-set `with_no_body_members()` always agrees with the runtime
+     * check that gates `Content-Type` / empty-body handling.
+     *
+     * `@httpPayload` on a struct/union counts as a body member because it
+     * provides body framing through the codec; `@httpPayload` on a blob
+     * or string does NOT (the bytes go directly into the request body
+     * without ever touching the codec).
+     */
+    private fun noBodyMembersChain(shape: Shape): String {
+        val operationIndex = software.amazon.smithy.model.knowledge.OperationIndex.of(model)
+        val isOperationInput =
+            model.operationShapes.any {
+                operationIndex.getInputShape(it).orElse(null)?.id == shape.id
+            }
+        if (!isOperationInput) return ""
+        if (shape !is software.amazon.smithy.model.shapes.StructureShape) return ""
+
+        for (member in shape.allMembers.values) {
+            val hasHttpHeader = member.hasTrait(software.amazon.smithy.model.traits.HttpHeaderTrait::class.java)
+            val hasHttpQuery = member.hasTrait(software.amazon.smithy.model.traits.HttpQueryTrait::class.java)
+            val hasHttpLabel = member.hasTrait(software.amazon.smithy.model.traits.HttpLabelTrait::class.java)
+            val hasHttpPrefixHeaders = member.hasTrait(software.amazon.smithy.model.traits.HttpPrefixHeadersTrait::class.java)
+            val hasHttpQueryParams = member.hasTrait(software.amazon.smithy.model.traits.HttpQueryParamsTrait::class.java)
+            val hasHttpPayload = member.hasTrait(software.amazon.smithy.model.traits.HttpPayloadTrait::class.java)
+
+            // Member without ANY HTTP binding → goes to body. Schema has body members.
+            if (!hasHttpHeader && !hasHttpQuery && !hasHttpLabel &&
+                !hasHttpPrefixHeaders && !hasHttpQueryParams && !hasHttpPayload
+            ) {
+                return ""
+            }
+            // `@httpPayload` on a struct/union → body framing comes from the
+            // codec writing the payload member's wrapper element. Counts as
+            // a body member from the runtime's perspective.
+            if (hasHttpPayload) {
+                val target = model.expectShape(member.target)
+                if (target is software.amazon.smithy.model.shapes.StructureShape ||
+                    target is software.amazon.smithy.model.shapes.UnionShape
+                ) {
+                    return ""
+                }
+            }
+        }
+        return "\n    .with_no_body_members()"
+    }
+
+    /**
+     * If this shape carries `SyntheticInputTrait` or `SyntheticOutputTrait`
+     * with a non-null `originalId`, returns a `.with_original_name(...)` call
+     * that surfaces the original (pre-synthesis) shape name. REST XML reads
+     * this when constructing the body root element name; other consumers
+     * (logging, future protocols) may also read it. Returns "" otherwise.
+     */
+    private fun originalNameChain(shape: Shape): String {
+        val originalName =
+            shape.getTrait(SyntheticInputTrait::class.java).orElse(null)?.originalId?.name
+                ?: shape.getTrait(SyntheticOutputTrait::class.java).orElse(null)?.originalId?.name
+                ?: return ""
+        return "\n    .with_original_name(${originalName.dq()})"
+    }
+
+    /**
+     * For a member targeting a list or map, emits the corresponding nested
+     * member sub-schema statics (`_KEY` / `_VALUE` for map, `_MEMBER` for
+     * list) and returns a `.with_map_members(...)` / `.with_list_member(...)`
+     * chain string to attach to the parent member's schema. Recurses for
+     * nested aggregates (e.g., `map<string, map<...>>`, `list<list<...>>`)
+     * so the entire aggregate sub-graph is reachable from the runtime via
+     * `Schema::key()` / `.value()` / `.member()`.
+     *
+     * Returns `""` for non-aggregate targets.
+     */
+    private fun emitAggregateMemberChain(
+        writer: RustWriter,
+        prefix: String,
+        target: Shape,
+        codegenScope: Array<out Pair<String, Any>>,
+    ): String =
+        when (target) {
+            is MapShape -> {
+                val keyTarget = model.expectShape(target.key.target)
+                val valueTarget = model.expectShape(target.value.target)
+                val escapedKeyId = target.key.id.toString().replace("#", "##")
+                val escapedValueId = target.value.id.toString().replace("#", "##")
+                val keyTraitChain = memberTraitChain(target.key)
+                val valueTraitChain = memberTraitChain(target.value)
+                // Recurse before emitting so nested chains attach correctly.
+                val keyAggChain = emitAggregateMemberChain(writer, "${prefix}_KEY", keyTarget, codegenScope)
+                val valueAggChain = emitAggregateMemberChain(writer, "${prefix}_VALUE", valueTarget, codegenScope)
+                writer.rustTemplate(
+                    """
+                    static ${prefix}_KEY: #{Schema} = #{Schema}::new_member(
+                        #{ShapeId}::from_static(
+                            "$escapedKeyId",
+                            "${target.key.id.namespace}",
+                            "${target.key.id.name}",
+                        ),
+                        #{ShapeType}::${shapeTypeVariant(keyTarget)},
+                        "key",
+                        0,
+                    )$keyTraitChain$keyAggChain;
+                    static ${prefix}_VALUE: #{Schema} = #{Schema}::new_member(
+                        #{ShapeId}::from_static(
+                            "$escapedValueId",
+                            "${target.value.id.namespace}",
+                            "${target.value.id.name}",
+                        ),
+                        #{ShapeType}::${shapeTypeVariant(valueTarget)},
+                        "value",
+                        1,
+                    )$valueTraitChain$valueAggChain;
+                    """,
+                    *codegenScope,
+                )
+                "\n    .with_map_members(&${prefix}_KEY, &${prefix}_VALUE)"
+            }
+            is ListShape -> {
+                val listMemberTarget = model.expectShape(target.member.target)
+                val escapedListMemberId = target.member.id.toString().replace("#", "##")
+                val listMemberTraitChain = memberTraitChain(target.member)
+                val nestedChain =
+                    emitAggregateMemberChain(writer, "${prefix}_MEMBER", listMemberTarget, codegenScope)
+                writer.rustTemplate(
+                    """
+                    static ${prefix}_MEMBER: #{Schema} = #{Schema}::new_member(
+                        #{ShapeId}::from_static(
+                            "$escapedListMemberId",
+                            "${target.member.id.namespace}",
+                            "${target.member.id.name}",
+                        ),
+                        #{ShapeType}::${shapeTypeVariant(listMemberTarget)},
+                        "member",
+                        0,
+                    )$listMemberTraitChain$nestedChain;
+                    """,
+                    *codegenScope,
+                )
+                "\n    .with_list_member(&${prefix}_MEMBER)"
+            }
+            else -> ""
+        }
 
     /** Returns true if the shape has any filtered traits that are NOT known direct fields. */
     private fun hasUnknownTraits(shape: Shape): Boolean =
@@ -1693,7 +2093,11 @@ class SchemaGenerator(
             "smithy.api#xmlName" -> "\n    .with_xml_name(${stringValue!!.dq()})"
             "smithy.api#xmlAttribute" -> "\n    .with_xml_attribute()"
             "smithy.api#xmlFlattened" -> "\n    .with_xml_flattened()"
-            "smithy.api#xmlNamespace" -> "\n    .with_xml_namespace()"
+            "smithy.api#xmlNamespace" -> {
+                val ns = trait as XmlNamespaceTrait
+                val prefix = ns.prefix.map { "Some(${it.dq()})" }.orElse("None")
+                "\n    .with_xml_namespace(${ns.uri.dq()}, $prefix)"
+            }
             "smithy.api#mediaType" -> "\n    .with_media_type(${stringValue!!.dq()})"
             "smithy.api#httpHeader" -> "\n    .with_http_header(${stringValue!!.dq()})"
             "smithy.api#httpLabel" -> "\n    .with_http_label()"
@@ -1740,7 +2144,10 @@ class SchemaGenerator(
                     } else {
                         "&[${allRefs.joinToString(", ")}]"
                     }
-                val traitChain = traitSetterChain(shape) + httpTraitChain(shape)
+                val traitChain =
+                    traitSetterChain(shape) + httpTraitChain(shape) +
+                        s3UnwrappedXmlOutputChain(shape) + noBodyMembersChain(shape) +
+                        originalNameChain(shape)
                 if (hasUnknownTraits(shape)) {
                     writer.rustTemplate(
                         """
@@ -1831,31 +2238,19 @@ class SchemaGenerator(
                     val smithyMemberName = member.memberName
                     val target = model.expectShape(member.target)
                     val escapedMemberId = member.id.toString().replace("#", "##")
-                    val memberTraitChain = traitSetterChain(member)
-                    // Include @timestampFormat from the target shape if not already on the member
-                    val targetTimestampFormat =
-                        if (
-                            target is software.amazon.smithy.model.shapes.TimestampShape &&
-                            !member.hasTrait(TimestampFormatTrait::class.java) &&
-                            target.hasTrait(TimestampFormatTrait::class.java)
-                        ) {
-                            knownTraitSetter(target.expectTrait(TimestampFormatTrait::class.java)) ?: ""
-                        } else {
-                            ""
-                        }
-                    // Include @mediaType from the target shape if not already on the member
-                    val targetMediaType =
-                        if (
-                            !member.hasTrait(software.amazon.smithy.model.traits.MediaTypeTrait::class.java) &&
-                            target.hasTrait(software.amazon.smithy.model.traits.MediaTypeTrait::class.java)
-                        ) {
-                            knownTraitSetter(target.expectTrait(software.amazon.smithy.model.traits.MediaTypeTrait::class.java)) ?: ""
-                        } else {
-                            ""
-                        }
+                    val traitChain = memberTraitChain(member)
+                    val memberConstName = "${schemaPrefix}_MEMBER_${constantName(rustMemberName)}"
+
+                    // For map / list members, emit key/value/element sub-schemas so the XML
+                    // codec can resolve entry element names. Recurses through nested
+                    // list/map shapes so the entire aggregate sub-graph is reachable from
+                    // the runtime via Schema::key() / .value() / .member().
+                    val mapMembersChain =
+                        emitAggregateMemberChain(writer, memberConstName, target, codegenScope)
+
                     writer.rustTemplate(
                         """
-                        static ${schemaPrefix}_MEMBER_${constantName(rustMemberName)}: #{Schema} = #{Schema}::new_member(
+                        static $memberConstName: #{Schema} = #{Schema}::new_member(
                             #{ShapeId}::from_static(
                                 "$escapedMemberId",
                                 "${member.id.namespace}",
@@ -1864,7 +2259,7 @@ class SchemaGenerator(
                             #{ShapeType}::${shapeTypeVariant(target)},
                             ${templateEscape(smithyMemberName.dq())},
                             $idx,
-                        )$memberTraitChain$targetTimestampFormat$targetMediaType;
+                        )$traitChain$mapMembersChain;
                         """,
                         *codegenScope,
                     )
@@ -1894,6 +2289,7 @@ class SchemaGenerator(
             is ListShape -> {
                 val target = model.expectShape(shape.member.target)
                 val escapedMemberId = shape.member.id.toString().replace("#", "##")
+                val traitChain = memberTraitChain(shape.member)
                 writer.rustTemplate(
                     """
                     static ${schemaPrefix}_MEMBER: #{Schema} = #{Schema}::new_member(
@@ -1905,7 +2301,7 @@ class SchemaGenerator(
                         #{ShapeType}::${shapeTypeVariant(target)},
                         "member",
                         0,
-                    );
+                    )$traitChain;
                     """,
                     *codegenScope,
                 )
@@ -1916,6 +2312,8 @@ class SchemaGenerator(
                 val valueTarget = model.expectShape(shape.value.target)
                 val escapedKeyId = shape.key.id.toString().replace("#", "##")
                 val escapedValueId = shape.value.id.toString().replace("#", "##")
+                val keyTraitChain = memberTraitChain(shape.key)
+                val valueTraitChain = memberTraitChain(shape.value)
                 writer.rustTemplate(
                     """
                     static ${schemaPrefix}_KEY: #{Schema} = #{Schema}::new_member(
@@ -1927,7 +2325,7 @@ class SchemaGenerator(
                         #{ShapeType}::${shapeTypeVariant(keyTarget)},
                         "key",
                         0,
-                    );
+                    )$keyTraitChain;
 
                     static ${schemaPrefix}_VALUE: #{Schema} = #{Schema}::new_member(
                         #{ShapeId}::from_static(
@@ -1938,7 +2336,7 @@ class SchemaGenerator(
                         #{ShapeType}::${shapeTypeVariant(valueTarget)},
                         "value",
                         1,
-                    );
+                    )$valueTraitChain;
                     """,
                     *codegenScope,
                 )

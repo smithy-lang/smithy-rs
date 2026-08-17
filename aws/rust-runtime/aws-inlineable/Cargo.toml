@@ -26,6 +26,7 @@ aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-smithy-observability = { path = "../../../rust-runtime/aws-smithy-observability" }
 aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime", features = ["client"] }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client", "http-1x", "http-02x"] }
+aws-smithy-schema = { path = "../../../rust-runtime/aws-smithy-schema" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types", features = ["http-body-0-4-x", "http-body-1-x"] }
 bytes = "1.11.1"
 fastrand = "2.3.0"

@@ -69,6 +69,22 @@ interface Protocol {
     fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType
 
     /**
+     * Generates a function that extracts the error body content from a response body.
+     *
+     * For protocols with error envelopes (e.g., REST XML's `<ErrorResponse><Error>...</Error></ErrorResponse>`),
+     * this returns the inner error content. For protocols without envelopes (e.g., JSON),
+     * this returns the full body unchanged.
+     *
+     * Generated function signature:
+     * ```rust
+     * fn error_body_contents(body: &[u8]) -> &[u8]
+     * ```
+     *
+     * Default: returns the full body (no envelope stripping).
+     */
+    fun errorBodyContents(operationShape: OperationShape): RuntimeType? = null
+
+    /**
      * Generates a function signature like the following:
      * ```rust
      * fn parse_event_stream_error_metadata(payload: &Bytes) -> aws_smithy_types::error::Error

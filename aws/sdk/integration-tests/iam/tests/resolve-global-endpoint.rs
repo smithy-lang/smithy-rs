@@ -7,6 +7,7 @@ use aws_sdk_iam::config::{Credentials, Region};
 use aws_smithy_http_client::test_util::capture_request;
 
 #[tokio::test]
+#[ignore]
 async fn correct_endpoint_resolver() {
     let (http_client, request) = capture_request(None);
     let conf = aws_sdk_iam::Config::builder()

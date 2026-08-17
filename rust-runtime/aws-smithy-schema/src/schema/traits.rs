@@ -51,7 +51,7 @@ macro_rules! string_trait {
             }
 
             /// Returns the trait value.
-            pub fn value(&self) -> &str {
+            pub fn value(&self) -> &'static str {
                 self.value
             }
         }
@@ -95,13 +95,54 @@ annotation_trait!(
     "smithy.api", "xmlFlattened"
 );
 
-// xmlNamespace is a structured trait (uri + optional prefix). For now we only
-// need its ShapeId for lookups; the full value can be stored as a DocumentTrait.
-annotation_trait!(
-    /// The `@xmlNamespace` trait — adds an XML namespace to an element.
-    XmlNamespaceTrait,
-    "smithy.api", "xmlNamespace"
-);
+// xmlNamespace is a structured trait carrying a URI and an optional prefix.
+// Hand-written rather than generated via the `string_trait!` macro because the
+// macro only models a single string value.
+
+/// The `@xmlNamespace` trait — adds an XML namespace declaration to elements
+/// generated for the targeted shape.
+///
+/// REST XML emits this as `xmlns="uri"` (no prefix) or `xmlns:prefix="uri"`
+/// on the start tag of the element to which the trait applies.
+#[derive(Debug, Clone)]
+#[allow(dead_code)] // Used by generated schema code
+pub struct XmlNamespaceTrait {
+    uri: &'static str,
+    prefix: Option<&'static str>,
+}
+
+#[allow(dead_code)] // Used by generated schema code
+impl XmlNamespaceTrait {
+    /// The Shape ID for this trait.
+    pub const TRAIT_ID: ShapeId = crate::shape_id!("smithy.api", "xmlNamespace");
+
+    /// Creates a new `XmlNamespaceTrait`.
+    pub const fn new(uri: &'static str, prefix: Option<&'static str>) -> Self {
+        Self { uri, prefix }
+    }
+
+    /// The namespace URI.
+    pub fn uri(&self) -> &'static str {
+        self.uri
+    }
+
+    /// The optional namespace prefix.
+    ///
+    /// When `Some(prefix)`, the namespace is declared as
+    /// `xmlns:prefix="uri"`. When `None`, it is declared as `xmlns="uri"`.
+    pub fn prefix(&self) -> Option<&'static str> {
+        self.prefix
+    }
+}
+
+impl Trait for XmlNamespaceTrait {
+    fn trait_id(&self) -> &ShapeId {
+        &Self::TRAIT_ID
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
 
 // --- Timestamp ---
 

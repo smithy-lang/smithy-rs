@@ -34,7 +34,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
-import software.amazon.smithy.rust.codegen.core.util.isOutputEventStream
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 /**
@@ -180,7 +179,7 @@ class FluentBuilderGenerator(
         }
 
     private fun handleEventStreamInitialResponse(): Writable? {
-        if (!operation.isOutputEventStream(model)) {
+        if (codegenContext.protocolImpl?.httpBindingResolver?.handlesEventStreamInitialResponse(operation) != true) {
             return null
         }
 

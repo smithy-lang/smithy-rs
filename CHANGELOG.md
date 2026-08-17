@@ -1,4 +1,152 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+August 12th, 2026
+=================
+**New this release:**
+- :tada: (all, [smithy-rs#4758](https://github.com/smithy-lang/smithy-rs/issues/4758)) `Blob` now stores its contents as `Bytes` and provides `from_maybe_shared` and `into_bytes` methods to avoid copies in `Bytes`-based protocol paths.
+- :tada: (client) Add opt-in capture of selected operation-input members for telemetry. Naming input members via
+    `Config::builder().emit_input_attributes([...])` makes the SDK capture those members' values into
+    the `ConfigBag` (as `CapturedTelemetryAttributes`) during `read_before_execution`, before the input
+    is consumed by serialization. Any interceptor can then read a value via
+    `cfg.load::<CapturedTelemetryAttributes>()`, without threading it through a `task_local!`. Only
+    string-valued, non-`@sensitive` members are eligible; capture is off by default.
+
+    ```rust,ignore
+    use aws_smithy_types::telemetry::CapturedTelemetryAttributes;
+
+    // Opt in to capturing the S3 `Bucket` input member.
+    let config = aws_sdk_s3::Config::builder()
+        .emit_input_attributes(["Bucket"])
+        // ...
+        .build();
+
+    // In any interceptor, read the captured value off the config bag — no `task_local!`.
+    if let Some(bucket) = cfg
+        .load::<CapturedTelemetryAttributes>()
+        .and_then(|a| a.get("Bucket"))
+    {
+        // use `bucket`
+    }
+    ```
+- :tada: (client) Emit captured telemetry attributes and transfer sizes on the built-in client metrics. Values
+    selected via `emit_input_attributes([...])` are now attached as attributes on
+    `smithy.client.call.duration` and `smithy.client.call.attempt.duration`. The operation-duration metric additionally
+    carries the outcome as `error.type` (a coarse category, set only on failure) and the raw
+    `http.status_code` when a response was received. Real transferred-byte counts are recorded on their
+    own histograms, `smithy.client.call.request.size` / `smithy.client.call.response.size`, counted per
+    frame and emitted when the body completes — so a streaming body reports its true size rather than the
+    `0` that content-length reports for it.
+
+    ```rust,ignore
+    // The same opt-in that captures a member now also emits it on the built-in metrics.
+    let config = aws_sdk_s3::Config::builder()
+        .emit_input_attributes(["Bucket"])
+        // ...
+        .build();
+
+    // `smithy.client.call.duration` is now emitted with, e.g.:
+    //   rpc.service="S3", rpc.method="GetObject", Bucket="my-bucket",
+    //   error.type="connector" (on failure), http.status_code=200
+    //
+    // and body sizes on their own instruments, e.g.:
+    //   smithy.client.call.response.size { rpc.service="S3", rpc.method="GetObject" } = 1024
+    ```
+- :tada: (client) Add support for configuring additional server names in TLS certificate verification.
+    When standard hostname verification fails, the client retries verification against
+    each configured additional server name. This is useful when a server presents a
+    certificate whose Subject Alternative Names (SANs) do not include the hostname used
+    to connect, but do include an alternative name the client has been configured to accept.
+- :bug: (server, [smithy-rs#4731](https://github.com/smithy-lang/smithy-rs/issues/4731), @hsbakshi) Fix RPC v2 CBOR server routing to use the verbatim Smithy operation shape name, matching the URI sent by spec-compliant clients.
+
+    For operations whose modeled name starts lowercase, regeneration changes the accepted route from the previous capitalized form (for example, `GetFoo`) to the spec-compliant verbatim form (`getFoo`). Operations already modeled with an uppercase initial are unchanged.
+
+    Set `rpcV2CborAddCapitalizedRoute` to `true` to also register the legacy capitalized route during migration.
+- :bug: (server, [smithy-rs#4743](https://github.com/smithy-lang/smithy-rs/issues/4743), @takenoko-gohan) Fix server codegen referencing `MakeSensitive` at the wrong module path. The type is located at  `instrumentation::sensitivity::MakeSensitive`, so generating a sensitive status-code formatter
+    previously failed to compile (E0425).
+- :bug: (server) Make `DefaultMetricsPlugin`'s `Service` impl generic over the request body type instead of
+    hardcoding `hyper::body::Incoming`. The plugin only reads request *extensions* (operation name,
+    service name, request ID) and never touches the body, so it composes with any body type. This
+    fixes a compilation error when using `DefaultMetricsPlugin` with request bodies other than
+    `hyper::body::Incoming`.
+- (client, [smithy-rs#4764](https://github.com/smithy-lang/smithy-rs/issues/4764)) Improve discoverability of the retry token bucket: the `config::retry` module docs, the `retry_config` builder method, and the `TokenBucket` type now point to `RetryPartition::custom().token_bucket(...)` for sizing or isolating the bucket.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @hsbakshi ([smithy-rs#4731](https://github.com/smithy-lang/smithy-rs/issues/4731))
+- @takenoko-gohan ([smithy-rs#4743](https://github.com/smithy-lang/smithy-rs/issues/4743))
+
+
+July 23rd, 2026
+===============
+**New this release:**
+- :bug: (client, [smithy-rs#4749](https://github.com/smithy-lang/smithy-rs/issues/4749)) Fix two retry-behavior bugs:
+    - Under Retry Behavior 2.1, `adaptive` retry mode now acquires a client-side rate-limiter send token before every send, including retries. Previously a retry computed a rate-limiter delay but sent without acquiring a token, so the adaptive rate limiter under-throttled retried requests. Pre-2.1 adaptive behavior — still the default today, until 2.1 becomes the default (see [aws-sdk-rust#1431](https://github.com/awslabs/aws-sdk-rust/discussions/1431)) — is unchanged.
+    - Honor the server-directed `x-amz-retry-after` header on responses that are retryable purely by HTTP status (e.g. a bare 500). This is enabled by a new `ClassifyRetry::classify_retry_v2`, which additionally receives the `RetryAction` accumulated by earlier-running classifiers and can refine it. It has a default implementation that delegates to `classify_retry`, so existing classifiers are unaffected.
+- :bug: (client, [smithy-rs#4741](https://github.com/smithy-lang/smithy-rs/issues/4741), @mark-creamer-amazon) Fix `keys()` JMESPath codegen for union shapes by using the symbol provider's resolved variant names instead of raw member names. This correctly handles modeled Unknown members (which get renamed to avoid colliding with the synthetic Unknown unit variant) and preserves the original wire name in the match output.
+- :bug: (client, @lauzmata) Fix endpoint rules codegen emitting invalid Rust when a templated static segment
+    is a single character requiring escape in a Rust `char` literal (e.g. `'`, `"`,
+    `\`). Previously produced `out.push(''');` in `internals.rs`; now always emits
+    `out.push_str(...)` with proper string escaping.
+- (client) Replace the hardcoded 5-second identity cache `load_timeout` with a pessimistic timeout derived from the configured `RetryConfig` and `TimeoutConfig`. The new default ensures the inner credential provider's retry strategy has enough time to exhaust all configured attempts before the cache kills the resolution future. With default settings (3 attempts, 3.1s connect timeout), the derived timeout is approximately 22 seconds. Customers who explicitly set `load_timeout` are unaffected.
+
+    If you rely on the legacy 5-second timeout behavior, you can restore it explicitly:
+
+    ```rust
+    use aws_smithy_runtime::client::identity::IdentityCache;
+    use std::time::Duration;
+
+    IdentityCache::lazy()
+        .load_timeout(Duration::from_secs(5))
+        .build()
+    ```
+
+**Contributors**
+Thank you for your contributions! ❤
+- @lauzmata
+- @mark-creamer-amazon ([smithy-rs#4741](https://github.com/smithy-lang/smithy-rs/issues/4741))
+
+
+July 14th, 2026
+===============
+**New this release:**
+- :tada: (server, @lauzadis) Support enum-typed members in server event stream unions. Previously, the server codegen rejected any model with an `enum`-trait shape reachable through an event stream, flagging it as an unsupported constraint. The `enum` trait is now excluded from that check, and the generated code is updated so it actually compiles and behaves correctly: event stream members skip the `MaybeConstrained`/builder unconstrained-type wrapping, and the generated unmarshaller calls `build()` on the parsed payload so a constraint violation surfaces as an unmarshalling error. Related: [smithy-lang/smithy#1388](https://github.com/smithy-lang/smithy/issues/1388).
+- :tada: (server, @lauzadis) Add a `codegen.allowMissingUnionVariant` configuration (boolean, default `false`). When `true`, a union JSON body whose object did not set any recognized variant (e.g. `{}` or `{"unknownKey": ...}`) parses to `Ok(None)` rather than returning a deserialization error. Opt in only for services that have shipped clients depending on the lenient behavior. Client codegen is unaffected.
+- :tada: (client, [aws-sdk-rust#146](https://github.com/awslabs/aws-sdk-rust/issues/146)) Add support for third-party libraries to self-identify in the SDK user agent via framework metadata, addressing the long-standing request to customize the user agent ([aws-sdk-rust#146](https://github.com/awslabs/aws-sdk-rust/issues/146)).
+
+    A new public `FrameworkMetadata` type (re-exported as `aws_config::FrameworkMetadata` and on each client's `config` module) can be set on the client config builder, on `SdkConfig`, and via `aws_config::ConfigLoader::framework_metadata`:
+
+    ```rust
+    let config = aws_config::from_env()
+        .framework_metadata(FrameworkMetadata::new("some-framework", Some("1.0"))?)
+        .load()
+        .await;
+    ```
+
+    Framework metadata is additive — multiple libraries (and the application) can each self-identify without clobbering one another. The name/version are validated against the same charset as `AppName` (rejecting, not sanitizing, invalid characters to prevent header injection). The `UserAgentInterceptor` de-duplicates entries on `(name, version)` preserving first-seen order, caps the total at 10 unique entries, and renders each as `lib/{name}/{version}` in the `x-amz-user-agent` header.
+- :bug: (all, [smithy-rs#4435](https://github.com/smithy-lang/smithy-rs/issues/4435)) Gate event-stream `try_recv_initial` to RPC protocols (`awsJson`, `awsQuery`, `rpcv2Cbor`) on both the client fluent builder and the server protocol generator. Previously, all event-stream operations performed an unconditional `try_recv_initial`, which can hang indefinitely on REST-bound operations whose streams take a long time to produce their first event. This change is a stopgap; the planned permanent fix tracked in #4435 will instead surface initial messages only when explicitly requested.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @lauzadis
+
+
+July 7th, 2026
+==============
+**Breaking Changes:**
+- :warning: (all, [smithy-rs#4692](https://github.com/smithy-lang/smithy-rs/issues/4692)) Upgrade MSRV to Rust 1.94.1.
+
+**New this release:**
+- :tada: (client, [smithy-rs#4726](https://github.com/smithy-lang/smithy-rs/issues/4726), @mark-creamer-amazon) Add `keys()` JMESPath function support for union shapes in waiter matchers. This enables waiters to match on the active variant of a union using `keys(unionField)` with the `allStringEquals` or `anyStringEquals` comparators.
+- :bug: (server, @lauzadis) Soften the server codegen's handling of unknown `codegen` configuration keys: log a warning instead of throwing `IllegalArgumentException`. This makes server codegen forward-compatible with `smithy-build.json` files that carry keys recognized by other tools or by future server codegen versions, matching the lenient behavior already used for client codegen settings.
+- :bug: (all, [aws-sdk-rust#1433](https://github.com/awslabs/aws-sdk-rust/issues/1433), [aws-sdk-rust#1418](https://github.com/awslabs/aws-sdk-rust/issues/1418), @iconara) Update the `User-Agent` header to contain the same information as the `x-amz-user-agent` header (including `AppName`, environment metadata, business metrics, etc.)
+- :bug: (all, [smithy-rs#4729](https://github.com/smithy-lang/smithy-rs/issues/4729)) Fix codegen emitting integer literals for f64/f32 non-zero default value comparisons in serializers. When a Smithy model specifies a non-zero `@default` on a Double or Float member using a JSON integer (e.g., `1` instead of `1.0`), the generated "skip if default" check produced `if value != 1` which fails to compile in Rust. The fix appends `_f64`/`_f32` type suffixes to the rendered default value.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @iconara ([aws-sdk-rust#1418](https://github.com/awslabs/aws-sdk-rust/issues/1418), [aws-sdk-rust#1433](https://github.com/awslabs/aws-sdk-rust/issues/1433))
+- @lauzadis
+- @mark-creamer-amazon ([smithy-rs#4726](https://github.com/smithy-lang/smithy-rs/issues/4726))
+
+
 June 11th, 2026
 ===============
 **New this release:**

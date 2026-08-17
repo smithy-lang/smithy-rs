@@ -90,3 +90,46 @@ async fn fips_endpoints() {
     )
     .await;
 }
+
+#[tokio::test]
+async fn service_specific_endpoint_url_from_env() {
+    use aws_runtime::env_config::EnvConfigValue;
+    use aws_types::os_shim_internal::Env;
+    use aws_types::service_config::{LoadServiceConfig, ServiceConfigKey};
+
+    #[derive(Debug)]
+    struct TestEnv {
+        env: Env,
+    }
+
+    impl LoadServiceConfig for TestEnv {
+        fn load_config(&self, key: ServiceConfigKey<'_>) -> Option<String> {
+            let (value, _source) = EnvConfigValue::new()
+                .env(key.env())
+                .profile(key.profile())
+                .service_id(key.service_id())
+                .load(&self.env, None)?;
+            Some(value.to_string())
+        }
+    }
+
+    let (http_client, request) = capture_request(None);
+    let shared_config = SdkConfig::builder()
+        .region(Region::new("us-east-1"))
+        .http_client(http_client)
+        .service_config(TestEnv {
+            env: Env::from_slice(&[("AWS_ENDPOINT_URL_DYNAMODB", "http://localhost:9999")]),
+        })
+        .build();
+
+    let conf = aws_sdk_dynamodb::config::Builder::from(&shared_config)
+        .credentials_provider(Credentials::for_tests())
+        .build();
+    let client = aws_sdk_dynamodb::Client::from_conf(conf);
+    let _ = client.list_tables().send().await;
+
+    assert_eq!(
+        request.expect_request().uri(),
+        &Uri::from_static("http://localhost:9999/"),
+    );
+}

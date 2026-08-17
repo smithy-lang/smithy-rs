@@ -8,7 +8,7 @@
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::Schema;
 use aws_smithy_types::date_time::Format as TimestampFormat;
-use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
+use aws_smithy_types::{BigDecimal, BigInteger, DateTime, Document};
 
 use crate::codec::JsonCodecSettings;
 
@@ -279,10 +279,10 @@ impl ShapeSerializer for JsonSerializer {
         Ok(())
     }
 
-    fn write_blob(&mut self, schema: &Schema, value: &Blob) -> Result<(), SerdeError> {
+    fn write_blob(&mut self, schema: &Schema, value: &[u8]) -> Result<(), SerdeError> {
         use aws_smithy_types::base64;
         self.prefix(schema);
-        let encoded = base64::encode(value.as_ref());
+        let encoded = base64::encode(value);
         self.output.push('"');
         self.output.push_str(&encoded);
         self.output.push('"');

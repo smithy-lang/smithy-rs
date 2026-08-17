@@ -93,6 +93,15 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                         /// let retry_config = RetryConfig::standard().with_max_attempts(5);
                         /// let config = Config::builder().retry_config(retry_config).build();
                         /// ```
+                        ///
+                        /// ## Retry token bucket
+                        ///
+                        /// [`RetryConfig`](#{RetryConfig}) controls *how many* times to retry and *how long* to back
+                        /// off. Retries are **also** gated by a retry token bucket (also called the retry quota) that
+                        /// is shared across a [`RetryPartition`](#{RetryPartition}). To configure the token bucket — for
+                        /// example, to set
+                        /// its capacity or to give a workload its own bucket — see [`Self::retry_partition`] and
+                        /// [`RetryPartition::custom`](#{RetryPartition}::custom).
                         pub fn retry_config(mut self, retry_config: #{RetryConfig}) -> Self {
                             self.set_retry_config(Some(retry_config));
                             self
@@ -280,7 +289,9 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                         ///
                         /// ## Notes
                         ///
-                        /// - This is an advanced setting — most users won't need to modify it.
+                        /// - This is an advanced setting. A common reason to set it is to size or isolate the retry
+                        ///   token bucket — for example, giving a high-throughput workload its own bucket. Otherwise
+                        ///   most users won't need to modify it.
                         /// - A configured client rate limiter has no effect unless [`RetryConfig::adaptive`](#{RetryConfig}::adaptive) is used.
                         ///
                         /// ## Examples
@@ -295,6 +306,21 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                         ///     .retry_partition(RetryPartition::custom("custom")
                         ///         .token_bucket(token_bucket)
                         ///         .build()
+                        ///     )
+                        ///     .build();
+                        /// ```
+                        ///
+                        /// Sizing the retry token bucket (for example, for a high-throughput workload), or giving a
+                        /// workload its own bucket:
+                        /// ```no_run
+                        /// use $moduleUseName::config::Config;
+                        /// use $moduleUseName::config::retry::{RetryPartition, TokenBucket};
+                        ///
+                        /// let config = Config::builder()
+                        ///     .retry_partition(
+                        ///         RetryPartition::custom("high-throughput")
+                        ///             .token_bucket(TokenBucket::builder().capacity(5000).build())
+                        ///             .build(),
                         ///     )
                         ///     .build();
                         /// ```
