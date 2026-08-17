@@ -17,6 +17,7 @@ use aws_credential_types::provider::{self, error::CredentialsError, future, Prov
 use aws_credential_types::Credentials;
 use aws_credential_types::StaticStabilityEligible;
 use aws_smithy_async::time::SharedTimeSource;
+use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 use aws_types::os_shim_internal::Env;
 use std::borrow::Cow;
 use std::error::Error as StdError;
@@ -56,6 +57,12 @@ pub struct ImdsCredentialsProvider {
     profile: Option<String>,
     time_source: SharedTimeSource,
     last_retrieved_credentials: Arc<RwLock<Option<Credentials>>>,
+    // Whether static stability is provided by the identity cache instead of by this provider.
+    // True at v2026_08_01+ (default cache is the StaticStabilityCache): this provider reports the
+    // true expiration and surfaces a failed refresh as an error. False for older behavior versions
+    // (LazyCache): this provider offers static stability itself — extending stale expirations and
+    // serving the last-retrieved credentials on a failed refresh.
+    static_stability_via_cache: bool,
 }
 
 /// Builder for [`ImdsCredentialsProvider`]
@@ -112,12 +119,21 @@ impl Builder {
         let client = self
             .imds_override
             .unwrap_or_else(|| imds::Client::builder().configure(&provider_config).build());
+        // An unset behavior version resolves to `latest()`, so a hand-built provider aligns with
+        // the modern default identity cache (the StaticStabilityCache) and doesn't double-cover it
+        // — the cache owns static stability. Pin an older behavior version to keep this provider's
+        // own (legacy) static stability instead.
+        let static_stability_via_cache = provider_config
+            .behavior_version()
+            .unwrap_or_else(BehaviorVersion::latest)
+            .is_at_least(BehaviorVersion::v2026_08_01());
         ImdsCredentialsProvider {
             client,
             env,
             profile: self.profile_override,
             time_source: provider_config.time_source(),
             last_retrieved_credentials: Arc::new(RwLock::new(self.last_retrieved_credentials)),
+            static_stability_via_cache,
         }
     }
 }
@@ -135,6 +151,9 @@ impl ProvideCredentials for ImdsCredentialsProvider {
     }
 
     fn fallback_on_interrupt(&self) -> Option<Credentials> {
+        if self.static_stability_via_cache {
+            return None;
+        }
         self.last_retrieved_credentials.read().unwrap().clone()
     }
 }
@@ -182,6 +201,10 @@ impl ImdsCredentialsProvider {
     //
     // This allows continued use of the credentials even when IMDS returns expired ones.
     fn maybe_extend_expiration(&self, expiration: SystemTime) -> SystemTime {
+        // Deferred to the identity cache: report the true expiration.
+        if self.static_stability_via_cache {
+            return expiration;
+        }
         let now = self.time_source.now();
         // If credentials from IMDS are not stale, use them as they are.
         if now < expiration {
@@ -276,7 +299,12 @@ impl ImdsCredentialsProvider {
     }
 
     async fn credentials(&self) -> provider::Result {
-        match self.retrieve_credentials().await {
+        let result = self.retrieve_credentials().await;
+        // Deferred to the identity cache: surface the failure instead of serving last-retrieved.
+        if self.static_stability_via_cache {
+            return result;
+        }
+        match result {
             creds @ Ok(_) => creds,
             // Any failure while retrieving credentials MUST NOT impede use of existing credentials.
             err => match &*self.last_retrieved_credentials.read().unwrap() {
@@ -384,6 +412,7 @@ mod test {
         // There should not be logs indicating credentials are extended for stability.
         assert!(!logs_contain(WARNING_FOR_EXTENDING_CREDENTIALS_EXPIRY));
     }
+    // Legacy path (behavior version < v2026_08_01): the provider extends the stale expiry itself.
     #[tokio::test]
     #[traced_test]
     async fn expired_credentials_should_be_extended() {
@@ -409,7 +438,8 @@ mod test {
         let provider_config = ProviderConfig::no_configuration()
             .with_http_client(http_client.clone())
             .with_sleep_impl(sleep)
-            .with_time_source(time_source);
+            .with_time_source(time_source)
+            .with_behavior_version(Some(BehaviorVersion::v2026_01_12()));
         let client = crate::imds::Client::builder()
             .configure(&provider_config)
             .build();
@@ -425,6 +455,54 @@ mod test {
         assert!(logs_contain(WARNING_FOR_EXTENDING_CREDENTIALS_EXPIRY));
     }
 
+    // Counterpart to `expired_credentials_should_be_extended`: at v2026_08_01 the cache owns static
+    // stability, so the provider reports the true (past) expiration and does not extend it.
+    #[tokio::test]
+    #[traced_test]
+    async fn expired_credentials_are_not_extended_at_v2026_08_01() {
+        let http_client = StaticReplayClient::new(vec![
+                ReplayEvent::new(
+                    token_request("http://169.254.169.254", 21600),
+                    token_response(21600, TOKEN_A),
+                ),
+                ReplayEvent::new(
+                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
+                    imds_response(r#"profile-name"#),
+                ),
+                ReplayEvent::new(
+                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/profile-name", TOKEN_A),
+                    imds_response("{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-20T21:42:26Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARTEST\",\n  \"SecretAccessKey\" : \"testsecret\",\n  \"Token\" : \"testtoken\",\n  \"Expiration\" : \"2021-09-21T04:16:53Z\"\n}"),
+                ),
+            ]);
+
+        // Same already-expired credentials as the legacy test, but at v2026_08_01.
+        let time_of_request_to_fetch_credentials = UNIX_EPOCH + Duration::from_secs(1632246085);
+        let (time_source, sleep) = instant_time_and_sleep(time_of_request_to_fetch_credentials);
+
+        let provider_config = ProviderConfig::no_configuration()
+            .with_http_client(http_client.clone())
+            .with_sleep_impl(sleep)
+            .with_time_source(time_source)
+            .with_behavior_version(Some(BehaviorVersion::v2026_08_01()));
+        let client = crate::imds::Client::builder()
+            .configure(&provider_config)
+            .build();
+        let provider = ImdsCredentialsProvider::builder()
+            .configure(&provider_config)
+            .imds_client(client)
+            .build();
+        let creds = provider.provide_credentials().await.expect("valid creds");
+        // The true expiration (2021-09-21T04:16:53Z) is reported unchanged.
+        assert_eq!(
+            creds.expiry(),
+            UNIX_EPOCH.checked_add(Duration::from_secs(1632197813))
+        );
+        http_client.assert_requests_match(&[]);
+        // No expiry extension, so no extension warning.
+        assert!(!logs_contain(WARNING_FOR_EXTENDING_CREDENTIALS_EXPIRY));
+    }
+
+    // Legacy path (behavior version < v2026_08_01): the provider serves last-retrieved on failure.
     #[tokio::test]
     #[cfg(feature = "default-https-client")]
     async fn read_timeout_during_credentials_refresh_should_yield_last_retrieved_credentials() {
@@ -436,6 +514,10 @@ mod test {
         let expected = aws_credential_types::Credentials::for_tests();
         let provider = ImdsCredentialsProvider::builder()
             .imds_client(client)
+            .configure(
+                &ProviderConfig::no_configuration()
+                    .with_behavior_version(Some(BehaviorVersion::v2026_01_12())),
+            )
             // seed fallback credentials for testing
             .last_retrieved_credentials(expected.clone())
             .build();
@@ -463,6 +545,32 @@ mod test {
         );
     }
 
+    // Counterpart to the fallback tests: at v2026_08_01 the cache owns serve-cached, so a failed
+    // refresh surfaces as an error rather than serving the seeded last-retrieved credentials.
+    #[tokio::test]
+    #[cfg(feature = "default-https-client")]
+    async fn refresh_failure_errors_at_v2026_08_01_instead_of_serving_last_retrieved() {
+        let client = crate::imds::Client::builder()
+            // 240.* can never be resolved
+            .endpoint("http://240.0.0.0")
+            .unwrap()
+            .build();
+        let provider = ImdsCredentialsProvider::builder()
+            .imds_client(client)
+            .configure(
+                &ProviderConfig::no_configuration()
+                    .with_behavior_version(Some(BehaviorVersion::v2026_08_01())),
+            )
+            // Seed a fallback; at v2026_08_01 it must NOT be served.
+            .last_retrieved_credentials(aws_credential_types::Credentials::for_tests())
+            .build();
+        let actual = provider.provide_credentials().await;
+        assert!(
+            actual.is_err(),
+            "at v2026_08_01 a failed refresh must error, not serve last-retrieved: {actual:?}"
+        );
+    }
+
     // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is ignored on Windows because it uses Unix-style paths
     #[cfg_attr(windows, ignore)]
     #[tokio::test]
@@ -477,7 +585,10 @@ mod test {
         let expected = aws_credential_types::Credentials::for_tests();
         let provider = ImdsCredentialsProvider::builder()
             .imds_client(client)
-            .configure(&ProviderConfig::no_configuration())
+            .configure(
+                &ProviderConfig::no_configuration()
+                    .with_behavior_version(Some(BehaviorVersion::v2026_01_12())),
+            )
             // seed fallback credentials for testing
             .last_retrieved_credentials(expected.clone())
             .build();
@@ -525,7 +636,10 @@ mod test {
             ]);
         let provider = ImdsCredentialsProvider::builder()
             .imds_client(make_imds_client(&http_client))
-            .configure(&ProviderConfig::no_configuration())
+            .configure(
+                &ProviderConfig::no_configuration()
+                    .with_behavior_version(Some(BehaviorVersion::v2026_01_12())),
+            )
             .build();
         let creds1 = provider.provide_credentials().await.expect("valid creds");
         assert_eq!(creds1.access_key_id(), "ASIARTEST");
