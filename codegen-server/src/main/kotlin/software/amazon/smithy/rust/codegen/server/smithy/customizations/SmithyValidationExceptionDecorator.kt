@@ -142,7 +142,7 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
                     rust(
                         """
                         Self::Length(length) => crate::model::ValidationExceptionField {
-                            message: format!("${it.validationErrorMessage()}", length, &path),
+                            message: format!("${it.validationErrorMessage()}", &path),
                             path,
                         },""",
                     )
@@ -207,7 +207,7 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
                             rust(
                                 """
                                 ConstraintViolation::${it.name()} => crate::model::ValidationExceptionField {
-                                    message: format!("Value at '{}/${it.forMember.memberName}' failed to satisfy constraint: Member must not be null", path),
+                                    message: format!("Value at '{path}/${it.forMember.memberName}' failed to satisfy constraint: Member must not be null"),
                                     path: path + "/${it.forMember.memberName}",
                                 },
                                 """,

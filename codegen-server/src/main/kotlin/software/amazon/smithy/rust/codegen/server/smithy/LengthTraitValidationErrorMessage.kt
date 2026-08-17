@@ -9,10 +9,10 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.traits.LengthTrait
 
 fun LengthTrait.validationErrorMessage() =
-    "Value with length {} at '{}' failed to satisfy constraint: Member must have length ${this.lengthDescription()}"
+    "Value with length {length} at '{}' failed to satisfy constraint: Member must have length ${this.lengthDescription()}"
 
 fun LengthTrait.shapeConstraintViolationDisplayMessage(shape: Shape) =
-    "Value with length {} provided for '${shape.id}' failed to satisfy constraint: Member must have length ${this.lengthDescription()}"
+    "Value with length {length} provided for '${shape.id}' failed to satisfy constraint: Member must have length ${this.lengthDescription()}"
 
 fun LengthTrait.lengthDescription() =
     if (this.min.isPresent && this.max.isPresent) {

@@ -226,7 +226,7 @@ data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
                 rust(
                     """
                     Self::Length(length) => crate::model::ValidationExceptionField {
-                        message: format!("${lengthTrait.validationErrorMessage()}", length, &path),
+                        message: format!("${lengthTrait.validationErrorMessage()}", &path),
                         path,
                     },
                     """,
@@ -269,7 +269,7 @@ data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
             rustTemplate(
                 """
                 Self::Length(length) => {
-                    format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}", length)
+                    format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}")
                 },
                 """,
             )

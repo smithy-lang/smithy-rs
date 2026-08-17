@@ -348,7 +348,7 @@ sealed class CollectionTraitInfo {
                     rust(
                         """
                         Self::Length(length) => crate::model::ValidationExceptionField {
-                            message: format!("${lengthTrait.validationErrorMessage()}", length, &path),
+                            message: format!("${lengthTrait.validationErrorMessage()}", &path),
                             path,
                         },
                         """,
@@ -378,7 +378,7 @@ sealed class CollectionTraitInfo {
                 rustTemplate(
                     """
                     Self::Length(length) => {
-                        format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}", length)
+                        format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}")
                     },
                     """,
                 )

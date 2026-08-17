@@ -329,7 +329,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                         "FieldAssignments" to
                                             fieldAssignments(
                                                 "path.clone()",
-                                                "format!(${lengthTrait.validationErrorMessage().dq()}, length, &path)",
+                                                "format!(${lengthTrait.validationErrorMessage().dq()}, &path)",
                                             ),
                                     )
                                 }
@@ -395,7 +395,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                         "path.clone()",
                                         "format!(${
                                             blobLength.lengthTrait.validationErrorMessage().dq()
-                                        }, length, &path)",
+                                        }, &path)",
                                     ),
                             )
                         }
@@ -433,7 +433,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                             "FieldAssignments" to
                                 fieldAssignments(
                                     "path.clone()",
-                                    """format!(${it.validationErrorMessage().dq()}, length, &path)""",
+                                    """format!(${it.validationErrorMessage().dq()}, &path)""",
                                 ),
                         )
                     }
@@ -523,7 +523,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                 "FieldAssignments" to
                                     fieldAssignments(
                                         """path.clone() + "/${it.forMember.memberName}"""",
-                                        """format!("Value at '{}/${it.forMember.memberName}' failed to satisfy constraint: Member must not be null", path)""",
+                                        """format!("Value at '{path}/${it.forMember.memberName}' failed to satisfy constraint: Member must not be null")""",
                                     ),
                             )
                         }
@@ -571,7 +571,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                                 "format!(${
                                                     collectionTraitInfo.lengthTrait.validationErrorMessage()
                                                         .dq()
-                                                }, length, &path)",
+                                                }, &path)",
                                             ),
                                     )
                                 }
