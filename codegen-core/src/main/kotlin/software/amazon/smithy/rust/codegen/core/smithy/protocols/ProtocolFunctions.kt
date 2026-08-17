@@ -41,6 +41,8 @@ class ProtocolFunctions(
     private val serDeModule = codegenContext.protocolSerdeModule
 
     companion object {
+        val defaultSerDeModule = RustModule.pubCrate("protocol_serde")
+
         fun crossOperationFn(
             codegenContext: CodegenContext,
             fnName: String,
