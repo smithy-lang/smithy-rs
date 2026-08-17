@@ -188,7 +188,7 @@ data class BlobLength(val lengthTrait: LengthTrait) : BlobConstraintGenerator {
                 rust(
                     """
                     Self::Length(length) => crate::model::ValidationExceptionField {
-                        message: format!("${lengthTrait.validationErrorMessage()}", &path),
+                        message: format!("${lengthTrait.validationErrorMessage()}"),
                         path,
                     },
                     """,

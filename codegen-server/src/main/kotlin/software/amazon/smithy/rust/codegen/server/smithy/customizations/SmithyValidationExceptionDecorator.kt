@@ -142,7 +142,7 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
                     rust(
                         """
                         Self::Length(length) => crate::model::ValidationExceptionField {
-                            message: format!("${it.validationErrorMessage()}", &path),
+                            message: format!("${it.validationErrorMessage()}"),
                             path,
                         },""",
                     )
@@ -169,7 +169,7 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
                 """
                 pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
                     crate::model::ValidationExceptionField {
-                        message: format!(r##"$message"##, &path),
+                        message: format!(r##"$message"##),
                         path,
                     }
                 }

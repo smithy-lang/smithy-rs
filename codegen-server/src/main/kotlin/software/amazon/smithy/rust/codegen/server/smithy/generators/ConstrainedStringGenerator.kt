@@ -226,7 +226,7 @@ data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
                 rust(
                     """
                     Self::Length(length) => crate::model::ValidationExceptionField {
-                        message: format!("${lengthTrait.validationErrorMessage()}", &path),
+                        message: format!("${lengthTrait.validationErrorMessage()}"),
                         path,
                     },
                     """,
@@ -318,7 +318,7 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
             val pattern = patternTrait.pattern.toString().replace("#", "##")
             rust(
                 """
-                format!("${patternTrait.validationErrorMessage()}", &path, r##"$pattern"##)
+                format!("${patternTrait.validationErrorMessage()}", r##"$pattern"##)
                 """,
             )
         }

@@ -329,7 +329,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                         "FieldAssignments" to
                                             fieldAssignments(
                                                 "path.clone()",
-                                                "format!(${lengthTrait.validationErrorMessage().dq()}, &path)",
+                                                "format!(${lengthTrait.validationErrorMessage().dq()})",
                                             ),
                                     )
                                 }
@@ -352,7 +352,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                                 "path.clone()",
                                                 "format!(${
                                                     patternTrait.validationErrorMessage().dq()
-                                                }, &path, ${patternTrait.pattern.toString().dq()})",
+                                                }, ${patternTrait.pattern.toString().dq()})",
                                             ),
                                     )
                                 }
@@ -395,7 +395,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                         "path.clone()",
                                         "format!(${
                                             blobLength.lengthTrait.validationErrorMessage().dq()
-                                        }, &path)",
+                                        })",
                                     ),
                             )
                         }
@@ -433,7 +433,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                             "FieldAssignments" to
                                 fieldAssignments(
                                     "path.clone()",
-                                    """format!(${it.validationErrorMessage().dq()}, &path)""",
+                                    """format!(${it.validationErrorMessage().dq()})""",
                                 ),
                         )
                     }
@@ -465,7 +465,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                 """,
                 *preludeScope,
                 *codegenScope,
-                "FieldAssignments" to fieldAssignments("path.clone()", """format!(r##"$message"##, &path)"""),
+                "FieldAssignments" to fieldAssignments("path.clone()", """format!(r##"$message"##)"""),
             )
         }
     }
@@ -491,7 +491,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                 "FieldAssignments" to
                     fieldAssignments(
                         "path.clone()",
-                        """format!(${rangeInfo.rangeTrait.validationErrorMessage().dq()}, &path)""",
+                        """format!(${rangeInfo.rangeTrait.validationErrorMessage().dq()})""",
                     ),
             )
         }
@@ -571,7 +571,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                                 "format!(${
                                                     collectionTraitInfo.lengthTrait.validationErrorMessage()
                                                         .dq()
-                                                }, &path)",
+                                                })",
                                             ),
                                     )
                                 }
@@ -592,8 +592,6 @@ class UserProvidedValidationExceptionConversionGenerator(
                                                     ${
                                                     collectionTraitInfo.uniqueItemsTrait.validationErrorMessage().dq()
                                                 },
-                                                    &duplicate_indices,
-                                                    &path
                                                 )
                                                 """,
                                             ),
