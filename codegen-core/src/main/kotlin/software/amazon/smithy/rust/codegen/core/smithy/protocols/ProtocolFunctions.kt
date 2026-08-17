@@ -29,15 +29,6 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
  */
 typealias ProtocolFnWritable = RustWriter.(String) -> Unit
 
-private fun crossOperationFnInModule(
-    module: RustModule.LeafModule,
-    fnName: String,
-    block: ProtocolFnWritable,
-): RuntimeType =
-    RuntimeType.forInlineFun(fnName, module) {
-        block(fnName)
-    }
-
 /**
  * Utilities for generating protocol serialization/deserialization functions, and common support functions.
  *
@@ -49,12 +40,12 @@ class ProtocolFunctions(
     private val serDeModule: RustModule.LeafModule = codegenContext.protocolSerdeModule,
 ) {
     companion object {
-        val serDeModule = RustModule.pubCrate("protocol_serde")
+        val defaultSerDeModule = RustModule.pubCrate("protocol_serde")
 
         fun crossOperationFn(
             fnName: String,
             block: ProtocolFnWritable,
-        ): RuntimeType = crossOperationFnInModule(serDeModule, fnName, block)
+        ): RuntimeType = crossOperationFn(defaultSerDeModule, fnName, block)
 
         /** Generates a cross-operation function in the context's configured protocol serde module. */
         fun crossOperationFn(
@@ -62,13 +53,22 @@ class ProtocolFunctions(
             fnName: String,
             block: ProtocolFnWritable,
         ): RuntimeType = ProtocolFunctions(codegenContext).crossOperationFn(fnName, block)
+
+        private fun crossOperationFn(
+            module: RustModule.LeafModule,
+            fnName: String,
+            block: ProtocolFnWritable,
+        ): RuntimeType =
+            RuntimeType.forInlineFun(fnName, module) {
+                block(fnName)
+            }
     }
 
     /** Generates a cross-operation function in this instance's configured protocol serde module. */
     fun crossOperationFn(
         fnName: String,
         block: ProtocolFnWritable,
-    ): RuntimeType = crossOperationFnInModule(serDeModule, fnName, block)
+    ): RuntimeType = crossOperationFn(serDeModule, fnName, block)
 
     private enum class FnType {
         Serialize,

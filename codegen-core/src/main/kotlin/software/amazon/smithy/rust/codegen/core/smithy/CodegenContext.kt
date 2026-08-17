@@ -61,7 +61,7 @@ abstract class CodegenContext(
      */
     open val target: CodegenTarget,
     /** Module that owns protocol serialization and deserialization helper functions. */
-    open val protocolSerdeModule: RustModule.LeafModule = ProtocolFunctions.serDeModule,
+    open val protocolSerdeModule: RustModule.LeafModule = ProtocolFunctions.defaultSerDeModule,
 ) {
     /**
      * Configuration of the runtime package:

@@ -205,7 +205,7 @@ internal fun testCodegenContext(
     settings: CoreRustSettings = testRustSettings(),
     codegenTarget: CodegenTarget = CodegenTarget.CLIENT,
     nullabilityCheckMode: NullableIndex.CheckMode = NullableIndex.CheckMode.CLIENT,
-    protocolSerdeModule: RustModule.LeafModule = ProtocolFunctions.serDeModule,
+    protocolSerdeModule: RustModule.LeafModule = ProtocolFunctions.defaultSerDeModule,
 ): CodegenContext =
     object : CodegenContext(
         model,
