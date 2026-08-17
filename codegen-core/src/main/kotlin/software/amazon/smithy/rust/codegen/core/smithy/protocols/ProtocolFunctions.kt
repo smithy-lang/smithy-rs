@@ -37,38 +37,25 @@ typealias ProtocolFnWritable = RustWriter.(String) -> Unit
  */
 class ProtocolFunctions(
     private val codegenContext: CodegenContext,
-    private val serDeModule: RustModule.LeafModule = codegenContext.protocolSerdeModule,
 ) {
+    private val serDeModule = codegenContext.protocolSerdeModule
+
     companion object {
-        val defaultSerDeModule = RustModule.pubCrate("protocol_serde")
-
-        fun crossOperationFn(
-            fnName: String,
-            block: ProtocolFnWritable,
-        ): RuntimeType = crossOperationFn(defaultSerDeModule, fnName, block)
-
-        /** Generates a cross-operation function in the context's configured protocol serde module. */
         fun crossOperationFn(
             codegenContext: CodegenContext,
             fnName: String,
             block: ProtocolFnWritable,
         ): RuntimeType = ProtocolFunctions(codegenContext).crossOperationFn(fnName, block)
-
-        private fun crossOperationFn(
-            module: RustModule.LeafModule,
-            fnName: String,
-            block: ProtocolFnWritable,
-        ): RuntimeType =
-            RuntimeType.forInlineFun(fnName, module) {
-                block(fnName)
-            }
     }
 
     /** Generates a cross-operation function in this instance's configured protocol serde module. */
     fun crossOperationFn(
         fnName: String,
         block: ProtocolFnWritable,
-    ): RuntimeType = crossOperationFn(serDeModule, fnName, block)
+    ): RuntimeType =
+        RuntimeType.forInlineFun(fnName, serDeModule) {
+            block(fnName)
+        }
 
     private enum class FnType {
         Serialize,
