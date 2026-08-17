@@ -5,8 +5,11 @@
 
 package software.amazon.smithy.rustsdk
 
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -15,23 +18,33 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
 /**
- * Installs `StaticStabilityCache` as the default identity cache for AWS clients built directly from
- * a `Config` (that is, without `aws-config`).
+ * Wires up static stability for AWS clients — the identity cache that owns consistent credential
+ * refresh, plus the interceptor that invalidates credentials a target service rejects.
  *
- * It is registered on the generated `ServiceRuntimePlugin` and installs the cache only when the
- * customer has not already configured one. It is gated on `BehaviorVersion >= v2026_08_01`, so
- * older behavior versions keep `LazyCache`.
+ * On the generated `ServiceRuntimePlugin`, it installs `StaticStabilityCache` as the default
+ * identity cache for clients built directly from a `Config` (without `aws-config`) — only when the
+ * customer hasn't configured one, and only at `BehaviorVersion >= v2026_08_01` (older versions keep
+ * `LazyCache`). Clients built through `aws-config` get the same cache from `ConfigLoader::load()`.
  *
- * Clients built through `aws-config` instead receive the same cache from `ConfigLoader::load()`.
+ * On every operation, it registers `CredentialAuthFailureInterceptor`: when a target service
+ * rejects a request with `ExpiredToken`/`InvalidToken`, the interceptor sets a data-free config-bag
+ * marker, and the orchestrator invalidates the signing identity so the next resolution refreshes.
  */
-class StaticStabilityCacheDecorator : ClientCodegenDecorator {
-    override val name: String = "StaticStabilityCache"
+class StaticStabilityDecorator : ClientCodegenDecorator {
+    override val name: String = "StaticStability"
     override val order: Byte = 0
 
     override fun serviceRuntimePluginCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> = baseCustomizations + StaticStabilityCacheCustomization(codegenContext)
+
+    override fun operationCustomizations(
+        codegenContext: ClientCodegenContext,
+        operation: OperationShape,
+        baseCustomizations: List<OperationCustomization>,
+    ): List<OperationCustomization> =
+        baseCustomizations + CredentialAuthFailureInterceptorCustomization(codegenContext, operation)
 }
 
 private class StaticStabilityCacheCustomization(
@@ -75,5 +88,31 @@ private class StaticStabilityCacheCustomization(
 
                 else -> {}
             }
+        }
+}
+
+private class CredentialAuthFailureInterceptorCustomization(
+    codegenContext: ClientCodegenContext,
+    private val operation: OperationShape,
+) : OperationCustomization() {
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val symbolProvider = codegenContext.symbolProvider
+
+    override fun section(section: OperationSection) =
+        when (section) {
+            is OperationSection.AdditionalInterceptors ->
+                writable {
+                    section.registerInterceptor(runtimeConfig, this) {
+                        rustTemplate(
+                            "#{CredentialAuthFailureInterceptor}::<#{OperationError}>::new()",
+                            "CredentialAuthFailureInterceptor" to
+                                AwsRuntimeType.awsRuntime(runtimeConfig)
+                                    .resolve("static_stability::invalidation::CredentialAuthFailureInterceptor"),
+                            "OperationError" to symbolProvider.symbolForOperationError(operation),
+                        )
+                    }
+                }
+
+            else -> emptySection
         }
 }
