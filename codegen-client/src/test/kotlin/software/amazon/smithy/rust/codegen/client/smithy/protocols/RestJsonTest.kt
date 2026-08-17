@@ -7,7 +7,11 @@ package software.amazon.smithy.rust.codegen.client.smithy.protocols
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.testModule
+import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 import kotlin.io.path.readText
 
 internal class RestJsonTest {
@@ -77,6 +81,30 @@ internal class RestJsonTest {
         }
         """.asSmithyModel()
 
+    private val blobPayloadModel =
+        """
+        ${'$'}version: "2"
+        namespace test
+
+        use aws.protocols#restJson1
+
+        @restJson1
+        service BlobPayloadService {
+            version: "2019-12-16",
+            operations: [PutBlob]
+        }
+
+        @http(uri: "/blob", method: "POST")
+        operation PutBlob {
+            input: PutBlobInput
+        }
+
+        structure PutBlobInput {
+            @httpPayload
+            data: Blob
+        }
+        """.asSmithyModel()
+
     @Test
     fun `generate a rest json service that compiles`() {
         val testDir = clientIntegrationTest(model) { _, _ -> }
@@ -94,5 +122,41 @@ internal class RestJsonTest {
         // even for empty structs, so no underscore prefix is needed.
         // This test passes without any code changes, proving RestJson immunity.
         clientIntegrationTest(inputUnionWithEmptyStructure) { _, _ -> }
+    }
+
+    @Test
+    fun `blob payload serialization reuses Bytes allocation`() {
+        clientIntegrationTest(blobPayloadModel) { context, rustCrate ->
+            rustCrate.testModule {
+                tokioTest("blob_payload_reuses_bytes") {
+                    rustTemplate(
+                        """
+                        let payload = ::bytes::Bytes::from_static(b"hello, world!");
+                        let payload_ptr = payload.as_ptr();
+                        let (http_client, rx) = #{capture_request}(#{None});
+                        let config = crate::Config::builder()
+                            .http_client(http_client)
+                            .endpoint_url("http://localhost:1234")
+                            .behavior_version_latest()
+                            .build();
+                        let client = crate::Client::from_conf(config);
+
+                        let _ = client
+                            .put_blob()
+                            .data(::aws_smithy_types::Blob::from_maybe_shared(payload))
+                            .send()
+                            .await;
+
+                        let request = rx.expect_request();
+                        let body = request.body().bytes().expect("in-memory request body");
+                        assert_eq!(b"hello, world!", body);
+                        assert_eq!(payload_ptr, body.as_ptr());
+                        """,
+                        *RuntimeType.preludeScope,
+                        "capture_request" to RuntimeType.captureRequest(context.runtimeConfig),
+                    )
+                }
+            }
+        }
     }
 }

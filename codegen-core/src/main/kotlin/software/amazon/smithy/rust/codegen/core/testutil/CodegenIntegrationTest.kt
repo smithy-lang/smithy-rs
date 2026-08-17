@@ -87,7 +87,19 @@ sealed class AdditionalSettings {
 class ClientAdditionalSettings private constructor(settings: List<AdditionalSettings>) :
     AdditionalSettings.CoreAdditionalSettings(settings) {
         class Builder : CoreAdditionalSettings.Builder<ClientAdditionalSettings>() {
+            fun includeLegacyClient(enabled: Boolean = true): Builder {
+                settings.add(IncludeLegacyClient(enabled))
+                return this
+            }
+
             override fun build(): ClientAdditionalSettings = ClientAdditionalSettings(settings)
+        }
+
+        private data class IncludeLegacyClient(val enabled: Boolean) : AdditionalSettings() {
+            override fun toObjectNode(): ObjectNode =
+                ObjectNode.builder()
+                    .withMember("includeLegacyClient", enabled)
+                    .build()
         }
 
         // Additional settings that are specific to client generation should be defined here.
@@ -127,6 +139,11 @@ class ServerAdditionalSettings private constructor(settings: List<AdditionalSett
 
             fun allowMissingUnionVariant(enabled: Boolean = true): Builder {
                 settings.add(AllowMissingUnionVariant(enabled))
+                return this
+            }
+
+            fun rpcV2CborAddCapitalizedRoute(enabled: Boolean = true): Builder {
+                settings.add(RpcV2CborAddCapitalizedRoute(enabled))
                 return this
             }
 
@@ -172,6 +189,13 @@ class ServerAdditionalSettings private constructor(settings: List<AdditionalSett
             override fun toObjectNode(): ObjectNode =
                 ObjectNode.builder()
                     .withMember("allowMissingUnionVariant", enabled)
+                    .build()
+        }
+
+        private data class RpcV2CborAddCapitalizedRoute(val enabled: Boolean) : AdditionalSettings() {
+            override fun toObjectNode(): ObjectNode =
+                ObjectNode.builder()
+                    .withMember("rpcV2CborAddCapitalizedRoute", enabled)
                     .build()
         }
 
