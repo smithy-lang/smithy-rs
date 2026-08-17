@@ -104,7 +104,7 @@ class ProtocolFunctionsTest {
             RestJson(codegenContext)
                 .parseHttpErrorMetadata(testModel.lookup("test#Op1"))
         val crossOperationFn =
-            ProtocolFunctions.crossOperationFn("cross_operation") { fnName ->
+            ProtocolFunctions.crossOperationFn(codegenContext, "cross_operation") { fnName ->
                 rust("pub fn $fnName() -> usize { 43 }")
             }
 
@@ -146,7 +146,7 @@ class ProtocolFunctionsTest {
             RestJson(codegenContext)
                 .parseHttpErrorMetadata(testModel.lookup("test#Op1"))
         val crossOperationFn =
-            ProtocolFunctions.crossOperationFn(module, "cross_operation") { fnName ->
+            ProtocolFunctions.crossOperationFn(codegenContext, "cross_operation") { fnName ->
                 rust("pub fn $fnName() -> usize { 43 }")
             }
 

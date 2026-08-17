@@ -201,7 +201,7 @@ class XmlBindingTraitSerializerGenerator(
     }
 
     override fun unsetStructure(structure: StructureShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn(codegenContext.protocolSerdeModule, "rest_xml_unset_struct_payload") { fnName ->
+        ProtocolFunctions.crossOperationFn(codegenContext, "rest_xml_unset_struct_payload") { fnName ->
             rustTemplate(
                 """
                 pub fn $fnName() -> #{ByteSlab} {
@@ -213,7 +213,7 @@ class XmlBindingTraitSerializerGenerator(
         }
 
     override fun unsetUnion(union: UnionShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn(codegenContext.protocolSerdeModule, "rest_xml_unset_union_payload") { fnName ->
+        ProtocolFunctions.crossOperationFn(codegenContext, "rest_xml_unset_union_payload") { fnName ->
             rustTemplate(
                 "pub fn $fnName() -> #{ByteSlab} { #{Vec}::new() }",
                 *codegenScope,

@@ -47,8 +47,14 @@ class ProtocolFunctions(
             block: ProtocolFnWritable,
         ): RuntimeType = crossOperationFn(serDeModule, fnName, block)
 
-        /** Generates a cross-operation function in the requested module. */
+        /** Generates a cross-operation function in the context's configured protocol serde module. */
         fun crossOperationFn(
+            codegenContext: CodegenContext,
+            fnName: String,
+            block: ProtocolFnWritable,
+        ): RuntimeType = crossOperationFn(codegenContext.protocolSerdeModule, fnName, block)
+
+        private fun crossOperationFn(
             module: RustModule.LeafModule,
             fnName: String,
             block: ProtocolFnWritable,

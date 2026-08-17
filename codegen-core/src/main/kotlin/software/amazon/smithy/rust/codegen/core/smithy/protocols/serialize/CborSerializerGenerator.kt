@@ -283,7 +283,7 @@ class CborSerializerGenerator(
     }
 
     override fun unsetStructure(structure: StructureShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn(codegenContext.protocolSerdeModule, "cbor_json_unset_struct_payload") { fnName ->
+        ProtocolFunctions.crossOperationFn(codegenContext, "cbor_json_unset_struct_payload") { fnName ->
             rustTemplate(
                 """
                 pub fn $fnName() -> #{ByteSlab} {

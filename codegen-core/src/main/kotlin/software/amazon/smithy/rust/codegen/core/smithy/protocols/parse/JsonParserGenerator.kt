@@ -244,7 +244,7 @@ class JsonParserGenerator(
     }
 
     private fun orEmptyJson(): RuntimeType =
-        ProtocolFunctions.crossOperationFn(codegenContext.protocolSerdeModule, "or_empty_doc") {
+        ProtocolFunctions.crossOperationFn(codegenContext, "or_empty_doc") {
             rust(
                 """
                 pub(crate) fn or_empty_doc(data: &[u8]) -> &[u8] {
