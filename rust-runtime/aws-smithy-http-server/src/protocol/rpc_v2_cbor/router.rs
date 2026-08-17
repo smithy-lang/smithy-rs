@@ -5,11 +5,16 @@
 
 use std::convert::Infallible;
 use std::str::FromStr;
-use std::sync::LazyLock;
 
 use http::header::ToStrError;
 use http::HeaderMap;
-use regex::Regex;
+use nom::branch::alt;
+use nom::bytes::complete::{tag, take_until, take_while, take_while1};
+use nom::character::complete::satisfy;
+use nom::combinator::{all_consuming, opt, recognize};
+use nom::multi::fold_many0;
+use nom::sequence::{pair, preceded};
+use nom::IResult;
 use thiserror::Error;
 use tower::Layer;
 use tower::Service;
@@ -59,47 +64,75 @@ pub struct RpcV2CborRouter<S> {
 /// implementations MUST reject such requests for security reasons.
 const FORBIDDEN_HEADERS: &[&str] = &["x-amz-target", "x-amzn-target"];
 
-/// Matches the `Identifier` ABNF rule in
-/// <https://smithy.io/2.0/spec/model.html#shape-id-abnf>.
-const IDENTIFIER_PATTERN: &str = r#"((_+([A-Za-z]|[0-9]))|[A-Za-z])[A-Za-z0-9_]*"#;
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct RouteIdentity<'a> {
+    service: &'a str,
+    operation: &'a str,
+    route_key: &'a str,
+}
+
+fn identifier(input: &str) -> IResult<&str, &str> {
+    recognize(pair(
+        alt((
+            recognize(pair(
+                take_while1(|character: char| character == '_'),
+                satisfy(|character| character.is_ascii_alphanumeric()),
+            )),
+            recognize(satisfy(|character| character.is_ascii_alphabetic())),
+        )),
+        take_while(|character: char| character.is_ascii_alphanumeric() || character == '_'),
+    ))(input)
+}
+
+fn wire_format_name(input: &str) -> IResult<&str, &str> {
+    all_consuming(preceded(
+        tag("rpc-v2-"),
+        take_while1(|character: char| character.is_ascii_alphanumeric() || character == '_'),
+    ))(input)
+}
+
+fn service_name(input: &str) -> IResult<&str, &str> {
+    let (input, first_segment) = identifier(input)?;
+    fold_many0(
+        preceded(tag("."), identifier),
+        move || first_segment,
+        |_previous, segment| segment,
+    )(input)
+}
+
+fn route_identity(input: &str) -> IResult<&str, RouteIdentity<'_>> {
+    let route = input;
+    let (input, service) = service_name(input)?;
+    let service_start = route.len() - input.len() - service.len();
+    let (input, _) = tag("/operation/")(input)?;
+    let (input, operation) = identifier(input)?;
+    Ok((
+        input,
+        RouteIdentity {
+            service,
+            operation,
+            // This starts at the unqualified service name and is therefore the exact
+            // `Service/operation/Operation` key emitted by server code generation.
+            route_key: &route[service_start..],
+        },
+    ))
+}
+
+fn route_candidate(input: &str) -> IResult<&str, Option<RouteIdentity<'_>>> {
+    let (input, _) = take_until("/service/")(input)?;
+    let (input, _) = tag("/service/")(input)?;
+    opt(all_consuming(route_identity))(input)
+}
+
+fn parse_route_identity(input: &str) -> Option<RouteIdentity<'_>> {
+    // The protocol permits an arbitrary prefix. Jump between `/service/` markers without retaining
+    // the prefix, then accept only a route grammar that consumes the remainder of the path. This
+    // preserves the previous regex's unanchored-start and anchored-end behavior.
+    let mut parser = fold_many0(route_candidate, || None, |found, candidate| candidate.or(found));
+    parser(input).ok().and_then(|(_, identity)| identity)
+}
 
 impl<S> RpcV2CborRouter<S> {
-    // TODO(https://github.com/smithy-lang/smithy-rs/issues/3748) Consider building a nom parser.
-    fn uri_path_regex() -> &'static Regex {
-        // Every request for the `rpcv2Cbor` protocol MUST be sent to a URL with the
-        // following form: `{prefix?}/service/{serviceName}/operation/{operationName}`
-        //
-        // * The optional `prefix` segment may span multiple path segments and is not
-        //   utilized by the Smithy RPC v2 CBOR protocol. For example, a service could
-        //   use a `v1` prefix for the following URL path: `v1/service/FooService/operation/BarOperation`
-        // * The `serviceName` segment MUST be replaced by the [`shape
-        //   name`](https://smithy.io/2.0/spec/model.html#grammar-token-smithy-Identifier)
-        //   of the service's [Shape ID](https://smithy.io/2.0/spec/model.html#shape-id)
-        //   in the Smithy model. The `serviceName` produced by client implementations
-        //   MUST NOT contain the namespace of the `service` shape. Service
-        //   implementations SHOULD accept an absolute shape ID as the content of this
-        //   segment with the `#` character replaced with a `.` character, routing it
-        //   the same as if only the name was specified. For example, if the `service`'s
-        //   absolute shape ID is `com.example#TheService`, a service should accept both
-        //   `TheService` and `com.example.TheService` as values for the `serviceName`
-        //   segment.
-        static PATH_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(&format!(
-                r#"/service/({IDENTIFIER_PATTERN}\.)*(?P<service>{IDENTIFIER_PATTERN})/operation/(?P<operation>{IDENTIFIER_PATTERN})$"#,
-            ))
-            .unwrap()
-        });
-
-        &PATH_REGEX
-    }
-
-    pub fn wire_format_regex() -> &'static Regex {
-        static SMITHY_PROTOCOL_REGEX: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r#"^rpc-v2-(?P<format>\w+)$"#).unwrap());
-
-        &SMITHY_PROTOCOL_REGEX
-    }
-
     pub fn boxed<B>(self) -> RpcV2CborRouter<Route<B>>
     where
         S: Service<http::Request<B>, Response = http::Response<BoxBody>, Error = Infallible>,
@@ -170,15 +203,9 @@ pub enum WireFormatError {
 fn parse_wire_format_from_header(headers: &HeaderMap) -> Result<WireFormat, WireFormatError> {
     let header = headers.get("smithy-protocol").ok_or(WireFormatError::HeaderNotFound)?;
     let header = header.to_str().map_err(WireFormatError::HeaderValueNotVisibleAscii)?;
-    let captures = RpcV2CborRouter::<()>::wire_format_regex()
-        .captures(header)
-        .ok_or_else(|| WireFormatError::HeaderValueNotValid(header.to_owned()))?;
+    let (_, format) = wire_format_name(header).map_err(|_| WireFormatError::HeaderValueNotValid(header.to_owned()))?;
 
-    let format = captures
-        .name("format")
-        .ok_or_else(|| WireFormatError::HeaderValueNotValid(header.to_owned()))?;
-
-    let wire_format_parse_res: Result<WireFormat, WireFormatFromStrError> = format.as_str().parse();
+    let wire_format_parse_res: Result<WireFormat, WireFormatFromStrError> = format.parse();
     wire_format_parse_res.map_err(|_| WireFormatError::WireFormatNotSupported(header.to_owned()))
 }
 
@@ -200,42 +227,38 @@ impl FromStr for WireFormat {
     }
 }
 
+fn request_route_identity<B>(request: &http::Request<B>) -> Result<RouteIdentity<'_>, Error> {
+    // Only `Method::POST` is allowed.
+    if request.method() != http::Method::POST {
+        return Err(Error::MethodNotAllowed);
+    }
+
+    // Some headers are not allowed.
+    let request_has_forbidden_header = FORBIDDEN_HEADERS
+        .iter()
+        .any(|&forbidden_header| request.headers().contains_key(forbidden_header));
+    if request_has_forbidden_header {
+        return Err(Error::ForbiddenHeaders);
+    }
+
+    // Wire format has to be specified and supported.
+    let _wire_format = parse_wire_format_from_header(request.headers())?;
+
+    let request_path = request.uri().path();
+    tracing::trace!(%request_path, "parsing service and operation from URI");
+    let identity = parse_route_identity(request_path).ok_or(Error::NotFound)?;
+    tracing::trace!(service = %identity.service, operation = %identity.operation, "parsed service and operation from URI");
+    Ok(identity)
+}
+
 impl<S: Clone, B> Router<B> for RpcV2CborRouter<S> {
     type Service = S;
 
     type Error = Error;
 
     fn match_route(&self, request: &http::Request<B>) -> Result<Self::Service, Self::Error> {
-        // Only `Method::POST` is allowed.
-        if request.method() != http::Method::POST {
-            return Err(Error::MethodNotAllowed);
-        }
-
-        // Some headers are not allowed.
-        let request_has_forbidden_header = FORBIDDEN_HEADERS
-            .iter()
-            .any(|&forbidden_header| request.headers().contains_key(forbidden_header));
-        if request_has_forbidden_header {
-            return Err(Error::ForbiddenHeaders);
-        }
-
-        // Wire format has to be specified and supported.
-        let _wire_format = parse_wire_format_from_header(request.headers())?;
-
-        // Extract the service name and the operation name from the request URI.
-        let request_path = request.uri().path();
-        let regex = Self::uri_path_regex();
-
-        tracing::trace!(%request_path, "capturing service and operation from URI");
-        let captures = regex.captures(request_path).ok_or(Error::NotFound)?;
-        let (service, operation) = (&captures["service"], &captures["operation"]);
-        tracing::trace!(%service, %operation, "captured service and operation from URI");
-
-        // Lookup in the `TinyMap` for a route for the target.
-        let route = self
-            .routes
-            .get((format!("{service}.{operation}")).as_str())
-            .ok_or(Error::NotFound)?;
+        let identity = request_route_identity(request)?;
+        let route = self.routes.get(identity.route_key).ok_or(Error::NotFound)?;
         Ok(route.clone())
     }
 }
@@ -249,31 +272,63 @@ impl<S> FromIterator<(&'static str, S)> for RpcV2CborRouter<S> {
     }
 }
 
+/// Implementations retained only to compare routing strategies in benchmarks.
+#[cfg(feature = "rpc-v2-cbor-router-benchmarks")]
+#[doc(hidden)]
+pub mod benchmarks {
+    use super::*;
+
+    /// The nom router before zero-copy route keys were introduced. It composes a
+    /// `Service.Operation` string for every successful path parse.
+    #[derive(Debug, Clone)]
+    pub struct NomAllocatingRpcV2CborRouter<S> {
+        routes: TinyMap<&'static str, S, ROUTE_CUTOFF>,
+    }
+
+    impl<S: Clone, B> Router<B> for NomAllocatingRpcV2CborRouter<S> {
+        type Service = S;
+        type Error = Error;
+
+        fn match_route(&self, request: &http::Request<B>) -> Result<Self::Service, Self::Error> {
+            let identity = request_route_identity(request)?;
+            let route_key = format!("{}.{}", identity.service, identity.operation);
+            let route = self.routes.get(route_key.as_str()).ok_or(Error::NotFound)?;
+            Ok(route.clone())
+        }
+    }
+
+    impl<S> FromIterator<(&'static str, S)> for NomAllocatingRpcV2CborRouter<S> {
+        fn from_iter<T: IntoIterator<Item = (&'static str, S)>>(iter: T) -> Self {
+            Self {
+                routes: iter.into_iter().collect(),
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use http::{HeaderMap, HeaderValue, Method};
-    use regex::Regex;
+    use nom::combinator::all_consuming;
 
     use crate::protocol::test_helpers::req;
 
-    use super::{Error, Router, RpcV2CborRouter};
-
-    fn identifier_regex() -> Regex {
-        Regex::new(&format!("^{}$", super::IDENTIFIER_PATTERN)).unwrap()
-    }
+    use super::{identifier, parse_route_identity, wire_format_name, Error, RouteIdentity, Router, RpcV2CborRouter};
 
     #[test]
     fn valid_identifiers() {
-        let valid_identifiers = vec!["a", "_a", "_0", "__0", "variable123", "_underscored_variable"];
+        let valid_identifiers = ["a", "_a", "_0", "__0", "variable123", "_underscored_variable"];
 
-        for id in &valid_identifiers {
-            assert!(identifier_regex().is_match(id), "'{id}' is incorrectly rejected");
+        for id in valid_identifiers {
+            assert!(all_consuming(identifier)(id).is_ok(), "'{id}' is incorrectly rejected");
         }
     }
 
     #[test]
     fn invalid_identifiers() {
-        let invalid_identifiers = vec![
+        let invalid_identifiers = [
+            "",
+            "_",
             "0",
             "123starts_with_digit",
             "@invalid_start_character",
@@ -283,15 +338,13 @@ mod tests {
             "no#hashes",
         ];
 
-        for id in &invalid_identifiers {
-            assert!(!identifier_regex().is_match(id), "'{id}' is incorrectly accepted");
+        for id in invalid_identifiers {
+            assert!(all_consuming(identifier)(id).is_err(), "'{id}' is incorrectly accepted");
         }
     }
 
     #[test]
-    fn uri_regex_works_accepts() {
-        let regex = RpcV2CborRouter::<()>::uri_path_regex();
-
+    fn uri_parser_accepts_valid_routes() {
         for uri in [
             "/service/Service/operation/Operation",
             "prefix/69/service/Service/operation/Operation",
@@ -299,22 +352,24 @@ mod tests {
             "prefix/69/service/Service/operation/Operation/service/Service/operation/Operation",
             // Service implementations SHOULD accept an absolute shape ID as the content of this
             // segment with the `#` character replaced with a `.` character, routing it the same as
-            // if only the name was specified. For example, if the `service`'s absolute shape ID is
-            // `com.example#TheService`, a service should accept both `TheService` and
-            // `com.example.TheService` as values for the `serviceName` segment.
+            // if only the name was specified.
             "/service/aws.protocoltests.rpcv2Cbor.Service/operation/Operation",
             "/service/namespace.Service/operation/Operation",
         ] {
-            let captures = regex.captures(uri).unwrap();
-            assert_eq!("Service", &captures["service"], "uri: {uri}");
-            assert_eq!("Operation", &captures["operation"], "uri: {uri}");
+            assert_eq!(
+                Some(RouteIdentity {
+                    service: "Service",
+                    operation: "Operation",
+                    route_key: "Service/operation/Operation",
+                }),
+                parse_route_identity(uri),
+                "uri: {uri}",
+            );
         }
     }
 
     #[test]
-    fn uri_regex_works_rejects() {
-        let regex = RpcV2CborRouter::<()>::uri_path_regex();
-
+    fn uri_parser_rejects_invalid_routes() {
         for uri in [
             "",
             "foo",
@@ -326,23 +381,19 @@ mod tests {
             "/service/namespace.foo#Service/operation/Operation",
             "/service/namespace-Service/operation/Operation",
             "/service/.Service/operation/Operation",
+            "/service/namespace./operation/Operation",
         ] {
-            assert!(regex.captures(uri).is_none(), "uri: {uri}");
+            assert_eq!(None, parse_route_identity(uri), "uri: {uri}");
         }
     }
 
     #[test]
-    fn wire_format_regex_works() {
-        let regex = RpcV2CborRouter::<()>::wire_format_regex();
-
-        let captures = regex.captures("rpc-v2-something").unwrap();
-        assert_eq!("something", &captures["format"]);
-
-        let captures = regex.captures("rpc-v2-SomethingElse").unwrap();
-        assert_eq!("SomethingElse", &captures["format"]);
-
-        let invalid = regex.captures("rpc-v1-something");
-        assert!(invalid.is_none());
+    fn wire_format_parser_works() {
+        assert_eq!(Ok(("", "something")), wire_format_name("rpc-v2-something"));
+        assert_eq!(Ok(("", "SomethingElse")), wire_format_name("rpc-v2-SomethingElse"));
+        assert!(wire_format_name("rpc-v1-something").is_err());
+        assert!(wire_format_name("rpc-v2-").is_err());
+        assert!(wire_format_name("rpc-v2-cbor-suffix").is_err());
     }
 
     /// Helper function returning the only strictly required header.
@@ -354,7 +405,7 @@ mod tests {
 
     #[test]
     fn simple_routing() {
-        let router: RpcV2CborRouter<_> = ["Service.Operation"].into_iter().map(|op| (op, ())).collect();
+        let router: RpcV2CborRouter<_> = [("Service/operation/Operation", ())].into_iter().collect();
         let good_uri = "/prefix/service/Service/operation/Operation";
 
         // The request should match.
@@ -402,5 +453,15 @@ mod tests {
                 Err(Error::InvalidWireFormatHeader(_))
             ));
         }
+    }
+
+    #[test]
+    fn route_key_borrows_the_request_path() {
+        let path = "/prefix/service/namespace.Service/operation/Operation".to_string();
+        let identity = parse_route_identity(&path).expect("valid route");
+        assert_eq!(identity.route_key, "Service/operation/Operation");
+
+        let path_range = path.as_ptr() as usize..path.as_ptr() as usize + path.len();
+        assert!(path_range.contains(&(identity.route_key.as_ptr() as usize)));
     }
 }

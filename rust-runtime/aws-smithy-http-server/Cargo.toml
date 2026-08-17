@@ -18,6 +18,7 @@ default = []
 unredacted-logging = []
 request-id = ["dep:uuid"]
 aws-lambda = ["dep:lambda_http"]
+rpc-v2-cbor-router-benchmarks = []
 
 [dependencies]
 aws-smithy-cbor = { path = "../aws-smithy-cbor" }
@@ -67,6 +68,7 @@ tracing = "0.1.44"
 uuid = { version = "1.1.2", features = ["v4", "fast-rng"], optional = true }
 
 [dev-dependencies]
+criterion = { version = "=0.5.1", features = ["async_tokio"] }
 pretty_assertions = "1"
 hyper-util = { version = "0.1", features = [
     "tokio",
@@ -85,3 +87,8 @@ targets = ["x86_64-unknown-linux-gnu"]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
+
+[[bench]]
+name = "rpc_v2_cbor_router"
+harness = false
+required-features = ["rpc-v2-cbor-router-benchmarks"]
