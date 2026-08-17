@@ -98,6 +98,12 @@ tokio = { version = "1.23.1", features = ["full", "test-util"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
+# `tempfile` is only used by the Windows-only `credential_process` integration
+# tests, so it is declared as a target-specific dev-dependency to avoid being
+# flagged as an unused dependency on other platforms (e.g. cargo-udeps in CI).
+[target.'cfg(windows)'.dev-dependencies]
+tempfile = "3.16.0"
+
 [package.metadata.docs.rs]
 all-features = true
 targets = ["x86_64-unknown-linux-gnu"]
