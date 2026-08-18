@@ -205,7 +205,7 @@ internal fun testCodegenContext(
     settings: CoreRustSettings = testRustSettings(),
     codegenTarget: CodegenTarget = CodegenTarget.CLIENT,
     nullabilityCheckMode: NullableIndex.CheckMode = NullableIndex.CheckMode.CLIENT,
-    protocolSerdeModule: RustModule.LeafModule = ProtocolFunctions.defaultSerDeModule,
+    protocolSerDeModule: RustModule.LeafModule = ProtocolFunctions.defaultSerDeModule,
 ): CodegenContext =
     object : CodegenContext(
         model,
@@ -217,7 +217,7 @@ internal fun testCodegenContext(
         ShapeId.from("test#Protocol"),
         settings,
         codegenTarget,
-        protocolSerdeModule,
+        protocolSerDeModule,
     ) {
         override fun builderInstantiator(): BuilderInstantiator {
             return DefaultBuilderInstantiator(codegenTarget == CodegenTarget.CLIENT, symbolProvider)

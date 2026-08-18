@@ -60,7 +60,7 @@ abstract class CodegenContext(
      * to just look up this flag.
      */
     open val target: CodegenTarget,
-    /** Module that owns protocol serialization and deserialization helper functions. */
+    /** Module that owns protocol serialization and deserialization. */
     open val protocolSerdeModule: RustModule.LeafModule = ProtocolFunctions.defaultSerDeModule,
 ) {
     /**
