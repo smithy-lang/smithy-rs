@@ -486,15 +486,12 @@ fn jittered_error_cache() -> Duration {
     Duration::from_secs(ERROR_CACHE_MIN_SECS + fastrand::u64(0..=ERROR_CACHE_JITTER_SECS))
 }
 
-// A `Clone` wrapper so a cached non-recoverable error can be re-raised to multiple callers
-// (`BoxError` is not `Clone`). The underlying error is exposed through `source`, matching how
-// `Arc`-wrapped errors elsewhere in the runtime surface their cause.
 #[derive(Clone, Debug)]
 struct CachedNonRecoverableError(Arc<dyn Error + Send + Sync>);
 
 impl fmt::Display for CachedNonRecoverableError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.0, f)
+        write!(f, "non-recoverable identity resolution error")
     }
 }
 
@@ -938,6 +935,29 @@ mod tests {
         assert!(
             !aws_non_recoverable(&recoverable),
             "no Unrecoverable anywhere in the chain"
+        );
+    }
+
+    #[test]
+    fn cached_non_recoverable_error_is_not_double_printed() {
+        use aws_smithy_types::error::display::DisplayErrorContext;
+
+        let err: BoxError = CredentialsError::unrecoverable("terminal").into();
+        let rendered = DisplayErrorContext(CachedNonRecoverableError(Arc::from(err))).to_string();
+
+        let inner_msg = "a non-recoverable error occurred while loading credentials";
+        assert_eq!(
+            rendered.matches(inner_msg).count(),
+            1,
+            "inner error message should appear exactly once: {rendered}"
+        );
+        assert!(
+            rendered.starts_with("non-recoverable identity resolution error:"),
+            "label should prefix the chain: {rendered}"
+        );
+        assert!(
+            rendered.contains("terminal"),
+            "underlying cause should be preserved: {rendered}"
         );
     }
 
