@@ -49,7 +49,13 @@ class ServiceGenerator(
             serviceConfigGenerator.render(this)
 
             // Enable users to opt in to the `test-util` feature in the runtime crate
-            rustCrate.mergeFeature(TestUtilFeature.copy(deps = listOf("aws-smithy-runtime/test-util")))
+            val testUtilDeps =
+                if (codegenContext.settings.codegenConfig.includeLegacyClient) {
+                    listOf("aws-smithy-runtime/test-util", "aws-smithy-runtime/legacy-test-util")
+                } else {
+                    listOf("aws-smithy-runtime/test-util")
+                }
+            rustCrate.mergeFeature(TestUtilFeature.copy(deps = testUtilDeps))
 
             ServiceRuntimePluginGenerator(codegenContext)
                 .render(this, decorator.serviceRuntimePluginCustomizations(codegenContext, emptyList()))

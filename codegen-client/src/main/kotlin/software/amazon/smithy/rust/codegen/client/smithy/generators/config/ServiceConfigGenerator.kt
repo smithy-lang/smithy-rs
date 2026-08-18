@@ -306,6 +306,7 @@ class ServiceConfigGenerator(
     private val moduleUseName = codegenContext.moduleUseName()
     private val runtimeConfig = codegenContext.runtimeConfig
     private val enableUserConfigurableRuntimePlugins = codegenContext.enableUserConfigurableRuntimePlugins
+    private val includeLegacyClient = codegenContext.settings.codegenConfig.includeLegacyClient
     private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
     val codegenScope =
         arrayOf(
@@ -349,6 +350,7 @@ class ServiceConfigGenerator(
 
     private fun behaviorMv() =
         writable {
+            val behaviorVersionExample = if (includeLegacyClient) "v2023_11_09" else "v2026_01_12"
             val docs = """
                 /// Sets the [`behavior major version`](crate::config::BehaviorVersion).
                 ///
@@ -374,7 +376,7 @@ class ServiceConfigGenerator(
                 /// use $moduleUseName::config::BehaviorVersion;
                 ///
                 /// let config = $moduleUseName::Config::builder()
-                ///     .behavior_version(BehaviorVersion::v2023_11_09())
+                ///     .behavior_version(BehaviorVersion::$behaviorVersionExample())
                 ///     // ...
                 ///     .build();
                 /// let client = $moduleUseName::Client::from_conf(config);
