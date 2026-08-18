@@ -2,10 +2,9 @@ $version: "2"
 
 namespace com.aws.example.multi
 
-use aws.protocols#restXml
 use com.aws.example#PokemonService
-use smithy.protocols#rpcv2Cbor
 
-// Exercise server-side multi-protocol generation without changing the existing Pokémon service.
-apply PokemonService @restXml
-apply PokemonService @rpcv2Cbor
+// All compatible protocols are now applied directly on the PokemonService in pokemon.smithy:
+// @restJson1, @restXml, @rpcv2Cbor
+// Note: @awsJson1_0 and @awsJson1_1 are incompatible with @httpPayload + streaming members
+// used by CapturePokemon and StreamPokemonRadio operations.

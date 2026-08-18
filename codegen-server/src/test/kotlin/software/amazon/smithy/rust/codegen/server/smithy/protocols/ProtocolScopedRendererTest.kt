@@ -46,7 +46,7 @@ class ProtocolScopedRendererTest {
         val renderer = ProtocolScopedRenderer(rustCrate, protocols, TestProtocol::modules, debugMode = false)
 
         renderer.renderEach({ it.modules.operations }) { scope ->
-            val shapeModule = RustModule.pubCrate("shape_test", parent = ProtocolFunctions.serDeModule)
+            val shapeModule = RustModule.pubCrate("shape_test", parent = ProtocolFunctions.defaultSerDeModule)
             val nested =
                 RuntimeType.forInlineFun("nested", shapeModule) {
                     rust("pub(crate) fn nested() -> u8 { ${scope.protocol.value} }")

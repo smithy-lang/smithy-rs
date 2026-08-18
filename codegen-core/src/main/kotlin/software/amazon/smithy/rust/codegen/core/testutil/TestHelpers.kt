@@ -42,6 +42,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderInstant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructSettings
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.module
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -204,6 +205,7 @@ internal fun testCodegenContext(
     settings: CoreRustSettings = testRustSettings(),
     codegenTarget: CodegenTarget = CodegenTarget.CLIENT,
     nullabilityCheckMode: NullableIndex.CheckMode = NullableIndex.CheckMode.CLIENT,
+    protocolSerdeModule: RustModule.LeafModule = ProtocolFunctions.defaultSerDeModule,
 ): CodegenContext =
     object : CodegenContext(
         model,
@@ -215,6 +217,7 @@ internal fun testCodegenContext(
         ShapeId.from("test#Protocol"),
         settings,
         codegenTarget,
+        protocolSerdeModule,
     ) {
         override fun builderInstantiator(): BuilderInstantiator {
             return DefaultBuilderInstantiator(codegenTarget == CodegenTarget.CLIENT, symbolProvider)

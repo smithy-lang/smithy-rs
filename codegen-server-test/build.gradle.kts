@@ -128,12 +128,6 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
         ),
         CodegenTest(
             "com.aws.example#PokemonService",
-            "pokemon-service-server-sdk",
-            imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy"),
-            extraCodegenConfig = """"debugMode": true""",
-        ),
-        CodegenTest(
-            "com.aws.example#PokemonService",
             "pokemon-service-awsjson-server-sdk",
             imports = listOf("$commonModels/pokemon-awsjson.smithy", "$commonModels/pokemon-common.smithy"),
         ),
@@ -151,6 +145,15 @@ val customCodegenTests = "custom-test-models".let { customModels ->
 }
 
 val multiProtocolCodegenTests = listOf(
+    CodegenTest(
+        "com.aws.example#PokemonService",
+        "pokemon-service-server-sdk",
+        imports = listOf(
+            "../codegen-core/common-test-models/pokemon.smithy",
+            "../codegen-core/common-test-models/pokemon-common.smithy",
+        ),
+        extraCodegenConfig = """"http-1x": true, "debugMode": true""",
+    ),
     CodegenTest(
         "com.aws.example#PokemonService",
         "pokemon-service-multi-protocol-server-sdk",

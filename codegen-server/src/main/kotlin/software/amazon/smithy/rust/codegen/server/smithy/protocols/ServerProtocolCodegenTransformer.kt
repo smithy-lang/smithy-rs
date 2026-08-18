@@ -43,7 +43,7 @@ internal class ServerProtocolCodegenTransformer(
 
         val roots =
             mapOf(
-                ProtocolFunctions.serDeModule to protocolModules.serde,
+                ProtocolFunctions.defaultSerDeModule to protocolModules.serde,
                 LEGACY_EVENT_STREAM_SERDE_MODULE to protocolModules.eventStreamSerde,
             )
         destinationWriter.writeWithNoFormatting(rewrite(temporaryWriter.generatedBody(), roots))

@@ -139,7 +139,7 @@ fun serverProtocolSerdeModule(
     if (isMultiProtocol) {
         RustModule.private("serde", parent = serverProtocolRootModule(protocolId))
     } else {
-        ProtocolFunctions.serDeModule
+        ProtocolFunctions.defaultSerDeModule
     }
 
 /** Returns the legacy event-stream module, or the private event-stream module owned by one protocol. */
