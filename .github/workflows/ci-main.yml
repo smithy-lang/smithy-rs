@@ -32,6 +32,8 @@ jobs:
     permissions:
       id-token: write
       contents: read
+      # Needed to push the build image to the public GHCR mirror that fork PRs pull from
+      packages: write
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - name: Checkout
@@ -62,6 +64,35 @@ jobs:
         pwd
         IMAGE_TAG="ci-$(./.github/scripts/docker-image-hash)"
         ./.github/scripts/upload-build-image.sh $IMAGE_TAG
+    # Mirror the image to public GHCR so fork PRs, which can't authenticate to ECR, can pull it
+    # instead of rebuilding it. continue-on-error since ECR (the path every non-fork build needs)
+    # already succeeded here; a mirror failure just leaves forks on the slower local build.
+    - name: Mirror image to public GHCR
+      continue-on-error: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -euo pipefail
+        IMAGE_TAG="ci-$(./.github/scripts/docker-image-hash)"
+        echo "${GITHUB_TOKEN}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+        GHCR_IMAGE="ghcr.io/smithy-lang/smithy-rs-build-image:${IMAGE_TAG}"
+        docker tag "smithy-rs-base-image:${IMAGE_TAG}" "${GHCR_IMAGE}"
+        docker push "${GHCR_IMAGE}"
+        # A new GHCR package is private by default and has to be made public by hand once (no API).
+        # Check it via the registry token endpoint: /v2/ returns 401 without a token even when
+        # public, but an anonymous token is only granted pull scope when the package is public.
+        GHCR_REPO="${{ github.repository_owner }}/smithy-rs-build-image"
+        ANON_TOKEN="$(
+          curl -fsSL "https://ghcr.io/token?scope=repository:${GHCR_REPO}:pull&service=ghcr.io" 2>/dev/null \
+            | sed -n 's/.*"token":"\([^"]*\)".*/\1/p' || true
+        )"
+        if [[ -n "${ANON_TOKEN}" ]] && curl -fsSL -o /dev/null \
+            -H "Authorization: Bearer ${ANON_TOKEN}" \
+            "https://ghcr.io/v2/${GHCR_REPO}/tags/list"; then
+          echo "GHCR package is anonymously pullable; fork PRs can use the mirror."
+        else
+          echo "::warning::GHCR package ${GHCR_REPO} is not anonymously pullable (likely still private). Make it public in the org's package settings, or fork PRs will keep rebuilding the image (~45m)."
+        fi
 
   # Run the shared CI after a Docker build image has been uploaded to ECR
   ci:

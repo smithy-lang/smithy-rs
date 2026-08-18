@@ -17,7 +17,9 @@ for runtime_path in "rust-runtime" "aws/rust-runtime"; do
   cargo doc --no-deps --document-private-items --all-features --workspace "${exclusions[@]}"
   popd &>/dev/null
 done
-# TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) We don't have a way to codegen the deps needed by the aws-config crate
-# (cd aws/rust-runtime/aws-config && cargo test --all-features) # aws-config is not part of the workspace so we have to test it separately
-echo "Testing isolated features of aws-smithy-http-client"
-(cd rust-runtime && cargo test -p aws-smithy-http-client --features rustls-ring) # only ring works on windows
+# aws-config is not part of these workspaces and depends on generated SDK crates,
+# so it is tested by the dedicated `test-rust-windows-aws-config` CI job (see
+# .github/workflows/ci.yml), which supplies the generated SDK and runs
+# tools/ci-scripts/test-windows-aws-config.sh.
+echo "Testing aws-smithy-http-client with Rustls/Ring and the wire harness"
+(cd rust-runtime && cargo test -p aws-smithy-http-client --features rustls-ring,wire-mock) # only ring works on windows
