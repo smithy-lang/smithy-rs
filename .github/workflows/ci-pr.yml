@@ -151,13 +151,39 @@ jobs:
           });
           const labels = response.data.labels.map(l => l.name);
           const isBreaking = labels.includes("breaking-change");
+          // Semver can only change if the generated SDK's public API can: runtime crates (copied
+          // into the SDK) or codegen sources. Skip the check when every changed file is inert
+          // (docs, changelog, CI config), which can't affect any crate's API.
+          //
+          // Fail-open: any failure to enumerate the changed files (or an empty result) runs the
+          // full semver check. A silent skip is a much worse outcome than a redundant run.
+          let runSemver = true;
+          try {
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              pull_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            // Markdown only counts as inert outside the runtime crates: files under rust-runtime/
+            // and aws/rust-runtime/ can be pulled into crate docs with `#[doc = include_str!(...)]`,
+            // which is part of the public API surface `cargo-semver-checks` inspects.
+            const inert = /^(design\/|docs\/|\.github\/|\.changelog\/|CHANGELOG\.md$|[^/]+\.md$)/;
+            // Only skip when at least one file was actually listed; an empty set means the lookup
+            // returned nothing (or the PR is somehow file-less) and the check should still run.
+            runSemver = files.length === 0 ? true : files.some(f => !inert.test(f.filename));
+          } catch (e) {
+            core.warning(`listFiles lookup failed, running semver checks anyway: ${e}`);
+          }
           const data = {
             labels,
-            isBreaking
+            isBreaking,
+            runSemver
           };
           console.log("data:", data);
           return data;
     - name: Run semver check
+      # Only run when the PR touches something that could change a crate's public API (see above)
+      if: fromJSON(steps.check-breaking-label.outputs.result).runSemver
       env:
         ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
         DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}

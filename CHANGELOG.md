@@ -1,4 +1,13 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+August 19th, 2026
+=================
+**New this release:**
+- :tada: (client, [smithy-rs#4767](https://github.com/smithy-lang/smithy-rs/issues/4767)) Add a deterministic connection-level test harness to the `wire-mock` feature under `aws_smithy_http_client::test_util::wire::connection`. It supports per-connection HTTP/1.1 scripts, raw socket actions, synchronization gates, and recorded connection events.
+- :tada: (client) Add `pool_max_idle_per_host` setter to HTTP client `Builder` and `ConnectorBuilder`,
+    exposing hyper's `pool_max_idle_per_host` setting to control the maximum number of idle
+    connections kept alive per host.
+
+
 August 12th, 2026
 =================
 **New this release:**
