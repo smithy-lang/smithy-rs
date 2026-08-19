@@ -234,7 +234,7 @@ impl<S: Clone, B> Router<B> for RpcV2CborRouter<S> {
         // Lookup in the `TinyMap` for a route for the target.
         let route = self
             .routes
-            .get((format!("{service}.{operation}")).as_str())
+            .get((format!("{service}/operation/{operation}")).as_str())
             .ok_or(Error::NotFound)?;
         Ok(route.clone())
     }
@@ -354,7 +354,7 @@ mod tests {
 
     #[test]
     fn simple_routing() {
-        let router: RpcV2CborRouter<_> = ["Service.Operation"].into_iter().map(|op| (op, ())).collect();
+        let router: RpcV2CborRouter<_> = [("Service/operation/Operation", ())].into_iter().collect();
         let good_uri = "/prefix/service/Service/operation/Operation";
 
         // The request should match.

@@ -585,6 +585,7 @@ dependencies = [
  "aws-smithy-types 1.6.2",
  "aws-smithy-xml 0.62.0",
  "bytes",
+ "criterion",
  "futures-util",
  "http 1.5.0",
  "http-body 1.1.0",

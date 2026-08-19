@@ -9,7 +9,6 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
 use aws_smithy_http_server::body::empty;
-use aws_smithy_http_server::protocol::rpc_v2_cbor::router::benchmarks::NomAllocatingRpcV2CborRouter;
 use aws_smithy_http_server::protocol::rpc_v2_cbor::router::RpcV2CborRouter;
 use aws_smithy_http_server::protocol::rpc_v2_cbor::RpcV2Cbor;
 use aws_smithy_http_server::routing::{Router, RoutingService};
@@ -68,7 +67,7 @@ fn request(path: &str) -> Request<()> {
         .uri(path)
         .header("smithy-protocol", HeaderValue::from_static("rpc-v2-cbor"))
         .body(())
-        .unwrap()
+        .expect("valid benchmark request")
 }
 
 fn sample_size() -> usize {
@@ -99,13 +98,34 @@ fn scenarios() -> [(&'static str, Request<()>); 4] {
     ]
 }
 
-fn benchmark_router<R>(c: &mut Criterion, strategy: &str, router: &R, scenarios: &[(&str, Request<()>)])
-where
-    R: Router<(), Service = ()>,
-{
-    let mut group = c.benchmark_group(format!("rpc_v2_cbor_router/{strategy}"));
-    group.throughput(Throughput::Elements(1));
+fn report_allocations(router: &RpcV2CborRouter<()>, scenarios: &[(&str, Request<()>)]) {
+    const ITERATIONS: u64 = 10_000;
+    eprintln!("allocation report: handwritten");
     for (name, request) in scenarios {
+        ALLOCATION_CALLS.store(0, Ordering::Relaxed);
+        ALLOCATED_BYTES.store(0, Ordering::Relaxed);
+        COUNT_ALLOCATIONS.store(true, Ordering::Relaxed);
+        for _ in 0..ITERATIONS {
+            black_box(router.match_route(black_box(request))).ok();
+        }
+        COUNT_ALLOCATIONS.store(false, Ordering::Relaxed);
+
+        eprintln!(
+            "  {name}: {:.2} allocations/route, {:.2} bytes/route",
+            ALLOCATION_CALLS.load(Ordering::Relaxed) as f64 / ITERATIONS as f64,
+            ALLOCATED_BYTES.load(Ordering::Relaxed) as f64 / ITERATIONS as f64,
+        );
+    }
+}
+
+fn rpc_v2_cbor_router(c: &mut Criterion) {
+    let router: RpcV2CborRouter<()> = [("Service/operation/Operation", ())].into_iter().collect();
+    let scenarios = scenarios();
+    report_allocations(&router, &scenarios);
+
+    let mut group = c.benchmark_group("rpc_v2_cbor_router/handwritten");
+    group.throughput(Throughput::Elements(1));
+    for (name, request) in &scenarios {
         group.bench_with_input(BenchmarkId::from_parameter(name), request, |b, request| {
             b.iter(|| black_box(router.match_route(black_box(request))));
         });
@@ -113,76 +133,17 @@ where
     group.finish();
 }
 
-fn allocation_totals<R>(router: &R, request: &Request<()>, iterations: u64) -> (u64, u64)
-where
-    R: Router<(), Service = ()>,
-{
-    ALLOCATION_CALLS.store(0, Ordering::Relaxed);
-    ALLOCATED_BYTES.store(0, Ordering::Relaxed);
-    COUNT_ALLOCATIONS.store(true, Ordering::Relaxed);
-    for _ in 0..iterations {
-        black_box(router.match_route(black_box(request))).ok();
-    }
-    COUNT_ALLOCATIONS.store(false, Ordering::Relaxed);
-    (
-        ALLOCATION_CALLS.load(Ordering::Relaxed),
-        ALLOCATED_BYTES.load(Ordering::Relaxed),
-    )
-}
-
-fn report_allocations<R>(strategy: &str, router: &R, scenarios: &[(&str, Request<()>)])
-where
-    R: Router<(), Service = ()>,
-{
-    const ITERATIONS: u64 = 10_000;
-    eprintln!("allocation report: {strategy}");
-    for (name, request) in scenarios {
-        let (calls, bytes) = allocation_totals(router, request, ITERATIONS);
-        eprintln!(
-            "  {name}: {:.2} allocations/route, {:.2} bytes/route",
-            calls as f64 / ITERATIONS as f64,
-            bytes as f64 / ITERATIONS as f64,
-        );
-    }
-}
-
-fn rpc_v2_cbor_router(c: &mut Criterion) {
-    let nom_allocating: NomAllocatingRpcV2CborRouter<()> = [("Service.Operation", ())].into_iter().collect();
-    let borrowed_path: RpcV2CborRouter<()> = [("Service/operation/Operation", ())].into_iter().collect();
-    let scenarios = scenarios();
-
-    report_allocations("nom_allocating", &nom_allocating, &scenarios);
-    report_allocations("borrowed_path", &borrowed_path, &scenarios);
-    benchmark_router(c, "nom_allocating", &nom_allocating, &scenarios);
-    benchmark_router(c, "borrowed_path", &borrowed_path, &scenarios);
-}
-
 fn rpc_v2_cbor_routing_service(c: &mut Criterion) {
     let operation = service_fn(|_request: Request<()>| async { Ok::<_, Infallible>(Response::new(empty())) });
-    let nom_router: NomAllocatingRpcV2CborRouter<_> = [("Service.Operation", operation.clone())].into_iter().collect();
-    let borrowed_router: RpcV2CborRouter<_> = [("Service/operation/Operation", operation)].into_iter().collect();
-    let nom_service = RoutingService::<_, RpcV2Cbor>::new(nom_router);
-    let borrowed_service = RoutingService::<_, RpcV2Cbor>::new(borrowed_router);
+    let router: RpcV2CborRouter<_> = [("Service/operation/Operation", operation)].into_iter().collect();
+    let service = RoutingService::<_, RpcV2Cbor>::new(router);
     let runtime = Runtime::new().expect("Tokio runtime");
 
     let mut group = c.benchmark_group("rpc_v2_cbor_routing_service");
     group.throughput(Throughput::Elements(1));
-    group.bench_function("nom_allocating", |b| {
+    group.bench_function("handwritten", |b| {
         b.to_async(&runtime).iter(|| {
-            let service = nom_service.clone();
-            async move {
-                black_box(
-                    service
-                        .oneshot(request("/service/Service/operation/Operation"))
-                        .await
-                        .expect("infallible operation"),
-                )
-            }
-        });
-    });
-    group.bench_function("borrowed_path", |b| {
-        b.to_async(&runtime).iter(|| {
-            let service = borrowed_service.clone();
+            let service = service.clone();
             async move {
                 black_box(
                     service

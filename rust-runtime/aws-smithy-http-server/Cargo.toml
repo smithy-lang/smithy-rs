@@ -18,7 +18,6 @@ default = []
 unredacted-logging = []
 request-id = ["dep:uuid"]
 aws-lambda = ["dep:lambda_http"]
-rpc-v2-cbor-router-benchmarks = []
 
 [dependencies]
 aws-smithy-cbor = { path = "../aws-smithy-cbor" }
@@ -91,4 +90,3 @@ rustdoc-args = ["--cfg", "docsrs"]
 [[bench]]
 name = "rpc_v2_cbor_router"
 harness = false
-required-features = ["rpc-v2-cbor-router-benchmarks"]

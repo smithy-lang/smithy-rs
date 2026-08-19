@@ -8,13 +8,6 @@ use std::str::FromStr;
 
 use http::header::ToStrError;
 use http::HeaderMap;
-use nom::branch::alt;
-use nom::bytes::complete::{tag, take_until, take_while, take_while1};
-use nom::character::complete::satisfy;
-use nom::combinator::{all_consuming, opt, recognize};
-use nom::multi::fold_many0;
-use nom::sequence::{pair, preceded};
-use nom::IResult;
 use thiserror::Error;
 use tower::Layer;
 use tower::Service;
@@ -71,65 +64,106 @@ struct RouteIdentity<'a> {
     route_key: &'a str,
 }
 
-fn identifier(input: &str) -> IResult<&str, &str> {
-    recognize(pair(
-        alt((
-            recognize(pair(
-                take_while1(|character: char| character == '_'),
-                satisfy(|character| character.is_ascii_alphanumeric()),
-            )),
-            recognize(satisfy(|character| character.is_ascii_alphabetic())),
-        )),
-        take_while(|character: char| character.is_ascii_alphanumeric() || character == '_'),
-    ))(input)
+/// Returns true for bytes matching the Smithy `Word` production: `[A-Za-z0-9_]`.
+#[inline(always)]
+fn is_word(character: u8) -> bool {
+    character.is_ascii_alphanumeric() || character == b'_'
 }
 
-fn wire_format_name(input: &str) -> IResult<&str, &str> {
-    all_consuming(preceded(
-        tag("rpc-v2-"),
-        take_while1(|character: char| character.is_ascii_alphanumeric() || character == '_'),
-    ))(input)
+/// Checks the leading-character portion of the Smithy `Identifier` production.
+///
+/// Callers must first establish that every byte is a `Word` byte.
+#[inline]
+fn has_valid_identifier_start(identifier: &[u8]) -> bool {
+    let underscores = identifier.iter().take_while(|&&character| character == b'_').count();
+    if underscores == identifier.len() {
+        return false;
+    }
+    underscores != 0 || identifier[0].is_ascii_alphabetic()
 }
 
-fn service_name(input: &str) -> IResult<&str, &str> {
-    let (input, first_segment) = identifier(input)?;
-    fold_many0(
-        preceded(tag("."), identifier),
-        move || first_segment,
-        |_previous, segment| segment,
-    )(input)
+#[cfg(test)]
+fn is_valid_identifier(identifier: &str) -> bool {
+    identifier.as_bytes().iter().copied().all(is_word) && has_valid_identifier_start(identifier.as_bytes())
 }
 
-fn route_identity(input: &str) -> IResult<&str, RouteIdentity<'_>> {
-    let route = input;
-    let (input, service) = service_name(input)?;
-    let service_start = route.len() - input.len() - service.len();
-    let (input, _) = tag("/operation/")(input)?;
-    let (input, operation) = identifier(input)?;
-    Ok((
-        input,
-        RouteIdentity {
-            service,
-            operation,
-            // This starts at the unqualified service name and is therefore the exact
-            // `Service/operation/Operation` key emitted by server code generation.
-            route_key: &route[service_start..],
-        },
-    ))
+fn wire_format_name(header: &str) -> Option<&str> {
+    let format = header.strip_prefix("rpc-v2-")?;
+    (!format.is_empty() && format.bytes().all(is_word)).then_some(format)
 }
 
-fn route_candidate(input: &str) -> IResult<&str, Option<RouteIdentity<'_>>> {
-    let (input, _) = take_until("/service/")(input)?;
-    let (input, _) = tag("/service/")(input)?;
-    opt(all_consuming(route_identity))(input)
-}
+/// Parses a path ending in `/service/{service}/operation/{operation}`.
+///
+/// Parsing backwards avoids scanning an arbitrary prefix and allows the route lookup key to borrow
+/// the contiguous `{service}/operation/{operation}` tail directly from the request URI.
+fn parse_route_identity(path: &str) -> Option<RouteIdentity<'_>> {
+    const OPERATION: &[u8] = b"/operation";
+    const SERVICE: &[u8] = b"/service";
 
-fn parse_route_identity(input: &str) -> Option<RouteIdentity<'_>> {
-    // The protocol permits an arbitrary prefix. Jump between `/service/` markers without retaining
-    // the prefix, then accept only a route grammar that consumes the remainder of the path. This
-    // preserves the previous regex's unanchored-start and anchored-end behavior.
-    let mut parser = fold_many0(route_candidate, || None, |found, candidate| candidate.or(found));
-    parser(input).ok().and_then(|(_, identity)| identity)
+    let bytes = path.as_bytes();
+
+    let mut position = bytes.len();
+    let operation_slash = loop {
+        if position == 0 {
+            return None;
+        }
+        position -= 1;
+        match bytes[position] {
+            b'/' => break position,
+            character if is_word(character) => {}
+            _ => return None,
+        }
+    };
+    let operation = &bytes[operation_slash + 1..];
+    if !has_valid_identifier_start(operation) {
+        return None;
+    }
+
+    if operation_slash < OPERATION.len() || &bytes[operation_slash - OPERATION.len()..operation_slash] != OPERATION {
+        return None;
+    }
+    let service_end = operation_slash - OPERATION.len();
+
+    position = service_end;
+    let service_slash = loop {
+        if position == 0 {
+            return None;
+        }
+        position -= 1;
+        match bytes[position] {
+            b'/' => break position,
+            character if is_word(character) || character == b'.' => {}
+            _ => return None,
+        }
+    };
+    let qualified_service = &bytes[service_slash + 1..service_end];
+    if qualified_service.is_empty() {
+        return None;
+    }
+
+    if service_slash < SERVICE.len() || &bytes[service_slash - SERVICE.len()..service_slash] != SERVICE {
+        return None;
+    }
+
+    let mut segment_start = 0;
+    for (index, &character) in qualified_service.iter().enumerate() {
+        if character == b'.' {
+            if !has_valid_identifier_start(&qualified_service[segment_start..index]) {
+                return None;
+            }
+            segment_start = index + 1;
+        }
+    }
+    if !has_valid_identifier_start(&qualified_service[segment_start..]) {
+        return None;
+    }
+
+    let service_start = service_slash + 1 + segment_start;
+    Some(RouteIdentity {
+        service: &path[service_start..service_end],
+        operation: &path[operation_slash + 1..],
+        route_key: &path[service_start..],
+    })
 }
 
 impl<S> RpcV2CborRouter<S> {
@@ -203,7 +237,7 @@ pub enum WireFormatError {
 fn parse_wire_format_from_header(headers: &HeaderMap) -> Result<WireFormat, WireFormatError> {
     let header = headers.get("smithy-protocol").ok_or(WireFormatError::HeaderNotFound)?;
     let header = header.to_str().map_err(WireFormatError::HeaderValueNotVisibleAscii)?;
-    let (_, format) = wire_format_name(header).map_err(|_| WireFormatError::HeaderValueNotValid(header.to_owned()))?;
+    let format = wire_format_name(header).ok_or_else(|| WireFormatError::HeaderValueNotValid(header.to_owned()))?;
 
     let wire_format_parse_res: Result<WireFormat, WireFormatFromStrError> = format.parse();
     wire_format_parse_res.map_err(|_| WireFormatError::WireFormatNotSupported(header.to_owned()))
@@ -272,55 +306,21 @@ impl<S> FromIterator<(&'static str, S)> for RpcV2CborRouter<S> {
     }
 }
 
-/// Implementations retained only to compare routing strategies in benchmarks.
-#[cfg(feature = "rpc-v2-cbor-router-benchmarks")]
-#[doc(hidden)]
-pub mod benchmarks {
-    use super::*;
-
-    /// The nom router before zero-copy route keys were introduced. It composes a
-    /// `Service.Operation` string for every successful path parse.
-    #[derive(Debug, Clone)]
-    pub struct NomAllocatingRpcV2CborRouter<S> {
-        routes: TinyMap<&'static str, S, ROUTE_CUTOFF>,
-    }
-
-    impl<S: Clone, B> Router<B> for NomAllocatingRpcV2CborRouter<S> {
-        type Service = S;
-        type Error = Error;
-
-        fn match_route(&self, request: &http::Request<B>) -> Result<Self::Service, Self::Error> {
-            let identity = request_route_identity(request)?;
-            let route_key = format!("{}.{}", identity.service, identity.operation);
-            let route = self.routes.get(route_key.as_str()).ok_or(Error::NotFound)?;
-            Ok(route.clone())
-        }
-    }
-
-    impl<S> FromIterator<(&'static str, S)> for NomAllocatingRpcV2CborRouter<S> {
-        fn from_iter<T: IntoIterator<Item = (&'static str, S)>>(iter: T) -> Self {
-            Self {
-                routes: iter.into_iter().collect(),
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use http::{HeaderMap, HeaderValue, Method};
-    use nom::combinator::all_consuming;
-
     use crate::protocol::test_helpers::req;
+    use http::{HeaderMap, HeaderValue, Method};
 
-    use super::{identifier, parse_route_identity, wire_format_name, Error, RouteIdentity, Router, RpcV2CborRouter};
+    use super::{
+        is_valid_identifier, parse_route_identity, wire_format_name, Error, RouteIdentity, Router, RpcV2CborRouter,
+    };
 
     #[test]
     fn valid_identifiers() {
         let valid_identifiers = ["a", "_a", "_0", "__0", "variable123", "_underscored_variable"];
 
         for id in valid_identifiers {
-            assert!(all_consuming(identifier)(id).is_ok(), "'{id}' is incorrectly rejected");
+            assert!(is_valid_identifier(id), "'{id}' is incorrectly rejected");
         }
     }
 
@@ -339,7 +339,7 @@ mod tests {
         ];
 
         for id in invalid_identifiers {
-            assert!(all_consuming(identifier)(id).is_err(), "'{id}' is incorrectly accepted");
+            assert!(!is_valid_identifier(id), "'{id}' is incorrectly accepted");
         }
     }
 
@@ -389,11 +389,11 @@ mod tests {
 
     #[test]
     fn wire_format_parser_works() {
-        assert_eq!(Ok(("", "something")), wire_format_name("rpc-v2-something"));
-        assert_eq!(Ok(("", "SomethingElse")), wire_format_name("rpc-v2-SomethingElse"));
-        assert!(wire_format_name("rpc-v1-something").is_err());
-        assert!(wire_format_name("rpc-v2-").is_err());
-        assert!(wire_format_name("rpc-v2-cbor-suffix").is_err());
+        assert_eq!(Some("something"), wire_format_name("rpc-v2-something"));
+        assert_eq!(Some("SomethingElse"), wire_format_name("rpc-v2-SomethingElse"));
+        assert_eq!(None, wire_format_name("rpc-v1-something"));
+        assert_eq!(None, wire_format_name("rpc-v2-"));
+        assert_eq!(None, wire_format_name("rpc-v2-cbor-suffix"));
     }
 
     /// Helper function returning the only strictly required header.
@@ -452,6 +452,70 @@ mod tests {
                 router.match_route(invalid_request),
                 Err(Error::InvalidWireFormatHeader(_))
             ));
+        }
+    }
+
+    fn legacy_path_regex() -> &'static regex::Regex {
+        const IDENTIFIER: &str = r#"((_+([A-Za-z]|[0-9]))|[A-Za-z])[A-Za-z0-9_]*"#;
+        static REGEX: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+            regex::Regex::new(&format!(
+                r#"/service/({IDENTIFIER}\.)*(?P<service>{IDENTIFIER})/operation/(?P<operation>{IDENTIFIER})$"#,
+            ))
+            .expect("valid legacy regex")
+        });
+        &REGEX
+    }
+
+    fn legacy_parse(path: &str) -> Option<(&str, &str)> {
+        let captures = legacy_path_regex().captures(path)?;
+        Some((captures.name("service")?.as_str(), captures.name("operation")?.as_str()))
+    }
+
+    struct DeterministicGenerator(u64);
+
+    impl DeterministicGenerator {
+        fn next(&mut self) -> u64 {
+            self.0 = self
+                .0
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            self.0 >> 33
+        }
+    }
+
+    #[test]
+    fn handwritten_parser_matches_legacy_regex() {
+        const ALPHABET: &[u8] = b"aZ09_./-#soperatinvc";
+        const FRAGMENTS: &[&str] = &[
+            "/service/",
+            "/operation/",
+            "service/",
+            "operation",
+            "com.example.",
+            "Foo",
+            "_",
+            ".",
+            "/",
+            "Bar_1",
+            "-",
+            "#",
+        ];
+        let mut generator = DeterministicGenerator(0x5EED);
+        for iteration in 0..100_000 {
+            let mut path = String::new();
+            if iteration % 2 == 0 {
+                for _ in 0..(generator.next() % 60) {
+                    path.push(ALPHABET[generator.next() as usize % ALPHABET.len()] as char);
+                }
+            } else {
+                for _ in 0..(generator.next() % 8) {
+                    path.push_str(FRAGMENTS[generator.next() as usize % FRAGMENTS.len()]);
+                }
+            }
+
+            let expected = legacy_parse(&path);
+            let actual = parse_route_identity(&path).map(|identity| (identity.service, identity.operation));
+            assert_eq!(expected, actual, "parser/regex mismatch on input {path:?}");
         }
     }
 
