@@ -37,15 +37,6 @@ runs:
       key: ${{ runner.os }}-gradle-${{ hashFiles('gradle/caches/**/*', 'gradle/wrapper/**/*') }}
       restore-keys: |
         ${{ runner.os }}-gradle-
-  # Cargo registry (index + downloaded crate sources) shared across containerized legs. ci-action
-  # seeds this from the image's baked-in registry on a miss, so a cold cache never regresses.
-  - name: Cargo registry cache
-    uses: actions/cache@v4
-    with:
-      path: cargo-registry
-      key: ${{ runner.os }}-cargo-registry-${{ hashFiles('smithy-rs/**/Cargo.lock') }}
-      restore-keys: |
-        ${{ runner.os }}-cargo-registry-
        # Pinned to the commit hash of v2.7.3
   - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84
     with:
@@ -93,6 +84,19 @@ runs:
       # docker cache doesn't already hold the image, and it can't fail the way a missing source does.
       ALLOW_LOCAL_BUILD=${{ github.event.pull_request.head.repo.fork == true }} \
         ./smithy-rs/.github/scripts/acquire-build-image
+  # Cargo registry (index + downloaded crate sources) shared across containerized legs. ci-action
+  # seeds this from the image's baked-in registry on a miss, so a cold cache never regresses.
+  #
+  # Restored here rather than with the other caches at the top of this action: nothing before the
+  # step below reads it, and when it sat immediately ahead of `Download all artifacts` that download
+  # started aborting mid-stream while still exiting 0. Same cache and key, just claimed later.
+  - name: Cargo registry cache
+    uses: actions/cache@v4
+    with:
+      path: cargo-registry
+      key: ${{ runner.os }}-cargo-registry-${{ hashFiles('smithy-rs/**/Cargo.lock') }}
+      restore-keys: |
+        ${{ runner.os }}-cargo-registry-
      # This runs the commands from the matrix strategy
   - name: Run ${{ inputs.action }}
     shell: bash
