@@ -1,0 +1,9 @@
+# cargo-nextest configuration for the smithy-rs runtime workspace.
+#
+# The experimental `aws-smithy-http-server-python` crate uses custom test harnesses
+# (`harness = false`) for `middleware_tests` and `python_tests`. nextest discovers tests by
+# invoking each binary with `--list --format terse`, which those custom harnesses don't support,
+# so it errors. Exclude them from the default nextest run -- they continue to run under
+# `cargo test` (and this crate is already excluded from exotic-platform CI as experimental).
+[profile.default]
+default-filter = "not binary(=middleware_tests) and not binary(=python_tests)"

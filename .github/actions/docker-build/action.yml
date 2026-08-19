@@ -12,6 +12,12 @@ inputs:
   action-arguments:
     description: Arguments to pass to the action
     required: false
+  # Cache-safe slug for the artifact name and cache key (no slashes/spaces); defaults to `action`.
+  # Set it when legs share an `action` but differ by `action-arguments`, so they don't collide.
+  label:
+    description: Unique slug for artifact name and cache key; defaults to action
+    required: false
+    default: ''
   use_cache:
     description: Whether to use the gradle cache
     type: boolean
@@ -31,10 +37,20 @@ runs:
       key: ${{ runner.os }}-gradle-${{ hashFiles('gradle/caches/**/*', 'gradle/wrapper/**/*') }}
       restore-keys: |
         ${{ runner.os }}-gradle-
+  # Cargo registry (index + downloaded crate sources) shared across containerized legs. ci-action
+  # seeds this from the image's baked-in registry on a miss, so a cold cache never regresses.
+  - name: Cargo registry cache
+    uses: actions/cache@v4
+    with:
+      path: cargo-registry
+      key: ${{ runner.os }}-cargo-registry-${{ hashFiles('smithy-rs/**/Cargo.lock') }}
+      restore-keys: |
+        ${{ runner.os }}-cargo-registry-
        # Pinned to the commit hash of v2.7.3
   - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84
     with:
-      shared-key: ${{ runner.os }}-${{ github.job }}
+      # Per-leg key: keying only on `github.job` made a job's matrix legs contend for one cache
+      shared-key: ${{ runner.os }}-${{ github.job }}-${{ inputs.label != '' && inputs.label || inputs.action }}
       workspaces: |
         . smithy-rs-target
   - name: Download all artifacts
@@ -68,14 +84,16 @@ runs:
      # This runs the commands from the matrix strategy
   - name: Run ${{ inputs.action }}
     shell: bash
+    env:
+      ARTIFACT_LABEL: ${{ inputs.label != '' && inputs.label || inputs.action }}
     run: |
       ./smithy-rs/tools/ci-build/ci-action ${{ inputs.action }} ${{ inputs.action-arguments}}
-      tar cfz artifacts-${{ inputs.action }}.tar.gz -C artifacts .
+      tar cfz "artifacts-${ARTIFACT_LABEL}.tar.gz" -C artifacts .
   - name: Upload artifacts
     uses: actions/upload-artifact@v4
     with:
-      name: artifacts-${{ inputs.action }}
-      path: artifacts-${{ inputs.action }}.tar.gz
+      name: artifacts-${{ inputs.label != '' && inputs.label || inputs.action }}
+      path: artifacts-${{ inputs.label != '' && inputs.label || inputs.action }}.tar.gz
       if-no-files-found: error
       retention-days: 3
       overwrite: true
