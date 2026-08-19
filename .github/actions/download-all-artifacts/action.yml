@@ -42,13 +42,32 @@ runs:
         echo "complete=false" >> "$GITHUB_OUTPUT"
         rm -rf smithy-rs-base-image
       fi
-  - name: Retry base image artifact download
+  # Retry through the `gh` CLI rather than the action. The abort above happens inside the action's
+  # Node process; `gh run download` is a separate implementation that streams to disk, so it should
+  # not hit the same failure. Skipped when `gh` isn't on the runner, which leaves us no worse off
+  # than a single attempt. Needs `actions: read`, which `ci-pr-forks.yml` already grants.
+  - name: Retry base image artifact download via gh
     if: steps.check-base-image.outputs.complete != 'true'
     continue-on-error: true
-    uses: actions/download-artifact@v4
-    with:
-      name: smithy-rs-base-image
-      path: smithy-rs-base-image
+    shell: bash
+    env:
+      GH_TOKEN: ${{ github.token }}
+    run: |
+      if ! command -v gh >/dev/null 2>&1; then
+        echo "gh CLI not available on this runner; skipping retry"
+        exit 0
+      fi
+      rm -rf smithy-rs-base-image
+      if ! gh run download "${GITHUB_RUN_ID}" --name smithy-rs-base-image --dir smithy-rs-base-image; then
+        # Also the same-repo case, where this artifact is never uploaded.
+        echo "gh run download did not return the artifact"
+        exit 0
+      fi
+      if [[ -s smithy-rs-base-image/smithy-rs-base-image ]]; then
+        echo "base image artifact retrieved via gh"
+      else
+        echo "gh returned no usable tarball"
+      fi
   # Still incomplete after the retry: drop the directory rather than leave a partial one behind, so
   # `acquire-build-image` skips the load and falls through to a remote pull instead of hard failing.
   - name: Verify base image artifact
