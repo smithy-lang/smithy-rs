@@ -57,30 +57,9 @@ pub struct RpcV2CborRouter<S> {
 /// implementations MUST reject such requests for security reasons.
 const FORBIDDEN_HEADERS: &[&str] = &["x-amz-target", "x-amzn-target"];
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct RouteIdentity<'a> {
-    service: &'a str,
-    operation: &'a str,
-    route_key: &'a str,
-}
-
-/// Returns true for bytes matching the Smithy `Word` production: `[A-Za-z0-9_]`.
-#[inline(always)]
-fn is_word(character: u8) -> bool {
-    character.is_ascii_alphanumeric() || character == b'_'
-}
-
-/// Checks the leading-character portion of the Smithy `Identifier` production.
-///
-/// Callers must first establish that every byte is a `Word` byte.
-#[inline]
-fn has_valid_identifier_start(identifier: &[u8]) -> bool {
-    let underscores = identifier.iter().take_while(|&&character| character == b'_').count();
-    if underscores == identifier.len() {
-        return false;
-    }
-    underscores != 0 || identifier[0].is_ascii_alphabetic()
-}
+#[cfg(test)]
+use super::route_identity::has_valid_identifier_start;
+use super::route_identity::{is_word, parse_route_identity, RouteIdentity};
 
 #[cfg(test)]
 fn is_valid_identifier(identifier: &str) -> bool {
@@ -90,80 +69,6 @@ fn is_valid_identifier(identifier: &str) -> bool {
 fn wire_format_name(header: &str) -> Option<&str> {
     let format = header.strip_prefix("rpc-v2-")?;
     (!format.is_empty() && format.bytes().all(is_word)).then_some(format)
-}
-
-/// Parses a path ending in `/service/{service}/operation/{operation}`.
-///
-/// Parsing backwards avoids scanning an arbitrary prefix and allows the route lookup key to borrow
-/// the contiguous `{service}/operation/{operation}` tail directly from the request URI.
-fn parse_route_identity(path: &str) -> Option<RouteIdentity<'_>> {
-    const OPERATION: &[u8] = b"/operation";
-    const SERVICE: &[u8] = b"/service";
-
-    let bytes = path.as_bytes();
-
-    let mut position = bytes.len();
-    let operation_slash = loop {
-        if position == 0 {
-            return None;
-        }
-        position -= 1;
-        match bytes[position] {
-            b'/' => break position,
-            character if is_word(character) => {}
-            _ => return None,
-        }
-    };
-    let operation = &bytes[operation_slash + 1..];
-    if !has_valid_identifier_start(operation) {
-        return None;
-    }
-
-    if operation_slash < OPERATION.len() || &bytes[operation_slash - OPERATION.len()..operation_slash] != OPERATION {
-        return None;
-    }
-    let service_end = operation_slash - OPERATION.len();
-
-    position = service_end;
-    let service_slash = loop {
-        if position == 0 {
-            return None;
-        }
-        position -= 1;
-        match bytes[position] {
-            b'/' => break position,
-            character if is_word(character) || character == b'.' => {}
-            _ => return None,
-        }
-    };
-    let qualified_service = &bytes[service_slash + 1..service_end];
-    if qualified_service.is_empty() {
-        return None;
-    }
-
-    if service_slash < SERVICE.len() || &bytes[service_slash - SERVICE.len()..service_slash] != SERVICE {
-        return None;
-    }
-
-    let mut segment_start = 0;
-    for (index, &character) in qualified_service.iter().enumerate() {
-        if character == b'.' {
-            if !has_valid_identifier_start(&qualified_service[segment_start..index]) {
-                return None;
-            }
-            segment_start = index + 1;
-        }
-    }
-    if !has_valid_identifier_start(&qualified_service[segment_start..]) {
-        return None;
-    }
-
-    let service_start = service_slash + 1 + segment_start;
-    Some(RouteIdentity {
-        service: &path[service_start..service_end],
-        operation: &path[operation_slash + 1..],
-        route_key: &path[service_start..],
-    })
 }
 
 impl<S> RpcV2CborRouter<S> {
@@ -313,6 +218,9 @@ mod tests {
 
     use super::{
         is_valid_identifier, parse_route_identity, wire_format_name, Error, RouteIdentity, Router, RpcV2CborRouter,
+    };
+    use crate::protocol::rpc_v2_cbor::route_identity::{
+        parse_route_identity_enumerate, parse_route_identity_take_while,
     };
 
     #[test]
@@ -500,6 +408,12 @@ mod tests {
             "-",
             "#",
         ];
+        type Parser = for<'a> fn(&'a str) -> Option<RouteIdentity<'a>>;
+        let implementations: [(&str, Parser); 3] = [
+            ("indexed", parse_route_identity),
+            ("rev_enumerate", parse_route_identity_enumerate),
+            ("rev_take_while_all", parse_route_identity_take_while),
+        ];
         let mut generator = DeterministicGenerator(0x5EED);
         for iteration in 0..100_000 {
             let mut path = String::new();
@@ -514,8 +428,13 @@ mod tests {
             }
 
             let expected = legacy_parse(&path);
-            let actual = parse_route_identity(&path).map(|identity| (identity.service, identity.operation));
-            assert_eq!(expected, actual, "parser/regex mismatch on input {path:?}");
+            for (implementation, parser) in implementations {
+                let actual = parser(&path).map(|identity| (identity.service, identity.operation));
+                assert_eq!(
+                    expected, actual,
+                    "{implementation} parser/regex mismatch on input {path:?}"
+                );
+            }
         }
     }
 

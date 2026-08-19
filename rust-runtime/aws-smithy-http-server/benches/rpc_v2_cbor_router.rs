@@ -17,6 +17,13 @@ use http::{HeaderValue, Method, Request, Response};
 use tokio::runtime::Runtime;
 use tower::{service_fn, ServiceExt};
 
+#[path = "../src/protocol/rpc_v2_cbor/route_identity.rs"]
+mod route_identity;
+
+use route_identity::{
+    parse_route_identity, parse_route_identity_enumerate, parse_route_identity_regex, parse_route_identity_take_while,
+};
+
 struct CountingAllocator;
 
 static COUNT_ALLOCATIONS: AtomicBool = AtomicBool::new(false);
@@ -133,6 +140,62 @@ fn rpc_v2_cbor_router(c: &mut Criterion) {
     group.finish();
 }
 
+fn route_identity_parser(c: &mut Criterion) {
+    const URL_COUNT: usize = 16_384;
+    // This odd stride visits every entry in the power-of-two corpus while avoiding sequential access.
+    const URL_STEP: usize = 8_191;
+
+    type UrlFactory = fn(usize) -> String;
+    let scenarios: [(&str, UrlFactory); 4] = [
+        ("canonical_hit", |index| {
+            format!("/service/Service{index:016X}/operation/Operation{index:016X}")
+        }),
+        ("namespaced_hit", |index| {
+            format!(
+                "/service/aws.protocoltests.rpcv2Cbor{index:016X}.Service{index:016X}/operation/Operation{index:016X}"
+            )
+        }),
+        ("long_operation_hit", |index| {
+            format!(
+                "/service/Service{index:016X}/operation/AnOperationNameThatIsLongEnoughToExposeSuffixScanningCosts{index:016X}"
+            )
+        }),
+        ("invalid_operation_miss", |index| {
+            format!("/service/Service{index:016X}/operation/AnOperationNameThatIsAlmostValid{index:016X}-")
+        }),
+    ];
+
+    type Parser = for<'a> fn(&'a str) -> Option<route_identity::RouteIdentity<'a>>;
+    let implementations: [(&str, Parser); 4] = [
+        ("regex", parse_route_identity_regex),
+        ("indexed", parse_route_identity),
+        ("rev_enumerate", parse_route_identity_enumerate),
+        ("rev_take_while_all", parse_route_identity_take_while),
+    ];
+
+    let mut group = c.benchmark_group("rpc_v2_cbor_route_identity_parser/corpus");
+    group.throughput(Throughput::Elements(1));
+    for (scenario, make_url) in scenarios {
+        // Constructing and allocating the corpus is intentionally outside Criterion's timed loop.
+        let urls: Vec<Box<str>> = (0..URL_COUNT).map(|index| make_url(index).into_boxed_str()).collect();
+
+        for (implementation, parser) in implementations {
+            let mut index = 0;
+            group.bench_function(BenchmarkId::new(implementation, scenario), |b| {
+                b.iter(|| {
+                    let path = urls[index].as_ref();
+                    index += URL_STEP;
+                    if index >= URL_COUNT {
+                        index -= URL_COUNT;
+                    }
+                    black_box(parser(black_box(path)))
+                });
+            });
+        }
+    }
+    group.finish();
+}
+
 fn rpc_v2_cbor_routing_service(c: &mut Criterion) {
     let operation = service_fn(|_request: Request<()>| async { Ok::<_, Infallible>(Response::new(empty())) });
     let router: RpcV2CborRouter<_> = [("Service/operation/Operation", operation)].into_iter().collect();
@@ -162,6 +225,6 @@ criterion_group! {
     config = Criterion::default()
         .sample_size(sample_size())
         .measurement_time(measurement_time());
-    targets = rpc_v2_cbor_router, rpc_v2_cbor_routing_service
+    targets = route_identity_parser, rpc_v2_cbor_router, rpc_v2_cbor_routing_service
 }
 criterion_main!(benches);
