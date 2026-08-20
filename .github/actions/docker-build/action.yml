@@ -59,10 +59,11 @@ runs:
       # from attempting to download an image from ECR since it will already exist,
       # which enables testing build image modifications as part of the pull request.
       #
-      # Test the tarball, not the directory. `download-artifact` creates the directory before it
-      # writes anything and can then abort while still reporting success, so `-d` treated a failed
-      # download as a hit and killed the job on `docker load`. Checking the file means an incomplete
-      # download falls through to a remote pull below instead.
+      # Test the tarball, not the directory. `download-all-artifacts` only leaves this file behind
+      # once it has verified the reassembled image against the checksum recorded when it was built,
+      # so the file's presence is the signal that the image is usable. `-d` was not: a download that
+      # aborted part-way still left the directory there, which read as a hit and killed the job on
+      # `docker load`. Anything short of a verified image now falls through to a remote pull below.
       if [[ -s smithy-rs-base-image/smithy-rs-base-image ]]; then
         echo "found base image in artifacts...loading it back into docker"
         IMAGE_TAG="ci-$(./smithy-rs/.github/scripts/docker-image-hash)"

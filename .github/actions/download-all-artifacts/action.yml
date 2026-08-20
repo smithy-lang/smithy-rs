@@ -6,80 +6,88 @@ description: Downloads and untars all available build artifacts
 runs:
   using: composite
   steps:
-  # `download-artifact` can abort part-way through and still report success, so nothing below
-  # trusts its outcome.
+  # The Docker base image arrives as artifacts only on runs that cannot pull it from a remote
+  # repository -- chiefly fork PRs, which have no ECR credentials. `../upload-base-image` splits it
+  # into five parts plus a checksum; see that file for why a single ~2GB artifact was not workable.
   #
-  # Seen on fork PRs, which are the only runs that move the ~2GB base image through artifacts: the
-  # step exits 0 having downloaded every small artifact but not that one. It never prints its
-  # closing `Total of N artifact(s) downloaded` / `Download artifact has finished successfully`
-  # lines, so the process died inside the download loop rather than throwing -- a thrown error
-  # would have reached the action's `catch` and failed the step. What is left behind is an empty
-  # `smithy-rs-base-image/`, which the consumer then mistakes for a cached image.
-  #
-  # It is not deterministic: the same artifact size, action version and runner group downloaded
-  # fine alongside 66 other artifacts on one run and died alongside 33 on another. Fetching it by
-  # name keeps it to a single stream instead of one of N, which should reduce the pressure, but the
-  # verify-and-retry below is what actually makes this safe.
-  #
-  # `continue-on-error` covers same-repo runs, where this artifact is never created at all (a
-  # missing `name` is a hard error, unlike a `pattern` that matches nothing).
-  - name: Download base image artifact
-    id: base-image
+  # `continue-on-error` covers every other run, where these artifacts are never created at all: a
+  # `name` that matches nothing is a hard error, unlike a `pattern` that matches nothing.
+  - name: Download base image part 0
     continue-on-error: true
     uses: actions/download-artifact@v4
     with:
-      name: smithy-rs-base-image
-      path: smithy-rs-base-image
-  # Check the tarball rather than the step outcome, for the reason above. Clear a bad directory so
-  # the retry starts from nothing.
-  - name: Check base image artifact
-    id: check-base-image
-    shell: bash
-    run: |
-      if [[ -s smithy-rs-base-image/smithy-rs-base-image ]]; then
-        echo "complete=true" >> "$GITHUB_OUTPUT"
-      else
-        echo "complete=false" >> "$GITHUB_OUTPUT"
-        rm -rf smithy-rs-base-image
-      fi
-  # Retry through the `gh` CLI rather than the action. The abort above happens inside the action's
-  # Node process; `gh run download` is a separate implementation that streams to disk, so it should
-  # not hit the same failure. Skipped when `gh` isn't on the runner, which leaves us no worse off
-  # than a single attempt. Needs `actions: read`, which `ci-pr-forks.yml` already grants.
-  - name: Retry base image artifact download via gh
-    if: steps.check-base-image.outputs.complete != 'true'
+      name: smithy-rs-base-image-part-0
+      path: base-image-parts
+  - name: Download base image part 1
     continue-on-error: true
+    uses: actions/download-artifact@v4
+    with:
+      name: smithy-rs-base-image-part-1
+      path: base-image-parts
+  - name: Download base image part 2
+    continue-on-error: true
+    uses: actions/download-artifact@v4
+    with:
+      name: smithy-rs-base-image-part-2
+      path: base-image-parts
+  - name: Download base image part 3
+    continue-on-error: true
+    uses: actions/download-artifact@v4
+    with:
+      name: smithy-rs-base-image-part-3
+      path: base-image-parts
+  - name: Download base image part 4
+    continue-on-error: true
+    uses: actions/download-artifact@v4
+    with:
+      name: smithy-rs-base-image-part-4
+      path: base-image-parts
+  - name: Download base image checksum
+    continue-on-error: true
+    uses: actions/download-artifact@v4
+    with:
+      name: smithy-rs-base-image-checksum
+      path: base-image-parts
+  # Nothing here trusts the exit code of the steps above -- that is the whole point, since the
+  # failure this replaces was a download that aborted and still exited 0. The image is only handed
+  # on if all five parts are present and non-empty AND the concatenation hashes to what the
+  # producing job recorded.
+  #
+  # Verifying rather than assuming matters more now than it did with a single artifact: a short or
+  # misordered concatenation would be *worse* than a missing image, because `docker load` would fail
+  # on a corrupt tar instead of falling through to a remote pull. On any doubt this leaves no
+  # `smithy-rs-base-image/` behind, which is the signal the consumer reads as "pull it instead".
+  - name: Reassemble base image
     shell: bash
-    env:
-      GH_TOKEN: ${{ github.token }}
     run: |
-      if ! command -v gh >/dev/null 2>&1; then
-        echo "gh CLI not available on this runner; skipping retry"
-        exit 0
-      fi
       rm -rf smithy-rs-base-image
-      # `-R` is required: this step's working directory is the workspace root, not the `smithy-rs/`
-      # checkout, so `gh` has no git remote to infer the repository from and exits immediately.
-      if ! gh run download "${GITHUB_RUN_ID}" -R "${GITHUB_REPOSITORY}" \
-        --name smithy-rs-base-image --dir smithy-rs-base-image; then
-        # Also the same-repo case, where this artifact is never uploaded.
-        echo "gh run download did not return the artifact"
+      # Uploaded last by `upload-base-image`, so no checksum means this run does not ship the image
+      # through artifacts at all. That is the normal case for same-repo runs.
+      if [[ ! -s base-image-parts/smithy-rs-base-image.sha256 ]]; then
+        echo "no base image checksum; this run does not ship the build image through artifacts"
         exit 0
       fi
-      if [[ -s smithy-rs-base-image/smithy-rs-base-image ]]; then
-        echo "base image artifact retrieved via gh"
-      else
-        echo "gh returned no usable tarball"
+      missing=0
+      for i in 0 1 2 3 4; do
+        if [[ ! -s "base-image-parts/smithy-rs-base-image.part${i}" ]]; then
+          echo "::warning::Base image part ${i} did not arrive."
+          missing=1
+        fi
+      done
+      if [[ "${missing}" -ne 0 ]]; then
+        echo "::warning::Base image parts are incomplete; the build image will be pulled from a remote repository instead."
+        exit 0
       fi
-  # Still incomplete after the retry: drop the directory rather than leave a partial one behind, so
-  # `acquire-build-image` skips the load and falls through to a remote pull instead of hard failing.
-  - name: Verify base image artifact
-    shell: bash
-    run: |
-      if [[ -d smithy-rs-base-image && ! -s smithy-rs-base-image/smithy-rs-base-image ]]; then
-        echo "::warning::Base image artifact is incomplete after a retry; removing it so the build image is pulled from a remote repository instead."
+      mkdir -p smithy-rs-base-image
+      cat base-image-parts/smithy-rs-base-image.part[0-4] > smithy-rs-base-image/smithy-rs-base-image
+      expected="$(cut -d' ' -f1 base-image-parts/smithy-rs-base-image.sha256)"
+      actual="$(sha256sum smithy-rs-base-image/smithy-rs-base-image | cut -d' ' -f1)"
+      if [[ "${expected}" != "${actual}" ]]; then
+        echo "::warning::Reassembled base image does not match the checksum recorded when it was built (expected ${expected}, got ${actual}); removing it so the build image is pulled from a remote repository instead."
         rm -rf smithy-rs-base-image
+        exit 0
       fi
+      echo "base image reassembled from 5 parts and verified against ${actual}"
   # Everything else is small. `artifacts-*` is what `Untar artifacts` below consumes; the
   # `*-permissions-*` artifacts are written for reporting and are never read back, so skipping
   # them keeps this call off the critical path. A `pattern` that matches nothing is not an error
