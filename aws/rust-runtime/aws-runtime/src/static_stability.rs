@@ -504,14 +504,14 @@ impl Error for CachedNonRecoverableError {
 }
 
 // Default non-recoverable predicate injected into the cache by the AWS layer: a terminal
-// `CredentialsError::Unrecoverable` anywhere in the source chain bypasses backoff and static
+// `CredentialsError::NonRecoverable` anywhere in the source chain bypasses backoff and static
 // stability. Providers such as `ChainProvider` wrap the base-provider error, so walk the chain
 // rather than inspecting only the outermost error.
 fn aws_non_recoverable(err: &BoxError) -> bool {
     let mut source: Option<&(dyn Error + 'static)> = Some(&**err);
     while let Some(e) = source {
         if e.downcast_ref::<CredentialsError>()
-            .is_some_and(CredentialsError::is_unrecoverable)
+            .is_some_and(CredentialsError::is_non_recoverable)
         {
             return true;
         }
@@ -686,7 +686,7 @@ mod tests {
                     }
                     Some("error") => queue.push(Err("recoverable".into())),
                     Some("nonRecoverableError") => {
-                        queue.push(Err(CredentialsError::unrecoverable("terminal").into()))
+                        queue.push(Err(CredentialsError::non_recoverable("terminal").into()))
                     }
                     Some(other) => panic!("{doc}: unknown response {other:?}"),
                     None => {}
@@ -925,18 +925,19 @@ mod tests {
     // still detected by walking the source chain, not just the outermost error.
     #[test]
     fn non_recoverable_walks_source_chain() {
-        let wrapped: BoxError =
-            CredentialsError::provider_error(CredentialsError::unrecoverable("expired SSO token"))
-                .into();
+        let wrapped: BoxError = CredentialsError::provider_error(
+            CredentialsError::non_recoverable("expired SSO token"),
+        )
+        .into();
         assert!(
             aws_non_recoverable(&wrapped),
-            "a nested Unrecoverable must be detected"
+            "a nested NonRecoverable must be detected"
         );
 
         let recoverable: BoxError = CredentialsError::provider_error("STS 503").into();
         assert!(
             !aws_non_recoverable(&recoverable),
-            "no Unrecoverable anywhere in the chain"
+            "no NonRecoverable anywhere in the chain"
         );
     }
 
@@ -944,7 +945,7 @@ mod tests {
     fn cached_non_recoverable_error_is_not_double_printed() {
         use aws_smithy_types::error::display::DisplayErrorContext;
 
-        let err: BoxError = CredentialsError::unrecoverable("terminal").into();
+        let err: BoxError = CredentialsError::non_recoverable("terminal").into();
         let rendered = DisplayErrorContext(CachedNonRecoverableError(Arc::from(err))).to_string();
 
         let inner_msg = "a non-recoverable error occurred while loading credentials";
@@ -1317,7 +1318,7 @@ mod tests {
             contacts: contacts.clone(),
             results: Mutex::new(vec![
                 Ok(identity(1, 3600, true)),
-                Err(CredentialsError::unrecoverable("terminal").into()),
+                Err(CredentialsError::non_recoverable("terminal").into()),
             ]),
         });
         let cache = StaticStabilityCache::builder().build();

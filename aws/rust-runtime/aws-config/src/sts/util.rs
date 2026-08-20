@@ -6,7 +6,10 @@
 use aws_credential_types::attributes::AccountId;
 use aws_credential_types::provider::{self, error::CredentialsError};
 use aws_credential_types::Credentials as AwsCredentials;
+use aws_sdk_sts::operation::assume_role::AssumeRoleError;
+use aws_sdk_sts::operation::assume_role_with_web_identity::AssumeRoleWithWebIdentityError;
 use aws_sdk_sts::types::{AssumedRoleUser, Credentials as StsCredentials};
+use aws_smithy_types::error::metadata::ProvideErrorMetadata;
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -62,4 +65,107 @@ fn parse_account_id(arn: &str) -> Result<AccountId, CredentialsError> {
     let account_id = split.next().ok_or_else(invalid_format)?;
 
     Ok(account_id.into())
+}
+
+pub(crate) fn assume_role_error_is_non_recoverable(err: &AssumeRoleError) -> bool {
+    matches!(
+        err,
+        AssumeRoleError::MalformedPolicyDocumentException(_)
+            | AssumeRoleError::PackedPolicyTooLargeException(_)
+            | AssumeRoleError::RegionDisabledException(_)
+    ) || err.code() == Some("AccessDenied")
+}
+
+pub(crate) fn web_identity_error_is_non_recoverable(err: &AssumeRoleWithWebIdentityError) -> bool {
+    matches!(
+        err,
+        AssumeRoleWithWebIdentityError::IdpRejectedClaimException(_)
+            | AssumeRoleWithWebIdentityError::InvalidIdentityTokenException(_)
+            | AssumeRoleWithWebIdentityError::MalformedPolicyDocumentException(_)
+            | AssumeRoleWithWebIdentityError::PackedPolicyTooLargeException(_)
+            | AssumeRoleWithWebIdentityError::RegionDisabledException(_)
+    ) || err.code() == Some("AccessDenied")
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use aws_sdk_sts::types::error::{
+        ExpiredTokenException, IdpCommunicationErrorException, IdpRejectedClaimException,
+        InvalidIdentityTokenException, MalformedPolicyDocumentException,
+        PackedPolicyTooLargeException, RegionDisabledException,
+    };
+    use aws_smithy_types::error::ErrorMetadata;
+
+    fn error_with_code(code: &str) -> ErrorMetadata {
+        ErrorMetadata::builder().code(code).build()
+    }
+
+    #[test]
+    fn assume_role_non_recoverable_classification() {
+        for err in [
+            AssumeRoleError::MalformedPolicyDocumentException(
+                MalformedPolicyDocumentException::builder().build(),
+            ),
+            AssumeRoleError::PackedPolicyTooLargeException(
+                PackedPolicyTooLargeException::builder().build(),
+            ),
+            AssumeRoleError::RegionDisabledException(RegionDisabledException::builder().build()),
+            AssumeRoleError::generic(error_with_code("AccessDenied")),
+        ] {
+            assert!(
+                assume_role_error_is_non_recoverable(&err),
+                "expected non-recoverable: {err:?}"
+            );
+        }
+        for err in [
+            AssumeRoleError::ExpiredTokenException(ExpiredTokenException::builder().build()),
+            AssumeRoleError::generic(error_with_code("ThrottlingException")),
+        ] {
+            assert!(
+                !assume_role_error_is_non_recoverable(&err),
+                "expected recoverable: {err:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn web_identity_non_recoverable_classification() {
+        for err in [
+            AssumeRoleWithWebIdentityError::IdpRejectedClaimException(
+                IdpRejectedClaimException::builder().build(),
+            ),
+            AssumeRoleWithWebIdentityError::InvalidIdentityTokenException(
+                InvalidIdentityTokenException::builder().build(),
+            ),
+            AssumeRoleWithWebIdentityError::MalformedPolicyDocumentException(
+                MalformedPolicyDocumentException::builder().build(),
+            ),
+            AssumeRoleWithWebIdentityError::PackedPolicyTooLargeException(
+                PackedPolicyTooLargeException::builder().build(),
+            ),
+            AssumeRoleWithWebIdentityError::RegionDisabledException(
+                RegionDisabledException::builder().build(),
+            ),
+            AssumeRoleWithWebIdentityError::generic(error_with_code("AccessDenied")),
+        ] {
+            assert!(
+                web_identity_error_is_non_recoverable(&err),
+                "expected non-recoverable: {err:?}"
+            );
+        }
+        for err in [
+            AssumeRoleWithWebIdentityError::IdpCommunicationErrorException(
+                IdpCommunicationErrorException::builder().build(),
+            ),
+            AssumeRoleWithWebIdentityError::ExpiredTokenException(
+                ExpiredTokenException::builder().build(),
+            ),
+        ] {
+            assert!(
+                !web_identity_error_is_non_recoverable(&err),
+                "expected recoverable: {err:?}"
+            );
+        }
+    }
 }

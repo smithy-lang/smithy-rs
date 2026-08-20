@@ -92,6 +92,7 @@ pub(super) enum LoginTokenError {
     WrongIdentityType(Identity),
     RefreshFailed {
         message: Option<String>,
+        non_recoverable: bool,
         source: Box<dyn StdError + Send + Sync>,
     },
     Other {
@@ -173,6 +174,20 @@ impl From<aws_smithy_json::deserialize::error::DeserializeError> for LoginTokenE
 
 impl From<LoginTokenError> for CredentialsError {
     fn from(val: LoginTokenError) -> CredentialsError {
+        let non_recoverable = matches!(
+            &val,
+            LoginTokenError::MissingField(_)
+                | LoginTokenError::RefreshFailed {
+                    non_recoverable: true,
+                    ..
+                }
+        ) || matches!(
+            &val,
+            LoginTokenError::IoError { source, .. } if source.kind() == std::io::ErrorKind::NotFound
+        );
+        if non_recoverable {
+            return CredentialsError::non_recoverable(val);
+        }
         match val {
             LoginTokenError::FailedToFormatDateTime { .. } => {
                 CredentialsError::invalid_configuration(val)
@@ -185,6 +200,50 @@ impl From<LoginTokenError> for CredentialsError {
             LoginTokenError::RefreshFailed { .. } => CredentialsError::provider_error(val),
             LoginTokenError::WrongIdentityType(_) => CredentialsError::invalid_configuration(val),
             LoginTokenError::Other { .. } => CredentialsError::unhandled(val),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn is_non_recoverable(err: LoginTokenError) -> bool {
+        CredentialsError::from(err).is_non_recoverable()
+    }
+
+    #[test]
+    fn login_non_recoverable_classification() {
+        for err in [
+            LoginTokenError::MissingField("accessToken"),
+            LoginTokenError::IoError {
+                what: "read",
+                path: "/does/not/exist".into(),
+                source: std::io::Error::from(std::io::ErrorKind::NotFound),
+            },
+            LoginTokenError::RefreshFailed {
+                message: None,
+                non_recoverable: true,
+                source: "access denied".into(),
+            },
+        ] {
+            assert!(is_non_recoverable(err));
+        }
+        for err in [
+            LoginTokenError::ExpiredToken,
+            LoginTokenError::JsonError("malformed".into()),
+            LoginTokenError::RefreshFailed {
+                message: None,
+                non_recoverable: false,
+                source: "server error".into(),
+            },
+            LoginTokenError::IoError {
+                what: "read",
+                path: "/denied".into(),
+                source: std::io::Error::from(std::io::ErrorKind::PermissionDenied),
+            },
+        ] {
+            assert!(!is_non_recoverable(err));
         }
     }
 }
