@@ -17,6 +17,7 @@ use aws_credential_types::credential_feature::AwsCredentialFeature;
 use aws_credential_types::provider;
 use aws_credential_types::provider::future;
 use aws_credential_types::provider::ProvideCredentials;
+use aws_credential_types::StaticStabilityEligible;
 use aws_sdk_signin::config::Builder as SignInClientConfigBuilder;
 use aws_sdk_signin::operation::create_o_auth2_token::CreateOAuth2TokenError;
 use aws_sdk_signin::types::{CreateOAuth2TokenRequestBody, OAuth2ErrorCode};
@@ -162,18 +163,19 @@ impl LoginCredentialsProvider {
             .await
             .map_err(|err| {
                 let service_err = err.into_service_error();
-                let message = match &service_err {
+                let (message, non_recoverable) = match &service_err {
                     CreateOAuth2TokenError::AccessDeniedException(e) => match e.error {
-                        OAuth2ErrorCode::InsufficientPermissions => Some("Unable to refresh credentials due to insufficient permissions. You may be missing permission for the 'CreateOAuth2Token' action.".to_string()),
-                        OAuth2ErrorCode::TokenExpired => Some("Your session has expired. Please reauthenticate.".to_string()),
-                        OAuth2ErrorCode::UserCredentialsChanged => Some("Unable to refresh credentials because of a change in your password. Please reauthenticate with your new password.".to_string()),
-                        _ => None,
+                        OAuth2ErrorCode::InsufficientPermissions => (Some("Unable to refresh credentials due to insufficient permissions. You may be missing permission for the 'CreateOAuth2Token' action.".to_string()), true),
+                        OAuth2ErrorCode::TokenExpired => (Some("Your session has expired. Please reauthenticate.".to_string()), true),
+                        OAuth2ErrorCode::UserCredentialsChanged => (Some("Unable to refresh credentials because of a change in your password. Please reauthenticate with your new password.".to_string()), true),
+                        _ => (None, false),
                     }
-                    _ => None,
+                    _ => (None, false),
                 };
 
                 LoginTokenError::RefreshFailed {
                     message,
+                    non_recoverable,
                     source: service_err.into(),
                 }
             })?;
@@ -200,6 +202,7 @@ impl LoginCredentialsProvider {
         creds
             .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
             .push(feat);
+        creds.set_property(StaticStabilityEligible);
         Ok(creds)
     }
 }

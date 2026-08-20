@@ -89,9 +89,9 @@ async fn all_expected_operation_spans_emitted_with_correct_nesting() {
         .was_closed_exactly(1)
         .finalize();
 
-    let lazy_load_identity = assertion_registry
+    let load_identity = assertion_registry
         .build()
-        .with_name("lazy_load_identity")
+        .with_name("load_identity")
         .with_parent_name(OPERATION_NAME)
         .with_parent_name(TRY_OP)
         .with_parent_name(TRY_ATTEMPT)
@@ -159,7 +159,7 @@ async fn all_expected_operation_spans_emitted_with_correct_nesting() {
     apply_configuration.assert();
     serialization.assert();
     orchestrate_endpoint.assert();
-    lazy_load_identity.assert();
+    load_identity.assert();
     deserialize_streaming.assert();
     deserialization.assert();
     try_attempt.assert();

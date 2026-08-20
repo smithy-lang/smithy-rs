@@ -223,6 +223,7 @@ mod loader {
         ProvideCredentials, SharedCredentialsProvider,
     };
     use aws_credential_types::Credentials;
+    use aws_runtime::static_stability::StaticStabilityCache;
     use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
     use aws_smithy_async::time::{SharedTimeSource, TimeSource};
     use aws_smithy_runtime::client::identity::IdentityCache;
@@ -1043,6 +1044,11 @@ mod loader {
 
             let identity_cache = match self.identity_cache {
                 None => match self.behavior_version {
+                    // For this behavior version and later, the default identity cache is the
+                    // static-stability cache.
+                    Some(bv) if bv.is_at_least(BehaviorVersion::v2026_08_01()) => {
+                        Some(StaticStabilityCache::builder().build())
+                    }
                     #[allow(deprecated)]
                     Some(bv) if bv.is_at_least(BehaviorVersion::v2024_03_28()) => {
                         Some(IdentityCache::lazy().build())

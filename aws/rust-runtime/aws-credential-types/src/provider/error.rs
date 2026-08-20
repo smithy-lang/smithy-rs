@@ -46,9 +46,9 @@ pub struct Unhandled {
     source: Box<dyn Error + Send + Sync + 'static>,
 }
 
-/// Details for [`CredentialsError::Unrecoverable`]
+/// Details for [`CredentialsError::NonRecoverable`]
 #[derive(Debug)]
-pub struct Unrecoverable {
+pub struct NonRecoverable {
     source: Box<dyn Error + Send + Sync + 'static>,
 }
 
@@ -85,7 +85,7 @@ pub enum CredentialsError {
 
     /// The credentials provider experienced a terminal, non-recoverable error; the caller must act
     /// (e.g. re-authenticate, `aws sso login`).
-    Unrecoverable(Unrecoverable),
+    NonRecoverable(NonRecoverable),
 }
 
 impl CredentialsError {
@@ -146,16 +146,16 @@ impl CredentialsError {
     /// The credentials provider experienced a terminal, non-recoverable error.
     ///
     /// The caller must act (for example, re-authenticate).
-    pub fn unrecoverable(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
-        Self::Unrecoverable(Unrecoverable {
+    pub fn non_recoverable(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        Self::NonRecoverable(NonRecoverable {
             source: source.into(),
         })
     }
 
     /// Returns `true` if this is a terminal, non-recoverable error
-    /// ([`CredentialsError::Unrecoverable`]).
-    pub fn is_unrecoverable(&self) -> bool {
-        matches!(self, Self::Unrecoverable(_))
+    /// ([`CredentialsError::NonRecoverable`]).
+    pub fn is_non_recoverable(&self) -> bool {
+        matches!(self, Self::NonRecoverable(_))
     }
 }
 
@@ -179,7 +179,7 @@ impl fmt::Display for CredentialsError {
             CredentialsError::Unhandled(_) => {
                 write!(f, "unexpected credentials error")
             }
-            CredentialsError::Unrecoverable(_) => {
+            CredentialsError::NonRecoverable(_) => {
                 write!(
                     f,
                     "a non-recoverable error occurred while loading credentials"
@@ -199,7 +199,7 @@ impl Error for CredentialsError {
             CredentialsError::InvalidConfiguration(details) => Some(details.source.as_ref() as _),
             CredentialsError::ProviderError(details) => Some(details.source.as_ref() as _),
             CredentialsError::Unhandled(details) => Some(details.source.as_ref() as _),
-            CredentialsError::Unrecoverable(details) => Some(details.source.as_ref() as _),
+            CredentialsError::NonRecoverable(details) => Some(details.source.as_ref() as _),
         }
     }
 }

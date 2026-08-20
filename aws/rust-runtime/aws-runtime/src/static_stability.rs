@@ -287,11 +287,13 @@ impl StaticStabilityCache {
                 // Backoff AND serve-stale are BOTH static stability — gated on eligibility.
                 match prev {
                     Some(c) if eligible(&c) => {
-                        st.next_refresh_allowed_at =
-                            Some(now + self.backoff_override.unwrap_or_else(jittered_backoff));
+                        let backoff = self.backoff_override.unwrap_or_else(jittered_backoff);
+                        st.next_refresh_allowed_at = Some(now + backoff);
                         tracing::warn!(
                             error = ?err,
-                            "credential refresh failed; serving cached credentials (static stability)"
+                            "credential refresh failed; serving cached credentials (static stability). \
+                             A refresh will be attempted again after {} seconds",
+                            backoff.as_secs()
                         );
                         Ok(c)
                     }
@@ -502,14 +504,14 @@ impl Error for CachedNonRecoverableError {
 }
 
 // Default non-recoverable predicate injected into the cache by the AWS layer: a terminal
-// `CredentialsError::Unrecoverable` anywhere in the source chain bypasses backoff and static
+// `CredentialsError::NonRecoverable` anywhere in the source chain bypasses backoff and static
 // stability. Providers such as `ChainProvider` wrap the base-provider error, so walk the chain
 // rather than inspecting only the outermost error.
 fn aws_non_recoverable(err: &BoxError) -> bool {
     let mut source: Option<&(dyn Error + 'static)> = Some(&**err);
     while let Some(e) = source {
         if e.downcast_ref::<CredentialsError>()
-            .is_some_and(CredentialsError::is_unrecoverable)
+            .is_some_and(CredentialsError::is_non_recoverable)
         {
             return true;
         }
@@ -567,10 +569,13 @@ impl StaticStabilityCache {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aws_smithy_async::test_util::tick_advance_sleep::tick_advance_time_and_sleep;
-    use aws_smithy_async::test_util::ManualTimeSource;
+    use aws_smithy_async::test_util::tick_advance_sleep::{
+        tick_advance_time_and_sleep, TickAdvanceTime,
+    };
+    use aws_smithy_async::time::TimeSource;
     use serde::Deserialize;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use tracing_test::traced_test;
 
     // Data-driven execution of the modeled credential-refresh test suite (test-data/). Our
     // implementation diverges from the suite in two spots, handled inline: invalidation matches by
@@ -681,7 +686,7 @@ mod tests {
                     }
                     Some("error") => queue.push(Err("recoverable".into())),
                     Some("nonRecoverableError") => {
-                        queue.push(Err(CredentialsError::unrecoverable("terminal").into()))
+                        queue.push(Err(CredentialsError::non_recoverable("terminal").into()))
                     }
                     Some(other) => panic!("{doc}: unknown response {other:?}"),
                     None => {}
@@ -692,8 +697,7 @@ mod tests {
 
         // Build an isolated harness: a concrete cache (for internal accessors) with a
         // fixed backoff.
-        let time = ManualTimeSource::new(epoch(0));
-        let (_tick, sleep) = tick_advance_time_and_sleep();
+        let (time, sleep) = tick_advance_time_and_sleep();
         let components = RuntimeComponentsBuilder::for_tests()
             .with_time_source(Some(time.clone()))
             .with_sleep_impl(Some(sleep))
@@ -718,16 +722,14 @@ mod tests {
         if seeded {
             let (r, _) = source_get(&cache, &resolver, &components, &cfg, &contacts).await;
             served = Some(r.expect("seed fetch"));
-            time.set_time(epoch(start));
+            time.tick(Duration::from_secs(start)).await;
         }
 
         // Execute the steps.
-        let mut clk = start;
         for step in &s.steps {
             match step {
                 Step::AdvanceTime { seconds } => {
-                    clk += seconds;
-                    time.set_time(epoch(clk));
+                    time.tick(Duration::from_secs(*seconds)).await;
                 }
                 Step::Invalidate {
                     rejected_access_key_id,
@@ -846,16 +848,13 @@ mod tests {
         resolver: SharedIdentityResolver,
         components: RuntimeComponents,
         config_bag: ConfigBag,
-        time: ManualTimeSource,
+        time: TickAdvanceTime,
         contacts: Arc<AtomicUsize>,
     }
 
     impl Harness {
         fn new(results: Vec<Result<Identity, BoxError>>) -> Self {
-            let time = ManualTimeSource::new(epoch(0));
-            // A tick-advance sleep never fires unless explicitly ticked, so the (immediately
-            // resolving) mock source always wins the refresh Timeout race — no spurious timeouts.
-            let (_tick, sleep) = tick_advance_time_and_sleep();
+            let (time, sleep) = tick_advance_time_and_sleep();
             let components = RuntimeComponentsBuilder::for_tests()
                 .with_time_source(Some(time.clone()))
                 .with_sleep_impl(Some(sleep))
@@ -887,8 +886,11 @@ mod tests {
             (result, contacted)
         }
 
-        fn advance_to(&self, secs: u64) {
-            self.time.set_time(epoch(secs));
+        async fn advance_to(&self, secs: u64) {
+            let delta = epoch(secs)
+                .duration_since(self.time.now())
+                .expect("advance_to only moves the clock forward");
+            self.time.tick(delta).await;
         }
     }
 
@@ -923,18 +925,19 @@ mod tests {
     // still detected by walking the source chain, not just the outermost error.
     #[test]
     fn non_recoverable_walks_source_chain() {
-        let wrapped: BoxError =
-            CredentialsError::provider_error(CredentialsError::unrecoverable("expired SSO token"))
-                .into();
+        let wrapped: BoxError = CredentialsError::provider_error(
+            CredentialsError::non_recoverable("expired SSO token"),
+        )
+        .into();
         assert!(
             aws_non_recoverable(&wrapped),
-            "a nested Unrecoverable must be detected"
+            "a nested NonRecoverable must be detected"
         );
 
         let recoverable: BoxError = CredentialsError::provider_error("STS 503").into();
         assert!(
             !aws_non_recoverable(&recoverable),
-            "no Unrecoverable anywhere in the chain"
+            "no NonRecoverable anywhere in the chain"
         );
     }
 
@@ -942,7 +945,7 @@ mod tests {
     fn cached_non_recoverable_error_is_not_double_printed() {
         use aws_smithy_types::error::display::DisplayErrorContext;
 
-        let err: BoxError = CredentialsError::unrecoverable("terminal").into();
+        let err: BoxError = CredentialsError::non_recoverable("terminal").into();
         let rendered = DisplayErrorContext(CachedNonRecoverableError(Arc::from(err))).to_string();
 
         let inner_msg = "a non-recoverable error occurred while loading credentials";
@@ -968,7 +971,7 @@ mod tests {
         let h = Harness::new(vec![Ok(identity(1, 3600, false)), Err("transient".into())]);
         assert_eq!(id_of(&h.get().await.0.unwrap()), 1);
 
-        h.advance_to(3700); // expired
+        h.advance_to(3700).await; // expired
         let (r, _contacted) = h.get().await;
         assert!(
             r.is_err(),
@@ -988,17 +991,17 @@ mod tests {
         ]);
         assert_eq!(id_of(&h.get().await.0.unwrap()), 1);
 
-        h.advance_to(3700); // expired -> failed refresh -> serve cached + backoff
+        h.advance_to(3700).await; // expired -> failed refresh -> serve cached + backoff
         let (r, contacted) = h.get().await;
         assert_eq!(id_of(&r.unwrap()), 1, "failed refresh serves cached");
         assert!(contacted, "a refresh was attempted");
 
-        h.advance_to(3800); // < 300s later: strictly inside the backoff -> rate-limited
+        h.advance_to(3800).await; // < 300s later: strictly inside the backoff -> rate-limited
         let (r, contacted) = h.get().await;
         assert_eq!(id_of(&r.unwrap()), 1);
         assert!(!contacted, "within backoff: source not contacted");
 
-        h.advance_to(3700 + 601); // past the max backoff (600s) -> refresh retried
+        h.advance_to(3700 + 601).await; // past the max backoff (600s) -> refresh retried
         let (r, contacted) = h.get().await;
         assert_eq!(
             id_of(&r.unwrap()),
@@ -1006,6 +1009,48 @@ mod tests {
             "refresh retried once backoff elapsed"
         );
         assert!(contacted);
+    }
+
+    #[tokio::test]
+    #[traced_test]
+    async fn failed_refresh_logs_next_attempt_timing() {
+        let (time, sleep) = tick_advance_time_and_sleep();
+        let components = RuntimeComponentsBuilder::for_tests()
+            .with_time_source(Some(time.clone()))
+            .with_sleep_impl(Some(sleep))
+            .build()
+            .unwrap();
+        let cfg = ConfigBag::base();
+        let resolver = SharedIdentityResolver::new(MockSource {
+            results: Mutex::new(vec![Ok(identity(1, 3600, true)), Err("transient".into())]),
+            contacts: Arc::new(AtomicUsize::new(0)),
+        });
+        // Pin the backoff so the logged duration is deterministic.
+        let cache =
+            StaticStabilityCache::new(None).with_overrides(Some(Duration::from_secs(420)), None);
+
+        let seed = cache
+            .resolve_cached_identity(resolver.clone(), &components, &cfg)
+            .await
+            .unwrap();
+        assert_eq!(id_of(&seed), 1);
+
+        // Expire the credential so the next resolve triggers a (failing) refresh.
+        time.tick(Duration::from_secs(3700)).await;
+        let served = cache
+            .resolve_cached_identity(resolver.clone(), &components, &cfg)
+            .await
+            .unwrap();
+        assert_eq!(id_of(&served), 1, "failed refresh serves cached");
+
+        assert!(
+            logs_contain("credential refresh failed"),
+            "log must include the failure"
+        );
+        assert!(
+            logs_contain("attempted again after 420 seconds"),
+            "log must state when the next refresh will be attempted"
+        );
     }
 
     // A source that reports no expiration is treated as non-expiring: fetched once and served
@@ -1024,7 +1069,7 @@ mod tests {
 
         // Advance far past any window a synthetic expiry could have produced (the old default was
         // 15m). A non-expiring identity is still served without contacting the source.
-        h.advance_to(100 * 3600); // 100 hours
+        h.advance_to(100 * 3600).await; // 100 hours
         let (r, contacted) = h.get().await;
         assert_eq!(id_of(&r.unwrap()), 1);
         assert!(
@@ -1065,8 +1110,7 @@ mod tests {
     // non-match path regardless of order.
     #[tokio::test]
     async fn invalidate_targets_only_the_matching_partition() {
-        let time = ManualTimeSource::new(epoch(0));
-        let (_tick, sleep) = tick_advance_time_and_sleep();
+        let (time, sleep) = tick_advance_time_and_sleep();
         let components = RuntimeComponentsBuilder::for_tests()
             .with_time_source(Some(time.clone()))
             .with_sleep_impl(Some(sleep))
@@ -1148,11 +1192,7 @@ mod tests {
     // immediately without waiting or contacting the source (non-blocking single-flight).
     #[tokio::test]
     async fn advisory_concurrent_single_flight() {
-        let time = ManualTimeSource::new(epoch(0));
-        // Tick-advance sleep: never ticked here, so the refresh Timeout never fires and a
-        // gate-blocked source stays blocked until the driver releases it (deterministic, no
-        // real time).
-        let (_tick, sleep) = tick_advance_time_and_sleep();
+        let (time, sleep) = tick_advance_time_and_sleep();
         let components = RuntimeComponentsBuilder::for_tests()
             .with_time_source(Some(time.clone()))
             .with_sleep_impl(Some(sleep))
@@ -1180,7 +1220,7 @@ mod tests {
         assert_eq!(id_of(&seed), 1);
         assert_eq!(contacts.load(Ordering::SeqCst), 1);
 
-        time.set_time(epoch(3000)); // advisory window (2700 <= now < 3540)
+        time.tick(Duration::from_secs(3000)).await; // advisory window (2700 <= now < 3540)
 
         // Two concurrent advisory callers + a driver that releases the single in-flight refresh.
         let get1 = cache.resolve_cached_identity(resolver.clone(), &components, &cfg);
@@ -1209,8 +1249,7 @@ mod tests {
     // others WAIT for it and reuse the result (no additional source contacts).
     #[tokio::test]
     async fn mandatory_concurrent_single_flight_all_reuse() {
-        let time = ManualTimeSource::new(epoch(0));
-        let (_tick, sleep) = tick_advance_time_and_sleep();
+        let (time, sleep) = tick_advance_time_and_sleep();
         let components = RuntimeComponentsBuilder::for_tests()
             .with_time_source(Some(time.clone()))
             .with_sleep_impl(Some(sleep))
@@ -1237,7 +1276,7 @@ mod tests {
         assert_eq!(id_of(&seed), 1);
         assert_eq!(contacts.load(Ordering::SeqCst), 1);
 
-        time.set_time(epoch(3700)); // expired -> mandatory path (blocking lock + recheck)
+        time.tick(Duration::from_secs(3700)).await; // expired -> mandatory path (blocking lock + recheck)
 
         // Three concurrent callers + a driver that releases the single in-flight refresh.
         let get1 = cache.resolve_cached_identity(resolver.clone(), &components, &cfg);
@@ -1265,8 +1304,7 @@ mod tests {
     // source.
     #[tokio::test]
     async fn mandatory_concurrent_non_recoverable_reuses_cached_error() {
-        let time = ManualTimeSource::new(epoch(0));
-        let (_tick, sleep) = tick_advance_time_and_sleep();
+        let (time, sleep) = tick_advance_time_and_sleep();
         let components = RuntimeComponentsBuilder::for_tests()
             .with_time_source(Some(time.clone()))
             .with_sleep_impl(Some(sleep))
@@ -1280,7 +1318,7 @@ mod tests {
             contacts: contacts.clone(),
             results: Mutex::new(vec![
                 Ok(identity(1, 3600, true)),
-                Err(CredentialsError::unrecoverable("terminal").into()),
+                Err(CredentialsError::non_recoverable("terminal").into()),
             ]),
         });
         let cache = StaticStabilityCache::builder().build();
@@ -1293,7 +1331,7 @@ mod tests {
         assert_eq!(id_of(&seed), 1);
         assert_eq!(contacts.load(Ordering::SeqCst), 1);
 
-        time.set_time(epoch(3700)); // expired -> mandatory path
+        time.tick(Duration::from_secs(3700)).await; // expired -> mandatory path
 
         // Three concurrent callers + a driver that releases the single in-flight refresh.
         let get1 = cache.resolve_cached_identity(resolver.clone(), &components, &cfg);

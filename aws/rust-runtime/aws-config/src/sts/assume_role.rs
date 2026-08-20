@@ -9,12 +9,11 @@ use aws_credential_types::credential_feature::AwsCredentialFeature;
 use aws_credential_types::provider::{
     self, error::CredentialsError, future, ProvideCredentials, SharedCredentialsProvider,
 };
+use aws_credential_types::StaticStabilityEligible;
 use aws_sdk_sts::operation::assume_role::builders::AssumeRoleFluentBuilder;
-use aws_sdk_sts::operation::assume_role::AssumeRoleError;
 use aws_sdk_sts::types::{PolicyDescriptorType, Tag};
 use aws_sdk_sts::Client as StsClient;
 use aws_smithy_runtime::client::identity::IdentityCache;
-use aws_smithy_runtime_api::client::result::SdkError;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_types::region::Region;
 use aws_types::SdkConfig;
@@ -326,28 +325,27 @@ impl Inner {
                     "AssumeRoleProvider",
                 )
             }
-            Err(SdkError::ServiceError(ref context))
-                if matches!(
-                    context.err(),
-                    AssumeRoleError::RegionDisabledException(_)
-                        | AssumeRoleError::MalformedPolicyDocumentException(_)
-                ) =>
-            {
-                Err(CredentialsError::invalid_configuration(
-                    assumed.err().unwrap(),
-                ))
+            Err(err) => {
+                let non_recoverable = match err.as_service_error() {
+                    Some(service_err) => {
+                        tracing::warn!(error = %DisplayErrorContext(service_err), "STS refused to grant assume role");
+                        super::util::assume_role_error_is_non_recoverable(service_err)
+                    }
+                    None => false,
+                };
+                if non_recoverable {
+                    Err(CredentialsError::non_recoverable(err))
+                } else {
+                    Err(CredentialsError::provider_error(err))
+                }
             }
-            Err(SdkError::ServiceError(ref context)) => {
-                tracing::warn!(error = %DisplayErrorContext(context.err()), "STS refused to grant assume role");
-                Err(CredentialsError::provider_error(assumed.err().unwrap()))
-            }
-            Err(err) => Err(CredentialsError::provider_error(err)),
         };
 
         assumed.map(|mut creds| {
             creds
                 .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
                 .push(AwsCredentialFeature::CredentialsStsAssumeRole);
+            creds.set_property(StaticStabilityEligible);
             creds
         })
     }
