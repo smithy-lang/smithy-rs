@@ -67,10 +67,19 @@ object SchemaSerdeAllowlist {
     /** Individual services allowed regardless of protocol. */
     private val allowedServices: Set<String> = setOf<String>()
 
-    /** Returns true if schema-based serde should be used exclusively (no fallback). */
+    /**
+     * Returns true if schema-based serde should be used exclusively (no fallback).
+     *
+     * The `disableSchemaSerde` codegen setting overrides the allowlist in one direction only: a
+     * service can opt *out* of schema serde in its `smithy-build.json` even when its protocol is
+     * allowlisted, but it cannot opt in. See `ClientCodegenConfig.disableSchemaSerde`.
+     */
     fun usesSchemaSerdeExclusively(codegenContext: ClientCodegenContext): Boolean =
-        codegenContext.protocol in allowedProtocols ||
-            codegenContext.serviceShape.id.toString() in allowedServices
+        !codegenContext.settings.codegenConfig.disableSchemaSerde &&
+            (
+                codegenContext.protocol in allowedProtocols ||
+                    codegenContext.serviceShape.id.toString() in allowedServices
+            )
 
     /**
      * Returns true if schema-based serde is enabled for [protocol].
@@ -79,6 +88,9 @@ object SchemaSerdeAllowlist {
      * registries or the schema-serde streaming deserializer) gate themselves on
      * this so they run exactly when the corresponding protocol is enabled and are
      * skipped otherwise, rather than being hard-disabled.
+     *
+     * This reports the allowlist state only; it does not account for the per-service
+     * `disableSchemaSerde` codegen setting, which needs a full codegen context to evaluate.
      */
     fun isProtocolEnabled(protocol: ShapeId): Boolean = protocol in allowedProtocols
 }

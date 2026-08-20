@@ -23,6 +23,32 @@
 //! over a lifetime `'a` that names the data their string fields and member
 //! references borrow from.
 //!
+//! # API stability
+//!
+//! <div class="warning">
+//!
+//! **This crate's version number does not mean its API is settled.** It is
+//! versioned `1.x` because the generated SDK crates depend on it and a stable
+//! SDK cannot depend on a `0.x` crate. We might need to iterate on it in semver-incompatible
+//! ways if we find bugs as schema serde is rolled out. Treat it as a supporting
+//! crate for generated code that happens to be publicly reachable, but do not
+//! rely on it directly.
+//!
+//! </div>
+//!
+//! What that means in practice:
+//!
+//! * **Prefer the API your generated client exposes:** Protocol selection,
+//!   document conversion, and error reification are all reachable from the
+//!   generated crate. Reaching directly into this crate couples you to
+//!   internals of the serde pipeline that the SDK is free to re-plumb.
+//! * **Items marked `#[doc(hidden)]` are not part of the public API at all.**
+//!   They exist for generated code and the `shape_id!` macro to call, and may
+//!   change or disappear in any release.
+//!
+//! If you do build on these types directly, pin an exact version and budget
+//! time to adapt when you upgrade.
+//!
 //! # Construction patterns
 //!
 //! ## `Schema<'static>` — the codegen-emitted form
