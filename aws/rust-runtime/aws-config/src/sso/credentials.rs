@@ -17,6 +17,7 @@ use crate::sso::SsoTokenProvider;
 use aws_credential_types::credential_feature::AwsCredentialFeature;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
 use aws_credential_types::Credentials;
+use aws_credential_types::StaticStabilityEligible;
 use aws_sdk_sso::types::RoleCredentials;
 use aws_sdk_sso::Client as SsoClient;
 use aws_smithy_async::time::SharedTimeSource;
@@ -93,6 +94,7 @@ impl SsoCredentialsProvider {
             creds
                 .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
                 .push(AwsCredentialFeature::CredentialsSso);
+            creds.set_property(StaticStabilityEligible);
             creds
         })
     }

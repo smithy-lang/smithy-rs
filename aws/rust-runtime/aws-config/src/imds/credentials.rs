@@ -15,6 +15,7 @@ use crate::provider_config::ProviderConfig;
 use aws_credential_types::credential_feature::AwsCredentialFeature;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
 use aws_credential_types::Credentials;
+use aws_credential_types::StaticStabilityEligible;
 use aws_smithy_async::time::SharedTimeSource;
 use aws_types::os_shim_internal::Env;
 use std::borrow::Cow;
@@ -269,6 +270,7 @@ impl ImdsCredentialsProvider {
             creds
                 .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
                 .push(AwsCredentialFeature::CredentialsImds);
+            creds.set_property(StaticStabilityEligible);
             creds
         })
     }

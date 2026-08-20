@@ -15,6 +15,7 @@ use crate::web_identity_token::{StaticConfiguration, WebIdentityTokenCredentials
 use aws_credential_types::provider::{
     self, error::CredentialsError, ProvideCredentials, SharedCredentialsProvider,
 };
+use aws_credential_types::StaticStabilityEligible;
 use aws_sdk_sts::config::Credentials;
 use aws_sdk_sts::Client as StsClient;
 use aws_smithy_async::time::SharedTimeSource;
@@ -57,6 +58,14 @@ impl AssumeRoleProvider {
             assume_role_output.assumed_role_user,
             "AssumeRoleProvider",
         )
+        .map(|mut creds| {
+            // Mark profile-based (role-chaining) assume-role credentials as eligible for
+            // static-stability caching, mirroring the standalone `sts::AssumeRoleProvider`.
+            // Without this, the `StaticStabilityCache` treats them as caching-only and will not
+            // serve them past expiration on a failed refresh.
+            creds.set_property(StaticStabilityEligible);
+            creds
+        })
     }
 }
 
@@ -296,6 +305,59 @@ mod test {
             ),
             "`{}` did not match expected error",
             err
+        );
+    }
+
+    #[tokio::test]
+    async fn profile_assume_role_creds_are_static_stability_eligible() {
+        use super::AssumeRoleProvider;
+        use aws_credential_types::StaticStabilityEligible;
+        use aws_smithy_async::rt::sleep::{SharedAsyncSleep, TokioSleep};
+        use aws_smithy_async::time::{SharedTimeSource, StaticTimeSource};
+        use aws_smithy_http_client::test_util::{ReplayEvent, StaticReplayClient};
+        use aws_smithy_types::body::SdkBody;
+        use aws_types::region::Region;
+        use aws_types::SdkConfig;
+        use std::time::{Duration, UNIX_EPOCH};
+
+        const ASSUME_ROLE_XML: &str = "<AssumeRoleResponse xmlns=\"https://sts.amazonaws.com/doc/2011-06-15/\">\n  <AssumeRoleResult>\n    <AssumedRoleUser>\n      <AssumedRoleId>AROAR42TAWARILN3MNKUT:assume-role-from-profile</AssumedRoleId>\n      <Arn>arn:aws:sts::130633740322:assumed-role/assume-provider-test/assume-role-from-profile</Arn>\n    </AssumedRoleUser>\n    <Credentials>\n      <AccessKeyId>ASIARCORRECT</AccessKeyId>\n      <SecretAccessKey>secretkeycorrect</SecretAccessKey>\n      <SessionToken>tokencorrect</SessionToken>\n      <Expiration>2009-02-13T23:31:30Z</Expiration>\n    </Credentials>\n  </AssumeRoleResult>\n  <ResponseMetadata>\n    <RequestId>d9d47248-fd55-4686-ad7c-0fb7cd1cddd7</RequestId>\n  </ResponseMetadata>\n</AssumeRoleResponse>\n";
+
+        let http_client = StaticReplayClient::new(vec![ReplayEvent::new(
+            http::Request::new(SdkBody::from("request body")),
+            http::Response::builder()
+                .status(200)
+                .body(SdkBody::from(ASSUME_ROLE_XML))
+                .unwrap(),
+        )]);
+
+        let sdk_config = SdkConfig::builder()
+            .http_client(http_client)
+            .region(Region::new("us-east-1"))
+            .time_source(StaticTimeSource::new(
+                UNIX_EPOCH + Duration::from_secs(1234567890 - 120),
+            ))
+            .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
+            .behavior_version(crate::BehaviorVersion::latest())
+            .build();
+
+        let provider = AssumeRoleProvider {
+            role_arn: "arn:aws:iam::130633740322:role/assume-provider-test".to_string(),
+            external_id: None,
+            session_name: Some("test-session".to_string()),
+            time_source: SharedTimeSource::new(StaticTimeSource::new(
+                UNIX_EPOCH + Duration::from_secs(1234567890 - 120),
+            )),
+        };
+
+        let assumed = provider
+            .credentials(Credentials::for_tests(), &sdk_config)
+            .await
+            .expect("assume role should succeed against the mocked STS response");
+
+        assert_eq!(assumed.access_key_id(), "ASIARCORRECT");
+        assert!(
+            assumed.get_property::<StaticStabilityEligible>().is_some(),
+            "profile role-chaining assume-role creds must be StaticStabilityEligible"
         );
     }
 }
