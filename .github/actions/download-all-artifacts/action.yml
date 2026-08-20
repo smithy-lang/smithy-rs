@@ -6,8 +6,96 @@ description: Downloads and untars all available build artifacts
 runs:
   using: composite
   steps:
-  - name: Download artifacts
+  # The Docker base image arrives as artifacts only on runs that cannot pull it from a remote
+  # repository -- chiefly fork PRs, which have no ECR credentials. `../upload-base-image` splits it
+  # into five parts plus a checksum; see that file for why a single ~2GB artifact was not workable.
+  #
+  # `continue-on-error` covers every other run, where these artifacts are never created at all: a
+  # `name` that matches nothing is a hard error, unlike a `pattern` that matches nothing.
+  - name: Download base image part 0
+    continue-on-error: true
     uses: actions/download-artifact@v4
+    with:
+      name: smithy-rs-base-image-part-0
+      path: base-image-parts
+  - name: Download base image part 1
+    continue-on-error: true
+    uses: actions/download-artifact@v4
+    with:
+      name: smithy-rs-base-image-part-1
+      path: base-image-parts
+  - name: Download base image part 2
+    continue-on-error: true
+    uses: actions/download-artifact@v4
+    with:
+      name: smithy-rs-base-image-part-2
+      path: base-image-parts
+  - name: Download base image part 3
+    continue-on-error: true
+    uses: actions/download-artifact@v4
+    with:
+      name: smithy-rs-base-image-part-3
+      path: base-image-parts
+  - name: Download base image part 4
+    continue-on-error: true
+    uses: actions/download-artifact@v4
+    with:
+      name: smithy-rs-base-image-part-4
+      path: base-image-parts
+  - name: Download base image checksum
+    continue-on-error: true
+    uses: actions/download-artifact@v4
+    with:
+      name: smithy-rs-base-image-checksum
+      path: base-image-parts
+  # Nothing here trusts the exit code of the steps above -- that is the whole point, since the
+  # failure this replaces was a download that aborted and still exited 0. The image is only handed
+  # on if all five parts are present and non-empty AND the concatenation hashes to what the
+  # producing job recorded.
+  #
+  # Verifying rather than assuming matters more now than it did with a single artifact: a short or
+  # misordered concatenation would be *worse* than a missing image, because `docker load` would fail
+  # on a corrupt tar instead of falling through to a remote pull. On any doubt this leaves no
+  # `smithy-rs-base-image/` behind, which is the signal the consumer reads as "pull it instead".
+  - name: Reassemble base image
+    shell: bash
+    run: |
+      rm -rf smithy-rs-base-image
+      # Uploaded last by `upload-base-image`, so no checksum means this run does not ship the image
+      # through artifacts at all. That is the normal case for same-repo runs.
+      if [[ ! -s base-image-parts/smithy-rs-base-image.sha256 ]]; then
+        echo "no base image checksum; this run does not ship the build image through artifacts"
+        exit 0
+      fi
+      missing=0
+      for i in 0 1 2 3 4; do
+        if [[ ! -s "base-image-parts/smithy-rs-base-image.part${i}" ]]; then
+          echo "::warning::Base image part ${i} did not arrive."
+          missing=1
+        fi
+      done
+      if [[ "${missing}" -ne 0 ]]; then
+        echo "::warning::Base image parts are incomplete; the build image will be pulled from a remote repository instead."
+        exit 0
+      fi
+      mkdir -p smithy-rs-base-image
+      cat base-image-parts/smithy-rs-base-image.part[0-4] > smithy-rs-base-image/smithy-rs-base-image
+      expected="$(cut -d' ' -f1 base-image-parts/smithy-rs-base-image.sha256)"
+      actual="$(sha256sum smithy-rs-base-image/smithy-rs-base-image | cut -d' ' -f1)"
+      if [[ "${expected}" != "${actual}" ]]; then
+        echo "::warning::Reassembled base image does not match the checksum recorded when it was built (expected ${expected}, got ${actual}); removing it so the build image is pulled from a remote repository instead."
+        rm -rf smithy-rs-base-image
+        exit 0
+      fi
+      echo "base image reassembled from 5 parts and verified against ${actual}"
+  # Everything else is small. `artifacts-*` is what `Untar artifacts` below consumes; the
+  # `*-permissions-*` artifacts are written for reporting and are never read back, so skipping
+  # them keeps this call off the critical path. A `pattern` that matches nothing is not an error
+  # (unlike `name`, which throws), so this needs no `continue-on-error`.
+  - name: Download remaining artifacts
+    uses: actions/download-artifact@v4
+    with:
+      pattern: artifacts-*
   - name: Untar artifacts
     shell: bash
     run: find . -maxdepth 2 -iname 'artifacts-*.tar.gz' -print -exec tar xfz {} \;
