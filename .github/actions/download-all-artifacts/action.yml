@@ -58,7 +58,10 @@ runs:
         exit 0
       fi
       rm -rf smithy-rs-base-image
-      if ! gh run download "${GITHUB_RUN_ID}" --name smithy-rs-base-image --dir smithy-rs-base-image; then
+      # `-R` is required: this step's working directory is the workspace root, not the `smithy-rs/`
+      # checkout, so `gh` has no git remote to infer the repository from and exits immediately.
+      if ! gh run download "${GITHUB_RUN_ID}" -R "${GITHUB_REPOSITORY}" \
+        --name smithy-rs-base-image --dir smithy-rs-base-image; then
         # Also the same-repo case, where this artifact is never uploaded.
         echo "gh run download did not return the artifact"
         exit 0
