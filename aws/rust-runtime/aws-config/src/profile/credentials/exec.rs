@@ -19,6 +19,7 @@ use aws_credential_types::StaticStabilityEligible;
 use aws_sdk_sts::config::Credentials;
 use aws_sdk_sts::Client as StsClient;
 use aws_smithy_async::time::SharedTimeSource;
+use aws_smithy_runtime::client::identity::IdentityCache;
 use aws_types::SdkConfig;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -40,6 +41,8 @@ impl AssumeRoleProvider {
         let config = sdk_config
             .to_builder()
             .credentials_provider(SharedCredentialsProvider::new(input_credentials))
+            // No inner identity cache; the outer credentials cache owns caching.
+            .identity_cache(IdentityCache::no_cache())
             .build();
         let client = StsClient::new(&config);
         let session_name = &self.session_name.as_ref().cloned().unwrap_or_else(|| {
