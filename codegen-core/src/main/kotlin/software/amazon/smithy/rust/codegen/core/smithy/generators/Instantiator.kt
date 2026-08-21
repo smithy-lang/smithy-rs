@@ -499,6 +499,8 @@ class PrimitiveInstantiator(
             "Blob" to RuntimeType.blob(runtimeConfig),
             "SmithyJson" to RuntimeType.smithyJson(runtimeConfig),
             "SmithyTypes" to RuntimeType.smithyTypes(runtimeConfig),
+            "BigInteger" to RuntimeType.bigInteger(runtimeConfig),
+            "BigDecimal" to RuntimeType.bigDecimal(runtimeConfig),
         ).map {
             it.first to
                 if (withinTest) {
@@ -550,14 +552,16 @@ class PrimitiveInstantiator(
                     val value = data.toString()
                     rustTemplate(
                         "<#{BigInteger} as ::std::str::FromStr>::from_str(${value.dq()}).expect(\"Invalid string for BigInteger\")",
-                        "BigInteger" to RuntimeType.bigInteger(runtimeConfig),
+                        // Resolved through `codegenScope` so that the dependency is registered as a dev-dependency
+                        // when instantiating within a test, matching every other runtime type used here.
+                        *codegenScope,
                     )
                 }
                 is BigDecimalShape -> {
                     val value = data.toString()
                     rustTemplate(
                         "<#{BigDecimal} as ::std::str::FromStr>::from_str(${value.dq()}).expect(\"invalid string for BigDecimal\")",
-                        "BigDecimal" to RuntimeType.bigDecimal(runtimeConfig),
+                        *codegenScope,
                     )
                 }
                 is NumberShape ->

@@ -103,6 +103,19 @@ class SdkSettings private constructor(private val awsSdk: ObjectNode?) {
         get() =
             awsSdk?.getObjectMember("endpointBasedAuthScheme")?.orNull()
                 ?.getBooleanMember("enabled")?.orNull()?.value ?: false
+
+    /**
+     * Whether to enable the legacy `rustls` default feature on generated crates.
+     *
+     * When `true` (the default for now), the generated crate will have `rustls` as a default feature that pulls in
+     * `aws-smithy-runtime/tls-rustls`. This keeps the legacy hyper+rustls stack working as-is and lets
+     * BehaviorVersion control which HTTP client you get.
+     *
+     * Set to `false` to disable the `rustls` default feature, which is the desired end state where the
+     * default HTTPS client is selected purely via BehaviorVersion without the legacy rustls dependency.
+     */
+    val includeLegacyClient: Boolean
+        get() = awsSdk?.getBooleanMember("includeLegacyClient")?.orNull()?.value ?: true
 }
 
 fun ClientCodegenContext.sdkSettings() = SdkSettings.from(this.settings)

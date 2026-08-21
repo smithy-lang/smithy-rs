@@ -1,4 +1,89 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+August 19th, 2026
+=================
+**New this release:**
+- :tada: (client, [smithy-rs#4767](https://github.com/smithy-lang/smithy-rs/issues/4767)) Add a deterministic connection-level test harness to the `wire-mock` feature under `aws_smithy_http_client::test_util::wire::connection`. It supports per-connection HTTP/1.1 scripts, raw socket actions, synchronization gates, and recorded connection events.
+- :tada: (client) Add `pool_max_idle_per_host` setter to HTTP client `Builder` and `ConnectorBuilder`,
+    exposing hyper's `pool_max_idle_per_host` setting to control the maximum number of idle
+    connections kept alive per host.
+
+
+August 12th, 2026
+=================
+**New this release:**
+- :tada: (all, [smithy-rs#4758](https://github.com/smithy-lang/smithy-rs/issues/4758)) `Blob` now stores its contents as `Bytes` and provides `from_maybe_shared` and `into_bytes` methods to avoid copies in `Bytes`-based protocol paths.
+- :tada: (client) Add opt-in capture of selected operation-input members for telemetry. Naming input members via
+    `Config::builder().emit_input_attributes([...])` makes the SDK capture those members' values into
+    the `ConfigBag` (as `CapturedTelemetryAttributes`) during `read_before_execution`, before the input
+    is consumed by serialization. Any interceptor can then read a value via
+    `cfg.load::<CapturedTelemetryAttributes>()`, without threading it through a `task_local!`. Only
+    string-valued, non-`@sensitive` members are eligible; capture is off by default.
+
+    ```rust,ignore
+    use aws_smithy_types::telemetry::CapturedTelemetryAttributes;
+
+    // Opt in to capturing the S3 `Bucket` input member.
+    let config = aws_sdk_s3::Config::builder()
+        .emit_input_attributes(["Bucket"])
+        // ...
+        .build();
+
+    // In any interceptor, read the captured value off the config bag — no `task_local!`.
+    if let Some(bucket) = cfg
+        .load::<CapturedTelemetryAttributes>()
+        .and_then(|a| a.get("Bucket"))
+    {
+        // use `bucket`
+    }
+    ```
+- :tada: (client) Emit captured telemetry attributes and transfer sizes on the built-in client metrics. Values
+    selected via `emit_input_attributes([...])` are now attached as attributes on
+    `smithy.client.call.duration` and `smithy.client.call.attempt.duration`. The operation-duration metric additionally
+    carries the outcome as `error.type` (a coarse category, set only on failure) and the raw
+    `http.status_code` when a response was received. Real transferred-byte counts are recorded on their
+    own histograms, `smithy.client.call.request.size` / `smithy.client.call.response.size`, counted per
+    frame and emitted when the body completes — so a streaming body reports its true size rather than the
+    `0` that content-length reports for it.
+
+    ```rust,ignore
+    // The same opt-in that captures a member now also emits it on the built-in metrics.
+    let config = aws_sdk_s3::Config::builder()
+        .emit_input_attributes(["Bucket"])
+        // ...
+        .build();
+
+    // `smithy.client.call.duration` is now emitted with, e.g.:
+    //   rpc.service="S3", rpc.method="GetObject", Bucket="my-bucket",
+    //   error.type="connector" (on failure), http.status_code=200
+    //
+    // and body sizes on their own instruments, e.g.:
+    //   smithy.client.call.response.size { rpc.service="S3", rpc.method="GetObject" } = 1024
+    ```
+- :tada: (client) Add support for configuring additional server names in TLS certificate verification.
+    When standard hostname verification fails, the client retries verification against
+    each configured additional server name. This is useful when a server presents a
+    certificate whose Subject Alternative Names (SANs) do not include the hostname used
+    to connect, but do include an alternative name the client has been configured to accept.
+- :bug: (server, [smithy-rs#4731](https://github.com/smithy-lang/smithy-rs/issues/4731), @hsbakshi) Fix RPC v2 CBOR server routing to use the verbatim Smithy operation shape name, matching the URI sent by spec-compliant clients.
+
+    For operations whose modeled name starts lowercase, regeneration changes the accepted route from the previous capitalized form (for example, `GetFoo`) to the spec-compliant verbatim form (`getFoo`). Operations already modeled with an uppercase initial are unchanged.
+
+    Set `rpcV2CborAddCapitalizedRoute` to `true` to also register the legacy capitalized route during migration.
+- :bug: (server, [smithy-rs#4743](https://github.com/smithy-lang/smithy-rs/issues/4743), @takenoko-gohan) Fix server codegen referencing `MakeSensitive` at the wrong module path. The type is located at  `instrumentation::sensitivity::MakeSensitive`, so generating a sensitive status-code formatter
+    previously failed to compile (E0425).
+- :bug: (server) Make `DefaultMetricsPlugin`'s `Service` impl generic over the request body type instead of
+    hardcoding `hyper::body::Incoming`. The plugin only reads request *extensions* (operation name,
+    service name, request ID) and never touches the body, so it composes with any body type. This
+    fixes a compilation error when using `DefaultMetricsPlugin` with request bodies other than
+    `hyper::body::Incoming`.
+- (client, [smithy-rs#4764](https://github.com/smithy-lang/smithy-rs/issues/4764)) Improve discoverability of the retry token bucket: the `config::retry` module docs, the `retry_config` builder method, and the `TokenBucket` type now point to `RetryPartition::custom().token_bucket(...)` for sizing or isolating the bucket.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @hsbakshi ([smithy-rs#4731](https://github.com/smithy-lang/smithy-rs/issues/4731))
+- @takenoko-gohan ([smithy-rs#4743](https://github.com/smithy-lang/smithy-rs/issues/4743))
+
+
 July 23rd, 2026
 ===============
 **New this release:**
