@@ -230,7 +230,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-eventstream"
-version = "0.61.2"
+version = "0.61.3"
 dependencies = [
  "aws-smithy-types",
  "bytes",
@@ -258,7 +258,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-client"
-version = "1.4.0"
+version = "1.4.1"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api",
@@ -302,7 +302,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.14.0"
+version = "1.14.1"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http",
@@ -326,7 +326,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.15.0"
+version = "1.15.1"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api-macros",
@@ -360,7 +360,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.6.2"
+version = "1.6.3"
 dependencies = [
  "base64-simd",
  "bytes",
