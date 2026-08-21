@@ -6,12 +6,24 @@
 # `pull_request` run, so today a maintainer has to dispatch `manual-canary.yml` by hand; this makes
 # it a label instead.
 #
-# SECURITY: this uses `pull_request_target`, which runs from the base repo with access to secrets
-# while checking out the PR's (untrusted) code. The label is the trust gate -- a maintainer is
-# attesting the diff is safe to run with the canary credentials. The guards that make that safe:
-#   - runs only when the `safe-to-run-canary` label is present AND the PR is from a fork
-#   - checks out the exact reviewed commit by SHA, never a branch ref
-#   - the label is removed on every new push (see `revoke-on-push`), so new commits need re-review
+# This workflow is only the trust gate. The canary pipeline itself stays in `manual-canary.yml` and
+# is called from here, so both entry points run identical steps -- re-implementing acquire/generate/
+# canary here would be a third copy, and the copies are how the same build-image bug ended up needing
+# the same fix in four workflows.
+#
+# SECURITY: `pull_request_target` runs from the base repo with access to secrets while the called
+# workflow checks out the PR's (untrusted) code. The label is the trust gate -- a maintainer is
+# attesting that they read the diff and are willing to run it against the canary credentials. Note
+# what that means concretely: the called workflow runs `./smithy-rs/.github/actions/docker-build`
+# from the PR's own checkout, so a PR that modifies `.github/actions/**` or `tools/ci-build/**`
+# changes what executes. Reviewing those paths is part of what the label attests to.
+#
+# The guards around it:
+#   - runs only on the `safe-to-run-canary` label, and only for PRs from a fork
+#   - the labeler must have write access, not merely the `triage` that applying a label requires
+#   - the head SHA is resolved from the API and passed through; `manual-canary.yml` fails if it no
+#     longer matches, so the run cannot silently drift onto newer commits
+#   - the label is removed on every new push (`revoke-on-push`), so new commits need re-review
 #   - no PR-controlled text (title, body, branch name) is ever interpolated into a `run:` block
 name: Fork canary
 on:
@@ -52,27 +64,53 @@ jobs:
             core.info(`no label to remove: ${e.message}`);
           }
 
-  # Everything below runs only when a maintainer has labeled a fork PR. `head.repo.full_name`
-  # excludes same-repo PRs (they already run the canary through ci-pr.yml).
-  get-pr-info:
+  # The gate. `head.repo.full_name` excludes same-repo PRs, which already run the canary through
+  # ci-pr.yml. Nothing here checks out or executes PR code.
+  gate:
     if: >
       github.event.action == 'labeled' &&
       github.event.label.name == 'safe-to-run-canary' &&
       github.event.pull_request.head.repo.full_name != 'smithy-lang/smithy-rs'
-    name: Get PR info
+    name: Gate
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       pull-requests: read
     outputs:
-      commit_sha: ${{ steps.get.outputs.result }}
+      commit_sha: ${{ steps.sha.outputs.result }}
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
-    - name: Resolve the reviewed head SHA
-      id: get
+      # Applying a label only requires `triage`, but running this spends the canary's AWS
+      # credentials -- a higher bar than grooming issues. Check the labeler explicitly so the
+      # restriction is enforced rather than assumed. Fails closed: if the permission cannot be
+      # read, the canary does not run.
+    - name: Require write access for the labeler
       uses: actions/github-script@v7
       with:
-        # Re-read the PR head SHA from the API rather than trusting a value derived from the event,
-        # and pin every checkout below to it so the code that runs is the code that was reviewed.
+        script: |
+          const actor = context.payload.sender.login;
+          let level;
+          try {
+            const res = await github.rest.repos.getCollaboratorPermissionLevel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              username: actor,
+            });
+            level = res.data.permission;
+          } catch (e) {
+            core.setFailed(`Could not read ${actor}'s permission level, refusing to run: ${e.message}`);
+            return;
+          }
+          if (!['admin', 'maintain', 'write'].includes(level)) {
+            core.setFailed(`${actor} has '${level}' access; the canary requires write access or higher.`);
+          }
+    - name: Resolve the reviewed head SHA
+      id: sha
+      uses: actions/github-script@v7
+      with:
+        # Read the head SHA from the API rather than trusting a value derived from the event.
+        # `manual-canary.yml` re-reads it too and fails if the two disagree, which is what stops a
+        # push landing between the label and the run from being canaried unreviewed.
         result-encoding: string
         script: |
           const pr = await github.rest.pulls.get({
@@ -82,74 +120,14 @@ jobs:
           });
           return pr.data.head.sha;
 
-  acquire-base-image:
-    name: Acquire Base Image
-    needs: get-pr-info
-    runs-on: smithy_ubuntu-latest_8-core
-    permissions:
-      id-token: write
-      contents: read
-    steps:
-    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
-    - uses: actions/checkout@v4
-      with:
-        path: smithy-rs
-        ref: ${{ needs.get-pr-info.outputs.commit_sha }}
-        fetch-depth: 0
-    - uses: ./smithy-rs/.github/actions/free-disk-space
-    - name: Acquire base image
-      id: acquire
-      run: ./smithy-rs/.github/scripts/acquire-build-image
-    - name: Upload base image
-      uses: actions/upload-artifact@v4
-      with:
-        name: smithy-rs-base-image
-        path: smithy-rs-base-image
-        retention-days: 1
-
-  generate:
-    name: Generate
-    needs:
-    - get-pr-info
-    - acquire-base-image
-    runs-on: smithy_ubuntu-latest_8-core
-    permissions:
-      contents: read
-    steps:
-    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
-    - uses: actions/checkout@v4
-      with:
-        path: smithy-rs
-        ref: ${{ needs.get-pr-info.outputs.commit_sha }}
-    - name: Generate a subset of SDKs for the canary
-      uses: ./smithy-rs/.github/actions/docker-build
-      with:
-        action: generate-aws-sdk-for-canary
-
+  # The canary pipeline itself, unchanged and shared with the manual dispatch path.
   canary:
-    name: Canary
-    needs:
-    - get-pr-info
-    - generate
-    runs-on: smithy_ubuntu-latest_8-core
+    needs: gate
     permissions:
       id-token: write
       contents: read
-    steps:
-    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
-    - uses: actions/checkout@v4
-      with:
-        path: smithy-rs
-        ref: ${{ needs.get-pr-info.outputs.commit_sha }}
-    - name: Configure credentials
-      id: creds
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-region: us-west-2
-        role-to-assume: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
-        output-credentials: true
-    - name: Run canary
-      uses: ./smithy-rs/.github/actions/docker-build
-      with:
-        action: run-canary
-        action-arguments: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }} ${{ steps.creds.outputs.aws-access-key-id }} ${{ steps.creds.outputs.aws-secret-access-key }} ${{ steps.creds.outputs.aws-session-token }} x86_64
+    uses: ./.github/workflows/manual-canary.yml
+    with:
+      pull_request_number: ${{ github.event.pull_request.number }}
+      commit_sha: ${{ needs.gate.outputs.commit_sha }}
+    secrets: inherit
