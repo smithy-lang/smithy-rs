@@ -166,7 +166,86 @@ val multiProtocolCodegenTests = listOf(
     ),
 )
 
-val allCodegenTests = commonCodegenTests + customCodegenTests + multiProtocolCodegenTests
+// Scenarios for specs/assumptions_register.md verification.
+// The two entries below are EXPECTED TO FAIL codegen (the event-stream
+// unsupported-constraint check is a hard SEVERE that even
+// `ignoreUnsupportedConstraints=true` cannot downgrade), so they are only
+// registered when `-P includeFailingAssumptionTests=true` is passed.
+val failingAssumptionsTests =
+    if (properties.get("includeFailingAssumptionTests") == "true") {
+        "custom-test-models".let { customModels ->
+            listOf(
+                CodegenTest(
+                    "com.aws.example.esconstrained#EventStreamConstrainedService",
+                    "assumptions_a1_off",
+                    imports = listOf("$customModels/pokemon-eventstream-constrained.smithy"),
+                ),
+                CodegenTest(
+                    "com.aws.example.esconstrained#EventStreamConstrainedService",
+                    "assumptions_a1_on",
+                    imports = listOf("$customModels/pokemon-eventstream-constrained.smithy"),
+                    extraCodegenConfig = """"ignoreUnsupportedConstraints": true""",
+                ),
+                // Codegen SUCCEEDS for this one (EnumTrait is excluded from the
+                // event-stream constraint check), but the generated crate does
+                // not compile (E0308 in event_stream_serde.rs: the constrained
+                // event builder's fallible `build()` is used where the struct is
+                // expected), so cargo-based tasks would fail on it.
+                CodegenTest(
+                    "com.aws.example.esenum#EventStreamEnumService",
+                    "assumptions_a1_enum",
+                    imports = listOf("$customModels/pokemon-eventstream-enum.smithy"),
+                ),
+            )
+        }
+    } else {
+        emptyList()
+    }
+
+val assumptionsVerificationTests = "custom-test-models".let { customModels ->
+    listOf(
+        CodegenTest(
+            "com.aws.example.esenum#EventStreamEnumService",
+            "assumptions_a1_enum",
+            imports = listOf("$customModels/pokemon-eventstream-enum.smithy"),
+        ),
+        CodegenTest(
+            "com.aws.example.distinctns#DistinctNsValidationExample",
+            "assumptions_b5_distinct_ns",
+            imports = listOf(
+                "$customModels/custom-validation-distinct-ns.smithy",
+                "$customModels/custom-validation-distinct-ns-errors.smithy",
+            ),
+        ),
+        CodegenTest(
+            "com.aws.example.d1#D1InjectionService",
+            "assumptions_d1_default",
+            imports = listOf("$customModels/d1-injection.smithy"),
+        ),
+        CodegenTest(
+            "com.aws.example.d1#D1InjectionService",
+            "assumptions_d1_flag_false",
+            imports = listOf("$customModels/d1-injection.smithy"),
+            extraCodegenConfig = """"addValidationExceptionToConstrainedOperations": false""",
+        ),
+        CodegenTest(
+            "com.aws.example.d1#D1InjectionService",
+            "assumptions_d1_flag_true",
+            imports = listOf("$customModels/d1-injection.smithy"),
+            extraCodegenConfig = """"addValidationExceptionToConstrainedOperations": true""",
+        ),
+        CodegenTest(
+            "com.aws.example.d3#D3CustomReasonService",
+            "assumptions_d3_custom_reason",
+            imports = listOf("$customModels/d3-custom-reason.smithy"),
+            extraCodegenConfig =
+                """"experimentalCustomValidationExceptionWithReasonPleaseDoNotUse": "com.aws.example.d3#ValidationException"""",
+        ),
+    )
+}
+
+val allCodegenTests =
+    commonCodegenTests + customCodegenTests + multiProtocolCodegenTests + assumptionsVerificationTests + failingAssumptionsTests
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
