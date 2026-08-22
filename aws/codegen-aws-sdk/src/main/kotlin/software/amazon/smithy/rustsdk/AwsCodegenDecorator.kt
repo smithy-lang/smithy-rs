@@ -70,6 +70,7 @@ val DECORATORS: List<ClientCodegenDecorator> =
             RecursionDetectionDecorator(),
             InvocationIdDecorator(),
             RetryInformationHeaderDecorator(),
+            ClockSkewRetryClassifierDecorator(),
             RemoveDefaultsDecorator(),
             TokenProvidersDecorator(),
             ServiceEnvConfigDecorator(),
