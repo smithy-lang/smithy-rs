@@ -5,9 +5,12 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.generators
 
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -99,6 +102,48 @@ class SchemaGeneratorTest {
 
         list LongList {
             member: Long
+        }
+
+        structure SparseNestedAggregates {
+            listOfSparseLists: ListOfSparseStringList,
+            mapOfSparseLists: MapOfSparseStringList,
+            sparseListOfSparseLists: SparseListOfSparseStringList,
+            listOfSparseMaps: ListOfSparseStringMap,
+            mapOfSparseMaps: MapOfSparseStringMap
+        }
+
+        list ListOfSparseStringList {
+            member: SparseStringList
+        }
+
+        @sparse
+        list SparseStringList {
+            member: String
+        }
+
+        map MapOfSparseStringList {
+            key: String,
+            value: SparseStringList
+        }
+
+        @sparse
+        list SparseListOfSparseStringList {
+            member: SparseStringList
+        }
+
+        list ListOfSparseStringMap {
+            member: SparseStringMap
+        }
+
+        @sparse
+        map SparseStringMap {
+            key: String,
+            value: String
+        }
+
+        map MapOfSparseStringMap {
+            key: String,
+            value: SparseStringMap
         }
         """.asSmithyModel()
 
@@ -505,8 +550,25 @@ class SchemaGeneratorTest {
             @trait(selector: "structure")
             structure myAnnotationCustomTrait {}
 
+            @trait(selector: "structure")
+            structure myComplexTrait {
+                items: ComplexItems,
+                count: Integer,
+                enabled: Boolean,
+                nested: NestedSetting
+            }
+
+            list ComplexItems {
+                member: String
+            }
+
+            structure NestedSetting {
+                inner: String
+            }
+
             @myCustomTrait(setting: "hello")
             @myAnnotationCustomTrait
+            @myComplexTrait(items: ["a", "b"], count: 3, enabled: true, nested: { inner: "deep" })
             structure Tagged {
                 value: String
             }
@@ -520,6 +582,7 @@ class SchemaGeneratorTest {
                 setOf(
                     software.amazon.smithy.model.shapes.ShapeId.from("test#myCustomTrait"),
                     software.amazon.smithy.model.shapes.ShapeId.from("test#myAnnotationCustomTrait"),
+                    software.amazon.smithy.model.shapes.ShapeId.from("test#myComplexTrait"),
                 ),
             )
         val project = TestWorkspace.testProject(customProvider)
@@ -530,32 +593,103 @@ class SchemaGeneratorTest {
                 "unknown_traits",
                 """
                 use aws_smithy_schema::{DocumentTrait, Trait};
+                use aws_smithy_types::Document;
                 let s = Tagged::SCHEMA;
 
                 // Unknown traits are stored in the fallback TraitMap
                 let traits = s.traits().expect("should have a fallback trait map");
 
-                // Complex custom trait is stored as DocumentTrait
+                // A structured (object-valued) custom trait is stored as a DocumentTrait
+                // whose value preserves the structure (NOT flattened to a JSON string).
                 let custom_id = aws_smithy_schema::shape_id!("test", "myCustomTrait");
                 let custom = traits.get(&custom_id).expect("should include custom trait");
                 let doc_trait = custom.as_any().downcast_ref::<DocumentTrait>()
                     .expect("unknown complex trait should be a DocumentTrait");
                 match doc_trait.value() {
-                    aws_smithy_types::Document::String(json) => {
-                        assert!(json.contains("hello"), "should contain the setting value: {json}");
+                    Document::Object(obj) => match obj.get("setting") {
+                        Some(Document::String(s)) => assert_eq!(s, "hello"),
+                        other => panic!("expected setting=String(hello), got: {other:?}"),
+                    },
+                    other => panic!("expected Document::Object, got: {other:?}"),
+                }
+
+                // A richly-structured custom trait round-trips arrays, numbers, bools,
+                // and nested objects as structured Document values.
+                let complex_id = aws_smithy_schema::shape_id!("test", "myComplexTrait");
+                let complex = traits.get(&complex_id).expect("should include complex trait");
+                let complex_doc = complex.as_any().downcast_ref::<DocumentTrait>()
+                    .expect("complex trait should be a DocumentTrait");
+                let obj = match complex_doc.value() {
+                    Document::Object(obj) => obj,
+                    other => panic!("expected Document::Object, got: {other:?}"),
+                };
+                match obj.get("items") {
+                    Some(Document::Array(items)) => {
+                        let strings: Vec<&str> = items.iter().map(|d| match d {
+                            Document::String(s) => s.as_str(),
+                            other => panic!("expected Document::String element, got: {other:?}"),
+                        }).collect();
+                        assert_eq!(strings, vec!["a", "b"]);
                     }
-                    other => panic!("expected Document::String, got: {other:?}"),
+                    other => panic!("expected items=Array, got: {other:?}"),
+                }
+                match obj.get("count") {
+                    Some(Document::Number(aws_smithy_types::Number::PosInt(n))) => assert_eq!(*n, 3),
+                    other => panic!("expected count=Number::PosInt, got: {other:?}"),
+                }
+                match obj.get("enabled") {
+                    Some(Document::Bool(b)) => assert!(*b),
+                    other => panic!("expected enabled=Bool, got: {other:?}"),
+                }
+                match obj.get("nested") {
+                    Some(Document::Object(inner)) => match inner.get("inner") {
+                        Some(Document::String(s)) => assert_eq!(s, "deep"),
+                        other => panic!("expected nested.inner=String, got: {other:?}"),
+                    },
+                    other => panic!("expected nested=Object, got: {other:?}"),
                 }
 
                 // Annotation custom trait is stored as AnnotationTrait
                 let ann_id = aws_smithy_schema::shape_id!("test", "myAnnotationCustomTrait");
                 assert!(traits.get(&ann_id).is_some(), "should include annotation custom trait");
 
-                assert_eq!(traits.len(), 2);
+                assert_eq!(traits.len(), 3);
                 """,
             )
         }
         project.compileAndTest()
+    }
+
+    @Test
+    fun `nested aggregate recursive through a struct keeps its resolved element schema and xmlName`() {
+        // Wrapper -> values: OuterList -> (element) InnerMap -> value: Wrapper. The
+        // cycle passes through the struct Wrapper, which carries its own ::SCHEMA
+        // constant, so it is not an aggregate cycle: the serializer references
+        // InnerMap's resolved nested schema constant (preserving @xmlName on the map
+        // value) instead of substituting prelude::DOCUMENT. The model has no document
+        // shapes, so any prelude::DOCUMENT in the generated schema would mean the
+        // element's member traits were dropped.
+        val nestedModel =
+            """
+            namespace test
+            structure Wrapper { values: OuterList }
+            list OuterList { member: InnerMap }
+            map InnerMap {
+                key: String,
+                @xmlName("CustomValue")
+                value: Wrapper
+            }
+            """.asSmithyModel()
+        val nestedContext = testCodegenContext(nestedModel)
+        val writer = RustWriter.forModule("model")
+        SchemaGenerator(nestedContext, writer, nestedModel.lookup<StructureShape>("test#Wrapper")).render()
+        val rendered = writer.toString()
+
+        // The InnerMap element keeps its resolved schema; no prelude::DOCUMENT
+        // substitution for a model with no document shapes.
+        rendered shouldNotContain "prelude::DOCUMENT"
+        // The resolved nested schema carries the map value's @xmlName.
+        rendered shouldContain "with_xml_name(\"CustomValue\")"
     }
 
     @Test
@@ -806,6 +940,81 @@ class SchemaGeneratorTest {
                 let mm = result.map_of_maps.expect("map_of_maps");
                 let inner = mm.get("outer").expect("outer");
                 assert_eq!(inner.get("k1"), Some(&"v1".to_string()));
+                """,
+            )
+        }
+        project.compileAndTest()
+    }
+
+    @Test
+    fun `json round trip with nested sparse aggregates`() {
+        val project = TestWorkspace.testProject(provider)
+        val shape = model.lookup<StructureShape>("test#SparseNestedAggregates")
+        project.useShapeWriter(shape) {
+            renderStructWithSchema(this, model, provider, codegenContext, shape, project)
+            rustTemplate(
+                "use #{JsonCodec};",
+                "JsonCodec" to RuntimeType.smithyJson(codegenContext.runtimeConfig).resolve("codec::JsonCodec"),
+            )
+            unitTest(
+                "nested_sparse_aggregates_round_trip",
+                """
+                use aws_smithy_schema::serde::{SerializableStruct, ShapeSerializer};
+                use aws_smithy_json::codec::{JsonCodec, JsonCodecSettings};
+                use aws_smithy_schema::codec::Codec;
+                use std::collections::HashMap;
+
+                // `@sparse` applies to the collection that carries it, at any nesting depth, so
+                // every inner collection below generates as a collection of `Option`s even when the
+                // collection containing it is dense. This is the shape that broke `iotsitewise`:
+                // `list RowList { member: Result }` where `Result` is an `@sparse list<String>`.
+                let mut map_of_sparse_lists = HashMap::new();
+                map_of_sparse_lists.insert("row".to_string(), vec![Some("v".to_string()), None]);
+
+                let mut sparse_map = HashMap::new();
+                sparse_map.insert("present".to_string(), Some("yes".to_string()));
+                sparse_map.insert("absent".to_string(), None);
+
+                let mut map_of_sparse_maps = HashMap::new();
+                map_of_sparse_maps.insert("outer".to_string(), sparse_map.clone());
+
+                let original = SparseNestedAggregates {
+                    // dense list of sparse lists
+                    list_of_sparse_lists: Some(vec![vec![Some("a".to_string()), None]]),
+                    // map whose value is a sparse list
+                    map_of_sparse_lists: Some(map_of_sparse_lists),
+                    // sparse list of sparse lists
+                    sparse_list_of_sparse_lists: Some(vec![Some(vec![None, Some("b".to_string())]), None]),
+                    // dense list of sparse maps
+                    list_of_sparse_maps: Some(vec![sparse_map]),
+                    // map whose value is a sparse map
+                    map_of_sparse_maps: Some(map_of_sparse_maps),
+                };
+
+                let codec = JsonCodec::new(JsonCodecSettings::default());
+                let mut ser = codec.create_serializer();
+                ser.write_struct(SparseNestedAggregates::SCHEMA, &original).expect("serialization");
+                let bytes = ser.finish();
+
+                let mut deser = codec.create_deserializer(&bytes);
+                let result = SparseNestedAggregates::deserialize(&mut deser).expect("deserialization");
+
+                // Nulls inside the nested sparse collections must survive as `None`.
+                let lol = result.list_of_sparse_lists.expect("list_of_sparse_lists");
+                assert_eq!(lol, vec![vec![Some("a".to_string()), None]]);
+
+                let mol = result.map_of_sparse_lists.expect("map_of_sparse_lists");
+                assert_eq!(mol.get("row"), Some(&vec![Some("v".to_string()), None]));
+
+                let slol = result.sparse_list_of_sparse_lists.expect("sparse_list_of_sparse_lists");
+                assert_eq!(slol, vec![Some(vec![None, Some("b".to_string())]), None]);
+
+                let lom = result.list_of_sparse_maps.expect("list_of_sparse_maps");
+                assert_eq!(lom[0].get("present"), Some(&Some("yes".to_string())));
+                assert_eq!(lom[0].get("absent"), Some(&None));
+
+                let mom = result.map_of_sparse_maps.expect("map_of_sparse_maps");
+                assert_eq!(mom.get("outer").expect("outer").get("absent"), Some(&None));
                 """,
             )
         }

@@ -9,8 +9,8 @@ several RFC beliefs).
 
 | Thing | Location |
 |---|---|
-| Main working branch | `fahadzub/mproto-clean` in `D:\smithy-rs` (head f97cba901) |
-| **Spike branch — start work HERE** | `mproto-schema-spike`, worktree `D:\smithy-rs-schema-spike`, commit 91c37c45d = #4721 runtime+codegen subset imported and verified compiling |
+| **Working checkout — start work HERE** | `D:\smithy-rs` on branch `mproto-schema-spike` = mproto-clean + verification commit 999256c81 + #4721 import commit 2f6aea5f1 (runtime+codegen subset, verified compiling) |
+| Fallback base branch | `fahadzub/mproto-clean` (head 999256c81; drop back here to shed the #4721 import) |
 | PR #4721 reference checkout | worktree `D:\smithy-rs-pr4721` (head 043eae3c7, UNMERGED upstream — do not merge into mproto-clean; when it lands on main, rebase the spike and drop the copied files) |
 | Verified register | `specs/assumptions_register.md` |
 | RFC | `specs/rfc_schema_decoupled_server.md` |
@@ -19,13 +19,14 @@ several RFC beliefs).
 | F2 byte-diff spike crates | session scratchpad `f2-spike/{legacy,schema}` (temp dir — may be gone; trivially recreatable, see register F2) |
 | Scenario models (A1/B5/D1/D3) | `codegen-server-test/custom-test-models/*.smithy` + entries in `codegen-server-test/build.gradle.kts` |
 
-## ⚠ Uncommitted state on mproto-clean (`D:\smithy-rs`)
+## Branch layout
 
-`specs/` (all docs), `codegen-server-test/custom-test-models/` (6 new models), and
-`codegen-server-test/build.gradle.kts` (assumptionsVerificationTests +
-failingAssumptionsTests blocks) are **not committed**. Commit them before anything
-destructive. The failing scenarios are gated behind
-`-P includeFailingAssumptionTests=true` so default builds/tests stay green.
+Everything is committed. `mproto-schema-spike` (checked out in `D:\smithy-rs`) is
+mproto-clean plus exactly two commits: 999256c81 (specs + scenario models + gradle
+entries) and 2f6aea5f1 (the #4721 import — the commit to DROP on rebase once #4721
+merges upstream). New server work goes on `mproto-schema-spike`. The intentionally
+failing codegen scenarios are gated behind `-P includeFailingAssumptionTests=true`
+so default builds/tests stay green.
 
 ## Environment gotchas
 

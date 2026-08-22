@@ -30,6 +30,9 @@ pub mod error;
 pub mod event_stream;
 pub mod primitive;
 pub mod retry;
+
+/// Types for carrying values selected from an operation's input through to telemetry.
+pub mod telemetry;
 pub mod timeout;
 
 /// Utilities for type erasure.
@@ -44,5 +47,5 @@ pub mod str_bytes;
 pub use big_number::{BigDecimal, BigInteger};
 pub use blob::Blob;
 pub use date_time::DateTime;
-pub use document::Document;
+pub use document::{DiscriminatedDocument, Document, DocumentError, DocumentSettings};
 pub use number::Number;
