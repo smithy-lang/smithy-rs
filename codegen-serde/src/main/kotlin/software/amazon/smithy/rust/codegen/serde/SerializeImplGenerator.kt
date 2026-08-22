@@ -529,11 +529,28 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                          },
                          #{Document}::Bool(b) => b.serialize(serializer),
                          #{Document}::Null => serializer.serialize_none(),
+                         #{Document}::Blob(v) => {
+                             if serializer.is_human_readable() {
+                                 serializer.serialize_str(&#{base64_encode}(v.as_slice()))
+                             } else {
+                                 serializer.serialize_bytes(v.as_slice())
+                             }
+                         },
+                         #{Document}::Timestamp(v) => serializer.serialize_str(&v.to_string()),
+                         #{Document}::BigInteger(v) => serializer.serialize_str(v.as_ref()),
+                         #{Document}::BigDecimal(v) => serializer.serialize_str(v.as_ref()),
+                         // `Document` is `##[non_exhaustive]`; reject any future variant the
+                         // serializer does not yet understand instead of silently dropping it.
+                         _ => #{Err}(<S::Error as #{serde}::ser::Error>::custom(
+                             "unsupported document variant",
+                         )),
                      }
                     """,
                     *SupportStructures.codegenScope,
+                    *RuntimeType.preludeScope,
                     "Document" to RuntimeType.document(codegenContext.runtimeConfig),
                     "Number" to RuntimeType.smithyTypes(codegenContext.runtimeConfig).resolve("Number"),
+                    "base64_encode" to RuntimeType.base64Encode(codegenContext.runtimeConfig),
                 )
             }
         }
