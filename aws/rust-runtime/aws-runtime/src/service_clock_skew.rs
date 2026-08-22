@@ -87,9 +87,20 @@ impl Storable for TimeRequestSent {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct ResponseClockSkew(pub(crate) ClockSkew);
 
-// When present and `true`, clock skew correction is disabled. Absent means enabled.
+/// When present and `true`, clock skew correction is disabled.
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct DisableClockSkewCorrection(pub(crate) bool);
+pub struct DisableClockSkewCorrection(bool);
+impl DisableClockSkewCorrection {
+    /// Returns whether clock skew correction is disabled.
+    pub fn is_disabled(&self) -> bool {
+        self.0
+    }
+}
+impl From<bool> for DisableClockSkewCorrection {
+    fn from(disable: bool) -> Self {
+        Self(disable)
+    }
+}
 impl Storable for DisableClockSkewCorrection {
     type Storer = StoreReplace<Self>;
 }
