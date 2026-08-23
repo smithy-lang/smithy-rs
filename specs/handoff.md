@@ -1,10 +1,18 @@
-# Handoff — schema-decoupled server work (state as of 2026-08-22, evening)
+# Handoff — schema-decoupled server work (state as of 2026-08-23)
 
 Read this first in a fresh session, then `specs/rfc_schema_decoupled_server.md` (§2b
 has the `ServerProtocol` trait definition; §2 carries an implementation correction on
 the blanket `IntoResponse` impl) and `specs/assumptions_register.md` (all assumptions
 verified — treat its verdicts as ground truth; F2 has an implementation follow-up
 block recording the protocol-dependent member-order discovery).
+
+## Commit map (branch `mproto-schema-spike`, working tree clean)
+
+- `8403a69b6` upstream ask doc (`specs/upstream-ask-schema-generator.md`)
+- `3f90feb58` ServerSchemaGenerator + `schema_serde` module refactor
+- `3ad0fc895` P1 seam implementation (contains the original core-`SchemaGenerator`
+  diff — the reference for the upstream ask)
+- `71dc2d608` #4721 import • `999256c81` specs + scenario models
 
 ## What is DONE (all six handoff work items implemented and green)
 
@@ -99,6 +107,70 @@ crates compile under `-D warnings`.
   `--rerun-tasks` when changing the module list.
 - Generated workspace has `-D warnings`; crates outside the members list need
   `[workspace]` appended to cargo-check standalone (wire-capture already has it).
+
+## IN FLIGHT when this handoff was written (check before anything else)
+
+- **Clean `:codegen-server:test` re-run** launched 2026-08-23 ~13:00 in the
+  background (gradle daemon survives the session). The PREVIOUS run reported
+  280 tests / 174 failed after 10h49m — that result is GARBAGE: the failures
+  are `ZipException: invalid LOC header` and `NoClassDefFoundError` on testutil
+  classes, i.e. classpath jars rebuilt underneath the running test JVM by this
+  session's concurrent `compileKotlin` invocations (plus heavy CPU contention
+  from parallel cargo workspace builds). Check the fresh result at
+  `codegen-server/build/reports/tests/test/index.html` /
+  `codegen-server/build/test-results/test/TEST-*.xml` (timestamps must be
+  2026-08-23 13:00+). Candidate REAL failures to triage if they reproduce:
+  `UserProvidedValidationExceptionDecoratorTest`, `EventStreamAcceptHeaderTest`,
+  `PostprocessValidationExceptionNotAttachedErrorMessageDecoratorTest`
+  (MultiVersionTestFailure / assertion errors, not zip corruption).
+  **Rule learned: never run gradle compile/codegen tasks while
+  `:codegen-server:test` is executing.**
+
+## NEXT TASK (user-directed): benchmark schema-decoupled vs legacy error serialization
+
+Goal per RFC §9 (perf is a merge gate): criterion wall-time + CPU + memory
+comparison of the legacy generated error path vs the new schema-driven path.
+
+Plan agreed with the user:
+
+1. **Add a codegen flag** (working name `schemaSerde` or similar, in
+   `ServerRustSettings.codegenConfig` alongside `publicConstrainedTypes` etc.)
+   gating `ServerSchemaDecorator.extras` — flag ON emits the `schema_serde`
+   module + ModeledError impls, OFF emits nothing (legacy-only crate). Decide
+   the default (currently the decorator is unconditionally ON for http1x).
+   Add two codegen-server-test projections of the same model (one per flag
+   state) to generate the two SDK variants side by side.
+2. **Note**: for pure RUNTIME benchmarks the flag is not strictly needed —
+   every current crate contains BOTH paths (legacy `ser_*` fns + schema
+   `serialize_error`), so a single crate can bench both. The flag matters for
+   the second-order comparisons: compile time, binary size, and making sure
+   the benched schema path can't accidentally lean on legacy code.
+3. **Bench harness**: new crate (suggest `codegen-server-test/schema-serde-bench/`,
+   committed like wire-capture, own `[workspace]`, path deps into the build
+   dir). Criterion benches over the golden shapes/cases (reuse construction
+   code from `wire-capture/tests/schema_serde_goldens.rs`):
+   - restJson1 ValidationException (message + 1-entry fieldList) — the hot
+     validation-rejection shape;
+   - restJson1 ComplexError with @httpHeader member (header-split cost);
+   - awsJson1.1 / rpcv2Cbor InvalidGreeting (discriminator wrapper cost);
+   - legacy side = `IntoResponse::<P>::into_response(enum)`, schema side =
+     `P.serialize_error(&err)` — bench full response assembly on both sides
+     (same work: body + headers + status).
+4. **CPU/memory tooling — Windows caveat**: RFC §9 names iai-callgrind, but
+   valgrind does NOT run on Windows (this box). Use:
+   - criterion for wall time (works everywhere);
+   - `dhat` crate (pure Rust) for heap profiling / allocation counts — add a
+     `#[global_allocator]` dhat harness binary; assert/record allocs per
+     serialize on both paths;
+   - CPU counters: either run iai-callgrind under WSL2 if available, or skip
+     instruction counts on this box and record criterion + dhat only (note it
+     in the results). `cargo bench` from bash.
+5. Record results in `specs/` (e.g. `specs/bench-results-error-serde.md`) per
+   the RFC's "results recorded per release" requirement.
+
+Watch out: benches build against the generated build-dir crates — regenerate
+first (command in wire-capture/Cargo.toml header) and do NOT run gradle while
+benching.
 
 ## Next work items
 
