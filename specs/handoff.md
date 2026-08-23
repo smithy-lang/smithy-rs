@@ -128,6 +128,31 @@ crates compile under `-D warnings`.
 
 ## NEXT TASK (user-directed): benchmark schema-decoupled vs legacy error serialization
 
+### Status 2026-08-23 (bench-prep session — NOT yet compiled, test run was in flight)
+
+- DONE: `schemaSerde` flag in `ServerCodegenConfig` (`ServerRustSettings.kt`,
+  key `schemaSerde`, `SCHEMA_SERDE_CONFIG_KEY` const, default **TRUE** — flip if
+  the dormant #4721-style default is preferred), gating `ServerSchemaDecorator.extras`
+  after the http1x check. Verified nothing else in codegen emits
+  `schema_serde`/`ModeledError` refs, so flag-off crates are legacy-only.
+- DONE: bench harness `codegen-server-test/schema-serde-bench/` (own `[workspace]`,
+  path deps like wire-capture; regen command in its Cargo.toml header):
+  `benches/error_serde.rs` — criterion, 4 golden cases (ValidationException,
+  ComplexError header-split, awsJson1.1 + rpcv2Cbor InvalidGreeting), legacy
+  `IntoResponse<P>` vs `P.serialize_error(&e)`, async with body drained;
+  `src/bin/dhat_alloc.rs` — allocs/bytes per iter via `dhat::HeapStats` deltas
+  (legacy inputs pre-cloned outside the measured region).
+- REJECTED (user decision): extra `rest_json_schema_serde_on/_off` projections in
+  `codegen-server-test/build.gradle.kts` (added, then reverted). The flag-on/off
+  SDK variants for compile-time/binary-size comparison should come from proper
+  server customization config, the way `http-1x` is handled — design that
+  mechanism first (plan step 1 is superseded accordingly).
+- Everything below still pending: generate variants, compile benches, run, record
+  results in `specs/bench-results-error-serde.md`. Do NOT run gradle/cargo until
+  the in-flight `:codegen-server:test` finishes (client `sh.exe` PID 22752,
+  launched 07:23 local; the 7:22:57 XMLs with 174 failures are the CORRUPTED
+  run's — ZipException — ignore them).
+
 Goal per RFC §9 (perf is a merge gate): criterion wall-time + CPU + memory
 comparison of the legacy generated error path vs the new schema-driven path.
 

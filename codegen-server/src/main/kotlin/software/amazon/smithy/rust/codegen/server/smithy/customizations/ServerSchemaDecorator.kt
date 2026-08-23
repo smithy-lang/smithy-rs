@@ -70,6 +70,11 @@ class ServerSchemaDecorator : ServerCodegenDecorator {
         if (codegenContext.runtimeConfig.httpVersion != HttpVersion.Http1x) {
             return
         }
+        // `schemaSerde: false` generates a legacy-only crate (compile-time /
+        // binary-size comparison baseline).
+        if (!codegenContext.settings.codegenConfig.schemaSerde) {
+            return
+        }
         val closure =
             errorClosure(
                 codegenContext.model,
