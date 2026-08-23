@@ -1,5 +1,14 @@
 # Handoff — schema-decoupled server work (state as of 2026-08-23)
 
+> **SUPERSEDED 2026-08-23 (later session): read `specs/plan.md` FIRST — it
+> replaces the RFC and this document as the working plan.** All Step-2 design
+> decisions are user-signed there; the architecture discussion below is
+> RESOLVED and the Step 0 reverts/commit are DONE (checkpoint commit
+> `4bd123b03`, working tree clean, wire-capture 37+10 green). This file
+> remains for its historical facts (wire pins, environment gotchas,
+> discoveries); its "IN FLIGHT"/"NEXT TASK"/discussion sections are stale.
+> Still owed from here: the full clean `:codegen-server:test` run.
+
 Read this first in a fresh session, then `specs/rfc_schema_decoupled_server.md` (§2b
 has the `ServerProtocol` trait definition; §2 carries an implementation correction on
 the blanket `IntoResponse` impl) and `specs/assumptions_register.md` (all assumptions
