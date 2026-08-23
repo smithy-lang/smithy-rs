@@ -11,9 +11,13 @@ block recording the protocol-dependent member-order discovery).
 1. **Server `SchemaDecorator` mirror** — `ServerSchemaDecorator`
    (`codegen-server/.../customizations/ServerSchemaDecorator.kt`, registered in
    `RustServerCodegenPlugin`): emits schema statics + `SCHEMA` const +
-   `SerializableStruct` (serialize-only, via new `SchemaGenerator.renderSerializeOnly()`)
-   for every shape in the **error closure** (error shapes + transitively reachable
-   structs/unions; unions hooked in `ServerCodegenVisitor.unionShape`), plus
+   `SerializableStruct` (serialize-only, via `ServerSchemaGenerator.renderSerializeOnly()`
+   — a server-side serialize-only copy of core's `SchemaGenerator`; core `SchemaGenerator`
+   and `ServerCodegenVisitor` are byte-identical to the #4721 import so the eventual
+   rebase drops the imports cleanly) for every shape in the **error closure** (error
+   shapes + transitively reachable structs/unions), rendered into a dedicated
+   `schema_serde` module, one file per shape (`schema_serde/shape_<name>.rs`,
+   mirroring the `protocol_serde` layout — shape modules stay readable), plus
    `ModeledError`/`HttpModeledError` impls with codegen-baked status literals for
    `@error` shapes. Gated to http 1.x runtimes. Constrained-string members
    (`publicConstrainedTypes=true` newtypes) serialize via `as_str()`; errors whose
@@ -54,11 +58,13 @@ crates compile under `-D warnings`.
 
 - **Legacy error-body member order is protocol-dependent**: REST protocols sort
   document members by member name (`HttpTraitHttpBindingResolver.mappedBindings`
-  `.sortedBy { memberName }`); RPC protocols use model order. `SchemaGenerator` grew
+  `.sortedBy { memberName }`); RPC protocols use model order. `ServerSchemaGenerator` has
   a `serializeMemberOrder` override; `ServerSchemaDecorator` passes member-name
   order for `@error` shapes on restJson1/restXml. Multi-protocol services get
   byte-identity only on the primary protocol (order-only divergence elsewhere).
-  Recorded in register F2 follow-up + RFC §2 note.
+  Recorded in register F2 follow-up + RFC §2 note. (The `serializeMemberOrder`
+  override and the constrained-string `as_str()` handling live in
+  `ServerSchemaGenerator`, not in core.)
 - **RFC §2's blanket `impl<P, E: HttpModeledError> IntoResponse<P> for E` is not
   implementable** — Rust coherence (no negative reasoning) makes it conflict with
   every generated `IntoResponse<P> for {Op}Output`. Correction recorded in the RFC:
@@ -79,7 +85,7 @@ crates compile under `-D warnings`.
 | Fallback base branch | `fahadzub/mproto-clean` (head 999256c81) |
 | PR #4721 reference checkout | worktree `D:\smithy-rs-pr4721` (head 043eae3c7, UNMERGED upstream — when it lands on main, rebase the spike and drop the imported copies) |
 | Runtime seam | `rust-runtime/aws-smithy-http-server/src/{modeled_error.rs,protocol/server_protocol.rs}` |
-| Server codegen | `codegen-server/.../customizations/ServerSchemaDecorator.kt` (+ `ServerCodegenVisitor.unionShape` hook, `SchemaGenerator.renderSerializeOnly()/serializeMemberOrder`) |
+| Server codegen | `codegen-server/.../customizations/ServerSchemaDecorator.kt` (renders via `extras` into `schema_serde/shape_*.rs`) + `codegen-server/.../generators/ServerSchemaGenerator.kt` (serialize-only copy; core `SchemaGenerator` + `ServerCodegenVisitor` untouched) |
 | Golden + capture harness (committed now) | `codegen-server-test/wire-capture/` — `cargo test` from that dir; regenerate deps first (command in its Cargo.toml header) |
 | Verified register | `specs/assumptions_register.md` |
 | RFC | `specs/rfc_schema_decoupled_server.md` |

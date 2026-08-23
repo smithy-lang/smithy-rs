@@ -475,7 +475,8 @@ discharged; obligation 1 needed a correction:**
   writes `TopLevel` before `Nested`). One `serialize_members` impl per shape therefore
   cannot match both orders on a service mounting both protocol families; the server
   schema codegen orders `@error` shapes by the service's primary protocol
-  (`SchemaGenerator.serializeMemberOrder`, set by `ServerSchemaDecorator`).
+  (`ServerSchemaGenerator.serializeMemberOrder` — a server-side serialize-only copy
+  of core's `SchemaGenerator`, which stays pristine — set by `ServerSchemaDecorator`).
 - Float fix landed (`Encoder`/ryu, f32 widened to f64 first, matching legacy).
 - The seam is `ServerProtocol` in `aws-smithy-http-server` (`protocol/server_protocol.rs`);
   header split + discriminator wrappers live there. `__type` placement pinned by
