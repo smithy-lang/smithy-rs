@@ -1,0 +1,41 @@
+# Wire-level capture harness for the schema-decoupled server RFC.
+#
+# - `tests/captures.rs`: captures for the assumptions register (B2/B3/B5/B6/C1/C2/C3/C6).
+# - `tests/schema_serde_goldens.rs`: byte-identity goldens — legacy generated
+#   `IntoResponse<P>` responses vs the schema-driven `ServerProtocol::serialize_error`.
+#
+# The generated server crates this depends on live in the gradle build output.
+# Regenerate them with (run from the repo root, bash so JAVA_HOME is corretto21):
+#
+#   ./gradlew --rerun-tasks -P modules='pokemon-service-server-sdk,json_rpc10,json_rpc11,rpcv2Cbor,rpcv2Cbor_extras,constraints,custom-validation-exception-example,rest_json' \
+#       :codegen-server-test:generateSmithyBuild :codegen-server-test:smithyBuild
+#
+# Then: cargo test --manifest-path codegen-server-test/wire-capture/Cargo.toml -- --nocapture
+[package]
+name = "wire-capture"
+version = "0.0.1"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+json_rpc10 = { path = "../build/smithyprojections/codegen-server-test/json_rpc10/rust-server-codegen" }
+json_rpc11 = { path = "../build/smithyprojections/codegen-server-test/json_rpc11/rust-server-codegen" }
+rpcv2cbor = { path = "../build/smithyprojections/codegen-server-test/rpcv2Cbor/rust-server-codegen" }
+rpcv2cbor_extras = { path = "../build/smithyprojections/codegen-server-test/rpcv2Cbor_extras/rust-server-codegen" }
+constraints = { path = "../build/smithyprojections/codegen-server-test/constraints/rust-server-codegen" }
+custom-validation-exception-example = { path = "../build/smithyprojections/codegen-server-test/custom-validation-exception-example/rust-server-codegen" }
+rest_json = { path = "../build/smithyprojections/codegen-server-test/rest_json/rust-server-codegen" }
+pokemon-service-server-sdk = { path = "../build/smithyprojections/codegen-server-test/pokemon-service-server-sdk/rust-server-codegen" }
+aws-smithy-http-server = { path = "../../rust-runtime/aws-smithy-http-server", features = ["request-id"] }
+aws-smithy-schema = { path = "../../rust-runtime/aws-smithy-schema" }
+http = "1"
+http-body = "1"
+http-body-util = "0.1.3"
+bytes = "1"
+tower = { version = "0.4", features = ["util"] }
+tokio = { version = "1.23.1", features = ["macros", "rt-multi-thread"] }
+serde_json = "1"
+minicbor = { version = "2.2.1", features = ["alloc", "half"] }
+hyper = "1"

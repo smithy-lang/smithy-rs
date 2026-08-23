@@ -23,6 +23,7 @@ pub use self::error::BoxError;
 pub mod extension;
 pub mod instrumentation;
 pub mod layer;
+pub mod modeled_error;
 pub mod operation;
 pub mod plugin;
 #[doc(hidden)]

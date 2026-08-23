@@ -391,7 +391,6 @@ impl ShapeSerializer for JsonSerializer {
     }
 
     fn write_float(&mut self, schema: &Schema<'_>, value: f32) -> Result<(), SerdeError> {
-        use std::fmt::Write;
         self.prefix(schema);
         if value.is_nan() {
             self.output.push_str("\"NaN\"");
@@ -404,13 +403,16 @@ impl ShapeSerializer for JsonSerializer {
             }
             Ok(())
         } else {
-            write!(&mut self.output, "{}", value)
-                .map_err(|e| SerdeError::write_failed(e.to_string()))
+            // Match the legacy generated serializers byte-for-byte: floats are
+            // widened to f64 and ryu-encoded (`10000000000.0`, `1.0`), whereas
+            // `Display` drops the trailing `.0` on integral values.
+            let mut encoder = aws_smithy_types::primitive::Encoder::from(f64::from(value));
+            self.output.push_str(encoder.encode());
+            Ok(())
         }
     }
 
     fn write_double(&mut self, schema: &Schema<'_>, value: f64) -> Result<(), SerdeError> {
-        use std::fmt::Write;
         self.prefix(schema);
         if value.is_nan() {
             self.output.push_str("\"NaN\"");
@@ -423,8 +425,11 @@ impl ShapeSerializer for JsonSerializer {
             }
             Ok(())
         } else {
-            write!(&mut self.output, "{}", value)
-                .map_err(|e| SerdeError::write_failed(e.to_string()))
+            // Match the legacy generated serializers byte-for-byte: ryu keeps
+            // the trailing `.0` on integral values (`1.0`), `Display` does not.
+            let mut encoder = aws_smithy_types::primitive::Encoder::from(value);
+            self.output.push_str(encoder.encode());
+            Ok(())
         }
     }
 
@@ -676,7 +681,10 @@ mod tests {
         let output = String::from_utf8(ser.finish()).unwrap();
         assert_eq!(
             output,
-            r#"{"active":true,"name":"test","count":42,"price":3.15,"items":[1,2]}"#
+            // `price` is an f32: the serializer widens f32 to f64 before ryu-encoding
+            // (matching the legacy generated serializers), so 3.15f32 renders with
+            // the full f64 expansion of its f32 bit pattern.
+            r#"{"active":true,"name":"test","count":42,"price":3.1500000953674316,"items":[1,2]}"#
         );
     }
 

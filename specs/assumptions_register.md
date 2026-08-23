@@ -462,6 +462,40 @@ Obligations for the RFC's no-fallback bet:
    not exercised by the spike). Discriminator injection is pluggable via a wrapper
    `SerializableStruct` prepending a synthetic `__type` member.
 
+**Implementation follow-up (2026-08-22, `mproto-schema-spike`) — all four obligations
+discharged; obligation 1 needed a correction:**
+
+- **Legacy member write order is PROTOCOL-DEPENDENT, not one order.** REST protocols
+  (restJson1/restXml) serialize error document members in **member-name-sorted order**:
+  `HttpTraitHttpBindingResolver.mappedBindings` ends in `.sortedBy { it.memberName }`
+  (`HttpBindingResolver.kt:226`) — that is why `fieldList` precedes `message` and
+  rest_json's `ComplexError` writes `Nested` before `TopLevel`. RPC protocols
+  (awsJson 1.0/1.1, rpcv2Cbor) use `StaticHttpBindingResolver`, which binds
+  `shape.members()` verbatim — **model member order** (json_rpc11's `ComplexError`
+  writes `TopLevel` before `Nested`). One `serialize_members` impl per shape therefore
+  cannot match both orders on a service mounting both protocol families; the server
+  schema codegen orders `@error` shapes by the service's primary protocol
+  (`SchemaGenerator.serializeMemberOrder`, set by `ServerSchemaDecorator`).
+- Float fix landed (`Encoder`/ryu, f32 widened to f64 first, matching legacy).
+- The seam is `ServerProtocol` in `aws-smithy-http-server` (`protocol/server_protocol.rs`);
+  header split + discriminator wrappers live there. `__type` placement pinned by
+  goldens: awsJson writes it **after** the members (not prepended); rpcv2Cbor first.
+- Goldens: `codegen-server-test/wire-capture/tests/schema_serde_goldens.rs` —
+  10 byte-identity tests green across restJson1 (incl. header split, empty-header
+  skip, ValidationException ordering), awsJson 1.0/1.1, rpcv2Cbor, plus an explicit
+  pin of the event-stream content-type divergence (A2 quirk: legacy stamps
+  `application/vnd.amazon.eventstream` on pre-first-event errors; the
+  operation-agnostic seam stamps `application/json`).
+- **New coherence finding**: the RFC §2 blanket
+  `impl<P, E: HttpModeledError> IntoResponse<P> for E` cannot coexist with the
+  generated `impl IntoResponse<P> for {Op}Output` impls — Rust coherence performs no
+  negative reasoning on the `E: HttpModeledError` bound (the classic manual-`ToString`
+  conflict), so every generated crate would fail to compile. B7's "no overlap" was
+  verified against actual impls, not coherence's future-proofing rules. Tier-1
+  middleware ergonomics must come from codegen-emitted per-error-type
+  `IntoResponse<P>` impls delegating to `serialize_error` (no coherence issue), not
+  from a blanket impl.
+
 ## Side-findings (bugs discovered during verification)
 
 1. **Request-time PANIC on a valid request** (constraints crate): `ConA.fixedValueInteger`

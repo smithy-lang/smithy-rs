@@ -41,6 +41,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.SchemaGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplGenerator
@@ -55,6 +56,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasEventStreamMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.runCommand
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerSchemaDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerProtocolOrderDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.CollectionConstraintViolationGenerator
@@ -668,6 +670,19 @@ open class ServerCodegenVisitor(
         logger.info("[rust-server-codegen] Generating an union shape $shape")
         rustCrate.useShapeWriter(shape) {
             UnionGenerator(model, codegenContext.symbolProvider, this, shape, renderUnknownVariant = false).render()
+            // Unions in the error closure need schemas + `SerializableStruct`
+            // for schema-driven error serialization; structures get theirs via
+            // `ServerSchemaDecorator`, which has no union hook.
+            if (codegenContext.runtimeConfig.httpVersion == HttpVersion.Http1x &&
+                shape.id in ServerSchemaDecorator.errorClosure(
+                    model,
+                    codegenContext.serviceShape,
+                    codegenContext.symbolProvider,
+                    codegenContext.settings.codegenConfig.publicConstrainedTypes,
+                )
+            ) {
+                SchemaGenerator(codegenContext, this, shape).renderSerializeOnly()
+            }
         }
 
         if (shape.isReachableFromOperationInput() &&

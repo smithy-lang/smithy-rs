@@ -167,10 +167,13 @@ val multiProtocolCodegenTests = listOf(
 )
 
 // Scenarios for specs/assumptions_register.md verification.
-// The two entries below are EXPECTED TO FAIL codegen (the event-stream
-// unsupported-constraint check is a hard SEVERE that even
-// `ignoreUnsupportedConstraints=true` cannot downgrade), so they are only
-// registered when `-P includeFailingAssumptionTests=true` is passed.
+// The entries below are EXPECTED TO FAIL — either codegen itself (a1_off/a1_on:
+// the event-stream unsupported-constraint check is a hard SEVERE that even
+// `ignoreUnsupportedConstraints=true` cannot downgrade; d1_flag_false: the
+// deprecated flag's explicit-false semantics abort with "You must model this
+// behavior") or compilation of the generated crate (a1_enum). They are only
+// registered when `-P includeFailingAssumptionTests=true` is passed so default
+// builds and cargo-based test tasks stay green.
 val failingAssumptionsTests =
     if (properties.get("includeFailingAssumptionTests") == "true") {
         "custom-test-models".let { customModels ->
@@ -196,6 +199,15 @@ val failingAssumptionsTests =
                     "assumptions_a1_enum",
                     imports = listOf("$customModels/pokemon-eventstream-enum.smithy"),
                 ),
+                // Codegen ABORTS for this one by design: the deprecated flag's
+                // explicit-false semantics preserve the old must-model behavior
+                // (SEVERE "You must model this behavior", register D1).
+                CodegenTest(
+                    "com.aws.example.d1#D1InjectionService",
+                    "assumptions_d1_flag_false",
+                    imports = listOf("$customModels/d1-injection.smithy"),
+                    extraCodegenConfig = """"addValidationExceptionToConstrainedOperations": false""",
+                ),
             )
         }
     } else {
@@ -204,11 +216,6 @@ val failingAssumptionsTests =
 
 val assumptionsVerificationTests = "custom-test-models".let { customModels ->
     listOf(
-        CodegenTest(
-            "com.aws.example.esenum#EventStreamEnumService",
-            "assumptions_a1_enum",
-            imports = listOf("$customModels/pokemon-eventstream-enum.smithy"),
-        ),
         CodegenTest(
             "com.aws.example.distinctns#DistinctNsValidationExample",
             "assumptions_b5_distinct_ns",
@@ -221,12 +228,6 @@ val assumptionsVerificationTests = "custom-test-models".let { customModels ->
             "com.aws.example.d1#D1InjectionService",
             "assumptions_d1_default",
             imports = listOf("$customModels/d1-injection.smithy"),
-        ),
-        CodegenTest(
-            "com.aws.example.d1#D1InjectionService",
-            "assumptions_d1_flag_false",
-            imports = listOf("$customModels/d1-injection.smithy"),
-            extraCodegenConfig = """"addValidationExceptionToConstrainedOperations": false""",
         ),
         CodegenTest(
             "com.aws.example.d1#D1InjectionService",

@@ -38,6 +38,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -111,6 +112,17 @@ class SchemaGenerator(
     private val syntheticMembers: List<SyntheticSchemaMember> = emptyList(),
     /** Override the prefix used for generated static names. Defaults to the symbol name uppercased. */
     val schemaPrefix: String? = null,
+    /**
+     * Overrides the order in which `serialize_members` writes structure
+     * members. Member schema statics, indices, and the schema member array are
+     * unaffected — only the write order changes.
+     *
+     * The server passes the legacy error serializer's order here so that
+     * schema-driven error bodies are byte-identical: REST protocols sort
+     * error-response bindings by member name (`HttpTraitHttpBindingResolver.mappedBindings`),
+     * while RPC protocols use model member order.
+     */
+    private val serializeMemberOrder: List<MemberShape>? = null,
 ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -132,6 +144,19 @@ class SchemaGenerator(
     private fun isStringEnum(shape: Shape): Boolean = shape is EnumShape || shape.hasTrait(EnumTrait::class.java)
 
     /**
+     * True when a string-targeting member's resolved Rust type is not `String` —
+     * i.e. a server constrained-string newtype (`publicConstrainedTypes=true`),
+     * which exposes the inner `&str` via `as_str()`.
+     */
+    private fun isConstrainedStringMember(member: MemberShape): Boolean {
+        var type = symbolProvider.toSymbol(member).rustType().stripOuter<software.amazon.smithy.rust.codegen.core.rustlang.RustType.Option>()
+        if (type is software.amazon.smithy.rust.codegen.core.rustlang.RustType.Box) {
+            type = type.member
+        }
+        return type != software.amazon.smithy.rust.codegen.core.rustlang.RustType.String
+    }
+
+    /**
      * Escape a member name for use inside rustTemplate strings.
      * Raw identifiers like `r#enum` contain `#`, which is the format character
      * in rustTemplate. We must escape `#` as `##` so that `r#enum` is emitted
@@ -146,6 +171,42 @@ class SchemaGenerator(
         val schemaPrefix = this.schemaPrefix ?: symbol.name.uppercase()
         renderMemberSchemas(writer, schemaPrefix)
         renderSchemaStatic(writer, schemaPrefix, symbol.name)
+    }
+
+    /**
+     * Renders the schema statics, the `SCHEMA` const, and the
+     * `SerializableStruct` impl — but no deserialization methods.
+     *
+     * Used by the server, whose Phase 1 schema-serde consumer (error
+     * serialization) is write-only; the deserialize methods assume
+     * client-side builder conventions.
+     */
+    fun renderSerializeOnly() {
+        val symbol = symbolProvider.toSymbol(shape)
+        val codegenScope =
+            arrayOf(
+                "Schema" to smithySchema.resolve("Schema"),
+            )
+        val schemaPrefix = this.schemaPrefix ?: symbol.name.uppercase()
+
+        renderMemberSchemas(writer, schemaPrefix)
+        renderSchemaStatic(writer, schemaPrefix, symbol.name)
+
+        writer.rustTemplate(
+            """
+            impl ${symbol.name} {
+                /// The schema for this shape.
+                pub const SCHEMA: &'static #{Schema}<'static> = &${schemaPrefix}_SCHEMA;
+            }
+            """,
+            *codegenScope,
+        )
+
+        if (shape is StructureShape) {
+            renderSerializableStruct(writer, symbol.name, schemaPrefix)
+        } else if (shape is UnionShape) {
+            renderSerializableUnion(writer, symbol.name, schemaPrefix)
+        }
     }
 
     fun render() {
@@ -197,7 +258,7 @@ class SchemaGenerator(
                 "ShapeSerializer" to smithySchema.resolve("serde::ShapeSerializer"),
                 "SerdeError" to smithySchema.resolve("serde::SerdeError"),
             )
-        val members = (shape as StructureShape).allMembers.values.toList()
+        val members = serializeMemberOrder ?: (shape as StructureShape).allMembers.values.toList()
 
         val memberWrites =
             writable {
@@ -282,11 +343,15 @@ class SchemaGenerator(
                             """,
                         )
                     } else {
-                        val writeExpr = unionVariantWriteExpr(target, memberSchemaRef, "val")
+                        val writeExpr = unionVariantWriteExpr(target, memberSchemaRef, "val", member)
                         rust("Self::$variantName(val) => { $writeExpr },")
                     }
                 }
-                rustTemplate("Self::${UnionGenerator.UNKNOWN_VARIANT_NAME} => return Err(#{SerdeError}::custom(\"cannot serialize unknown union variant\")),", *codegenScope)
+                // Server unions are generated without the `Unknown` variant
+                // (`renderUnknownVariant = false`), so the arm would not compile there.
+                if (codegenContext.target == software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget.CLIENT) {
+                    rustTemplate("Self::${UnionGenerator.UNKNOWN_VARIANT_NAME} => return Err(#{SerdeError}::custom(\"cannot serialize unknown union variant\")),", *codegenScope)
+                }
             }
 
         writer.rustTemplate(
@@ -311,6 +376,7 @@ class SchemaGenerator(
         target: Shape,
         memberSchemaRef: String,
         varName: String,
+        member: MemberShape? = null,
     ): String {
         return when (target) {
             is BooleanShape -> "ser.write_boolean(&$memberSchemaRef, *$varName)?;"
@@ -324,7 +390,7 @@ class SchemaGenerator(
             is BigDecimalShape -> "ser.write_big_decimal(&$memberSchemaRef, $varName)?;"
             is EnumShape -> "ser.write_string(&$memberSchemaRef, $varName.as_str())?;"
             is StringShape ->
-                if (isStringEnum(target)) {
+                if (isStringEnum(target) || (member != null && isConstrainedStringMember(member))) {
                     "ser.write_string(&$memberSchemaRef, $varName.as_str())?;"
                 } else {
                     "ser.write_string(&$memberSchemaRef, $varName)?;"
@@ -509,6 +575,11 @@ class SchemaGenerator(
             is EnumShape -> "ser.write_string(&$memberSchemaRef, val.as_str())?;"
             is StringShape ->
                 if (isStringEnum(target)) {
+                    "ser.write_string(&$memberSchemaRef, val.as_str())?;"
+                } else if (member != null && isConstrainedStringMember(member)) {
+                    // Server `publicConstrainedTypes=true`: the member holds a
+                    // constrained newtype (e.g. `pub struct ErrorMessage(String)`),
+                    // which exposes the inner `&str` via `as_str()`.
                     "ser.write_string(&$memberSchemaRef, val.as_str())?;"
                 } else {
                     "ser.write_string(&$memberSchemaRef, val)?;"

@@ -591,6 +591,7 @@ dependencies = [
  "aws-smithy-http 0.64.0",
  "aws-smithy-json 0.63.1",
  "aws-smithy-runtime-api 1.15.1",
+ "aws-smithy-schema 0.2.1",
  "aws-smithy-types 1.6.3",
  "aws-smithy-xml 0.62.1",
  "bytes",

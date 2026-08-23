@@ -281,6 +281,13 @@ pub trait HttpModeledError: ModeledError {
 - **P1 error-body serialization (decided)**: error bodies serialize via
   `serialize_members` through the schema-driven codecs, **for all protocols**. Errors
   are thereby the first server-side consumer of #4721 schema serde. Notes:
+  - **Member write order is protocol-dependent in legacy codegen** (register F2
+    follow-up): REST protocols sort error document members by member name
+    (`mappedBindings`), RPC protocols use model member order. Server schema codegen
+    therefore orders `@error` shapes' `serialize_members` by the service's primary
+    protocol; a service mounting both protocol families keeps byte-identity on its
+    primary protocol and preserves only member-set equality (order may differ) on the
+    other — JSON/CBOR member order is not semantically visible to clients.
   - #4721's rejection of *document-typed shapes* in XML is Smithy-spec compliance and
     does not constrain this path: error structures have concrete members, and
     schema-driven struct-to-XML serialization (including restXml error envelopes) is in
@@ -316,6 +323,17 @@ pub trait HttpModeledError: ModeledError {
   bespoke `IntoResponse` impls for individual error types, all framework synthetic errors
   (unknown operation, malformed request, internal failure) become modeled framework
   shapes. One serialization path total; "everything modeled" is a hard rule.
+
+  > **Correction from implementation (assumptions register F2 follow-up)**: the blanket
+  > impl as written is not implementable — Rust coherence performs no negative
+  > reasoning on the `E: HttpModeledError` bound, so the blanket in
+  > `aws-smithy-http-server` conflicts with every generated
+  > `impl IntoResponse<P> for {Op}Output` in downstream crates (the classic
+  > manual-`ToString` conflict), not merely with bespoke error impls. The same
+  > outcome is achieved instead by **codegen emitting per-error-type
+  > `IntoResponse<P>` impls that delegate to `ServerProtocol::serialize_error`** —
+  > one serialization path is preserved, coherence is satisfied, and the emitted
+  > impls are mechanical one-liners. Everything else in this section stands.
 
 ### 2c. Wire discriminators and error namespaces
 
