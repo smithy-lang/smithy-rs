@@ -70,8 +70,9 @@ class ServerSchemaDecorator : ServerCodegenDecorator {
         if (codegenContext.runtimeConfig.httpVersion != HttpVersion.Http1x) {
             return
         }
-        // `schemaSerde: false` generates a legacy-only crate (compile-time /
-        // binary-size comparison baseline).
+        // Schema serde is opt-in (like `http-1x`): `schemaSerde: true` in
+        // codegenConfig enables it; the default legacy-only crate is also the
+        // compile-time / binary-size comparison baseline.
         if (!codegenContext.settings.codegenConfig.schemaSerde) {
             return
         }
@@ -131,12 +132,7 @@ class ServerSchemaDecorator : ServerCodegenDecorator {
         if (shape !is StructureShape || !shape.hasTrait(ErrorTrait::class.java)) {
             return null
         }
-        val restProtocols =
-            setOf(
-                ShapeId.from("aws.protocols#restJson1"),
-                ShapeId.from("aws.protocols#restXml"),
-            )
-        return if (codegenContext.protocol in restProtocols) {
+        return if (isRestFamilyProtocol(codegenContext.protocol)) {
             shape.members().sortedBy { it.memberName }
         } else {
             null
@@ -179,6 +175,19 @@ class ServerSchemaDecorator : ServerCodegenDecorator {
     }
 
     companion object {
+        private val REST_FAMILY_PROTOCOLS =
+            setOf(
+                ShapeId.from("aws.protocols#restJson1"),
+                ShapeId.from("aws.protocols#restXml"),
+            )
+
+        /**
+         * REST-family protocols sort top-level error document members by member
+         * name (`HttpTraitHttpBindingResolver.mappedBindings`); RPC-family
+         * protocols (awsJson 1.0/1.1, rpcv2Cbor) use model order.
+         */
+        fun isRestFamilyProtocol(protocolId: ShapeId): Boolean = protocolId in REST_FAMILY_PROTOCOLS
+
         /**
          * The set of structure/union shapes reachable from any *schema-safe*
          * operation error of [service] (the error shapes themselves included).

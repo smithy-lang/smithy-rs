@@ -1,13 +1,15 @@
 //! Heap-allocation comparison via dhat (valgrind-free, works on Windows):
 //! for each golden case, runs N full response assemblies (serialize + drain)
-//! on the legacy and schema paths and prints the per-iteration allocation
-//! block/byte deltas from `dhat::HeapStats`.
+//! on the legacy (flag-OFF crate) and schema (flag-ON `*-schema` crate) paths
+//! and prints the per-iteration allocation block/byte deltas from
+//! `dhat::HeapStats`.
 //!
 //! `cargo run --release --bin dhat_alloc`
 //!
-//! Inputs for the legacy path (which consumes its enum) are pre-cloned before
-//! the measured region so input construction never lands in the deltas; dhat's
-//! totals are cumulative, so drops inside the region do not subtract.
+//! Both paths consume their operation-error enum; inputs are pre-cloned before
+//! the measured region on both sides so input construction never lands in the
+//! deltas; dhat's totals are cumulative, so drops inside the region do not
+//! subtract.
 
 use aws_smithy_http_server::body::BoxBody;
 use schema_serde_bench::drain;
@@ -17,27 +19,29 @@ static ALLOC: dhat::Alloc = dhat::Alloc;
 
 const ITERS: usize = 1000;
 
-fn measure<E: Clone>(
+fn measure<L: Clone, S: Clone>(
     rt: &tokio::runtime::Runtime,
     name: &str,
-    error: E,
-    legacy: fn(E) -> http::Response<BoxBody>,
-    schema: fn(&E) -> http::Response<BoxBody>,
+    legacy_error: L,
+    schema_error: S,
+    legacy: fn(L) -> http::Response<BoxBody>,
+    schema: fn(S) -> http::Response<BoxBody>,
 ) {
-    // Pre-clone legacy inputs outside the measured region.
-    let inputs: Vec<E> = (0..ITERS).map(|_| error.clone()).collect();
+    // Pre-clone all inputs outside the measured region.
+    let legacy_inputs: Vec<L> = (0..ITERS).map(|_| legacy_error.clone()).collect();
+    let schema_inputs: Vec<S> = (0..ITERS).map(|_| schema_error.clone()).collect();
 
     let before = dhat::HeapStats::get();
     rt.block_on(async {
-        for e in inputs {
+        for e in legacy_inputs {
             std::hint::black_box(drain(legacy(e)).await);
         }
     });
     let after_legacy = dhat::HeapStats::get();
 
     rt.block_on(async {
-        for _ in 0..ITERS {
-            std::hint::black_box(drain(schema(&error)).await);
+        for e in schema_inputs {
+            std::hint::black_box(drain(schema(e)).await);
         }
     });
     let after_schema = dhat::HeapStats::get();
@@ -64,7 +68,8 @@ fn main() {
         measure(
             &rt,
             "restjson1_validation_exception",
-            case::error(),
+            case::legacy_error(),
+            case::schema_error(),
             case::legacy,
             case::schema,
         );
@@ -74,7 +79,8 @@ fn main() {
         measure(
             &rt,
             "restjson1_complex_error_header_split",
-            case::error(),
+            case::legacy_error(),
+            case::schema_error(),
             case::legacy,
             case::schema,
         );
@@ -84,7 +90,8 @@ fn main() {
         measure(
             &rt,
             "awsjson11_invalid_greeting",
-            case::error(),
+            case::legacy_error(),
+            case::schema_error(),
             case::legacy,
             case::schema,
         );
@@ -94,7 +101,8 @@ fn main() {
         measure(
             &rt,
             "rpcv2cbor_invalid_greeting",
-            case::error(),
+            case::legacy_error(),
+            case::schema_error(),
             case::legacy,
             case::schema,
         );

@@ -131,13 +131,14 @@ data class ServerCodegenConfig(
      */
     val allowMissingUnionVariant: Boolean = DEFAULT_ALLOW_MISSING_UNION_VARIANT,
     /**
-     * When true (the default), emit the schema-driven serialization machinery for the
+     * When true, emit the schema-driven serialization machinery for the
      * service's error closure: the `schema_serde` module (schema statics +
      * `SerializableStruct` impls) and the `ModeledError`/`HttpModeledError` impls,
      * via [ServerSchemaDecorator]. Only takes effect on http 1.x runtimes.
      *
-     * Set to false to generate a legacy-only crate (no schema path) — used to compare
-     * compile time and binary size against the schema-enabled variant.
+     * Off by default — an opt-in experimental flag, like `http-1x`. Flag-off
+     * crates are legacy-only (no schema path), which is also the baseline for
+     * compile-time and binary-size comparisons against the schema-enabled variant.
      */
     val schemaSerde: Boolean = DEFAULT_SCHEMA_SERDE,
 ) : CoreCodegenConfig(
@@ -150,12 +151,12 @@ data class ServerCodegenConfig(
         private const val DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE = false
         private const val DEFAULT_ALLOW_MISSING_UNION_VARIANT = false
         const val DEFAULT_HTTP_1X = false
-        const val DEFAULT_SCHEMA_SERDE = true
+        const val DEFAULT_SCHEMA_SERDE = false
 
         /**
-         * Configuration key for the schema-serde flag. `true` (default) emits the
+         * Configuration key for the schema-serde opt-in. `true` emits the
          * `schema_serde` module and `ModeledError` impls for the error closure on
-         * http 1.x runtimes; `false` generates a legacy-only crate.
+         * http 1.x runtimes; `false` (default) generates a legacy-only crate.
          */
         const val SCHEMA_SERDE_CONFIG_KEY = "schemaSerde"
 

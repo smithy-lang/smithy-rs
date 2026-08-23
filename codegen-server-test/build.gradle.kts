@@ -144,6 +144,53 @@ val customCodegenTests = "custom-test-models".let { customModels ->
     ).bothHttpVersions()
 }
 
+// Schema-serde opt-in variants (`"schemaSerde": true`, http-1x only — the same
+// opt-in pattern as `http-1x` itself) of the models whose legacy (flag-off,
+// unsuffixed) crates the `wire-capture` goldens and `schema-serde-bench`
+// harnesses compare against. Flag-on crates serve modeled errors through
+// `ServerProtocol::serialize_error` and contain no legacy error serializers.
+val schemaSerdeCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
+    listOf(
+        CodegenTest(
+            "aws.protocoltests.restjson#RestJson",
+            "rest_json-schema",
+        ),
+        CodegenTest(
+            "aws.protocoltests.json10#JsonRpc10",
+            "json_rpc10-schema",
+        ),
+        CodegenTest(
+            "aws.protocoltests.json#JsonProtocol",
+            "json_rpc11-schema",
+        ),
+        CodegenTest(
+            "smithy.protocoltests.rpcv2Cbor#RpcV2Protocol",
+            "rpcv2Cbor-schema",
+        ),
+        CodegenTest(
+            "com.amazonaws.constraints#ConstraintsService",
+            "constraints-schema",
+            imports = listOf("$commonModels/constraints.smithy"),
+        ),
+        CodegenTest(
+            "com.aws.example#PokemonService",
+            "pokemon-service-server-sdk-schema",
+            imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy"),
+        ),
+    ).map {
+        // pokemon additionally enables `alwaysSendEventStreamInitialResponse` to
+        // mirror its legacy counterpart (`pokemon-service-server-sdk` above) —
+        // crate-pair goldens require both sides to share the setting.
+        val extra =
+            if (it.module == "pokemon-service-server-sdk-schema") {
+                """, "alwaysSendEventStreamInitialResponse": true"""
+            } else {
+                ""
+            }
+        it.copy(extraCodegenConfig = """"http-1x": true, "schemaSerde": true$extra""")
+    }
+}
+
 val multiProtocolCodegenTests = listOf(
     CodegenTest(
         "com.aws.example#PokemonService",
@@ -152,7 +199,12 @@ val multiProtocolCodegenTests = listOf(
             "../codegen-core/common-test-models/pokemon.smithy",
             "../codegen-core/common-test-models/pokemon-common.smithy",
         ),
-        extraCodegenConfig = """"http-1x": true, "debugMode": true""",
+        // `alwaysSendEventStreamInitialResponse` is enabled PERMANENTLY so the
+        // pokemon example demonstrates both event-stream initial-message
+        // directions on its rpcv2Cbor protocol: the client sends `region` in an
+        // initial-request frame (RPC protocols only, #4344/#4734), and the
+        // server emits an initial-response frame (#4352; default off).
+        extraCodegenConfig = """"http-1x": true, "debugMode": true, "alwaysSendEventStreamInitialResponse": true""",
     ),
     CodegenTest(
         "com.aws.example#PokemonService",
@@ -246,7 +298,8 @@ val assumptionsVerificationTests = "custom-test-models".let { customModels ->
 }
 
 val allCodegenTests =
-    commonCodegenTests + customCodegenTests + multiProtocolCodegenTests + assumptionsVerificationTests + failingAssumptionsTests
+    commonCodegenTests + customCodegenTests + schemaSerdeCodegenTests + multiProtocolCodegenTests +
+        assumptionsVerificationTests + failingAssumptionsTests
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)

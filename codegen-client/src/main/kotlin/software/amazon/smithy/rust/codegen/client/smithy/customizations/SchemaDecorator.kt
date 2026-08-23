@@ -56,7 +56,10 @@ object SchemaSerdeAllowlist {
         emptySet()
 
     /** Individual services allowed regardless of protocol. */
-    private val allowedServices: Set<String> = setOf<String>()
+    // TEMPORARY (schema-decoupled server spike): pokemon allowlisted so the
+    // schema-serde client SDK exists as the reference architecture. Remove
+    // before merging.
+    private val allowedServices: Set<String> = setOf("com.aws.example#PokemonService")
 
     /** Returns true if schema-based serde should be used exclusively (no fallback). */
     fun usesSchemaSerdeExclusively(codegenContext: ClientCodegenContext): Boolean =

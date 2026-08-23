@@ -32,6 +32,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RpcV2Cbor
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.awsJsonFieldName
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.shapeModuleName
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParserCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParserSection
@@ -140,6 +141,35 @@ fun serverProtocolSerdeModule(
         RustModule.private("serde", parent = serverProtocolRootModule(protocolId))
     } else {
         ProtocolFunctions.defaultSerDeModule
+    }
+
+/**
+ * Returns the serializer fn for the validation-exception shape's error payload, for use by the
+ * `From<ConstraintViolation> for RequestRejection` conversions.
+ *
+ * - Single-protocol crates return the serializer generator's `RuntimeType`: referencing the fn
+ *   this way MATERIALIZES it even when no legacy error-response serializer does (`schemaSerde`
+ *   crates serve modeled errors schema-driven and never reference those).
+ * - Multi-protocol crates return the per-protocol path (`protocol_<x>::serde::...`) as a plain
+ *   `RuntimeType`: each protocol's serde pass already materializes its own copy there (via the
+ *   protocol codegen transformer), whereas the serializer generator would materialize into the
+ *   shared `protocol_serde` module, where the protocols' differently-typed copies collide.
+ *   (The schema-serde serving flip is disabled on multi-protocol crates, so the legacy pass
+ *   always runs there.)
+ */
+fun serverValidationExceptionErrorSerializer(
+    codegenContext: ServerCodegenContext,
+    protocol: ServerProtocol,
+    validationExceptionShape: ShapeId,
+): RuntimeType =
+    if (codegenContext.isMultiProtocol) {
+        val shape = codegenContext.model.expectShape(validationExceptionShape)
+        val moduleName = codegenContext.symbolProvider.shapeModuleName(codegenContext.serviceShape, shape)
+        serverProtocolSerdeModule(protocol.protocolShapeId, true)
+            .toType()
+            .resolve("$moduleName::ser_${validationExceptionShape.name.toSnakeCase()}_error")
+    } else {
+        protocol.structuredDataSerializer().serverErrorSerializer(validationExceptionShape)
     }
 
 /** Returns the legacy event-stream module, or the private event-stream module owned by one protocol. */

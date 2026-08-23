@@ -244,6 +244,31 @@ dependencies = [
  "aws-smithy-http-server",
  "aws-smithy-json",
  "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "bytes",
+ "form_urlencoded",
+ "futures-util",
+ "http 1.5.0",
+ "http-body 1.1.0",
+ "http-body-util",
+ "mime",
+ "nom",
+ "percent-encoding",
+ "pin-project-lite",
+ "regex",
+ "tower",
+ "tracing",
+]
+
+[[package]]
+name = "constraints-schema"
+version = "0.0.1"
+dependencies = [
+ "aws-smithy-eventstream",
+ "aws-smithy-http",
+ "aws-smithy-http-server",
+ "aws-smithy-json",
+ "aws-smithy-runtime-api",
  "aws-smithy-schema",
  "aws-smithy-types",
  "bytes",
@@ -293,7 +318,6 @@ dependencies = [
  "aws-smithy-http-server",
  "aws-smithy-json",
  "aws-smithy-runtime-api",
- "aws-smithy-schema",
  "aws-smithy-types",
  "futures-util",
  "http 1.5.0",
@@ -584,6 +608,24 @@ dependencies = [
  "aws-smithy-http-server",
  "aws-smithy-json",
  "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "futures-util",
+ "http 1.5.0",
+ "http-body-util",
+ "mime",
+ "pin-project-lite",
+ "tower",
+ "tracing",
+]
+
+[[package]]
+name = "json_rpc10-schema"
+version = "0.0.1"
+dependencies = [
+ "aws-smithy-http",
+ "aws-smithy-http-server",
+ "aws-smithy-json",
+ "aws-smithy-runtime-api",
  "aws-smithy-schema",
  "aws-smithy-types",
  "futures-util",
@@ -597,6 +639,24 @@ dependencies = [
 
 [[package]]
 name = "json_rpc11"
+version = "0.0.1"
+dependencies = [
+ "aws-smithy-http",
+ "aws-smithy-http-server",
+ "aws-smithy-json",
+ "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "futures-util",
+ "http 1.5.0",
+ "http-body-util",
+ "mime",
+ "pin-project-lite",
+ "tower",
+ "tracing",
+]
+
+[[package]]
+name = "json_rpc11-schema"
 version = "0.0.1"
 dependencies = [
  "aws-smithy-http",
@@ -800,6 +860,31 @@ dependencies = [
  "aws-smithy-http-server",
  "aws-smithy-json",
  "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "aws-smithy-xml",
+ "bytes",
+ "futures-util",
+ "http 1.5.0",
+ "http-body 1.1.0",
+ "http-body-util",
+ "mime",
+ "nom",
+ "percent-encoding",
+ "pin-project-lite",
+ "tower",
+ "tracing",
+]
+
+[[package]]
+name = "pokemon-service-server-sdk-schema"
+version = "0.0.1"
+dependencies = [
+ "aws-smithy-cbor",
+ "aws-smithy-eventstream",
+ "aws-smithy-http",
+ "aws-smithy-http-server",
+ "aws-smithy-json",
+ "aws-smithy-runtime-api",
  "aws-smithy-schema",
  "aws-smithy-types",
  "aws-smithy-xml",
@@ -910,6 +995,30 @@ dependencies = [
  "aws-smithy-http-server",
  "aws-smithy-json",
  "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "bytes",
+ "form_urlencoded",
+ "futures-util",
+ "http 1.5.0",
+ "http-body 1.1.0",
+ "http-body-util",
+ "mime",
+ "nom",
+ "percent-encoding",
+ "pin-project-lite",
+ "tower",
+ "tracing",
+]
+
+[[package]]
+name = "rest_json-schema"
+version = "0.0.1"
+dependencies = [
+ "aws-smithy-eventstream",
+ "aws-smithy-http",
+ "aws-smithy-http-server",
+ "aws-smithy-json",
+ "aws-smithy-runtime-api",
  "aws-smithy-schema",
  "aws-smithy-types",
  "bytes",
@@ -928,6 +1037,24 @@ dependencies = [
 
 [[package]]
 name = "rpcv2cbor"
+version = "0.0.1"
+dependencies = [
+ "aws-smithy-cbor",
+ "aws-smithy-http",
+ "aws-smithy-http-server",
+ "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "futures-util",
+ "http 1.5.0",
+ "http-body-util",
+ "mime",
+ "pin-project-lite",
+ "tower",
+ "tracing",
+]
+
+[[package]]
+name = "rpcv2cbor-schema"
 version = "0.0.1"
 dependencies = [
  "aws-smithy-cbor",
@@ -954,7 +1081,6 @@ dependencies = [
  "aws-smithy-http",
  "aws-smithy-http-server",
  "aws-smithy-runtime-api",
- "aws-smithy-schema",
  "aws-smithy-types",
  "bytes",
  "futures-util",
@@ -1358,17 +1484,23 @@ dependencies = [
  "aws-smithy-schema",
  "bytes",
  "constraints",
+ "constraints-schema",
  "custom-validation-exception-example",
  "http 1.5.0",
  "http-body 1.1.0",
  "http-body-util",
  "hyper",
  "json_rpc10",
+ "json_rpc10-schema",
  "json_rpc11",
+ "json_rpc11-schema",
  "minicbor",
  "pokemon-service-server-sdk",
+ "pokemon-service-server-sdk-schema",
  "rest_json",
+ "rest_json-schema",
  "rpcv2cbor",
+ "rpcv2cbor-schema",
  "rpcv2cbor_extras",
  "serde_json",
  "tokio",

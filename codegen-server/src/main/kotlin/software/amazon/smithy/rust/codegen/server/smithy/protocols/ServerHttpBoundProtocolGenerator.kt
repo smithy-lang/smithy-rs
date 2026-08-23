@@ -16,6 +16,7 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.HttpErrorTrait
@@ -74,6 +75,7 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerSchemaDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerRequestBindingGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerResponseBindingGenerator
@@ -182,6 +184,49 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     private val httpBindingResolver = protocol.httpBindingResolver
     private val protocolFunctions = ProtocolFunctions(codegenContext)
     private val isMultiProtocol: Boolean = codegenContext.isMultiProtocol
+
+    /**
+     * The schema-safe error closure (see [ServerSchemaDecorator.errorClosure]),
+     * non-empty only when the schema-serde opt-in is active on this crate
+     * (`schemaSerde: true` in codegenConfig, http 1.x runtime) and the crate is
+     * single-protocol: one baked `serialize_members` order cannot match both
+     * protocol families' legacy byte order, and the framework
+     * validation-rejection path still pre-serializes through the legacy
+     * per-protocol serializers (see specs/plan.md — the multi-protocol lift
+     * lands with the generic `IntoResponse` + rejection redesign).
+     */
+    private val schemaServedErrorClosure: Set<ShapeId> by lazy {
+        if (runtimeConfig.httpVersion == HttpVersion.Http1x &&
+            codegenContext.settings.codegenConfig.schemaSerde &&
+            !isMultiProtocol
+        ) {
+            ServerSchemaDecorator.errorClosure(
+                model,
+                codegenContext.serviceShape,
+                symbolProvider,
+                codegenContext.settings.codegenConfig.publicConstrainedTypes,
+            )
+        } else {
+            emptySet()
+        }
+    }
+
+    /**
+     * True when this operation's errors are served through the schema-driven
+     * `ServerProtocol::serialize_error` seam instead of the legacy generated
+     * per-protocol error serializer (which is then never referenced, and so
+     * never generated).
+     *
+     * Event-stream operations always keep the legacy path: their pre-first-event
+     * HTTP error stamps the event-stream content type (assumptions register A2)
+     * and their frame marshallers need the legacy payload serializers anyway.
+     * Operations with any schema-excluded error (constrained-newtype closure,
+     * see [ServerSchemaDecorator.errorClosure]) also keep the legacy path.
+     */
+    private fun operationServedBySchema(operationShape: OperationShape): Boolean =
+        schemaServedErrorClosure.isNotEmpty() &&
+            !operationShape.isEventStream(model) &&
+            operationShape.operationErrors(model).all { it.id in schemaServedErrorClosure }
 
     fun withHttpBindingCustomizations(
         customizations: List<HttpBindingCustomization>,
@@ -451,28 +496,70 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         )
 
         if (operationShape.operationErrors(model).isNotEmpty()) {
-            rustTemplate(
-                """
-                impl #{SmithyHttpServer}::response::IntoResponse<#{Marker}> for #{E} {
-                    fn into_response(self) -> #{SmithyHttpServer}::response::Response {
-                        match #{serialize_error}(&self) {
-                            Ok(mut response) => {
-                                response.extensions_mut().insert(#{SmithyHttpServer}::extension::ModeledErrorExtension::new(self.name()));
-                                response
-                            },
-                            Err(e) => {
-                                #{Tracing}::error!(error = %e, "failed to serialize response");
-                                #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
+            if (operationServedBySchema(operationShape)) {
+                // Schema-serde opt-in: errors go through the protocol-agnostic
+                // `ServerProtocol::serialize_error` seam. Serialization failure
+                // falls back to the protocol's `RuntimeError::Serialization`
+                // response inside `serialize_error` itself, so this impl is
+                // infallible (the `ModeledErrorExtension` is stamped on the
+                // fallback response too, unlike the legacy impl, where the
+                // failure arm returned without it).
+                val serverProtocolTrait =
+                    ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+                        .resolve("protocol::server_protocol::ServerProtocol")
+                rustTemplate(
+                    """
+                    impl #{SmithyHttpServer}::response::IntoResponse<#{Marker}> for #{E} {
+                        fn into_response(self) -> #{SmithyHttpServer}::response::Response {
+                            let mut response = match &self {
+                                #{match_arms:W}
+                            };
+                            response.extensions_mut().insert(#{SmithyHttpServer}::extension::ModeledErrorExtension::new(self.name()));
+                            response
+                        }
+                    }
+                    """.trimIndent(),
+                    *codegenScope,
+                    "E" to errorSymbol,
+                    "Marker" to protocol.markerStruct(),
+                    "match_arms" to
+                        writable {
+                            operationShape.operationErrors(model).forEach {
+                                val variantShape = model.expectShape(it.id, StructureShape::class.java)
+                                val variantSymbol = symbolProvider.toSymbol(variantShape)
+                                rustTemplate(
+                                    "#{E}::${variantSymbol.name}(e) => #{ServerProtocol}::serialize_error(&#{Marker}, e),",
+                                    "E" to errorSymbol,
+                                    "Marker" to protocol.markerStruct(),
+                                    "ServerProtocol" to serverProtocolTrait,
+                                )
+                            }
+                        },
+                )
+            } else {
+                rustTemplate(
+                    """
+                    impl #{SmithyHttpServer}::response::IntoResponse<#{Marker}> for #{E} {
+                        fn into_response(self) -> #{SmithyHttpServer}::response::Response {
+                            match #{serialize_error}(&self) {
+                                Ok(mut response) => {
+                                    response.extensions_mut().insert(#{SmithyHttpServer}::extension::ModeledErrorExtension::new(self.name()));
+                                    response
+                                },
+                                Err(e) => {
+                                    #{Tracing}::error!(error = %e, "failed to serialize response");
+                                    #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
+                                }
                             }
                         }
                     }
-                }
-                """.trimIndent(),
-                *codegenScope,
-                "E" to errorSymbol,
-                "Marker" to protocol.markerStruct(),
-                "serialize_error" to serverSerializeError(operationShape),
-            )
+                    """.trimIndent(),
+                    *codegenScope,
+                    "E" to errorSymbol,
+                    "Marker" to protocol.markerStruct(),
+                    "serialize_error" to serverSerializeError(operationShape),
+                )
+            }
         }
     }
 

@@ -36,7 +36,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ValidationEx
 import software.amazon.smithy.rust.codegen.server.smithy.generators.isKeyConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.generators.isValueConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.serverProtocolSerdeModule
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.serverValidationExceptionErrorSerializer
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
 
 /**
@@ -75,8 +75,6 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
         constraintViolation: RuntimeType,
     ): Writable =
         writable {
-            val serDeModule =
-                serverProtocolSerdeModule(protocol.protocolShapeId, codegenContext.isMultiProtocol)
             rustTemplate(
                 """
                 impl #{From}<#{ConstraintViolation}> for #{RequestRejection} {
@@ -87,7 +85,7 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
                             field_list: Some(vec![first_validation_exception_field]),
                         };
                         Self::ConstraintViolation(
-                            #{Serde}::shape_validation_exception::ser_validation_exception_error(&validation_exception)
+                            #{ErrorSerializer}(&validation_exception)
                                 .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
                         )
                     }
@@ -95,7 +93,7 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
                 """,
                 "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
                 "ConstraintViolation" to constraintViolation,
-                "Serde" to serDeModule.toType(),
+                "ErrorSerializer" to serverValidationExceptionErrorSerializer(codegenContext, protocol, shapeId),
                 "From" to RuntimeType.From,
             )
         }

@@ -33,11 +33,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.shapeModuleName
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.targetShape
-import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
@@ -53,7 +51,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ValidationEx
 import software.amazon.smithy.rust.codegen.server.smithy.generators.isKeyConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.generators.isValueConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.serverProtocolSerdeModule
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.serverValidationExceptionErrorSerializer
 import software.amazon.smithy.rust.codegen.server.smithy.util.isValidationFieldName
 import software.amazon.smithy.rust.codegen.server.smithy.util.isValidationMessage
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
@@ -231,11 +229,6 @@ class UserProvidedValidationExceptionConversionGenerator(
     ): Writable =
         writable {
             val validationMessageName = codegenContext.symbolProvider.toMemberName(validationMessageMember)
-            // Generate the correct shape module name for the user provided validation exception
-            val shapeModuleName =
-                codegenContext.symbolProvider.shapeModuleName(codegenContext.serviceShape, validationExceptionStructure)
-            val shapeFunctionName = validationExceptionStructure.id.name.toSnakeCase()
-            val serDeModule = serverProtocolSerdeModule(protocol.protocolShapeId, codegenContext.isMultiProtocol)
 
             rustTemplate(
                 """
@@ -248,7 +241,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                             #{AdditionalFieldAssignments}
                         };
                         Self::ConstraintViolation(
-                            #{Serde}::$shapeModuleName::ser_${shapeFunctionName}_error(&validation_exception)
+                            #{ErrorSerializer}(&validation_exception)
                                 .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
                         )
                     }
@@ -257,7 +250,8 @@ class UserProvidedValidationExceptionConversionGenerator(
                 *preludeScope,
                 "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
                 "ConstraintViolation" to constraintViolation,
-                "Serde" to serDeModule.toType(),
+                "ErrorSerializer" to
+                    serverValidationExceptionErrorSerializer(codegenContext, protocol, validationExceptionStructure.id),
                 "ValidationException" to codegenContext.symbolProvider.toSymbol(validationExceptionStructure),
                 "FieldCreation" to
                     writable {

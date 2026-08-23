@@ -1,11 +1,14 @@
 # Benchmark harness for the schema-decoupled server error path (RFC §9 merge gate):
-# legacy generated `IntoResponse<P>` vs schema-driven `ServerProtocol::serialize_error`,
-# over the golden shapes from `wire-capture/tests/schema_serde_goldens.rs`.
+# legacy generated `IntoResponse<P>` (unsuffixed, `schemaSerde` OFF crates) vs the
+# schema-driven serving path (`*-schema`, `schemaSerde` ON crates, whose
+# `IntoResponse<P>` delegates to `ServerProtocol::serialize_error`), over the
+# golden shapes from `wire-capture/tests/schema_serde_goldens.rs`. The crate
+# pairs also give the compile-time / binary-size comparison for free.
 #
 # The generated server crates this depends on live in the gradle build output.
 # Regenerate them with (run from the repo root, bash so JAVA_HOME is corretto21):
 #
-#   ./gradlew --rerun-tasks -P modules='json_rpc11,rpcv2Cbor,constraints,rest_json' \
+#   ./gradlew --rerun-tasks -P modules='json_rpc11,json_rpc11-schema,rpcv2Cbor,rpcv2Cbor-schema,constraints,constraints-schema,rest_json,rest_json-schema' \
 #       :codegen-server-test:generateSmithyBuild :codegen-server-test:smithyBuild
 #
 # Then, from this directory:
@@ -28,6 +31,10 @@ json_rpc11 = { path = "../build/smithyprojections/codegen-server-test/json_rpc11
 rpcv2cbor = { path = "../build/smithyprojections/codegen-server-test/rpcv2Cbor/rust-server-codegen" }
 constraints = { path = "../build/smithyprojections/codegen-server-test/constraints/rust-server-codegen" }
 rest_json = { path = "../build/smithyprojections/codegen-server-test/rest_json/rust-server-codegen" }
+json_rpc11-schema = { path = "../build/smithyprojections/codegen-server-test/json_rpc11-schema/rust-server-codegen" }
+rpcv2cbor-schema = { path = "../build/smithyprojections/codegen-server-test/rpcv2Cbor-schema/rust-server-codegen" }
+constraints-schema = { path = "../build/smithyprojections/codegen-server-test/constraints-schema/rust-server-codegen" }
+rest_json-schema = { path = "../build/smithyprojections/codegen-server-test/rest_json-schema/rust-server-codegen" }
 aws-smithy-http-server = { path = "../../rust-runtime/aws-smithy-http-server", features = ["request-id"] }
 http = "1"
 http-body-util = "0.1.3"

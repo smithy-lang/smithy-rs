@@ -108,7 +108,15 @@ crates compile under `-D warnings`.
 - Generated workspace has `-D warnings`; crates outside the members list need
   `[workspace]` appended to cargo-check standalone (wire-capture already has it).
 
-## IN FLIGHT when this handoff was written (check before anything else)
+## IN FLIGHT — RESOLVED: run KILLED by user 2026-08-23 ~08:05
+
+**The re-run described below was killed on user instruction before completing**
+(all cargo + gradle processes, including daemons, terminated). There are NO
+valid `:codegen-server:test` results — the 7:22:57 XMLs on disk are the
+corrupted run's 174-failure garbage. A full clean re-run is still owed at some
+point; candidate real failures to watch for remain the three named below.
+
+## Original in-flight notes (historical)
 
 - **Clean `:codegen-server:test` re-run** launched 2026-08-23 ~13:00 in the
   background (gradle daemon survives the session). The PREVIOUS run reported
@@ -125,33 +133,217 @@ crates compile under `-D warnings`.
   (MultiVersionTestFailure / assertion errors, not zip corruption).
   **Rule learned: never run gradle compile/codegen tasks while
   `:codegen-server:test` is executing.**
+- **2026-08-23 ~08:00 intervention**: the fresh run stalled at ~7:25 — its
+  `cargo test --all-features` (shared workspace
+  `~/.local/share/smithy-test-workspace`, crate `smithy-test17446620918955556225`,
+  a `ServerProtocolTestGenerator` compile test) hung for 33+ min on crates.io
+  downloads with both TCP connections in CloseWait (cargo's stall timeout never
+  fired; zero CPU, no rustc children, held the build-dir lock). Killed the two
+  cargo PIDs; the suite resumed immediately (next cargo spawned within a minute).
+  **Expect exactly one spurious network-failure test** in the final report from
+  that protocol-test compile at ~07:24–08:00 — re-run just that test to confirm
+  it's clean before trusting a failure there.
 
 ## NEXT TASK (user-directed): benchmark schema-decoupled vs legacy error serialization
 
-### Status 2026-08-23 (bench-prep session — NOT yet compiled, test run was in flight)
+### Status 2026-08-23 (opt-in flip session)
 
-- DONE: `schemaSerde` flag in `ServerCodegenConfig` (`ServerRustSettings.kt`,
-  key `schemaSerde`, `SCHEMA_SERDE_CONFIG_KEY` const, default **TRUE** — flip if
-  the dormant #4721-style default is preferred), gating `ServerSchemaDecorator.extras`
-  after the http1x check. Verified nothing else in codegen emits
-  `schema_serde`/`ModeledError` refs, so flag-off crates are legacy-only.
-- DONE: bench harness `codegen-server-test/schema-serde-bench/` (own `[workspace]`,
-  path deps like wire-capture; regen command in its Cargo.toml header):
-  `benches/error_serde.rs` — criterion, 4 golden cases (ValidationException,
-  ComplexError header-split, awsJson1.1 + rpcv2Cbor InvalidGreeting), legacy
-  `IntoResponse<P>` vs `P.serialize_error(&e)`, async with body drained;
-  `src/bin/dhat_alloc.rs` — allocs/bytes per iter via `dhat::HeapStats` deltas
-  (legacy inputs pre-cloned outside the measured region).
-- REJECTED (user decision): extra `rest_json_schema_serde_on/_off` projections in
-  `codegen-server-test/build.gradle.kts` (added, then reverted). The flag-on/off
-  SDK variants for compile-time/binary-size comparison should come from proper
-  server customization config, the way `http-1x` is handled — design that
-  mechanism first (plan step 1 is superseded accordingly).
-- Everything below still pending: generate variants, compile benches, run, record
-  results in `specs/bench-results-error-serde.md`. Do NOT run gradle/cargo until
-  the in-flight `:codegen-server:test` finishes (client `sh.exe` PID 22752,
-  launched 07:23 local; the 7:22:57 XMLs with 174 failures are the CORRUPTED
-  run's — ZipException — ignore them).
+- DONE (user-directed redesign): `schemaSerde` is now a REAL OPT-IN, mirroring
+  `http-1x`: `DEFAULT_SCHEMA_SERDE = false` in `ServerRustSettings.kt`; enable
+  per service with `"schemaSerde": true` in codegenConfig (http 1.x only).
+- DONE (user-directed): **flag ON now also FLIPS THE SERVING PATH and drops the
+  legacy error serializers.** In `ServerHttpBoundProtocolTraitImplGenerator`
+  (`ServerHttpBoundProtocolGenerator.kt`): `operationServedBySchema(op)` —
+  http1x + flag on + all op errors in `ServerSchemaDecorator.errorClosure` +
+  NOT an event-stream op — switches the operation-error-enum `IntoResponse<P>`
+  impl to a variant match delegating to `ServerProtocol::serialize_error`
+  (ModeledErrorExtension still stamped; note: also stamped on the internal
+  serialization-failure fallback, unlike legacy). The legacy
+  `ser_*_http_error` fn is then never referenced, and lazy fn generation means
+  it and the error payload serializers are NOT generated at all (per-protocol
+  in multi-protocol crates — the compile-time win the user asked for).
+  Ineligible ops (event-stream: A2 content-type quirk + frame marshallers need
+  the payload serializers; ops with schema-excluded constrained errors, e.g.
+  ebs) keep the full legacy path, so flag-on crates always compile.
+  NOT yet schema-driven: input deser + output ser (serialize-only P1 scope) —
+  per-protocol `protocol_serde` generation still runs for those; the "no
+  protocol info at compile time" endgame needs schema-driven input/output.
+- DONE: `codegen-server-test/build.gradle.kts` gained `schemaSerdeCodegenTests`:
+  flag-ON http1x variants (`rest_json-schema`, `json_rpc10-schema`,
+  `json_rpc11-schema`, `rpcv2Cbor-schema`, `constraints-schema`,
+  `pokemon-service-server-sdk-schema`) of the models the harnesses use.
+  Unsuffixed crates are now flag-OFF legacy-only.
+- DONE: goldens rewritten as CRATE-PAIR comparisons (legacy crate
+  `IntoResponse` vs schema crate `IntoResponse` — the real serving path on
+  both sides). Eventstream golden: schema side still calls `serialize_error`
+  directly (flag-on crates keep legacy IntoResponse for event-stream ops).
+  Bench harness rewritten the same way (both sides consume their enum,
+  symmetric iter_batched/pre-clone); crate pairs also give compile-time and
+  binary-size comparisons. Regen commands updated in both Cargo.toml headers.
+- DONE: **the flip is SINGLE-PROTOCOL ONLY** (`!isMultiProtocol` in the
+  predicate). Two reasons, discovered when the multi-protocol pokemon crates
+  failed to compile: (a) one baked `serialize_members` order can't match both
+  protocols' legacy byte order; (b) the framework validation-rejection path
+  (`impl From<ConstraintViolation> for RequestRejection`, NOT P1 scope)
+  serializes ValidationException via the legacy per-protocol payload
+  serializers. Multi-protocol flag-on crates still emit `schema_serde` +
+  ModeledError impls, just serve legacy. Lift after RFC items "framework
+  errors on modeled shapes" + the member-order decision.
+- DONE (fix): the three validation decorators
+  (`SmithyValidationExceptionDecorator`, `CustomValidationExceptionWithReason…`,
+  `UserProvidedValidationException…`) referenced
+  `ser_validation_exception_error` by RAW PATH, which only existed as a side
+  effect of the legacy error pass. New shared helper
+  `serverValidationExceptionErrorSerializer` (`ServerProtocol.kt`):
+  single-protocol → `structuredDataSerializer().serverErrorSerializer(id)`
+  RuntimeType (forces materialization in flag-on crates); multi-protocol →
+  per-protocol raw path unchanged (the serializer generator would collide both
+  protocols' differently-typed copies in shared `protocol_serde` — the
+  String-vs-Vec<u8> E0308 that broke pokemon).
+- VERIFIED GREEN: 14 modules regenerated; `rest_json-schema` has zero legacy
+  `ser_*_http_error` except the 7 event-stream ops (deliberate carve-out), 41
+  schema `IntoResponse` impls, validation serializer materialized; flag-off
+  crates have no `schema_serde` (stale 07:00 leftovers were deleted from the
+  build dir once — regen does not clean orphans). wire-capture: 37 captures +
+  10 goldens ALL PASS (goldens now legacy-crate `IntoResponse` vs schema-crate
+  `IntoResponse`, byte-identical).
+- REMAINING (paused): benches compiled in background (task completed, output
+  never verified) but NOT run; results doc not written; `:codegen-server:test`
+  full run still owed (re-check `ProtocolSpecificModuleTest` + validation
+  decorator Kotlin tests against the serializer-reference change). ALL paused
+  behind the architecture discussion below.
+
+## ⚠️ ARCHITECTURE DISCUSSION IN PROGRESS (2026-08-23, read before ANY more code)
+
+The user stopped implementation mid-way through lifting the multi-protocol
+restriction. **Core principle articulated by the user (now binding):**
+generated types — errors included — and their generated serializers must be
+100% protocol-free. All protocol knowledge (error headers, discriminators,
+status placement, member order, HTTP itself) belongs to the runtime
+`ServerProtocol`/codec. Anything baking protocol facts into generated code is
+a design bug, even if it preserves bytes.
+
+Five issues were enumerated; the user wants them discussed ONE AT A TIME.
+State of each:
+
+1. **Form of `IntoResponse` — DISCUSSED, proposal on the table (not yet
+   explicitly approved).** `IntoResponse<P>`'s job: convert outputs, operation
+   error enums, and runtime framework types into `http::Response` for
+   protocol P; called by the runtime `Upgrade` plumbing on handler results.
+   The flip's per-marker generated impls are protocol-generic in body
+   (`match … => P.serialize_error(e)`), so they should collapse into ONE
+   generated generic impl per error enum:
+   `impl<P: ServerProtocol> IntoResponse<P> for {Op}Error` (local self type ⇒
+   coherent; the RFC's rejected blanket impl was runtime-crate-side, which is
+   the thing coherence forbids — "per-error-type" in the earlier correction
+   was right, "per-marker" was over-specific). Mechanical prereq: a way to get
+   a P value generically (`Default` on markers / `P::instance()` /
+   associated-fn `serialize_error`). This erases ALL per-protocol error
+   codegen; multi-protocol errors then need zero extra generated code.
+2. **RFC ordering is WRONG — pending discussion.** The framework-error rebase
+   (currently "next work item 3") is a PREREQUISITE of the flip, not later
+   work. Target design: `RequestRejection::ConstraintViolation` carries
+   `Box<dyn HttpModeledError + Send>` (serialize_error already takes
+   `?Sized`/dyn by design) instead of pre-serialized per-codec bytes
+   (String/Vec<u8>). Then: one protocol-free
+   `From<ConstraintViolation> for ValidationException` conversion, serialization
+   happens once at the protocol boundary, and the ENTIRE validation-serializer
+   plumbing built this session (RuntimeType materialization, the
+   multi-protocol raw-path branch, the renderScoped attempt) becomes
+   deletable. ValidationException needs per-protocol generated code today ONLY
+   because the legacy path eagerly pre-serializes — not because it's a
+   framework shape. RFC must be corrected: dependency order + an explicit
+   "generated serializers are protocol-free" principle.
+3. **Member-order leak — pending discussion.** `serializeMemberOrder` bakes
+   the REST binding-resolver sort (protocol knowledge!) into the generated
+   `serialize_members`. Verified: `HttpBindingResolver.kt` mappedBindings
+   sorts request+response+error bindings alike ⇒ same issue hits outputs in
+   P2; inputs unaffected (parsing is order-insensitive); nested structs
+   unaffected (model order everywhere). Options: (a) canonical model order
+   everywhere + relax the byte gate to "top-level member order on REST bodies
+   is parse-equal, everything else byte-exact" (JSON/CBOR declare order
+   insignificant; every SDK parses order-insensitively; my recommendation);
+   (b) codec-side buffer-and-sort by schema member name (keeps full byte
+   identity, costs runtime buffering + codec complexity to reproduce a
+   `mappedBindings` accident). User previously questioned why byte-identity
+   for JSON at all — leaning (a), NOT yet decided.
+4. **restXml — pending.** A generic `impl<P>` (issue 1) uniformly covers
+   RestXml, implicitly taking the "fix-forward" branch of the still-open
+   freeze-or-fix decision (register B4/B6; legacy bare-`<Error>` is broken).
+   Needs an explicit decision; current code excludes restXml from the flip.
+5. **Housekeeping — pending.** Revert the UNCOMMITTED in-progress
+   multi-protocol work (see inventory below). The earlier "option 3 wrapper
+   view" approval is SUPERSEDED by issues 1–3 (wrapper bakes protocol order
+   into codegen — violates the principle).
+
+### Uncommitted working-tree inventory (HEAD = 6f5241a82, nothing committed this session)
+
+KEEP (the green opt-in flip state, exercised by the goldens):
+- `ServerRustSettings.kt` — DEFAULT_SCHEMA_SERDE=false, opt-in docs.
+- `ServerHttpBoundProtocolGenerator.kt` — schemaServedErrorClosure lazy +
+  operationServedBySchema + per-marker schema IntoResponse branch (to be
+  REPLACED by the generic impl of issue 1 once approved).
+- 3 validation decorators + `serverValidationExceptionErrorSerializer` in
+  `ServerProtocol.kt` (interim scaffolding; deleted by issue-2 rebase).
+- `codegen-server-test/build.gradle.kts` schemaSerdeCodegenTests (6 `*-schema`
+  projections), wire-capture goldens/Cargo.toml (crate-pair form),
+  schema-serde-bench lib/benches/dhat/Cargo.toml (crate-pair form).
+- `ServerSchemaDecorator.kt` — opt-in comment + errorSerializeOrder via helper
+  (fine), BUT ALSO contains revert-items below.
+
+REVERT (in-progress multi-protocol lift, UNCOMPILED since last kotlin build,
+UNEXERCISED by any regen, and `ServerBuilderGenerator` would CRASH
+multi-protocol codegen via checkNotNull because the visitor call site was
+never updated to pass the renderer):
+- `ServerSchemaGenerator.kt`: `renderErrorOrderView` + the
+  membersOverride/accessor params on renderSerializableStruct.
+- `ServerSchemaDecorator.kt`: view emission block in extras loop, companion
+  NAME_SORTED/MODEL_ORDER_ERROR_VIEW + errorOrderViewName; keep
+  isRestFamilyProtocol only if still referenced after revert (errorSerializeOrder
+  uses it), and the renderModeledErrorImpls implTarget/schemaConst params can
+  revert to the original single-target form.
+- `ServerHttpBoundProtocolGenerator.kt`: useOrderView/view-path wrap logic,
+  the lifted guard (restore `!codegenContext.isMultiProtocol`, keep or drop the
+  added restXml exclusion per issue-4 outcome), shapeModuleName import.
+- `ServerProtocolGeneration.kt`: `renderScoped`.
+- `ServerBuilderGenerator.kt`: `protocolScopedRenderer` param + renderScoped
+  usage in renderProtocolValidationConversions (restore
+  rustCrate.withModule form).
+
+### Verified-green snapshot (what the build dir + tests currently prove)
+
+Generated build dir corresponds to the KEEP state (regen `bnw5sfrce`, BEFORE
+the revert-items were written; kotlin edits after it never compiled/ran):
+14 modules regenerated; `rest_json-schema`: zero legacy `ser_*_http_error`
+except 7 event-stream ops (deliberate), 41 schema IntoResponse impls,
+validation serializer materialized; flag-off crates schema_serde-free (stale
+orphans deleted once by hand — regen does NOT clean orphans).
+wire-capture: 37 captures + 10 goldens ALL GREEN (crate-pair byte-identity).
+Bench harness compile task finished; output unverified. Benches never run.
+
+### Facts established in discussion (don't re-derive)
+
+- Multi-protocol routing is STATIC: router nests per-protocol monomorphized
+  services; `SelectedProtocol` request extension exists
+  (`routing/multi_protocol.rs:191`) but is NOT needed for serialization.
+- Multi-protocol serde placement works via `ServerProtocolCodegenTransformer`
+  (post-render path rewrite + inline-dep relocation w/ crate-wide dedup);
+  validation From-impls render OUTSIDE it — that's why the RuntimeType fix
+  collided both protocols' differently-typed serializer copies in shared
+  `protocol_serde` (pokemon E0308 String vs Vec<u8>).
+- `From<ConstraintViolation> for RequestRejection` is per-protocol ONLY
+  because rejections carry pre-serialized bytes typed per codec.
+
+### Resume protocol for next session
+
+Continue the one-at-a-time discussion: get explicit sign-off on issue 1
+(generic impl), then issues 2 (RFC reorder — then EDIT the RFC), 3
+(member-order policy), 4 (restXml), 5 (execute reverts). Only then implement:
+likely order = revert → RFC edits → issue-2 rebase (rejection carries dyn
+HttpModeledError) → generic IntoResponse impl → re-run goldens (multi-protocol
+pair per issue-3 gate decision) → benches.
+
+## SUPERSEDED historical plan (bench-first; kept for context)
 
 Goal per RFC §9 (perf is a merge gate): criterion wall-time + CPU + memory
 comparison of the legacy generated error path vs the new schema-driven path.
