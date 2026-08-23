@@ -3,7 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::modeled_error::HttpModeledError;
 use crate::protocol::rest_xml::RestXml;
+use crate::protocol::server_protocol::ServerProtocol;
 use crate::response::IntoResponse;
 use crate::runtime_error::InternalFailureException;
 use crate::{extension::RuntimeErrorExtension, runtime_error::INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE};
@@ -27,7 +29,7 @@ pub enum RuntimeError {
     UnsupportedMediaType,
     /// See: [`crate::protocol::rest_json_1::runtime_error::RuntimeError::Validation`]
     #[error("validation failure: operation input contains data that does not adhere to the modeled constraints: {0}")]
-    Validation(String),
+    Validation(Box<dyn HttpModeledError + Send>),
 }
 
 impl RuntimeError {
@@ -58,8 +60,21 @@ impl IntoResponse<RestXml> for InternalFailureException {
     }
 }
 
+// Only `Validation` is schema-driven: it carries a modeled shape. The other
+// variants are framework conventions with no Smithy shape behind them; the
+// frozen `{}` body below (a JSON literal on an XML protocol) is not the
+// serialization of any shape, so they stay hand-assembled this phase. Full
+// rationale on the `IntoResponse<RestJson1> for RuntimeError` impl in
+// `crate::protocol::rest_json_1::runtime_error`.
 impl IntoResponse<RestXml> for RuntimeError {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
+        // The modeled validation error serializes through the schema path —
+        // exactly once, here, at the protocol boundary. (Fix-forward
+        // divergence 2f: legacy restXml discarded the validation body.)
+        if let RuntimeError::Validation(err) = &self {
+            return RestXml::serialize_error(err.as_ref());
+        }
+
         let res = http::Response::builder()
             .status(self.status_code())
             .header("Content-Type", "application/xml")

@@ -414,7 +414,20 @@ protocol-conditional generated code.
 - Existing 37 wire captures stay green (re-pointed at the schema crate's full
   pipeline). `:codegen-server:test` full clean run (nothing else running).
 - Benches last (crate-pair harness exists): criterion + dhat, results recorded in
-  `specs/bench-results-error-serde.md`.
+  `specs/bench-results-error-serde.md`. Beyond the existing error-serde benches,
+  add a **request-path bench pair**: legacy's per-operation compile-time
+  specialization (generated nom URI parsers monomorphized against each
+  `@http` template, per-op query-match loops, per-member header glue) vs the
+  schema path's single generic runtime interpreter
+  (`request_bindings::extract_labels` / `parse_query_pairs` / composite
+  deserializer, including the label re-match the router's capture-less
+  `Match` forces). Direction is an open empirical question — the interpreter
+  pays per-request template walking, but legacy pays nom combinator overhead
+  and per-op code bloat (icache) — so measure, don't assume: throughput
+  (criterion) + allocations (dhat) on a label+query+header+body operation and
+  a body-only RPC operation, both directions. Response-path pair likewise
+  (splitter vs generated ser fns). Record verdicts per protocol; a regression
+  is a finding to weigh at the Step 6 walkthrough, not an automatic blocker.
 
 ## Step 6 — Final walkthrough deliverable
 
@@ -427,7 +440,17 @@ A review session + short doc enumerating:
   plumbing, `serializeMemberOrder`);
 - divergence register with the test that pins each entry;
 - what Phase 1 explicitly leaves for later (awsJson/restXml gates, validation
-  engine, constrained closures, routing metadata at runtime, upstream ask status).
+  engine, constrained closures, routing metadata at runtime, upstream ask status,
+  and: model the remaining framework `RuntimeError` variants —
+  `SerializationException`, `UnsupportedMediaTypeException`,
+  `NotAcceptableException`, `InternalFailureException` — as smithy.framework
+  `@error`/`@httpError` shapes serialized via `P::serialize_error`, completing
+  the symmetry ValidationException started in 2d and collapsing the per-protocol
+  `IntoResponse<P> for RuntimeError` bodies. Deliberately deferred because it is
+  wire-changing: today's frozen framework bodies are quirks — restJson1 literal
+  `{}`, awsJson1.1 empty body, rpcv2Cbor empty map with NO `__type` (#3716),
+  restXml a JSON `{}` on an XML protocol — and each fix must land as a pinned
+  divergence-register entry once the Step 5 gates exist, not as a side effect).
 
 ---
 

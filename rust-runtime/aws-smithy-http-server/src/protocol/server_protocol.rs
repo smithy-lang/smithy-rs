@@ -3,16 +3,24 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! The server-side protocol trait: schema-driven output and error serialization.
+//! The server-side protocol trait: schema-driven request deserialization and
+//! output/error serialization (plan 2a).
 //!
 //! [`ServerProtocol`] is implemented once per protocol on the existing
 //! zero-sized protocol markers ([`RestJson1`], [`AwsJson1_0`], [`AwsJson1_1`],
-//! [`RpcV2Cbor`], [`RestXml`]). It owns the schema-driven body codec and the
-//! `serialize_output` / `serialize_error` seam. A single trait — deliberately
-//! not mirroring the client's `ClientProtocolInner` / object-safe
-//! `ClientProtocol` pair — because server protocol dispatch is fully static:
-//! protocols come from the statically nested multi-protocol router, never from
-//! config.
+//! [`RpcV2Cbor`], [`RestXml`]). Protocols are types: every member is an
+//! associated function — server protocol dispatch is fully static (the
+//! multi-protocol router nests protocol services monomorphized over their
+//! marker; protocols never come from config), and per-service protocol facts
+//! such as `@xmlNamespace` ride on schemas, not on protocol values.
+//!
+//! The three verbs mirror the client's `ClientProtocolInner`
+//! (`serialize_request`↔[`deserialize_request`](ServerProtocol::deserialize_request),
+//! `deserialize_response`↔[`serialize_response`](ServerProtocol::serialize_response),
+//! `deserialize_error_response`↔[`serialize_error`](ServerProtocol::serialize_error)),
+//! diverging where server semantics demand: no error correction, unknown
+//! union variants rejected, constraint failures produce the modeled
+//! validation error.
 //!
 //! # Error framing (frozen to legacy generated behavior)
 //!
@@ -30,22 +38,25 @@
 //! `@httpHeader`-bound error members are split out of the body and stamped as
 //! response headers on the REST protocols, mirroring the legacy generated
 //! `ser_*_headers` functions (including the skip-empty-string rule).
-//!
-//! Serializers never detect errors; call sites declare them: `is_error`
-//! selects the error framing, and [`ServerProtocol::serialize_error`] is the
-//! declaration on the error path.
+//! Serializers never detect errors; call sites declare them by calling
+//! [`ServerProtocol::serialize_error`].
 
-use std::cell::RefCell;
+use std::borrow::Cow;
 use std::sync::LazyLock;
 
-use aws_smithy_schema::codec::{Codec, FinishSerializer};
+use aws_smithy_schema::codec::Codec;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::{Schema, ShapeId, ShapeType};
-use aws_smithy_types::{BigDecimal, BigInteger, DateTime, Document};
 
 use crate::body::BoxBody;
+use crate::deserialize::{DeserializableShape, DeserializeError};
 use crate::extension::ModeledErrorExtension;
 use crate::modeled_error::HttpModeledError;
+use crate::protocol::request_bindings::{EmptyStructDeserializer, RestRequestDeserializer};
+use crate::protocol::response_bindings::{
+    resolve_status, serialize_split, BodyKind, SplitResponse,
+};
+use crate::rejection::MissingContentTypeReason;
 use crate::response::IntoResponse;
 
 use super::aws_json_10::AwsJson1_0;
@@ -59,44 +70,90 @@ use aws_smithy_cbor::codec::{CborCodec, CborCodecSettings};
 use aws_smithy_json::codec::{JsonCodec, JsonCodecSettings};
 use aws_smithy_xml::codec::{XmlCodec, XmlCodecSettings};
 
-/// Implemented on each protocol marker. One impl per protocol; all dispatch is
-/// static — the multi-protocol router nests protocol services that are each
-/// monomorphized over their marker, so by the time output or an error is
-/// serialized the protocol is statically known.
+/// Implemented on each protocol marker. One impl per protocol; all dispatch
+/// is static. Associated functions only — protocols have no instances.
 pub trait ServerProtocol: ProtocolShape {
-    /// The schema-driven body codec for this protocol (e.g. `JsonCodec`
-    /// configured for restJson1).
+    /// Body codec. Also the event-stream frame-payload codec — the client
+    /// needs a dyn `payload_codec()` accessor because its protocol is a
+    /// runtime value; server dispatch is static, so `Self::Codec` serves
+    /// both.
     ///
     /// Associated type, not `DynCodec`: `FinishSerializer::finish` is not
     /// object-safe, and no protocol-erased call site exists server-side.
     type Codec: Codec;
 
+    /// The rejection type for [`deserialize_request`](Self::deserialize_request)
+    /// failures — the protocol's `RequestRejection` enum. Wire-level failures
+    /// map to malformed-request variants (protocol 4xx); constraint
+    /// violations map to `ConstraintViolation`, carrying the modeled
+    /// validation error serialized once at the protocol boundary.
+    type RequestRejection: std::fmt::Debug + std::fmt::Display + Send + From<DeserializeError>;
+
     /// Returns this protocol's codec.
-    fn codec(&self) -> &Self::Codec;
+    fn codec() -> &'static Self::Codec;
 
-    /// Serializes a success or error payload to a complete response with the
-    /// protocol content-type and content-length stamped and status `200`.
+    /// Request path: reads `@http` bindings off the operation input schema
+    /// (labels from the URI matched against `schema.http().uri()`, query
+    /// strings, headers, `@httpPayload`, body via `Self::Codec`), presenting
+    /// ONE composite deserializer to the generated walker `T`.
     ///
-    /// `is_error` selects error framing (discriminator injection,
-    /// `@httpHeader` member splitting); serializers never detect errors —
-    /// call sites declare them.
-    fn serialize_output(
-        &self,
+    /// Distinguishes malformed-request failures (protocol 4xx) from
+    /// constraint violations (the modeled validation error) through
+    /// `Self::RequestRejection`.
+    fn deserialize_request<T: DeserializableShape>(
         schema: &Schema<'_>,
-        output: &dyn SerializableStruct,
-        is_error: bool,
-    ) -> Result<http::Response<BoxBody>, SerdeError>;
+        parts: &http::request::Parts,
+        body: &[u8],
+    ) -> Result<T, Self::RequestRejection>;
 
-    /// Serializes a modeled error to a complete response: status from
-    /// [`HttpModeledError::status_code`], protocol discriminator,
-    /// content-type, and body via
-    /// [`serialize_output`](ServerProtocol::serialize_output) with
-    /// `is_error = true`.
+    /// Success path. Status: `@httpResponseCode` member if bound and set,
+    /// else `schema.http().code()`, else `200`. REST protocols honor
+    /// response bindings read off member schemas; RPC protocols serialize
+    /// body-only.
     ///
     /// Serialization failure logs via `tracing` and falls back to the
     /// protocol's `RuntimeError::Serialization` response, preserving the
-    /// legacy generated `IntoResponse` fallback semantics.
-    fn serialize_error<E: HttpModeledError + ?Sized>(&self, error: &E) -> http::Response<BoxBody>;
+    /// legacy generated `IntoResponse` contract.
+    fn serialize_response(
+        schema: &Schema<'_>,
+        output: &dyn SerializableStruct,
+    ) -> http::Response<BoxBody>;
+
+    /// Error path. Status from [`HttpModeledError::status_code`],
+    /// discriminator framing per protocol, header-bound members split out of
+    /// the body on the REST protocols. Same internal fallback as
+    /// [`serialize_response`](Self::serialize_response).
+    fn serialize_error(error: &dyn HttpModeledError) -> http::Response<BoxBody>;
+}
+
+/// Event-stream capability subtrait (Option B of
+/// `specs/eventstream-capability-options.md`, kept as the decision record):
+/// implemented only by protocols whose Smithy definition declares
+/// `eventStreamHttp`. Wiring an event-stream operation to a non-supporting
+/// protocol is a compile error at assembly, not a runtime failure. Frame glue
+/// and event-stream operation impls bound on `P: EventStreamProtocol`;
+/// ordinary operations stay `P: ServerProtocol`. Bounds never reach
+/// user-facing signatures (concrete-marker instantiation).
+pub trait EventStreamProtocol: ServerProtocol {
+    /// Frame-level `:content-type` for event payloads (json:
+    /// `application/json`, cbor: `application/cbor`). Fixes the client's
+    /// baked-literal leak.
+    const EVENT_PAYLOAD_CONTENT_TYPE: &'static str;
+
+    /// HTTP-level `Content-Type` of the streaming response. NOT uniform:
+    /// restJson1/restXml/rpcv2Cbor declare
+    /// `application/vnd.amazon.eventstream`; awsJson keeps
+    /// `application/x-amz-json-1.x` (`AwsJson.kt:93` — response content type
+    /// equals request content type unconditionally, no
+    /// `eventStreamContentType` override).
+    const EVENT_STREAM_HTTP_CONTENT_TYPE: &'static str;
+
+    /// RPC protocols frame initial-request/initial-response messages; REST
+    /// protocols put the prelude in HTTP and the body is frames-only.
+    /// (Per-operation conditions — a non-stream `DOCUMENT` member for the
+    /// request direction, the `alwaysSendEventStreamInitialResponse` setting
+    /// for the response direction — live in generated glue, not here.)
+    const FRAMES_INITIAL_MESSAGES: bool;
 }
 
 /// Sized adapter so a `&E` with `E: SerializableStruct + ?Sized` (e.g.
@@ -156,368 +213,47 @@ impl SerializableStruct for WithTypeLast<'_> {
 }
 
 // ============================================================================
-// `@httpHeader` member splitting (REST protocols)
-// ============================================================================
-
-type CapturedHeaders = RefCell<Vec<(http::HeaderName, http::HeaderValue)>>;
-
-/// Returns `true` if any top-level member of `schema` is `@httpHeader`-bound.
-fn has_header_bound_members(schema: &Schema<'_>) -> bool {
-    schema.members().iter().any(|m| m.http_header().is_some())
-}
-
-/// Wrapper that diverts `@httpHeader`-bound top-level members into a header
-/// sink while forwarding everything else to the body serializer.
-struct SplitHttpHeaders<'a> {
-    inner: &'a dyn SerializableStruct,
-    sink: &'a CapturedHeaders,
-}
-
-impl SerializableStruct for SplitHttpHeaders<'_> {
-    fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
-        let mut splitter = HeaderSplitter {
-            inner: serializer,
-            sink: self.sink,
-        };
-        self.inner.serialize_members(&mut splitter)
-    }
-}
-
-fn capture_header(
-    sink: &CapturedHeaders,
-    schema: &Schema<'_>,
-    formatted: &str,
-) -> Result<(), SerdeError> {
-    // Mirror the legacy generated `ser_*_headers` functions: empty string
-    // values are skipped rather than sent as empty headers.
-    if formatted.is_empty() {
-        return Ok(());
-    }
-    let header = schema
-        .http_header()
-        .expect("checked by caller: schema carries @httpHeader");
-    let name = http::HeaderName::try_from(header.value()).map_err(|err| {
-        SerdeError::custom(format!(
-            "`{}` cannot be used as a header name: {}",
-            header.value(),
-            err
-        ))
-    })?;
-    let value = http::HeaderValue::try_from(formatted).map_err(|err| {
-        SerdeError::custom(format!("`{formatted}` cannot be used as a header value: {err}"))
-    })?;
-    sink.borrow_mut().push((name, value));
-    Ok(())
-}
-
-/// Formats a timestamp for an HTTP header: `@timestampFormat` if present on
-/// the member schema, else `http-date` (the Smithy default for header-bound
-/// timestamps).
-fn format_header_timestamp(schema: &Schema<'_>, value: &DateTime) -> Result<String, SerdeError> {
-    use aws_smithy_schema::traits::TimestampFormat as SchemaFormat;
-    use aws_smithy_types::date_time::Format;
-    let format = match schema.timestamp_format().map(|t| t.format()) {
-        Some(SchemaFormat::EpochSeconds) => Format::EpochSeconds,
-        Some(SchemaFormat::DateTime) => Format::DateTimeWithOffset,
-        Some(SchemaFormat::HttpDate) | None => Format::HttpDate,
-    };
-    value
-        .fmt(format)
-        .map_err(|err| SerdeError::custom(format!("failed to format timestamp header: {err}")))
-    }
-
-/// Serializer that intercepts `@httpHeader`-bound member writes and forwards
-/// the rest to the wrapped body serializer.
-struct HeaderSplitter<'a> {
-    inner: &'a mut dyn ShapeSerializer,
-    sink: &'a CapturedHeaders,
-}
-
-impl HeaderSplitter<'_> {
-    fn is_header(&self, schema: &Schema<'_>) -> bool {
-        schema.http_header().is_some()
-    }
-}
-
-macro_rules! split_scalar {
-    ($fn_name:ident, $ty:ty) => {
-        fn $fn_name(&mut self, schema: &Schema<'_>, value: $ty) -> Result<(), SerdeError> {
-            if self.is_header(schema) {
-                let mut encoder = aws_smithy_types::primitive::Encoder::from(value);
-                capture_header(self.sink, schema, encoder.encode())
-            } else {
-                self.inner.$fn_name(schema, value)
-            }
-        }
-    };
-}
-
-impl ShapeSerializer for HeaderSplitter<'_> {
-    fn write_struct(
-        &mut self,
-        schema: &Schema<'_>,
-        value: &dyn SerializableStruct,
-    ) -> Result<(), SerdeError> {
-        // `@httpHeader` cannot target structures; always a body member.
-        self.inner.write_struct(schema, value)
-    }
-
-    fn write_list(
-        &mut self,
-        schema: &Schema<'_>,
-        write_elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        if self.is_header(schema) {
-            // Each element becomes its own header value under the same name;
-            // the collector formats elements against the outer
-            // (header-carrying) member schema.
-            let mut collector = HeaderListCollector {
-                sink: self.sink,
-                outer: schema,
-            };
-            write_elements(&mut collector)
-        } else {
-            self.inner.write_list(schema, write_elements)
-        }
-    }
-
-    fn write_map(
-        &mut self,
-        schema: &Schema<'_>,
-        write_entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        // `@httpHeader` cannot target maps (`@httpPrefixHeaders` is a
-        // different binding, out of scope for error responses).
-        self.inner.write_map(schema, write_entries)
-    }
-
-    split_scalar!(write_boolean, bool);
-    split_scalar!(write_byte, i8);
-    split_scalar!(write_short, i16);
-    split_scalar!(write_integer, i32);
-    split_scalar!(write_long, i64);
-    split_scalar!(write_float, f32);
-    split_scalar!(write_double, f64);
-
-    fn write_big_integer(
-        &mut self,
-        schema: &Schema<'_>,
-        value: &BigInteger,
-    ) -> Result<(), SerdeError> {
-        if self.is_header(schema) {
-            capture_header(self.sink, schema, value.as_ref())
-        } else {
-            self.inner.write_big_integer(schema, value)
-        }
-    }
-
-    fn write_big_decimal(
-        &mut self,
-        schema: &Schema<'_>,
-        value: &BigDecimal,
-    ) -> Result<(), SerdeError> {
-        if self.is_header(schema) {
-            capture_header(self.sink, schema, value.as_ref())
-        } else {
-            self.inner.write_big_decimal(schema, value)
-        }
-    }
-
-    fn write_string(&mut self, schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
-        if self.is_header(schema) {
-            capture_header(self.sink, schema, value)
-        } else {
-            self.inner.write_string(schema, value)
-        }
-    }
-
-    fn write_blob(&mut self, schema: &Schema<'_>, value: &[u8]) -> Result<(), SerdeError> {
-        if self.is_header(schema) {
-            capture_header(self.sink, schema, &aws_smithy_types::base64::encode(value))
-        } else {
-            self.inner.write_blob(schema, value)
-        }
-    }
-
-    fn write_timestamp(&mut self, schema: &Schema<'_>, value: &DateTime) -> Result<(), SerdeError> {
-        if self.is_header(schema) {
-            let formatted = format_header_timestamp(schema, value)?;
-            capture_header(self.sink, schema, &formatted)
-        } else {
-            self.inner.write_timestamp(schema, value)
-        }
-    }
-
-    fn write_document(&mut self, schema: &Schema<'_>, value: &Document) -> Result<(), SerdeError> {
-        // `@httpHeader` cannot target documents; always a body member.
-        self.inner.write_document(schema, value)
-    }
-
-    fn write_null(&mut self, schema: &Schema<'_>) -> Result<(), SerdeError> {
-        if self.is_header(schema) {
-            // A null header-bound member is simply not sent.
-            Ok(())
-        } else {
-            self.inner.write_null(schema)
-        }
-    }
-}
-
-/// Collects the elements of an `@httpHeader`-bound list member: each element
-/// becomes its own header value under the member's header name.
-struct HeaderListCollector<'a> {
-    sink: &'a CapturedHeaders,
-    /// The header-carrying member schema.
-    outer: &'a Schema<'a>,
-}
-
-macro_rules! collect_scalar {
-    ($fn_name:ident, $ty:ty) => {
-        fn $fn_name(&mut self, _schema: &Schema<'_>, value: $ty) -> Result<(), SerdeError> {
-            let mut encoder = aws_smithy_types::primitive::Encoder::from(value);
-            capture_header(self.sink, self.outer, encoder.encode())
-        }
-    };
-}
-
-impl ShapeSerializer for HeaderListCollector<'_> {
-    fn write_struct(
-        &mut self,
-        _schema: &Schema<'_>,
-        _value: &dyn SerializableStruct,
-    ) -> Result<(), SerdeError> {
-        Err(SerdeError::custom(
-            "structures cannot appear in an @httpHeader-bound list",
-        ))
-    }
-
-    fn write_list(
-        &mut self,
-        _schema: &Schema<'_>,
-        _write_elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Err(SerdeError::custom(
-            "nested lists cannot appear in an @httpHeader-bound list",
-        ))
-    }
-
-    fn write_map(
-        &mut self,
-        _schema: &Schema<'_>,
-        _write_entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Err(SerdeError::custom(
-            "maps cannot appear in an @httpHeader-bound list",
-        ))
-    }
-
-    collect_scalar!(write_boolean, bool);
-    collect_scalar!(write_byte, i8);
-    collect_scalar!(write_short, i16);
-    collect_scalar!(write_integer, i32);
-    collect_scalar!(write_long, i64);
-    collect_scalar!(write_float, f32);
-    collect_scalar!(write_double, f64);
-
-    fn write_big_integer(
-        &mut self,
-        _schema: &Schema<'_>,
-        value: &BigInteger,
-    ) -> Result<(), SerdeError> {
-        capture_header(self.sink, self.outer, value.as_ref())
-    }
-
-    fn write_big_decimal(
-        &mut self,
-        _schema: &Schema<'_>,
-        value: &BigDecimal,
-    ) -> Result<(), SerdeError> {
-        capture_header(self.sink, self.outer, value.as_ref())
-    }
-
-    fn write_string(&mut self, _schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
-        capture_header(self.sink, self.outer, value)
-    }
-
-    fn write_blob(&mut self, _schema: &Schema<'_>, value: &[u8]) -> Result<(), SerdeError> {
-        capture_header(self.sink, self.outer, &aws_smithy_types::base64::encode(value))
-    }
-
-    fn write_timestamp(&mut self, _schema: &Schema<'_>, value: &DateTime) -> Result<(), SerdeError> {
-        let formatted = format_header_timestamp(self.outer, value)?;
-        capture_header(self.sink, self.outer, &formatted)
-    }
-
-    fn write_document(&mut self, _schema: &Schema<'_>, _value: &Document) -> Result<(), SerdeError> {
-        Err(SerdeError::custom(
-            "documents cannot appear in an @httpHeader-bound list",
-        ))
-    }
-
-    fn write_null(&mut self, _schema: &Schema<'_>) -> Result<(), SerdeError> {
-        // Sparse list null elements are not representable in headers; skip.
-        Ok(())
-    }
-}
-
-// ============================================================================
 // Shared response assembly
 // ============================================================================
 
-/// Serializes `value` through `codec`, optionally splitting
-/// `@httpHeader`-bound members out of the body.
-fn serialize_body<C: Codec>(
-    codec: &C,
-    schema: &Schema<'_>,
-    value: &dyn SerializableStruct,
-    split_headers: bool,
-) -> Result<(Vec<u8>, Vec<(http::HeaderName, http::HeaderValue)>), SerdeError> {
-    let mut serializer = codec.create_serializer();
-    if split_headers && has_header_bound_members(schema) {
-        let sink = CapturedHeaders::default();
-        let wrapper = SplitHttpHeaders { inner: value, sink: &sink };
-        serializer.write_struct(schema, &wrapper)?;
-        Ok((serializer.finish(), sink.into_inner()))
-    } else {
-        serializer.write_struct(schema, value)?;
-        Ok((serializer.finish(), Vec::new()))
-    }
-}
-
-/// Assembles the response: content-type, captured `@httpHeader` values,
-/// content-length, status 200 (the caller overrides on the error path).
+/// Assembles a response from a [`SplitResponse`]: status, content type per
+/// [`BodyKind`], captured binding headers, content-length.
 ///
-/// Mirrors the legacy generated `ser_*_http_error` functions, which stamp
-/// content-type, protocol-specific headers, and content-length via
+/// Mirrors the legacy generated `ser_*_http_response` functions, which stamp
+/// content-type, binding headers, and content-length via
 /// `set_response_header_if_absent` (the headers cannot already be present on
 /// a fresh builder, so plain insertion is equivalent).
 fn assemble_response(
-    body: Vec<u8>,
-    content_type: &'static str,
-    extra_headers: Vec<(http::HeaderName, http::HeaderValue)>,
+    split: SplitResponse,
+    status: u16,
+    codec_content_type: &'static str,
 ) -> Result<http::Response<BoxBody>, SerdeError> {
-    let mut builder = http::Response::builder()
-        .status(http::StatusCode::OK)
-        .header(http::header::CONTENT_TYPE, content_type);
-    for (name, value) in extra_headers {
+    let mut builder = http::Response::builder().status(
+        http::StatusCode::from_u16(status).unwrap_or(http::StatusCode::INTERNAL_SERVER_ERROR),
+    );
+    let content_type: Option<Cow<'_, str>> = match &split.kind {
+        BodyKind::Codec => Some(Cow::Borrowed(codec_content_type)),
+        BodyKind::Raw { content_type } => Some(Cow::Borrowed(content_type.as_str())),
+        BodyKind::Empty => None,
+    };
+    if let Some(content_type) = content_type {
+        builder = builder.header(http::header::CONTENT_TYPE, content_type.as_ref());
+    }
+    for (name, value) in split.headers {
         builder = builder.header(name, value);
     }
-    builder = builder.header(http::header::CONTENT_LENGTH, body.len());
+    builder = builder.header(http::header::CONTENT_LENGTH, split.body.len());
     builder
-        .body(crate::body::to_boxed(body))
+        .body(crate::body::to_boxed(split.body))
         .map_err(|err| SerdeError::custom(format!("failed to build response: {err}")))
 }
 
-/// Finishes an error response: sets the status code and inserts the
-/// [`ModeledErrorExtension`], preserving the legacy generated `IntoResponse`
-/// behavior.
-fn finish_error_response(
+/// Finishes an error response: inserts the [`ModeledErrorExtension`],
+/// preserving the legacy generated `IntoResponse` behavior.
+fn stamp_error_extension(
     mut response: http::Response<BoxBody>,
-    status: u16,
     error_name: &str,
 ) -> http::Response<BoxBody> {
-    *response.status_mut() = http::StatusCode::from_u16(status)
-        .unwrap_or(http::StatusCode::INTERNAL_SERVER_ERROR);
     // `ModeledErrorExtension` requires `&'static str`; generated schemas are
     // `'static` but the `ModeledError::schema` seam erases that lifetime.
     // Interning is deduplicated and bounded by the number of distinct error
@@ -535,13 +271,195 @@ macro_rules! log_serialize_failure {
 }
 
 // ============================================================================
+// Shared request-side helpers
+// ============================================================================
+
+/// What the request's `Content-Type` header must look like for an input
+/// schema, mirroring the legacy generated checks.
+enum ExpectedContentType<'s> {
+    /// No check at all (all members bound to non-body locations, or a blob
+    /// `@httpPayload` without `@mediaType` — the legacy generator skips the
+    /// check for those).
+    Skip,
+    /// The header must be absent (`serverContentTypeCheckNoModeledInput`
+    /// protocols, operations without modeled input). Checked even on an
+    /// empty body.
+    Absent,
+    /// The header must match — but only when the request body is non-empty
+    /// (the legacy `if !bytes.is_empty()` gate; see smithy-lang/smithy#2327).
+    Expect(Cow<'s, str>),
+}
+
+/// Computes the `Content-Type` expectation for this input schema: the payload
+/// member's content type when `@httpPayload` is modeled, the protocol's codec
+/// content type when unbound (body) members exist, absence for
+/// no-modeled-input operations on protocols that demand it.
+fn expected_request_content_type<'s>(
+    schema: &'s Schema<'s>,
+    codec_content_type: &'static str,
+    check_absent_when_no_input: bool,
+) -> ExpectedContentType<'s> {
+    if let Some(payload) = schema.members().iter().find(|m| m.http_payload().is_some()) {
+        let media_type = payload.media_type().map(|m| Cow::Borrowed(m.value()));
+        return match (payload.shape_type(), media_type) {
+            // Legacy skips the check for blob payloads without @mediaType.
+            (ShapeType::Blob, None) => ExpectedContentType::Skip,
+            (ShapeType::Blob, Some(media)) => ExpectedContentType::Expect(media),
+            (ShapeType::String, media) => {
+                ExpectedContentType::Expect(media.unwrap_or(Cow::Borrowed("text/plain")))
+            }
+            _ => ExpectedContentType::Expect(Cow::Borrowed(codec_content_type)),
+        };
+    }
+    if schema.members().is_empty() {
+        // Approximation of the legacy `hadUserModeledOperationInput` signal:
+        // an input schema with zero members. (A user-modeled EMPTY input
+        // struct is indistinguishable here — watch item for the request
+        // goldens.)
+        return if check_absent_when_no_input {
+            ExpectedContentType::Absent
+        } else {
+            ExpectedContentType::Skip
+        };
+    }
+    let has_unbound_members = schema.members().iter().any(|m| {
+        m.http_header().is_none()
+            && m.http_query().is_none()
+            && m.http_label().is_none()
+            && m.http_prefix_headers().is_none()
+            && m.http_query_params().is_none()
+    });
+    if has_unbound_members {
+        ExpectedContentType::Expect(Cow::Borrowed(codec_content_type))
+    } else {
+        ExpectedContentType::Skip
+    }
+}
+
+/// Checks the request `Content-Type` header against the expected value,
+/// mirroring [`super::content_type_header_classifier_smithy`] for
+/// `http::HeaderMap` and non-`'static` expected values.
+#[allow(clippy::result_large_err)]
+fn check_content_type(
+    headers: &http::HeaderMap,
+    expected: Option<&str>,
+) -> Result<(), MissingContentTypeReason> {
+    let actual = match headers.get(http::header::CONTENT_TYPE) {
+        Some(value) => Some(
+            value
+                .to_str()
+                .map_err(|_| MissingContentTypeReason::UnexpectedMimeType {
+                    expected_mime: expected.and_then(|e| e.parse().ok()),
+                    found_mime: None,
+                })?,
+        ),
+        None => None,
+    };
+    let parse = |s: &str| {
+        s.parse::<mime::Mime>()
+            .map_err(MissingContentTypeReason::MimeParseError)
+    };
+    match (actual, expected) {
+        (None, None) => Ok(()),
+        (None, Some(expected)) => Err(MissingContentTypeReason::UnexpectedMimeType {
+            expected_mime: expected.parse().ok(),
+            found_mime: None,
+        }),
+        (Some(actual), None) => Err(MissingContentTypeReason::UnexpectedMimeType {
+            expected_mime: None,
+            found_mime: Some(parse(actual)?),
+        }),
+        (Some(actual), Some(expected)) => {
+            let found = parse(actual)?;
+            if expected != found.essence_str() {
+                Err(MissingContentTypeReason::UnexpectedMimeType {
+                    expected_mime: expected.parse().ok(),
+                    found_mime: Some(found),
+                })
+            } else {
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Runs the content-type expectation against the request, mirroring the
+/// legacy gating: `Expect` only applies to non-empty bodies; `Absent` is
+/// checked unconditionally.
+#[allow(clippy::result_large_err)]
+fn enforce_content_type(
+    expected: ExpectedContentType<'_>,
+    parts: &http::request::Parts,
+    body: &[u8],
+) -> Result<(), MissingContentTypeReason> {
+    match expected {
+        ExpectedContentType::Skip => Ok(()),
+        ExpectedContentType::Absent => check_content_type(&parts.headers, None),
+        ExpectedContentType::Expect(content_type) => {
+            if body.is_empty() {
+                Ok(())
+            } else {
+                check_content_type(&parts.headers, Some(content_type.as_ref()))
+            }
+        }
+    }
+}
+
+/// The shared REST request path: content-type validation, then the composite
+/// binding deserializer driving the generated walker.
+fn deserialize_rest_request<T, C, R>(
+    codec: &'static C,
+    codec_content_type: &'static str,
+    check_absent_when_no_input: bool,
+    schema: &Schema<'_>,
+    parts: &http::request::Parts,
+    body: &[u8],
+) -> Result<T, R>
+where
+    T: DeserializableShape,
+    C: Codec,
+    R: From<DeserializeError> + From<MissingContentTypeReason>,
+{
+    let expected =
+        expected_request_content_type(schema, codec_content_type, check_absent_when_no_input);
+    enforce_content_type(expected, parts, body).map_err(R::from)?;
+    let mut deserializer = RestRequestDeserializer::new(codec, parts, body);
+    T::deserialize(&mut deserializer).map_err(R::from)
+}
+
+/// The shared RPC request path: content-type validation (non-empty bodies
+/// only, per the legacy gate), then body-only deserialization through the
+/// codec (an empty body reads as a structure with no members present —
+/// `@required` enforcement stays in `build()`).
+fn deserialize_rpc_request<T, C, R>(
+    codec: &'static C,
+    codec_content_type: &'static str,
+    parts: &http::request::Parts,
+    body: &[u8],
+) -> Result<T, R>
+where
+    T: DeserializableShape,
+    C: Codec,
+    R: From<DeserializeError> + From<MissingContentTypeReason>,
+{
+    if !body.is_empty() {
+        check_content_type(&parts.headers, Some(codec_content_type)).map_err(R::from)?;
+        let mut deserializer = codec.create_deserializer(body);
+        T::deserialize(&mut deserializer).map_err(R::from)
+    } else {
+        T::deserialize(&mut EmptyStructDeserializer).map_err(R::from)
+    }
+}
+
+// ============================================================================
 // restJson1
 // ============================================================================
 
 impl ServerProtocol for RestJson1 {
     type Codec = JsonCodec;
+    type RequestRejection = super::rest_json_1::rejection::RequestRejection;
 
-    fn codec(&self) -> &Self::Codec {
+    fn codec() -> &'static Self::Codec {
         static CODEC: LazyLock<JsonCodec> = LazyLock::new(|| {
             JsonCodec::new(
                 JsonCodecSettings::builder()
@@ -553,30 +471,61 @@ impl ServerProtocol for RestJson1 {
         &CODEC
     }
 
-    fn serialize_output(
-        &self,
+    fn deserialize_request<T: DeserializableShape>(
         schema: &Schema<'_>,
-        output: &dyn SerializableStruct,
-        is_error: bool,
-    ) -> Result<http::Response<BoxBody>, SerdeError> {
-        // restJson1 carries no body discriminator; the error name travels in
-        // the `x-amzn-errortype` header, stamped by `serialize_error`.
-        let (body, headers) = serialize_body(self.codec(), schema, output, is_error)?;
-        assemble_response(body, "application/json", headers)
+        parts: &http::request::Parts,
+        body: &[u8],
+    ) -> Result<T, Self::RequestRejection> {
+        // Legacy generated `from_request` checks `Accept` (against the
+        // response content type) before anything else.
+        if !super::accept_header_classifier(&parts.headers, &APPLICATION_JSON_MIME) {
+            return Err(Self::RequestRejection::NotAcceptable);
+        }
+        deserialize_rest_request(Self::codec(), "application/json", true, schema, parts, body)
     }
 
-    fn serialize_error<E: HttpModeledError + ?Sized>(&self, error: &E) -> http::Response<BoxBody> {
+    fn serialize_response(
+        schema: &Schema<'_>,
+        output: &dyn SerializableStruct,
+    ) -> http::Response<BoxBody> {
+        let result = serialize_split(Self::codec(), schema, output, true).and_then(|split| {
+            let status = resolve_status(split.status, schema);
+            assemble_response(split, status, "application/json")
+        });
+        match result {
+            Ok(response) => response,
+            Err(err) => {
+                log_serialize_failure!(err);
+                IntoResponse::<RestJson1>::into_response(
+                    super::rest_json_1::runtime_error::RuntimeError::Serialization(
+                        crate::Error::new(err),
+                    ),
+                )
+            }
+        }
+    }
+
+    fn serialize_error(error: &dyn HttpModeledError) -> http::Response<BoxBody> {
         let schema = error.schema();
         let name = schema.shape_id().shape_name();
-        match self.serialize_output(schema, &AsSerializable(error), true) {
+        // restJson1 carries no body discriminator; the error name travels in
+        // the `x-amzn-errortype` header.
+        let result =
+            serialize_split(Self::codec(), schema, &AsSerializable(error), true).and_then(
+                |split| assemble_response(split, error.status_code(), "application/json"),
+            );
+        match result {
             Ok(mut response) => {
-                // Shape name only — the settled post-#1982 behavior.
+                // Shape name only — the settled post-#1982 behavior. The
+                // legacy hard-coded `ValidationException` header for custom
+                // validation shapes was a confirmed bug (2f); the schema path
+                // emits the actual shape name.
                 if let Ok(value) = http::HeaderValue::try_from(name) {
                     response
                         .headers_mut()
                         .insert(http::HeaderName::from_static("x-amzn-errortype"), value);
                 }
-                finish_error_response(response, error.status_code(), name)
+                stamp_error_extension(response, name)
             }
             Err(err) => {
                 log_serialize_failure!(err);
@@ -588,6 +537,23 @@ impl ServerProtocol for RestJson1 {
             }
         }
     }
+}
+
+static APPLICATION_JSON_MIME: LazyLock<mime::Mime> =
+    LazyLock::new(|| "application/json".parse().expect("valid mime"));
+static AMZ_JSON_10_MIME: LazyLock<mime::Mime> =
+    LazyLock::new(|| "application/x-amz-json-1.0".parse().expect("valid mime"));
+static AMZ_JSON_11_MIME: LazyLock<mime::Mime> =
+    LazyLock::new(|| "application/x-amz-json-1.1".parse().expect("valid mime"));
+static APPLICATION_CBOR_MIME: LazyLock<mime::Mime> =
+    LazyLock::new(|| "application/cbor".parse().expect("valid mime"));
+static APPLICATION_XML_MIME: LazyLock<mime::Mime> =
+    LazyLock::new(|| "application/xml".parse().expect("valid mime"));
+
+impl EventStreamProtocol for RestJson1 {
+    const EVENT_PAYLOAD_CONTENT_TYPE: &'static str = "application/json";
+    const EVENT_STREAM_HTTP_CONTENT_TYPE: &'static str = "application/vnd.amazon.eventstream";
+    const FRAMES_INITIAL_MESSAGES: bool = false;
 }
 
 // ============================================================================
@@ -606,96 +572,111 @@ fn aws_json_codec() -> &'static JsonCodec {
     &CODEC
 }
 
-impl ServerProtocol for AwsJson1_0 {
-    type Codec = JsonCodec;
+macro_rules! aws_json_impl {
+    ($marker:ty, $content_type:literal, $mime:ident, $type_value:ident) => {
+        impl ServerProtocol for $marker {
+            type Codec = JsonCodec;
+            type RequestRejection = super::aws_json::rejection::RequestRejection;
 
-    fn codec(&self) -> &Self::Codec {
-        aws_json_codec()
-    }
+            fn codec() -> &'static Self::Codec {
+                aws_json_codec()
+            }
 
-    fn serialize_output(
-        &self,
-        schema: &Schema<'_>,
-        output: &dyn SerializableStruct,
-        is_error: bool,
-    ) -> Result<http::Response<BoxBody>, SerdeError> {
-        let (body, _) = if is_error {
-            // Full shape ID, written after the modeled members (legacy order).
-            let wrapper = WithTypeLast {
-                type_value: schema.shape_id().as_str(),
-                inner: output,
-            };
-            serialize_body(self.codec(), schema, &wrapper, false)?
-        } else {
-            serialize_body(self.codec(), schema, output, false)?
-        };
-        assemble_response(body, "application/x-amz-json-1.0", Vec::new())
-    }
+            fn deserialize_request<T: DeserializableShape>(
+                _schema: &Schema<'_>,
+                parts: &http::request::Parts,
+                body: &[u8],
+            ) -> Result<T, Self::RequestRejection> {
+                if !super::accept_header_classifier(&parts.headers, &$mime) {
+                    return Err(Self::RequestRejection::NotAcceptable);
+                }
+                deserialize_rpc_request(Self::codec(), $content_type, parts, body)
+            }
 
-    fn serialize_error<E: HttpModeledError + ?Sized>(&self, error: &E) -> http::Response<BoxBody> {
-        let schema = error.schema();
-        match self.serialize_output(schema, &AsSerializable(error), true) {
-            Ok(response) => finish_error_response(
-                response,
-                error.status_code(),
-                schema.shape_id().shape_name(),
-            ),
-            Err(err) => {
-                log_serialize_failure!(err);
-                IntoResponse::<AwsJson1_0>::into_response(
-                    super::aws_json::runtime_error::RuntimeError::Serialization(crate::Error::new(
-                        err,
-                    )),
-                )
+            fn serialize_response(
+                schema: &Schema<'_>,
+                output: &dyn SerializableStruct,
+            ) -> http::Response<BoxBody> {
+                let result =
+                    serialize_split(Self::codec(), schema, output, false).and_then(|split| {
+                        let status = resolve_status(split.status, schema);
+                        assemble_response(split, status, $content_type)
+                    });
+                match result {
+                    Ok(response) => response,
+                    Err(err) => {
+                        log_serialize_failure!(err);
+                        IntoResponse::<$marker>::into_response(
+                            super::aws_json::runtime_error::RuntimeError::Serialization(
+                                crate::Error::new(err),
+                            ),
+                        )
+                    }
+                }
+            }
+
+            fn serialize_error(error: &dyn HttpModeledError) -> http::Response<BoxBody> {
+                let schema = error.schema();
+                // `__type` written after the modeled members (legacy order).
+                let wrapper = WithTypeLast {
+                    type_value: $type_value(schema),
+                    inner: &AsSerializable(error),
+                };
+                let result = serialize_split(Self::codec(), schema, &wrapper, false)
+                    .and_then(|split| {
+                        assemble_response(split, error.status_code(), $content_type)
+                    });
+                match result {
+                    Ok(response) => {
+                        stamp_error_extension(response, schema.shape_id().shape_name())
+                    }
+                    Err(err) => {
+                        log_serialize_failure!(err);
+                        IntoResponse::<$marker>::into_response(
+                            super::aws_json::runtime_error::RuntimeError::Serialization(
+                                crate::Error::new(err),
+                            ),
+                        )
+                    }
+                }
             }
         }
-    }
+    };
 }
 
-impl ServerProtocol for AwsJson1_1 {
-    type Codec = JsonCodec;
+/// awsJson 1.0 discriminator: the full `namespace#Name` shape ID.
+fn full_shape_id<'s>(schema: &'s Schema<'s>) -> &'s str {
+    schema.shape_id().as_str()
+}
 
-    fn codec(&self) -> &Self::Codec {
-        aws_json_codec()
-    }
+/// awsJson 1.1 discriminator: the shape name only.
+fn shape_name_only<'s>(schema: &'s Schema<'s>) -> &'s str {
+    schema.shape_id().shape_name()
+}
 
-    fn serialize_output(
-        &self,
-        schema: &Schema<'_>,
-        output: &dyn SerializableStruct,
-        is_error: bool,
-    ) -> Result<http::Response<BoxBody>, SerdeError> {
-        let (body, _) = if is_error {
-            // Shape name only, written after the modeled members (legacy order).
-            let wrapper = WithTypeLast {
-                type_value: schema.shape_id().shape_name(),
-                inner: output,
-            };
-            serialize_body(self.codec(), schema, &wrapper, false)?
-        } else {
-            serialize_body(self.codec(), schema, output, false)?
-        };
-        assemble_response(body, "application/x-amz-json-1.1", Vec::new())
-    }
+aws_json_impl!(
+    AwsJson1_0,
+    "application/x-amz-json-1.0",
+    AMZ_JSON_10_MIME,
+    full_shape_id
+);
+aws_json_impl!(
+    AwsJson1_1,
+    "application/x-amz-json-1.1",
+    AMZ_JSON_11_MIME,
+    shape_name_only
+);
 
-    fn serialize_error<E: HttpModeledError + ?Sized>(&self, error: &E) -> http::Response<BoxBody> {
-        let schema = error.schema();
-        match self.serialize_output(schema, &AsSerializable(error), true) {
-            Ok(response) => finish_error_response(
-                response,
-                error.status_code(),
-                schema.shape_id().shape_name(),
-            ),
-            Err(err) => {
-                log_serialize_failure!(err);
-                IntoResponse::<AwsJson1_1>::into_response(
-                    super::aws_json::runtime_error::RuntimeError::Serialization(crate::Error::new(
-                        err,
-                    )),
-                )
-            }
-        }
-    }
+impl EventStreamProtocol for AwsJson1_0 {
+    const EVENT_PAYLOAD_CONTENT_TYPE: &'static str = "application/json";
+    const EVENT_STREAM_HTTP_CONTENT_TYPE: &'static str = "application/x-amz-json-1.0";
+    const FRAMES_INITIAL_MESSAGES: bool = true;
+}
+
+impl EventStreamProtocol for AwsJson1_1 {
+    const EVENT_PAYLOAD_CONTENT_TYPE: &'static str = "application/json";
+    const EVENT_STREAM_HTTP_CONTENT_TYPE: &'static str = "application/x-amz-json-1.1";
+    const FRAMES_INITIAL_MESSAGES: bool = true;
 }
 
 // ============================================================================
@@ -704,46 +685,72 @@ impl ServerProtocol for AwsJson1_1 {
 
 impl ServerProtocol for RpcV2Cbor {
     type Codec = CborCodec;
+    type RequestRejection = super::rpc_v2_cbor::rejection::RequestRejection;
 
-    fn codec(&self) -> &Self::Codec {
+    fn codec() -> &'static Self::Codec {
         static CODEC: LazyLock<CborCodec> =
             LazyLock::new(|| CborCodec::new(CborCodecSettings::default()));
         &CODEC
     }
 
-    fn serialize_output(
-        &self,
-        schema: &Schema<'_>,
-        output: &dyn SerializableStruct,
-        is_error: bool,
-    ) -> Result<http::Response<BoxBody>, SerdeError> {
-        let (body, _) = if is_error {
-            // Full shape ID as the FIRST map entry (legacy
-            // `AddTypeFieldToServerErrorsCborCustomization` order).
-            let wrapper = WithTypeFirst {
-                type_value: schema.shape_id().as_str(),
-                inner: output,
-            };
-            serialize_body(self.codec(), schema, &wrapper, false)?
-        } else {
-            serialize_body(self.codec(), schema, output, false)?
-        };
-        let mut response = assemble_response(body, "application/cbor", Vec::new())?;
-        response.headers_mut().insert(
-            http::HeaderName::from_static("smithy-protocol"),
-            http::HeaderValue::from_static("rpc-v2-cbor"),
-        );
-        Ok(response)
+    fn deserialize_request<T: DeserializableShape>(
+        _schema: &Schema<'_>,
+        parts: &http::request::Parts,
+        body: &[u8],
+    ) -> Result<T, Self::RequestRejection> {
+        // The `smithy-protocol: rpc-v2-cbor` header is validated by the
+        // router; the body content type is validated here.
+        if !super::accept_header_classifier(&parts.headers, &APPLICATION_CBOR_MIME) {
+            return Err(Self::RequestRejection::NotAcceptable);
+        }
+        deserialize_rpc_request(Self::codec(), "application/cbor", parts, body)
     }
 
-    fn serialize_error<E: HttpModeledError + ?Sized>(&self, error: &E) -> http::Response<BoxBody> {
+    fn serialize_response(
+        schema: &Schema<'_>,
+        output: &dyn SerializableStruct,
+    ) -> http::Response<BoxBody> {
+        let result = serialize_split(Self::codec(), schema, output, false).and_then(|split| {
+            let status = resolve_status(split.status, schema);
+            assemble_response(split, status, "application/cbor")
+        });
+        match result {
+            Ok(mut response) => {
+                response.headers_mut().insert(
+                    http::HeaderName::from_static("smithy-protocol"),
+                    http::HeaderValue::from_static("rpc-v2-cbor"),
+                );
+                response
+            }
+            Err(err) => {
+                log_serialize_failure!(err);
+                IntoResponse::<RpcV2Cbor>::into_response(
+                    super::rpc_v2_cbor::runtime_error::RuntimeError::Serialization(
+                        crate::Error::new(err),
+                    ),
+                )
+            }
+        }
+    }
+
+    fn serialize_error(error: &dyn HttpModeledError) -> http::Response<BoxBody> {
         let schema = error.schema();
-        match self.serialize_output(schema, &AsSerializable(error), true) {
-            Ok(response) => finish_error_response(
-                response,
-                error.status_code(),
-                schema.shape_id().shape_name(),
-            ),
+        // Full shape ID as the FIRST map entry (legacy
+        // `AddTypeFieldToServerErrorsCborCustomization` order).
+        let wrapper = WithTypeFirst {
+            type_value: schema.shape_id().as_str(),
+            inner: &AsSerializable(error),
+        };
+        let result = serialize_split(Self::codec(), schema, &wrapper, false)
+            .and_then(|split| assemble_response(split, error.status_code(), "application/cbor"));
+        match result {
+            Ok(mut response) => {
+                response.headers_mut().insert(
+                    http::HeaderName::from_static("smithy-protocol"),
+                    http::HeaderValue::from_static("rpc-v2-cbor"),
+                );
+                stamp_error_extension(response, schema.shape_id().shape_name())
+            }
             Err(err) => {
                 log_serialize_failure!(err);
                 IntoResponse::<RpcV2Cbor>::into_response(
@@ -756,40 +763,47 @@ impl ServerProtocol for RpcV2Cbor {
     }
 }
 
+impl EventStreamProtocol for RpcV2Cbor {
+    const EVENT_PAYLOAD_CONTENT_TYPE: &'static str = "application/cbor";
+    const EVENT_STREAM_HTTP_CONTENT_TYPE: &'static str = "application/vnd.amazon.eventstream";
+    const FRAMES_INITIAL_MESSAGES: bool = true;
+}
+
 // ============================================================================
 // restXml
 // ============================================================================
 
 impl ServerProtocol for RestXml {
     type Codec = XmlCodec;
+    type RequestRejection = super::rest_xml::rejection::RequestRejection;
 
-    fn codec(&self) -> &Self::Codec {
+    fn codec() -> &'static Self::Codec {
         static CODEC: LazyLock<XmlCodec> =
             LazyLock::new(|| XmlCodec::new(XmlCodecSettings::default()));
         &CODEC
     }
 
-    fn serialize_output(
-        &self,
+    fn deserialize_request<T: DeserializableShape>(
         schema: &Schema<'_>,
-        output: &dyn SerializableStruct,
-        is_error: bool,
-    ) -> Result<http::Response<BoxBody>, SerdeError> {
-        // Known divergence, deliberate: today's generated restXml server error
-        // bodies are broken (bare `<Error>` envelope no client parses, and the
-        // runtime discards pre-rendered validation/framework bodies in favor of
-        // a literal `"{}"`). Freezing that behavior would freeze a bug, so the
-        // schema path serializes the error structure through the XML codec
-        // as-is. See assumptions register B4/B6.
-        let (body, headers) = serialize_body(self.codec(), schema, output, is_error)?;
-        assemble_response(body, "application/xml", headers)
+        parts: &http::request::Parts,
+        body: &[u8],
+    ) -> Result<T, Self::RequestRejection> {
+        if !super::accept_header_classifier(&parts.headers, &APPLICATION_XML_MIME) {
+            return Err(Self::RequestRejection::NotAcceptable);
+        }
+        deserialize_rest_request(Self::codec(), "application/xml", true, schema, parts, body)
     }
 
-    fn serialize_error<E: HttpModeledError + ?Sized>(&self, error: &E) -> http::Response<BoxBody> {
-        let schema = error.schema();
-        let name = schema.shape_id().shape_name();
-        match self.serialize_output(schema, &AsSerializable(error), true) {
-            Ok(response) => finish_error_response(response, error.status_code(), name),
+    fn serialize_response(
+        schema: &Schema<'_>,
+        output: &dyn SerializableStruct,
+    ) -> http::Response<BoxBody> {
+        let result = serialize_split(Self::codec(), schema, output, true).and_then(|split| {
+            let status = resolve_status(split.status, schema);
+            assemble_response(split, status, "application/xml")
+        });
+        match result {
+            Ok(response) => response,
             Err(err) => {
                 log_serialize_failure!(err);
                 IntoResponse::<RestXml>::into_response(
@@ -799,5 +813,408 @@ impl ServerProtocol for RestXml {
                 )
             }
         }
+    }
+
+    fn serialize_error(error: &dyn HttpModeledError) -> http::Response<BoxBody> {
+        // Known divergence, deliberate (2f, fix-forward): today's generated
+        // restXml server error bodies are broken (bare `<Error>` envelope no
+        // client parses, and the runtime discards pre-rendered
+        // validation/framework bodies in favor of a literal `"{}"`).
+        // Freezing that behavior would freeze a bug, so the schema path
+        // serializes the error structure through the XML codec as-is. See
+        // assumptions register B4/B6; gated by its own pinned goldens.
+        let schema = error.schema();
+        let result = serialize_split(Self::codec(), schema, &AsSerializable(error), true)
+            .and_then(|split| assemble_response(split, error.status_code(), "application/xml"));
+        match result {
+            Ok(response) => stamp_error_extension(response, schema.shape_id().shape_name()),
+            Err(err) => {
+                log_serialize_failure!(err);
+                IntoResponse::<RestXml>::into_response(
+                    super::rest_xml::runtime_error::RuntimeError::Serialization(crate::Error::new(
+                        err,
+                    )),
+                )
+            }
+        }
+    }
+}
+
+impl EventStreamProtocol for RestXml {
+    const EVENT_PAYLOAD_CONTENT_TYPE: &'static str = "application/xml";
+    const EVENT_STREAM_HTTP_CONTENT_TYPE: &'static str = "application/vnd.amazon.eventstream";
+    const FRAMES_INITIAL_MESSAGES: bool = false;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::modeled_error::ModeledError;
+    use crate::protocol::test_helpers::get_body_as_string;
+    use aws_smithy_schema::serde::ShapeDeserializer;
+    use aws_smithy_schema::traits::HttpTrait;
+
+    // ------------------------------------------------------------------
+    // A hand-built operation input: label + query + header + body member.
+    // ------------------------------------------------------------------
+
+    static NAME_MEMBER: Schema<'static> = Schema::new_member(
+        ShapeId::from_parts("test#In$name", "test", "In"),
+        ShapeType::String,
+        "name",
+        0,
+    )
+    .with_http_label();
+    static AGE_MEMBER: Schema<'static> = Schema::new_member(
+        ShapeId::from_parts("test#In$age", "test", "In"),
+        ShapeType::Integer,
+        "age",
+        1,
+    )
+    .with_http_query("age");
+    static NOTE_MEMBER: Schema<'static> = Schema::new_member(
+        ShapeId::from_parts("test#In$note", "test", "In"),
+        ShapeType::String,
+        "note",
+        2,
+    );
+    static IN_MEMBERS: [&Schema<'static>; 3] = [&NAME_MEMBER, &AGE_MEMBER, &NOTE_MEMBER];
+    static IN_SCHEMA: Schema<'static> = Schema::new_struct(
+        ShapeId::from_parts("test#In", "test", "In"),
+        ShapeType::Structure,
+        &IN_MEMBERS,
+    )
+    .with_http(HttpTrait::new("POST", "/pets/{name}", Some(200)));
+
+    // Body-only variant for the RPC protocols (no @http bindings at all).
+    static RPC_NOTE_MEMBER: Schema<'static> = Schema::new_member(
+        ShapeId::from_parts("test#RpcIn$note", "test", "RpcIn"),
+        ShapeType::String,
+        "note",
+        0,
+    );
+    static RPC_IN_MEMBERS: [&Schema<'static>; 1] = [&RPC_NOTE_MEMBER];
+    static RPC_IN_SCHEMA: Schema<'static> = Schema::new_struct(
+        ShapeId::from_parts("test#RpcIn", "test", "RpcIn"),
+        ShapeType::Structure,
+        &RPC_IN_MEMBERS,
+    );
+
+    #[derive(Debug, Default, PartialEq)]
+    struct TestInput {
+        name: Option<String>,
+        age: Option<i32>,
+        note: Option<String>,
+    }
+
+    impl TestInput {
+        fn walk(
+            schema: &'static Schema<'static>,
+            deserializer: &mut dyn ShapeDeserializer,
+        ) -> Result<Self, DeserializeError> {
+            let mut out = TestInput::default();
+            deserializer.read_struct(schema, &mut |member, d| {
+                match member.member_name() {
+                    Some("name") => out.name = Some(d.read_string(member)?),
+                    Some("age") => out.age = Some(d.read_integer(member)?),
+                    Some("note") => out.note = Some(d.read_string(member)?),
+                    _ => {}
+                }
+                Ok(())
+            })?;
+            Ok(out)
+        }
+    }
+
+    impl DeserializableShape for TestInput {
+        fn deserialize(
+            deserializer: &mut dyn ShapeDeserializer,
+        ) -> Result<Self, DeserializeError> {
+            Self::walk(&IN_SCHEMA, deserializer)
+        }
+    }
+
+    /// The same walker against the body-only RPC schema.
+    #[derive(Debug, Default, PartialEq)]
+    struct RpcTestInput(TestInput);
+
+    impl DeserializableShape for RpcTestInput {
+        fn deserialize(
+            deserializer: &mut dyn ShapeDeserializer,
+        ) -> Result<Self, DeserializeError> {
+            TestInput::walk(&RPC_IN_SCHEMA, deserializer).map(RpcTestInput)
+        }
+    }
+
+    fn parts(uri: &str, headers: &[(&'static str, &str)]) -> http::request::Parts {
+        let mut builder = http::Request::builder().method("POST").uri(uri);
+        for (name, value) in headers {
+            builder = builder.header(*name, *value);
+        }
+        builder.body(()).unwrap().into_parts().0
+    }
+
+    static EMPTY_IN_MEMBERS: [&Schema<'static>; 0] = [];
+    static EMPTY_IN_SCHEMA: Schema<'static> = Schema::new_struct(
+        ShapeId::from_parts("test#EmptyIn", "test", "EmptyIn"),
+        ShapeType::Structure,
+        &EMPTY_IN_MEMBERS,
+    )
+    .with_http(HttpTrait::new("POST", "/empty", Some(200)));
+
+    #[derive(Debug)]
+    struct EmptyInput;
+    impl DeserializableShape for EmptyInput {
+        fn deserialize(
+            deserializer: &mut dyn ShapeDeserializer,
+        ) -> Result<Self, DeserializeError> {
+            deserializer.read_struct(&EMPTY_IN_SCHEMA, &mut |_, _| Ok(()))?;
+            Ok(EmptyInput)
+        }
+    }
+
+    #[test]
+    fn request_paths() {
+        use super::super::rest_json_1::rejection::RequestRejection;
+
+        // REST: label + query + body member route through the composite.
+        let p = parts("/pets/rex?age=7", &[("content-type", "application/json")]);
+        let input: TestInput =
+            RestJson1::deserialize_request(&IN_SCHEMA, &p, br#"{"note":"hi"}"#).unwrap();
+        assert_eq!(
+            input,
+            TestInput {
+                name: Some("rex".to_string()),
+                age: Some(7),
+                note: Some("hi".to_string()),
+            }
+        );
+
+        // Wrong content type (non-empty body) and bad Accept are rejected.
+        let p = parts("/pets/rex", &[("content-type", "text/xml")]);
+        assert!(matches!(
+            RestJson1::deserialize_request::<TestInput>(&IN_SCHEMA, &p, b"{}").unwrap_err(),
+            RequestRejection::MissingContentType(_)
+        ));
+        let p = parts(
+            "/pets/rex",
+            &[("content-type", "application/json"), ("accept", "text/xml")],
+        );
+        assert!(matches!(
+            RestJson1::deserialize_request::<TestInput>(&IN_SCHEMA, &p, b"{}").unwrap_err(),
+            RequestRejection::NotAcceptable
+        ));
+
+        // The legacy `if !bytes.is_empty()` gate: no content type required
+        // when no body was sent, even though body members are modeled.
+        let p = parts("/pets/rex", &[]);
+        let input: TestInput = RestJson1::deserialize_request(&IN_SCHEMA, &p, b"").unwrap();
+        assert_eq!(input.name.as_deref(), Some("rex"));
+        assert_eq!(input.note, None);
+
+        // `serverContentTypeCheckNoModeledInput`: content-type must NOT be
+        // present when the operation has no modeled input.
+        let p = parts("/empty", &[("content-type", "application/json")]);
+        assert!(matches!(
+            RestJson1::deserialize_request::<EmptyInput>(&EMPTY_IN_SCHEMA, &p, b"")
+                .unwrap_err(),
+            RequestRejection::MissingContentType(_)
+        ));
+        let p = parts("/empty", &[]);
+        RestJson1::deserialize_request::<EmptyInput>(&EMPTY_IN_SCHEMA, &p, b"").unwrap();
+
+        // RPC: body round-trips through the protocol's own codec.
+        use aws_smithy_schema::codec::FinishSerializer;
+        struct Body;
+        impl SerializableStruct for Body {
+            fn serialize_members(
+                &self,
+                s: &mut dyn ShapeSerializer,
+            ) -> Result<(), SerdeError> {
+                s.write_string(&RPC_NOTE_MEMBER, "hi")
+            }
+        }
+        let mut serializer = <RpcV2Cbor as ServerProtocol>::codec().create_serializer();
+        serializer.write_struct(&RPC_IN_SCHEMA, &Body).unwrap();
+        let body = serializer.finish();
+        let p = parts("/service/Op", &[("content-type", "application/cbor")]);
+        let input: RpcTestInput =
+            RpcV2Cbor::deserialize_request(&RPC_IN_SCHEMA, &p, &body).unwrap();
+        assert_eq!(input.0.note.as_deref(), Some("hi"));
+
+        // RPC empty body: members stay unset (`build()` owns @required).
+        let p = parts(
+            "/service/Op",
+            &[("content-type", "application/x-amz-json-1.0")],
+        );
+        let input: RpcTestInput =
+            AwsJson1_0::deserialize_request(&RPC_IN_SCHEMA, &p, b"").unwrap();
+        assert_eq!(input.0, TestInput::default());
+    }
+
+    // ------------------------------------------------------------------
+    // Responses
+    // ------------------------------------------------------------------
+
+    static OUT_MSG_MEMBER: Schema<'static> = Schema::new_member(
+        ShapeId::from_parts("test#Out$msg", "test", "Out"),
+        ShapeType::String,
+        "msg",
+        0,
+    );
+    static OUT_MEMBERS: [&Schema<'static>; 1] = [&OUT_MSG_MEMBER];
+    static OUT_SCHEMA: Schema<'static> = Schema::new_struct(
+        ShapeId::from_parts("test#Out", "test", "Out"),
+        ShapeType::Structure,
+        &OUT_MEMBERS,
+    )
+    .with_http(HttpTrait::new("POST", "/pets/{name}", Some(201)));
+
+    struct TestOutput;
+    impl SerializableStruct for TestOutput {
+        fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+            s.write_string(&OUT_MSG_MEMBER, "ok")
+        }
+    }
+
+    #[tokio::test]
+    async fn response_paths() {
+        // REST: status from the @http trait, protocol content type, codec body.
+        let response = RestJson1::serialize_response(&OUT_SCHEMA, &TestOutput);
+        assert_eq!(response.status(), http::StatusCode::CREATED);
+        assert_eq!(
+            response.headers().get("content-type").unwrap(),
+            "application/json"
+        );
+        let body = get_body_as_string(response.into_body()).await;
+        assert_eq!(body, r#"{"msg":"ok"}"#);
+
+        // RPC: default status, protocol headers stamped.
+        let response = RpcV2Cbor::serialize_response(&RPC_IN_SCHEMA, &TestOutput);
+        assert_eq!(response.status(), http::StatusCode::OK);
+        assert_eq!(
+            response.headers().get("smithy-protocol").unwrap(),
+            "rpc-v2-cbor"
+        );
+        assert_eq!(
+            response.headers().get("content-type").unwrap(),
+            "application/cbor"
+        );
+    }
+
+    // ------------------------------------------------------------------
+    // Errors and the 2d validation seam
+    // ------------------------------------------------------------------
+
+    static BOOM_MSG_MEMBER: Schema<'static> = Schema::new_member(
+        ShapeId::from_parts("test#Boom$message", "test", "Boom"),
+        ShapeType::String,
+        "message",
+        0,
+    );
+    static BOOM_HDR_MEMBER: Schema<'static> = Schema::new_member(
+        ShapeId::from_parts("test#Boom$tag", "test", "Boom"),
+        ShapeType::String,
+        "tag",
+        1,
+    )
+    .with_http_header("x-boom-tag");
+    static BOOM_MEMBERS: [&Schema<'static>; 2] = [&BOOM_MSG_MEMBER, &BOOM_HDR_MEMBER];
+    static BOOM_SCHEMA: Schema<'static> = Schema::new_struct(
+        ShapeId::from_parts("test#Boom", "test", "Boom"),
+        ShapeType::Structure,
+        &BOOM_MEMBERS,
+    );
+
+    #[derive(Debug)]
+    struct Boom;
+
+    impl std::fmt::Display for Boom {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("boom happened")
+        }
+    }
+
+    impl SerializableStruct for Boom {
+        fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+            s.write_string(&BOOM_MSG_MEMBER, "boom happened")?;
+            s.write_string(&BOOM_HDR_MEMBER, "tagged")
+        }
+    }
+
+    impl ModeledError for Boom {
+        fn schema(&self) -> &Schema<'_> {
+            &BOOM_SCHEMA
+        }
+    }
+
+    impl HttpModeledError for Boom {
+        fn status_code(&self) -> u16 {
+            422
+        }
+    }
+
+    #[tokio::test]
+    async fn error_framing_and_validation_seam() {
+        // restJson1: name-only header discriminator, status from
+        // status_code(), @httpHeader-bound error member split out of the body.
+        let response = RestJson1::serialize_error(&Boom);
+        assert_eq!(response.status(), http::StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(response.headers().get("x-amzn-errortype").unwrap(), "Boom");
+        assert_eq!(response.headers().get("x-boom-tag").unwrap(), "tagged");
+        let body = get_body_as_string(response.into_body()).await;
+        assert_eq!(body, r#"{"message":"boom happened"}"#);
+
+        // awsJson 1.0: full shape ID written last; header-bound members are
+        // NOT split on RPC protocols. awsJson 1.1: name only.
+        let body = get_body_as_string(AwsJson1_0::serialize_error(&Boom).into_body()).await;
+        assert!(body.contains(r#""tag":"tagged""#), "{body}");
+        assert!(body.ends_with(r#""__type":"test#Boom"}"#), "{body}");
+        let body = get_body_as_string(AwsJson1_1::serialize_error(&Boom).into_body()).await;
+        assert!(body.ends_with(r#""__type":"Boom"}"#), "{body}");
+
+        // rpcv2Cbor: full shape ID as the FIRST map entry.
+        let response = RpcV2Cbor::serialize_error(&Boom);
+        assert_eq!(
+            response.headers().get("smithy-protocol").unwrap(),
+            "rpc-v2-cbor"
+        );
+        use http_body_util::BodyExt;
+        let bytes = response
+            .into_body()
+            .collect()
+            .await
+            .expect("body collects")
+            .to_bytes();
+        let type_pos = bytes
+            .windows(6)
+            .position(|w| w == b"__type")
+            .expect("__type present");
+        let msg_pos = bytes
+            .windows(7)
+            .position(|w| w == b"message")
+            .expect("message present");
+        assert!(type_pos < msg_pos, "__type must be the first map entry");
+        assert!(
+            bytes.windows(9).any(|w| w == b"test#Boom"),
+            "full shape ID present"
+        );
+
+        // The 2d seam: walker constraint-violation channel → rejection →
+        // RuntimeError::Validation → serialized exactly ONCE, by the
+        // protocol, at the boundary, with the ACTUAL shape name (2f
+        // fix-forward — not the legacy hard-coded `ValidationException`).
+        use super::super::rest_json_1::rejection::RequestRejection;
+        use super::super::rest_json_1::runtime_error::RuntimeError;
+        use crate::response::IntoResponse;
+        let rejection: RequestRejection =
+            DeserializeError::ConstraintViolation(Box::new(Boom)).into();
+        let runtime_error = RuntimeError::from(rejection);
+        assert!(matches!(runtime_error, RuntimeError::Validation(_)));
+        let response = IntoResponse::<RestJson1>::into_response(runtime_error);
+        assert_eq!(response.status(), http::StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(response.headers().get("x-amzn-errortype").unwrap(), "Boom");
+        let body = get_body_as_string(response.into_body()).await;
+        assert_eq!(body, r#"{"message":"boom happened"}"#);
     }
 }

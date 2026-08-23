@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::modeled_error::HttpModeledError;
+use crate::protocol::server_protocol::ServerProtocol;
 use crate::response::IntoResponse;
 use crate::runtime_error::{InternalFailureException, INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE};
 use crate::{extension::RuntimeErrorExtension, protocol::rpc_v2_cbor::RpcV2Cbor};
@@ -27,9 +29,9 @@ pub enum RuntimeError {
     UnsupportedMediaType,
     /// See: [`crate::protocol::rest_json_1::runtime_error::RuntimeError::Validation`]
     #[error(
-        "validation failure: operation input contains data that does not adhere to the modeled constraints: {0:?}"
+        "validation failure: operation input contains data that does not adhere to the modeled constraints: {0}"
     )]
-    Validation(Vec<u8>),
+    Validation(Box<dyn HttpModeledError + Send>),
 }
 
 impl RuntimeError {
@@ -60,8 +62,20 @@ impl IntoResponse<RpcV2Cbor> for InternalFailureException {
     }
 }
 
+// Only `Validation` is schema-driven: it carries a modeled shape. The other
+// variants are framework conventions with no Smithy shape behind them; the
+// frozen empty-map-without-`__type` body below (#3716) is not the
+// serialization of any shape, so they stay hand-assembled this phase. Full
+// rationale on the `IntoResponse<RestJson1> for RuntimeError` impl in
+// `crate::protocol::rest_json_1::runtime_error`.
 impl IntoResponse<RpcV2Cbor> for RuntimeError {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
+        // The modeled validation error serializes through the schema path —
+        // exactly once, here, at the protocol boundary.
+        if let RuntimeError::Validation(err) = &self {
+            return RpcV2Cbor::serialize_error(err.as_ref());
+        }
+
         let res = http::Response::builder()
             .status(self.status_code())
             .header("Content-Type", "application/cbor")
@@ -72,10 +86,7 @@ impl IntoResponse<RpcV2Cbor> for RuntimeError {
 
         // TODO(https://github.com/smithy-lang/smithy-rs/issues/3716): we're not serializing
         // `__type`.
-        let body = match self {
-            RuntimeError::Validation(reason) => crate::body::to_boxed(reason),
-            _ => crate::body::to_boxed(EMPTY_CBOR_MAP),
-        };
+        let body = crate::body::to_boxed(EMPTY_CBOR_MAP);
 
         res.body(body)
             .expect(INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE)

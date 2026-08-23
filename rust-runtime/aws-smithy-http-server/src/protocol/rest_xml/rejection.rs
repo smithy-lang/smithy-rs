@@ -7,6 +7,8 @@
 //! [`crate::protocol::rest_json_1::rejection::RequestRejection::JsonDeserialize`] is swapped for
 //! [`RequestRejection::XmlDeserialize`].
 
+use crate::deserialize::DeserializeError;
+use crate::modeled_error::HttpModeledError;
 use crate::rejection::MissingContentTypeReason;
 use aws_smithy_runtime_api::http::HttpError;
 use std::num::TryFromIntError;
@@ -57,8 +59,14 @@ pub enum RequestRejection {
     #[error("error parsing primitive type from request URI: {0}")]
     PrimitiveParse(#[from] aws_smithy_types::primitive::PrimitiveParseError),
 
+    /// Used when the schema-driven request deserializer fails at the wire level.
+    #[error("error deserializing request: {0}")]
+    SchemaDeserialize(#[from] aws_smithy_schema::serde::SerdeError),
+
+    /// Carries the modeled validation error; serialized once at the protocol
+    /// boundary via `ServerProtocol::serialize_error`.
     #[error("request does not adhere to modeled constraints: {0}")]
-    ConstraintViolation(String),
+    ConstraintViolation(Box<dyn HttpModeledError + Send>),
 
     /// Typically happens when the request has headers that are not valid UTF-8.
     #[error("failed to convert request: {0}")]
@@ -68,6 +76,15 @@ pub enum RequestRejection {
 impl From<std::convert::Infallible> for RequestRejection {
     fn from(_err: std::convert::Infallible) -> Self {
         match _err {}
+    }
+}
+
+impl From<DeserializeError> for RequestRejection {
+    fn from(err: DeserializeError) -> Self {
+        match err {
+            DeserializeError::Serde(err) => Self::SchemaDeserialize(err),
+            DeserializeError::ConstraintViolation(err) => Self::ConstraintViolation(err),
+        }
     }
 }
 

@@ -20,6 +20,7 @@ pub mod error;
 
 /// A type-erased boxed error used throughout the server framework.
 pub use self::error::BoxError;
+pub mod deserialize;
 pub mod extension;
 pub mod instrumentation;
 pub mod layer;

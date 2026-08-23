@@ -47,7 +47,18 @@ pub trait ModeledError: SerializableStruct {
 
 /// HTTP extension of [`ModeledError`]; the bound accepted by
 /// `aws-smithy-http-server`'s error serialization seam.
-pub trait HttpModeledError: ModeledError {
+///
+/// The `Debug + Display + Send + Sync` supertraits exist because boxed
+/// values of this trait travel through
+/// `RequestRejection::ConstraintViolation`: `RequestRejection` derives
+/// `Debug`, `Upgrade` logs rejections via `Display`, rejections cross await
+/// points, and the rejection's `Serialization` fallback converts into
+/// `crate::Error` (`Send + Sync`). `Display` is free for generated `@error`
+/// shapes — they implement `std::error::Error` — and generated error shapes
+/// are plain data, so `Send + Sync` hold structurally.
+pub trait HttpModeledError:
+    ModeledError + std::fmt::Debug + std::fmt::Display + Send + Sync
+{
     /// The HTTP status code for this error.
     ///
     /// Generated implementations bake a literal resolved at codegen time:

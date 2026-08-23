@@ -47,6 +47,8 @@
 //!
 //! Consult `crate::protocol::$protocolName::rejection` for rejection types for other protocols.
 
+use crate::deserialize::DeserializeError;
+use crate::modeled_error::HttpModeledError;
 use crate::rejection::MissingContentTypeReason;
 use aws_smithy_runtime_api::http::HttpError;
 use std::num::TryFromIntError;
@@ -160,10 +162,19 @@ pub enum RequestRejection {
     #[error("error parsing primitive type from request URI: {0}")]
     PrimitiveParse(#[from] aws_smithy_types::primitive::PrimitiveParseError),
 
+    /// Used when the schema-driven request deserializer fails at the wire
+    /// level (bad document, type mismatch, unknown union variant,
+    /// unparseable header/label/query value).
+    #[error("error deserializing request: {0}")]
+    SchemaDeserialize(#[from] aws_smithy_schema::serde::SerdeError),
+
     /// Used when consuming the input struct builder, and constraint violations occur.
-    // This rejection is constructed directly in the code-generated SDK instead of in this crate.
+    /// Carries the modeled validation error (default `ValidationException` or a
+    /// decorator-customized shape), built by the generated protocol-free
+    /// `From<ConstraintViolation>` conversion. It is serialized exactly once, at
+    /// the protocol boundary, via `ServerProtocol::serialize_error`.
     #[error("request does not adhere to modeled constraints: {0}")]
-    ConstraintViolation(String),
+    ConstraintViolation(Box<dyn HttpModeledError + Send>),
 
     /// Typically happens when the request has headers that are not valid UTF-8.
     #[error("failed to convert request: {0}")]
@@ -186,6 +197,15 @@ impl From<std::convert::Infallible> for RequestRejection {
         // We opt for this `match` here rather than [`unreachable`] to assure the reader that this
         // code path is dead.
         match _err {}
+    }
+}
+
+impl From<DeserializeError> for RequestRejection {
+    fn from(err: DeserializeError) -> Self {
+        match err {
+            DeserializeError::Serde(err) => Self::SchemaDeserialize(err),
+            DeserializeError::ConstraintViolation(err) => Self::ConstraintViolation(err),
+        }
     }
 }
 
