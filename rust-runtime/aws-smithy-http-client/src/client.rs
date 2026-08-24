@@ -4,6 +4,7 @@
  */
 
 mod dns;
+pub mod pool;
 /// Proxy configuration
 pub mod proxy;
 mod timeout;
