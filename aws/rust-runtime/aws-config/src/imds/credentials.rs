@@ -197,11 +197,19 @@ impl ImdsCredentialsProvider {
         }
     }
 
-    // Extend the cached expiration time if necessary
+    // Determines the expiration to report for freshly fetched IMDS credentials.
     //
-    // This allows continued use of the credentials even when IMDS returns expired ones.
+    // When the identity cache owns static stability (the default from
+    // `BehaviorVersion::v2026_08_01`), report the true expiration and let the cache decide how to
+    // handle expired credentials from IMDS: it treats an expired response as a failed refresh and
+    // keeps serving the last successfully cached credential, so static stability applies at refresh
+    // time. Before the first successful fetch there is nothing cached to fall back on, so an expired
+    // response on the initial fetch surfaces as an error rather than being used.
+    //
+    // On older behavior versions this provider owns static stability itself: it extends a stale
+    // expiration so the already-fetched credentials continue to be used until the next refresh.
     fn maybe_extend_expiration(&self, expiration: SystemTime) -> SystemTime {
-        // Deferred to the identity cache: report the true expiration.
+        // Cache path: report the true expiration; the identity cache owns static stability.
         if self.static_stability_via_cache {
             return expiration;
         }
