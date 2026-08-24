@@ -387,6 +387,57 @@ legacy vs schema projection. Every impl accounted for; grep-proof that flag-on
 crates contain zero `protocol_serde`, zero legacy serde fns, zero
 protocol-conditional generated code.
 
+**STEP 4 STATUS (2026-08-24): all 8 items IMPLEMENTED; Checkpoint 4 walkthrough
+pending (commits `93d690455`, `49d24c172`, `48fc38549`, `fd5ce1a00`,
+`b7e9a0483`).** Grep-proof holds: a clean regen of `pokemon-service-server-sdk-schema`
+and every single-protocol flag-on crate contains zero `protocol_serde` /
+`event_stream_serde` / legacy serde fns; multiprotocol crates' per-protocol
+modules hold only the `operations` glue (FromRequest/IntoResponse impls).
+Standing evidence: all 33 generated http-1.x crates green (`cargo test`),
+including the FULL smithy protocol suites through the schema pipeline
+(rest_json 750/750, json_rpc11 100/100, rpcv2Cbor 60/60, json_rpc10 44/44);
+37 wire captures + 10 error goldens + 2×21 eventstream integration tests +
+runtime unit suites green.
+
+Implementation notes / deltas discovered during Step 4 (for the Checkpoint-4
+walkthrough and Step 6 doc):
+
+- **2d seam is version-split**: http-1.x generates ONE protocol-free
+  `From<ConstraintViolation> for {ValidationShape}` + per-rejection boxed
+  delegations + `From<ConstraintViolation> for DeserializeError` (walker seam);
+  the frozen http-0.x fork keeps the pre-serialized form, reusing the same
+  value-building `From` (so `serverValidationExceptionErrorSerializer` SURVIVES
+  for http-0.x only — the "delete" in 2d applies to the 1.x pipeline).
+- **Error-closure schema gen runs on every http-1.x crate** (not only flag-on):
+  the runtime rejection carries `Box<dyn HttpModeledError + Send>` everywhere.
+- **Constrained-newtype exclusions are GONE** (supersedes the "exclusions stay"
+  non-goal): the schema serializer unwraps every newtype position (`.0` for
+  aggregate/number/blob wrappers, `as_str()` for strings — the legacy
+  serializers' access patterns), so sets/@length/@range shapes serialize
+  schema-driven and `operationServedBySchema` = flag + http1.x, no closure
+  carve-outs at all.
+- **`ServerProtocol` grew `with_request_deserializer`** (callback seam;
+  `deserialize_request` is a provided method over it) and `deserialize_request`
+  takes the OUTPUT schema too — the legacy Accept check validates against the
+  response content type (payload `@mediaType` aware, event-stream aware).
+- **Server-grade strictness landed in the JSON codec** (element-separator
+  discipline, trailing-garbage rejection, float-string forms, unknown union
+  variants, `strict_timestamp_format` setting enabled by the server codecs) —
+  that is what closed the malformed-request protocol tests.
+- Divergence register additions (each pinned by a protocol test now RUNNING
+  rather than expect-fail):
+  - `RestJsonHttpPayloadWithStructureAndEmptyResponseBody` FIXED on flag-on
+    crates (moved out of ExpectFail there).
+  - Event-stream initial-request receive failures map to the protocol's
+    malformed-request rejection (`SchemaDeserialize`) on http-1.x instead of
+    the legacy raw-string-as-validation-body hack.
+  - Client-sent modeled stream errors on CBOR/awsJson event streams marshal
+    WITHOUT a `__type` member (restJson1 parity; legacy cbor added it via
+    `AddTypeFieldToServerErrorsCborCustomization`) — pin at Step 5 frame
+    goldens.
+- The Step-5 harness delta already landed: the two multi-member restJson1
+  error goldens compare parse-equal per the 2e order policy.
+
 ## Step 5 — Gates
 
 - **Response goldens (crate-pair), ALL FIVE protocols**: outputs — one case per
