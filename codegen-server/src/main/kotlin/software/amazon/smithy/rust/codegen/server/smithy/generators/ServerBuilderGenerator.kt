@@ -28,6 +28,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
@@ -50,6 +51,7 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.serverValidationExceptionErrorSerializer
 import software.amazon.smithy.rust.codegen.server.smithy.hasConstraintTraitOrTargetHasConstraintTrait
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolModules
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolTarget
@@ -187,9 +189,6 @@ class ServerBuilderGenerator internal constructor(
         rustCrate.withInMemoryInlineModule(writer, builderSymbol.module(), docWriter) {
             renderBuilder(this)
         }
-        if (isBuilderFallible && shape.hasTrait<SyntheticInputTrait>() && codegenContext.isMultiProtocol) {
-            renderProtocolValidationConversions(rustCrate)
-        }
     }
 
     private fun renderBuilder(writer: RustWriter) {
@@ -201,9 +200,9 @@ class ServerBuilderGenerator internal constructor(
                 shouldRenderAsValidationExceptionFieldList = shape.isReachableFromOperationInput(),
             )
 
-            // Only generate converter from `ConstraintViolation` into `RequestRejection` if the structure shape is
+            // Only generate converters out of `ConstraintViolation` if the structure shape is
             // an operation input shape.
-            if (shape.hasTrait<SyntheticInputTrait>() && !codegenContext.isMultiProtocol) {
+            if (shape.hasTrait<SyntheticInputTrait>()) {
                 renderImplFromConstraintViolationForRequestRejection(writer)
             }
 
@@ -248,38 +247,68 @@ class ServerBuilderGenerator internal constructor(
         }
     }
 
+    /**
+     * Renders the conversions out of this operation input's `ConstraintViolation` (plan 2d):
+     *
+     * 1. ONE protocol-free `From<ConstraintViolation> for {ValidationShape}` building the modeled
+     *    validation error value — the only piece the three validation decorators customize.
+     * 2. Per distinct protocol rejection type, a trivial `From<ConstraintViolation> for
+     *    RequestRejection`:
+     *    - http 1.x: boxes that value as `dyn HttpModeledError`; it is serialized exactly once,
+     *      at the protocol boundary, via `ServerProtocol::serialize_error`. Identical on single-
+     *      and multi-protocol crates (no per-protocol serialization remains).
+     *    - http 0.x (`aws-smithy-legacy-http-server`, frozen fork): the rejection still carries
+     *      pre-serialized bytes, so the value is run through the legacy per-protocol error
+     *      serializer here, as before.
+     */
     private fun renderImplFromConstraintViolationForRequestRejection(writer: RustWriter) {
+        writer.rustTemplate(
+            "#{ValidationShapeConverter:W}",
+            "ValidationShapeConverter" to
+                customValidationExceptionWithReasonConversionGenerator
+                    .renderImplFromConstraintViolationForValidationException(),
+        )
+        val validationShapeId =
+            customValidationExceptionWithReasonConversionGenerator.validationExceptionShapeId()
+        val validationShapeSymbol = symbolProvider.toSymbol(model.expectShape(validationShapeId))
         protocolTargets
             .distinctBy { it.protocol.requestRejection(runtimeConfig).path }
             .forEach { target ->
-                val protocol = target.protocol
-                writer.rustTemplate(
-                    """
-                    #{Converter:W}
-                    """,
-                    "Converter" to
-                        customValidationExceptionWithReasonConversionGenerator.renderImplFromConstraintViolationForRequestRejection(protocol),
-                )
-            }
-    }
-
-    private fun renderProtocolValidationConversions(rustCrate: RustCrate) {
-        val constraintViolation =
-            RuntimeType("${builderSymbol.module().fullyQualifiedPath()}::ConstraintViolation")
-        protocolTargets
-            .distinctBy { it.protocol.requestRejection(runtimeConfig).path }
-            .forEach { target ->
-                rustCrate.withModule(target.modules.operations) {
-                    rustTemplate(
+                if (runtimeConfig.httpVersion == HttpVersion.Http1x) {
+                    writer.rustTemplate(
                         """
-                        #{Converter:W}
+                        impl #{From}<ConstraintViolation> for #{RequestRejection} {
+                            fn from(constraint_violation: ConstraintViolation) -> Self {
+                                Self::ConstraintViolation(#{Box}::new(#{ValidationShape}::from(constraint_violation)))
+                            }
+                        }
                         """,
-                        "Converter" to
-                            customValidationExceptionWithReasonConversionGenerator
-                                .renderImplFromConstraintViolationForRequestRejection(
-                                    target.protocol,
-                                    constraintViolation,
-                                ),
+                        *codegenScope,
+                        "RequestRejection" to target.protocol.requestRejection(runtimeConfig),
+                        "ValidationShape" to validationShapeSymbol,
+                    )
+                } else {
+                    writer.rustTemplate(
+                        """
+                        impl #{From}<ConstraintViolation> for #{RequestRejection} {
+                            fn from(constraint_violation: ConstraintViolation) -> Self {
+                                let validation_exception = #{ValidationShape}::from(constraint_violation);
+                                Self::ConstraintViolation(
+                                    #{ErrorSerializer}(&validation_exception)
+                                        .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
+                                )
+                            }
+                        }
+                        """,
+                        *codegenScope,
+                        "RequestRejection" to target.protocol.requestRejection(runtimeConfig),
+                        "ValidationShape" to validationShapeSymbol,
+                        "ErrorSerializer" to
+                            serverValidationExceptionErrorSerializer(
+                                codegenContext,
+                                target.protocol,
+                                validationShapeId,
+                            ),
                     )
                 }
             }

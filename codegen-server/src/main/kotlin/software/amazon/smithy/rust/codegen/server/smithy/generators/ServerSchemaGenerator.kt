@@ -66,10 +66,9 @@ import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
  * trimmed to the SERIALIZE-ONLY surface the schema-decoupled error path needs
  * (`renderSerializeOnly`), with the server-specific behaviors applied:
  *
- * - **`serializeMemberOrder`**: overrides the member write order in
- *   `serialize_members` so error bodies stay byte-identical to the legacy
- *   serializers (REST protocols sort error document members by member name;
- *   RPC protocols use model order — assumptions register F2 follow-up).
+ * - **Canonical model member order** in `serialize_members` (plan 2e): no
+ *   protocol-specific ordering exists in generated code. RPC protocols match
+ *   legacy byte-for-byte; restJson1 error bodies are gated parse-equal.
  * - **Constrained-string newtypes** (`publicConstrainedTypes=true`): members
  *   whose resolved Rust type is a string newtype serialize via `as_str()`.
  * - **No `Unknown` union arm**: server unions are generated with
@@ -91,12 +90,6 @@ class ServerSchemaGenerator(
     private val syntheticMembers: List<SyntheticSchemaMember> = emptyList(),
     /** Override the prefix used for generated static names. Defaults to the symbol name uppercased. */
     val schemaPrefix: String? = null,
-    /**
-     * Overrides the order in which `serialize_members` writes structure
-     * members. Member schema statics, indices, and the schema member array are
-     * unaffected — only the write order changes.
-     */
-    private val serializeMemberOrder: List<MemberShape>? = null,
 ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -186,7 +179,7 @@ class ServerSchemaGenerator(
                 "ShapeSerializer" to smithySchema.resolve("serde::ShapeSerializer"),
                 "SerdeError" to smithySchema.resolve("serde::SerdeError"),
             )
-        val members = serializeMemberOrder ?: (shape as StructureShape).allMembers.values.toList()
+        val members = (shape as StructureShape).allMembers.values.toList()
 
         val memberWrites =
             writable {

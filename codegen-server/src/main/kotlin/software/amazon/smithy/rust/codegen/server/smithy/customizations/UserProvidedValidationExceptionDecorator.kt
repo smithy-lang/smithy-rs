@@ -50,8 +50,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.UnionConstra
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.isKeyConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.generators.isValueConstrained
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.serverValidationExceptionErrorSerializer
 import software.amazon.smithy.rust.codegen.server.smithy.util.isValidationFieldName
 import software.amazon.smithy.rust.codegen.server.smithy.util.isValidationMessage
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
@@ -223,8 +221,9 @@ class UserProvidedValidationExceptionConversionGenerator(
 
     override val shapeId: ShapeId = SHAPE_ID
 
-    override fun renderImplFromConstraintViolationForRequestRejection(
-        protocol: ServerProtocol,
+    override fun validationExceptionShapeId(): ShapeId = validationExceptionStructure.id
+
+    override fun renderImplFromConstraintViolationForValidationException(
         constraintViolation: RuntimeType,
     ): Writable =
         writable {
@@ -232,26 +231,19 @@ class UserProvidedValidationExceptionConversionGenerator(
 
             rustTemplate(
                 """
-                impl #{From}<#{ConstraintViolation}> for #{RequestRejection} {
+                impl #{From}<#{ConstraintViolation}> for #{ValidationException} {
                     fn from(constraint_violation: #{ConstraintViolation}) -> Self {
                         #{FieldCreation}
-                        let validation_exception = #{ValidationException} {
+                        Self {
                             $validationMessageName: #{ValidationMessage},
                             #{FieldListAssignment}
                             #{AdditionalFieldAssignments}
-                        };
-                        Self::ConstraintViolation(
-                            #{ErrorSerializer}(&validation_exception)
-                                .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
-                        )
+                        }
                     }
                 }
                 """,
                 *preludeScope,
-                "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
                 "ConstraintViolation" to constraintViolation,
-                "ErrorSerializer" to
-                    serverValidationExceptionErrorSerializer(codegenContext, protocol, validationExceptionStructure.id),
                 "ValidationException" to codegenContext.symbolProvider.toSymbol(validationExceptionStructure),
                 "FieldCreation" to
                     writable {

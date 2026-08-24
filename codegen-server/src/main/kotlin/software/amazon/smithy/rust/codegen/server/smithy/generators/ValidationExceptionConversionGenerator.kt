@@ -14,7 +14,6 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 
 /**
  * Collection of methods that will be invoked by the respective generators to generate code to convert constraint
@@ -25,11 +24,23 @@ interface ValidationExceptionConversionGenerator {
     val shapeId: ShapeId
 
     /**
-     * Convert from a top-level operation input's constraint violation into
-     * `aws_smithy_http_server::rejection::RequestRejection`.
+     * The id of the validation error structure IN THE MODEL that this generator converts
+     * constraint violations into. Usually [shapeId]; decorators whose [shapeId] is a
+     * sentinel that is not itself a model shape (e.g. the user-provided validation
+     * exception) override this with the real structure's id.
      */
-    fun renderImplFromConstraintViolationForRequestRejection(
-        protocol: ServerProtocol,
+    fun validationExceptionShapeId(): ShapeId = shapeId
+
+    /**
+     * The protocol-free conversion from a top-level operation input's constraint
+     * violation into the modeled validation error shape (default
+     * `smithy.framework#ValidationException` or a decorator-customized shape):
+     * `impl From<ConstraintViolation> for {ValidationShape}`, building the value
+     * (message, field list — frozen format strings). This is the ONLY place the
+     * three validation decorators customize; serialization happens once, at the
+     * protocol boundary, via `ServerProtocol::serialize_error`.
+     */
+    fun renderImplFromConstraintViolationForValidationException(
         constraintViolation: RuntimeType = RuntimeType("ConstraintViolation"),
     ): Writable
 

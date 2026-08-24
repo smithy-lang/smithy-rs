@@ -1161,18 +1161,42 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             val readInitialRequest =
                                 writable {
                                     if (httpBindingResolver.isRpcProtocol()) {
+                                        // A failure to receive/parse the initial-request frame is a
+                                        // wire-level deserialization failure. On http 1.x it maps to the
+                                        // schema-deserialize rejection (the `ConstraintViolation` variant
+                                        // now carries the modeled validation error, plan 2d); the frozen
+                                        // http 0.x fork keeps the legacy pre-serialized mapping.
+                                        val initialRequestErrorMapping =
+                                            if (runtimeConfig.httpVersion == HttpVersion.Http1x) {
+                                                writable {
+                                                    rustTemplate(
+                                                        "|ev_error| #{RequestRejection}::SchemaDeserialize(#{SerdeError}::custom(format!(\"{ev_error}\")))",
+                                                        *codegenScope,
+                                                        "SerdeError" to
+                                                            RuntimeType.smithySchema(runtimeConfig).resolve("serde::SerdeError"),
+                                                    )
+                                                }
+                                            } else {
+                                                writable {
+                                                    rustTemplate(
+                                                        """
+                                                        |ev_error| #{RequestRejection}::ConstraintViolation(
+                                                            #{AllowUselessConversion}
+                                                            format!("{ev_error}").into()
+                                                        )
+                                                        """,
+                                                        *codegenScope,
+                                                        "AllowUselessConversion" to Attribute.AllowClippyUselessConversion.writable(),
+                                                    )
+                                                }
+                                            }
                                         rustTemplate(
                                             """
                                             let mut receiver = receiver;
                                             if let Some(_initial_event) = receiver
                                                 .try_recv_initial(#{InitialMessageType}::Request)
                                                 .await
-                                                .map_err(
-                                                    |ev_error| #{RequestRejection}::ConstraintViolation(
-                                                        #{AllowUselessConversion}
-                                                        format!("{ev_error}").into()
-                                                    )
-                                                )? {
+                                                .map_err(#{initialRequestErrorMapping:W})? {
                                                 #{parseInitialRequest}
                                             }
                                             """,
@@ -1181,7 +1205,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                                 RuntimeType.smithyHttp(runtimeConfig)
                                                     .resolve("event_stream::InitialMessageType"),
                                             "parseInitialRequest" to parseInitialRequest,
-                                            "AllowUselessConversion" to Attribute.AllowClippyUselessConversion.writable(),
+                                            "initialRequestErrorMapping" to initialRequestErrorMapping,
                                             *codegenScope,
                                         )
                                     }

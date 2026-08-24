@@ -49,10 +49,9 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.ShapeReachableFr
  * (serialize-only — the server's Phase 1 schema-serde consumer is error
  * serialization):
  * - the `Schema<'static>` statics and the `SCHEMA` const,
- * - the `SerializableStruct` impl, with member writes in the order the legacy
- *   error serializer used — member-name-sorted for REST protocols, model member
- *   order for RPC protocols — which the byte-identical error-body requirement
- *   hinges on (assumptions register F2 follow-up),
+ * - the `SerializableStruct` impl, writing members in canonical model order
+ *   (plan 2e — the legacy REST member-name sort is deliberately gone; restJson1
+ *   error-body gates are parse-equal at the top level),
  * - for `@error` shapes, `ModeledError` and `HttpModeledError` impls with the
  *   HTTP status resolved at codegen time (`@httpError` code, else the
  *   `@error` fault default: client = 400, server = 500).
@@ -70,12 +69,13 @@ class ServerSchemaDecorator : ServerCodegenDecorator {
         if (codegenContext.runtimeConfig.httpVersion != HttpVersion.Http1x) {
             return
         }
-        // Schema serde is opt-in (like `http-1x`): `schemaSerde: true` in
-        // codegenConfig enables it; the default legacy-only crate is also the
-        // compile-time / binary-size comparison baseline.
-        if (!codegenContext.settings.codegenConfig.schemaSerde) {
-            return
-        }
+        // NOTE: this runs on every http-1.x crate, NOT just `schemaSerde: true`
+        // opt-ins. The validation-rejection seam (plan 2d) has the runtime's
+        // `RequestRejection::ConstraintViolation` carry
+        // `Box<dyn HttpModeledError + Send>` on all http-1.x protocols, so the
+        // modeled validation error (an operation error, hence in this closure)
+        // must be schema-serializable even when the crate otherwise serves the
+        // legacy code paths.
         val closure =
             errorClosure(
                 codegenContext.model,
@@ -92,50 +92,20 @@ class ServerSchemaDecorator : ServerCodegenDecorator {
                     parent = schemaSerdeModule,
                 )
             rustCrate.withModule(shapeModule) {
+                // Member write order is canonical MODEL order everywhere (plan 2e):
+                // the legacy REST-protocol member-name sort was protocol knowledge
+                // baked into codegen and is deliberately gone. restJson1 error-body
+                // gates compare parse-equal at the top level; RPC protocols already
+                // used model order and stay byte-exact.
                 ServerSchemaGenerator(
                     codegenContext,
                     this,
                     shape,
-                    serializeMemberOrder = errorSerializeOrder(codegenContext, shape),
                 ).renderSerializeOnly()
                 shape.getTrait<ErrorTrait>()?.also { errorTrait ->
                     renderModeledErrorImpls(codegenContext, this, shape, errorTrait)
                 }
             }
-        }
-    }
-
-    /**
-     * The member write order the legacy error serializer used, so that
-     * schema-driven error bodies stay byte-identical (assumptions register F2
-     * follow-up):
-     *
-     * - REST protocols (restJson1, restXml): `HttpTraitHttpBindingResolver.mappedBindings`
-     *   sorts error-response bindings by member name, so the legacy body wrote
-     *   document members in member-name order (e.g. `fieldList` before `message`
-     *   on `ValidationException`).
-     * - RPC protocols (awsJson 1.0/1.1, rpcv2Cbor): `StaticHttpBindingResolver`
-     *   binds `shape.members()` verbatim — model member order, the
-     *   [ServerSchemaGenerator] default.
-     *
-     * Only `@error` shapes get the override: legacy *nested* structure
-     * serializers always use model member order.
-     *
-     * Known limitation (multi-protocol services): the legacy per-protocol
-     * serializers could order the same shape differently per protocol; a
-     * single `serialize_members` impl follows the service's primary protocol.
-     */
-    private fun errorSerializeOrder(
-        codegenContext: ServerCodegenContext,
-        shape: Shape,
-    ): List<MemberShape>? {
-        if (shape !is StructureShape || !shape.hasTrait(ErrorTrait::class.java)) {
-            return null
-        }
-        return if (isRestFamilyProtocol(codegenContext.protocol)) {
-            shape.members().sortedBy { it.memberName }
-        } else {
-            null
         }
     }
 
@@ -175,19 +145,6 @@ class ServerSchemaDecorator : ServerCodegenDecorator {
     }
 
     companion object {
-        private val REST_FAMILY_PROTOCOLS =
-            setOf(
-                ShapeId.from("aws.protocols#restJson1"),
-                ShapeId.from("aws.protocols#restXml"),
-            )
-
-        /**
-         * REST-family protocols sort top-level error document members by member
-         * name (`HttpTraitHttpBindingResolver.mappedBindings`); RPC-family
-         * protocols (awsJson 1.0/1.1, rpcv2Cbor) use model order.
-         */
-        fun isRestFamilyProtocol(protocolId: ShapeId): Boolean = protocolId in REST_FAMILY_PROTOCOLS
-
         /**
          * The set of structure/union shapes reachable from any *schema-safe*
          * operation error of [service] (the error shapes themselves included).

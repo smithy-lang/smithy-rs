@@ -129,7 +129,8 @@ class EventStreamErrorMarshallerGenerator(
                 rust("let mut headers = Vec::new();")
                 addStringHeader(":message-type", """"exception".into()""")
                 if (errorsShape.errorMembers.isEmpty()) {
-                    rust("let payload = Vec::new();")
+                    // No trailing `;`: the shared `; Ok(...)` epilogue below terminates the statement.
+                    rust("let payload = Vec::new()")
                 } else {
                     rustBlock("let payload = match _input") {
                         errorsShape.errorMembers.forEach { error ->
