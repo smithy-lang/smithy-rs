@@ -16,11 +16,21 @@ open class ServerProtocolGenerator(
     /**
      * The server implementation uses this method to generate implementations of the `from_request` and `into_response`
      * traits for operation input and output shapes, respectively.
+     *
+     * @param generateSharedTypes whether protocol-independent supporting types should be emitted by this invocation
      */
-    fun renderOperation(
+    fun renderSharedOperationTypes(
         operationWriter: RustWriter,
         operationShape: OperationShape,
     ) {
-        traitGenerator.generateTraitImpls(operationWriter, operationShape)
+        traitGenerator.generateSharedTypes(operationWriter, operationShape)
+    }
+
+    fun renderOperation(
+        operationWriter: RustWriter,
+        operationShape: OperationShape,
+        generateSharedTypes: Boolean = true,
+    ) {
+        traitGenerator.generateTraitImpls(operationWriter, operationShape, generateSharedTypes)
     }
 }

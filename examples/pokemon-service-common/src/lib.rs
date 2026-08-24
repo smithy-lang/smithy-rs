@@ -18,13 +18,14 @@ use async_stream::stream;
 use aws_smithy_http_client::{tls, Connector};
 use aws_smithy_http_server_metrics::operation::Metrics;
 use aws_smithy_runtime_api::client::http::HttpConnector;
+use aws_smithy_types::{body::SdkBody, byte_stream::ByteStream};
 use http::Uri;
 use pokemon_service_server_sdk::{
     error, input,
     model::{self, CapturingPayload},
     output,
     server::Extension,
-    types::{Blob, ByteStream, SdkBody},
+    types::Blob,
 };
 use rand::{seq::SliceRandom, Rng};
 use tracing_subscriber::{prelude::*, EnvFilter};

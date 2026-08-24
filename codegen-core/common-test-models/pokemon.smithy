@@ -3,6 +3,8 @@ $version: "2"
 namespace com.aws.example
 
 use aws.protocols#restJson1
+use aws.protocols#restXml
+use smithy.protocols#rpcv2Cbor
 use smithy.framework#ValidationException
 use com.aws.example#PokemonSpecies
 use com.aws.example#GetServerStatistics
@@ -13,6 +15,8 @@ use com.aws.example#ResourceNotFoundException
 /// The Pokémon Service allows you to retrieve information about Pokémon species.
 @title("Pokémon Service")
 @restJson1
+@restXml
+@rpcv2Cbor
 service PokemonService {
     version: "2024-03-18"
     resources: [

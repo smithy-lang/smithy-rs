@@ -18,7 +18,7 @@ use crate::codec::serializer::QueryShapeSerializer;
 
 #[derive(Debug)]
 pub struct AwsQueryProtocol {
-    protocol_id: ShapeId,
+    protocol_id: ShapeId<'static>,
     service_version: String,
 }
 
@@ -35,14 +35,14 @@ impl ClientProtocolInner for AwsQueryProtocol {
     type Request = Request;
     type Response = Response;
 
-    fn protocol_id(&self) -> &ShapeId {
+    fn protocol_id(&self) -> &ShapeId<'static> {
         &self.protocol_id
     }
 
     fn serialize_request(
         &self,
         input: &dyn SerializableStruct,
-        input_schema: &Schema,
+        input_schema: &Schema<'_>,
         endpoint: &str,
         cfg: &ConfigBag,
     ) -> Result<Request, SerdeError> {
@@ -81,7 +81,7 @@ impl ClientProtocolInner for AwsQueryProtocol {
     fn deserialize_response<'a>(
         &self,
         response: &'a Response,
-        _output_schema: &Schema,
+        _output_schema: &Schema<'_>,
         _cfg: &ConfigBag,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
         use aws_smithy_schema::codec::Codec;
@@ -91,9 +91,8 @@ impl ClientProtocolInner for AwsQueryProtocol {
             .body()
             .bytes()
             .ok_or_else(|| SerdeError::custom("response body not available"))?;
-        let body_str = std::str::from_utf8(body).map_err(|e| SerdeError::InvalidInput {
-            message: e.to_string(),
-        })?;
+        let body_str =
+            std::str::from_utf8(body).map_err(|e| SerdeError::invalid_input(e.to_string()))?;
 
         // Strip the AWS Query response envelope down to the `<...Result>` (or
         // `<Error>`) element, inclusive of its tags, so the XML deserializer
@@ -174,7 +173,7 @@ mod tests {
         }
     }
 
-    static SCHEMA: Schema = Schema::new(shape_id!("test", "Input"), ShapeType::Structure);
+    static SCHEMA: Schema<'static> = Schema::new(shape_id!("test", "Input"), ShapeType::Structure);
 
     fn cfg_with_metadata() -> ConfigBag {
         let mut layer = Layer::new("test");
@@ -233,9 +232,11 @@ mod tests {
         let xml = "<GetUserResponse><GetUserResult><Name>Alice</Name><Age>30</Age></GetUserResult></GetUserResponse>";
         let response = Response::new(200u16.try_into().unwrap(), SdkBody::from(xml));
 
-        static NAME: Schema = Schema::new_member(shape_id!("t", "S"), ShapeType::String, "Name", 0);
-        static AGE: Schema = Schema::new_member(shape_id!("t", "S"), ShapeType::Integer, "Age", 1);
-        static OUT_SCHEMA: Schema =
+        static NAME: Schema<'static> =
+            Schema::new_member(shape_id!("t", "S"), ShapeType::String, "Name", 0);
+        static AGE: Schema<'static> =
+            Schema::new_member(shape_id!("t", "S"), ShapeType::Integer, "Age", 1);
+        static OUT_SCHEMA: Schema<'static> =
             Schema::new_struct(shape_id!("t", "S"), ShapeType::Structure, &[&NAME, &AGE]);
 
         let mut deser = AwsQueryProtocol::new("1.0")

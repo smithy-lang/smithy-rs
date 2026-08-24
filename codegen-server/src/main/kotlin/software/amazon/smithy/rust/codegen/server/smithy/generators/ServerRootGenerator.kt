@@ -99,7 +99,7 @@ open class ServerRootGenerator(
                         //!     .expect("unable to parse the server bind address and port");
                         //! #{Hyper0}::Server::bind(&bind).serve(server).await.unwrap();
                         //! ## }
-                        //! 
+                        //!
                         //! ```
                         """,
                         "Hyper0" to ServerCargoDependency.hyperDev(codegenContext.runtimeConfig).toType(),
@@ -400,6 +400,12 @@ open class ServerRootGenerator(
             } else {
                 ""
             }
+        val routerReExport =
+            if (codegenContext.isMultiProtocol) {
+                "${serviceName}Router,"
+            } else {
+                ""
+            }
         rustWriter.rust(
             """
             pub use crate::service::{
@@ -408,6 +414,7 @@ open class ServerRootGenerator(
                 ${serviceName}ConfigBuilder,
                 $configErrorReExport
                 ${serviceName}Builder,
+                $routerReExport
                 MissingOperationsError
             };
             """,

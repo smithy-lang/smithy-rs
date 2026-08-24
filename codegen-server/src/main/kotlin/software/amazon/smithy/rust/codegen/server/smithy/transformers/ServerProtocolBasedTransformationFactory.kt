@@ -18,7 +18,6 @@ import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.utils.SmithyBuilder
 import software.amazon.smithy.utils.ToSmithyBuilder
 
@@ -34,10 +33,9 @@ import software.amazon.smithy.utils.ToSmithyBuilder
 object ServerProtocolBasedTransformationFactory {
     fun transform(
         model: Model,
-        settings: ServerRustSettings,
+        selectedProtocolIds: Set<ShapeId>,
     ): Model {
-        val service = settings.getService(model)
-        if (!service.hasTrait<Rpcv2CborTrait>()) {
+        if (Rpcv2CborTrait.ID !in selectedProtocolIds || selectedProtocolIds.size > 1) {
             return model
         }
 

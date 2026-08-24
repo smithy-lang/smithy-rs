@@ -15,6 +15,11 @@ publish = false
 # are specifically noted in comments above the corresponding dependency in this file.
 pokemon-service-client = { path = "../pokemon-service-client/", features = ["behavior-version-latest"] }
 
+# Required by the multi-protocol CLI to select a protocol through the generated config-bag setter.
+aws-smithy-cbor = { path = "../../rust-runtime/aws-smithy-cbor/" }
+aws-smithy-json = { path = "../../rust-runtime/aws-smithy-json/" }
+aws-smithy-xml = { path = "../../rust-runtime/aws-smithy-xml/" }
+
 # Required for `Storable` and `StoreReplace` in `response-header-interceptor` example.
 aws-smithy-types = { path = "../../rust-runtime/aws-smithy-types/" }
 
@@ -38,3 +43,4 @@ hyper-rustls = "0.27"
 http = "1"
 uuid = {version="1.4.1", features = ["v4"]}
 thiserror = "1.0.49"
+clap = { version = "4", features = ["derive"] }

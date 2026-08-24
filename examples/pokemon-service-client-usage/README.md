@@ -30,6 +30,15 @@ folder. To run an example, pass its name to the `cargo run --example` command, e
 cargo run --example simple-client
 ```
 
+To invoke a multi-protocol Pokemon server through every modeled protocol:
+
+```bash
+cargo run --example multi-protocol-cli -- --protocol all
+```
+
+Use `--protocol rpc-v2-cbor`, `--protocol rest-json1`, or `--protocol rest-xml`
+to invoke one protocol.
+
 ## List of examples
 
 | Rust Example                   | Description                                                             |

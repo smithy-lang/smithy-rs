@@ -8,4 +8,5 @@ pub mod router;
 pub mod runtime_error;
 
 /// [AWS restXml](https://smithy.io/2.0/aws/protocols/aws-restxml-protocol.html) protocol.
+#[derive(Debug, Clone, Copy)]
 pub struct RestXml;

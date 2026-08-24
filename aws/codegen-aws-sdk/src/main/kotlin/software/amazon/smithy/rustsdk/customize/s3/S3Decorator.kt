@@ -19,6 +19,7 @@ import software.amazon.smithy.rulesengine.traits.EndpointTestOperationInput
 import software.amazon.smithy.rulesengine.traits.EndpointTestsTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.SyntheticNoAuthTrait
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
@@ -151,6 +152,25 @@ class S3Decorator : ClientCodegenDecorator {
                                 }
                             }
 
+                            is OperationSection.PopulateErrorMetadataExtras -> {
+                                // S3 HEAD responses have no body to carry an error code, so a 404
+                                // with an empty body maps to `NotFound`. The legacy codegen path
+                                // applies this in `S3ProtocolOverride::parseHttpErrorMetadata`,
+                                // but the schema-serde path resolves error metadata via the
+                                // runtime `parse_error_metadata` and never calls that override, so
+                                // the convention is reapplied here. Guarded on a non-empty body so
+                                // a real 404 error code (e.g. `NoSuchKey`) is never clobbered.
+                                if (SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
+                                    rustTemplate(
+                                        """
+                                        if ${section.responseBodyName}.is_empty() && ${section.responseStatusName} == 404 {
+                                            ${section.builderName} = ${section.builderName}.code("NotFound");
+                                        }
+                                        """,
+                                    )
+                                }
+                            }
+
                             is OperationSection.RetryClassifiers -> {
                                 section.registerRetryClassifier(this) {
                                     rustTemplate(
@@ -237,7 +257,7 @@ class S3ProtocolOverride(codegenContext: CodegenContext) : RestXml(codegenContex
         )
 
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType {
-        return ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
+        return ProtocolFunctions.crossOperationFn(codegenContext, "parse_http_error_metadata") { fnName ->
             rustBlockTemplate(
                 "pub fn $fnName(response_status: u16, _response_headers: &#{Headers}, response_body: &[u8]) -> #{Result}<#{ErrorBuilder}, #{XmlDecodeError}>",
                 *errorScope,

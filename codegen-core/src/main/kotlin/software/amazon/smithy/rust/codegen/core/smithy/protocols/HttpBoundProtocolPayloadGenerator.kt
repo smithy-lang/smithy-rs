@@ -404,7 +404,7 @@ class HttpBoundProtocolPayloadGenerator(
 
             is DocumentShape -> {
                 rust(
-                    "#T($payloadName)",
+                    "#T($payloadName)?",
                     serializer.documentSerializer(),
                 )
             }

@@ -191,6 +191,7 @@ class JsonSerializerGenerator(
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "JsonObjectWriter" to RuntimeType.smithyJson(runtimeConfig).resolve("serialize::JsonObjectWriter"),
             "JsonValueWriter" to RuntimeType.smithyJson(runtimeConfig).resolve("serialize::JsonValueWriter"),
+            "JsonCodecSettings" to RuntimeType.smithyJson(runtimeConfig).resolve("codec::JsonCodecSettings"),
             "ByteSlab" to RuntimeType.ByteSlab,
         )
     private val serializerUtil = SerializerUtil(model, symbolProvider)
@@ -258,7 +259,7 @@ class JsonSerializerGenerator(
     }
 
     override fun unsetStructure(structure: StructureShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn("rest_json_unset_struct_payload") { fnName ->
+        protocolFunctions.crossOperationFn("rest_json_unset_struct_payload") { fnName ->
             rustTemplate(
                 """
                 pub fn $fnName() -> #{ByteSlab} {
@@ -270,7 +271,7 @@ class JsonSerializerGenerator(
         }
 
     override fun unsetUnion(union: UnionShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn("rest_json_unset_union_payload") { fnName ->
+        protocolFunctions.crossOperationFn("rest_json_unset_union_payload") { fnName ->
             rustTemplate(
                 "pub fn $fnName() -> #{ByteSlab} { #{Vec}::new() }",
                 *codegenScope,
@@ -301,13 +302,13 @@ class JsonSerializerGenerator(
     }
 
     override fun documentSerializer(): RuntimeType {
-        return ProtocolFunctions.crossOperationFn("serialize_document") { fnName ->
+        return protocolFunctions.crossOperationFn("serialize_document") { fnName ->
             rustTemplate(
                 """
-                pub fn $fnName(input: &#{Document}) -> #{ByteSlab} {
+                pub fn $fnName(input: &#{Document}) -> std::result::Result<#{ByteSlab}, #{Error}> {
                     let mut out = String::new();
-                    #{JsonValueWriter}::new(&mut out).document(input);
-                    out.into_bytes()
+                    #{JsonValueWriter}::new(&mut out).document(input, &#{JsonCodecSettings}::default())?;
+                    Ok(out.into_bytes())
                 }
                 """,
                 "Document" to RuntimeType.document(runtimeConfig), *codegenScope,
@@ -483,7 +484,11 @@ class JsonSerializerGenerator(
                     serializeUnion(Context(objectName, value, target))
                 }
 
-            is DocumentShape -> rust("$writer.document(${value.asRef()});")
+            is DocumentShape ->
+                rustTemplate(
+                    "$writer.document(${value.asRef()}, &#{JsonCodecSettings}::default())?;",
+                    *codegenScope,
+                )
             else -> TODO(target.toString())
         }
     }

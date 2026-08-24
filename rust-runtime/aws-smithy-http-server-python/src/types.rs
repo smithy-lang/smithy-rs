@@ -31,6 +31,7 @@ use pyo3::{
     exceptions::{PyRuntimeError, PyStopAsyncIteration, PyTypeError},
     iter::IterNextOutput,
     prelude::*,
+    types::{PyBytes, PyDateTime},
 };
 use tokio::{runtime::Handle, sync::Mutex};
 
@@ -600,6 +601,34 @@ impl IntoPy<PyObject> for Document {
             D::String(str) => str.into_py(py),
             D::Bool(bool) => bool.into_py(py),
             D::Null => py.None(),
+            // Blob → Python `bytes`. Native binary representation; no encoding
+            // is applied here.
+            D::Blob(b) => PyBytes::new(py, &b).to_object(py),
+            // Timestamp → Python `datetime.datetime`. The conversion goes
+            // through `as_secs_f64()` and `PyDateTime::from_timestamp`, which
+            // produces a UTC-naive datetime. Out-of-range timestamp values
+            // (extremely far past/future) fall back to `None`.
+            D::Timestamp(ts) => PyDateTime::from_timestamp(py, ts.as_secs_f64(), None)
+                .map(|dt| dt.to_object(py))
+                .unwrap_or_else(|_| py.None()),
+            // BigInteger → Python `int` when it fits in `i128`; otherwise the
+            // raw decimal string (Python `int` accepts arbitrary precision but
+            // PyO3 only ships `IntoPy` for fixed-width integers, so the
+            // string fallback is the safe path for values beyond `i128`).
+            D::BigInteger(bi) => bi
+                .as_ref()
+                .parse::<i128>()
+                .map(|v| v.into_py(py))
+                .unwrap_or_else(|_| bi.as_ref().to_string().into_py(py)),
+            // BigDecimal → Python `str`. Python's stdlib has no
+            // arbitrary-precision decimal type by default (`decimal.Decimal`
+            // exists but isn't a builtin), so the canonical
+            // round-trippable form is the decimal string.
+            D::BigDecimal(bd) => bd.as_ref().to_string().into_py(py),
+            // `aws_smithy_types::Document` is `#[non_exhaustive]`. New
+            // variants land in the binding as `None` until a follow-up
+            // adds a dedicated arm.
+            _ => py.None(),
         }
     }
 }
@@ -608,7 +637,27 @@ impl FromPyObject<'_> for Document {
     fn extract(obj: &PyAny) -> PyResult<Self> {
         use aws_smithy_types::{Document as D, Number};
 
-        if let Ok(obj) = obj.extract::<HashMap<String, Document>>() {
+        if let Ok(b) = obj.extract::<&PyBytes>() {
+            // `bytes` MUST be tried before `Vec<Self>` — a Python `bytes`
+            // object is iterable and each element is a u8 int that would
+            // happily extract as `Document::Number(PosInt(_))`, mis-typing
+            // the value as an array of integers instead of a blob.
+            Ok(Self(D::Blob(b.as_bytes().to_vec())))
+        } else if obj.is_instance_of::<PyDateTime>() {
+            // `datetime.datetime` MUST be tried before any numeric extract —
+            // Python's `int(some_datetime)` is invalid but `.timestamp()` on a
+            // datetime returns a float, and we want to preserve the timestamp
+            // semantics rather than route through Float.
+            //
+            // For naive datetime objects, Python's `.timestamp()` interprets
+            // the value in the local timezone; callers that want explicit UTC
+            // must attach `tzinfo=datetime.timezone.utc` on the Python side.
+            // This matches how Python's stdlib treats naive datetimes.
+            let secs = obj.call_method0("timestamp")?.extract::<f64>()?;
+            Ok(Self(D::Timestamp(
+                aws_smithy_types::DateTime::from_secs_f64(secs),
+            )))
+        } else if let Ok(obj) = obj.extract::<HashMap<String, Document>>() {
             Ok(Self(D::Object(
                 obj.into_iter().map(|(k, v)| (k, v.0)).collect(),
             )))
@@ -629,6 +678,14 @@ impl FromPyObject<'_> for Document {
         } else if obj.is_none() {
             Ok(Self(D::Null))
         } else {
+            // Note: `Document` carries `BigInteger` and `BigDecimal` variants
+            // that have no canonical Python builtin counterparts. The IntoPy
+            // direction emits BigInteger as `int` (when it fits in i128) or
+            // a string, and BigDecimal as a string. Python `str` values
+            // round-trip back as `Document::String`, not BigDecimal — losing
+            // the arbitrary-precision semantics. Customers that need
+            // round-trip fidelity should construct the types directly on the
+            // Rust side rather than passing them through Python.
             Err(PyTypeError::new_err(format!(
                 "'{obj}' cannot be converted to 'Document'",
             )))

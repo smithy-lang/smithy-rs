@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-cbor"
-version = "0.62.0"
+version = "0.62.1"
 authors = [
     "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
     "David Pérez <d@vidp.dev>",
@@ -27,7 +27,7 @@ aws-smithy-types = { path = "../aws-smithy-types" }
 num-bigint = "0.4.6"
 
 [dev-dependencies]
-criterion = "0.5.1"
+criterion = "0.8.2"
 
 [[bench]]
 name = "string"

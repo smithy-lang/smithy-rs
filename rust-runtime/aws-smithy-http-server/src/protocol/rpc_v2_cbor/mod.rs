@@ -9,4 +9,5 @@ pub mod runtime_error;
 
 /// [Smithy RPC v2 CBOR](https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html)
 /// protocol.
+#[derive(Debug, Clone, Copy)]
 pub struct RpcV2Cbor;

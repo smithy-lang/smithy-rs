@@ -8,9 +8,11 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators.protocol
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -25,6 +27,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDesc
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RpcV2Cbor
@@ -41,6 +44,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.restJsonFieldNa
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.CborSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
@@ -54,6 +58,9 @@ import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerRestJso
 import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
 
 interface ServerProtocol : Protocol {
+    /** The protocol's ShapeId for code generation purposes (e.g., aws.protocols#restJson1). */
+    val protocolShapeId: ShapeId
+
     /** The path such that `aws_smithy_http_server::protocol::$path` points to the protocol's module. */
     val protocolModulePath: String
 
@@ -120,6 +127,36 @@ interface ServerProtocol : Protocol {
     fun deserializePayloadErrorType(binding: HttpBindingDescriptor): RuntimeType
 }
 
+/** Returns the private module that owns all generated artifacts for one protocol. */
+fun serverProtocolRootModule(protocolId: ShapeId): RustModule.LeafModule =
+    RustModule.private("protocol_${protocolId.name.toSnakeCase()}")
+
+/** Returns the legacy serde module, or the private serde module owned by one protocol. */
+fun serverProtocolSerdeModule(
+    protocolId: ShapeId,
+    isMultiProtocol: Boolean,
+): RustModule.LeafModule =
+    if (isMultiProtocol) {
+        RustModule.private("serde", parent = serverProtocolRootModule(protocolId))
+    } else {
+        ProtocolFunctions.defaultSerDeModule
+    }
+
+/** Returns the legacy event-stream module, or the private event-stream module owned by one protocol. */
+fun serverEventStreamSerdeModule(
+    protocolId: ShapeId,
+    isMultiProtocol: Boolean,
+): RustModule.LeafModule =
+    if (isMultiProtocol) {
+        RustModule.private("event_stream_serde", parent = serverProtocolRootModule(protocolId))
+    } else {
+        RustModule.private("event_stream_serde")
+    }
+
+/** Returns the private module containing one protocol's operation and validation trait implementations. */
+fun serverProtocolOperationsModule(protocolId: ShapeId): RustModule.LeafModule =
+    RustModule.private("operations", parent = serverProtocolRootModule(protocolId))
+
 fun returnSymbolToParseFn(codegenContext: ServerCodegenContext): (Shape) -> ReturnSymbolToParse {
     fun returnSymbolToParse(shape: Shape): ReturnSymbolToParse =
         if (shape.canReachConstrainedShape(codegenContext.model, codegenContext.symbolProvider)) {
@@ -153,6 +190,8 @@ class ServerAwsJsonProtocol(
     private val additionalParserCustomizations: List<JsonParserCustomization> = listOf(),
 ) : AwsJson(serverCodegenContext, awsJsonVersion), ServerProtocol {
     private val runtimeConfig = codegenContext.runtimeConfig
+
+    override val protocolShapeId: ShapeId = serverCodegenContext.protocol
 
     override val protocolModulePath: String
         get() =
@@ -238,6 +277,8 @@ class ServerRestJsonProtocol(
 ) : RestJson(serverCodegenContext), ServerProtocol {
     val runtimeConfig = codegenContext.runtimeConfig
 
+    override val protocolShapeId: ShapeId = serverCodegenContext.protocol
+
     override val protocolModulePath: String = "rest_json_1"
 
     override fun structuredDataParser(): StructuredDataParserGenerator =
@@ -280,9 +321,12 @@ class ServerRestJsonProtocol(
 }
 
 class ServerRestXmlProtocol(
-    codegenContext: CodegenContext,
-) : RestXml(codegenContext), ServerProtocol {
-    val runtimeConfig = codegenContext.runtimeConfig
+    private val serverCodegenContext: ServerCodegenContext,
+) : RestXml(serverCodegenContext), ServerProtocol {
+    val runtimeConfig = serverCodegenContext.runtimeConfig
+
+    override val protocolShapeId: ShapeId = serverCodegenContext.protocol
+
     override val protocolModulePath = "rest_xml"
 
     override fun markerStruct() = ServerRuntimeType.protocol("RestXml", protocolModulePath, runtimeConfig)
@@ -317,6 +361,8 @@ class ServerRpcV2CborProtocol(
     private val serverCodegenContext: ServerCodegenContext,
 ) : RpcV2Cbor(serverCodegenContext), ServerProtocol {
     val runtimeConfig = codegenContext.runtimeConfig
+
+    override val protocolShapeId: ShapeId = serverCodegenContext.protocol
 
     override val protocolModulePath = "rpc_v2_cbor"
 
