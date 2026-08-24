@@ -68,7 +68,11 @@ jobs:
       contents: read
     needs:
     - get-pr-info
-    runs-on: ubuntu-latest
+    # The other three workflows that build this image all use the 8-core runner. On `ubuntu-latest`
+    # the build is killed part-way -- a dispatch against a fork PR on 2026-08-20 ran 64 minutes and
+    # died with the step still in progress. That path had been broken for any fork PR whose image
+    # tag wasn't already in ECR, and `fork-canary.yml` now calls this workflow.
+    runs-on: smithy_ubuntu-latest_8-core
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
