@@ -10,7 +10,7 @@
 //!
 //! This provider is included automatically when profiles are loaded.
 
-use super::cache::load_cached_token;
+use super::cache::{load_cached_token, CachedSsoTokenError};
 use super::token::SsoTokenProviderError;
 use crate::identity::IdentityCache;
 use crate::provider_config::ProviderConfig;
@@ -257,6 +257,27 @@ fn resolved_token_error_is_non_recoverable(err: &TokenError) -> bool {
         })
 }
 
+// Classifies a failure from the legacy `load_cached_token` path. A cached SSO token that is missing
+// or malformed is non-recoverable: it requires re-authentication (`aws sso login`) and retrying the
+// load will not fix it. Transient or environmental failures are left recoverable so that static
+// stability continues serving the last successfully cached credentials.
+fn cached_sso_token_error_is_non_recoverable(err: &CachedSsoTokenError) -> bool {
+    match err {
+        // Malformed token file, or a required field that is missing or cannot be parsed.
+        CachedSsoTokenError::MissingField(_)
+        | CachedSsoTokenError::InvalidField { .. }
+        | CachedSsoTokenError::JsonError(_)
+        | CachedSsoTokenError::FailedToFormatDateTime { .. } => true,
+        // A missing token file is non-recoverable; other I/O errors (e.g. a transient permission or
+        // resource issue) may succeed on a later attempt, so they remain recoverable.
+        CachedSsoTokenError::IoError { source, .. } => {
+            source.kind() == std::io::ErrorKind::NotFound
+        }
+        // No positive knowledge that a retry will fail, so keep these recoverable.
+        CachedSsoTokenError::NoHomeDirectory | CachedSsoTokenError::Other(_) => false,
+    }
+}
+
 fn get_role_credentials_error_is_non_recoverable(err: &GetRoleCredentialsError) -> bool {
     matches!(err, GetRoleCredentialsError::UnauthorizedException(_))
 }
@@ -284,7 +305,13 @@ async fn load_sso_credentials(
         // Backwards compatible token loading that uses `start_url` instead of `session_name`
         load_cached_token(env, fs, &sso_provider_config.start_url)
             .await
-            .map_err(CredentialsError::non_recoverable)?
+            .map_err(|err| {
+                if cached_sso_token_error_is_non_recoverable(&err) {
+                    CredentialsError::non_recoverable(err)
+                } else {
+                    CredentialsError::provider_error(err)
+                }
+            })?
     };
 
     let config = sdk_config
@@ -375,5 +402,50 @@ mod test {
                     .build()
             )
         ));
+    }
+
+    #[test]
+    fn cached_sso_token_error_classification() {
+        use std::io::{Error as IoError, ErrorKind};
+        use std::path::PathBuf;
+
+        // Missing or malformed cached tokens require re-authentication -> non-recoverable.
+        for err in [
+            CachedSsoTokenError::MissingField("accessToken"),
+            CachedSsoTokenError::InvalidField {
+                field: "expiresAt",
+                source: "invalid".into(),
+            },
+            CachedSsoTokenError::JsonError("invalid json".into()),
+            CachedSsoTokenError::FailedToFormatDateTime {
+                source: "bad datetime".into(),
+            },
+            CachedSsoTokenError::IoError {
+                what: "read",
+                path: PathBuf::from("/tmp/token.json"),
+                source: IoError::from(ErrorKind::NotFound),
+            },
+        ] {
+            assert!(
+                cached_sso_token_error_is_non_recoverable(&err),
+                "expected non-recoverable: {err}"
+            );
+        }
+
+        // Transient or environmental failures remain recoverable so static stability applies.
+        for err in [
+            CachedSsoTokenError::IoError {
+                what: "read",
+                path: PathBuf::from("/tmp/token.json"),
+                source: IoError::from(ErrorKind::PermissionDenied),
+            },
+            CachedSsoTokenError::NoHomeDirectory,
+            CachedSsoTokenError::Other("unexpected".into()),
+        ] {
+            assert!(
+                !cached_sso_token_error_is_non_recoverable(&err),
+                "expected recoverable: {err}"
+            );
+        }
     }
 }
