@@ -13,7 +13,7 @@ fi
 
 cd smithy-rs
 
-args=(verify-semver)
+args=()
 if [[ $# -eq 1 ]]; then
     args+=(--codegen-version "$1")
 fi

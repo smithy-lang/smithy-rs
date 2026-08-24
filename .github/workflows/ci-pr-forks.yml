@@ -56,7 +56,7 @@ jobs:
   # runner so contributors can validate the compatibility harness in their fork
   # before opening an upstream PR.
   check-released-codegen-runtime-compatibility-hosted:
-    name: Check PR semver across last released version
+    name: Check released codegen compatibility with current runtimes
     if: ${{ github.repository != 'smithy-lang/smithy-rs' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -80,7 +80,7 @@ jobs:
     - name: Run codegen/runtime compatibility check
       env:
         CODEGEN_RUNTIME_LOG_LEVEL: DEBUG
-      run: ./tools/ci-scripts/released-codegen-runtime-compatibility.py verify-semver
+      run: ./tools/ci-scripts/released-codegen-runtime-compatibility.py
 
   semver-checks:
     name: Check PR semver compliance

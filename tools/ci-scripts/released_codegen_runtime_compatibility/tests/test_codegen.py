@@ -6,7 +6,7 @@ import unittest
 from released_codegen_runtime_compatibility.codegen import (
     CLIENT_MODULES,
     LEGACY_SERVER_MODULES,
-    PROTOCOLS,
+    COMPATIBILITY_PROTOCOLS,
     SERVER_MODULES,
     gradle_build,
     smithy_build_config,
@@ -35,7 +35,7 @@ class PublishedCodegenProjectTest(unittest.TestCase):
                 "ec2-query",
                 "rpc-v2-cbor",
             },
-            {protocol for protocol, _, _ in PROTOCOLS},
+            {protocol for protocol, _, _ in COMPATIBILITY_PROTOCOLS},
         )
 
         for module in CLIENT_MODULES:

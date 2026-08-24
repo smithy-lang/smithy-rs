@@ -92,3 +92,10 @@ class MavenCodegenResolver:
         """
         if not VERSION_PATTERN.match(version):
             raise RuntimeError("invalid Maven version: {!r}".format(version))
+
+
+def resolve_published_codegen(
+    requested_version: Optional[str] = None,
+) -> PublishedCodegen:
+    """Resolve a requested codegen release, or Maven Central's latest release."""
+    return MavenCodegenResolver().resolve(requested_version)

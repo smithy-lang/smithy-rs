@@ -7,7 +7,10 @@ import tempfile
 import unittest
 from unittest import mock
 
-from released_codegen_runtime_compatibility.cargo import CargoVerifier
+from released_codegen_runtime_compatibility.cargo import (
+    _append_runtime_patches,
+    _discover_runtime_crates,
+)
 from released_codegen_runtime_compatibility.models import RuntimeCrate
 
 
@@ -25,7 +28,7 @@ def toml_basic_string(value: str) -> str:
     return '"{}"'.format(value.replace("\\", "\\\\").replace('"', '\\"'))
 
 
-class CargoVerifierTest(unittest.TestCase):
+class CargoPatchingTest(unittest.TestCase):
     def test_runtime_discovery_uses_cargo_metadata(self) -> None:
         """Verify Cargo metadata drives current runtime patch discovery.
         Ensure unpublished and non-AWS workspace packages are excluded.
@@ -54,7 +57,7 @@ class CargoVerifierTest(unittest.TestCase):
             "released_codegen_runtime_compatibility.cargo.output",
             return_value=(0, json.dumps(metadata), ""),
         ) as output_mock:
-            crates = CargoVerifier(runtime_root)._discover_runtime_crates()
+            crates = _discover_runtime_crates(runtime_root)
 
         self.assertEqual(
             [RuntimeCrate(name="aws-one", path=runtime_path("aws-one"))],
@@ -82,7 +85,7 @@ class CargoVerifierTest(unittest.TestCase):
             (workspace / "Cargo.toml").write_text("[workspace]\nmembers = []\n")
             (workspace / "Cargo.lock").write_text("old lock")
             crate_path = Path(temp) / 'path with "quotes"'
-            CargoVerifier(Path("/runtime"))._append_runtime_patches(
+            _append_runtime_patches(
                 workspace,
                 [
                     RuntimeCrate(

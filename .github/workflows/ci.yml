@@ -242,7 +242,7 @@ jobs:
   # their runtime dependencies to candidate crates from the current checkout, and compile them.
   # Cargo enforces the generated dependency requirements.
   check-released-codegen-runtime-compatibility:
-    name: Check PR semver across last released version
+    name: Check released codegen compatibility with current runtimes
     runs-on: smithy_ubuntu-latest_8-core
     timeout-minutes: 30
     steps:
