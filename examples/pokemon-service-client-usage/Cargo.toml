@@ -38,3 +38,4 @@ hyper-rustls = "0.27"
 http = "1"
 uuid = {version="1.4.1", features = ["v4"]}
 thiserror = "1.0.49"
+aws-smithy-cbor = { path = "../../rust-runtime/aws-smithy-cbor" }
