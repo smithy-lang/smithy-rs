@@ -10,6 +10,26 @@ use std::fmt;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 
+/// Opaque identifier for a physical HTTP connection.
+///
+/// The assigning HTTP client defines the scope of an ID. IDs from different
+/// clients or pools are not comparable.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct ConnectionId(u64);
+
+impl ConnectionId {
+    /// Creates an ID from a value assigned by an HTTP client.
+    pub const fn new(value: u64) -> Self {
+        Self(value)
+    }
+}
+
+impl fmt::Display for ConnectionId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 /// Metadata that tracks the state of an active connection.
 #[derive(Clone)]
 pub struct ConnectionMetadata {
@@ -17,6 +37,7 @@ pub struct ConnectionMetadata {
     remote_addr: Option<SocketAddr>,
     local_addr: Option<SocketAddr>,
     poison_fn: Arc<dyn Fn() + Send + Sync>,
+    connection_id: Option<ConnectionId>,
 }
 
 impl ConnectionMetadata {
@@ -45,6 +66,7 @@ impl ConnectionMetadata {
             // need to use builder to set this field
             local_addr: None,
             poison_fn: Arc::new(poison),
+            connection_id: None,
         }
     }
 
@@ -62,6 +84,13 @@ impl ConnectionMetadata {
     pub fn local_addr(&self) -> Option<SocketAddr> {
         self.local_addr
     }
+
+    /// Get the ID assigned to this connection, if the HTTP client provides one.
+    ///
+    /// Clients that do not track physical connection identity leave this unset.
+    pub fn connection_id(&self) -> Option<ConnectionId> {
+        self.connection_id
+    }
 }
 
 impl fmt::Debug for ConnectionMetadata {
@@ -70,6 +99,7 @@ impl fmt::Debug for ConnectionMetadata {
             .field("is_proxied", &self.is_proxied)
             .field("remote_addr", &self.remote_addr)
             .field("local_addr", &self.local_addr)
+            .field("connection_id", &self.connection_id)
             .finish()
     }
 }
@@ -81,6 +111,7 @@ pub struct ConnectionMetadataBuilder {
     remote_addr: Option<SocketAddr>,
     local_addr: Option<SocketAddr>,
     poison_fn: Option<Arc<dyn Fn() + Send + Sync>>,
+    connection_id: Option<ConnectionId>,
 }
 
 impl fmt::Debug for ConnectionMetadataBuilder {
@@ -89,6 +120,7 @@ impl fmt::Debug for ConnectionMetadataBuilder {
             .field("is_proxied", &self.is_proxied)
             .field("remote_addr", &self.remote_addr)
             .field("local_addr", &self.local_addr)
+            .field("connection_id", &self.connection_id)
             .finish()
     }
 }
@@ -135,6 +167,18 @@ impl ConnectionMetadataBuilder {
         self
     }
 
+    /// Set the [`ConnectionId`] assigned by the HTTP client.
+    pub fn connection_id(mut self, connection_id: ConnectionId) -> Self {
+        self.set_connection_id(Some(connection_id));
+        self
+    }
+
+    /// Set the [`ConnectionId`] assigned by the HTTP client.
+    pub fn set_connection_id(&mut self, connection_id: Option<ConnectionId>) -> &mut Self {
+        self.connection_id = connection_id;
+        self
+    }
+
     /// Set a closure which will poison the associated connection.
     ///
     /// A poisoned connection will not be reused for subsequent requests by the pool
@@ -170,6 +214,7 @@ impl ConnectionMetadataBuilder {
             poison_fn: self
                 .poison_fn
                 .expect("poison_fn should be set for ConnectionMetadata"),
+            connection_id: self.connection_id,
         }
     }
 }
@@ -259,6 +304,7 @@ mod tests {
             .proxied(true)
             .local_addr(TEST_SOCKET_ADDR)
             .remote_addr(TEST_SOCKET_ADDR)
+            .connection_id(ConnectionId::new(17))
             .poison_fn({
                 let mutable_flag = Arc::clone(&mutable_flag);
                 move || {
@@ -271,6 +317,11 @@ mod tests {
         assert!(connection_metadata.is_proxied);
         assert_eq!(connection_metadata.remote_addr(), Some(TEST_SOCKET_ADDR));
         assert_eq!(connection_metadata.local_addr(), Some(TEST_SOCKET_ADDR));
+        assert_eq!(
+            connection_metadata.connection_id(),
+            Some(ConnectionId::new(17))
+        );
+        assert_eq!("17", ConnectionId::new(17).to_string());
         assert!(!(*mutable_flag.lock().unwrap()));
         connection_metadata.poison();
         assert!(*mutable_flag.lock().unwrap());
@@ -285,6 +336,7 @@ mod tests {
 
         assert_eq!(metadata1.local_addr(), None);
         assert_eq!(metadata1.remote_addr(), None);
+        assert_eq!(metadata1.connection_id(), None);
 
         let metadata2 = ConnectionMetadataBuilder::new()
             .proxied(true)
