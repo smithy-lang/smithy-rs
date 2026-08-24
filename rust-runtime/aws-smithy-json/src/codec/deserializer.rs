@@ -8,6 +8,7 @@
 use aws_smithy_schema::serde::SerdeError;
 use aws_smithy_schema::serde::ShapeDeserializer;
 use aws_smithy_schema::Schema;
+use aws_smithy_schema::ShapeType;
 use aws_smithy_types::{
     BigDecimal, BigInteger, Blob, DateTime, DiscriminatedDocument, Document, DocumentSettings,
     Number,
@@ -199,25 +200,13 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         }
         self.advance_by(1);
 
+        let mut first = true;
         loop {
-            self.skip_whitespace();
-
-            // Check for end of object, error on end of input, otherwise
-            // fall through to parse the next key/value pair.
-            match self.remaining().first() {
-                Some(&b'}') => {
-                    self.advance_by(1);
-                    break;
-                }
-                None => {
-                    return Err(SerdeError::invalid_input(
-                        "unexpected end of input in object",
-                    ));
-                }
-                Some(&b'"') => {}
-                Some(_) => {
-                    return Err(SerdeError::invalid_input("expected object key"));
-                }
+            if self.container_element_boundary(&mut first, b'}')? {
+                break;
+            }
+            if self.remaining().first() != Some(&b'"') {
+                return Err(SerdeError::invalid_input("expected object key"));
             }
 
             // Parse the key directly from bytes
@@ -237,12 +226,27 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                 self.advance_by(4);
             } else if let Some(member_schema) = self.resolve_member(schema, &key_str) {
                 consumer(member_schema, self)?;
+            } else if schema.shape_type() == ShapeType::Union && key_str != "__type" {
+                // An unrecognized union variant is a wire-level error (server
+                // semantics; the legacy parsers also rejected it). `__type`
+                // discriminators are tolerated and skipped, matching legacy.
+                return Err(SerdeError::invalid_input("unknown union variant"));
             } else {
                 self.skip_value()?;
             }
         }
 
         self.depth -= 1;
+        if self.depth == 0 {
+            // Outermost document: nothing but whitespace may follow (the legacy
+            // parsers checked `tokens.next().is_some()` after the root value).
+            self.skip_whitespace();
+            if !self.remaining().is_empty() {
+                return Err(SerdeError::invalid_input(
+                    "trailing characters after JSON document",
+                ));
+            }
+        }
         Ok(())
     }
 
@@ -261,20 +265,12 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         }
         self.advance_by(1);
 
+        let mut first = true;
         loop {
-            self.skip_whitespace();
-            match self.remaining().first() {
-                Some(&b']') => {
-                    self.advance_by(1);
-                    break;
-                }
-                None => {
-                    return Err(SerdeError::invalid_input(
-                        "unexpected end of input in array",
-                    ));
-                }
-                _ => consumer(self)?,
+            if self.container_element_boundary(&mut first, b']')? {
+                break;
             }
+            consumer(self)?;
         }
 
         self.depth -= 1;
@@ -296,22 +292,13 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         }
         self.advance_by(1);
 
+        let mut first = true;
         loop {
-            self.skip_whitespace();
-            match self.remaining().first() {
-                Some(&b'}') => {
-                    self.advance_by(1);
-                    break;
-                }
-                None => {
-                    return Err(SerdeError::invalid_input(
-                        "unexpected end of input in object",
-                    ));
-                }
-                Some(&b'"') => {}
-                Some(_) => {
-                    return Err(SerdeError::invalid_input("expected key"));
-                }
+            if self.container_element_boundary(&mut first, b'}')? {
+                break;
+            }
+            if self.remaining().first() != Some(&b'"') {
+                return Err(SerdeError::invalid_input("expected key"));
             }
 
             let key = self.parse_key()?;
@@ -474,20 +461,12 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         }
         self.advance_by(1);
         let mut out = Vec::new();
+        let mut first = true;
         loop {
-            self.skip_whitespace();
-            match self.remaining().first() {
-                Some(&b']') => {
-                    self.advance_by(1);
-                    break;
-                }
-                None => {
-                    return Err(SerdeError::invalid_input(
-                        "unexpected end of input in array",
-                    ))
-                }
-                _ => out.push(self.read_string(_schema)?),
+            if self.container_element_boundary(&mut first, b']')? {
+                break;
             }
+            out.push(self.read_string(_schema)?);
         }
         self.depth -= 1;
         Ok(out)
@@ -504,20 +483,12 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         }
         self.advance_by(1);
         let mut out = Vec::new();
+        let mut first = true;
         loop {
-            self.skip_whitespace();
-            match self.remaining().first() {
-                Some(&b']') => {
-                    self.advance_by(1);
-                    break;
-                }
-                None => {
-                    return Err(SerdeError::invalid_input(
-                        "unexpected end of input in array",
-                    ))
-                }
-                _ => out.push(self.read_blob(_schema)?),
+            if self.container_element_boundary(&mut first, b']')? {
+                break;
             }
+            out.push(self.read_blob(_schema)?);
         }
         self.depth -= 1;
         Ok(out)
@@ -534,20 +505,12 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         }
         self.advance_by(1);
         let mut out = Vec::new();
+        let mut first = true;
         loop {
-            self.skip_whitespace();
-            match self.remaining().first() {
-                Some(&b']') => {
-                    self.advance_by(1);
-                    break;
-                }
-                None => {
-                    return Err(SerdeError::invalid_input(
-                        "unexpected end of input in array",
-                    ))
-                }
-                _ => out.push(self.read_integer(_schema)?),
+            if self.container_element_boundary(&mut first, b']')? {
+                break;
             }
+            out.push(self.read_integer(_schema)?);
         }
         self.depth -= 1;
         Ok(out)
@@ -564,20 +527,12 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         }
         self.advance_by(1);
         let mut out = Vec::new();
+        let mut first = true;
         loop {
-            self.skip_whitespace();
-            match self.remaining().first() {
-                Some(&b']') => {
-                    self.advance_by(1);
-                    break;
-                }
-                None => {
-                    return Err(SerdeError::invalid_input(
-                        "unexpected end of input in array",
-                    ))
-                }
-                _ => out.push(self.read_long(_schema)?),
+            if self.container_element_boundary(&mut first, b']')? {
+                break;
             }
+            out.push(self.read_long(_schema)?);
         }
         self.depth -= 1;
         Ok(out)
@@ -597,10 +552,9 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         }
         self.advance_by(1);
         let mut out = std::collections::HashMap::new();
+        let mut first = true;
         loop {
-            self.skip_whitespace();
-            if self.remaining().first() == Some(&b'}') {
-                self.advance_by(1);
+            if self.container_element_boundary(&mut first, b'}')? {
                 break;
             }
             if self.remaining().first() != Some(&b'"') {
@@ -622,12 +576,42 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
 
     fn read_timestamp(&mut self, schema: &Schema<'_>) -> Result<DateTime, SerdeError> {
         self.skip_whitespace();
+        // The member's resolved format: `@timestampFormat` trait, else the
+        // codec default. Under strict enforcement (server semantics), the wire
+        // TYPE must match it — `epoch-seconds` is a number; `date-time` and
+        // `http-date` are strings, with `date-time` rejecting UTC offsets (the
+        // Smithy malformed-timestamp protocol tests pin all of this).
+        let resolved_format = schema.timestamp_format().map(|t| t.format()).unwrap_or_else(
+            || match self.settings.default_timestamp_format() {
+                aws_smithy_types::date_time::Format::EpochSeconds => {
+                    aws_smithy_schema::traits::TimestampFormat::EpochSeconds
+                }
+                aws_smithy_types::date_time::Format::HttpDate => {
+                    aws_smithy_schema::traits::TimestampFormat::HttpDate
+                }
+                _ => aws_smithy_schema::traits::TimestampFormat::DateTime,
+            },
+        );
+        let strict = self.settings.strict_timestamp_format();
         let rem = self.remaining();
         match rem.first() {
             Some(b'"') => {
                 let s = self.read_string(schema)?;
-                // Determine parse format from @timestampFormat trait or default
-                let format = if let Some(ts_trait) = schema.timestamp_format() {
+                let format = if strict {
+                    match resolved_format {
+                        aws_smithy_schema::traits::TimestampFormat::HttpDate => {
+                            aws_smithy_types::date_time::Format::HttpDate
+                        }
+                        aws_smithy_schema::traits::TimestampFormat::EpochSeconds => {
+                            return Err(SerdeError::type_mismatch(
+                                "expected epoch-seconds timestamp (number), found string",
+                            ));
+                        }
+                        aws_smithy_schema::traits::TimestampFormat::DateTime => {
+                            aws_smithy_types::date_time::Format::DateTime
+                        }
+                    }
+                } else if let Some(ts_trait) = schema.timestamp_format() {
                     match ts_trait.format() {
                         aws_smithy_schema::traits::TimestampFormat::HttpDate => {
                             aws_smithy_types::date_time::Format::HttpDate
@@ -652,6 +636,16 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                     .map_err(|e| SerdeError::custom(format!("invalid timestamp string: {e}")))
             }
             Some(b'-') | Some(b'0'..=b'9') => {
+                if strict
+                    && !matches!(
+                        resolved_format,
+                        aws_smithy_schema::traits::TimestampFormat::EpochSeconds
+                    )
+                {
+                    return Err(SerdeError::type_mismatch(
+                        "expected string timestamp, found number",
+                    ));
+                }
                 // Numeric timestamp — epoch seconds
                 let start = self.position;
                 self.consume_number();
@@ -703,10 +697,9 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             Some(b'{') => {
                 self.advance_by(1);
                 let mut map = aws_smithy_types::document::DocumentObject::new();
+                let mut first = true;
                 loop {
-                    self.skip_whitespace();
-                    if self.remaining().first() == Some(&b'}') {
-                        self.advance_by(1);
+                    if self.container_element_boundary(&mut first, b'}')? {
                         break;
                     }
                     if self.remaining().first() != Some(&b'"') {
@@ -729,22 +722,12 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             Some(b'[') => {
                 self.advance_by(1);
                 let mut arr = Vec::new();
+                let mut first = true;
                 loop {
-                    self.skip_whitespace();
-                    match self.remaining().first() {
-                        Some(&b']') => {
-                            self.advance_by(1);
-                            break;
-                        }
-                        None => {
-                            return Err(SerdeError::invalid_input(
-                                "unexpected end of input in document array",
-                            ))
-                        }
-                        _ => {
-                            arr.push(self.read_document(_schema)?);
-                        }
+                    if self.container_element_boundary(&mut first, b']')? {
+                        break;
                     }
+                    arr.push(self.read_document(_schema)?);
                 }
                 Ok(Document::Array(arr))
             }
@@ -980,9 +963,55 @@ impl<'a> JsonDeserializer<'a> {
     fn skip_whitespace(&mut self) {
         while self.position < self.input.len() {
             match self.input[self.position] {
-                b' ' | b'\t' | b'\n' | b'\r' | b',' => self.position += 1,
+                b' ' | b'\t' | b'\n' | b'\r' => self.position += 1,
                 _ => break,
             }
+        }
+    }
+
+    /// Enforces JSON element-separator discipline inside a container: the
+    /// closing delimiter [`close`] ends the container; after the first element,
+    /// exactly one `,` must precede each further element, and a trailing comma
+    /// before the closing delimiter is rejected (the Smithy malformed-request
+    /// protocol tests pin this). Returns `true` when the container was closed.
+    fn container_element_boundary(
+        &mut self,
+        first: &mut bool,
+        close: u8,
+    ) -> Result<bool, SerdeError> {
+        self.skip_whitespace();
+        match self.remaining().first() {
+            Some(&c) if c == close => {
+                self.advance_by(1);
+                return Ok(true);
+            }
+            None => {
+                return Err(SerdeError::invalid_input(
+                    "unexpected end of input in container",
+                ));
+            }
+            _ => {}
+        }
+        if *first {
+            *first = false;
+            return Ok(false);
+        }
+        if self.remaining().first() == Some(&b',') {
+            self.advance_by(1);
+            self.skip_whitespace();
+            match self.remaining().first() {
+                Some(&c) if c == close => {
+                    Err(SerdeError::invalid_input("trailing comma in container"))
+                }
+                None => Err(SerdeError::invalid_input(
+                    "unexpected end of input in container",
+                )),
+                _ => Ok(false),
+            }
+        } else {
+            Err(SerdeError::invalid_input(
+                "expected `,` between container elements",
+            ))
         }
     }
 
@@ -1004,6 +1033,13 @@ impl<'a> JsonDeserializer<'a> {
         loop {
             self.skip_whitespace();
             match self.remaining().first().copied() {
+                // Separators inside a skipped container. `skip_whitespace` no
+                // longer consumes commas (element-separator discipline is
+                // enforced in the typed read paths), so skip them here — the
+                // value being skipped was not selected for strict validation.
+                Some(b',') | Some(b':') if depth > 0 => {
+                    self.advance_by(1);
+                }
                 Some(b'{') | Some(b'[') => {
                     self.advance_by(1);
                     depth += 1;
@@ -1123,13 +1159,14 @@ impl<'a> JsonDeserializer<'a> {
         // Handle string-encoded special float values: "NaN", "Infinity", "-Infinity"
         if rem.first() == Some(&b'"') {
             let s = self.read_string(&aws_smithy_schema::prelude::STRING)?;
+            // Only the special non-finite values have a string form on the
+            // wire; any other string is a type mismatch (the Smithy
+            // malformed-float/double protocol tests pin this).
             return match s.as_str() {
                 "NaN" => Ok(f64::NAN),
                 "Infinity" => Ok(f64::INFINITY),
                 "-Infinity" => Ok(f64::NEG_INFINITY),
-                _ => s
-                    .parse::<f64>()
-                    .map_err(|e| SerdeError::invalid_input(e.to_string())),
+                _ => Err(SerdeError::type_mismatch("expected number")),
             };
         }
         let mut len = 0;

@@ -117,6 +117,15 @@ pub struct JsonCodecSettings {
     /// this setting, so a sender configured for one form interoperates
     /// with a receiver configured for the other.
     use_string_for_arbitrary_precision: bool,
+    /// Strict `@timestampFormat` enforcement on the read path (server
+    /// semantics): a timestamp member whose resolved format is
+    /// `epoch-seconds` accepts only a JSON number; `date-time` and
+    /// `http-date` accept only a JSON string, and `date-time` rejects
+    /// UTC offsets (per the Smithy malformed-timestamp protocol
+    /// tests). When `false` (default, client semantics), the lenient
+    /// legacy behavior is preserved: numeric values parse as epoch
+    /// seconds and `date-time` strings tolerate offsets.
+    strict_timestamp_format: bool,
     /// Default Smithy namespace used to resolve relative shape IDs in
     /// JSON `__type` discriminator fields produced by services that
     /// emit relative names (e.g., awsJson1_0/1_1 senders).
@@ -149,6 +158,12 @@ impl JsonCodecSettings {
     /// and deeply-nested document payloads.
     pub fn max_depth(&self) -> u32 {
         self.max_depth
+    }
+
+    /// Whether strict `@timestampFormat` enforcement is enabled on the read
+    /// path (server semantics). See the builder method of the same name.
+    pub fn strict_timestamp_format(&self) -> bool {
+        self.strict_timestamp_format
     }
 
     /// Whether [`Document::BigInteger`](aws_smithy_types::Document::BigInteger)
@@ -188,6 +203,7 @@ impl JsonCodecSettings {
             max_depth: self.max_depth,
             protocol_id: self.protocol_id.clone(),
             use_string_for_arbitrary_precision: self.use_string_for_arbitrary_precision,
+            strict_timestamp_format: self.strict_timestamp_format,
             default_namespace: self.default_namespace.clone(),
         }
     }
@@ -212,6 +228,7 @@ impl Default for JsonCodecSettings {
         Self {
             field_mapper: JsonFieldMapper::UseJsonName,
             default_timestamp_format: TimestampFormat::EpochSeconds,
+            strict_timestamp_format: false,
             max_depth: crate::codec::deserializer::MAX_DESERIALIZE_DEPTH,
             protocol_id: DEFAULT_JSON_CODEC_ID,
             use_string_for_arbitrary_precision: false,
@@ -252,6 +269,7 @@ pub struct JsonCodecSettingsBuilder {
     max_depth: u32,
     protocol_id: ShapeId<'static>,
     use_string_for_arbitrary_precision: bool,
+    strict_timestamp_format: bool,
     default_namespace: Option<String>,
 }
 
@@ -263,6 +281,7 @@ impl Default for JsonCodecSettingsBuilder {
             max_depth: crate::codec::deserializer::MAX_DESERIALIZE_DEPTH,
             protocol_id: DEFAULT_JSON_CODEC_ID,
             use_string_for_arbitrary_precision: false,
+            strict_timestamp_format: false,
             default_namespace: None,
         }
     }
@@ -285,6 +304,15 @@ impl JsonCodecSettingsBuilder {
     /// before returning an error. Defaults to 128.
     pub fn max_depth(mut self, value: u32) -> Self {
         self.max_depth = value;
+        self
+    }
+
+    /// Enables strict `@timestampFormat` enforcement on the read path (server
+    /// semantics): `epoch-seconds` accepts only numbers; `date-time` and
+    /// `http-date` accept only strings, with `date-time` rejecting UTC
+    /// offsets. Defaults to `false` (lenient client semantics).
+    pub fn strict_timestamp_format(mut self, value: bool) -> Self {
+        self.strict_timestamp_format = value;
         self
     }
 
@@ -335,6 +363,7 @@ impl JsonCodecSettingsBuilder {
             max_depth: self.max_depth,
             protocol_id: self.protocol_id,
             use_string_for_arbitrary_precision: self.use_string_for_arbitrary_precision,
+            strict_timestamp_format: self.strict_timestamp_format,
             default_namespace: self.default_namespace,
         }
     }

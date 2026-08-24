@@ -32,6 +32,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.BrokenTest
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.FailingTest
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
@@ -66,6 +68,18 @@ class ServerProtocolTestGenerator(
     override val operationShape: OperationShape,
 ) : ProtocolTestGenerator() {
     companion object {
+        /**
+         * Expect-fail entries that pin LEGACY bugs the schema-driven pipeline fixes
+         * (divergence register, plan 2f): on `schemaSerde` crates these tests pass
+         * and are removed from [ExpectFail].
+         */
+        private val PassingOnSchemaServedCrates: Set<FailingTest> =
+            setOf(
+                // Legacy fails to serialize an @httpPayload structure member that is
+                // unset as an empty body; the schema splitter handles it.
+                FailingTest.ResponseTest(REST_JSON, "RestJsonHttpPayloadWithStructureAndEmptyResponseBody"),
+            )
+
         private val ExpectFail: Set<FailingTest> =
             setOf(
                 // Endpoint trait is not implemented yet, see https://github.com/smithy-lang/smithy-rs/issues/950.
@@ -243,7 +257,15 @@ class ServerProtocolTestGenerator(
     override val appliesTo: AppliesTo
         get() = AppliesTo.SERVER
     override val expectFail: Set<FailingTest>
-        get() = ExpectFail
+        get() =
+            if ((codegenContext as? ServerCodegenContext)?.settings?.codegenConfig?.schemaSerde == true) {
+                // Divergence register (plan 2f, fix-forward): the schema-driven
+                // response path FIXES legacy bugs these expect-fail entries pinned.
+                // On flag-on crates the tests pass and must run as normal tests.
+                ExpectFail - PassingOnSchemaServedCrates
+            } else {
+                ExpectFail
+            }
     override val brokenTests: Set<BrokenTest>
         get() = BrokenTests
     override val generateOnly: Set<String>
@@ -282,6 +304,25 @@ class ServerProtocolTestGenerator(
         }
 
     private val instantiator = ServerInstantiator(codegenContext, withinTest = true)
+
+    /**
+     * The runtime protocol marker for this service's (primary) protocol. Response test
+     * cases call `IntoResponse::<Marker>::into_response(output)` — schema-served
+     * operations implement `IntoResponse` generically over every `ServerProtocol`
+     * (plan 2c), so the marker must be named explicitly.
+     */
+    private val protocolMarker: RuntimeType = run {
+        val (name, path) =
+            when (codegenContext.protocol.toString()) {
+                "aws.protocols#restJson1" -> "RestJson1" to "rest_json_1"
+                "aws.protocols#restXml" -> "RestXml" to "rest_xml"
+                "aws.protocols#awsJson1_0" -> "AwsJson1_0" to "aws_json_10"
+                "aws.protocols#awsJson1_1" -> "AwsJson1_1" to "aws_json_11"
+                "smithy.protocols#rpcv2Cbor" -> "RpcV2Cbor" to "rpc_v2_cbor"
+                else -> error("unsupported protocol for server protocol tests: ${codegenContext.protocol}")
+            }
+        ServerRuntimeType.protocol(name, path, codegenContext.runtimeConfig)
+    }
 
     /**
      * Returns the protocol test dependency with the correct HTTP version feature.
@@ -396,9 +437,10 @@ class ServerProtocolTestGenerator(
         rustTemplate(
             """
             use #{SmithyHttpServer}::response::IntoResponse;
-            let http_response = output.into_response();
+            let http_response = IntoResponse::<#{Marker}>::into_response(output);
             """,
             *codegenScope,
+            "Marker" to protocolMarker,
         )
         checkResponse(this, testCase)
     }

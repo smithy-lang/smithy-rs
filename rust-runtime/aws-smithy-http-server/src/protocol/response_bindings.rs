@@ -462,8 +462,11 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
 
     fn write_document(&mut self, schema: &Schema<'_>, value: &Document) -> Result<(), SerdeError> {
         if self.payload_mode || schema.http_payload().is_some() {
+            // The document VALUE is the body: serialize against the prelude
+            // document schema, not the member schema — a member schema would
+            // make the codec emit a `"memberName":` key fragment.
             let mut serializer = self.codec.create_serializer();
-            serializer.write_document(schema, value)?;
+            serializer.write_document(&aws_smithy_schema::prelude::DOCUMENT, value)?;
             self.capture_payload(serializer.finish(), None);
             return Ok(());
         }
@@ -557,7 +560,11 @@ impl ShapeSerializer for HeaderListCollector<'_> {
     }
 
     fn write_string(&mut self, _schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
-        capture_header(self.sink, self.outer, value)
+        // Elements of a header-bound list are quoted when they contain `,` or
+        // `"` (RFC 9110 list syntax) — mirroring the legacy generated
+        // serializers' `quote_header_value` usage.
+        let quoted = aws_smithy_http::header::quote_header_value(value);
+        capture_header(self.sink, self.outer, quoted.as_ref())
     }
 
     fn write_blob(&mut self, _schema: &Schema<'_>, value: &[u8]) -> Result<(), SerdeError> {

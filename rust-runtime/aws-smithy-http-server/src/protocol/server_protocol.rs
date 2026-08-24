@@ -102,6 +102,7 @@ pub trait ServerProtocol: ProtocolShape {
     /// `Self::RequestRejection`.
     fn deserialize_request<T: DeserializableShape>(
         schema: &Schema<'_>,
+        output_schema: &Schema<'_>,
         parts: &http::request::Parts,
         body: &[u8],
     ) -> Result<T, Self::RequestRejection>;
@@ -312,11 +313,13 @@ fn expected_request_content_type<'s>(
         };
     }
     if schema.members().is_empty() {
-        // Approximation of the legacy `hadUserModeledOperationInput` signal:
-        // an input schema with zero members. (A user-modeled EMPTY input
-        // struct is indistinguishable here — watch item for the request
-        // goldens.)
-        return if check_absent_when_no_input {
+        // `original_name` is transcribed from the synthetic input trait's
+        // original id, which exists exactly when the operation had
+        // user-modeled input — the legacy `hadUserModeledOperationInput`
+        // signal. A user-modeled EMPTY input struct therefore skips the
+        // absence check (RestJsonEmptyInputAndEmptyOutput accepts a
+        // `Content-Type` header).
+        return if check_absent_when_no_input && schema.original_name().is_none() {
             ExpectedContentType::Absent
         } else {
             ExpectedContentType::Skip
@@ -405,6 +408,83 @@ fn enforce_content_type(
     }
 }
 
+/// The `Content-Type` the operation's response will carry, resolved from the
+/// OUTPUT schema — the value the request's `Accept` header is validated
+/// against (mirroring the legacy `verifyAcceptHeader`, which used the binding
+/// resolver's `responseContentType`):
+///
+/// - `@httpPayload` member: its `@mediaType`, else `application/octet-stream`
+///   for blobs and `text/plain` for strings; codec content type for
+///   struct/union/document payloads.
+/// - otherwise: the codec content type when any member serializes to the
+///   response body; `None` (no Accept check) when none does.
+fn expected_response_content_type<'s>(
+    output_schema: &'s Schema<'s>,
+    codec_content_type: &'static str,
+) -> Option<Cow<'s, str>> {
+    if let Some(payload) = output_schema
+        .members()
+        .iter()
+        .find(|m| m.http_payload().is_some())
+    {
+        let media_type = payload.media_type().map(|m| m.value());
+        return match (payload.shape_type(), media_type) {
+            (ShapeType::Blob, Some(media)) => Some(Cow::Borrowed(media)),
+            // A blob payload without `@mediaType` may produce any bytes — every
+            // `Accept` is satisfiable (RestJsonHttpPayloadTraitsWithBlobAcceptsAllAccepts).
+            (ShapeType::Blob, None) => None,
+            (ShapeType::String, Some(media)) => Some(Cow::Borrowed(media)),
+            (ShapeType::String, None) => Some(Cow::Borrowed("text/plain")),
+            _ => Some(Cow::Borrowed(codec_content_type)),
+        };
+    }
+    let has_body_members = output_schema.members().iter().any(|m| {
+        m.http_header().is_none()
+            && m.http_prefix_headers().is_none()
+            && m.http_response_code().is_none()
+    });
+    has_body_members.then_some(Cow::Borrowed(codec_content_type))
+}
+
+/// Validates the request `Accept` header against the response content type
+/// resolved from the OUTPUT schema. Returns `false` when the request's
+/// `Accept` cannot be satisfied (→ `NotAcceptable`).
+fn accept_matches_output(
+    headers: &http::HeaderMap,
+    output_schema: &Schema<'_>,
+    codec_content_type: &'static str,
+) -> bool {
+    match expected_response_content_type(output_schema, codec_content_type) {
+        Some(expected) => match expected.parse::<mime::Mime>() {
+            Ok(mime) => super::accept_header_classifier(headers, &mime),
+            // An unparseable modeled @mediaType cannot be validated; accept.
+            Err(_) => true,
+        },
+        None => true,
+    }
+}
+
+/// The response for an operation with NO user-modeled output (the schema has
+/// no `original_name`): an empty body, no codec invocation, and — protocol
+/// dependent — no `Content-Type` header. Mirrors the legacy generated
+/// serializers, which never opened the codec for synthetic empty outputs.
+fn no_modeled_output_response(
+    schema: &Schema<'_>,
+    content_type: Option<&'static str>,
+) -> http::Response<BoxBody> {
+    let status = resolve_status(None, schema);
+    let mut builder = http::Response::builder().status(
+        http::StatusCode::from_u16(status).unwrap_or(http::StatusCode::INTERNAL_SERVER_ERROR),
+    );
+    if let Some(content_type) = content_type {
+        builder = builder.header(http::header::CONTENT_TYPE, content_type);
+    }
+    builder = builder.header(http::header::CONTENT_LENGTH, 0);
+    builder
+        .body(crate::body::empty())
+        .expect("valid status and static headers cannot fail to build")
+}
+
 /// The shared REST request path: content-type validation, then the composite
 /// binding deserializer driving the generated walker.
 fn deserialize_rest_request<T, C, R>(
@@ -434,6 +514,7 @@ where
 fn deserialize_rpc_request<T, C, R>(
     codec: &'static C,
     codec_content_type: &'static str,
+    schema: &Schema<'_>,
     parts: &http::request::Parts,
     body: &[u8],
 ) -> Result<T, R>
@@ -442,7 +523,12 @@ where
     C: Codec,
     R: From<DeserializeError> + From<MissingContentTypeReason>,
 {
-    if !body.is_empty() {
+    // An input schema with no members mirrors the legacy `parser == null`
+    // case: the body is never parsed OR content-type checked, whatever it
+    // contains (rpcv2Cbor's NoInputOutput tests send an empty CBOR map).
+    // An empty body reads as a structure with no members present —
+    // `@required` enforcement stays in `build()`.
+    if !body.is_empty() && !schema.members().is_empty() {
         check_content_type(&parts.headers, Some(codec_content_type)).map_err(R::from)?;
         let mut deserializer = codec.create_deserializer(body);
         T::deserialize(&mut deserializer).map_err(R::from)
@@ -465,6 +551,9 @@ impl ServerProtocol for RestJson1 {
                 JsonCodecSettings::builder()
                     .use_json_name(true)
                     .default_timestamp_format(aws_smithy_types::date_time::Format::EpochSeconds)
+                    // Server semantics: `@timestampFormat` is enforced, not
+                    // coerced (Smithy malformed-timestamp protocol tests).
+                    .strict_timestamp_format(true)
                     .build(),
             )
         });
@@ -473,12 +562,14 @@ impl ServerProtocol for RestJson1 {
 
     fn deserialize_request<T: DeserializableShape>(
         schema: &Schema<'_>,
+        output_schema: &Schema<'_>,
         parts: &http::request::Parts,
         body: &[u8],
     ) -> Result<T, Self::RequestRejection> {
-        // Legacy generated `from_request` checks `Accept` (against the
-        // response content type) before anything else.
-        if !super::accept_header_classifier(&parts.headers, &APPLICATION_JSON_MIME) {
+        // Legacy generated `from_request` checks `Accept` against the
+        // response content type (payload `@mediaType` aware) before
+        // anything else.
+        if !accept_matches_output(&parts.headers, output_schema, "application/json") {
             return Err(Self::RequestRejection::NotAcceptable);
         }
         deserialize_rest_request(Self::codec(), "application/json", true, schema, parts, body)
@@ -488,6 +579,9 @@ impl ServerProtocol for RestJson1 {
         schema: &Schema<'_>,
         output: &dyn SerializableStruct,
     ) -> http::Response<BoxBody> {
+        if schema.original_name().is_none() {
+            return no_modeled_output_response(schema, None);
+        }
         let result = serialize_split(Self::codec(), schema, output, true).and_then(|split| {
             let status = resolve_status(split.status, schema);
             assemble_response(split, status, "application/json")
@@ -539,16 +633,12 @@ impl ServerProtocol for RestJson1 {
     }
 }
 
-static APPLICATION_JSON_MIME: LazyLock<mime::Mime> =
-    LazyLock::new(|| "application/json".parse().expect("valid mime"));
 static AMZ_JSON_10_MIME: LazyLock<mime::Mime> =
     LazyLock::new(|| "application/x-amz-json-1.0".parse().expect("valid mime"));
 static AMZ_JSON_11_MIME: LazyLock<mime::Mime> =
     LazyLock::new(|| "application/x-amz-json-1.1".parse().expect("valid mime"));
 static APPLICATION_CBOR_MIME: LazyLock<mime::Mime> =
     LazyLock::new(|| "application/cbor".parse().expect("valid mime"));
-static APPLICATION_XML_MIME: LazyLock<mime::Mime> =
-    LazyLock::new(|| "application/xml".parse().expect("valid mime"));
 
 impl EventStreamProtocol for RestJson1 {
     const EVENT_PAYLOAD_CONTENT_TYPE: &'static str = "application/json";
@@ -566,6 +656,9 @@ fn aws_json_codec() -> &'static JsonCodec {
             JsonCodecSettings::builder()
                 .use_json_name(false)
                 .default_timestamp_format(aws_smithy_types::date_time::Format::EpochSeconds)
+                // Server semantics: `@timestampFormat` is enforced, not
+                // coerced (Smithy malformed-timestamp protocol tests).
+                .strict_timestamp_format(true)
                 .build(),
         )
     });
@@ -583,20 +676,26 @@ macro_rules! aws_json_impl {
             }
 
             fn deserialize_request<T: DeserializableShape>(
-                _schema: &Schema<'_>,
+                schema: &Schema<'_>,
+                _output_schema: &Schema<'_>,
                 parts: &http::request::Parts,
                 body: &[u8],
             ) -> Result<T, Self::RequestRejection> {
                 if !super::accept_header_classifier(&parts.headers, &$mime) {
                     return Err(Self::RequestRejection::NotAcceptable);
                 }
-                deserialize_rpc_request(Self::codec(), $content_type, parts, body)
+                deserialize_rpc_request(Self::codec(), $content_type, schema, parts, body)
             }
 
             fn serialize_response(
                 schema: &Schema<'_>,
                 output: &dyn SerializableStruct,
             ) -> http::Response<BoxBody> {
+                if schema.original_name().is_none() {
+                    // awsJson keeps its protocol Content-Type on the empty
+                    // response (AwsJson1xServiceRespondsWithNoPayload).
+                    return no_modeled_output_response(schema, Some($content_type));
+                }
                 let result =
                     serialize_split(Self::codec(), schema, output, false).and_then(|split| {
                         let status = resolve_status(split.status, schema);
@@ -694,7 +793,8 @@ impl ServerProtocol for RpcV2Cbor {
     }
 
     fn deserialize_request<T: DeserializableShape>(
-        _schema: &Schema<'_>,
+        schema: &Schema<'_>,
+        _output_schema: &Schema<'_>,
         parts: &http::request::Parts,
         body: &[u8],
     ) -> Result<T, Self::RequestRejection> {
@@ -703,13 +803,23 @@ impl ServerProtocol for RpcV2Cbor {
         if !super::accept_header_classifier(&parts.headers, &APPLICATION_CBOR_MIME) {
             return Err(Self::RequestRejection::NotAcceptable);
         }
-        deserialize_rpc_request(Self::codec(), "application/cbor", parts, body)
+        deserialize_rpc_request(Self::codec(), "application/cbor", schema, parts, body)
     }
 
     fn serialize_response(
         schema: &Schema<'_>,
         output: &dyn SerializableStruct,
     ) -> http::Response<BoxBody> {
+        if schema.original_name().is_none() {
+            // rpcv2Cbor forbids Content-Type on the empty response
+            // (RpcV2CborNoOutput) but keeps `smithy-protocol`.
+            let mut response = no_modeled_output_response(schema, None);
+            response.headers_mut().insert(
+                http::HeaderName::from_static("smithy-protocol"),
+                http::HeaderValue::from_static("rpc-v2-cbor"),
+            );
+            return response;
+        }
         let result = serialize_split(Self::codec(), schema, output, false).and_then(|split| {
             let status = resolve_status(split.status, schema);
             assemble_response(split, status, "application/cbor")
@@ -785,10 +895,11 @@ impl ServerProtocol for RestXml {
 
     fn deserialize_request<T: DeserializableShape>(
         schema: &Schema<'_>,
+        output_schema: &Schema<'_>,
         parts: &http::request::Parts,
         body: &[u8],
     ) -> Result<T, Self::RequestRejection> {
-        if !super::accept_header_classifier(&parts.headers, &APPLICATION_XML_MIME) {
+        if !accept_matches_output(&parts.headers, output_schema, "application/xml") {
             return Err(Self::RequestRejection::NotAcceptable);
         }
         deserialize_rest_request(Self::codec(), "application/xml", true, schema, parts, body)
@@ -798,6 +909,9 @@ impl ServerProtocol for RestXml {
         schema: &Schema<'_>,
         output: &dyn SerializableStruct,
     ) -> http::Response<BoxBody> {
+        if schema.original_name().is_none() {
+            return no_modeled_output_response(schema, None);
+        }
         let result = serialize_split(Self::codec(), schema, output, true).and_then(|split| {
             let status = resolve_status(split.status, schema);
             assemble_response(split, status, "application/xml")
@@ -898,7 +1012,8 @@ mod tests {
         ShapeId::from_parts("test#RpcIn", "test", "RpcIn"),
         ShapeType::Structure,
         &RPC_IN_MEMBERS,
-    );
+    )
+    .with_original_name("RpcIn");
 
     #[derive(Debug, Default, PartialEq)]
     struct TestInput {
@@ -980,7 +1095,7 @@ mod tests {
         // REST: label + query + body member route through the composite.
         let p = parts("/pets/rex?age=7", &[("content-type", "application/json")]);
         let input: TestInput =
-            RestJson1::deserialize_request(&IN_SCHEMA, &p, br#"{"note":"hi"}"#).unwrap();
+            RestJson1::deserialize_request(&IN_SCHEMA, &IN_SCHEMA, &p, br#"{"note":"hi"}"#).unwrap();
         assert_eq!(
             input,
             TestInput {
@@ -993,7 +1108,7 @@ mod tests {
         // Wrong content type (non-empty body) and bad Accept are rejected.
         let p = parts("/pets/rex", &[("content-type", "text/xml")]);
         assert!(matches!(
-            RestJson1::deserialize_request::<TestInput>(&IN_SCHEMA, &p, b"{}").unwrap_err(),
+            RestJson1::deserialize_request::<TestInput>(&IN_SCHEMA, &IN_SCHEMA, &p, b"{}").unwrap_err(),
             RequestRejection::MissingContentType(_)
         ));
         let p = parts(
@@ -1001,14 +1116,14 @@ mod tests {
             &[("content-type", "application/json"), ("accept", "text/xml")],
         );
         assert!(matches!(
-            RestJson1::deserialize_request::<TestInput>(&IN_SCHEMA, &p, b"{}").unwrap_err(),
+            RestJson1::deserialize_request::<TestInput>(&IN_SCHEMA, &IN_SCHEMA, &p, b"{}").unwrap_err(),
             RequestRejection::NotAcceptable
         ));
 
         // The legacy `if !bytes.is_empty()` gate: no content type required
         // when no body was sent, even though body members are modeled.
         let p = parts("/pets/rex", &[]);
-        let input: TestInput = RestJson1::deserialize_request(&IN_SCHEMA, &p, b"").unwrap();
+        let input: TestInput = RestJson1::deserialize_request(&IN_SCHEMA, &IN_SCHEMA, &p, b"").unwrap();
         assert_eq!(input.name.as_deref(), Some("rex"));
         assert_eq!(input.note, None);
 
@@ -1016,12 +1131,12 @@ mod tests {
         // present when the operation has no modeled input.
         let p = parts("/empty", &[("content-type", "application/json")]);
         assert!(matches!(
-            RestJson1::deserialize_request::<EmptyInput>(&EMPTY_IN_SCHEMA, &p, b"")
+            RestJson1::deserialize_request::<EmptyInput>(&EMPTY_IN_SCHEMA, &EMPTY_IN_SCHEMA, &p, b"")
                 .unwrap_err(),
             RequestRejection::MissingContentType(_)
         ));
         let p = parts("/empty", &[]);
-        RestJson1::deserialize_request::<EmptyInput>(&EMPTY_IN_SCHEMA, &p, b"").unwrap();
+        RestJson1::deserialize_request::<EmptyInput>(&EMPTY_IN_SCHEMA, &EMPTY_IN_SCHEMA, &p, b"").unwrap();
 
         // RPC: body round-trips through the protocol's own codec.
         use aws_smithy_schema::codec::FinishSerializer;
@@ -1039,7 +1154,7 @@ mod tests {
         let body = serializer.finish();
         let p = parts("/service/Op", &[("content-type", "application/cbor")]);
         let input: RpcTestInput =
-            RpcV2Cbor::deserialize_request(&RPC_IN_SCHEMA, &p, &body).unwrap();
+            RpcV2Cbor::deserialize_request(&RPC_IN_SCHEMA, &RPC_IN_SCHEMA, &p, &body).unwrap();
         assert_eq!(input.0.note.as_deref(), Some("hi"));
 
         // RPC empty body: members stay unset (`build()` owns @required).
@@ -1048,7 +1163,7 @@ mod tests {
             &[("content-type", "application/x-amz-json-1.0")],
         );
         let input: RpcTestInput =
-            AwsJson1_0::deserialize_request(&RPC_IN_SCHEMA, &p, b"").unwrap();
+            AwsJson1_0::deserialize_request(&RPC_IN_SCHEMA, &RPC_IN_SCHEMA, &p, b"").unwrap();
         assert_eq!(input.0, TestInput::default());
     }
 
@@ -1068,7 +1183,8 @@ mod tests {
         ShapeType::Structure,
         &OUT_MEMBERS,
     )
-    .with_http(HttpTrait::new("POST", "/pets/{name}", Some(201)));
+    .with_http(HttpTrait::new("POST", "/pets/{name}", Some(201)))
+    .with_original_name("Out");
 
     struct TestOutput;
     impl SerializableStruct for TestOutput {

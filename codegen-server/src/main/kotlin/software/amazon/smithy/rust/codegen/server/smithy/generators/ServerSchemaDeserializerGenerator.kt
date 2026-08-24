@@ -382,6 +382,12 @@ class ServerSchemaDeserializerGenerator(
                         deser.read_null()?;
                         return Ok(());
                     }
+                    // A union document may set exactly one variant (the Smithy
+                    // malformed-union protocol tests pin this; legacy errored with
+                    // "encountered mixed variants in union").
+                    if result.is_some() {
+                        return Err(::aws_smithy_schema::serde::SerdeError::custom("encountered mixed variants in union"));
+                    }
                     result = ::std::option::Option::Some(match member.member_index() {
                         ${esc(arms.toString())}
                         _ => return Err(::aws_smithy_schema::serde::SerdeError::custom("unknown union variant")),

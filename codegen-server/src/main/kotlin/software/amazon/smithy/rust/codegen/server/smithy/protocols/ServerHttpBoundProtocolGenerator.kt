@@ -288,7 +288,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             // into `ServerProtocol::deserialize_request`; responses go through the
             // protocol-generic `IntoResponse` impls. No legacy serde function is
             // referenced, so none is generated.
-            operationWriter.renderSchemaServedFromRequest(inputSymbol, operationShape)
+            operationWriter.renderSchemaServedFromRequest(inputSymbol, outputSymbol, operationShape)
             if (!isMultiProtocol) {
                 operationWriter.renderSchemaGenericIntoResponse(outputSymbol, operationShape)
             }
@@ -368,6 +368,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
      */
     private fun RustWriter.renderSchemaServedFromRequest(
         inputSymbol: Symbol,
+        outputSymbol: Symbol,
         operationShape: OperationShape,
     ) {
         val serverProtocolTrait =
@@ -413,7 +414,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                         let fut = async move {
                             let (parts, body) = request.into_parts();
                             #{collectBody:W}
-                            <#{Marker} as #{ServerProtocol}>::deserialize_request::<#{I}>(#{I}::SCHEMA, &parts, bytes.as_ref())
+                            <#{Marker} as #{ServerProtocol}>::deserialize_request::<#{I}>(#{I}::SCHEMA, #{O}::SCHEMA, &parts, bytes.as_ref())
                         };
                         use #{FuturesUtil}::future::TryFutureExt;
                         let fut = fut.map_err(|e: #{RequestRejection}| {
@@ -427,6 +428,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                     """,
                     *codegenScope,
                     "I" to inputSymbol,
+                    "O" to outputSymbol,
                     "Marker" to protocol.markerStruct(),
                     "ServerProtocol" to serverProtocolTrait,
                     "collectBody" to collectBody,
@@ -461,7 +463,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                 let fut = async move {
                                     let (parts, body) = request.into_parts();
                                     #{collectBody:W}
-                                    <#{Marker} as #{ServerProtocol}>::deserialize_request::<#{I}>(#{I}::SCHEMA, &parts, bytes.as_ref())
+                                    <#{Marker} as #{ServerProtocol}>::deserialize_request::<#{I}>(#{I}::SCHEMA, #{O}::SCHEMA, &parts, bytes.as_ref())
                                 };
                                 use #{FuturesUtil}::future::TryFutureExt;
                                 let fut = fut.map_err(|e: #{RequestRejection}| {
@@ -475,6 +477,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             """,
                             *codegenScope,
                             "I" to inputSymbol,
+                            "O" to outputSymbol,
                             "Marker" to protocol.markerStruct(),
                             "ServerProtocol" to serverProtocolTrait,
                             "collectBody" to collectBody,

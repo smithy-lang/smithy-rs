@@ -1087,8 +1087,12 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
             } else if member.http_payload().is_some() {
                 match member.shape_type() {
                     ShapeType::Blob | ShapeType::String => {
-                        let mut deser = PayloadBytesDeserializer::new(self.body);
-                        consumer(member, &mut deser)?;
+                        // Legacy parity (`HttpBindingGenerator.kt:342`): an empty
+                        // body leaves a raw blob/string payload member UNSET.
+                        if !self.body.is_empty() {
+                            let mut deser = PayloadBytesDeserializer::new(self.body);
+                            consumer(member, &mut deser)?;
+                        }
                     }
                     _ => {
                         // Structure / union / document payload: the body IS
