@@ -14,6 +14,7 @@ use aws_credential_types::attributes::AccountId;
 use aws_credential_types::credential_feature::AwsCredentialFeature;
 use aws_credential_types::provider::{self, error::CredentialsError};
 use aws_credential_types::Credentials;
+use aws_credential_types::StaticStabilityEligible;
 use aws_smithy_runtime::client::metrics::MetricsRuntimePlugin;
 use aws_smithy_runtime::client::orchestrator::operation::Operation;
 use aws_smithy_runtime::client::retries::classifiers::{
@@ -63,6 +64,7 @@ impl HttpCredentialProvider {
                     creds
                         .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
                         .push(AwsCredentialFeature::CredentialsHttp);
+                    creds.set_property(StaticStabilityEligible);
                     creds
                 });
         match credentials {

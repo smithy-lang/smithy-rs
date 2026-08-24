@@ -65,8 +65,10 @@ use crate::provider_config::ProviderConfig;
 use crate::sts;
 use aws_credential_types::credential_feature::AwsCredentialFeature;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
+use aws_credential_types::StaticStabilityEligible;
 use aws_sdk_sts::{types::PolicyDescriptorType, Client as StsClient};
 use aws_smithy_async::time::SharedTimeSource;
+use aws_smithy_runtime::client::identity::IdentityCache;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_types::os_shim_internal::{Env, Fs};
 
@@ -163,6 +165,7 @@ impl WebIdentityTokenCredentialsProvider {
             creds
                 .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
                 .push(AwsCredentialFeature::CredentialsProfileStsWebIdToken);
+            creds.set_property(StaticStabilityEligible);
             creds
         })
     }
@@ -238,10 +241,16 @@ impl Builder {
     pub fn build(self) -> WebIdentityTokenCredentialsProvider {
         let conf = self.config.unwrap_or_default();
         let source = self.source.unwrap_or_else(|| Source::Env(conf.env()));
+        // No inner identity cache; the outer credentials cache owns caching.
+        let client_config = conf
+            .client_config()
+            .into_builder()
+            .identity_cache(IdentityCache::no_cache())
+            .build();
         WebIdentityTokenCredentialsProvider {
             source,
             fs: conf.fs(),
-            sts_client: StsClient::new(&conf.client_config()),
+            sts_client: StsClient::new(&client_config),
             time_source: conf.time_source(),
             policy: self.policy,
             policy_arns: self.policy_arns,
@@ -276,7 +285,14 @@ async fn load_credentials(
         .await
         .map_err(|sdk_error| {
             tracing::warn!(error = %DisplayErrorContext(&sdk_error), "STS returned an error assuming web identity role");
-            CredentialsError::provider_error(sdk_error)
+            if sdk_error
+                .as_service_error()
+                .is_some_and(sts::util::web_identity_error_is_non_recoverable)
+            {
+                CredentialsError::non_recoverable(sdk_error)
+            } else {
+                CredentialsError::provider_error(sdk_error)
+            }
         })?;
     sts::util::into_credentials(resp.credentials, resp.assumed_role_user, "WebIdentityToken")
 }

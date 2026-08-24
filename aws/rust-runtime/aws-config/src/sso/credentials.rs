@@ -10,13 +10,20 @@
 //!
 //! This provider is included automatically when profiles are loaded.
 
-use super::cache::load_cached_token;
+use super::cache::{load_cached_token, CachedSsoTokenError};
+use super::token::SsoTokenProviderError;
 use crate::identity::IdentityCache;
 use crate::provider_config::ProviderConfig;
 use crate::sso::SsoTokenProvider;
 use aws_credential_types::credential_feature::AwsCredentialFeature;
-use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
+use aws_credential_types::provider::{
+    self,
+    error::{CredentialsError, TokenError},
+    future, ProvideCredentials,
+};
 use aws_credential_types::Credentials;
+use aws_credential_types::StaticStabilityEligible;
+use aws_sdk_sso::operation::get_role_credentials::GetRoleCredentialsError;
 use aws_sdk_sso::types::RoleCredentials;
 use aws_sdk_sso::Client as SsoClient;
 use aws_smithy_async::time::SharedTimeSource;
@@ -24,6 +31,7 @@ use aws_smithy_types::DateTime;
 use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::region::Region;
 use aws_types::SdkConfig;
+use std::error::Error as _;
 
 /// SSO Credentials Provider
 ///
@@ -93,6 +101,7 @@ impl SsoCredentialsProvider {
             creds
                 .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
                 .push(AwsCredentialFeature::CredentialsSso);
+            creds.set_property(StaticStabilityEligible);
             creds
         })
     }
@@ -236,6 +245,43 @@ pub(crate) struct SsoProviderConfig {
     pub(crate) session_name: Option<String>,
 }
 
+fn resolved_token_error_is_non_recoverable(err: &TokenError) -> bool {
+    err.source()
+        .and_then(|source| source.downcast_ref::<SsoTokenProviderError>())
+        .is_some_and(|e| {
+            matches!(
+                e,
+                SsoTokenProviderError::ExpiredToken
+                    | SsoTokenProviderError::FailedToLoadToken { .. }
+            )
+        })
+}
+
+// Classifies a failure from the legacy `load_cached_token` path. A cached SSO token that is missing
+// or malformed is non-recoverable: it requires re-authentication (`aws sso login`) and retrying the
+// load will not fix it. Transient or environmental failures are left recoverable so that static
+// stability continues serving the last successfully cached credentials.
+fn cached_sso_token_error_is_non_recoverable(err: &CachedSsoTokenError) -> bool {
+    match err {
+        // Malformed token file, or a required field that is missing or cannot be parsed.
+        CachedSsoTokenError::MissingField(_)
+        | CachedSsoTokenError::InvalidField { .. }
+        | CachedSsoTokenError::JsonError(_)
+        | CachedSsoTokenError::FailedToFormatDateTime { .. } => true,
+        // A missing token file is non-recoverable; other I/O errors (e.g. a transient permission or
+        // resource issue) may succeed on a later attempt, so they remain recoverable.
+        CachedSsoTokenError::IoError { source, .. } => {
+            source.kind() == std::io::ErrorKind::NotFound
+        }
+        // No positive knowledge that a retry will fail, so keep these recoverable.
+        CachedSsoTokenError::NoHomeDirectory | CachedSsoTokenError::Other(_) => false,
+    }
+}
+
+fn get_role_credentials_error_is_non_recoverable(err: &GetRoleCredentialsError) -> bool {
+    matches!(err, GetRoleCredentialsError::UnauthorizedException(_))
+}
+
 async fn load_sso_credentials(
     sso_provider_config: &SsoProviderConfig,
     sdk_config: &SdkConfig,
@@ -248,12 +294,24 @@ async fn load_sso_credentials(
         token_provider
             .resolve_token(time_source)
             .await
-            .map_err(CredentialsError::provider_error)?
+            .map_err(|err| {
+                if resolved_token_error_is_non_recoverable(&err) {
+                    CredentialsError::non_recoverable(err)
+                } else {
+                    CredentialsError::provider_error(err)
+                }
+            })?
     } else {
         // Backwards compatible token loading that uses `start_url` instead of `session_name`
         load_cached_token(env, fs, &sso_provider_config.start_url)
             .await
-            .map_err(CredentialsError::provider_error)?
+            .map_err(|err| {
+                if cached_sso_token_error_is_non_recoverable(&err) {
+                    CredentialsError::non_recoverable(err)
+                } else {
+                    CredentialsError::provider_error(err)
+                }
+            })?
     };
 
     let config = sdk_config
@@ -270,7 +328,16 @@ async fn load_sso_credentials(
         .account_id(&sso_provider_config.account_id)
         .send()
         .await
-        .map_err(CredentialsError::provider_error)?;
+        .map_err(|err| {
+            if err
+                .as_service_error()
+                .is_some_and(get_role_credentials_error_is_non_recoverable)
+            {
+                CredentialsError::non_recoverable(err)
+            } else {
+                CredentialsError::provider_error(err)
+            }
+        })?;
     let credentials: RoleCredentials = resp
         .role_credentials
         .ok_or_else(|| CredentialsError::unhandled("SSO did not return credentials"))?;
@@ -295,4 +362,90 @@ async fn load_sso_credentials(
         .provider_name("SSO");
     builder.set_session_token(credentials.session_token);
     Ok(builder.build())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use aws_sdk_sso::types::error::UnauthorizedException;
+    use aws_smithy_types::error::ErrorMetadata;
+
+    #[test]
+    fn sso_token_error_classification() {
+        for err in [
+            TokenError::provider_error(SsoTokenProviderError::ExpiredToken),
+            TokenError::provider_error(SsoTokenProviderError::FailedToLoadToken {
+                source: "missing token file".into(),
+            }),
+        ] {
+            assert!(resolved_token_error_is_non_recoverable(&err));
+        }
+        for err in [
+            TokenError::provider_error(SsoTokenProviderError::BadExpirationTimeFromSsoOidc),
+            TokenError::provider_error("network error"),
+        ] {
+            assert!(!resolved_token_error_is_non_recoverable(&err));
+        }
+    }
+
+    #[test]
+    fn get_role_credentials_error_classification() {
+        assert!(get_role_credentials_error_is_non_recoverable(
+            &GetRoleCredentialsError::UnauthorizedException(
+                UnauthorizedException::builder().build()
+            )
+        ));
+        assert!(!get_role_credentials_error_is_non_recoverable(
+            &GetRoleCredentialsError::generic(
+                ErrorMetadata::builder()
+                    .code("TooManyRequestsException")
+                    .build()
+            )
+        ));
+    }
+
+    #[test]
+    fn cached_sso_token_error_classification() {
+        use std::io::{Error as IoError, ErrorKind};
+        use std::path::PathBuf;
+
+        // Missing or malformed cached tokens require re-authentication -> non-recoverable.
+        for err in [
+            CachedSsoTokenError::MissingField("accessToken"),
+            CachedSsoTokenError::InvalidField {
+                field: "expiresAt",
+                source: "invalid".into(),
+            },
+            CachedSsoTokenError::JsonError("invalid json".into()),
+            CachedSsoTokenError::FailedToFormatDateTime {
+                source: "bad datetime".into(),
+            },
+            CachedSsoTokenError::IoError {
+                what: "read",
+                path: PathBuf::from("/tmp/token.json"),
+                source: IoError::from(ErrorKind::NotFound),
+            },
+        ] {
+            assert!(
+                cached_sso_token_error_is_non_recoverable(&err),
+                "expected non-recoverable: {err}"
+            );
+        }
+
+        // Transient or environmental failures remain recoverable so static stability applies.
+        for err in [
+            CachedSsoTokenError::IoError {
+                what: "read",
+                path: PathBuf::from("/tmp/token.json"),
+                source: IoError::from(ErrorKind::PermissionDenied),
+            },
+            CachedSsoTokenError::NoHomeDirectory,
+            CachedSsoTokenError::Other("unexpected".into()),
+        ] {
+            assert!(
+                !cached_sso_token_error_is_non_recoverable(&err),
+                "expected recoverable: {err}"
+            );
+        }
+    }
 }
