@@ -141,6 +141,20 @@ impl ServiceClockSkewInterceptor {
     pub fn new() -> Self {
         Self::default()
     }
+
+    // Seeds the client-level skew (for conformance tests that start from a non-zero skew).
+    #[cfg(test)]
+    fn with_client_skew(client_skew: ClockSkew) -> Self {
+        Self {
+            client_skew: Arc::new(Mutex::new(client_skew)),
+        }
+    }
+
+    // Reads the current client-level skew (to assert `expectedClientSkew`).
+    #[cfg(test)]
+    fn client_skew(&self) -> ClockSkew {
+        *self.client_skew.lock().unwrap()
+    }
 }
 
 #[dyn_dispatch_hint]
@@ -295,9 +309,14 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aws_smithy_async::test_util::ManualTimeSource;
     use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
+    use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+    use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use aws_smithy_types::body::SdkBody;
     use aws_smithy_types::error::ErrorMetadata;
+    use serde::Deserialize;
+    use std::collections::HashMap;
     use std::fmt;
 
     #[derive(Debug)]
@@ -306,7 +325,7 @@ mod tests {
     }
 
     impl CodedError {
-        fn new(code: &'static str) -> Self {
+        fn new(code: &str) -> Self {
             Self {
                 metadata: ErrorMetadata::builder().code(code).build(),
             }
@@ -417,5 +436,207 @@ mod tests {
             classifier.classify_retry(&ctx(None, Some(TEN_MIN))),
             RetryAction::NoActionIndicated
         );
+    }
+
+    // ---- Data-driven conformance suite ----
+    //
+    // Drives the real interceptor (skew measurement, discards, recording), the real classifier
+    // (code set + detection threshold), and the signing offset (`AttemptSkew::apply`, exactly what
+    // the signer runs) against the shared clock-skew test cases. The attempt/retry sequencing is
+    // modeled here (the JSON lists the attempts that occur); the orchestrator wiring itself is
+    // covered by codegen tests. Time is injected via a settable `ManualTimeSource`.
+
+    #[derive(Deserialize)]
+    struct Suite {
+        tests: Vec<TestCase>,
+    }
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct TestCase {
+        description: String,
+        operations: Vec<Operation>,
+    }
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Operation {
+        initial_client_skew: i64,
+        #[serde(default)]
+        max_attempts: Option<u32>,
+        attempts: Vec<Attempt>,
+        expected_client_skew: i64,
+        expected_outcome: String,
+    }
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Attempt {
+        client_time_at_send: String,
+        client_time_at_receive: String,
+        expected_signing_time: String,
+        response: ResponseSpec,
+    }
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct ResponseSpec {
+        status_code: u16,
+        #[serde(default)]
+        headers: HashMap<String, String>,
+        #[serde(default)]
+        error_code: Option<String>,
+    }
+
+    const SUITE: &str = include_str!("../test-data/clock-skew-test-cases.json");
+
+    fn parse_time(s: &str) -> SystemTime {
+        SystemTime::try_from(DateTime::from_str(s, Format::DateTime).expect("valid timestamp"))
+            .expect("representable time")
+    }
+
+    // The suite expresses skews in whole seconds.
+    fn skew_secs(secs: i64) -> ClockSkew {
+        ClockSkew(secs * 1000)
+    }
+
+    fn build_response(spec: &ResponseSpec) -> HttpResponse {
+        let mut builder = http_1x::Response::builder().status(spec.status_code);
+        for (name, value) in &spec.headers {
+            builder = builder.header(name.as_str(), value.as_str());
+        }
+        builder.body(SdkBody::empty()).unwrap().try_into().unwrap()
+    }
+
+    fn response_output_or_error(spec: &ResponseSpec) -> Result<Output, OrchestratorError<Error>> {
+        match &spec.error_code {
+            Some(code) => Err(OrchestratorError::operation(Error::erase(CodedError::new(
+                code,
+            )))),
+            None => Ok(Output::erase("ok")),
+        }
+    }
+
+    // A context advanced to the `BeforeTransmit` phase with a placeholder request.
+    fn before_transmit_context() -> InterceptorContext {
+        let mut context = InterceptorContext::new(Input::doesnt_matter());
+        context.enter_serialization_phase();
+        context.set_request(HttpRequest::empty());
+        let _ = context.take_input();
+        context.enter_before_transmit_phase();
+        context
+    }
+
+    fn run_operation(interceptor: &ServiceClockSkewInterceptor, op: &Operation, desc: &str) {
+        let time = ManualTimeSource::new(SystemTime::UNIX_EPOCH);
+        let rc = RuntimeComponentsBuilder::for_tests()
+            .with_time_source(Some(time.clone()))
+            .build()
+            .unwrap();
+        let mut cfg = ConfigBag::base();
+
+        // Once per operation: seed AttemptSkew from the persisted ClientSkew.
+        {
+            let mut seed = before_transmit_context();
+            let mut seed_ctx = (&mut seed).into();
+            interceptor
+                .modify_before_retry_loop(&mut seed_ctx, &rc, &mut cfg)
+                .unwrap();
+        }
+
+        for (j, attempt) in op.attempts.iter().enumerate() {
+            let send = parse_time(&attempt.client_time_at_send);
+            let receive = parse_time(&attempt.client_time_at_receive);
+
+            // The signer signs at now() + AttemptSkew.
+            time.set_time(send);
+            let attempt_skew = cfg.load::<AttemptSkew>().map(|s| s.0).unwrap_or_default();
+            assert_eq!(
+                attempt_skew.apply(send),
+                parse_time(&attempt.expected_signing_time),
+                "{desc}: attempt {j} signing time",
+            );
+
+            let mut context = before_transmit_context();
+            {
+                let ref_ctx = (&context).into();
+                interceptor
+                    .read_before_transmit(&ref_ctx, &rc, &mut cfg)
+                    .unwrap();
+            }
+
+            context.enter_transmit_phase();
+            let _ = context.take_request();
+            context.set_response(build_response(&attempt.response));
+            context.enter_before_deserialization_phase();
+            time.set_time(receive);
+            {
+                let mut mut_ctx = (&mut context).into();
+                interceptor
+                    .modify_before_deserialization(&mut mut_ctx, &rc, &mut cfg)
+                    .unwrap();
+            }
+
+            context.enter_deserialization_phase();
+            context.set_output_or_error(response_output_or_error(&attempt.response));
+            let action = ServiceClockSkewClassifier::<CodedError>::new().classify_retry(&context);
+
+            let is_last = j + 1 == op.attempts.len();
+            if !is_last {
+                // A retry followed, so the classifier must have indicated one.
+                assert!(action.should_retry(), "{desc}: attempt {j} should retry");
+            } else if op.expected_outcome == "error"
+                && op
+                    .max_attempts
+                    .is_none_or(|m| (op.attempts.len() as u32) < m)
+            {
+                // No further attempt despite remaining budget => the classifier declined to retry.
+                assert!(
+                    !action.should_retry(),
+                    "{desc}: final attempt should not be retried as clock skew",
+                );
+            }
+        }
+
+        let final_status = op
+            .attempts
+            .last()
+            .expect("at least one attempt")
+            .response
+            .status_code;
+        let outcome = if (200..300).contains(&final_status) {
+            "success"
+        } else {
+            "error"
+        };
+        assert_eq!(outcome, op.expected_outcome, "{desc}: outcome");
+    }
+
+    #[test]
+    fn clock_skew_conformance() {
+        let suite: Suite = serde_json::from_str(SUITE).expect("valid clock skew suite json");
+        assert_eq!(suite.tests.len(), 10, "expected the full clock skew suite");
+        for case in &suite.tests {
+            // ClientSkew starts at the first operation's initial value and persists across the
+            // operations of a case (a single client).
+            let interceptor = ServiceClockSkewInterceptor::with_client_skew(skew_secs(
+                case.operations[0].initial_client_skew,
+            ));
+            for (i, op) in case.operations.iter().enumerate() {
+                assert_eq!(
+                    interceptor.client_skew(),
+                    skew_secs(op.initial_client_skew),
+                    "{}: operation {i} initial ClientSkew",
+                    case.description,
+                );
+                run_operation(&interceptor, op, &case.description);
+                assert_eq!(
+                    interceptor.client_skew(),
+                    skew_secs(op.expected_client_skew),
+                    "{}: operation {i} expected ClientSkew",
+                    case.description,
+                );
+            }
+        }
     }
 }
