@@ -1,4 +1,14 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+August 21st, 2026
+=================
+**New this release:**
+- :bug: (client, [aws-sdk-rust#1451](https://github.com/awslabs/aws-sdk-rust/issues/1451), @shrey4796) Update the `lru` dependency to 0.18.2 to address RUSTSEC-2026-0253.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @shrey4796 ([aws-sdk-rust#1451](https://github.com/awslabs/aws-sdk-rust/issues/1451))
+
+
 August 19th, 2026
 =================
 **New this release:**
