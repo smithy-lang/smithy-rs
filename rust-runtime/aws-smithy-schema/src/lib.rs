@@ -665,6 +665,22 @@ impl<'a> Schema<'a> {
     }
 
     /// Returns the `@mediaType` trait if present.
+    /// Returns the `@streaming` trait if present.
+    pub fn streaming(&self) -> Option<&trait_types::StreamingTrait> {
+        self.streaming.as_ref()
+    }
+
+    /// Returns the `@eventHeader` trait if present.
+    pub fn event_header(&self) -> Option<&trait_types::EventHeaderTrait> {
+        self.event_header.as_ref()
+    }
+
+    /// Returns the `@eventPayload` trait if present.
+    pub fn event_payload(&self) -> Option<&trait_types::EventPayloadTrait> {
+        self.event_payload.as_ref()
+    }
+
+    /// Returns the `@mediaType` trait if present.
     pub fn media_type(&self) -> Option<&trait_types::MediaTypeTrait<'a>> {
         self.media_type.as_ref()
     }

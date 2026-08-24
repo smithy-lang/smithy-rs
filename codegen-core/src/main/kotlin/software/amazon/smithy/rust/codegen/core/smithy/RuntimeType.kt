@@ -578,7 +578,19 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun protocolTest(
             runtimeConfig: RuntimeConfig,
             func: String,
-        ): RuntimeType = smithyProtocolTest(runtimeConfig).resolve(func)
+        ): RuntimeType =
+            when (runtimeConfig.httpVersion) {
+                // The http-1x feature gates the `&http_1x::HeaderMap` impls the
+                // generated header assertions need; featureless registrations
+                // would otherwise only compile in crates where some OTHER usage
+                // unions the feature in.
+                HttpVersion.Http1x ->
+                    CargoDependency.smithyProtocolTestHelpers(runtimeConfig)
+                        .withFeature("http-1x")
+                        .toType()
+                        .resolve(func)
+                HttpVersion.Http0x -> smithyProtocolTest(runtimeConfig).resolve(func)
+            }
 
         fun provideErrorKind(runtimeConfig: RuntimeConfig) =
             smithyTypes(runtimeConfig).resolve("retry::ProvideErrorKind")

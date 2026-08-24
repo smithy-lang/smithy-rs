@@ -18,6 +18,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.HttpErrorTrait
 import software.amazon.smithy.model.traits.HttpPayloadTrait
@@ -57,6 +58,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDesc
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.shapeModuleName
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
@@ -315,8 +317,13 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         val serverProtocolTrait =
             ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
                 .resolve("protocol::server_protocol::ServerProtocol")
+        val eventStreamProtocolTrait =
+            ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+                .resolve("protocol::server_protocol::EventStreamProtocol")
         val streamingMember = operationShape.outputShape(model).findStreamingMember(model)
-        if (streamingMember == null) {
+        if (streamingMember != null && streamingMember.isEventStream(model)) {
+            renderSchemaEventStreamIntoResponse(outputSymbol, operationShape, streamingMember)
+        } else if (streamingMember == null) {
             rustTemplate(
                 """
                 impl<P: #{ServerProtocol}> #{SmithyHttpServer}::response::IntoResponse<P> for #{O} {
@@ -373,13 +380,34 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         }
         if (operationShape.operationErrors(model).isNotEmpty()) {
             val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
+            val isEventStreamOp = operationShape.isEventStream(model)
+            // A2 quirk (assumptions register, pinned): pre-first-event errors on an
+            // event-stream operation stamp the operation's event-stream HTTP content
+            // type over the codec body — mirroring the legacy generated serializers.
+            val protocolBound = if (isEventStreamOp) eventStreamProtocolTrait else serverProtocolTrait
+            val contentTypeOverride =
+                writable {
+                    if (isEventStreamOp) {
+                        rustTemplate(
+                            """
+                            response.headers_mut().insert(
+                                #{http}::header::CONTENT_TYPE,
+                                #{http}::HeaderValue::from_static(P::EVENT_STREAM_HTTP_CONTENT_TYPE),
+                            );
+                            """,
+                            *codegenScope,
+                        )
+                    }
+                }
             rustTemplate(
                 """
-                impl<P: #{ServerProtocol}> #{SmithyHttpServer}::response::IntoResponse<P> for #{E} {
+                impl<P: #{ProtocolBound}> #{SmithyHttpServer}::response::IntoResponse<P> for #{E} {
                     fn into_response(self) -> #{SmithyHttpServer}::response::Response {
+                        ##[allow(unused_mut)]
                         let mut response = match &self {
                             #{match_arms:W}
                         };
+                        #{contentTypeOverride:W}
                         response.extensions_mut().insert(#{SmithyHttpServer}::extension::ModeledErrorExtension::new(self.name()));
                         response
                     }
@@ -387,7 +415,8 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 """,
                 *codegenScope,
                 "E" to errorSymbol,
-                "ServerProtocol" to serverProtocolTrait,
+                "ProtocolBound" to protocolBound,
+                "contentTypeOverride" to contentTypeOverride,
                 "match_arms" to
                     writable {
                         operationShape.operationErrors(model).forEach {
@@ -401,6 +430,114 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                     },
             )
         }
+    }
+
+    /**
+     * The event-stream response glue (plan Step 4.8): the prelude (status,
+     * binding headers) is schema-driven through `P::serialize_response` — the
+     * generated serializer skips the stream member — then the HTTP content type
+     * becomes `P::EVENT_STREAM_HTTP_CONTENT_TYPE` and the body is the marshalled
+     * frame stream. When `alwaysSendEventStreamInitialResponse` is set, an
+     * `initial-response` frame carrying the codec-serialized non-stream output
+     * members is prepended (RPC protocols frame real content; the REST payload is
+     * the empty document, mirroring legacy).
+     */
+    private fun RustWriter.renderSchemaEventStreamIntoResponse(
+        outputSymbol: Symbol,
+        operationShape: OperationShape,
+        streamingMember: MemberShape,
+    ) {
+        val eventStreamProtocolTrait =
+            ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+                .resolve("protocol::server_protocol::EventStreamProtocol")
+        val fieldName = symbolProvider.toMemberName(streamingMember)
+        val unionShape = model.expectShape(streamingMember.target, UnionShape::class.java)
+        val unionModule =
+            "crate::schema_serde::${symbolProvider.shapeModuleName(codegenContext.serviceShape, unionShape)}"
+        val unionName = symbolProvider.toSymbol(unionShape).name
+        val bodyStream =
+            writable {
+                if (codegenContext.settings.codegenConfig.alwaysSendEventStreamInitialResponse) {
+                    rustTemplate(
+                        """
+                        let initial_payload = {
+                            use #{Codec};
+                            use #{FinishSerializer};
+                            use #{ShapeSerializer};
+                            let mut serializer = P::codec().create_serializer();
+                            match serializer.write_struct(Self::SCHEMA, &self) {
+                                Ok(()) => serializer.finish(),
+                                Err(err) => {
+                                    #{Tracing}::error!(error = %err, "failed to serialize initial-response payload");
+                                    ::std::vec::Vec::new()
+                                }
+                            }
+                        };
+                        let initial_message = #{event_bindings}::initial_message(
+                            "initial-response",
+                            P::EVENT_PAYLOAD_CONTENT_TYPE,
+                            initial_payload.into(),
+                        );
+                        let mut buffer = ::std::vec::Vec::new();
+                        #{write_message_to}(&initial_message, &mut buffer)
+                            .expect("failed to write initial message");
+                        let marshaller = $unionModule::${unionName}Marshaller::<P>::new();
+                        let error_marshaller = $unionModule::${unionName}ErrorMarshaller::<P>::new();
+                        let signer = #{NoOpSigner}{};
+                        let adapter = self.$fieldName.into_body_stream(marshaller, error_marshaller, signer);
+                        let body_stream = {
+                            use #{FuturesUtil}::StreamExt;
+                            #{FuturesUtil}::stream::iter(vec![Ok(#{HttpBody1x}::Frame::data(buffer.into()))]).chain(adapter)
+                        };
+                        """,
+                        *codegenScope,
+                        "Codec" to RuntimeType.smithySchema(runtimeConfig).resolve("codec::Codec"),
+                        "ShapeSerializer" to RuntimeType.smithySchema(runtimeConfig).resolve("serde::ShapeSerializer"),
+                        "FinishSerializer" to
+                            RuntimeType.smithySchema(runtimeConfig).resolve("codec::FinishSerializer"),
+                        "event_bindings" to
+                            ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+                                .resolve("protocol::event_bindings"),
+                        "write_message_to" to
+                            RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::write_message_to"),
+                        "NoOpSigner" to
+                            RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::NoOpSigner"),
+                        "HttpBody1x" to CargoDependency.HttpBody1x.toType(),
+                    )
+                } else {
+                    rustTemplate(
+                        """
+                        let marshaller = $unionModule::${unionName}Marshaller::<P>::new();
+                        let error_marshaller = $unionModule::${unionName}ErrorMarshaller::<P>::new();
+                        let signer = #{NoOpSigner}{};
+                        let body_stream = self.$fieldName.into_body_stream(marshaller, error_marshaller, signer);
+                        """,
+                        "NoOpSigner" to
+                            RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::NoOpSigner"),
+                    )
+                }
+            }
+        rustTemplate(
+            """
+            impl<P: #{EventStreamProtocol}> #{SmithyHttpServer}::response::IntoResponse<P> for #{O} {
+                fn into_response(self) -> #{SmithyHttpServer}::response::Response {
+                    let mut response = P::serialize_response(Self::SCHEMA, &self);
+                    response.headers_mut().remove(#{http}::header::CONTENT_LENGTH);
+                    response.headers_mut().insert(
+                        #{http}::header::CONTENT_TYPE,
+                        #{http}::HeaderValue::from_static(P::EVENT_STREAM_HTTP_CONTENT_TYPE),
+                    );
+                    #{bodyStream:W}
+                    *response.body_mut() = #{SmithyHttpServer}::body::boxed(#{http_body_util}::StreamBody::new(body_stream));
+                    response
+                }
+            }
+            """,
+            *codegenScope,
+            "O" to outputSymbol,
+            "EventStreamProtocol" to eventStreamProtocolTrait,
+            "bodyStream" to bodyStream,
+        )
     }
 
     /**
@@ -457,7 +594,9 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         val streamingMember = operationShape.inputShape(model).findStreamingMember(model)
         val requestParse =
             writable {
-                if (streamingMember == null) {
+                if (streamingMember != null && streamingMember.isEventStream(model)) {
+                    renderEventStreamRequestParse(this, inputSymbol, outputSymbol, operationShape, streamingMember)
+                } else if (streamingMember == null) {
                     rustTemplate(
                         """
                         let (parts, body) = request.into_parts();
@@ -829,6 +968,102 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 "serialize_error" to serverSerializeError(operationShape),
             )
         }
+    }
+
+    /**
+     * The event-stream request glue (plan Step 4.8): wrap the raw body in a
+     * frame receiver with the schema-driven `Unmarshaller<P>`, unframe the
+     * `initial-request` message on RPC protocols (`P::FRAMES_INITIAL_MESSAGES`,
+     * only when the input models non-stream members), walk the prelude into the
+     * input's internal BUILDER through `P::with_request_deserializer` (labels /
+     * query / headers on REST, the initial-request codec payload on RPC), attach
+     * the receiver, and only then `build()` — constraint enforcement unmoved.
+     */
+    private fun renderEventStreamRequestParse(
+        writer: RustWriter,
+        inputSymbol: Symbol,
+        outputSymbol: Symbol,
+        operationShape: OperationShape,
+        streamingMember: MemberShape,
+    ) {
+        val serverProtocolTrait =
+            ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+                .resolve("protocol::server_protocol::ServerProtocol")
+        val eventStreamProtocolTrait =
+            ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+                .resolve("protocol::server_protocol::EventStreamProtocol")
+        val inputShape = operationShape.inputShape(model)
+        val unionShape = model.expectShape(streamingMember.target, UnionShape::class.java)
+        val unionModule =
+            "crate::schema_serde::${symbolProvider.shapeModuleName(codegenContext.serviceShape, unionShape)}"
+        val unionName = symbolProvider.toSymbol(unionShape).name
+        val inputModule =
+            "crate::schema_serde::${symbolProvider.shapeModuleName(codegenContext.serviceShape, inputShape)}"
+        val deserFn = "deser_" + symbolProvider.toSymbol(inputShape).name.toSnakeCase()
+        val setterName = "set_" + streamingMember.memberName.toSnakeCase()
+        // Legacy parity: the initial-request frame is consumed only when the input
+        // models non-stream members (`handlesEventStreamInitialRequest`); the
+        // RPC-ness gate is the protocol const.
+        val hasNonStreamMembers =
+            inputShape.members().any {
+                !model.expectShape(it.target).hasTrait<software.amazon.smithy.model.traits.StreamingTrait>()
+            }
+        check(
+            ServerBuilderGenerator.hasFallibleBuilder(
+                inputShape,
+                model,
+                symbolProvider,
+                takeInUnconstrainedTypes = true,
+            ),
+        ) { "event-stream inputs always have fallible builders (the stream member is required)" }
+        writer.rustTemplate(
+            """
+            let (parts, body) = request.into_parts();
+            // The receiver type is the member's resolved symbol — decorators may
+            // wrap it (e.g. the SigV4 unsigning receiver); every wrapper exposes
+            // the same `new(unmarshaller, body)` / `try_recv_initial` surface.
+            let mut receiver = <#{ReceiverTy}>::new(
+                $unionModule::${unionName}Unmarshaller::<#{Marker}>::new(),
+                #{SdkBody}::from_body_1_x(body),
+            );
+            let initial_payload: ::std::option::Option<#{Bytes}> =
+                if <#{Marker} as #{EventStreamProtocol}>::FRAMES_INITIAL_MESSAGES && $hasNonStreamMembers {
+                    receiver
+                        .try_recv_initial(#{InitialMessageType}::Request)
+                        .await
+                        .map_err(|err| #{RequestRejection}::SchemaDeserialize(#{SchemaSerdeError}::custom(format!("{err}"))))?
+                        .map(|message| message.payload().clone())
+                } else {
+                    ::std::option::Option::None
+                };
+            let initial_bytes: &[u8] = initial_payload.as_deref().unwrap_or(b"");
+            let mut builder = <#{Marker} as #{ServerProtocol}>::with_request_deserializer(
+                #{I}::SCHEMA,
+                #{O}::SCHEMA,
+                &parts,
+                initial_bytes,
+                |deserializer| $inputModule::$deserFn(deserializer).map_err(#{DeserializeError}::from),
+            )?;
+            builder = builder.$setterName(receiver);
+            builder.build().map_err(|err| {
+                let err = #{DeserializeError}::from(err);
+                <#{RequestRejection} as ::std::convert::From<#{DeserializeError}>>::from(err)
+            })
+            """,
+            *codegenScope,
+            "I" to inputSymbol,
+            "O" to outputSymbol,
+            "Marker" to protocol.markerStruct(),
+            "ServerProtocol" to serverProtocolTrait,
+            "EventStreamProtocol" to eventStreamProtocolTrait,
+            "ReceiverTy" to symbolProvider.toSymbol(streamingMember),
+            "SdkBody" to RuntimeType.smithyTypes(runtimeConfig).resolve("body::SdkBody"),
+            "InitialMessageType" to RuntimeType.smithyHttp(runtimeConfig).resolve("event_stream::InitialMessageType"),
+            "SchemaSerdeError" to RuntimeType.smithySchema(runtimeConfig).resolve("serde::SerdeError"),
+            "DeserializeError" to
+                ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+                    .resolve("deserialize::DeserializeError"),
+        )
     }
 
     /**

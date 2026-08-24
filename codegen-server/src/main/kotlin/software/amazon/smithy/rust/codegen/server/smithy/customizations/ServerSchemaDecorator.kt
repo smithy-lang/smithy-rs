@@ -37,6 +37,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerSchemaDeserializerGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerSchemaEventStreamGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerSchemaGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.traits.ShapeReachableFromOperationInputTagTrait
@@ -97,6 +98,12 @@ class ServerSchemaDecorator : ServerCodegenDecorator {
         val deserClosure = mutableSetOf<ShapeId>()
         val supportedInputShapes = mutableSetOf<ShapeId>()
         val serializeClosure = errorShapes.toMutableSet()
+        // Event-stream unions needing frame serde: unions reachable from an
+        // operation INPUT get an `Unmarshaller<P>`, from an OUTPUT a
+        // `Marshaller<P>` (+ error marshaller). Streaming unions get no schema
+        // walker — the unmarshaller drives the EVENT structures' walkers.
+        val unmarshallerUnions = mutableSetOf<ShapeId>()
+        val marshallerUnions = mutableSetOf<ShapeId>()
         if (schemaSerde) {
             val supportedOps =
                 schemaSupportedOperations(
@@ -109,12 +116,55 @@ class ServerSchemaDecorator : ServerCodegenDecorator {
                 val inputShape = op.inputShape(codegenContext.model)
                 supportedInputShapes.add(inputShape.id)
                 walker.walkShapes(inputShape).forEach { reachable: Shape ->
+                    if (ServerSchemaEventStreamGenerator.isEventStreamUnion(reachable)) {
+                        unmarshallerUnions.add(reachable.id)
+                        // Client-sent modeled stream errors unmarshal through the
+                        // error structures' walkers.
+                        reachable.asUnionShape().get()
+                            .expectTrait(
+                                software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticEventStreamUnionTrait::class.java,
+                            )
+                            .errorMembers
+                            .forEach { errorMember ->
+                                walker.walkShapes(codegenContext.model.expectShape(errorMember.target))
+                                    .forEach { errShape: Shape ->
+                                        if ((errShape is StructureShape || errShape is UnionShape) &&
+                                            errShape.id != ShapeId.from("smithy.api#Unit") &&
+                                            !ServerSchemaEventStreamGenerator.isEventStreamUnion(errShape)
+                                        ) {
+                                            deserClosure.add(errShape.id)
+                                        }
+                                    }
+                            }
+                    }
                     // `smithy.api#Unit` needs no walker: unit union variants read the
-                    // empty struct inline.
+                    // empty struct inline. Streaming unions get no walker either —
+                    // frames unmarshal through the event structures' walkers.
                     if ((reachable is StructureShape || reachable is UnionShape) &&
-                        reachable.id != ShapeId.from("smithy.api#Unit")
+                        reachable.id != ShapeId.from("smithy.api#Unit") &&
+                        !ServerSchemaEventStreamGenerator.isEventStreamUnion(reachable)
                     ) {
                         deserClosure.add(reachable.id)
+                    }
+                }
+                walker.walkShapes(op.outputShape(codegenContext.model)).forEach { reachable: Shape ->
+                    if (ServerSchemaEventStreamGenerator.isEventStreamUnion(reachable)) {
+                        marshallerUnions.add(reachable.id)
+                        // The hoisted stream-error structures must be schema-
+                        // serializable for the error marshaller.
+                        reachable.asUnionShape().get()
+                            .expectTrait(
+                                software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticEventStreamUnionTrait::class.java,
+                            )
+                            .errorMembers
+                            .forEach { errorMember ->
+                                walker.walkShapes(codegenContext.model.expectShape(errorMember.target))
+                                    .forEach { errShape: Shape ->
+                                        if (errShape is StructureShape || errShape is UnionShape) {
+                                            serializeClosure.add(errShape.id)
+                                        }
+                                    }
+                            }
                     }
                 }
                 walker.walkShapes(op).forEach { reachable: Shape ->
@@ -152,6 +202,17 @@ class ServerSchemaDecorator : ServerCodegenDecorator {
                     deserGenerator.render()
                     if (shapeId in supportedInputShapes) {
                         deserGenerator.renderDeserializableShapeImpl()
+                    }
+                }
+                if (shape is UnionShape &&
+                    (shapeId in marshallerUnions || shapeId in unmarshallerUnions)
+                ) {
+                    val eventGenerator = ServerSchemaEventStreamGenerator(codegenContext, this, shape)
+                    if (shapeId in marshallerUnions) {
+                        eventGenerator.renderMarshallers()
+                    }
+                    if (shapeId in unmarshallerUnions) {
+                        eventGenerator.renderUnmarshaller()
                     }
                 }
             }
@@ -198,15 +259,12 @@ class ServerSchemaDecorator : ServerCodegenDecorator {
          * The operations of [service] the schema-driven pipeline can fully serve, both
          * directions (plan Step 4.7's "supported closure"):
          *
-         * The only exclusion: event-stream operations — schema-served through the
-         * `Marshaller<P>`/`Unmarshaller<P>` designs of plan Step 4.8, excluded until
-         * that lands. Streaming-BLOB operations are IN: their prelude goes through
-         * the schema pipeline and the raw `ByteStream` is spliced by specialized
-         * generated glue (still generic over the protocol). Constrained newtypes
-         * (`publicConstrainedTypes=true`) are fully handled by the schema serializer
-         * (`.0` / `as_str()` unwrapping) and the walker (unconstrained parse types).
-         *
-         * Operations not in this set keep the legacy code paths even on flag-on crates.
+         * EVERY operation is schema-supported (plan Step 4.7): streaming-blob and
+         * event-stream operations are served through specialized generated glue
+         * (splice / `Marshaller<P>`+`Unmarshaller<P>`, plan Step 4.8), still generic
+         * over the protocol; constrained newtypes (`publicConstrainedTypes=true`)
+         * are fully handled by the schema serializer (`.0` / `as_str()` unwrapping)
+         * and the walker (unconstrained parse types).
          */
         fun schemaSupportedOperations(
             model: Model,
@@ -217,7 +275,6 @@ class ServerSchemaDecorator : ServerCodegenDecorator {
             val walker = Walker(model)
             return walker.walkShapes(service)
                 .filterIsInstance<OperationShape>()
-                .filter { op -> !op.isEventStream(model) }
                 .sortedBy { it.id }
         }
 

@@ -6,6 +6,9 @@
 pub mod aws_json;
 pub mod aws_json_10;
 pub mod aws_json_11;
+/// Frame-level event-stream binding interpretation for schema-driven
+/// marshallers/unmarshallers (generated code drives these).
+pub mod event_bindings;
 pub(crate) mod request_bindings;
 pub(crate) mod response_bindings;
 pub mod rest;

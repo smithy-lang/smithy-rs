@@ -21,6 +21,7 @@ aws-lambda = ["dep:lambda_http"]
 
 [dependencies]
 aws-smithy-cbor = { path = "../aws-smithy-cbor" }
+aws-smithy-eventstream = { path = "../aws-smithy-eventstream" }
 aws-smithy-http = { path = "../aws-smithy-http", features = ["rt-tokio"] }
 aws-smithy-json = { path = "../aws-smithy-json" }
 aws-smithy-schema = { path = "../aws-smithy-schema" }

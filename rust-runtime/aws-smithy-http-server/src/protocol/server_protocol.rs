@@ -45,7 +45,7 @@ use std::borrow::Cow;
 use std::sync::LazyLock;
 
 use aws_smithy_schema::codec::Codec;
-use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
+use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer};
 use aws_smithy_schema::{Schema, ShapeId, ShapeType};
 
 use crate::body::BoxBody;
@@ -72,7 +72,7 @@ use aws_smithy_xml::codec::{XmlCodec, XmlCodecSettings};
 
 /// Implemented on each protocol marker. One impl per protocol; all dispatch
 /// is static. Associated functions only — protocols have no instances.
-pub trait ServerProtocol: ProtocolShape {
+pub trait ServerProtocol: ProtocolShape + 'static {
     /// Body codec. Also the event-stream frame-payload codec — the client
     /// needs a dyn `payload_codec()` accessor because its protocol is a
     /// runtime value; server dispatch is static, so `Self::Codec` serves
@@ -80,7 +80,7 @@ pub trait ServerProtocol: ProtocolShape {
     ///
     /// Associated type, not `DynCodec`: `FinishSerializer::finish` is not
     /// object-safe, and no protocol-erased call site exists server-side.
-    type Codec: Codec;
+    type Codec: Codec + 'static;
 
     /// The rejection type for [`deserialize_request`](Self::deserialize_request)
     /// failures — the protocol's `RequestRejection` enum. Wire-level failures
@@ -105,7 +105,24 @@ pub trait ServerProtocol: ProtocolShape {
         output_schema: &Schema<'_>,
         parts: &http::request::Parts,
         body: &[u8],
-    ) -> Result<T, Self::RequestRejection>;
+    ) -> Result<T, Self::RequestRejection> {
+        Self::with_request_deserializer(schema, output_schema, parts, body, |deserializer| {
+            T::deserialize(deserializer)
+        })
+    }
+
+    /// Like [`deserialize_request`](Self::deserialize_request), but hands the
+    /// composite deserializer to `f` instead of driving `T::deserialize`.
+    /// Event-stream operation glue uses this seam to walk into the input's
+    /// internal BUILDER, attach the frame receiver, and only then `build()`
+    /// (the stream member is `@required`-equivalent).
+    fn with_request_deserializer<R>(
+        schema: &Schema<'_>,
+        output_schema: &Schema<'_>,
+        parts: &http::request::Parts,
+        body: &[u8],
+        f: impl FnOnce(&mut dyn ShapeDeserializer) -> Result<R, DeserializeError>,
+    ) -> Result<R, Self::RequestRejection>;
 
     /// Success path. Status: `@httpResponseCode` member if bound and set,
     /// else `schema.http().code()`, else `200`. REST protocols honor
@@ -421,7 +438,17 @@ fn enforce_content_type(
 fn expected_response_content_type<'s>(
     output_schema: &'s Schema<'s>,
     codec_content_type: &'static str,
+    event_stream_content_type: &'static str,
 ) -> Option<Cow<'s, str>> {
+    // An event-stream output: the response is the frame stream, and the legacy
+    // Accept check validated against the event-stream HTTP content type.
+    if output_schema
+        .members()
+        .iter()
+        .any(|m| m.streaming().is_some() && m.shape_type() == ShapeType::Union)
+    {
+        return Some(Cow::Borrowed(event_stream_content_type));
+    }
     if let Some(payload) = output_schema
         .members()
         .iter()
@@ -453,8 +480,9 @@ fn accept_matches_output(
     headers: &http::HeaderMap,
     output_schema: &Schema<'_>,
     codec_content_type: &'static str,
+    event_stream_content_type: &'static str,
 ) -> bool {
-    match expected_response_content_type(output_schema, codec_content_type) {
+    match expected_response_content_type(output_schema, codec_content_type, event_stream_content_type) {
         Some(expected) => match expected.parse::<mime::Mime>() {
             Ok(mime) => super::accept_header_classifier(headers, &mime),
             // An unparseable modeled @mediaType cannot be validated; accept.
@@ -487,16 +515,17 @@ fn no_modeled_output_response(
 
 /// The shared REST request path: content-type validation, then the composite
 /// binding deserializer driving the generated walker.
-fn deserialize_rest_request<T, C, R>(
+fn deserialize_rest_request<Out, F, C, R>(
     codec: &'static C,
     codec_content_type: &'static str,
     check_absent_when_no_input: bool,
     schema: &Schema<'_>,
     parts: &http::request::Parts,
     body: &[u8],
-) -> Result<T, R>
+    f: F,
+) -> Result<Out, R>
 where
-    T: DeserializableShape,
+    F: FnOnce(&mut dyn ShapeDeserializer) -> Result<Out, DeserializeError>,
     C: Codec,
     R: From<DeserializeError> + From<MissingContentTypeReason>,
 {
@@ -504,22 +533,23 @@ where
         expected_request_content_type(schema, codec_content_type, check_absent_when_no_input);
     enforce_content_type(expected, parts, body).map_err(R::from)?;
     let mut deserializer = RestRequestDeserializer::new(codec, parts, body);
-    T::deserialize(&mut deserializer).map_err(R::from)
+    f(&mut deserializer).map_err(R::from)
 }
 
 /// The shared RPC request path: content-type validation (non-empty bodies
 /// only, per the legacy gate), then body-only deserialization through the
 /// codec (an empty body reads as a structure with no members present —
 /// `@required` enforcement stays in `build()`).
-fn deserialize_rpc_request<T, C, R>(
+fn deserialize_rpc_request<Out, F, C, R>(
     codec: &'static C,
     codec_content_type: &'static str,
     schema: &Schema<'_>,
     parts: &http::request::Parts,
     body: &[u8],
-) -> Result<T, R>
+    f: F,
+) -> Result<Out, R>
 where
-    T: DeserializableShape,
+    F: FnOnce(&mut dyn ShapeDeserializer) -> Result<Out, DeserializeError>,
     C: Codec,
     R: From<DeserializeError> + From<MissingContentTypeReason>,
 {
@@ -528,12 +558,19 @@ where
     // contains (rpcv2Cbor's NoInputOutput tests send an empty CBOR map).
     // An empty body reads as a structure with no members present —
     // `@required` enforcement stays in `build()`.
+    //
+    // Event-stream inputs skip the Content-Type check: the HTTP header carries
+    // the event-stream content type, and the "body" handed here is the
+    // initial-request frame's codec payload.
+    let is_event_stream_input = schema.members().iter().any(|m| m.streaming().is_some());
     if !body.is_empty() && !schema.members().is_empty() {
-        check_content_type(&parts.headers, Some(codec_content_type)).map_err(R::from)?;
+        if !is_event_stream_input {
+            check_content_type(&parts.headers, Some(codec_content_type)).map_err(R::from)?;
+        }
         let mut deserializer = codec.create_deserializer(body);
-        T::deserialize(&mut deserializer).map_err(R::from)
+        f(&mut deserializer).map_err(R::from)
     } else {
-        T::deserialize(&mut EmptyStructDeserializer).map_err(R::from)
+        f(&mut EmptyStructDeserializer).map_err(R::from)
     }
 }
 
@@ -560,19 +597,25 @@ impl ServerProtocol for RestJson1 {
         &CODEC
     }
 
-    fn deserialize_request<T: DeserializableShape>(
+    fn with_request_deserializer<R>(
         schema: &Schema<'_>,
         output_schema: &Schema<'_>,
         parts: &http::request::Parts,
         body: &[u8],
-    ) -> Result<T, Self::RequestRejection> {
+        f: impl FnOnce(&mut dyn ShapeDeserializer) -> Result<R, DeserializeError>,
+    ) -> Result<R, Self::RequestRejection> {
         // Legacy generated `from_request` checks `Accept` against the
         // response content type (payload `@mediaType` aware) before
         // anything else.
-        if !accept_matches_output(&parts.headers, output_schema, "application/json") {
+        if !accept_matches_output(
+            &parts.headers,
+            output_schema,
+            "application/json",
+            <Self as EventStreamProtocol>::EVENT_STREAM_HTTP_CONTENT_TYPE,
+        ) {
             return Err(Self::RequestRejection::NotAcceptable);
         }
-        deserialize_rest_request(Self::codec(), "application/json", true, schema, parts, body)
+        deserialize_rest_request(Self::codec(), "application/json", true, schema, parts, body, f)
     }
 
     fn serialize_response(
@@ -675,16 +718,17 @@ macro_rules! aws_json_impl {
                 aws_json_codec()
             }
 
-            fn deserialize_request<T: DeserializableShape>(
+            fn with_request_deserializer<R>(
                 schema: &Schema<'_>,
                 _output_schema: &Schema<'_>,
                 parts: &http::request::Parts,
                 body: &[u8],
-            ) -> Result<T, Self::RequestRejection> {
+                f: impl FnOnce(&mut dyn ShapeDeserializer) -> Result<R, DeserializeError>,
+            ) -> Result<R, Self::RequestRejection> {
                 if !super::accept_header_classifier(&parts.headers, &$mime) {
                     return Err(Self::RequestRejection::NotAcceptable);
                 }
-                deserialize_rpc_request(Self::codec(), $content_type, schema, parts, body)
+                deserialize_rpc_request(Self::codec(), $content_type, schema, parts, body, f)
             }
 
             fn serialize_response(
@@ -792,18 +836,19 @@ impl ServerProtocol for RpcV2Cbor {
         &CODEC
     }
 
-    fn deserialize_request<T: DeserializableShape>(
+    fn with_request_deserializer<R>(
         schema: &Schema<'_>,
         _output_schema: &Schema<'_>,
         parts: &http::request::Parts,
         body: &[u8],
-    ) -> Result<T, Self::RequestRejection> {
+        f: impl FnOnce(&mut dyn ShapeDeserializer) -> Result<R, DeserializeError>,
+    ) -> Result<R, Self::RequestRejection> {
         // The `smithy-protocol: rpc-v2-cbor` header is validated by the
         // router; the body content type is validated here.
         if !super::accept_header_classifier(&parts.headers, &APPLICATION_CBOR_MIME) {
             return Err(Self::RequestRejection::NotAcceptable);
         }
-        deserialize_rpc_request(Self::codec(), "application/cbor", schema, parts, body)
+        deserialize_rpc_request(Self::codec(), "application/cbor", schema, parts, body, f)
     }
 
     fn serialize_response(
@@ -893,16 +938,22 @@ impl ServerProtocol for RestXml {
         &CODEC
     }
 
-    fn deserialize_request<T: DeserializableShape>(
+    fn with_request_deserializer<R>(
         schema: &Schema<'_>,
         output_schema: &Schema<'_>,
         parts: &http::request::Parts,
         body: &[u8],
-    ) -> Result<T, Self::RequestRejection> {
-        if !accept_matches_output(&parts.headers, output_schema, "application/xml") {
+        f: impl FnOnce(&mut dyn ShapeDeserializer) -> Result<R, DeserializeError>,
+    ) -> Result<R, Self::RequestRejection> {
+        if !accept_matches_output(
+            &parts.headers,
+            output_schema,
+            "application/xml",
+            <Self as EventStreamProtocol>::EVENT_STREAM_HTTP_CONTENT_TYPE,
+        ) {
             return Err(Self::RequestRejection::NotAcceptable);
         }
-        deserialize_rest_request(Self::codec(), "application/xml", true, schema, parts, body)
+        deserialize_rest_request(Self::codec(), "application/xml", true, schema, parts, body, f)
     }
 
     fn serialize_response(
