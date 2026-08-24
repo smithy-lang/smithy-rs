@@ -30,9 +30,13 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.shapeModuleName
 import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
+import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerSchemaDeserializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerSchemaGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.traits.ShapeReachableFromOperationInputTagTrait
@@ -69,22 +73,60 @@ class ServerSchemaDecorator : ServerCodegenDecorator {
         if (codegenContext.runtimeConfig.httpVersion != HttpVersion.Http1x) {
             return
         }
-        // NOTE: this runs on every http-1.x crate, NOT just `schemaSerde: true`
-        // opt-ins. The validation-rejection seam (plan 2d) has the runtime's
-        // `RequestRejection::ConstraintViolation` carry
+        // NOTE: the error closure renders on every http-1.x crate, NOT just
+        // `schemaSerde: true` opt-ins. The validation-rejection seam (plan 2d)
+        // has the runtime's `RequestRejection::ConstraintViolation` carry
         // `Box<dyn HttpModeledError + Send>` on all http-1.x protocols, so the
         // modeled validation error (an operation error, hence in this closure)
         // must be schema-serializable even when the crate otherwise serves the
         // legacy code paths.
-        val closure =
+        val errorShapes =
             errorClosure(
                 codegenContext.model,
                 codegenContext.serviceShape,
                 codegenContext.symbolProvider,
                 codegenContext.settings.codegenConfig.publicConstrainedTypes,
             )
+
+        // Flag-on crates additionally get the FULL closure of every schema-supported
+        // operation (inputs, outputs, and everything transitively reachable), the
+        // deserialization walkers for the input side, and the `DeserializableShape`
+        // seam on operation inputs (plan Step 4.1/4.2).
+        val schemaSerde = codegenContext.settings.codegenConfig.schemaSerde
+        val walker = Walker(codegenContext.model)
+        val deserClosure = mutableSetOf<ShapeId>()
+        val supportedInputShapes = mutableSetOf<ShapeId>()
+        val serializeClosure = errorShapes.toMutableSet()
+        if (schemaSerde) {
+            val supportedOps =
+                schemaSupportedOperations(
+                    codegenContext.model,
+                    codegenContext.serviceShape,
+                    codegenContext.symbolProvider,
+                    codegenContext.settings.codegenConfig.publicConstrainedTypes,
+                )
+            for (op in supportedOps) {
+                val inputShape = op.inputShape(codegenContext.model)
+                supportedInputShapes.add(inputShape.id)
+                walker.walkShapes(inputShape).forEach { reachable: Shape ->
+                    // `smithy.api#Unit` needs no walker: unit union variants read the
+                    // empty struct inline.
+                    if ((reachable is StructureShape || reachable is UnionShape) &&
+                        reachable.id != ShapeId.from("smithy.api#Unit")
+                    ) {
+                        deserClosure.add(reachable.id)
+                    }
+                }
+                walker.walkShapes(op).forEach { reachable: Shape ->
+                    if (reachable is StructureShape || reachable is UnionShape) {
+                        serializeClosure.add(reachable.id)
+                    }
+                }
+            }
+        }
+
         val schemaSerdeModule = RustModule.pubCrate("schema_serde")
-        for (shapeId in closure.sorted()) {
+        for (shapeId in (serializeClosure + deserClosure).sorted()) {
             val shape = codegenContext.model.expectShape(shapeId)
             val shapeModule =
                 RustModule.pubCrate(
@@ -104,6 +146,13 @@ class ServerSchemaDecorator : ServerCodegenDecorator {
                 ).renderSerializeOnly()
                 shape.getTrait<ErrorTrait>()?.also { errorTrait ->
                     renderModeledErrorImpls(codegenContext, this, shape, errorTrait)
+                }
+                if (shapeId in deserClosure) {
+                    val deserGenerator = ServerSchemaDeserializerGenerator(codegenContext, this, shape)
+                    deserGenerator.render()
+                    if (shapeId in supportedInputShapes) {
+                        deserGenerator.renderDeserializableShapeImpl()
+                    }
                 }
             }
         }
@@ -146,18 +195,39 @@ class ServerSchemaDecorator : ServerCodegenDecorator {
 
     companion object {
         /**
-         * The set of structure/union shapes reachable from any *schema-safe*
-         * operation error of [service] (the error shapes themselves included).
+         * The operations of [service] the schema-driven pipeline can fully serve, both
+         * directions (plan Step 4.7's "supported closure"):
          *
-         * Under `publicConstrainedTypes=true`, constrained shapes reachable
-         * from operation input generate as newtype wrappers, which the
-         * serialize-only schema pass does not handle beyond strings (whose
-         * newtypes expose `as_str()`). An error whose closure reaches any
-         * other constrained newtype — a `@range` number, `@length` blob or
-         * collection, or a constrained string inside a list/map — is excluded
-         * wholesale, so the generated crate always compiles. The constrained
-         * story is deferred to the RFC's `publicConstrainedTypes` migration
-         * (section 6).
+         * The only exclusion: operations with streaming members in input or output —
+         * event-stream and streaming-blob operations are schema-served through
+         * specialized generated glue (plan Step 4.8) and are excluded until that lands.
+         * Constrained newtypes (`publicConstrainedTypes=true`) are fully handled by the
+         * schema serializer (`.0` / `as_str()` unwrapping, the legacy serializers'
+         * access patterns) and the walker (unconstrained parse types).
+         *
+         * Operations not in this set keep the legacy code paths even on flag-on crates.
+         */
+        fun schemaSupportedOperations(
+            model: Model,
+            service: ServiceShape,
+            symbolProvider: SymbolProvider,
+            publicConstrainedTypes: Boolean,
+        ): List<OperationShape> {
+            val walker = Walker(model)
+            return walker.walkShapes(service)
+                .filterIsInstance<OperationShape>()
+                .filter { op ->
+                    !op.inputShape(model).hasStreamingMember(model) &&
+                        !op.outputShape(model).hasStreamingMember(model)
+                }
+                .sortedBy { it.id }
+        }
+
+        /**
+         * The set of structure/union shapes reachable from any operation error of
+         * [service] (the error shapes themselves included). Constrained newtypes in
+         * error closures are handled by the schema serializer's `.0` / `as_str()`
+         * unwrapping — no exclusions remain.
          */
         fun errorClosure(
             model: Model,
@@ -173,51 +243,14 @@ class ServerSchemaDecorator : ServerCodegenDecorator {
                     .toSet()
             val closure = mutableSetOf<ShapeId>()
             for (errorId in errorShapes) {
-                val errorClosure = walker.walkShapes(model.expectShape(errorId))
-                val safe =
-                    !publicConstrainedTypes ||
-                        errorClosure.none { unsafeForSchemaSerialization(model, it, symbolProvider) }
-                if (safe) {
-                    errorClosure.forEach { shape: Shape ->
-                        if (shape is StructureShape || shape is UnionShape) {
-                            closure.add(shape.id)
-                        }
+                walker.walkShapes(model.expectShape(errorId)).forEach { shape: Shape ->
+                    if (shape is StructureShape || shape is UnionShape) {
+                        closure.add(shape.id)
                     }
                 }
             }
             return closure
         }
 
-        /**
-         * True when [shape] generates as a constrained newtype (or an aggregate
-         * of constrained newtypes) that the serialize-only schema pass cannot
-         * drive. Strings are exempt when targeted directly by structure/union
-         * members (`as_str()` handles their newtypes) but not as list/map
-         * elements, where the specialized slice/map write helpers expect the
-         * plain types.
-         */
-        private fun unsafeForSchemaSerialization(
-            model: Model,
-            shape: Shape,
-            symbolProvider: SymbolProvider,
-        ): Boolean {
-            fun constrainedNonEnum(target: Shape): Boolean =
-                target.hasTrait(ShapeReachableFromOperationInputTagTrait::class.java) &&
-                    target.isDirectlyConstrained(symbolProvider) &&
-                    target !is EnumShape &&
-                    !target.hasTrait(EnumTrait::class.java)
-            return when (shape) {
-                is StructureShape, is UnionShape -> false
-                is ListShape ->
-                    constrainedNonEnum(shape) || constrainedNonEnum(model.expectShape(shape.member.target))
-                is MapShape ->
-                    constrainedNonEnum(shape) ||
-                        constrainedNonEnum(model.expectShape(shape.key.target)) ||
-                        constrainedNonEnum(model.expectShape(shape.value.target))
-                is StringShape -> false // newtypes expose as_str()
-                is MemberShape, is OperationShape, is ServiceShape -> false
-                else -> constrainedNonEnum(shape)
-            }
-        }
     }
 }

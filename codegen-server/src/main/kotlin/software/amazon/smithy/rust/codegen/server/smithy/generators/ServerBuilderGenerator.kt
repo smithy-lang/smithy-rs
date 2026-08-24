@@ -48,6 +48,7 @@ import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
@@ -271,6 +272,24 @@ class ServerBuilderGenerator internal constructor(
         val validationShapeId =
             customValidationExceptionWithReasonConversionGenerator.validationExceptionShapeId()
         val validationShapeSymbol = symbolProvider.toSymbol(model.expectShape(validationShapeId))
+        if (runtimeConfig.httpVersion == HttpVersion.Http1x) {
+            // The schema-driven request path (plan 2g): the generated
+            // `DeserializableShape` walker funnels `build()` failures through this
+            // conversion — the modeled validation error, boxed once, serialized once
+            // at the protocol boundary.
+            writer.rustTemplate(
+                """
+                impl #{From}<ConstraintViolation> for #{SmithyHttpServer}::deserialize::DeserializeError {
+                    fn from(constraint_violation: ConstraintViolation) -> Self {
+                        Self::ConstraintViolation(#{Box}::new(#{ValidationShape}::from(constraint_violation)))
+                    }
+                }
+                """,
+                *codegenScope,
+                "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
+                "ValidationShape" to validationShapeSymbol,
+            )
+        }
         protocolTargets
             .distinctBy { it.protocol.requestRejection(runtimeConfig).path }
             .forEach { target ->

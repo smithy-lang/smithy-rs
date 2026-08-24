@@ -72,6 +72,36 @@ async fn assert_identical(
     );
 }
 
+
+/// The plan-2e response-order policy for restJson1: JSON member order is
+/// insignificant per spec, and the schema path writes canonical MODEL order while
+/// the legacy REST serializers name-sorted top-level error members. Status and
+/// headers stay byte-exact; bodies compare parse-equal (`serde_json::Value`
+/// equality). RPC-protocol goldens remain fully byte-exact.
+async fn assert_identical_json_parse_equal_body(
+    label: &str,
+    legacy: http::Response<BoxBody>,
+    schema: http::Response<BoxBody>,
+) {
+    let (legacy_status, legacy_headers, legacy_body) = parts(legacy).await;
+    let (schema_status, schema_headers, schema_body) = parts(schema).await;
+    assert_eq!(legacy_status, schema_status, "[{label}] status mismatch");
+    assert_eq!(legacy_headers, schema_headers, "[{label}] headers mismatch");
+    let legacy_json: serde_json::Value =
+        serde_json::from_slice(&legacy_body).expect("legacy body is not valid JSON");
+    let schema_json: serde_json::Value =
+        serde_json::from_slice(&schema_body).expect("schema body is not valid JSON");
+    assert_eq!(
+        legacy_json,
+        schema_json,
+        "[{label}] body mismatch (parse-equal)
+ legacy: {}
+ schema: {}",
+        String::from_utf8_lossy(&legacy_body),
+        String::from_utf8_lossy(&schema_body),
+    );
+}
+
 // ---------------------------------------------------------------------------
 // restJson1 (rest_json / rest_json_schema crates)
 // ---------------------------------------------------------------------------
@@ -121,7 +151,7 @@ async fn restjson_complex_error_header_split() {
             },
         ),
     );
-    assert_identical("restJson1 ComplexError", legacy, schema).await;
+    assert_identical_json_parse_equal_body("restJson1 ComplexError", legacy, schema).await;
 }
 
 #[tokio::test]
@@ -175,7 +205,7 @@ async fn restjson_validation_exception() {
             },
         ),
     );
-    assert_identical("restJson1 ValidationException", legacy, schema).await;
+    assert_identical_json_parse_equal_body("restJson1 ValidationException", legacy, schema).await;
 }
 
 // ---------------------------------------------------------------------------
@@ -323,7 +353,7 @@ async fn pokemon_eventstream_error_body_and_status() {
     let schema_error = pokemon_service_server_sdk_schema::error::UnsupportedRegionError {
         region: "Kanto".to_owned(),
     };
-    let schema = RestJson1.serialize_error(&schema_error);
+    let schema = RestJson1::serialize_error(&schema_error);
 
     let (legacy_status, legacy_headers, legacy_body) = parts(legacy).await;
     let (schema_status, schema_headers, schema_body) = parts(schema).await;

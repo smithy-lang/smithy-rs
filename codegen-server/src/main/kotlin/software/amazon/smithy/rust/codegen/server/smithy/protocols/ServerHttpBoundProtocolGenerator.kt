@@ -186,47 +186,34 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     private val isMultiProtocol: Boolean = codegenContext.isMultiProtocol
 
     /**
-     * The schema-safe error closure (see [ServerSchemaDecorator.errorClosure]),
-     * non-empty only when the schema-serde opt-in is active on this crate
-     * (`schemaSerde: true` in codegenConfig, http 1.x runtime) and the crate is
-     * single-protocol: one baked `serialize_members` order cannot match both
-     * protocol families' legacy byte order, and the framework
-     * validation-rejection path still pre-serializes through the legacy
-     * per-protocol serializers (see specs/plan.md — the multi-protocol lift
-     * lands with the generic `IntoResponse` + rejection redesign).
+     * The operations served end-to-end by the schema-driven pipeline (plan Step 4.7):
+     * `schemaSerde` flag + http 1.x + supported closure
+     * ([ServerSchemaDecorator.schemaSupportedOperations] — no streaming members until
+     * the event-stream/streaming-blob glue of plan Step 4.8 lands, and no
+     * schema-unsafe constrained newtypes in the closure).
+     *
+     * Deliberately NO per-protocol and NO multi-protocol conditions: the flag flips
+     * the whole crate (plan 2h); a multi-protocol crate only additionally attaches
+     * the selection layer at assembly time. Served operations reference no legacy
+     * serde functions, which are generated on demand and therefore never generated.
      */
-    private val schemaServedErrorClosure: Set<ShapeId> by lazy {
+    private val schemaServedOperations: Set<ShapeId> by lazy {
         if (runtimeConfig.httpVersion == HttpVersion.Http1x &&
-            codegenContext.settings.codegenConfig.schemaSerde &&
-            !isMultiProtocol
+            codegenContext.settings.codegenConfig.schemaSerde
         ) {
-            ServerSchemaDecorator.errorClosure(
+            ServerSchemaDecorator.schemaSupportedOperations(
                 model,
                 codegenContext.serviceShape,
                 symbolProvider,
                 codegenContext.settings.codegenConfig.publicConstrainedTypes,
-            )
+            ).map { it.id }.toSet()
         } else {
             emptySet()
         }
     }
 
-    /**
-     * True when this operation's errors are served through the schema-driven
-     * `ServerProtocol::serialize_error` seam instead of the legacy generated
-     * per-protocol error serializer (which is then never referenced, and so
-     * never generated).
-     *
-     * Event-stream operations always keep the legacy path: their pre-first-event
-     * HTTP error stamps the event-stream content type (assumptions register A2)
-     * and their frame marshallers need the legacy payload serializers anyway.
-     * Operations with any schema-excluded error (constrained-newtype closure,
-     * see [ServerSchemaDecorator.errorClosure]) also keep the legacy path.
-     */
     private fun operationServedBySchema(operationShape: OperationShape): Boolean =
-        schemaServedErrorClosure.isNotEmpty() &&
-            !operationShape.isEventStream(model) &&
-            operationShape.operationErrors(model).all { it.id in schemaServedErrorClosure }
+        operationShape.id in schemaServedOperations
 
     fun withHttpBindingCustomizations(
         customizations: List<HttpBindingCustomization>,
@@ -277,6 +264,12 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         }
         val inputSymbol = symbolProvider.toSymbol(operationShape.inputShape(model))
         operationWriter.renderSharedInputFuture(inputSymbol)
+        if (operationServedBySchema(operationShape)) {
+            // The protocol-generic `IntoResponse` impls (plan 2c) are protocol-independent
+            // by construction — render them exactly once, alongside the shared future.
+            val outputSymbol = symbolProvider.toSymbol(operationShape.outputShape(model))
+            operationWriter.renderSchemaGenericIntoResponse(outputSymbol, operationShape)
+        }
     }
 
     fun generateTraitImpls(
@@ -290,7 +283,243 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         if (isMultiProtocol && generateSharedTypes) {
             operationWriter.renderSharedInputFuture(inputSymbol)
         }
+        if (operationServedBySchema(operationShape)) {
+            // Schema-served operation (plan Step 4.3/4.4): `FromRequest` is a thin call
+            // into `ServerProtocol::deserialize_request`; responses go through the
+            // protocol-generic `IntoResponse` impls. No legacy serde function is
+            // referenced, so none is generated.
+            operationWriter.renderSchemaServedFromRequest(inputSymbol, operationShape)
+            if (!isMultiProtocol) {
+                operationWriter.renderSchemaGenericIntoResponse(outputSymbol, operationShape)
+            }
+            return
+        }
         operationWriter.renderTraits(inputSymbol, outputSymbol, operationShape)
+    }
+
+    /**
+     * The generic `IntoResponse` impls (plan 2c): one `impl<P: ServerProtocol>
+     * IntoResponse<P>` per operation output delegating to
+     * `P::serialize_response(SCHEMA, &self)`, and one per operation error enum
+     * variant-matching into `P::serialize_error(e)`. Protocols are types with
+     * associated functions — no instance mechanism; serialization failures fall
+     * back to the protocol's internal-error response inside the runtime verbs,
+     * so both impls are infallible (the `ModeledErrorExtension` is stamped on
+     * the fallback response too, unlike the legacy impl, where the failure arm
+     * returned without it).
+     */
+    private fun RustWriter.renderSchemaGenericIntoResponse(
+        outputSymbol: Symbol,
+        operationShape: OperationShape,
+    ) {
+        val serverProtocolTrait =
+            ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+                .resolve("protocol::server_protocol::ServerProtocol")
+        rustTemplate(
+            """
+            impl<P: #{ServerProtocol}> #{SmithyHttpServer}::response::IntoResponse<P> for #{O} {
+                fn into_response(self) -> #{SmithyHttpServer}::response::Response {
+                    P::serialize_response(Self::SCHEMA, &self)
+                }
+            }
+            """,
+            *codegenScope,
+            "O" to outputSymbol,
+            "ServerProtocol" to serverProtocolTrait,
+        )
+        if (operationShape.operationErrors(model).isNotEmpty()) {
+            val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
+            rustTemplate(
+                """
+                impl<P: #{ServerProtocol}> #{SmithyHttpServer}::response::IntoResponse<P> for #{E} {
+                    fn into_response(self) -> #{SmithyHttpServer}::response::Response {
+                        let mut response = match &self {
+                            #{match_arms:W}
+                        };
+                        response.extensions_mut().insert(#{SmithyHttpServer}::extension::ModeledErrorExtension::new(self.name()));
+                        response
+                    }
+                }
+                """,
+                *codegenScope,
+                "E" to errorSymbol,
+                "ServerProtocol" to serverProtocolTrait,
+                "match_arms" to
+                    writable {
+                        operationShape.operationErrors(model).forEach {
+                            val variantShape = model.expectShape(it.id, StructureShape::class.java)
+                            val variantSymbol = symbolProvider.toSymbol(variantShape)
+                            rustTemplate(
+                                "#{E}::${variantSymbol.name}(e) => P::serialize_error(e),",
+                                "E" to errorSymbol,
+                            )
+                        }
+                    },
+            )
+        }
+    }
+
+    /**
+     * The schema-served `FromRequest` impl (plan 2g Design B): collect the body,
+     * then ONE call into `ServerProtocol::deserialize_request`, which does ALL
+     * transport interpretation internally (labels, query, headers, payload, body
+     * via the protocol codec, content-type/Accept validation) and drives the
+     * generated `DeserializableShape` walker.
+     */
+    private fun RustWriter.renderSchemaServedFromRequest(
+        inputSymbol: Symbol,
+        operationShape: OperationShape,
+    ) {
+        val serverProtocolTrait =
+            ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+                .resolve("protocol::server_protocol::ServerProtocol")
+        val inputFuture = "${inputSymbol.name}Future"
+        // Body collection mirrors the legacy path: `requestBodyMaxBytes` caps request
+        // buffering (DoS protection); `0` disables the check.
+        val requestBodyMaxBytes = codegenContext.settings.codegenConfig.requestBodyMaxBytes
+        val collectBody =
+            writable {
+                if (requestBodyMaxBytes > 0L) {
+                    rustTemplate(
+                        """
+                        let bytes = match #{SmithyHttpServer}::body::collect_body_limited(body, ${requestBodyMaxBytes}usize).await {
+                            #{Ok}(bytes) => bytes,
+                            #{Err}(#{SmithyHttpServer}::body::CollectBodyError::Body(err)) => return #{Err}(#{RequestRejection}::from(err)),
+                            #{Err}(#{SmithyHttpServer}::body::CollectBodyError::TooLarge(err)) => {
+                                return #{Err}(#{RequestRejection}::BufferHttpBodyBytes(#{SmithyHttpServer}::error::Error::new(err)));
+                            }
+                        };
+                        """,
+                        *codegenScope,
+                    )
+                } else {
+                    rustTemplate(
+                        """
+                        let bytes = {
+                            use #{HttpBodyUtil}::BodyExt;
+                            body.collect().await?.to_bytes()
+                        };
+                        """,
+                        *codegenScope,
+                        "HttpBodyUtil" to CargoDependency.HttpBodyUtil01x.toType(),
+                    )
+                }
+            }
+        val fromRequestBody =
+            writable {
+                rustTemplate(
+                    """
+                    fn from_request(request: #{http}::Request<B>) -> Self::Future {
+                        let fut = async move {
+                            let (parts, body) = request.into_parts();
+                            #{collectBody:W}
+                            <#{Marker} as #{ServerProtocol}>::deserialize_request::<#{I}>(#{I}::SCHEMA, &parts, bytes.as_ref())
+                        };
+                        use #{FuturesUtil}::future::TryFutureExt;
+                        let fut = fut.map_err(|e: #{RequestRejection}| {
+                            #{Tracing}::debug!(error = %e, "failed to deserialize request");
+                            #{RuntimeError}::from(e)
+                        });
+                        $inputFuture {
+                            inner: Box::pin(fut)
+                        }
+                    }
+                    """,
+                    *codegenScope,
+                    "I" to inputSymbol,
+                    "Marker" to protocol.markerStruct(),
+                    "ServerProtocol" to serverProtocolTrait,
+                    "collectBody" to collectBody,
+                )
+            }
+        if (isMultiProtocol) {
+            rustTemplate(
+                """
+                impl<B> #{SmithyHttpServer}::request::FromRequest<#{Marker}, B> for #{I}
+                where
+                    B: #{SmithyHttpServer}::body::HttpBody + Send,
+                    B: 'static,
+                    B::Data: Send,
+                    #{RequestRejection} : From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
+                {
+                    type Rejection = #{RuntimeError};
+                    type Future = crate::operation::$inputFuture<#{Marker}>;
+
+                    #{from_request:W}
+                }
+                """,
+                *codegenScope,
+                "I" to inputSymbol,
+                "Marker" to protocol.markerStruct(),
+                "from_request" to
+                    writable {
+                        // The shared future is generic over the marker; construction goes
+                        // through the same struct literal, path-qualified.
+                        rustTemplate(
+                            """
+                            fn from_request(request: #{http}::Request<B>) -> Self::Future {
+                                let fut = async move {
+                                    let (parts, body) = request.into_parts();
+                                    #{collectBody:W}
+                                    <#{Marker} as #{ServerProtocol}>::deserialize_request::<#{I}>(#{I}::SCHEMA, &parts, bytes.as_ref())
+                                };
+                                use #{FuturesUtil}::future::TryFutureExt;
+                                let fut = fut.map_err(|e: #{RequestRejection}| {
+                                    #{Tracing}::debug!(error = %e, "failed to deserialize request");
+                                    #{RuntimeError}::from(e)
+                                });
+                                crate::operation::$inputFuture {
+                                    inner: Box::pin(fut)
+                                }
+                            }
+                            """,
+                            *codegenScope,
+                            "I" to inputSymbol,
+                            "Marker" to protocol.markerStruct(),
+                            "ServerProtocol" to serverProtocolTrait,
+                            "collectBody" to collectBody,
+                        )
+                    },
+            )
+        } else {
+            rustTemplate(
+                """
+                #{PinProjectLite}::pin_project! {
+                    /// A [`Future`](std::future::Future) aggregating the body bytes of a [`Request`] and constructing the
+                    /// [`${inputSymbol.name}`](#{I}) using modelled bindings.
+                    pub struct $inputFuture {
+                        inner: std::pin::Pin<Box<dyn std::future::Future<Output = Result<#{I}, #{RuntimeError}>> + Send>>
+                    }
+                }
+
+                impl std::future::Future for $inputFuture {
+                    type Output = Result<#{I}, #{RuntimeError}>;
+
+                    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+                        let this = self.project();
+                        this.inner.as_mut().poll(cx)
+                    }
+                }
+
+                impl<B> #{SmithyHttpServer}::request::FromRequest<#{Marker}, B> for #{I}
+                where
+                    B: #{SmithyHttpServer}::body::HttpBody + Send,
+                    B: 'static,
+                    B::Data: Send,
+                    #{RequestRejection} : From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
+                {
+                    type Rejection = #{RuntimeError};
+                    type Future = $inputFuture;
+
+                    #{from_request:W}
+                }
+                """,
+                *codegenScope,
+                "I" to inputSymbol,
+                "Marker" to protocol.markerStruct(),
+                "from_request" to fromRequestBody,
+            )
+        }
     }
 
     private fun RustWriter.renderSharedInputFuture(inputSymbol: Symbol) {
@@ -496,70 +725,28 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         )
 
         if (operationShape.operationErrors(model).isNotEmpty()) {
-            if (operationServedBySchema(operationShape)) {
-                // Schema-serde opt-in: errors go through the protocol-agnostic
-                // `ServerProtocol::serialize_error` seam. Serialization failure
-                // falls back to the protocol's `RuntimeError::Serialization`
-                // response inside `serialize_error` itself, so this impl is
-                // infallible (the `ModeledErrorExtension` is stamped on the
-                // fallback response too, unlike the legacy impl, where the
-                // failure arm returned without it).
-                val serverProtocolTrait =
-                    ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
-                        .resolve("protocol::server_protocol::ServerProtocol")
-                rustTemplate(
-                    """
-                    impl #{SmithyHttpServer}::response::IntoResponse<#{Marker}> for #{E} {
-                        fn into_response(self) -> #{SmithyHttpServer}::response::Response {
-                            let mut response = match &self {
-                                #{match_arms:W}
-                            };
-                            response.extensions_mut().insert(#{SmithyHttpServer}::extension::ModeledErrorExtension::new(self.name()));
-                            response
-                        }
-                    }
-                    """.trimIndent(),
-                    *codegenScope,
-                    "E" to errorSymbol,
-                    "Marker" to protocol.markerStruct(),
-                    "match_arms" to
-                        writable {
-                            operationShape.operationErrors(model).forEach {
-                                val variantShape = model.expectShape(it.id, StructureShape::class.java)
-                                val variantSymbol = symbolProvider.toSymbol(variantShape)
-                                rustTemplate(
-                                    "#{E}::${variantSymbol.name}(e) => #{ServerProtocol}::serialize_error(&#{Marker}, e),",
-                                    "E" to errorSymbol,
-                                    "Marker" to protocol.markerStruct(),
-                                    "ServerProtocol" to serverProtocolTrait,
-                                )
-                            }
-                        },
-                )
-            } else {
-                rustTemplate(
-                    """
-                    impl #{SmithyHttpServer}::response::IntoResponse<#{Marker}> for #{E} {
-                        fn into_response(self) -> #{SmithyHttpServer}::response::Response {
-                            match #{serialize_error}(&self) {
-                                Ok(mut response) => {
-                                    response.extensions_mut().insert(#{SmithyHttpServer}::extension::ModeledErrorExtension::new(self.name()));
-                                    response
-                                },
-                                Err(e) => {
-                                    #{Tracing}::error!(error = %e, "failed to serialize response");
-                                    #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
-                                }
+            rustTemplate(
+                """
+                impl #{SmithyHttpServer}::response::IntoResponse<#{Marker}> for #{E} {
+                    fn into_response(self) -> #{SmithyHttpServer}::response::Response {
+                        match #{serialize_error}(&self) {
+                            Ok(mut response) => {
+                                response.extensions_mut().insert(#{SmithyHttpServer}::extension::ModeledErrorExtension::new(self.name()));
+                                response
+                            },
+                            Err(e) => {
+                                #{Tracing}::error!(error = %e, "failed to serialize response");
+                                #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
                             }
                         }
                     }
-                    """.trimIndent(),
-                    *codegenScope,
-                    "E" to errorSymbol,
-                    "Marker" to protocol.markerStruct(),
-                    "serialize_error" to serverSerializeError(operationShape),
-                )
-            }
+                }
+                """.trimIndent(),
+                *codegenScope,
+                "E" to errorSymbol,
+                "Marker" to protocol.markerStruct(),
+                "serialize_error" to serverSerializeError(operationShape),
+            )
         }
     }
 

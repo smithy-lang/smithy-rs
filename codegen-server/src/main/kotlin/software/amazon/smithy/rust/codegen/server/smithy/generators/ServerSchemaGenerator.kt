@@ -168,6 +168,63 @@ class ServerSchemaGenerator(
         return type != RustType.String
     }
 
+    // ------------------------------------------------------------------
+    // Constrained-newtype detection (`publicConstrainedTypes=true`): the value at a
+    // position resolves to a tuple-struct wrapper (`StringSet(Vec<String>)`,
+    // `RangeInteger(i32)`, `LengthBlob(Blob)`, …) whose `pub(crate)` inner is
+    // accessed via `.0` — the same access pattern the legacy generated serializers
+    // used. With `publicConstrainedTypes=false` the resolved types are the plain
+    // ones and every check below is false.
+    // ------------------------------------------------------------------
+
+    /** True when a list/map shape resolves to a constrained-newtype wrapper (iterate `&val.0`). */
+    private fun isAggregateNewtype(target: Shape): Boolean =
+        (target is ListShape || target is MapShape) &&
+            symbolProvider.toSymbol(target).rustType() is RustType.Opaque
+
+    /** True when a number shape resolves to a constrained-newtype wrapper (read `val.0`). */
+    private fun isNumberNewtype(target: Shape): Boolean =
+        (
+            target is ByteShape || target is ShortShape || target is IntegerShape ||
+                target is LongShape || target is FloatShape || target is DoubleShape
+        ) &&
+            target !is IntEnumShape &&
+            symbolProvider.toSymbol(target).rustType() is RustType.Opaque
+
+    /** True when a blob shape resolves to a constrained-newtype wrapper (read `val.0.as_ref()`). */
+    private fun isBlobNewtype(target: Shape): Boolean {
+        if (target !is BlobShape) return false
+        val type = symbolProvider.toSymbol(target).rustType()
+        return type is RustType.Opaque && type.name != "Blob"
+    }
+
+    /** True when a (non-enum) string shape resolves to a constrained newtype (read `.as_str()`). */
+    private fun isConstrainedStringShape(target: Shape): Boolean =
+        target is StringShape && !isStringEnum(target) &&
+            symbolProvider.toSymbol(target).rustType() != RustType.String
+
+    /** Iteration source for a list/map value expression: unwraps constrained newtypes. */
+    private fun iterSource(
+        target: Shape,
+        varName: String,
+    ): String = if (isAggregateNewtype(target)) "&$varName.0" else varName
+
+    /** Map-key expression: enum and constrained-string keys expose `as_str()`. */
+    private fun mapKeyExpr(keyTarget: Shape): String =
+        if (isStringEnum(keyTarget) || isConstrainedStringShape(keyTarget)) "key.as_str()" else "key"
+
+    /** Value expression for a number-typed position ([varName] is a reference). */
+    private fun numberValueExpr(
+        target: Shape,
+        varName: String,
+    ): String = if (isNumberNewtype(target)) "$varName.0" else "*$varName"
+
+    /** Value expression for a blob-typed position ([varName] is a reference). */
+    private fun blobValueExpr(
+        target: Shape,
+        varName: String,
+    ): String = if (isBlobNewtype(target)) "$varName.0.as_ref()" else "$varName.as_ref()"
+
     private fun renderSerializableStruct(
         writer: RustWriter,
         structName: String,
@@ -298,22 +355,22 @@ class ServerSchemaGenerator(
     ): String {
         return when (target) {
             is BooleanShape -> "ser.write_boolean(&$memberSchemaRef, *$varName)?;"
-            is ByteShape -> "ser.write_byte(&$memberSchemaRef, *$varName)?;"
-            is ShortShape -> "ser.write_short(&$memberSchemaRef, *$varName)?;"
-            is IntegerShape -> "ser.write_integer(&$memberSchemaRef, *$varName)?;"
-            is LongShape -> "ser.write_long(&$memberSchemaRef, *$varName)?;"
-            is FloatShape -> "ser.write_float(&$memberSchemaRef, *$varName)?;"
-            is DoubleShape -> "ser.write_double(&$memberSchemaRef, *$varName)?;"
+            is ByteShape -> "ser.write_byte(&$memberSchemaRef, ${numberValueExpr(target, varName)})?;"
+            is ShortShape -> "ser.write_short(&$memberSchemaRef, ${numberValueExpr(target, varName)})?;"
+            is IntegerShape -> "ser.write_integer(&$memberSchemaRef, ${numberValueExpr(target, varName)})?;"
+            is LongShape -> "ser.write_long(&$memberSchemaRef, ${numberValueExpr(target, varName)})?;"
+            is FloatShape -> "ser.write_float(&$memberSchemaRef, ${numberValueExpr(target, varName)})?;"
+            is DoubleShape -> "ser.write_double(&$memberSchemaRef, ${numberValueExpr(target, varName)})?;"
             is BigIntegerShape -> "ser.write_big_integer(&$memberSchemaRef, $varName)?;"
             is BigDecimalShape -> "ser.write_big_decimal(&$memberSchemaRef, $varName)?;"
             is EnumShape -> "ser.write_string(&$memberSchemaRef, $varName.as_str())?;"
             is StringShape ->
-                if (isStringEnum(target) || (member != null && isConstrainedStringMember(member))) {
+                if (isStringEnum(target) || isConstrainedStringShape(target) || (member != null && isConstrainedStringMember(member))) {
                     "ser.write_string(&$memberSchemaRef, $varName.as_str())?;"
                 } else {
                     "ser.write_string(&$memberSchemaRef, $varName)?;"
                 }
-            is BlobShape -> "ser.write_blob(&$memberSchemaRef, $varName.as_ref())?;"
+            is BlobShape -> "ser.write_blob(&$memberSchemaRef, ${blobValueExpr(target, varName)})?;"
             is TimestampShape -> "ser.write_timestamp(&$memberSchemaRef, $varName)?;"
             is StructureShape -> "ser.write_struct(&$memberSchemaRef, $varName)?;"
             is ListShape -> {
@@ -325,14 +382,14 @@ class ServerSchemaGenerator(
                 // generic write_list path below, which destructures
                 // `Option<T>` per element and emits write_null for None.
                 val helperExpr =
-                    if (isSparse) {
+                    if (isSparse || isAggregateNewtype(target)) {
                         null
                     } else {
                         when (elementTarget) {
-                            is StringShape -> if (!isStringEnum(elementTarget)) "ser.write_string_list(&$memberSchemaRef, $varName)?;" else null
-                            is BlobShape -> "ser.write_blob_list(&$memberSchemaRef, $varName)?;"
-                            is IntegerShape, is IntEnumShape -> "ser.write_integer_list(&$memberSchemaRef, $varName)?;"
-                            is LongShape -> "ser.write_long_list(&$memberSchemaRef, $varName)?;"
+                            is StringShape -> if (!isStringEnum(elementTarget) && !isConstrainedStringShape(elementTarget)) "ser.write_string_list(&$memberSchemaRef, $varName)?;" else null
+                            is BlobShape -> if (!isBlobNewtype(elementTarget)) "ser.write_blob_list(&$memberSchemaRef, $varName)?;" else null
+                            is IntegerShape, is IntEnumShape -> if (!isNumberNewtype(elementTarget)) "ser.write_integer_list(&$memberSchemaRef, $varName)?;" else null
+                            is LongShape -> if (!isNumberNewtype(elementTarget)) "ser.write_long_list(&$memberSchemaRef, $varName)?;" else null
                             else -> null
                         }
                     }
@@ -341,7 +398,7 @@ class ServerSchemaGenerator(
                     if (isSparse) {
                         """
                         ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
-                            for item in $varName {
+                            for item in ${iterSource(target, varName)} {
                                 match item {
                                     Some(item) => { $elementWrite }
                                     None => { ser.write_null(&::aws_smithy_schema::prelude::STRING)?; }
@@ -353,7 +410,7 @@ class ServerSchemaGenerator(
                     } else {
                         """
                         ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
-                            for item in $varName {
+                            for item in ${iterSource(target, varName)} {
                                 $elementWrite
                             }
                             Ok(())
@@ -369,15 +426,17 @@ class ServerSchemaGenerator(
                 // The string-string map helper takes `&HashMap<String, String>`.
                 // Sparse maps have `Option<String>` values, so the helper
                 // doesn't apply.
-                if (!isSparse && !isStringEnum(keyTarget) && valueTarget is StringShape && !isStringEnum(valueTarget)) {
+                if (!isSparse && !isAggregateNewtype(target) && !isStringEnum(keyTarget) && !isConstrainedStringShape(keyTarget) &&
+                    valueTarget is StringShape && !isStringEnum(valueTarget) && !isConstrainedStringShape(valueTarget)
+                ) {
                     "ser.write_string_string_map(&$memberSchemaRef, $varName)?;"
                 } else {
-                    val keyExpr = if (isStringEnum(keyTarget)) "key.as_str()" else "key"
+                    val keyExpr = mapKeyExpr(keyTarget)
                     val valueWrite = mapValueWriteExpr(target, memberSchemaRef, valueTarget, "value")
                     if (isSparse) {
                         """
                         ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
-                            for (key, value) in $varName {
+                            for (key, value) in ${iterSource(target, varName)} {
                                 ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
                                 match value {
                                     Some(value) => { $valueWrite }
@@ -390,7 +449,7 @@ class ServerSchemaGenerator(
                     } else {
                         """
                         ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
-                            for (key, value) in $varName {
+                            for (key, value) in ${iterSource(target, varName)} {
                                 ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
                                 $valueWrite
                             }
@@ -425,17 +484,17 @@ class ServerSchemaGenerator(
             }
         return when (target) {
             is BooleanShape -> "ser.write_boolean(&$memberSchemaRef, *val)?;"
-            is ByteShape -> "ser.write_byte(&$memberSchemaRef, *val)?;"
-            is ShortShape -> "ser.write_short(&$memberSchemaRef, *val)?;"
-            is IntegerShape -> "ser.write_integer(&$memberSchemaRef, *val)?;"
-            is LongShape -> "ser.write_long(&$memberSchemaRef, *val)?;"
-            is FloatShape -> "ser.write_float(&$memberSchemaRef, *val)?;"
-            is DoubleShape -> "ser.write_double(&$memberSchemaRef, *val)?;"
+            is ByteShape -> "ser.write_byte(&$memberSchemaRef, ${numberValueExpr(target, "val")})?;"
+            is ShortShape -> "ser.write_short(&$memberSchemaRef, ${numberValueExpr(target, "val")})?;"
+            is IntegerShape -> "ser.write_integer(&$memberSchemaRef, ${numberValueExpr(target, "val")})?;"
+            is LongShape -> "ser.write_long(&$memberSchemaRef, ${numberValueExpr(target, "val")})?;"
+            is FloatShape -> "ser.write_float(&$memberSchemaRef, ${numberValueExpr(target, "val")})?;"
+            is DoubleShape -> "ser.write_double(&$memberSchemaRef, ${numberValueExpr(target, "val")})?;"
             is BigIntegerShape -> "ser.write_big_integer(&$memberSchemaRef, val)?;"
             is BigDecimalShape -> "ser.write_big_decimal(&$memberSchemaRef, val)?;"
             is EnumShape -> "ser.write_string(&$memberSchemaRef, val.as_str())?;"
             is StringShape ->
-                if (isStringEnum(target) || (member != null && isConstrainedStringMember(member))) {
+                if (isStringEnum(target) || isConstrainedStringShape(target) || (member != null && isConstrainedStringMember(member))) {
                     // Constrained-string newtypes expose the inner `&str` via `as_str()`.
                     "ser.write_string(&$memberSchemaRef, val.as_str())?;"
                 } else {
@@ -446,7 +505,7 @@ class ServerSchemaGenerator(
                 if (target.hasTrait(StreamingTrait::class.java)) {
                     "// streaming blob is serialized as the HTTP body by the protocol, not the codec"
                 } else {
-                    "ser.write_blob(&$memberSchemaRef, val.as_ref())?;"
+                    "ser.write_blob(&$memberSchemaRef, ${blobValueExpr(target, "val")})?;"
                 }
 
             is TimestampShape -> "ser.write_timestamp(&$memberSchemaRef, val)?;"
@@ -458,7 +517,7 @@ class ServerSchemaGenerator(
                 if (isSparse) {
                     """
                     ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
-                        for item in val {
+                        for item in ${iterSource(target, "val")} {
                             match item {
                                 Some(item) => { $elementWrite }
                                 None => { ser.write_null(&aws_smithy_schema::prelude::STRING)?; }
@@ -470,7 +529,7 @@ class ServerSchemaGenerator(
                 } else {
                     """
                     ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
-                        for item in val {
+                        for item in ${iterSource(target, "val")} {
                             $elementWrite
                         }
                         Ok(())
@@ -482,13 +541,13 @@ class ServerSchemaGenerator(
             is MapShape -> {
                 val isSparse = target.hasTrait(SparseTrait::class.java)
                 val keyTarget = model.expectShape(target.key.target)
-                val keyExpr = if (isStringEnum(keyTarget)) "key.as_str()" else "key"
+                val keyExpr = mapKeyExpr(keyTarget)
                 val valueTarget = model.expectShape(target.value.target)
                 val valueWrite = mapValueWriteExpr(target, memberSchemaRef, valueTarget, "value")
                 if (isSparse) {
                     """
                     ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
-                        for (key, value) in val {
+                        for (key, value) in ${iterSource(target, "val")} {
                             ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
                             match value {
                                 Some(value) => { $valueWrite }
@@ -501,7 +560,7 @@ class ServerSchemaGenerator(
                 } else {
                     """
                     ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
-                        for (key, value) in val {
+                        for (key, value) in ${iterSource(target, "val")} {
                             ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
                             $valueWrite
                         }
@@ -536,23 +595,23 @@ class ServerSchemaGenerator(
         val prelude = "aws_smithy_schema::prelude"
         return when (target) {
             is BooleanShape -> "ser.write_boolean(&$prelude::BOOLEAN, *$varName)?;"
-            is ByteShape -> "ser.write_byte(&$prelude::BYTE, *$varName)?;"
-            is ShortShape -> "ser.write_short(&$prelude::SHORT, *$varName)?;"
-            is IntegerShape -> "ser.write_integer(&$prelude::INTEGER, *$varName)?;"
-            is LongShape -> "ser.write_long(&$prelude::LONG, *$varName)?;"
-            is FloatShape -> "ser.write_float(&$prelude::FLOAT, *$varName)?;"
-            is DoubleShape -> "ser.write_double(&$prelude::DOUBLE, *$varName)?;"
+            is ByteShape -> "ser.write_byte(&$prelude::BYTE, ${numberValueExpr(target, varName)})?;"
+            is ShortShape -> "ser.write_short(&$prelude::SHORT, ${numberValueExpr(target, varName)})?;"
+            is IntegerShape -> "ser.write_integer(&$prelude::INTEGER, ${numberValueExpr(target, varName)})?;"
+            is LongShape -> "ser.write_long(&$prelude::LONG, ${numberValueExpr(target, varName)})?;"
+            is FloatShape -> "ser.write_float(&$prelude::FLOAT, ${numberValueExpr(target, varName)})?;"
+            is DoubleShape -> "ser.write_double(&$prelude::DOUBLE, ${numberValueExpr(target, varName)})?;"
             is BigIntegerShape -> "ser.write_big_integer(&$prelude::BIG_INTEGER, $varName)?;"
             is BigDecimalShape -> "ser.write_big_decimal(&$prelude::BIG_DECIMAL, $varName)?;"
             is EnumShape -> "ser.write_string(&$prelude::STRING, $varName.as_str())?;"
             is StringShape ->
-                if (isStringEnum(target)) {
+                if (isStringEnum(target) || isConstrainedStringShape(target)) {
                     "ser.write_string(&$prelude::STRING, $varName.as_str())?;"
                 } else {
                     "ser.write_string(&$prelude::STRING, $varName)?;"
                 }
 
-            is BlobShape -> "ser.write_blob(&$prelude::BLOB, $varName.as_ref())?;"
+            is BlobShape -> "ser.write_blob(&$prelude::BLOB, ${blobValueExpr(target, varName)})?;"
             is TimestampShape -> "ser.write_timestamp(&$prelude::TIMESTAMP, $varName)?;"
             is DocumentShape -> "ser.write_document(&$prelude::DOCUMENT, $varName)?;"
             is StructureShape -> {
@@ -562,7 +621,7 @@ class ServerSchemaGenerator(
 
             is MapShape -> {
                 val keyTarget = model.expectShape(target.key.target)
-                val keyExpr = if (isStringEnum(keyTarget)) "key.as_str()" else "key"
+                val keyExpr = mapKeyExpr(keyTarget)
                 val valueTarget = model.expectShape(target.value.target)
                 val isSparse = target.hasTrait(SparseTrait::class.java)
                 // We're writing a list element that is itself a map. The map's
@@ -581,7 +640,7 @@ class ServerSchemaGenerator(
                 if (isSparse) {
                     """
                     ser.write_map($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
-                        for (key, value) in $varName {
+                        for (key, value) in ${iterSource(target, varName)} {
                             ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
                             match value {
                                 Some(value) => { $valueWrite }
@@ -594,7 +653,7 @@ class ServerSchemaGenerator(
                 } else {
                     """
                     ser.write_map($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
-                        for (key, value) in $varName {
+                        for (key, value) in ${iterSource(target, varName)} {
                             ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
                             $valueWrite
                         }
@@ -618,7 +677,7 @@ class ServerSchemaGenerator(
                 if (isSparse) {
                     """
                     ser.write_list($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
-                        for item in $varName {
+                        for item in ${iterSource(target, varName)} {
                             match item {
                                 Some(item) => { $elementWrite }
                                 None => { ser.write_null(&::aws_smithy_schema::prelude::STRING)?; }
@@ -630,7 +689,7 @@ class ServerSchemaGenerator(
                 } else {
                     """
                     ser.write_list($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
-                        for item in $varName {
+                        for item in ${iterSource(target, varName)} {
                             $elementWrite
                         }
                         Ok(())
@@ -667,23 +726,23 @@ class ServerSchemaGenerator(
         val prelude = "::aws_smithy_schema::prelude"
         return when (target) {
             is BooleanShape -> "ser.write_boolean(&$prelude::BOOLEAN, *$varName)?;"
-            is ByteShape -> "ser.write_byte(&$prelude::BYTE, *$varName)?;"
-            is ShortShape -> "ser.write_short(&$prelude::SHORT, *$varName)?;"
-            is IntegerShape -> "ser.write_integer(&$prelude::INTEGER, *$varName)?;"
-            is LongShape -> "ser.write_long(&$prelude::LONG, *$varName)?;"
-            is FloatShape -> "ser.write_float(&$prelude::FLOAT, *$varName)?;"
-            is DoubleShape -> "ser.write_double(&$prelude::DOUBLE, *$varName)?;"
+            is ByteShape -> "ser.write_byte(&$prelude::BYTE, ${numberValueExpr(target, varName)})?;"
+            is ShortShape -> "ser.write_short(&$prelude::SHORT, ${numberValueExpr(target, varName)})?;"
+            is IntegerShape -> "ser.write_integer(&$prelude::INTEGER, ${numberValueExpr(target, varName)})?;"
+            is LongShape -> "ser.write_long(&$prelude::LONG, ${numberValueExpr(target, varName)})?;"
+            is FloatShape -> "ser.write_float(&$prelude::FLOAT, ${numberValueExpr(target, varName)})?;"
+            is DoubleShape -> "ser.write_double(&$prelude::DOUBLE, ${numberValueExpr(target, varName)})?;"
             is BigIntegerShape -> "ser.write_big_integer(&$prelude::BIG_INTEGER, $varName)?;"
             is BigDecimalShape -> "ser.write_big_decimal(&$prelude::BIG_DECIMAL, $varName)?;"
             is EnumShape -> "ser.write_string(&$prelude::STRING, $varName.as_str())?;"
             is StringShape ->
-                if (isStringEnum(target)) {
+                if (isStringEnum(target) || isConstrainedStringShape(target)) {
                     "ser.write_string(&$prelude::STRING, $varName.as_str())?;"
                 } else {
                     "ser.write_string(&$prelude::STRING, $varName)?;"
                 }
 
-            is BlobShape -> "ser.write_blob(&$prelude::BLOB, $varName.as_ref())?;"
+            is BlobShape -> "ser.write_blob(&$prelude::BLOB, ${blobValueExpr(target, varName)})?;"
             is TimestampShape -> "ser.write_timestamp(&$prelude::TIMESTAMP, $varName)?;"
             is DocumentShape -> "ser.write_document(&$prelude::DOCUMENT, $varName)?;"
             is StructureShape -> {
@@ -693,7 +752,7 @@ class ServerSchemaGenerator(
 
             is MapShape -> {
                 val keyTarget = model.expectShape(target.key.target)
-                val keyExpr = if (isStringEnum(keyTarget)) "key.as_str()" else "key"
+                val keyExpr = mapKeyExpr(keyTarget)
                 val valueTarget = model.expectShape(target.value.target)
                 val isSparse = target.hasTrait(SparseTrait::class.java)
                 // We're writing a map value that is itself a map. Its schema
@@ -711,7 +770,7 @@ class ServerSchemaGenerator(
                 if (isSparse) {
                     """
                     ser.write_map($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
-                        for (key, value) in $varName {
+                        for (key, value) in ${iterSource(target, varName)} {
                             ser.write_string(&$prelude::STRING, $keyExpr)?;
                             match value {
                                 Some(value) => { $innerValueWrite }
@@ -724,7 +783,7 @@ class ServerSchemaGenerator(
                 } else {
                     """
                     ser.write_map($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
-                        for (key, value) in $varName {
+                        for (key, value) in ${iterSource(target, varName)} {
                             ser.write_string(&$prelude::STRING, $keyExpr)?;
                             $innerValueWrite
                         }
@@ -748,7 +807,7 @@ class ServerSchemaGenerator(
                 if (isSparse) {
                     """
                     ser.write_list($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
-                        for item in $varName {
+                        for item in ${iterSource(target, varName)} {
                             match item {
                                 Some(item) => { $elementWrite }
                                 None => { ser.write_null(&$prelude::STRING)?; }
@@ -760,7 +819,7 @@ class ServerSchemaGenerator(
                 } else {
                     """
                     ser.write_list($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
-                        for item in $varName {
+                        for item in ${iterSource(target, varName)} {
                             $elementWrite
                         }
                         Ok(())
@@ -982,15 +1041,20 @@ class ServerSchemaGenerator(
     }
 
     /**
-     * If this shape is an operation input, returns a `.with_http(...)` chain
-     * for the operation's `@http` trait. The `@http` trait is operation-level
-     * but is included on the input schema for convenience so the protocol
-     * serializer can construct the request URI.
+     * If this shape is an operation input OR output, returns a `.with_http(...)`
+     * chain for the operation's `@http` trait. The `@http` trait is
+     * operation-level but is transcribed onto both sides' schemas (plan Step
+     * 4.1): the input schema drives request-URI interpretation
+     * (`deserialize_request` label re-matching); the output schema drives
+     * success-status resolution (`serialize_response`: `@httpResponseCode`
+     * member if set, else `schema.http().code()`, else 200).
      */
     private fun httpTraitChain(shape: Shape): String {
         val operationIndex = software.amazon.smithy.model.knowledge.OperationIndex.of(model)
         for (operation in model.operationShapes) {
-            if (operationIndex.getInputShape(operation).orElse(null)?.id == shape.id) {
+            if (operationIndex.getInputShape(operation).orElse(null)?.id == shape.id ||
+                operationIndex.getOutputShape(operation).orElse(null)?.id == shape.id
+            ) {
                 val httpTrait =
                     operation.getTrait(software.amazon.smithy.model.traits.HttpTrait::class.java).orElse(null)
                         ?: return ""

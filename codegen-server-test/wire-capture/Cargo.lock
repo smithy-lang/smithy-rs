@@ -244,6 +244,7 @@ dependencies = [
  "aws-smithy-http-server",
  "aws-smithy-json",
  "aws-smithy-runtime-api",
+ "aws-smithy-schema",
  "aws-smithy-types",
  "bytes",
  "form_urlencoded",
@@ -272,14 +273,11 @@ dependencies = [
  "aws-smithy-schema",
  "aws-smithy-types",
  "bytes",
- "form_urlencoded",
  "futures-util",
  "http 1.5.0",
  "http-body 1.1.0",
  "http-body-util",
  "mime",
- "nom",
- "percent-encoding",
  "pin-project-lite",
  "regex",
  "tower",
@@ -318,6 +316,7 @@ dependencies = [
  "aws-smithy-http-server",
  "aws-smithy-json",
  "aws-smithy-runtime-api",
+ "aws-smithy-schema",
  "aws-smithy-types",
  "futures-util",
  "http 1.5.0",
@@ -608,6 +607,7 @@ dependencies = [
  "aws-smithy-http-server",
  "aws-smithy-json",
  "aws-smithy-runtime-api",
+ "aws-smithy-schema",
  "aws-smithy-types",
  "futures-util",
  "http 1.5.0",
@@ -622,16 +622,12 @@ dependencies = [
 name = "json_rpc10-schema"
 version = "0.0.1"
 dependencies = [
- "aws-smithy-http",
  "aws-smithy-http-server",
- "aws-smithy-json",
- "aws-smithy-runtime-api",
  "aws-smithy-schema",
  "aws-smithy-types",
  "futures-util",
  "http 1.5.0",
  "http-body-util",
- "mime",
  "pin-project-lite",
  "tower",
  "tracing",
@@ -645,6 +641,7 @@ dependencies = [
  "aws-smithy-http-server",
  "aws-smithy-json",
  "aws-smithy-runtime-api",
+ "aws-smithy-schema",
  "aws-smithy-types",
  "futures-util",
  "http 1.5.0",
@@ -659,16 +656,12 @@ dependencies = [
 name = "json_rpc11-schema"
 version = "0.0.1"
 dependencies = [
- "aws-smithy-http",
  "aws-smithy-http-server",
- "aws-smithy-json",
- "aws-smithy-runtime-api",
  "aws-smithy-schema",
  "aws-smithy-types",
  "futures-util",
  "http 1.5.0",
  "http-body-util",
- "mime",
  "pin-project-lite",
  "tower",
  "tracing",
@@ -860,6 +853,7 @@ dependencies = [
  "aws-smithy-http-server",
  "aws-smithy-json",
  "aws-smithy-runtime-api",
+ "aws-smithy-schema",
  "aws-smithy-types",
  "aws-smithy-xml",
  "bytes",
@@ -995,6 +989,7 @@ dependencies = [
  "aws-smithy-http-server",
  "aws-smithy-json",
  "aws-smithy-runtime-api",
+ "aws-smithy-schema",
  "aws-smithy-types",
  "bytes",
  "form_urlencoded",
@@ -1022,14 +1017,11 @@ dependencies = [
  "aws-smithy-schema",
  "aws-smithy-types",
  "bytes",
- "form_urlencoded",
  "futures-util",
  "http 1.5.0",
  "http-body 1.1.0",
  "http-body-util",
  "mime",
- "nom",
- "percent-encoding",
  "pin-project-lite",
  "tower",
  "tracing",
@@ -1037,24 +1029,6 @@ dependencies = [
 
 [[package]]
 name = "rpcv2cbor"
-version = "0.0.1"
-dependencies = [
- "aws-smithy-cbor",
- "aws-smithy-http",
- "aws-smithy-http-server",
- "aws-smithy-runtime-api",
- "aws-smithy-types",
- "futures-util",
- "http 1.5.0",
- "http-body-util",
- "mime",
- "pin-project-lite",
- "tower",
- "tracing",
-]
-
-[[package]]
-name = "rpcv2cbor-schema"
 version = "0.0.1"
 dependencies = [
  "aws-smithy-cbor",
@@ -1073,6 +1047,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "rpcv2cbor-schema"
+version = "0.0.1"
+dependencies = [
+ "aws-smithy-http-server",
+ "aws-smithy-schema",
+ "aws-smithy-types",
+ "futures-util",
+ "http 1.5.0",
+ "http-body-util",
+ "pin-project-lite",
+ "tower",
+ "tracing",
+]
+
+[[package]]
 name = "rpcv2cbor_extras"
 version = "0.0.1"
 dependencies = [
@@ -1081,6 +1070,7 @@ dependencies = [
  "aws-smithy-http",
  "aws-smithy-http-server",
  "aws-smithy-runtime-api",
+ "aws-smithy-schema",
  "aws-smithy-types",
  "bytes",
  "futures-util",
