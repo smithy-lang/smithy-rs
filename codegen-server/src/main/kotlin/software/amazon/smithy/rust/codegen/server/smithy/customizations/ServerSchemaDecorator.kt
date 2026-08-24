@@ -30,8 +30,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.shapeModuleName
 import software.amazon.smithy.rust.codegen.core.util.getTrait
-import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
@@ -198,12 +198,13 @@ class ServerSchemaDecorator : ServerCodegenDecorator {
          * The operations of [service] the schema-driven pipeline can fully serve, both
          * directions (plan Step 4.7's "supported closure"):
          *
-         * The only exclusion: operations with streaming members in input or output —
-         * event-stream and streaming-blob operations are schema-served through
-         * specialized generated glue (plan Step 4.8) and are excluded until that lands.
-         * Constrained newtypes (`publicConstrainedTypes=true`) are fully handled by the
-         * schema serializer (`.0` / `as_str()` unwrapping, the legacy serializers'
-         * access patterns) and the walker (unconstrained parse types).
+         * The only exclusion: event-stream operations — schema-served through the
+         * `Marshaller<P>`/`Unmarshaller<P>` designs of plan Step 4.8, excluded until
+         * that lands. Streaming-BLOB operations are IN: their prelude goes through
+         * the schema pipeline and the raw `ByteStream` is spliced by specialized
+         * generated glue (still generic over the protocol). Constrained newtypes
+         * (`publicConstrainedTypes=true`) are fully handled by the schema serializer
+         * (`.0` / `as_str()` unwrapping) and the walker (unconstrained parse types).
          *
          * Operations not in this set keep the legacy code paths even on flag-on crates.
          */
@@ -216,10 +217,7 @@ class ServerSchemaDecorator : ServerCodegenDecorator {
             val walker = Walker(model)
             return walker.walkShapes(service)
                 .filterIsInstance<OperationShape>()
-                .filter { op ->
-                    !op.inputShape(model).hasStreamingMember(model) &&
-                        !op.outputShape(model).hasStreamingMember(model)
-                }
+                .filter { op -> !op.isEventStream(model) }
                 .sortedBy { it.id }
         }
 

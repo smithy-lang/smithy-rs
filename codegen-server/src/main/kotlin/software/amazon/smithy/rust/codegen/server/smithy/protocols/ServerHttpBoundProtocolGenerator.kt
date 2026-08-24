@@ -315,18 +315,62 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         val serverProtocolTrait =
             ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
                 .resolve("protocol::server_protocol::ServerProtocol")
-        rustTemplate(
-            """
-            impl<P: #{ServerProtocol}> #{SmithyHttpServer}::response::IntoResponse<P> for #{O} {
-                fn into_response(self) -> #{SmithyHttpServer}::response::Response {
-                    P::serialize_response(Self::SCHEMA, &self)
+        val streamingMember = operationShape.outputShape(model).findStreamingMember(model)
+        if (streamingMember == null) {
+            rustTemplate(
+                """
+                impl<P: #{ServerProtocol}> #{SmithyHttpServer}::response::IntoResponse<P> for #{O} {
+                    fn into_response(self) -> #{SmithyHttpServer}::response::Response {
+                        P::serialize_response(Self::SCHEMA, &self)
+                    }
                 }
-            }
-            """,
-            *codegenScope,
-            "O" to outputSymbol,
-            "ServerProtocol" to serverProtocolTrait,
-        )
+                """,
+                *codegenScope,
+                "O" to outputSymbol,
+                "ServerProtocol" to serverProtocolTrait,
+            )
+        } else {
+            // Streaming-blob output (plan Step 4.8's splice design): the prelude
+            // (status, binding headers) is schema-driven through
+            // `P::serialize_response` — the generated serializer skips the streaming
+            // member — and the raw `ByteStream` is spliced in as the body. The
+            // content type is model data (`@mediaType`, else octet-stream) and the
+            // content length is unknowable, mirroring the legacy generated
+            // serializer.
+            val fieldName = symbolProvider.toMemberName(streamingMember)
+            val target = model.expectShape(streamingMember.target)
+            val contentType =
+                streamingMember.getTrait<MediaTypeTrait>()?.value
+                    ?: target.getTrait<MediaTypeTrait>()?.value
+                    ?: "application/octet-stream"
+            rustTemplate(
+                """
+                impl<P: #{ServerProtocol}> #{SmithyHttpServer}::response::IntoResponse<P> for #{O} {
+                    fn into_response(mut self) -> #{SmithyHttpServer}::response::Response {
+                        let stream = ::std::mem::take(&mut self.$fieldName);
+                        let mut response = P::serialize_response(Self::SCHEMA, &self);
+                        response.headers_mut().remove(#{http}::header::CONTENT_LENGTH);
+                        if !response.headers().contains_key(#{http}::header::CONTENT_TYPE) {
+                            response.headers_mut().insert(
+                                #{http}::header::CONTENT_TYPE,
+                                #{http}::HeaderValue::from_static(${contentType.dq()}),
+                            );
+                        }
+                        *response.body_mut() = #{SmithyHttpServer}::body::boxed(#{SmithyHttpServer}::body::wrap_stream(
+                            #{FuturesStreamCompatByteStream}::new(stream),
+                        ));
+                        response
+                    }
+                }
+                """,
+                *codegenScope,
+                "O" to outputSymbol,
+                "ServerProtocol" to serverProtocolTrait,
+                "FuturesStreamCompatByteStream" to
+                    RuntimeType.smithyHttp(runtimeConfig)
+                        .resolve("futures_stream_adapter::FuturesStreamCompatByteStream"),
+            )
+        }
         if (operationShape.operationErrors(model).isNotEmpty()) {
             val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
             rustTemplate(
@@ -406,15 +450,53 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                     )
                 }
             }
+        // Streaming-blob input (plan Step 4.8's splice design): the prelude
+        // (labels, query, headers) is schema-driven with an EMPTY body — the
+        // walker skips the streaming member and `build()` defaults it — and the
+        // raw request body is spliced in as the `ByteStream` afterwards.
+        val streamingMember = operationShape.inputShape(model).findStreamingMember(model)
+        val requestParse =
+            writable {
+                if (streamingMember == null) {
+                    rustTemplate(
+                        """
+                        let (parts, body) = request.into_parts();
+                        #{collectBody:W}
+                        <#{Marker} as #{ServerProtocol}>::deserialize_request::<#{I}>(#{I}::SCHEMA, #{O}::SCHEMA, &parts, bytes.as_ref())
+                        """,
+                        *codegenScope,
+                        "I" to inputSymbol,
+                        "O" to outputSymbol,
+                        "Marker" to protocol.markerStruct(),
+                        "ServerProtocol" to serverProtocolTrait,
+                        "collectBody" to collectBody,
+                    )
+                } else {
+                    val fieldName = symbolProvider.toMemberName(streamingMember)
+                    rustTemplate(
+                        """
+                        let (parts, body) = request.into_parts();
+                        let mut input = <#{Marker} as #{ServerProtocol}>::deserialize_request::<#{I}>(#{I}::SCHEMA, #{O}::SCHEMA, &parts, b"")?;
+                        input.$fieldName = #{ByteStream}::new(#{SdkBody}::from_body_1_x(body));
+                        Ok(input)
+                        """,
+                        *codegenScope,
+                        "I" to inputSymbol,
+                        "O" to outputSymbol,
+                        "Marker" to protocol.markerStruct(),
+                        "ServerProtocol" to serverProtocolTrait,
+                        "ByteStream" to RuntimeType.smithyTypes(runtimeConfig).resolve("byte_stream::ByteStream"),
+                        "SdkBody" to RuntimeType.smithyTypes(runtimeConfig).resolve("body::SdkBody"),
+                    )
+                }
+            }
         val fromRequestBody =
             writable {
                 rustTemplate(
                     """
                     fn from_request(request: #{http}::Request<B>) -> Self::Future {
                         let fut = async move {
-                            let (parts, body) = request.into_parts();
-                            #{collectBody:W}
-                            <#{Marker} as #{ServerProtocol}>::deserialize_request::<#{I}>(#{I}::SCHEMA, #{O}::SCHEMA, &parts, bytes.as_ref())
+                            #{requestParse:W}
                         };
                         use #{FuturesUtil}::future::TryFutureExt;
                         let fut = fut.map_err(|e: #{RequestRejection}| {
@@ -428,10 +510,8 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                     """,
                     *codegenScope,
                     "I" to inputSymbol,
-                    "O" to outputSymbol,
                     "Marker" to protocol.markerStruct(),
-                    "ServerProtocol" to serverProtocolTrait,
-                    "collectBody" to collectBody,
+                    "requestParse" to requestParse,
                 )
             }
         if (isMultiProtocol) {
@@ -441,6 +521,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 where
                     B: #{SmithyHttpServer}::body::HttpBody + Send,
                     B: 'static,
+                    ${streamingBodyTraitBounds(operationShape)}
                     B::Data: Send,
                     #{RequestRejection} : From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
                 {
@@ -461,9 +542,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             """
                             fn from_request(request: #{http}::Request<B>) -> Self::Future {
                                 let fut = async move {
-                                    let (parts, body) = request.into_parts();
-                                    #{collectBody:W}
-                                    <#{Marker} as #{ServerProtocol}>::deserialize_request::<#{I}>(#{I}::SCHEMA, #{O}::SCHEMA, &parts, bytes.as_ref())
+                                    #{requestParse:W}
                                 };
                                 use #{FuturesUtil}::future::TryFutureExt;
                                 let fut = fut.map_err(|e: #{RequestRejection}| {
@@ -477,10 +556,8 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             """,
                             *codegenScope,
                             "I" to inputSymbol,
-                            "O" to outputSymbol,
                             "Marker" to protocol.markerStruct(),
-                            "ServerProtocol" to serverProtocolTrait,
-                            "collectBody" to collectBody,
+                            "requestParse" to requestParse,
                         )
                     },
             )
@@ -508,6 +585,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 where
                     B: #{SmithyHttpServer}::body::HttpBody + Send,
                     B: 'static,
+                    ${streamingBodyTraitBounds(operationShape)}
                     B::Data: Send,
                     #{RequestRejection} : From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
                 {

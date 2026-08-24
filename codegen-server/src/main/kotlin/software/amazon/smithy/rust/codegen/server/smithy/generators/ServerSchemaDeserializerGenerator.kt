@@ -254,12 +254,22 @@ class ServerSchemaDeserializerGenerator(
         val members = shape.allMembers.values.toList()
 
         val arms = StringBuilder()
+        // Streaming-blob members never travel through the codec: the operation glue
+        // splices the raw request body in AFTER `build()` (plan Step 4.8). The walker
+        // parks an empty placeholder through the member's setter so the builder's
+        // ingestion surface stays uniform.
+        val streamingPlaceholders = StringBuilder()
         members.forEachIndexed { idx, member ->
             val target = model.expectShape(member.target)
-            // Streaming members (event streams, streaming blobs) never come through the
-            // codec walker; operations carrying them are schema-served via specialized
-            // glue (plan Step 4.8) and their prelude members only.
             if (target.hasTrait(StreamingTrait::class.java)) {
+                if (target is software.amazon.smithy.model.shapes.BlobShape) {
+                    val setterName = "set_" + member.memberName.toSnakeCase()
+                    streamingPlaceholders.append(
+                        """
+                        builder = builder.$setterName(::aws_smithy_types::byte_stream::ByteStream::new(::aws_smithy_types::body::SdkBody::empty()));
+                        """,
+                    )
+                }
                 return@forEachIndexed
             }
             // Feed the builder through its `pub(crate) set_*` setters — the builder's
@@ -315,6 +325,7 @@ class ServerSchemaDeserializerGenerator(
                     }
                     Ok(())
                 })?;
+                ${esc(streamingPlaceholders.toString())}
                 Ok($result)
             }
             """,
