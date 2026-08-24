@@ -51,6 +51,37 @@ jobs:
     with:
       run_canary: false
 
+  # Workflows executed directly in personal fork repositories cannot access
+  # smithy-lang's self-hosted runners. Run this focused check on a GitHub-hosted
+  # runner so contributors can validate the compatibility harness in their fork
+  # before opening an upstream PR.
+  check-released-codegen-runtime-compatibility-hosted:
+    name: Check PR semver across last released version
+    if: ${{ github.repository != 'smithy-lang/smithy-rs' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up JDK
+      uses: actions/setup-java@v4
+      with:
+        distribution: corretto
+        java-version: 17
+    - name: Set up Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: 1.94.1
+    - name: Run focused unit tests
+      env:
+        PYTHONPATH: tools/ci-scripts
+      run: >-
+        python3 -m unittest discover
+        -s tools/ci-scripts/released_codegen_runtime_compatibility/tests -v
+    - name: Run codegen/runtime compatibility check
+      env:
+        CODEGEN_RUNTIME_LOG_LEVEL: DEBUG
+      run: ./tools/ci-scripts/released-codegen-runtime-compatibility.py verify-semver
+
   semver-checks:
     name: Check PR semver compliance
     permissions:

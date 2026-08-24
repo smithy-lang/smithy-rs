@@ -1,0 +1,21 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+set -euo pipefail
+
+if [[ $# -gt 1 ]]; then
+    echo "Usage: check-released-codegen-runtime-compatibility [codegen-version]"
+    exit 1
+fi
+
+cd smithy-rs
+
+args=(verify-semver)
+if [[ $# -eq 1 ]]; then
+    args+=(--codegen-version "$1")
+fi
+
+./tools/ci-scripts/released-codegen-runtime-compatibility.py "${args[@]}"

@@ -238,6 +238,23 @@ jobs:
       with:
         action: check-semver-hazards
 
+  # Generate client and server crates for every supported protocol with released codegen, patch
+  # their runtime dependencies to candidate crates from the current checkout, and compile them.
+  # Cargo enforces the generated dependency requirements.
+  check-released-codegen-runtime-compatibility:
+    name: Check PR semver across last released version
+    runs-on: smithy_ubuntu-latest_8-core
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ inputs.git_ref }}
+    - name: Run codegen/runtime compatibility check
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: check-released-codegen-runtime-compatibility
+
   # Test all the things that require generated code. Note: the Rust runtimes require codegen
   # to be checked since `aws-config` depends on the generated STS client.
   test-sdk:
@@ -664,6 +681,7 @@ jobs:
     - generate-full
     - test-codegen
     - check-semver-hazards
+    - check-released-codegen-runtime-compatibility
     - test-sdk
     - test-sdk-full
     - test-rust-windows
