@@ -43,8 +43,13 @@ jobs:
   # re-reviewing the new commits is what re-triggers the canary. This runs with only `pull-requests:
   # write` and never checks out fork code, so it can't be subverted by the push it's reacting to.
   revoke-on-push:
-    if: github.event.action == 'synchronize'
+    # Also gated on the label actually being present. Without that this job starts on every push to
+    # every open PR in the repo, only to catch a 404 discovering there was nothing to remove.
+    if: >
+      github.event.action == 'synchronize' &&
+      contains(github.event.pull_request.labels.*.name, 'safe-to-run-canary')
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       pull-requests: write
     steps:
@@ -73,6 +78,7 @@ jobs:
       github.event.pull_request.head.repo.full_name != 'smithy-lang/smithy-rs'
     name: Gate
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: read
