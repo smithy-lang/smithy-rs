@@ -26,6 +26,28 @@ pub mod http_body_1_x;
 /// A generic, boxed error that's `Send` and `Sync`
 pub type Error = Box<dyn StdError + Send + Sync>;
 
+// Converts an `http` 0.2.x trailer `HeaderMap` into an `http` 1.x `HeaderMap`. Only needed on the
+// legacy http-body 0.4.x trailer code path inside `poll_next_trailers`, i.e. when the `HttpBody04`
+// box body exists (`http-body-0-4-x`, or `rt-tokio` together with `http-body-1-x`). It is never
+// needed for the `http-body-1-x`-only path, keeping that path free of the `http` 0.2.x crate.
+#[cfg(any(
+    feature = "http-body-0-4-x",
+    all(feature = "rt-tokio", feature = "http-body-1-x")
+))]
+fn convert_trailers_0x_1x(input: http::HeaderMap) -> http_1x::HeaderMap {
+    let mut map = http_1x::HeaderMap::with_capacity(input.capacity());
+    let mut mem: Option<http::HeaderName> = None;
+    for (k, v) in input.into_iter() {
+        let name = k.or_else(|| mem.clone()).unwrap();
+        map.append(
+            http_1x::HeaderName::from_bytes(name.as_str().as_bytes()).expect("already validated"),
+            http_1x::HeaderValue::from_bytes(v.as_bytes()).expect("already validated"),
+        );
+        mem = Some(name);
+    }
+    map
+}
+
 pin_project! {
     /// SdkBody type
     ///
@@ -62,12 +84,10 @@ impl Debug for SdkBody {
 #[allow(dead_code)]
 enum BoxBody {
     // This is enabled by the **dependency**, not the feature. This allows us to construct it
-    // whenever we have the dependency and keep the APIs private
-    #[cfg(any(
-        feature = "http-body-0-4-x",
-        feature = "http-body-1-x",
-        feature = "rt-tokio"
-    ))]
+    // whenever we have the dependency and keep the APIs private.
+    // NOTE: intentionally NOT enabled by `http-body-1-x`, so that the http-body 1.x path does
+    // not pull in the `http` 0.2.x / `http-body` 0.4.x crates transitively.
+    #[cfg(any(feature = "http-body-0-4-x", feature = "rt-tokio"))]
     // will be dead code with `--no-default-features --features rt-tokio`
     HttpBody04(#[allow(dead_code)] http_body_0_4::combinators::BoxBody<Bytes, Error>),
 
@@ -212,11 +232,7 @@ impl SdkBody {
     }
 
     #[allow(dead_code)]
-    #[cfg(any(
-        feature = "http-body-0-4-x",
-        feature = "http-body-1-x",
-        feature = "rt-tokio"
-    ))]
+    #[cfg(any(feature = "http-body-0-4-x", feature = "rt-tokio"))]
     pub(crate) fn from_body_0_4_internal<T, E>(body: T) -> Self
     where
         T: http_body_0_4::Body<Data = Bytes, Error = E> + Send + Sync + 'static,
@@ -258,27 +274,19 @@ impl SdkBody {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Result<Option<http_1x::HeaderMap<http_1x::HeaderValue>>, Error>> {
-        // Three cases that matter here:
-        // 1) Both http-body features disabled, doesn't matter because this func won't compile
-        // 2) http-body-0-4-x enabled but 1-x disabled, we use the http_body_0_4_x conversion
-        // 3) http-body-1-x enabled (and 0-4-x is enabled or disabled), we use the 1-x conversion
-        // as our default whenever it is available
-        #[cfg(all(feature = "http-body-0-4-x", not(feature = "http-body-1-x")))]
-        use crate::body::http_body_0_4_x::convert_headers_0x_1x;
-        #[cfg(feature = "http-body-1-x")]
-        use crate::body::http_body_1_x::convert_headers_0x_1x;
-
         let this = self.project();
         match this.inner.project() {
             InnerProj::Once { .. } => Poll::Ready(Ok(None)),
             InnerProj::Dyn { inner } => match inner.get_mut() {
+                #[cfg(any(feature = "http-body-0-4-x", feature = "rt-tokio"))]
                 BoxBody::HttpBody04(box_body) => {
                     use http_body_0_4::Body;
                     let polled = Pin::new(box_body).poll_trailers(cx);
 
                     match polled {
                         Poll::Ready(Ok(maybe_trailers)) => {
-                            let http_1x_trailers = maybe_trailers.map(convert_headers_0x_1x);
+                            let http_1x_trailers =
+                                maybe_trailers.map(convert_trailers_0x_1x);
                             Poll::Ready(Ok(http_1x_trailers))
                         }
                         Poll::Ready(Err(err)) => Poll::Ready(Err(err)),

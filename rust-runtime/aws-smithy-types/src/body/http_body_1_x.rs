@@ -10,6 +10,7 @@ use std::task::{ready, Context, Poll};
 
 use bytes::Bytes;
 use http_body_util::BodyExt;
+#[cfg(feature = "http-body-0-4-x")]
 use pin_project_lite::pin_project;
 
 use crate::body::{Error, SdkBody};
@@ -72,6 +73,7 @@ impl http_body_1_0::Body for SdkBody {
     }
 }
 
+#[cfg(feature = "http-body-0-4-x")]
 pin_project! {
     struct Http1toHttp04<B> {
         #[pin]
@@ -80,6 +82,7 @@ pin_project! {
     }
 }
 
+#[cfg(feature = "http-body-0-4-x")]
 impl<B> Http1toHttp04<B> {
     #[allow(dead_code)]
     fn new(inner: B) -> Self {
@@ -90,6 +93,7 @@ impl<B> Http1toHttp04<B> {
     }
 }
 
+#[cfg(feature = "http-body-0-4-x")]
 impl<B> http_body_0_4::Body for Http1toHttp04<B>
 where
     B: http_body_1_0::Body,
@@ -159,6 +163,7 @@ where
     }
 }
 
+#[cfg(feature = "http-body-0-4-x")]
 pub(crate) fn convert_headers_1x_0x(input: http_1x::HeaderMap) -> http::HeaderMap {
     let mut map = http::HeaderMap::with_capacity(input.capacity());
     let mut mem: Option<http_1x::HeaderName> = None;
@@ -173,20 +178,6 @@ pub(crate) fn convert_headers_1x_0x(input: http_1x::HeaderMap) -> http::HeaderMa
     map
 }
 
-pub(crate) fn convert_headers_0x_1x(input: http::HeaderMap) -> http_1x::HeaderMap {
-    let mut map = http_1x::HeaderMap::with_capacity(input.capacity());
-    let mut mem: Option<http::HeaderName> = None;
-    for (k, v) in input.into_iter() {
-        let name = k.or_else(|| mem.clone()).unwrap();
-        map.append(
-            http_1x::HeaderName::from_bytes(name.as_str().as_bytes()).expect("already validated"),
-            http_1x::HeaderValue::from_bytes(v.as_bytes()).expect("already validated"),
-        );
-        mem = Some(name);
-    }
-    map
-}
-
 #[cfg(test)]
 mod test {
     use std::collections::VecDeque;
@@ -194,12 +185,15 @@ mod test {
     use std::task::{Context, Poll};
 
     use bytes::Bytes;
+    #[cfg(feature = "http-body-0-4-x")]
     use http::header::{CONTENT_LENGTH as CL0, CONTENT_TYPE as CT0};
+    #[cfg(feature = "http-body-0-4-x")]
     use http_1x::header::{CONTENT_LENGTH as CL1, CONTENT_TYPE as CT1};
     use http_1x::{HeaderMap, HeaderName, HeaderValue};
     use http_body_1_0::Frame;
     use http_body_util::BodyExt;
 
+    #[cfg(feature = "http-body-0-4-x")]
     use crate::body::http_body_1_x::{convert_headers_1x_0x, Http1toHttp04};
     use crate::body::{Error, SdkBody};
     use crate::byte_stream::ByteStream;
@@ -314,6 +308,7 @@ mod test {
         assert_eq!(collected_trailers, &merged_trailers);
     }
 
+    #[cfg(feature = "http-body-0-4-x")]
     #[tokio::test]
     async fn test_trailers_04x_to_1x() {
         let body = TestBody {
@@ -332,6 +327,7 @@ mod test {
         assert_eq!(collected.to_bytes().as_ref(), b"123456789");
     }
 
+    #[cfg(feature = "http-body-0-4-x")]
     #[tokio::test]
     async fn test_multiple_trailers_04x_to_1x() {
         let mut second_trailers = HeaderMap::new();
@@ -390,6 +386,7 @@ mod test {
         assert_eq!(collected.to_bytes().as_ref(), b"123456789");
     }
 
+    #[cfg(feature = "http-body-0-4-x")]
     #[test]
     fn test_convert_headers() {
         let mut http1_headermap = http_1x::HeaderMap::new();

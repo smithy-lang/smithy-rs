@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-types"
-version = "1.6.2"
+version = "1.7.0"
 authors = [
     "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
     "Russell Cohen <rcoh@amazon.com>",
@@ -14,7 +14,7 @@ rust-version = "1.94.1"
 [features]
 byte-stream-poll-next = []
 http-body-0-4-x = ["dep:http-body-0-4", "dep:http"]
-http-body-1-x = ["dep:http-body-1-0", "dep:http-body-util", "dep:http-body-0-4", "dep:http"]
+http-body-1-x = ["dep:http-body-1-0", "dep:http-body-util"]
 hyper-0-14-x = ["dep:hyper-0-14"]
 rt-tokio = [
     "dep:http-body-0-4",
