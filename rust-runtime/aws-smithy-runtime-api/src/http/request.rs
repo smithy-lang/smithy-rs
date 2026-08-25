@@ -41,6 +41,7 @@ pub struct Uri {
 
 #[derive(Debug, Clone)]
 enum ParsedUri {
+    #[cfg(feature = "http-02x")]
     H0(http_02x::Uri),
     H1(http_1x::Uri),
 }
@@ -48,6 +49,7 @@ enum ParsedUri {
 impl ParsedUri {
     fn path_and_query(&self) -> &str {
         match &self {
+            #[cfg(feature = "http-02x")]
             ParsedUri::H0(u) => u.path_and_query().map(|pq| pq.as_str()).unwrap_or(""),
             ParsedUri::H1(u) => u.path_and_query().map(|pq| pq.as_str()).unwrap_or(""),
         }
@@ -55,6 +57,7 @@ impl ParsedUri {
 
     fn path(&self) -> &str {
         match &self {
+            #[cfg(feature = "http-02x")]
             ParsedUri::H0(u) => u.path(),
             ParsedUri::H1(u) => u.path(),
         }
@@ -62,6 +65,7 @@ impl ParsedUri {
 
     fn query(&self) -> Option<&str> {
         match &self {
+            #[cfg(feature = "http-02x")]
             ParsedUri::H0(u) => u.query(),
             ParsedUri::H1(u) => u.query(),
         }
@@ -76,20 +80,20 @@ impl Uri {
     ///
     /// An `endpoint` MUST NOT contain a query
     pub fn set_endpoint(&mut self, endpoint: &str) -> Result<(), HttpError> {
-        let endpoint: http_02x::Uri = endpoint.parse().map_err(HttpError::invalid_uri)?;
+        let endpoint: http_1x::Uri = endpoint.parse().map_err(HttpError::invalid_uri)?;
         let endpoint = endpoint.into_parts();
         let authority = endpoint
             .authority
             .ok_or_else(HttpError::missing_authority)?;
         let scheme = endpoint.scheme.ok_or_else(HttpError::missing_scheme)?;
-        let new_uri = http_02x::Uri::builder()
+        let new_uri = http_1x::Uri::builder()
             .authority(authority)
             .scheme(scheme)
             .path_and_query(merge_paths(endpoint.path_and_query, &self.parsed).as_ref())
             .build()
             .map_err(HttpError::invalid_uri_parts)?;
         self.as_string = new_uri.to_string();
-        self.parsed = ParsedUri::H0(new_uri);
+        self.parsed = ParsedUri::H1(new_uri);
         Ok(())
     }
 
@@ -103,6 +107,7 @@ impl Uri {
         self.parsed.query()
     }
 
+    #[cfg(feature = "http-02x")]
     fn from_http0x_uri(uri: http_02x::Uri) -> Self {
         Self {
             as_string: uri.to_string(),
@@ -110,7 +115,6 @@ impl Uri {
         }
     }
 
-    #[allow(dead_code)]
     fn from_http1x_uri(uri: http_1x::Uri) -> Self {
         Self {
             as_string: uri.to_string(),
@@ -118,7 +122,7 @@ impl Uri {
         }
     }
 
-    #[allow(dead_code)]
+    #[cfg(feature = "http-02x")]
     fn into_h0(self) -> http_02x::Uri {
         match self.parsed {
             ParsedUri::H0(uri) => uri,
@@ -128,7 +132,7 @@ impl Uri {
 }
 
 fn merge_paths(
-    endpoint_path: Option<http_02x::uri::PathAndQuery>,
+    endpoint_path: Option<http_1x::uri::PathAndQuery>,
     uri: &ParsedUri,
 ) -> Cow<'_, str> {
     let uri_path_and_query = uri.path_and_query();
@@ -155,7 +159,7 @@ impl TryFrom<String> for Uri {
     type Error = HttpError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        let parsed = ParsedUri::H0(value.parse().map_err(HttpError::invalid_uri)?);
+        let parsed = ParsedUri::H1(value.parse().map_err(HttpError::invalid_uri)?);
         Ok(Uri {
             as_string: value,
             parsed,
@@ -253,7 +257,7 @@ impl<B> Request<B> {
     pub fn new(body: B) -> Self {
         Self {
             body,
-            uri: Uri::from_http0x_uri(http_02x::Uri::from_static("/")),
+            uri: Uri::from_http1x_uri(http_1x::Uri::from_static("/")),
             method: http_1x::Method::GET,
             extensions: Default::default(),
             headers: Default::default(),
@@ -402,14 +406,14 @@ impl<B> TryFrom<http_1x::Request<B>> for Request<B> {
     }
 }
 
-#[cfg(all(test, feature = "http-02x", feature = "http-1x"))]
+#[cfg(all(test, feature = "http-1x"))]
 mod test {
     use aws_smithy_types::body::SdkBody;
-    use http_02x::header::{AUTHORIZATION, CONTENT_LENGTH};
+    use http_1x::header::{AUTHORIZATION, CONTENT_LENGTH};
 
     #[test]
     fn non_ascii_requests() {
-        let request = http_02x::Request::builder()
+        let request = http_1x::Request::builder()
             .header("k", "😹")
             .body(SdkBody::empty())
             .unwrap();
@@ -421,7 +425,7 @@ mod test {
 
     #[test]
     fn request_can_be_created() {
-        let req = http_02x::Request::builder()
+        let req = http_1x::Request::builder()
             .uri("http://foo.com")
             .body(SdkBody::from("hello"))
             .unwrap();
@@ -430,13 +434,13 @@ mod test {
         assert_eq!(req.headers().get("a").unwrap(), "b");
         req.headers_mut().append("a", "c");
         assert_eq!(req.headers().get("a").unwrap(), "b");
-        let http0 = req.try_into_http02x().unwrap();
-        assert_eq!(http0.uri(), "http://foo.com");
+        let http1 = req.try_into_http1x().unwrap();
+        assert_eq!(http1.uri(), "http://foo.com");
     }
 
     #[test]
     fn uri_mutations() {
-        let req = http_02x::Request::builder()
+        let req = http_1x::Request::builder()
             .uri("http://foo.com")
             .body(SdkBody::from("hello"))
             .unwrap();
@@ -444,14 +448,22 @@ mod test {
         assert_eq!(req.uri(), "http://foo.com/");
         req.set_uri("http://bar.com").unwrap();
         assert_eq!(req.uri(), "http://bar.com");
-        let http0 = req.try_into_http02x().unwrap();
-        assert_eq!(http0.uri(), "http://bar.com");
+        let http1 = req.try_into_http1x().unwrap();
+        assert_eq!(http1.uri(), "http://bar.com");
+    }
+
+    #[test]
+    fn set_endpoint_merges_paths() {
+        let mut req = super::Request::empty();
+        req.set_uri("/foo/bar").unwrap();
+        req.uri_mut().set_endpoint("https://www.amazon.com").unwrap();
+        assert_eq!(req.uri(), "https://www.amazon.com/foo/bar");
     }
 
     #[test]
     #[should_panic]
     fn header_panics() {
-        let req = http_02x::Request::builder()
+        let req = http_1x::Request::builder()
             .uri("http://foo.com")
             .body(SdkBody::from("hello"))
             .unwrap();
@@ -465,8 +477,8 @@ mod test {
 
     #[test]
     fn try_clone_clones_all_data() {
-        let request = http_02x::Request::builder()
-            .uri(http_02x::Uri::from_static("https://www.amazon.com"))
+        let request = http_1x::Request::builder()
+            .uri(http_1x::Uri::from_static("https://www.amazon.com"))
             .method("POST")
             .header(CONTENT_LENGTH, 456)
             .header(AUTHORIZATION, "Token: hello")
@@ -483,6 +495,12 @@ mod test {
         assert_eq!("456", cloned.headers().get(CONTENT_LENGTH).unwrap());
         assert_eq!("hello world!".as_bytes(), cloned.body().bytes().unwrap());
     }
+}
+
+#[cfg(all(test, feature = "http-02x", feature = "http-1x"))]
+mod cross_version_test {
+    use aws_smithy_types::body::SdkBody;
+    use http_02x::header::{AUTHORIZATION, CONTENT_LENGTH};
 
     #[test]
     fn valid_round_trips() {
