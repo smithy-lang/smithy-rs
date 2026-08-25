@@ -212,7 +212,7 @@ pub trait ClientProtocolInner: Send + Sync + std::fmt::Debug {
 /// Object-safe view of [`ClientProtocolInner`] parameterized over concrete
 /// request / response types.
 ///
-/// This is what callers hold behind `dyn` — for example,
+/// This is what callers hold behind `dyn`, for example,
 /// [`SharedClientProtocol`] stores `Arc<dyn ClientProtocol<Req, Res>>` so the
 /// protocol can be swapped at runtime. The generic `Req` / `Res` parameters
 /// default to HTTP so existing call sites remain source-compatible.

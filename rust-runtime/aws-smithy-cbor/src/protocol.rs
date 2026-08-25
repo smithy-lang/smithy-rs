@@ -70,8 +70,27 @@ impl ClientProtocolInner for RpcV2CborProtocol {
         // without populating the config bag.
         let route = rpc_v2_cbor_route(cfg);
         let endpoint = route.as_deref().unwrap_or(endpoint);
-        self.inner
-            .serialize_request(input, input_schema, endpoint, cfg)
+        let mut request = self
+            .inner
+            .serialize_request(input, input_schema, endpoint, cfg)?;
+
+        // Protocol framing, set here for the same reason as the route: it is a
+        // function of the protocol, not of the operation or its model, so a client
+        // generated for another protocol never emitted it. `smithy-protocol` is
+        // required on every request and is what conformant servers route on —
+        // smithy-rs's own server rejects its absence with
+        // `WireFormatError::HeaderNotFound`.
+        //
+        // Codegen inserts headers *after* this returns and `Headers::insert`
+        // replaces, so an operation that needs a different value (an event stream
+        // sends `accept: application/vnd.amazon.eventstream, application/cbor`)
+        // still overrides these without any coordination here.
+        request
+            .headers_mut()
+            .insert("smithy-protocol", "rpc-v2-cbor");
+        request.headers_mut().insert("accept", "application/cbor");
+
+        Ok(request)
     }
 
     fn deserialize_response<'a>(
@@ -421,6 +440,37 @@ mod tests {
             request.uri()
         );
         assert_eq!("POST", request.method());
+    }
+
+    /// `smithy-protocol` and `accept` are required on every RPC v2 CBOR request and
+    /// are a function of the protocol alone, so this protocol must set them itself
+    /// rather than rely on codegen having emitted them — a client generated for
+    /// another protocol never did. Unlike the route, these do *not* fall back to
+    /// anything: they are unconditional.
+    #[test]
+    fn serialize_request_sets_protocol_framing_headers() {
+        let cfg = cfg_with_names("PokemonService", "GetServerStatistics");
+        let request = serialize_with(&cfg, "");
+        assert_eq!(
+            Some("rpc-v2-cbor"),
+            request.headers().get("smithy-protocol")
+        );
+        assert_eq!(Some("application/cbor"), request.headers().get("accept"));
+    }
+
+    /// The framing headers do not depend on the config bag, so they are still set
+    /// when the model names are absent and the route falls back to the supplied
+    /// endpoint.
+    #[test]
+    fn serialize_request_sets_framing_headers_without_model_names() {
+        let cfg = ConfigBag::base();
+        let request = serialize_with(&cfg, "/some/path");
+        assert_eq!("/some/path", request.uri());
+        assert_eq!(
+            Some("rpc-v2-cbor"),
+            request.headers().get("smithy-protocol")
+        );
+        assert_eq!(Some("application/cbor"), request.headers().get("accept"));
     }
 
     /// The route is protocol-mandated, so a path computed by codegen for a

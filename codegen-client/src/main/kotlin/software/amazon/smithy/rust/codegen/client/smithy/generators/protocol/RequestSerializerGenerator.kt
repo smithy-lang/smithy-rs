@@ -297,18 +297,27 @@ class RequestSerializerGenerator(
         schemaRef: String = "$operationName::INPUT_SCHEMA",
     ): Writable =
         writable {
-            val additionalHeaders = protocol.additionalRequestHeaders(operationShape)
-            // Helper: generates code to add protocol-level headers to a `request` variable.
-            // x-amz-target is excluded because the runtime protocol (AwsJsonRpcProtocol)
-            // sets it in serialize_request(). Emitting it here would prevent protocol swapping
-            // from removing it when switching to a non-RPC protocol like restJson1.
-            val addAdditionalHeaders =
+            // Protocol framing (`x-amz-target`, `smithy-protocol`, `accept`) is deliberately not
+            // emitted here: the runtime `ClientProtocol` sets it in `serialize_request`, so it stays
+            // correct when a customer selects a different protocol via
+            // `Config::builder().protocol(..)`. Service-determined headers (`x-amzn-query-mode`,
+            // from `@awsQueryCompatible` on the service) are emitted, because their value does not
+            // change with the protocol. See `Protocol.protocolFramingHeaders`.
+            fun headerInserts(headers: List<Pair<String, String>>) =
                 writable {
-                    for (header in additionalHeaders) {
-                        if (header.first == "x-amz-target") continue
+                    for (header in headers) {
                         rust("request.headers_mut().insert(${header.first.dq()}, ${header.second.dq()});")
                     }
                 }
+            val addServiceHeaders = headerInserts(protocol.serviceRequestHeaders(operationShape))
+            // The event-stream branch is an exception. It already performs protocol-specific request
+            // surgery of its own — replacing the body with a marshaller, removing `Content-Length`,
+            // and overriding the `Content-Type` the protocol chose — so those requests are not
+            // swap-safe regardless of headers, and its `accept` is operation-dependent
+            // (`application/vnd.amazon.eventstream, application/cbor`) in a way the runtime cannot
+            // see from the input schema alone. It therefore keeps emitting the full set; codegen's
+            // inserts run after `serialize_request` returns and `insert` replaces, so these win.
+            val addAllHeaders = headerInserts(protocol.additionalRequestHeaders(operationShape))
             // Which side resolves the request path depends on the *protocol*, not on whether the
             // operation happens to carry an `@http` trait:
             //
@@ -339,9 +348,9 @@ class RequestSerializerGenerator(
             val isEventStream = streamingMember != null && !isBlobStreaming
 
             when {
-                isBlobStreaming -> renderBlobStreamingRequest(streamingMember!!, schemaRef, uriPath, addAdditionalHeaders)
-                isEventStream -> renderEventStreamRequest(operationShape, streamingMember!!, schemaRef, uriPath, addAdditionalHeaders)
-                else -> renderStandardRequest(operationShape, inputShape, schemaRef, uriPath, addAdditionalHeaders)
+                isBlobStreaming -> renderBlobStreamingRequest(streamingMember!!, schemaRef, uriPath, addServiceHeaders)
+                isEventStream -> renderEventStreamRequest(operationShape, streamingMember!!, schemaRef, uriPath, addAllHeaders)
+                else -> renderStandardRequest(operationShape, inputShape, schemaRef, uriPath, addServiceHeaders)
             }
         }
 

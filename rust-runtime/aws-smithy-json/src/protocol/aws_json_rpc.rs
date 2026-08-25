@@ -108,16 +108,27 @@ impl aws_smithy_schema::protocol::ClientProtocolInner for AwsJsonRpcProtocol {
         self.inner.protocol_id()
     }
 
+    /// Serializes an awsJson1_0 / awsJson1_1 request.
+    ///
+    /// `_endpoint` is deliberately ignored: both protocols fix the request path at `/`, so the
+    /// route is a function of the protocol rather than of the operation, and a path computed by
+    /// codegen for a different protocol must not leak through when this protocol is selected at
+    /// runtime via `Config::builder().protocol(..)`. `apply_http_endpoint` merges the scheme and
+    /// authority afterwards.
+    ///
+    /// The assertion belongs here rather than in [`HttpRpcProtocol`] because only the concrete
+    /// protocol knows whether its route is constant — `RpcV2CborProtocol` legitimately passes
+    /// `HttpRpcProtocol` a computed `/service/{service}/operation/{operation}` route.
     fn serialize_request(
         &self,
         input: &dyn aws_smithy_schema::serde::SerializableStruct,
         input_schema: &Schema<'_>,
-        endpoint: &str,
+        _endpoint: &str,
         cfg: &ConfigBag,
     ) -> Result<aws_smithy_runtime_api::http::Request, aws_smithy_schema::serde::SerdeError> {
         let mut request = self
             .inner
-            .serialize_request(input, input_schema, endpoint, cfg)?;
+            .serialize_request(input, input_schema, "/", cfg)?;
         if let Some(metadata) = cfg.load::<Metadata>() {
             request.headers_mut().insert(
                 "X-Amz-Target",
@@ -258,6 +269,41 @@ mod tests {
                 .as_str(),
             "aws.protocols#awsJson1_0"
         );
+    }
+
+    // ---- route ---------------------------------------------------------
+
+    /// awsJson1_0/1_1 fix the request path at `/`, so a path computed by codegen for a
+    /// *different* protocol must not win when this protocol is selected at runtime via
+    /// `Config::builder().protocol(..)`. The rpcv2Cbor route below is what an
+    /// rpcv2Cbor-generated client passes.
+    ///
+    /// This is the mirror image of https://github.com/smithy-lang/smithy-rs/issues/4801,
+    /// where the CBOR protocol failed to apply its own route.
+    #[test]
+    fn serialize_request_ignores_a_route_computed_for_another_protocol() {
+        let cfg = cfg_with_metadata("MyService", "DoThing");
+        for foreign_route in ["/service/MyService/operation/DoThing", "/stats"] {
+            let request = AwsJsonRpcProtocol::aws_json_1_0("MyService")
+                .serialize_request(&EmptyStruct, &TEST_SCHEMA, foreign_route, &cfg)
+                .unwrap();
+            assert_eq!(
+                "/",
+                request.uri(),
+                "awsJson must POST to / regardless of the path it is handed"
+            );
+            assert_eq!("POST", request.method());
+        }
+    }
+
+    /// The empty endpoint a generated awsJson client passes must keep resolving to `/`.
+    #[test]
+    fn serialize_request_defaults_to_slash() {
+        let cfg = cfg_with_metadata("MyService", "DoThing");
+        let request = AwsJsonRpcProtocol::aws_json_1_0("MyService")
+            .serialize_request(&EmptyStruct, &TEST_SCHEMA, "", &cfg)
+            .unwrap();
+        assert_eq!("/", request.uri());
     }
 
     #[test]

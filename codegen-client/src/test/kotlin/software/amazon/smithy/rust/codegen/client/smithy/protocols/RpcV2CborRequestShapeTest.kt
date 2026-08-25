@@ -19,21 +19,29 @@ import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 import kotlin.io.path.readText
 
 /**
- * Regression tests for https://github.com/smithy-lang/smithy-rs/issues/4801.
+ * Tests that an `rpcv2Cbor` request has the right *shape* — route and protocol framing headers —
+ * including when the protocol is selected at runtime rather than baked in by codegen.
  *
- * `rpcv2Cbor` ignores `@http` bindings and always routes to
- * `/service/{serviceName}/operation/{operationName}`. A model may nevertheless
- * carry `@http` traits on its operations (they are simply inert for this
- * protocol) — the Pokémon example model in this repo is one such model.
+ * Regression tests for https://github.com/smithy-lang/smithy-rs/issues/4801 and the defect class it
+ * exposed: request shaping that is a function of the *protocol* must be resolved by the runtime
+ * `ClientProtocol`, not emitted by codegen, or it is wrong in both directions the moment
+ * `Config::builder().protocol(..)` selects something other than the generated protocol.
  *
- * The schema-serde request path used to decide whether to pass a URI path to
- * `ClientProtocol::serialize_request` by asking whether the *operation* had an
- * `@http` trait, rather than whether the *protocol* honors HTTP bindings. For
- * `rpcv2Cbor` operations carrying `@http`, that passed an empty endpoint, and
- * `HttpRpcProtocol::serialize_request` falls back to `/` when the endpoint is
- * empty — so requests were sent to `/` and servers answered 404.
+ * **The route.** `rpcv2Cbor` ignores `@http` bindings and always routes to
+ * `/service/{serviceName}/operation/{operationName}`. A model may nevertheless carry `@http` traits
+ * on its operations (they are simply inert for this protocol) — the Pokémon example model in this
+ * repo is one such model. The schema-serde request path used to decide whether to pass a URI path to
+ * `ClientProtocol::serialize_request` by asking whether the *operation* had an `@http` trait, rather
+ * than whether the *protocol* honors HTTP bindings. For `rpcv2Cbor` operations carrying `@http`,
+ * that passed an empty endpoint, and `HttpRpcProtocol::serialize_request` falls back to `/` when the
+ * endpoint is empty — so requests were sent to `/` and servers answered 404.
+ *
+ * **The framing headers.** `smithy-protocol` and `accept` were emitted by codegen keyed on the
+ * generated protocol, so a swapped-in `rpcv2Cbor` protocol omitted them (smithy-rs's own server
+ * rejects a missing `smithy-protocol` with `WireFormatError::HeaderNotFound`) and a swapped-out one
+ * left them on a request of another protocol.
  */
-internal class RpcV2CborRequestUriTest {
+internal class RpcV2CborRequestShapeTest {
     /** Operations carry inert `@http` traits, as the Pokémon model does. */
     private val modelWithHttpTraits =
         """
@@ -192,6 +200,45 @@ internal class RpcV2CborRequestUriTest {
                             "capture_request" to RuntimeType.captureRequest(context.runtimeConfig),
                         )
                     }
+
+                    // Swap-out: the mirror of the swap-in case. rpcv2Cbor's framing must not
+                    // survive selecting a protocol that does not use it, so it cannot be emitted
+                    // unconditionally by codegen. This model's `@http` traits are what make it a
+                    // usable restJson1 client at all.
+                    tokioTest("rpc_framing_headers_absent_when_another_protocol_is_selected") {
+                        rustTemplate(
+                            """
+                            let (http_client, rx) = #{capture_request}(#{None});
+                            let config = crate::Config::builder()
+                                .http_client(http_client)
+                                .endpoint_url("http://localhost:1234")
+                                .behavior_version_latest()
+                                // Swap rpcv2Cbor out for restJson1 at runtime.
+                                .protocol(#{AwsRestJsonProtocol}::new())
+                                .build();
+                            let client = crate::Client::from_conf(config);
+
+                            let _ = client.get_stats().name("test").send().await;
+
+                            let request = rx.expect_request();
+                            assert_eq!(
+                                #{None},
+                                request.headers().get("smithy-protocol"),
+                                "rpcv2Cbor framing must not persist onto a restJson1 request",
+                            );
+                            assert_eq!(
+                                #{None},
+                                request.headers().get("accept"),
+                                "rpcv2Cbor's `accept: application/cbor` must not persist onto a restJson1 request",
+                            );
+                            """,
+                            *RuntimeType.preludeScope,
+                            "capture_request" to RuntimeType.captureRequest(context.runtimeConfig),
+                            "AwsRestJsonProtocol" to
+                                RuntimeType.smithyJson(context.runtimeConfig)
+                                    .resolve("protocol::aws_rest_json_1::AwsRestJsonProtocol"),
+                        )
+                    }
                 }
             }
 
@@ -280,6 +327,21 @@ internal class RpcV2CborRequestUriTest {
                         assert_eq!(
                             #{Some}("application/cbor"),
                             request.headers().get("Content-Type"),
+                        );
+
+                        // Protocol framing. These are required on every rpcv2Cbor request and are
+                        // what servers route on — smithy-rs's own server returns
+                        // `WireFormatError::HeaderNotFound` without `smithy-protocol`. The client
+                        // this ran on was generated for awsJson1_0, so codegen never emitted them;
+                        // only the runtime protocol can know it needs them.
+                        assert_eq!(
+                            #{Some}("rpc-v2-cbor"),
+                            request.headers().get("smithy-protocol"),
+                            "a runtime-selected rpcv2Cbor protocol must set its own framing header",
+                        );
+                        assert_eq!(
+                            #{Some}("application/cbor"),
+                            request.headers().get("accept"),
                         );
                         """,
                         *RuntimeType.preludeScope,

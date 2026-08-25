@@ -39,11 +39,19 @@ impl ClientProtocolInner for AwsQueryProtocol {
         &self.protocol_id
     }
 
+    /// Serializes an awsQuery request.
+    ///
+    /// `_endpoint` is deliberately ignored: awsQuery fixes the request path at `/` (its
+    /// `StaticHttpBindingResolver` uses `@http(method: "POST", uri: "/")`), so the route is a
+    /// function of the protocol rather than of the operation, and a path computed by codegen for a
+    /// different protocol must not leak through when this protocol is selected at runtime via
+    /// `Config::builder().protocol(..)`. `apply_http_endpoint` merges the scheme and authority
+    /// afterwards.
     fn serialize_request(
         &self,
         input: &dyn SerializableStruct,
         input_schema: &Schema<'_>,
-        endpoint: &str,
+        _endpoint: &str,
         cfg: &ConfigBag,
     ) -> Result<Request, SerdeError> {
         let op_name = cfg
@@ -59,7 +67,7 @@ impl ClientProtocolInner for AwsQueryProtocol {
         serializer.write_struct(input_schema, input)?;
         let body = aws_smithy_schema::codec::FinishSerializer::finish(serializer);
 
-        let uri = if endpoint.is_empty() { "/" } else { endpoint };
+        let uri = "/";
         let mut request = Request::new(SdkBody::from(body));
         request
             .set_method("POST")
@@ -204,18 +212,33 @@ mod tests {
         assert!(body.contains("Version=2012-11-05"));
     }
 
+    /// awsQuery fixes the request path at `/` (its `StaticHttpBindingResolver` uses
+    /// `@http(method: "POST", uri: "/")`), so a path computed by codegen for a *different*
+    /// protocol must not win when this protocol is selected at runtime via
+    /// `Config::builder().protocol(..)`. That is the only way this method is reached today,
+    /// since awsQuery is not yet on the schema-serde allowlist — so the path it is handed
+    /// was always computed for some other protocol.
+    ///
+    /// This is the mirror image of https://github.com/smithy-lang/smithy-rs/issues/4801,
+    /// where the CBOR protocol failed to apply its own route.
+    ///
+    /// Note the `endpoint` argument is a *path*, not a host: `apply_http_endpoint` merges the
+    /// scheme and authority later. An earlier version of this test passed a host and asserted
+    /// it was echoed back, which documented the pass-through rather than the protocol's rule.
     #[test]
-    fn request_posts_to_endpoint() {
+    fn request_ignores_a_route_computed_for_another_protocol() {
         let cfg = cfg_with_metadata();
-        let request = AwsQueryProtocol::new("1.0")
-            .serialize_request(
-                &EmptyInput,
-                &SCHEMA,
-                "https://sqs.us-east-1.amazonaws.com",
-                &cfg,
-            )
-            .unwrap();
-        assert_eq!(request.uri(), "https://sqs.us-east-1.amazonaws.com");
+        for foreign_route in ["/service/MyService/operation/GetUser", "/stats"] {
+            let request = AwsQueryProtocol::new("1.0")
+                .serialize_request(&EmptyInput, &SCHEMA, foreign_route, &cfg)
+                .unwrap();
+            assert_eq!(
+                request.uri(),
+                "/",
+                "awsQuery must POST to / regardless of the path it is handed"
+            );
+            assert_eq!(request.method(), "POST");
+        }
     }
 
     #[test]
