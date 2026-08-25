@@ -3,9 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::alloc::{GlobalAlloc, Layout, System};
+//! Benchmarks the RPC v2 CBOR route parser, router, and routing service.
+//!
+//! Run with:
+//! `cargo bench -p aws-smithy-http-server --bench rpc_v2_cbor_router`
+//!
+//! `SAMPLE_SIZE` and `MEASUREMENT_TIME_SECS` tune Criterion.
+
 use std::convert::Infallible;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
 use aws_smithy_http_server::body::empty;
@@ -20,52 +25,25 @@ use tower::{service_fn, ServiceExt};
 #[path = "../src/protocol/rpc_v2_cbor/route_identity.rs"]
 mod route_identity;
 
-use route_identity::{
-    parse_route_identity, parse_route_identity_enumerate, parse_route_identity_regex, parse_route_identity_take_while,
-};
+use route_identity::parse_route_identity;
 
-struct CountingAllocator;
+fn parse_route_identity_regex(path: &str) -> Option<route_identity::RouteIdentity<'_>> {
+    const IDENTIFIER: &str = r#"((_+([A-Za-z]|[0-9]))|[A-Za-z])[A-Za-z0-9_]*"#;
+    static PATH_REGEX: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(&format!(
+            r#"/service/({IDENTIFIER}\.)*(?P<service>{IDENTIFIER})/operation/(?P<operation>{IDENTIFIER})$"#,
+        ))
+        .expect("valid legacy route regex")
+    });
 
-static COUNT_ALLOCATIONS: AtomicBool = AtomicBool::new(false);
-static ALLOCATION_CALLS: AtomicU64 = AtomicU64::new(0);
-static ALLOCATED_BYTES: AtomicU64 = AtomicU64::new(0);
-
-#[global_allocator]
-static ALLOCATOR: CountingAllocator = CountingAllocator;
-
-unsafe impl GlobalAlloc for CountingAllocator {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        // SAFETY: Delegates to the process-wide system allocator with the unchanged layout.
-        let pointer = unsafe { System.alloc(layout) };
-        record_allocation(pointer, layout.size());
-        pointer
-    }
-
-    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        // SAFETY: Delegates to the process-wide system allocator with the unchanged layout.
-        let pointer = unsafe { System.alloc_zeroed(layout) };
-        record_allocation(pointer, layout.size());
-        pointer
-    }
-
-    unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) {
-        // SAFETY: The pointer and layout are passed through to the allocator that created it.
-        unsafe { System.dealloc(pointer, layout) }
-    }
-
-    unsafe fn realloc(&self, pointer: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        // SAFETY: The pointer, old layout, and new size are passed through unchanged.
-        let new_pointer = unsafe { System.realloc(pointer, layout, new_size) };
-        record_allocation(new_pointer, new_size);
-        new_pointer
-    }
-}
-
-fn record_allocation(pointer: *mut u8, size: usize) {
-    if !pointer.is_null() && COUNT_ALLOCATIONS.load(Ordering::Relaxed) {
-        ALLOCATION_CALLS.fetch_add(1, Ordering::Relaxed);
-        ALLOCATED_BYTES.fetch_add(size as u64, Ordering::Relaxed);
-    }
+    let captures = PATH_REGEX.captures(path)?;
+    let service = captures.name("service")?;
+    let operation = captures.name("operation")?;
+    Some(route_identity::RouteIdentity {
+        service: service.as_str(),
+        operation: operation.as_str(),
+        route_key: &path[service.start()..],
+    })
 }
 
 fn request(path: &str) -> Request<()> {
@@ -105,30 +83,9 @@ fn scenarios() -> [(&'static str, Request<()>); 4] {
     ]
 }
 
-fn report_allocations(router: &RpcV2CborRouter<()>, scenarios: &[(&str, Request<()>)]) {
-    const ITERATIONS: u64 = 10_000;
-    eprintln!("allocation report: handwritten");
-    for (name, request) in scenarios {
-        ALLOCATION_CALLS.store(0, Ordering::Relaxed);
-        ALLOCATED_BYTES.store(0, Ordering::Relaxed);
-        COUNT_ALLOCATIONS.store(true, Ordering::Relaxed);
-        for _ in 0..ITERATIONS {
-            black_box(router.match_route(black_box(request))).ok();
-        }
-        COUNT_ALLOCATIONS.store(false, Ordering::Relaxed);
-
-        eprintln!(
-            "  {name}: {:.2} allocations/route, {:.2} bytes/route",
-            ALLOCATION_CALLS.load(Ordering::Relaxed) as f64 / ITERATIONS as f64,
-            ALLOCATED_BYTES.load(Ordering::Relaxed) as f64 / ITERATIONS as f64,
-        );
-    }
-}
-
 fn rpc_v2_cbor_router(c: &mut Criterion) {
     let router: RpcV2CborRouter<()> = [("Service/operation/Operation", ())].into_iter().collect();
     let scenarios = scenarios();
-    report_allocations(&router, &scenarios);
 
     let mut group = c.benchmark_group("rpc_v2_cbor_router/handwritten");
     group.throughput(Throughput::Elements(1));
@@ -166,11 +123,9 @@ fn route_identity_parser(c: &mut Criterion) {
     ];
 
     type Parser = for<'a> fn(&'a str) -> Option<route_identity::RouteIdentity<'a>>;
-    let implementations: [(&str, Parser); 4] = [
-        ("regex", parse_route_identity_regex),
-        ("indexed", parse_route_identity),
-        ("rev_enumerate", parse_route_identity_enumerate),
-        ("rev_take_while_all", parse_route_identity_take_while),
+    let implementations: [(&str, Parser); 2] = [
+        ("legacy_regex", parse_route_identity_regex),
+        ("handwritten", parse_route_identity),
     ];
 
     let mut group = c.benchmark_group("rpc_v2_cbor_route_identity_parser/corpus");

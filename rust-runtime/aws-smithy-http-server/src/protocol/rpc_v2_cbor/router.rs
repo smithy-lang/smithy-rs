@@ -6,7 +6,7 @@
 use std::convert::Infallible;
 use std::str::FromStr;
 
-use http::header::ToStrError;
+use http::header::{HeaderName, ToStrError};
 use http::HeaderMap;
 use thiserror::Error;
 use tower::Layer;
@@ -55,7 +55,9 @@ pub struct RpcV2CborRouter<S> {
 /// Requests for the `rpcv2Cbor` protocol MUST NOT contain an `x-amz-target` or `x-amzn-target`
 /// header. An `rpcv2Cbor` request is malformed if it contains either of these headers. Server-side
 /// implementations MUST reject such requests for security reasons.
-const FORBIDDEN_HEADERS: &[&str] = &["x-amz-target", "x-amzn-target"];
+const SMITHY_PROTOCOL_HEADER: HeaderName = HeaderName::from_static("smithy-protocol");
+const X_AMZ_TARGET_HEADER: HeaderName = HeaderName::from_static("x-amz-target");
+const X_AMZN_TARGET_HEADER: HeaderName = HeaderName::from_static("x-amzn-target");
 
 #[cfg(test)]
 use super::route_identity::has_valid_identifier_start;
@@ -140,7 +142,9 @@ pub enum WireFormatError {
 /// `"rpc-v2-{format}"`, where `format` is one of the supported wire formats
 /// by the protocol (see [`WireFormat`]).
 fn parse_wire_format_from_header(headers: &HeaderMap) -> Result<WireFormat, WireFormatError> {
-    let header = headers.get("smithy-protocol").ok_or(WireFormatError::HeaderNotFound)?;
+    let header = headers
+        .get(&SMITHY_PROTOCOL_HEADER)
+        .ok_or(WireFormatError::HeaderNotFound)?;
     let header = header.to_str().map_err(WireFormatError::HeaderValueNotVisibleAscii)?;
     let format = wire_format_name(header).ok_or_else(|| WireFormatError::HeaderValueNotValid(header.to_owned()))?;
 
@@ -173,9 +177,8 @@ fn request_route_identity<B>(request: &http::Request<B>) -> Result<RouteIdentity
     }
 
     // Some headers are not allowed.
-    let request_has_forbidden_header = FORBIDDEN_HEADERS
-        .iter()
-        .any(|&forbidden_header| request.headers().contains_key(forbidden_header));
+    let request_has_forbidden_header =
+        request.headers().contains_key(&X_AMZ_TARGET_HEADER) || request.headers().contains_key(&X_AMZN_TARGET_HEADER);
     if request_has_forbidden_header {
         return Err(Error::ForbiddenHeaders);
     }
@@ -218,9 +221,6 @@ mod tests {
 
     use super::{
         is_valid_identifier, parse_route_identity, wire_format_name, Error, RouteIdentity, Router, RpcV2CborRouter,
-    };
-    use crate::protocol::rpc_v2_cbor::route_identity::{
-        parse_route_identity_enumerate, parse_route_identity_take_while,
     };
 
     #[test]
@@ -408,12 +408,6 @@ mod tests {
             "-",
             "#",
         ];
-        type Parser = for<'a> fn(&'a str) -> Option<RouteIdentity<'a>>;
-        let implementations: [(&str, Parser); 3] = [
-            ("indexed", parse_route_identity),
-            ("rev_enumerate", parse_route_identity_enumerate),
-            ("rev_take_while_all", parse_route_identity_take_while),
-        ];
         let mut generator = DeterministicGenerator(0x5EED);
         for iteration in 0..100_000 {
             let mut path = String::new();
@@ -428,13 +422,8 @@ mod tests {
             }
 
             let expected = legacy_parse(&path);
-            for (implementation, parser) in implementations {
-                let actual = parser(&path).map(|identity| (identity.service, identity.operation));
-                assert_eq!(
-                    expected, actual,
-                    "{implementation} parser/regex mismatch on input {path:?}"
-                );
-            }
+            let actual = parse_route_identity(&path).map(|identity| (identity.service, identity.operation));
+            assert_eq!(expected, actual, "parser/regex mismatch on input {path:?}");
         }
     }
 
