@@ -383,6 +383,46 @@ pub fn apply_http_endpoint(
     Ok(())
 }
 
+/// The name of the Smithy `service` shape a client was generated for.
+///
+/// Some protocols derive parts of the wire format from model names rather than
+/// from HTTP binding traits. RPC v2 CBOR is the canonical example: every request
+/// is routed to `/service/{serviceName}/operation/{operationName}`, where
+/// `serviceName` is the *service shape name* — not the `@aws.api#service`
+/// `sdkId`, and not the shape's namespace.
+///
+/// Because [`SharedClientProtocol`] can be swapped at runtime, a protocol cannot
+/// rely on codegen having baked its route into the generated request path: a
+/// client generated for `awsJson1_0` may have `RpcV2CborProtocol` plugged in via
+/// `Config::builder().protocol(..)`. Generated clients therefore store this entry
+/// in the config bag regardless of which protocol they were generated for, so
+/// whichever protocol ends up being used can resolve the names it needs. The
+/// companion operation name comes from
+/// [`Metadata::name`](aws_smithy_runtime_api::client::orchestrator::Metadata::name).
+///
+/// See <https://github.com/smithy-lang/smithy-rs/issues/4801>.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ServiceShapeName(std::borrow::Cow<'static, str>);
+
+impl ServiceShapeName {
+    /// Creates a new [`ServiceShapeName`] from the Smithy service shape name.
+    ///
+    /// Accepts a codegen-emitted `&'static str` as well as a `String`
+    /// materialized at runtime from a parsed model.
+    pub fn new(name: impl Into<std::borrow::Cow<'static, str>>) -> Self {
+        Self(name.into())
+    }
+
+    /// Returns the service shape name.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl aws_smithy_types::config_bag::Storable for ServiceShapeName {
+    type Storer = aws_smithy_types::config_bag::StoreReplace<Self>;
+}
+
 /// A shared, type-erased client protocol stored in a [`ConfigBag`].
 ///
 /// Wraps `Arc<dyn ClientProtocol<Req, Res>>` so a protocol can be stored and

@@ -153,6 +153,19 @@ private class SchemaProtocolCustomization(
                     val serviceShapeName = codegenContext.serviceShape.id.name
                     val serviceNamespace = codegenContext.serviceShape.id.namespace
 
+                    // Stored unconditionally, not just for the protocol this client was generated
+                    // for. Protocols whose wire format depends on model names — rpcv2Cbor routes to
+                    // `/service/{service}/operation/{operation}` — need the service shape name at
+                    // runtime, and `Config::builder().protocol(..)` lets a customer plug in such a
+                    // protocol regardless of what the model declared.
+                    // See https://github.com/smithy-lang/smithy-rs/issues/4801.
+                    rustTemplate(
+                        """
+                        ${section.newLayerName}.store_put(#{ServiceShapeName}::new(${serviceShapeName.dq()}));
+                        """,
+                        "ServiceShapeName" to smithySchema.resolve("protocol::ServiceShapeName"),
+                    )
+
                     val (protocolType, constructor) =
                         when {
                             protocol == RestJson1Trait.ID ->

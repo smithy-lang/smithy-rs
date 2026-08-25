@@ -7,10 +7,11 @@
 
 use crate::codec::{CborCodec, CborCodecSettings};
 use crate::Decoder;
+use aws_smithy_runtime_api::client::orchestrator::Metadata;
 use aws_smithy_runtime_api::http::{Headers, Request, Response};
 use aws_smithy_schema::error_envelope::{parse_query_compatible_header, sanitize_error_code};
 use aws_smithy_schema::http_protocol::HttpRpcProtocol;
-use aws_smithy_schema::protocol::ClientProtocolInner;
+use aws_smithy_schema::protocol::{ClientProtocolInner, ServiceShapeName};
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
 use aws_smithy_schema::{shape_id, Schema, ShapeId};
 use aws_smithy_types::config_bag::ConfigBag;
@@ -56,6 +57,19 @@ impl ClientProtocolInner for RpcV2CborProtocol {
         endpoint: &str,
         cfg: &ConfigBag,
     ) -> Result<Request, SerdeError> {
+        // RPC v2 CBOR ignores HTTP binding traits entirely and routes to
+        // `/service/{serviceName}/operation/{operationName}`. Resolve that route
+        // here rather than trusting the path codegen passed in: because the
+        // protocol can be swapped at runtime, `endpoint` may have been computed
+        // for a different protocol (`/` for a client generated against awsJson,
+        // or an `@http` URI for a REST one), and honoring it sends every request
+        // to the wrong route. See https://github.com/smithy-lang/smithy-rs/issues/4801.
+        //
+        // Falls back to the supplied endpoint when the model names aren't
+        // available — e.g. a hand-written caller invoking this protocol directly
+        // without populating the config bag.
+        let route = rpc_v2_cbor_route(cfg);
+        let endpoint = route.as_deref().unwrap_or(endpoint);
         self.inner
             .serialize_request(input, input_schema, endpoint, cfg)
     }
@@ -91,6 +105,26 @@ impl ClientProtocolInner for RpcV2CborProtocol {
         let body = response.body().bytes().unwrap_or(&[]);
         parse_error_envelope_metadata(body, response.headers())
     }
+}
+
+/// Resolves the canonical RPC v2 CBOR request route from the config bag.
+///
+/// Per the [spec](https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html#requests),
+/// requests are sent to `/service/{serviceName}/operation/{operationName}`, using
+/// the Smithy shape names of the service and the operation.
+///
+/// The service shape name comes from [`ServiceShapeName`] (stored by generated
+/// clients for whichever protocol ends up being used) and the operation shape
+/// name from [`Metadata`]. Returns `None` when either is absent, leaving the
+/// caller to fall back to the endpoint it was given.
+fn rpc_v2_cbor_route(cfg: &ConfigBag) -> Option<String> {
+    let service = cfg.load::<ServiceShapeName>()?;
+    let operation = cfg.load::<Metadata>()?;
+    Some(format!(
+        "/service/{}/operation/{}",
+        service.as_str(),
+        operation.name()
+    ))
 }
 
 /// Parses the canonical CBOR error envelope. The envelope is a CBOR map at the
@@ -346,5 +380,103 @@ mod tests {
         assert_eq!(meta.code(), Some("Customized"));
         assert_eq!(meta.message(), Some("Hi"));
         assert_eq!(meta.extra("type"), Some("Sender"));
+    }
+
+    /// A minimal input with no members, enough to drive `serialize_request`.
+    struct EmptyInput;
+    impl aws_smithy_schema::serde::SerializableStruct for EmptyInput {
+        fn serialize_members(
+            &self,
+            _: &mut dyn aws_smithy_schema::serde::ShapeSerializer,
+        ) -> Result<(), SerdeError> {
+            Ok(())
+        }
+    }
+
+    static INPUT_SCHEMA: Schema<'static> = Schema::new(
+        aws_smithy_schema::shape_id!("smithy.example", "GetStatsInput"),
+        aws_smithy_schema::ShapeType::Structure,
+    );
+
+    /// Builds a config bag holding the model names a generated client stores.
+    fn cfg_with_names(service: &'static str, operation: &'static str) -> ConfigBag {
+        let mut layer = aws_smithy_types::config_bag::Layer::new("test");
+        layer.store_put(ServiceShapeName::new(service));
+        layer.store_put(Metadata::new(operation, "Some Sdk Id"));
+        ConfigBag::of_layers(vec![layer])
+    }
+
+    fn serialize_with(cfg: &ConfigBag, endpoint: &str) -> Request {
+        RpcV2CborProtocol::new()
+            .serialize_request(&EmptyInput, &INPUT_SCHEMA, endpoint, cfg)
+            .expect("serialization succeeds")
+    }
+
+    #[test]
+    fn serialize_request_uses_canonical_rpc_route() {
+        let cfg = cfg_with_names("PokemonService", "GetServerStatistics");
+        let request = serialize_with(&cfg, "");
+        assert_eq!(
+            "/service/PokemonService/operation/GetServerStatistics",
+            request.uri()
+        );
+        assert_eq!("POST", request.method());
+    }
+
+    /// The route is protocol-mandated, so a path computed by codegen for a
+    /// *different* protocol must not win when this protocol is plugged in at
+    /// runtime. `/` is what an awsJson-generated client passes, and `/stats` is
+    /// what a REST-generated client's `@http` URI would look like.
+    /// See https://github.com/smithy-lang/smithy-rs/issues/4801.
+    #[test]
+    fn serialize_request_overrides_endpoint_from_another_protocol() {
+        let cfg = cfg_with_names("PokemonService", "GetServerStatistics");
+        for endpoint in ["/", "/stats", "/service/Wrong/operation/Wrong"] {
+            let request = serialize_with(&cfg, endpoint);
+            assert_eq!(
+                "/service/PokemonService/operation/GetServerStatistics",
+                request.uri(),
+                "endpoint {endpoint:?} must not override the protocol's route",
+            );
+        }
+    }
+
+    /// Without the model names in the config bag there is nothing to resolve, so
+    /// the supplied endpoint is used as-is. This keeps direct (non-generated)
+    /// callers of the protocol API working.
+    #[test]
+    fn serialize_request_falls_back_to_supplied_endpoint() {
+        let cfg = ConfigBag::base();
+        assert_eq!(
+            "/service/Fallback/operation/Op",
+            serialize_with(&cfg, "/service/Fallback/operation/Op").uri()
+        );
+        // And with no endpoint at all, `HttpRpcProtocol`'s `/` default applies.
+        assert_eq!("/", serialize_with(&cfg, "").uri());
+    }
+
+    /// `Metadata` alone is not enough — the service shape name is not derivable
+    /// from it, since `Metadata::service` is the sdkId rather than the shape name.
+    #[test]
+    fn serialize_request_falls_back_when_only_metadata_is_present() {
+        let mut layer = aws_smithy_types::config_bag::Layer::new("test");
+        layer.store_put(Metadata::new("GetServerStatistics", "Pokemon Service"));
+        let cfg = ConfigBag::of_layers(vec![layer]);
+        assert_eq!("/", serialize_with(&cfg, "").uri());
+    }
+
+    /// The service name may be materialized at runtime (e.g. read from a parsed
+    /// model) rather than being a codegen-emitted literal.
+    #[test]
+    fn service_shape_name_accepts_runtime_strings() {
+        let owned: String = ["Pokemon", "Service"].concat();
+        let mut layer = aws_smithy_types::config_bag::Layer::new("test");
+        layer.store_put(ServiceShapeName::new(owned));
+        layer.store_put(Metadata::new("GetServerStatistics", "Pokemon Service"));
+        let cfg = ConfigBag::of_layers(vec![layer]);
+        assert_eq!(
+            "/service/PokemonService/operation/GetServerStatistics",
+            serialize_with(&cfg, "").uri()
+        );
     }
 }
