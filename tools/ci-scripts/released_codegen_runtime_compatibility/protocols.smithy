@@ -6,8 +6,15 @@ use aws.protocols#awsJson1_0
 use aws.protocols#awsJson1_1
 use aws.protocols#awsQuery
 use aws.protocols#ec2Query
+use aws.protocols#restJson1
 use aws.protocols#restXml
 use smithy.protocols#rpcv2Cbor
+
+@restJson1
+service RestJsonService {
+    version: "2024-01-01"
+    operations: [RestOperation]
+}
 
 @restXml
 service RestXmlService {

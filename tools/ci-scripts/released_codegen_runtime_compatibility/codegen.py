@@ -12,15 +12,18 @@ from .paths import copy_file, copy_tree, exists, gradle_wrapper
 
 PROJECT_NAME = "published-codegen-compatibility"
 SMITHY_GRADLE_PLUGIN_VERSION = "1.3.0"
-COMMON_MODEL_FILES = ("pokemon.smithy", "pokemon-common.smithy")
 PROTOCOL_MODEL_FILE = "protocols.smithy"
-MODEL_FILES = COMMON_MODEL_FILES + (PROTOCOL_MODEL_FILE,)
+MODEL_FILES = (PROTOCOL_MODEL_FILE,)
 
 Protocol = Tuple[str, str, bool]
 
 # Protocol name, service shape, and whether server codegen supports it.
 COMPATIBILITY_PROTOCOLS: Tuple[Protocol, ...] = (
-    ("rest-json-1", "com.aws.example#PokemonService", True),
+    (
+        "rest-json-1",
+        "smithy.rust.codegen.compatibility#RestJsonService",
+        True,
+    ),
     ("rest-xml", "smithy.rust.codegen.compatibility#RestXmlService", True),
     ("aws-json-1-0", "smithy.rust.codegen.compatibility#AwsJson10Service", True),
     ("aws-json-1-1", "smithy.rust.codegen.compatibility#AwsJson11Service", True),
@@ -220,9 +223,6 @@ class ProtocolSdkGenerator:
         """Write an isolated Smithy project using exact published artifacts."""
         model_root = project_root / "model"
         model_root.mkdir(parents=True)
-        for name in COMMON_MODEL_FILES:
-            source = self.repository_root / "codegen-core/common-test-models" / name
-            copy_file(source, model_root / name)
         copy_file(
             Path(__file__).resolve().with_name(PROTOCOL_MODEL_FILE),
             model_root / PROTOCOL_MODEL_FILE,

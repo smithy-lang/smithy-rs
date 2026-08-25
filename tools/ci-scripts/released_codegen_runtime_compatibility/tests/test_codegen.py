@@ -38,6 +38,14 @@ class PublishedCodegenProjectTest(unittest.TestCase):
             {protocol for protocol, _, _ in COMPATIBILITY_PROTOCOLS},
         )
 
+        rest_json = projections["protocol-rest-json-1-client"]["plugins"][
+            "rust-client-codegen"
+        ]
+        self.assertEqual(
+            "smithy.rust.codegen.compatibility#RestJsonService",
+            rest_json["service"],
+        )
+
         for module in CLIENT_MODULES:
             settings = projections[module]["plugins"]["rust-client-codegen"]
             self.assertNotIn("runtimeConfig", settings)
