@@ -4,8 +4,8 @@ ci-build
 This directory includes everything to build the build/release/CI Docker image.
 - `Dockerfile`: Dockerfile used to create the base build image. Needs to be in `tools/ci-build` so that it
   can copy all the tools source code into the image at build time.
-- `add-local-user.dockerfile`: Creates a user in the build image with the host's user ID
-- `build.docker-compose.yml`: Docker Compose file for using the build image
+- `add-local-user.dockerfile`: Creates a runner-specific image with the host user's ID. This wrapper is local-only and must never be published as the reusable base image.
+- `build.docker-compose.yml`: Docker Compose file for using the runner-specific image
 - `ci-action`: Script for running CI actions inside the Docker build image
 - `ci-create-workspace`: Used by `ci-action`, but can be run manually to create a one-off workspace for debugging
 - `sanity-test`: Script that sanity tests the Docker build image

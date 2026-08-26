@@ -13,6 +13,7 @@
 # Docker execution is completed.
 
 FROM smithy-rs-base-image:local AS bare_base_image
+LABEL org.smithy-rs.image-role="runner"
 
 ARG USER_ID
 USER root

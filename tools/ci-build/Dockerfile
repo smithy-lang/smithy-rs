@@ -195,6 +195,7 @@ RUN set -eux; \
 #
 # `clang` needed by SDK examples for `libxlsxwriter-sys`
 FROM bare_base_image AS final_image
+LABEL org.smithy-rs.image-role="base"
 ARG rust_stable_version
 ARG rust_nightly_version
 RUN set -eux; \

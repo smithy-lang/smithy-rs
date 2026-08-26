@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from enum import Enum
-from unittest.mock import call, MagicMock
+from unittest.mock import call, MagicMock, patch
 import os
 import shlex
 import subprocess
@@ -39,6 +39,7 @@ class DockerPullResult(Enum):
     NOT_FOUND = 5
     UNKNOWN_ERROR = 6
     UNAUTHENTICATED = 7
+    REBUILD_REQUIRED = 8
 
 
 class Platform(Enum):
@@ -126,6 +127,7 @@ class Shell:
         throttle_messages = ["toomanyrequests:"]
         retryable_messages = ["net/http: TLS handshake timeout"]
         unauthenticated_messages = ["no basic auth credentials"]
+        rebuild_messages = ["max depth exceeded"]
         if status == 0:
             return DockerPullResult.SUCCESS
 
@@ -138,6 +140,8 @@ class Shell:
             return DockerPullResult.RETRYABLE_ERROR
         elif output_contains_any(stdout, stderr, unauthenticated_messages):
             return DockerPullResult.UNAUTHENTICATED
+        elif output_contains_any(stdout, stderr, rebuild_messages):
+            return DockerPullResult.REBUILD_REQUIRED
         return DockerPullResult.UNKNOWN_ERROR
 
     # Builds the base image with the Dockerfile in `path` and tags with with `image_tag`
@@ -226,6 +230,8 @@ def acquire_build_image(context=Context.default(), shell=Shell()):
         if pull_result != DockerPullResult.SUCCESS:
             if pull_result == DockerPullResult.REMOTE_ARCHITECTURE_MISMATCH:
                 announce("Remote architecture is not the same as the local architecture. A local build is required.")
+            elif pull_result == DockerPullResult.REBUILD_REQUIRED:
+                announce("Remote image has an invalid layer ancestry. A clean local build is required.")
             elif pull_result == DockerPullResult.UNKNOWN_ERROR:
                 announce("An unknown failure happened during Docker pull. This needs to be examined.")
                 return 1
@@ -317,10 +323,14 @@ class SelfTest(unittest.TestCase):
         # ECR then GHCR both miss; we only care that docker_login was called for ECR auth
         shell.docker_image_exists_locally.side_effect = [False]
         shell.docker_pull.side_effect = [DockerPullResult.NOT_FOUND, DockerPullResult.NOT_FOUND]
-        acquire_build_image(self.test_context(
-            allow_local_build=True,
-            encrypted_docker_password="jA0ECQMCvYU/JxsX3g/70j0BxbLLW8QaFWWb/DqY9gPhTuEN/xdYVxaoDnV6Fha+lAWdT7xN0qZr5DHPBalLfVvvM1SEXRBI8qnfXyGI",
-            docker_passphrase="secret"), shell)
+        with patch(
+            f"{__name__}.get_cmd_output",
+            return_value=(0, "payload", ""),
+        ):
+            acquire_build_image(self.test_context(
+                allow_local_build=True,
+                encrypted_docker_password="jA0ECQMCvYU/JxsX3g/70j0BxbLLW8QaFWWb/DqY9gPhTuEN/xdYVxaoDnV6Fha+lAWdT7xN0qZr5DHPBalLfVvvM1SEXRBI8qnfXyGI",
+                docker_passphrase="secret"), shell)
         shell.docker_login.assert_called_with("payload")
 
     def test_retry_immediate_success(self):
@@ -364,6 +374,16 @@ class SelfTest(unittest.TestCase):
                 retryable_error_sleep_time=0
             )
         )
+
+    def test_docker_pull_max_depth_requires_rebuild(self):
+        with patch(
+            f"{__name__}.get_cmd_output",
+            return_value=(1, "", "failed to register layer: max depth exceeded"),
+        ):
+            self.assertEqual(
+                DockerPullResult.REBUILD_REQUIRED,
+                Shell().docker_pull("test-image", "test-image-tag")
+            )
 
     def test_retry_throttling_then_success(self):
         shell = self.mock_shell()
@@ -472,6 +492,31 @@ class SelfTest(unittest.TestCase):
         shell.docker_save.assert_not_called()
         shell.docker_tag.assert_called_with(LOCAL_BASE_IMAGE_NAME, "someimagetag", LOCAL_BASE_IMAGE_NAME, LOCAL_TAG)
         shell.docker_build_build_image.assert_called_with("123", "/tmp/test/tools-path/ci-build")
+
+    # When both registries contain an image whose layer ancestry exceeds Docker's limit,
+    # it should rebuild the base locally rather than fail the entire workflow.
+    def test_image_local_build_after_max_depth_error(self):
+        context = self.test_context(allow_local_build=True, github_actions=True)
+        shell = self.mock_shell()
+        shell.platform.return_value = Platform.X86_64
+        shell.docker_image_exists_locally.side_effect = [False]
+        shell.docker_pull.side_effect = [
+            DockerPullResult.REBUILD_REQUIRED,
+            DockerPullResult.REBUILD_REQUIRED,
+        ]
+
+        self.assertEqual(0, acquire_build_image(context, shell))
+        shell.docker_build_base_image.assert_called_once_with(
+            "someimagetag", "/tmp/test/tools-path/ci-build"
+        )
+        shell.docker_save.assert_called_once_with(
+            LOCAL_BASE_IMAGE_NAME,
+            "someimagetag",
+            "/tmp/test/start-path/smithy-rs-base-image"
+        )
+        shell.docker_build_build_image.assert_called_once_with(
+            "123", "/tmp/test/tools-path/ci-build"
+        )
 
     # When:
     #  - the base image doesn't exist locally
