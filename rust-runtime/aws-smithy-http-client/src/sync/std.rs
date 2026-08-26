@@ -7,6 +7,7 @@
 
 use ::std::ops::{Deref, DerefMut};
 
+pub(crate) use ::std::sync::atomic::{AtomicBool, Ordering};
 pub(crate) use ::std::sync::Arc;
 
 /// Non-owning reference used by coordination registries.
@@ -31,15 +32,15 @@ impl<T> Clone for Weak<T> {
     }
 }
 
-#[cfg(test)]
+#[cfg(debug_assertions)]
 ::std::thread_local! {
     static HELD_POOL_LOCKS: ::std::cell::Cell<usize> = const { ::std::cell::Cell::new(0) };
 }
 
-#[cfg(test)]
+#[cfg(debug_assertions)]
 struct LockDepth;
 
-#[cfg(test)]
+#[cfg(debug_assertions)]
 impl LockDepth {
     fn enter() -> Self {
         HELD_POOL_LOCKS.with(|depth| {
@@ -54,7 +55,7 @@ impl LockDepth {
     }
 }
 
-#[cfg(test)]
+#[cfg(debug_assertions)]
 impl Drop for LockDepth {
     fn drop(&mut self) {
         HELD_POOL_LOCKS.with(|depth| {
@@ -76,7 +77,7 @@ impl<T> Mutex<T> {
 
     /// Locks the mutex.
     pub(crate) fn lock(&self) -> MutexGuard<'_, T> {
-        #[cfg(test)]
+        #[cfg(debug_assertions)]
         let depth = LockDepth::enter();
         let inner = self
             .0
@@ -84,7 +85,7 @@ impl<T> Mutex<T> {
             .unwrap_or_else(::std::sync::PoisonError::into_inner);
         MutexGuard {
             inner,
-            #[cfg(test)]
+            #[cfg(debug_assertions)]
             _depth: depth,
         }
     }
@@ -93,7 +94,7 @@ impl<T> Mutex<T> {
 /// Exclusive access returned by [`Mutex::lock`].
 pub(crate) struct MutexGuard<'a, T> {
     inner: ::std::sync::MutexGuard<'a, T>,
-    #[cfg(test)]
+    #[cfg(debug_assertions)]
     _depth: LockDepth,
 }
 
@@ -123,7 +124,7 @@ impl<T> RwLock<T> {
 
     /// Locks with shared read access.
     pub(crate) fn read(&self) -> RwLockReadGuard<'_, T> {
-        #[cfg(test)]
+        #[cfg(debug_assertions)]
         let depth = LockDepth::enter();
         let inner = self
             .0
@@ -131,14 +132,14 @@ impl<T> RwLock<T> {
             .unwrap_or_else(::std::sync::PoisonError::into_inner);
         RwLockReadGuard {
             inner,
-            #[cfg(test)]
+            #[cfg(debug_assertions)]
             _depth: depth,
         }
     }
 
     /// Locks with exclusive write access.
     pub(crate) fn write(&self) -> RwLockWriteGuard<'_, T> {
-        #[cfg(test)]
+        #[cfg(debug_assertions)]
         let depth = LockDepth::enter();
         let inner = self
             .0
@@ -146,7 +147,7 @@ impl<T> RwLock<T> {
             .unwrap_or_else(::std::sync::PoisonError::into_inner);
         RwLockWriteGuard {
             inner,
-            #[cfg(test)]
+            #[cfg(debug_assertions)]
             _depth: depth,
         }
     }
@@ -155,7 +156,7 @@ impl<T> RwLock<T> {
 /// Shared access returned by [`RwLock::read`].
 pub(crate) struct RwLockReadGuard<'a, T> {
     inner: ::std::sync::RwLockReadGuard<'a, T>,
-    #[cfg(test)]
+    #[cfg(debug_assertions)]
     _depth: LockDepth,
 }
 
@@ -170,7 +171,7 @@ impl<T> Deref for RwLockReadGuard<'_, T> {
 /// Exclusive access returned by [`RwLock::write`].
 pub(crate) struct RwLockWriteGuard<'a, T> {
     inner: ::std::sync::RwLockWriteGuard<'a, T>,
-    #[cfg(test)]
+    #[cfg(debug_assertions)]
     _depth: LockDepth,
 }
 

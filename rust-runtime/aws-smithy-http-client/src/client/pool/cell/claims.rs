@@ -106,6 +106,17 @@ impl SourceClaimSlot {
         )
     }
 
+    /// Checks relationships that are not already encoded by the state enum.
+    pub(super) fn assert_consistent(&self, _source_supports_installed_claim: bool) {
+        #[cfg(debug_assertions)]
+        if matches!(self.state, SourceClaimState::Installed(_)) {
+            assert!(
+                _source_supports_installed_claim,
+                "installed HTTP/1 claim had no externally owned source record to settle it"
+            );
+        }
+    }
+
     #[cfg(test)]
     pub(super) fn local_turn_owed(&self) -> bool {
         self.local_turn_owed

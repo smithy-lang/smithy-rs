@@ -31,7 +31,7 @@ default-client = [
     "dep:rustls-native-certs"
 ]
 
-rt-tokio = ["tokio/rt"]
+rt-tokio = ["aws-smithy-async/rt-tokio", "tokio/rt"]
 
 wire-mock = [
     "test-util",
@@ -43,7 +43,7 @@ wire-mock = [
     "tokio/macros",
     "tokio/io-util",
     "tokio/net",
-    "tokio/rt",
+    "rt-tokio",
     "tokio/sync",
     "tokio/time",
     "dep:http-body-util",

@@ -51,6 +51,15 @@ pub(super) struct WaiterQueue {
     next_demand_id: u64,
 }
 
+/// Owner-runtime progress of one submitted establishment task.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum EstablishmentPhase {
+    /// The task was submitted but has not claimed its first connector poll.
+    Submitted,
+    /// The owner runtime polled the task and the pool owns completion.
+    Started,
+}
+
 impl WaiterQueue {
     /// Registers one acquisition episode.
     ///
@@ -170,17 +179,16 @@ impl WaiterQueue {
 
     /// Commits a returned HTTP/1 sender to the oldest compatible episode.
     ///
-    /// A waiter still awaiting capacity leaves the demand FIFO. A waiter that
-    /// already owns establishment capacity returns that permit after unlock.
-    /// If capacity is crossing from admission, the H1 result remains pending
-    /// until that crossing returns its permit and closes its delivery fence.
+    /// Payload construction is delayed until all panic-capable target checks
+    /// have completed. Once constructed, the result is either state-owned or
+    /// returned to the caller for cleanup after the cell lock is released.
     pub(super) fn install_returned_h1(
         &mut self,
-        result: AcquisitionResult,
+        result: impl FnOnce() -> AcquisitionResult,
         eligibility_group: &EligibilityGroup,
     ) -> H1Install {
         let Some(waiter) = self.oldest_h1_candidate() else {
-            return H1Install::rejected(result);
+            return H1Install::rejected(result());
         };
 
         if matches!(
@@ -197,7 +205,7 @@ impl WaiterQueue {
                 unreachable!("HTTP/1 target waiter left the waiting state");
             };
             let waker = waker.take();
-            record.state = WaiterState::Ready(result);
+            record.state = WaiterState::Ready(result());
             let retired =
                 DemandSnapshot::inactive(removed.demand.id, removed.demand.version.next());
             self.assert_consistent();
@@ -218,11 +226,11 @@ impl WaiterQueue {
                 pending_h1,
             } => {
                 debug_assert!(pending_h1.is_none());
-                *pending_h1 = Some(result);
+                *pending_h1 = Some(result());
                 (None, None)
             }
             WaiterState::ReadyToEstablish { .. } | WaiterState::Launching { .. } => {
-                let previous = std::mem::replace(&mut record.state, WaiterState::Ready(result));
+                let previous = std::mem::replace(&mut record.state, WaiterState::Ready(result()));
                 match previous {
                     WaiterState::ReadyToEstablish { permit } => {
                         (Some(AcquisitionEvent::Establish(permit)), None)
@@ -238,7 +246,11 @@ impl WaiterQueue {
             }
         };
         self.h1_candidates.remove(&waiter);
-        self.assert_consistent();
+        if returned_event.is_none() {
+            // The incoming H1 is state-owned and no permit is detached, so an
+            // invariant failure cannot drop a pool value under this lock.
+            self.assert_consistent();
+        }
         H1Install {
             demand_updates: [None, None],
             returned_event,
@@ -353,7 +365,7 @@ impl WaiterQueue {
             let previous = std::mem::replace(
                 &mut record.state,
                 WaiterState::Launching {
-                    started: false,
+                    phase: EstablishmentPhase::Submitted,
                     waker: None,
                 },
             );
@@ -400,20 +412,23 @@ impl WaiterQueue {
 
     /// Claims pool ownership immediately before an attempt's first poll.
     ///
-    /// A returned H1 or cancellation that wins first removes the lazy
+    /// A returned H1 or cancellation that wins first removes the submitted
     /// attempt's authority, allowing its unpolled future and permit to drop.
     pub(super) fn start_establishment(&mut self, waiter: WaiterId) -> bool {
         let Some(record) = self.records.get_mut(&waiter) else {
             return false;
         };
         match &mut record.state {
-            WaiterState::Launching { started, .. } if !*started => {
-                *started = true;
+            WaiterState::Launching { phase, .. } if *phase == EstablishmentPhase::Submitted => {
+                *phase = EstablishmentPhase::Started;
                 self.assert_consistent();
                 true
             }
             WaiterState::Ready(AcquisitionResult::H1(_)) => false,
-            WaiterState::Launching { started: true, .. } => {
+            WaiterState::Launching {
+                phase: EstablishmentPhase::Started,
+                ..
+            } => {
                 panic!("establishment attempt was started more than once")
             }
             _ => {
@@ -493,7 +508,8 @@ impl WaiterQueue {
                 if let Some(h1) = pending_h1.take() {
                     record.state = WaiterState::Ready(h1);
                     self.h1_candidates.remove(&waiter);
-                    self.assert_consistent();
+                    // The rejected permit must cross the lock boundary even
+                    // if other state is already inconsistent.
                     return ResultInstall {
                         returned_events: [Some(AcquisitionEvent::Establish(permit)), None],
                         waker,
@@ -558,7 +574,8 @@ impl WaiterQueue {
                 if let Some(local_h1) = pending_h1.take() {
                     record.state = WaiterState::Ready(local_h1);
                     self.h1_candidates.remove(&waiter);
-                    self.assert_consistent();
+                    // The rejected borrowed sender must cross the lock
+                    // boundary before any panic-capable consistency check.
                     return ResultInstall {
                         returned_events: [Some(AcquisitionEvent::Complete(result)), None],
                         waker,
@@ -600,7 +617,11 @@ impl WaiterQueue {
         }
     }
 
-    /// Commits one establishment outcome if its launching waiter is still live.
+    /// Commits one terminal establishment result when its waiter is still live.
+    ///
+    /// Completion may occur from either launch phase: normal execution starts
+    /// the connector first, while dropping an unpolled submitted task installs
+    /// a terminal runtime error.
     pub(super) fn install_establishment_result(
         &mut self,
         waiter: WaiterId,
@@ -612,13 +633,12 @@ impl WaiterQueue {
         if matches!(record.state, WaiterState::Ready(AcquisitionResult::H1(_))) {
             return ResultInstall::rejected(AcquisitionEvent::Complete(result));
         }
-        let WaiterState::Launching { started, waker } = &mut record.state else {
+        let WaiterState::Launching { waker, .. } = &mut record.state else {
             return ResultInstall::invalid(
                 AcquisitionEvent::Complete(result),
                 ResultInstallError::UnexpectedState,
             );
         };
-        debug_assert!(*started, "unstarted establishment attempt completed");
         let waker = waker.take();
         record.state = WaiterState::Ready(result);
         self.h1_candidates.remove(&waiter);
@@ -969,10 +989,10 @@ enum WaiterState {
         /// Optional bounded-origin capacity owned until connection install.
         permit: EstablishmentPermit,
     },
-    /// Establishment may be lazy or pool-owned and races a returned H1.
+    /// Establishment was submitted to the owner runtime and may be unpolled.
     Launching {
-        /// Whether the owner partition claimed the first connector poll.
-        started: bool,
+        /// Ownership phase used to distinguish submission from first poll.
+        phase: EstablishmentPhase,
         /// Latest task waiting for the attempt or returned H1 to complete.
         waker: Option<Waker>,
     },
