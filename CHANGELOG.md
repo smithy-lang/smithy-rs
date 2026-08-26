@@ -1,4 +1,23 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+August 21st, 2026
+=================
+**New this release:**
+- :bug: (client, [aws-sdk-rust#1451](https://github.com/awslabs/aws-sdk-rust/issues/1451), @shrey4796) Update the `lru` dependency to 0.18.2 to address RUSTSEC-2026-0253.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @shrey4796 ([aws-sdk-rust#1451](https://github.com/awslabs/aws-sdk-rust/issues/1451))
+
+
+August 19th, 2026
+=================
+**New this release:**
+- :tada: (client, [smithy-rs#4767](https://github.com/smithy-lang/smithy-rs/issues/4767)) Add a deterministic connection-level test harness to the `wire-mock` feature under `aws_smithy_http_client::test_util::wire::connection`. It supports per-connection HTTP/1.1 scripts, raw socket actions, synchronization gates, and recorded connection events.
+- :tada: (client) Add `pool_max_idle_per_host` setter to HTTP client `Builder` and `ConnectorBuilder`,
+    exposing hyper's `pool_max_idle_per_host` setting to control the maximum number of idle
+    connections kept alive per host.
+
+
 August 12th, 2026
 =================
 **New this release:**
