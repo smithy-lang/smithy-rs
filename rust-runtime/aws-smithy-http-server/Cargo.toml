@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-http-server"
-version = "0.66.6"
+version = "0.68.0"
 authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -67,7 +67,7 @@ tracing = "0.1.44"
 uuid = { version = "1.1.2", features = ["v4", "fast-rng"], optional = true }
 
 [dev-dependencies]
-criterion = { version = "=0.5.1", features = ["async_tokio"] }
+criterion = { version = "0.5.1", features = ["async_tokio"] }
 pretty_assertions = "1"
 hyper-util = { version = "0.1", features = [
     "tokio",
