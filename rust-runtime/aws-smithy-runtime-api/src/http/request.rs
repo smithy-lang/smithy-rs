@@ -131,10 +131,7 @@ impl Uri {
     }
 }
 
-fn merge_paths(
-    endpoint_path: Option<http_1x::uri::PathAndQuery>,
-    uri: &ParsedUri,
-) -> Cow<'_, str> {
+fn merge_paths(endpoint_path: Option<http_1x::uri::PathAndQuery>, uri: &ParsedUri) -> Cow<'_, str> {
     let uri_path_and_query = uri.path_and_query();
     let endpoint_path = match endpoint_path {
         None => return Cow::Borrowed(uri_path_and_query),
@@ -456,7 +453,9 @@ mod test {
     fn set_endpoint_merges_paths() {
         let mut req = super::Request::empty();
         req.set_uri("/foo/bar").unwrap();
-        req.uri_mut().set_endpoint("https://www.amazon.com").unwrap();
+        req.uri_mut()
+            .set_endpoint("https://www.amazon.com")
+            .unwrap();
         assert_eq!(req.uri(), "https://www.amazon.com/foo/bar");
     }
 

@@ -285,8 +285,7 @@ impl SdkBody {
 
                     match polled {
                         Poll::Ready(Ok(maybe_trailers)) => {
-                            let http_1x_trailers =
-                                maybe_trailers.map(convert_trailers_0x_1x);
+                            let http_1x_trailers = maybe_trailers.map(convert_trailers_0x_1x);
                             Poll::Ready(Ok(http_1x_trailers))
                         }
                         Poll::Ready(Err(err)) => Poll::Ready(Err(err)),

@@ -228,8 +228,7 @@ impl TryFrom<http_02x::HeaderMap> for Headers {
             string_safe_headers.extend(value.into_iter().map(|(k, v)| {
                 (
                     k.map(|n| {
-                        http_1x::HeaderName::from_bytes(n.as_str().as_bytes())
-                            .expect("known valid")
+                        http_1x::HeaderName::from_bytes(n.as_str().as_bytes()).expect("known valid")
                     }),
                     HeaderValue::from_http02x(v).expect("validated above"),
                 )
