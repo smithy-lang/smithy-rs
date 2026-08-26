@@ -44,6 +44,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.ReturnSymbolToParse
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.shapeFunctionName
@@ -67,9 +68,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromO
 /**
  * Generates ordinary `Deserialize` implementations for nominal model types.
  *
- * Serde formats are first decoded into a private value tree. Shape-specific parsers then convert that tree into
- * generated model types. This preserves duplicate map entries and lets server input shapes flow through their
- * unconstrained representations before constraints are enforced at the root.
+ * Each shape is deserialized by a typed visitor. Aggregate visitors pass shape-specific seeds directly to Serde and
+ * structures populate their generated builders as fields arrive.
  */
 class DeserializeImplGenerator(private val codegenContext: CodegenContext) {
     private val model = codegenContext.model
@@ -107,20 +107,20 @@ class DeserializeImplGenerator(private val codegenContext: CodegenContext) {
                 if (shape.isEventStream()) {
                     writable { }
                 } else {
-                    writable { addDependency(parser(shape).toSymbol()) }
+                    writable { addDependency(seed(shape).toSymbol()) }
                 }
 
             is StructureShape ->
                 if (shape.hasEventStreamMember(model)) {
                     writable { }
                 } else {
-                    writable { addDependency(parser(shape).toSymbol()) }
+                    writable { addDependency(seed(shape).toSymbol()) }
                 }
 
-            is EnumShape -> writable { addDependency(parser(shape).toSymbol()) }
+            is EnumShape -> writable { addDependency(seed(shape).toSymbol()) }
             is StringShape ->
                 if (shape.hasTrait<EnumTrait>()) {
-                    writable { addDependency(parser(shape).toSymbol()) }
+                    writable { addDependency(seed(shape).toSymbol()) }
                 } else {
                     writable { }
                 }
@@ -128,13 +128,22 @@ class DeserializeImplGenerator(private val codegenContext: CodegenContext) {
             else -> writable { }
         }
 
-    private fun parser(shape: Shape): RuntimeType =
-        RuntimeType.forInlineFun(parseFunctionName(shape), DeserializerModule) {
-            renderParser(shape)(this)
+    private fun seed(shape: Shape): RuntimeType =
+        RuntimeType.forInlineFun(seedName(shape), DeserializerModule) {
+            renderSeed(shape)(this)
         }
 
-    private fun parseFunctionName(shape: Shape): String =
-        symbolProvider.shapeFunctionName(codegenContext.serviceShape, shape) + "_serde_deserialize"
+    private fun seedName(shape: Shape): String =
+        (
+            symbolProvider.shapeFunctionName(codegenContext.serviceShape, shape) +
+                "_serde_deserialize_seed"
+        ).toPascalCase()
+
+    private fun visitorName(shape: Shape): String = seedName(shape) + "Visitor"
+
+    private fun fieldName(shape: Shape): String = seedName(shape) + "Field"
+
+    private fun fieldVisitorName(shape: Shape): String = fieldName(shape) + "Visitor"
 
     private fun parseInfo(shape: Shape): ReturnSymbolToParse {
         if (shape is BlobShape && shape.hasTrait<StreamingTrait>()) {
@@ -154,24 +163,36 @@ class DeserializeImplGenerator(private val codegenContext: CodegenContext) {
         }
     }
 
-    private fun renderParser(shape: Shape): Writable =
+    private fun renderSeed(shape: Shape): Writable =
         writable {
             val info = parseInfo(shape)
+            renderVisitor(shape, info)(this)
             rustTemplate(
                 """
-                ##[allow(unused_mut, unused_variables)]
-                ##[allow(clippy::match_single_binding, clippy::single_match)]
-                fn ${parseFunctionName(shape)}(
-                    value: #{Value},
-                    settings: &#{DeserializationSettings},
-                ) -> #{Result}<#{Return}, #{String}> {
-                    let _ = settings;
-                    #{Body}
+                ##[allow(dead_code)]
+                struct ${seedName(shape)}<'a> {
+                    settings: &'a #{DeserializationSettings},
+                    depth: usize,
+                }
+
+                impl<'de> #{serde}::de::DeserializeSeed<'de> for ${seedName(shape)}<'_> {
+                    type Value = #{Return};
+
+                    fn deserialize<D>(self, deserializer: D) -> #{Result}<Self::Value, D::Error>
+                    where
+                        D: #{serde}::Deserializer<'de>,
+                    {
+                        let depth = self.depth.checked_sub(1).ok_or_else(|| {
+                            <D::Error as #{serde}::de::Error>::custom(
+                                "maximum deserialization depth exceeded"
+                            )
+                        })?;
+                        #{Dispatch}
+                    }
                 }
                 """,
-                "Value" to dynamicValue(),
                 "Return" to info.symbol,
-                "Body" to parserBody(shape, info),
+                "Dispatch" to deserializeDispatch(shape),
                 *SupportStructures.codegenScope,
                 *RuntimeType.preludeScope,
             )
@@ -186,184 +207,450 @@ class DeserializeImplGenerator(private val codegenContext: CodegenContext) {
             shape is EnumShape ||
             (shape is StringShape && shape.hasTrait<EnumTrait>())
 
-    private fun parserBody(
+    private fun renderVisitor(
         shape: Shape,
         info: ReturnSymbolToParse,
     ): Writable =
         when (shape) {
-            is StructureShape -> parseStructure(shape, info)
-            is UnionShape -> parseUnion(shape, info)
-            is EnumShape -> parseEnum(shape, info)
+            is StructureShape -> renderStructureVisitor(shape, info)
+            is UnionShape -> renderUnionVisitor(shape, info)
+            is EnumShape -> renderEnumVisitor(shape, info)
             is StringShape ->
                 if (shape.hasTrait<EnumTrait>()) {
-                    parseEnum(shape, info)
+                    renderEnumVisitor(shape, info)
                 } else {
-                    parseString()
+                    renderStringVisitor(shape, info)
                 }
 
-            is BooleanShape -> parseBoolean()
-            is NumberShape -> parseNumber(shape)
-            is BlobShape -> parseBlob(shape)
-            is TimestampShape -> parseTimestamp()
-            is DocumentShape -> parseDocument(shape)
-            is CollectionShape -> parseCollection(shape, info)
-            is MapShape -> parseMap(shape, info)
-            else -> writable { rust("Err(\"unsupported shape for deserialization\".to_string())") }
+            is BooleanShape -> renderBooleanVisitor(shape, info)
+            is NumberShape -> renderNumberVisitor(shape, info)
+            is BlobShape -> renderBlobVisitor(shape, info)
+            is TimestampShape -> renderTimestampVisitor(shape, info)
+            is DocumentShape -> renderDocumentVisitor(shape, info)
+            is CollectionShape -> renderCollectionVisitor(shape, info)
+            is MapShape -> renderMapVisitor(shape, info)
+            else -> writable { rust("// unsupported shape for deserialization") }
         }
 
-    private fun parseBoolean(): Writable =
+    private fun deserializeDispatch(shape: Shape): Writable =
         writable {
-            rustTemplate(
-                """
-                match value {
-                    #{Value}::Bool(value) => #{Ok}(value),
-                    _ => #{Err}("expected a boolean".to_string()),
+            val visitor =
+                writable {
+                    rustTemplate(
+                        "${visitorName(shape)} { settings: self.settings, depth }",
+                    )
                 }
-                """,
-                "Value" to dynamicValue(),
-                *RuntimeType.preludeScope,
-            )
+            when (shape) {
+                is StructureShape ->
+                    rustTemplate(
+                        """
+                        deserializer.deserialize_struct(
+                            ${shape.contextName(codegenContext.serviceShape).dq()},
+                            &[#{Fields}],
+                            #{Visitor},
+                        )
+                        """,
+                        "Fields" to
+                            writable {
+                                rust(shape.members().joinToString(", ") { it.memberName.dq() })
+                            },
+                        "Visitor" to visitor,
+                    )
+
+                is UnionShape ->
+                    rustTemplate(
+                        """
+                        deserializer.deserialize_enum(
+                            ${shape.contextName(codegenContext.serviceShape).dq()},
+                            &[#{Variants}],
+                            #{Visitor},
+                        )
+                        """,
+                        "Variants" to
+                            writable {
+                                rust(shape.members().joinToString(", ") { it.memberName.dq() })
+                            },
+                        "Visitor" to visitor,
+                    )
+
+                is EnumShape, is StringShape -> rustTemplate("deserializer.deserialize_string(#{Visitor})", "Visitor" to visitor)
+                is BooleanShape -> rustTemplate("deserializer.deserialize_bool(#{Visitor})", "Visitor" to visitor)
+                is ByteShape -> rustTemplate("deserializer.deserialize_i8(#{Visitor})", "Visitor" to visitor)
+                is ShortShape -> rustTemplate("deserializer.deserialize_i16(#{Visitor})", "Visitor" to visitor)
+                is IntegerShape -> rustTemplate("deserializer.deserialize_i32(#{Visitor})", "Visitor" to visitor)
+                is LongShape -> rustTemplate("deserializer.deserialize_i64(#{Visitor})", "Visitor" to visitor)
+                is FloatShape ->
+                    rustTemplate(
+                        """
+                        if self.settings.allow_non_finite_float_strings {
+                            deserializer.deserialize_any(#{Visitor})
+                        } else {
+                            deserializer.deserialize_f32(#{Visitor})
+                        }
+                        """,
+                        "Visitor" to visitor,
+                    )
+
+                is DoubleShape ->
+                    rustTemplate(
+                        """
+                        if self.settings.allow_non_finite_float_strings {
+                            deserializer.deserialize_any(#{Visitor})
+                        } else {
+                            deserializer.deserialize_f64(#{Visitor})
+                        }
+                        """,
+                        "Visitor" to visitor,
+                    )
+
+                is BigIntegerShape, is BigDecimalShape ->
+                    rustTemplate("deserializer.deserialize_any(#{Visitor})", "Visitor" to visitor)
+
+                is BlobShape ->
+                    rustTemplate("deserializer.deserialize_any(#{Visitor})", "Visitor" to visitor)
+
+                is TimestampShape -> rustTemplate("deserializer.deserialize_string(#{Visitor})", "Visitor" to visitor)
+                is DocumentShape -> rustTemplate("deserializer.deserialize_any(#{Visitor})", "Visitor" to visitor)
+                is CollectionShape -> rustTemplate("deserializer.deserialize_seq(#{Visitor})", "Visitor" to visitor)
+                is MapShape -> rustTemplate("deserializer.deserialize_map(#{Visitor})", "Visitor" to visitor)
+                else ->
+                    rustTemplate(
+                        "#{Err}(<D::Error as #{serde}::de::Error>::custom(\"unsupported shape for deserialization\"))",
+                        *SupportStructures.codegenScope,
+                        *RuntimeType.preludeScope,
+                    )
+            }
         }
 
-    private fun parseString(): Writable =
-        writable {
-            rustTemplate(
-                """
-                match value {
-                    #{Value}::String(value) => #{Ok}(value),
-                    _ => #{Err}("expected a string".to_string()),
-                }
-                """,
-                "Value" to dynamicValue(),
-                *RuntimeType.preludeScope,
-            )
-        }
-
-    private fun parseEnum(
+    private fun visitorHeader(
         shape: Shape,
         info: ReturnSymbolToParse,
+        expecting: String,
+        body: Writable,
     ): Writable =
         writable {
             rustTemplate(
                 """
-                let text = match value {
-                    #{Value}::String(value) => value,
-                    _ => return #{Err}("expected an enum string".to_string()),
-                };
+                ##[allow(dead_code)]
+                struct ${visitorName(shape)}<'a> {
+                    settings: &'a #{DeserializationSettings},
+                    depth: usize,
+                }
+
+                ##[allow(unused_mut, unused_variables)]
+                ##[allow(
+                    clippy::match_single_binding,
+                    clippy::unnecessary_cast,
+                    clippy::unnecessary_fallible_conversions,
+                )]
+                impl<'de> #{serde}::de::Visitor<'de> for ${visitorName(shape)}<'_> {
+                    type Value = #{Return};
+
+                    fn expecting(&self, formatter: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                        formatter.write_str(${expecting.dq()})
+                    }
+
+                    #{Body}
+                }
                 """,
-                "Value" to dynamicValue(),
-                *RuntimeType.preludeScope,
+                "Return" to info.symbol,
+                "Body" to body,
+                *SupportStructures.codegenScope,
             )
+        }
+
+    private fun renderBooleanVisitor(
+        shape: BooleanShape,
+        info: ReturnSymbolToParse,
+    ): Writable =
+        visitorHeader(
+            shape,
+            info,
+            "a boolean",
+            writable {
+                rustTemplate(
+                    """
+                    fn visit_bool<E>(self, value: bool) -> #{Result}<Self::Value, E> {
+                        #{Ok}(value)
+                    }
+                    """,
+                    *RuntimeType.preludeScope,
+                )
+            },
+        )
+
+    private fun renderStringVisitor(
+        shape: StringShape,
+        info: ReturnSymbolToParse,
+    ): Writable =
+        visitorHeader(
+            shape,
+            info,
+            "a string",
+            writable {
+                rustTemplate(
+                    """
+                    fn visit_str<E>(self, value: &str) -> #{Result}<Self::Value, E> {
+                        #{Ok}(value.to_string())
+                    }
+
+                    fn visit_string<E>(self, value: #{String}) -> #{Result}<Self::Value, E> {
+                        #{Ok}(value)
+                    }
+                    """,
+                    *RuntimeType.preludeScope,
+                )
+            },
+        )
+
+    private fun renderEnumVisitor(
+        shape: Shape,
+        info: ReturnSymbolToParse,
+    ): Writable =
+        visitorHeader(
+            shape,
+            info,
+            "an enum string",
+            writable {
+                rustTemplate(
+                    """
+                    fn visit_str<E>(self, value: &str) -> #{Result}<Self::Value, E>
+                    where
+                        E: #{serde}::de::Error,
+                    {
+                        self.visit_string(value.to_string())
+                    }
+
+                    fn visit_string<E>(self, value: #{String}) -> #{Result}<Self::Value, E>
+                    where
+                        E: #{serde}::de::Error,
+                    {
+                        #{Parse}
+                    }
+                    """,
+                    "Parse" to enumFromString(info),
+                    *SupportStructures.codegenScope,
+                    *RuntimeType.preludeScope,
+                )
+            },
+        )
+
+    private fun enumFromString(info: ReturnSymbolToParse): Writable =
+        writable {
             when {
                 codegenContext.target == CodegenTarget.SERVER && info.isUnconstrained ->
-                    rustTemplate("#{Ok}(text)", *RuntimeType.preludeScope)
+                    rustTemplate("#{Ok}(value)", *RuntimeType.preludeScope)
 
                 codegenContext.target == CodegenTarget.SERVER ->
                     rustTemplate(
-                        "#{Return}::try_from(text).map_err(|err| err.to_string())",
+                        "<#{Return} as #{TryFrom}<#{String}>>::try_from(value).map_err(E::custom)",
                         "Return" to info.symbol,
+                        *RuntimeType.preludeScope,
                     )
 
                 else ->
                     rustTemplate(
-                        "#{Ok}(#{Return}::from(text.as_str()))",
+                        "#{Ok}(#{Return}::from(value.as_str()))",
                         "Return" to info.symbol,
                         *RuntimeType.preludeScope,
                     )
             }
         }
 
-    private fun parseNumber(shape: NumberShape): Writable =
+    private fun renderNumberVisitor(
+        shape: NumberShape,
+        info: ReturnSymbolToParse,
+    ): Writable =
         when (shape) {
-            is FloatShape -> parseFloat("f32")
-            is DoubleShape -> parseFloat("f64")
-            is BigIntegerShape -> parseBigNumber(RuntimeType.bigInteger(codegenContext.runtimeConfig))
-            is BigDecimalShape -> parseBigNumber(RuntimeType.bigDecimal(codegenContext.runtimeConfig))
-            is ByteShape -> parseInteger("i8")
-            is ShortShape -> parseInteger("i16")
-            is IntegerShape -> parseInteger("i32")
-            is LongShape -> parseInteger("i64")
-            else -> writable { rust("Err(\"unsupported number shape\".to_string())") }
+            is FloatShape -> renderFloatVisitor(shape, info, "f32")
+            is DoubleShape -> renderFloatVisitor(shape, info, "f64")
+            is BigIntegerShape -> renderBigNumberVisitor(shape, info, RuntimeType.bigInteger(codegenContext.runtimeConfig))
+            is BigDecimalShape -> renderBigNumberVisitor(shape, info, RuntimeType.bigDecimal(codegenContext.runtimeConfig))
+            is ByteShape -> renderIntegerVisitor(shape, info, "i8")
+            is ShortShape -> renderIntegerVisitor(shape, info, "i16")
+            is IntegerShape -> renderIntegerVisitor(shape, info, "i32")
+            is LongShape -> renderIntegerVisitor(shape, info, "i64")
+            else -> writable { rust("// unsupported number shape") }
         }
 
-    private fun parseInteger(rustType: String): Writable =
-        writable {
-            rustTemplate(
-                """
-                match value {
-                    #{Value}::I64(value) => <$rustType as #{TryFrom}<i64>>::try_from(value)
-                        .map_err(|_| "integer is out of range".to_string()),
-                    #{Value}::U64(value) => <$rustType as #{TryFrom}<u64>>::try_from(value)
-                        .map_err(|_| "integer is out of range".to_string()),
-                    _ => #{Err}("expected an integer".to_string()),
-                }
-                """,
-                "Value" to dynamicValue(),
-                *RuntimeType.preludeScope,
-            )
-        }
-
-    private fun parseFloat(rustType: String): Writable =
-        writable {
-            val parsedF64 = if (rustType == "f64") "value" else "value as $rustType"
-            rustTemplate(
-                """
-                match value {
-                    #{Value}::F64(value) => #{Ok}($parsedF64),
-                    #{Value}::I64(value) => #{Ok}(value as $rustType),
-                    #{Value}::U64(value) => #{Ok}(value as $rustType),
-                    #{Value}::String(value) if settings.allow_non_finite_float_strings => match value.as_str() {
-                        "NaN" => #{Ok}($rustType::NAN),
-                        "Infinity" => #{Ok}($rustType::INFINITY),
-                        "-Infinity" => #{Ok}($rustType::NEG_INFINITY),
-                        _ => #{Err}("expected a floating-point number".to_string()),
-                    },
-                    _ => #{Err}("expected a floating-point number".to_string()),
-                }
-                """,
-                "Value" to dynamicValue(),
-                *RuntimeType.preludeScope,
-            )
-        }
-
-    private fun parseBigNumber(type: RuntimeType): Writable =
-        writable {
-            rustTemplate(
-                """
-                let text = match value {
-                    #{Value}::String(value) => value,
-                    #{Value}::I64(value) => value.to_string(),
-                    #{Value}::U64(value) => value.to_string(),
-                    #{Value}::F64(value) => value.to_string(),
-                    _ => return #{Err}("expected a number".to_string()),
-                };
-                <#{Type} as ::std::str::FromStr>::from_str(&text).map_err(|err| err.to_string())
-                """,
-                "Value" to dynamicValue(),
-                "Type" to type,
-                *RuntimeType.preludeScope,
-            )
-        }
-
-    private fun parseBlob(shape: BlobShape): Writable =
-        writable {
-            rustTemplate(
-                """
-                let bytes = match value {
-                    #{Value}::Bytes(value) => value,
-                    #{Value}::String(value) => {
-                        if value == "streaming data" {
-                            return #{Err}("the streaming data placeholder cannot be deserialized".to_string());
+    private fun renderIntegerVisitor(
+        shape: NumberShape,
+        info: ReturnSymbolToParse,
+        rustType: String,
+    ): Writable =
+        visitorHeader(
+            shape,
+            info,
+            "an integer",
+            writable {
+                listOf("i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64").forEach { source ->
+                    rustTemplate(
+                        """
+                        fn visit_$source<E>(self, value: $source) -> #{Result}<Self::Value, E>
+                        where
+                            E: #{serde}::de::Error,
+                        {
+                            <$rustType as #{TryFrom}<$source>>::try_from(value)
+                                .map_err(|_| E::custom("integer is out of range"))
                         }
-                        #{base64_decode}(value).map_err(|_| "invalid base64 blob".to_string())?
-                    },
-                    _ => return #{Err}("expected a base64 string or bytes".to_string()),
-                };
-                """,
-                "Value" to dynamicValue(),
-                "base64_decode" to RuntimeType.base64Decode(codegenContext.runtimeConfig),
-                *RuntimeType.preludeScope,
-            )
+                        """,
+                        *SupportStructures.codegenScope,
+                        *RuntimeType.preludeScope,
+                    )
+                }
+            },
+        )
+
+    private fun renderFloatVisitor(
+        shape: NumberShape,
+        info: ReturnSymbolToParse,
+        rustType: String,
+    ): Writable =
+        visitorHeader(
+            shape,
+            info,
+            "a floating-point number",
+            writable {
+                listOf("i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64").forEach { source ->
+                    rustTemplate(
+                        """
+                        fn visit_$source<E>(self, value: $source) -> #{Result}<Self::Value, E> {
+                            #{Ok}(value as $rustType)
+                        }
+                        """,
+                        *RuntimeType.preludeScope,
+                    )
+                }
+                rustTemplate(
+                    """
+                    fn visit_str<E>(self, value: &str) -> #{Result}<Self::Value, E>
+                    where
+                        E: #{serde}::de::Error,
+                    {
+                        if !self.settings.allow_non_finite_float_strings {
+                            return #{Err}(E::custom("expected a floating-point number"));
+                        }
+                        match value {
+                            "NaN" => #{Ok}($rustType::NAN),
+                            "Infinity" => #{Ok}($rustType::INFINITY),
+                            "-Infinity" => #{Ok}($rustType::NEG_INFINITY),
+                            _ => #{Err}(E::custom("expected a floating-point number")),
+                        }
+                    }
+
+                    fn visit_string<E>(self, value: #{String}) -> #{Result}<Self::Value, E>
+                    where
+                        E: #{serde}::de::Error,
+                    {
+                        self.visit_str(value.as_str())
+                    }
+                    """,
+                    *SupportStructures.codegenScope,
+                    *RuntimeType.preludeScope,
+                )
+            },
+        )
+
+    private fun renderBigNumberVisitor(
+        shape: NumberShape,
+        info: ReturnSymbolToParse,
+        type: RuntimeType,
+    ): Writable =
+        visitorHeader(
+            shape,
+            info,
+            "a number",
+            writable {
+                rustTemplate(
+                    """
+                    fn visit_str<E>(self, value: &str) -> #{Result}<Self::Value, E>
+                    where
+                        E: #{serde}::de::Error,
+                    {
+                        <#{Type} as ::std::str::FromStr>::from_str(value).map_err(E::custom)
+                    }
+
+                    fn visit_string<E>(self, value: #{String}) -> #{Result}<Self::Value, E>
+                    where
+                        E: #{serde}::de::Error,
+                    {
+                        self.visit_str(value.as_str())
+                    }
+                    """,
+                    "Type" to type,
+                    *SupportStructures.codegenScope,
+                    *RuntimeType.preludeScope,
+                )
+                listOf("i64", "u64", "f64").forEach { source ->
+                    rustTemplate(
+                        """
+                        fn visit_$source<E>(self, value: $source) -> #{Result}<Self::Value, E>
+                        where
+                            E: #{serde}::de::Error,
+                        {
+                            self.visit_string(value.to_string())
+                        }
+                        """,
+                        *SupportStructures.codegenScope,
+                        *RuntimeType.preludeScope,
+                    )
+                }
+            },
+        )
+
+    private fun renderBlobVisitor(
+        shape: BlobShape,
+        info: ReturnSymbolToParse,
+    ): Writable =
+        writable {
+            visitorHeader(
+                shape,
+                info,
+                "a base64 string or bytes",
+                writable {
+                    rustTemplate(
+                        """
+                        fn visit_str<E>(self, value: &str) -> #{Result}<Self::Value, E>
+                        where
+                            E: #{serde}::de::Error,
+                        {
+                            if value == "streaming data" {
+                                return #{Err}(E::custom(
+                                    "the streaming data placeholder cannot be deserialized"
+                                ));
+                            }
+                            let bytes = #{base64_decode}(value)
+                                .map_err(|_| E::custom("invalid base64 blob"))?;
+                            #{Finish}
+                        }
+
+                        fn visit_string<E>(self, value: #{String}) -> #{Result}<Self::Value, E>
+                        where
+                            E: #{serde}::de::Error,
+                        {
+                            self.visit_str(value.as_str())
+                        }
+
+                        fn visit_bytes<E>(self, value: &[u8]) -> #{Result}<Self::Value, E> {
+                            let bytes = value.to_vec();
+                            #{Finish}
+                        }
+
+                        fn visit_byte_buf<E>(self, bytes: #{Vec}<u8>) -> #{Result}<Self::Value, E> {
+                            #{Finish}
+                        }
+                        """,
+                        "base64_decode" to RuntimeType.base64Decode(codegenContext.runtimeConfig),
+                        "Finish" to finishBlob(shape),
+                        *SupportStructures.codegenScope,
+                        *RuntimeType.preludeScope,
+                    )
+                },
+            )(this)
+        }
+
+    private fun finishBlob(shape: BlobShape): Writable =
+        writable {
             if (shape.hasTrait<StreamingTrait>()) {
                 rustTemplate(
                     "#{Ok}(#{ByteStream}::from(bytes))",
@@ -379,166 +666,276 @@ class DeserializeImplGenerator(private val codegenContext: CodegenContext) {
             }
         }
 
-    private fun parseTimestamp(): Writable =
-        writable {
-            rustTemplate(
-                """
-                let text = match value {
-                    #{Value}::String(value) => value,
-                    _ => return #{Err}("expected a timestamp string".to_string()),
-                };
-                #{DateTime}::from_str(&text, #{Format}::DateTime).map_err(|err| err.to_string())
-                """,
-                "Value" to dynamicValue(),
-                "DateTime" to RuntimeType.dateTime(codegenContext.runtimeConfig),
-                "Format" to RuntimeType.smithyTypes(codegenContext.runtimeConfig).resolve("date_time::Format"),
-                *RuntimeType.preludeScope,
-            )
-        }
+    private fun renderTimestampVisitor(
+        shape: TimestampShape,
+        info: ReturnSymbolToParse,
+    ): Writable =
+        visitorHeader(
+            shape,
+            info,
+            "a timestamp string",
+            writable {
+                rustTemplate(
+                    """
+                    fn visit_str<E>(self, value: &str) -> #{Result}<Self::Value, E>
+                    where
+                        E: #{serde}::de::Error,
+                    {
+                        #{DateTime}::from_str(value, #{Format}::DateTime).map_err(E::custom)
+                    }
 
-    private fun parseDocument(shape: DocumentShape): Writable =
-        writable {
-            val parseName = parseFunctionName(shape)
-            rustTemplate(
-                """
-                let document = match value {
-                    #{Value}::Null => #{Document}::Null,
-                    #{Value}::Bool(value) => #{Document}::Bool(value),
-                    #{Value}::String(value) => #{Document}::String(value),
-                    #{Value}::I64(value) if value < 0 => #{Document}::Number(#{Number}::NegInt(value)),
-                    #{Value}::I64(value) => #{Document}::Number(#{Number}::PosInt(value as u64)),
-                    #{Value}::U64(value) => #{Document}::Number(#{Number}::PosInt(value)),
-                    #{Value}::F64(value) => #{Document}::Number(#{Number}::Float(value)),
-                    #{Value}::Seq(values) => {
-                        let mut result = #{Vec}::with_capacity(values.len());
-                        for value in values {
-                            result.push($parseName(value, settings)?);
-                        }
-                        #{Document}::Array(result)
-                    },
-                    #{Value}::Map(entries) => {
-                        let mut result = #{HashMap}::with_capacity(entries.len());
-                        for (key, value) in entries {
-                            let key = match key {
-                                #{Value}::String(key) => key,
-                                _ => return #{Err}("document object keys must be strings".to_string()),
-                            };
-                            result.insert(key, $parseName(value, settings)?);
-                        }
-                        #{Document}::Object(result)
-                    },
-                    #{Value}::Bytes(_) => return #{Err}("documents cannot contain raw bytes".to_string()),
-                };
-                #{Ok}(document)
-                """,
-                "Value" to dynamicValue(),
-                "Document" to RuntimeType.document(codegenContext.runtimeConfig),
-                "Number" to RuntimeType.smithyTypes(codegenContext.runtimeConfig).resolve("Number"),
-                "HashMap" to RuntimeType.HashMap,
-                *RuntimeType.preludeScope,
-            )
-        }
+                    fn visit_string<E>(self, value: #{String}) -> #{Result}<Self::Value, E>
+                    where
+                        E: #{serde}::de::Error,
+                    {
+                        self.visit_str(value.as_str())
+                    }
+                    """,
+                    "DateTime" to RuntimeType.dateTime(codegenContext.runtimeConfig),
+                    "Format" to RuntimeType.smithyTypes(codegenContext.runtimeConfig).resolve("date_time::Format"),
+                    *SupportStructures.codegenScope,
+                    *RuntimeType.preludeScope,
+                )
+            },
+        )
 
-    private fun parseCollection(
+    private fun renderDocumentVisitor(
+        shape: DocumentShape,
+        info: ReturnSymbolToParse,
+    ): Writable =
+        visitorHeader(
+            shape,
+            info,
+            "a document",
+            writable {
+                rustTemplate(
+                    """
+                    fn visit_unit<E>(self) -> #{Result}<Self::Value, E> {
+                        #{Ok}(#{Document}::Null)
+                    }
+
+                    fn visit_none<E>(self) -> #{Result}<Self::Value, E> {
+                        #{Ok}(#{Document}::Null)
+                    }
+
+                    fn visit_bool<E>(self, value: bool) -> #{Result}<Self::Value, E> {
+                        #{Ok}(#{Document}::Bool(value))
+                    }
+
+                    fn visit_str<E>(self, value: &str) -> #{Result}<Self::Value, E> {
+                        #{Ok}(#{Document}::String(value.to_string()))
+                    }
+
+                    fn visit_string<E>(self, value: #{String}) -> #{Result}<Self::Value, E> {
+                        #{Ok}(#{Document}::String(value))
+                    }
+
+                    fn visit_i64<E>(self, value: i64) -> #{Result}<Self::Value, E> {
+                        if value < 0 {
+                            #{Ok}(#{Document}::Number(#{Number}::NegInt(value)))
+                        } else {
+                            #{Ok}(#{Document}::Number(#{Number}::PosInt(value as u64)))
+                        }
+                    }
+
+                    fn visit_u64<E>(self, value: u64) -> #{Result}<Self::Value, E> {
+                        #{Ok}(#{Document}::Number(#{Number}::PosInt(value)))
+                    }
+
+                    fn visit_f64<E>(self, value: f64) -> #{Result}<Self::Value, E> {
+                        #{Ok}(#{Document}::Number(#{Number}::Float(value)))
+                    }
+
+                    fn visit_some<D>(self, deserializer: D) -> #{Result}<Self::Value, D::Error>
+                    where
+                        D: #{serde}::Deserializer<'de>,
+                    {
+                        #{serde}::de::DeserializeSeed::deserialize(
+                            ${seedName(shape)} {
+                                settings: self.settings,
+                                depth: self.depth,
+                            },
+                            deserializer,
+                        )
+                    }
+
+                    fn visit_seq<A>(self, mut seq: A) -> #{Result}<Self::Value, A::Error>
+                    where
+                        A: #{serde}::de::SeqAccess<'de>,
+                    {
+                        let mut result = #{Vec}::with_capacity(
+                            seq.size_hint().unwrap_or(0).min(10_000)
+                        );
+                        while let #{Some}(value) = seq.next_element_seed(
+                            ${seedName(shape)} {
+                                settings: self.settings,
+                                depth: self.depth,
+                            }
+                        )? {
+                            result.push(value);
+                        }
+                        #{Ok}(#{Document}::Array(result))
+                    }
+
+                    fn visit_map<A>(self, mut map: A) -> #{Result}<Self::Value, A::Error>
+                    where
+                        A: #{serde}::de::MapAccess<'de>,
+                    {
+                        let mut result = #{HashMap}::with_capacity(
+                            map.size_hint().unwrap_or(0).min(10_000)
+                        );
+                        while let #{Some}(key) = map.next_key::<#{String}>()? {
+                            let value = map.next_value_seed(
+                                ${seedName(shape)} {
+                                    settings: self.settings,
+                                    depth: self.depth,
+                                }
+                            )?;
+                            result.insert(key, value);
+                        }
+                        #{Ok}(#{Document}::Object(result))
+                    }
+                    """,
+                    "Document" to RuntimeType.document(codegenContext.runtimeConfig),
+                    "Number" to RuntimeType.smithyTypes(codegenContext.runtimeConfig).resolve("Number"),
+                    "HashMap" to RuntimeType.HashMap,
+                    *SupportStructures.codegenScope,
+                    *RuntimeType.preludeScope,
+                )
+            },
+        )
+
+    private fun renderCollectionVisitor(
         shape: CollectionShape,
         info: ReturnSymbolToParse,
     ): Writable =
-        writable {
-            val memberTarget = model.expectShape(shape.member.target)
-            val memberParser = parser(memberTarget)
-            rustTemplate(
-                """
-                let values = match value {
-                    #{Value}::Seq(values) => values,
-                    _ => return #{Err}("expected a sequence".to_string()),
-                };
-                let mut result = #{Vec}::with_capacity(values.len());
-                for value in values {
-                    #{ParseMember}
-                }
-                #{Finish}
-                """,
-                "Value" to dynamicValue(),
-                "ParseMember" to
-                    writable {
-                        if (shape.hasTrait<SparseTrait>()) {
-                            rustTemplate(
-                                """
-                                if matches!(value, #{Value}::Null) {
-                                    result.push(#{None});
-                                } else {
-                                    result.push(#{Some}(#{MemberParser}(value, settings)?));
-                                }
-                                """,
-                                "Value" to dynamicValue(),
-                                "MemberParser" to memberParser,
-                                *RuntimeType.preludeScope,
-                            )
-                        } else {
-                            rustTemplate("result.push(#{MemberParser}(value, settings)?);", "MemberParser" to memberParser)
+        visitorHeader(
+            shape,
+            info,
+            "a sequence",
+            writable {
+                val memberSeed = seed(model.expectShape(shape.member.target))
+                rustTemplate(
+                    """
+                    fn visit_seq<A>(self, mut seq: A) -> #{Result}<Self::Value, A::Error>
+                    where
+                        A: #{serde}::de::SeqAccess<'de>,
+                    {
+                        let mut result = #{Vec}::with_capacity(
+                            seq.size_hint().unwrap_or(0).min(10_000)
+                        );
+                        while let #{Some}(value) = seq.next_element_seed(#{MemberSeed})? {
+                            result.push(value);
                         }
-                    },
-                "Finish" to finishContainer(shape, info),
-                *RuntimeType.preludeScope,
-            )
-        }
+                        #{Finish}
+                    }
+                    """,
+                    "MemberSeed" to
+                        writable {
+                            if (shape.hasTrait<SparseTrait>()) {
+                                rustTemplate(
+                                    """
+                                    #{OptionalSeed}(#{Seed} {
+                                        settings: self.settings,
+                                        depth: self.depth,
+                                    })
+                                    """,
+                                    "OptionalSeed" to optionalSeed(),
+                                    "Seed" to memberSeed,
+                                )
+                            } else {
+                                rustTemplate(
+                                    """
+                                    #{Seed} {
+                                        settings: self.settings,
+                                        depth: self.depth,
+                                    }
+                                    """,
+                                    "Seed" to memberSeed,
+                                )
+                            }
+                        },
+                    "Finish" to finishContainer(shape, info, "A::Error"),
+                    *SupportStructures.codegenScope,
+                    *RuntimeType.preludeScope,
+                )
+            },
+        )
 
-    private fun parseMap(
+    private fun renderMapVisitor(
         shape: MapShape,
         info: ReturnSymbolToParse,
     ): Writable =
-        writable {
-            val keyParser = parser(model.expectShape(shape.key.target))
-            val valueParser = parser(model.expectShape(shape.value.target))
-            rustTemplate(
-                """
-                let entries = match value {
-                    #{Value}::Map(entries) => entries,
-                    _ => return #{Err}("expected a map".to_string()),
-                };
-                let mut result = #{HashMap}::with_capacity(entries.len());
-                for (key, value) in entries {
-                    let key = #{KeyParser}(key, settings)?;
-                    #{ParseValue}
-                    if result.insert(key, value).is_some() {
-                        return #{Err}("duplicate map key".to_string());
-                    }
-                }
-                #{Finish}
-                """,
-                "Value" to dynamicValue(),
-                "HashMap" to RuntimeType.HashMap,
-                "KeyParser" to keyParser,
-                "ParseValue" to
-                    writable {
-                        if (shape.hasTrait<SparseTrait>()) {
-                            rustTemplate(
-                                """
-                                let value = if matches!(value, #{Value}::Null) {
-                                    #{None}
-                                } else {
-                                    #{Some}(#{ValueParser}(value, settings)?)
-                                };
-                                """,
-                                "Value" to dynamicValue(),
-                                "ValueParser" to valueParser,
-                                *RuntimeType.preludeScope,
-                            )
-                        } else {
-                            rustTemplate(
-                                "let value = #{ValueParser}(value, settings)?;",
-                                "ValueParser" to valueParser,
-                            )
+        visitorHeader(
+            shape,
+            info,
+            "a map",
+            writable {
+                val keySeed = seed(model.expectShape(shape.key.target))
+                val valueSeed = seed(model.expectShape(shape.value.target))
+                rustTemplate(
+                    """
+                    fn visit_map<A>(self, mut map: A) -> #{Result}<Self::Value, A::Error>
+                    where
+                        A: #{serde}::de::MapAccess<'de>,
+                    {
+                        let mut result = #{HashMap}::with_capacity(
+                            map.size_hint().unwrap_or(0).min(10_000)
+                        );
+                        while let #{Some}(key) = map.next_key_seed(
+                            #{KeySeed} {
+                                settings: self.settings,
+                                depth: self.depth,
+                            }
+                        )? {
+                            let value = map.next_value_seed(#{ValueSeed})?;
+                            if result.insert(key, value).is_some() {
+                                return #{Err}(<A::Error as #{serde}::de::Error>::custom(
+                                    "duplicate map key"
+                                ));
+                            }
                         }
-                    },
-                "Finish" to finishContainer(shape, info),
-                *RuntimeType.preludeScope,
-            )
-        }
+                        #{Finish}
+                    }
+                    """,
+                    "HashMap" to RuntimeType.HashMap,
+                    "KeySeed" to keySeed,
+                    "ValueSeed" to
+                        writable {
+                            if (shape.hasTrait<SparseTrait>()) {
+                                rustTemplate(
+                                    """
+                                    #{OptionalSeed}(#{Seed} {
+                                        settings: self.settings,
+                                        depth: self.depth,
+                                    })
+                                    """,
+                                    "OptionalSeed" to optionalSeed(),
+                                    "Seed" to valueSeed,
+                                )
+                            } else {
+                                rustTemplate(
+                                    """
+                                    #{Seed} {
+                                        settings: self.settings,
+                                        depth: self.depth,
+                                    }
+                                    """,
+                                    "Seed" to valueSeed,
+                                )
+                            }
+                        },
+                    "Finish" to finishContainer(shape, info, "A::Error"),
+                    *SupportStructures.codegenScope,
+                    *RuntimeType.preludeScope,
+                )
+            },
+        )
 
     private fun finishContainer(
         shape: Shape,
         info: ReturnSymbolToParse,
+        errorType: String,
     ): Writable =
         writable {
             if (info.isUnconstrained) {
@@ -546,9 +943,11 @@ class DeserializeImplGenerator(private val codegenContext: CodegenContext) {
             } else if (serverContext != null && shape.canReachConstrainedShape(model, symbolProvider)) {
                 rustTemplate(
                     """
-                    <#{Return} as #{TryFrom}<_>>::try_from(result).map_err(|err| err.to_string())
+                    <#{Return} as #{TryFrom}<_>>::try_from(result)
+                        .map_err(<$errorType as #{serde}::de::Error>::custom)
                     """,
                     "Return" to info.symbol,
+                    *SupportStructures.codegenScope,
                     *RuntimeType.preludeScope,
                 )
             } else {
@@ -556,42 +955,119 @@ class DeserializeImplGenerator(private val codegenContext: CodegenContext) {
             }
         }
 
-    private fun parseStructure(
+    private fun renderStructureVisitor(
         shape: StructureShape,
         info: ReturnSymbolToParse,
     ): Writable =
         writable {
+            renderStructureField(shape)(this)
             val builder = structureBuilderSymbol(shape)
+            visitorHeader(
+                shape,
+                info,
+                "a structure",
+                writable {
+                    rustTemplate(
+                        """
+                        fn visit_seq<A>(self, mut seq: A) -> #{Result}<Self::Value, A::Error>
+                        where
+                            A: #{serde}::de::SeqAccess<'de>,
+                        {
+                            let mut builder = #{Builder}::default();
+                            #{SequenceMembers}
+                            while seq.next_element::<#{serde}::de::IgnoredAny>()?.is_some() {}
+                            #{Finish}
+                        }
+
+                        fn visit_map<A>(self, mut map: A) -> #{Result}<Self::Value, A::Error>
+                        where
+                            A: #{serde}::de::MapAccess<'de>,
+                        {
+                            let mut builder = #{Builder}::default();
+                            let mut seen: #{HashSet}<&'static str> = #{HashSet}::new();
+                            while let #{Some}(field) = map.next_key::<${fieldName(shape)}>()? {
+                                match field {
+                                    #{MapMembers}
+                                    ${fieldName(shape)}::Ignore => {
+                                        map.next_value::<#{serde}::de::IgnoredAny>()?;
+                                    }
+                                }
+                            }
+                            #{Finish}
+                        }
+                        """,
+                        "Builder" to builder,
+                        "HashSet" to RuntimeType.std.resolve("collections::HashSet"),
+                        "SequenceMembers" to
+                            writable {
+                                shape.members().forEach { member ->
+                                    renderStructureSequenceMember(shape, member)
+                                }
+                            },
+                        "MapMembers" to
+                            writable {
+                                shape.members().forEachIndexed { index, member ->
+                                    renderStructureMapMember(shape, member, index)
+                                }
+                            },
+                        "Finish" to finishStructure(shape, info, "A::Error"),
+                        *SupportStructures.codegenScope,
+                        *RuntimeType.preludeScope,
+                    )
+                },
+            )(this)
+        }
+
+    private fun renderStructureField(shape: StructureShape): Writable =
+        writable {
             rustTemplate(
                 """
-                let entries = match value {
-                    #{Value}::Map(entries) => entries,
-                    _ => return #{Err}("expected a structure map".to_string()),
-                };
-                let mut builder = #{Builder}::default();
-                let mut seen: #{HashSet}<&'static str> = #{HashSet}::new();
-                for (key, value) in entries {
-                    let key = match key {
-                        #{Value}::String(key) => key,
-                        _ => return #{Err}("structure field names must be strings".to_string()),
-                    };
-                    match key.as_str() {
-                        #{Members}
-                        _ => {}
+                enum ${fieldName(shape)} {
+                    #{Variants}
+                    Ignore,
+                }
+
+                struct ${fieldVisitorName(shape)};
+
+                ##[allow(clippy::match_single_binding)]
+                impl<'de> #{serde}::de::Visitor<'de> for ${fieldVisitorName(shape)} {
+                    type Value = ${fieldName(shape)};
+
+                    fn expecting(&self, formatter: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                        formatter.write_str("a structure field name")
+                    }
+
+                    fn visit_str<E>(self, value: &str) -> #{Result}<Self::Value, E>
+                    where
+                        E: #{serde}::de::Error,
+                    {
+                        match value {
+                            #{Matches}
+                            _ => #{Ok}(${fieldName(shape)}::Ignore),
+                        }
                     }
                 }
-                #{Finish}
+
+                impl<'de> #{serde}::Deserialize<'de> for ${fieldName(shape)} {
+                    fn deserialize<D>(deserializer: D) -> #{Result}<Self, D::Error>
+                    where
+                        D: #{serde}::Deserializer<'de>,
+                    {
+                        deserializer.deserialize_identifier(${fieldVisitorName(shape)})
+                    }
+                }
                 """,
-                "Value" to dynamicValue(),
-                "Builder" to builder,
-                "HashSet" to RuntimeType.std.resolve("collections::HashSet"),
-                "Members" to
+                "Variants" to
                     writable {
-                        shape.members().forEach { member ->
-                            renderStructureMember(shape, member)
+                        shape.members().indices.forEach { rust("Field$it,") }
+                    },
+                "Matches" to
+                    writable {
+                        shape.members().forEachIndexed { index, member ->
+                            rust("${member.memberName.dq()} => Ok(${fieldName(shape)}::Field$index),")
                         }
                     },
-                "Finish" to finishStructure(shape, info),
+                *SupportStructures.codegenScope,
                 *RuntimeType.preludeScope,
             )
         }
@@ -603,34 +1079,149 @@ class DeserializeImplGenerator(private val codegenContext: CodegenContext) {
             else -> shape.serverBuilderSymbol(symbolProvider, false)
         }
 
-    private fun RustWriter.renderStructureMember(
+    private fun RustWriter.renderStructureSequenceMember(
         container: StructureShape,
         member: MemberShape,
     ) {
         val target = model.expectShape(member.target)
         val targetInfo = parseInfo(target)
-        val fieldName = symbolProvider.toMemberName(member)
-        val wireName = member.memberName
+        val field = symbolProvider.toMemberName(member)
+        val memberSymbol = symbolProvider.toSymbol(member)
+        if (memberSymbol.isOptional()) {
+            rustTemplate(
+                """
+                let parsed = match seq.next_element_seed(
+                    #{OptionalSeed}(#{TargetSeed} {
+                        settings: self.settings,
+                        depth: self.depth,
+                    })
+                )? {
+                    #{Some}(parsed) => parsed,
+                    #{None} => return #{Finish},
+                };
+                if let #{Some}(parsed) = parsed {
+                    #{Prepare}
+                    builder.$field = #{Some}(parsed);
+                }
+                """,
+                "OptionalSeed" to optionalSeed(),
+                "TargetSeed" to seed(target),
+                "Finish" to finishStructure(container, parseInfo(container), "A::Error"),
+                "Prepare" to
+                    prepareMember(
+                        container,
+                        target,
+                        targetInfo,
+                        memberSymbol.isRustBoxed(),
+                        "A::Error",
+                    ),
+                *RuntimeType.preludeScope,
+            )
+            return
+        }
         rustTemplate(
             """
-            ${wireName.dq()} => {
-                if !seen.insert(${wireName.dq()}) {
-                    return #{Err}("duplicate field `$wireName`".to_string());
+            let parsed = match seq.next_element_seed(
+                #{TargetSeed} {
+                    settings: self.settings,
+                    depth: self.depth,
                 }
-                let parsed = #{TargetParser}(value, settings)
-                    .map_err(|err| format!("invalid field `$wireName`: {err}"))?;
-                #{Prepare}
-                builder.$fieldName = #{Some}(parsed);
-            },
+            )? {
+                #{Some}(parsed) => parsed,
+                #{None} => return #{Finish},
+            };
+            #{Prepare}
+            builder.$field = #{Some}(parsed);
             """,
-            "TargetParser" to parser(target),
+            "TargetSeed" to seed(target),
+            "Finish" to finishStructure(container, parseInfo(container), "A::Error"),
             "Prepare" to
                 prepareMember(
                     container,
                     target,
                     targetInfo,
-                    symbolProvider.toSymbol(member).isRustBoxed(),
+                    memberSymbol.isRustBoxed(),
+                    "A::Error",
                 ),
+            *RuntimeType.preludeScope,
+        )
+    }
+
+    private fun RustWriter.renderStructureMapMember(
+        container: StructureShape,
+        member: MemberShape,
+        index: Int,
+    ) {
+        val target = model.expectShape(member.target)
+        val targetInfo = parseInfo(target)
+        val field = symbolProvider.toMemberName(member)
+        val wireName = member.memberName
+        val memberSymbol = symbolProvider.toSymbol(member)
+        rustTemplate(
+            """
+            ${fieldName(container)}::Field$index => {
+                if !seen.insert(${wireName.dq()}) {
+                    return #{Err}(<A::Error as #{serde}::de::Error>::custom(
+                        ${"duplicate field `$wireName`".dq()}
+                    ));
+                }
+                #{Parse}
+            }
+            """,
+            "Parse" to
+                writable {
+                    if (memberSymbol.isOptional()) {
+                        rustTemplate(
+                            """
+                            let parsed = map.next_value_seed(
+                                #{OptionalSeed}(#{TargetSeed} {
+                                    settings: self.settings,
+                                    depth: self.depth,
+                                })
+                            )?;
+                            if let #{Some}(parsed) = parsed {
+                                #{Prepare}
+                                builder.$field = #{Some}(parsed);
+                            }
+                            """,
+                            "OptionalSeed" to optionalSeed(),
+                            "TargetSeed" to seed(target),
+                            "Prepare" to
+                                prepareMember(
+                                    container,
+                                    target,
+                                    targetInfo,
+                                    memberSymbol.isRustBoxed(),
+                                    "A::Error",
+                                ),
+                            *RuntimeType.preludeScope,
+                        )
+                    } else {
+                        rustTemplate(
+                            """
+                            let parsed = map.next_value_seed(
+                                #{TargetSeed} {
+                                    settings: self.settings,
+                                    depth: self.depth,
+                                }
+                            )?;
+                            #{Prepare}
+                            builder.$field = #{Some}(parsed);
+                            """,
+                            "TargetSeed" to seed(target),
+                            "Prepare" to
+                                prepareMember(
+                                    container,
+                                    target,
+                                    targetInfo,
+                                    memberSymbol.isRustBoxed(),
+                                    "A::Error",
+                                ),
+                            *RuntimeType.preludeScope,
+                        )
+                    }
+                },
+            *SupportStructures.codegenScope,
             *RuntimeType.preludeScope,
         )
     }
@@ -640,6 +1231,7 @@ class DeserializeImplGenerator(private val codegenContext: CodegenContext) {
         target: Shape,
         targetInfo: ReturnSymbolToParse,
         boxed: Boolean,
+        errorType: String,
     ): Writable =
         writable {
             val serverInput =
@@ -654,7 +1246,7 @@ class DeserializeImplGenerator(private val codegenContext: CodegenContext) {
                     !serverContext.settings.codegenConfig.publicConstrainedTypes &&
                     target.isDirectlyConstrained(symbolProvider)
             if (serverContext != null && !serverInput && (requiresConversion(targetInfo, target) || hiddenDirectConstraint)) {
-                convertServerOutputMember(target, targetInfo)(this)
+                convertServerOutputMember(target, targetInfo, errorType)(this)
             }
             when {
                 serverInput && boxed && targetInfo.isUnconstrained ->
@@ -677,6 +1269,7 @@ class DeserializeImplGenerator(private val codegenContext: CodegenContext) {
     private fun convertServerOutputMember(
         target: Shape,
         targetInfo: ReturnSymbolToParse,
+        errorType: String,
     ): Writable =
         writable {
             val server = checkNotNull(serverContext)
@@ -700,22 +1293,24 @@ class DeserializeImplGenerator(private val codegenContext: CodegenContext) {
                 rustTemplate(
                     """
                     let parsed = <#{Constrained} as #{TryFrom}<#{Parsed}>>::try_from(parsed)
-                        .map_err(|err| err.to_string())?;
+                        .map_err(<$errorType as #{serde}::de::Error>::custom)?;
                     let parsed: #{Final} = parsed.into();
                     """,
                     "Constrained" to constrainedSymbol,
                     "Parsed" to targetInfo.symbol,
                     "Final" to finalSymbol,
+                    *SupportStructures.codegenScope,
                     *RuntimeType.preludeScope,
                 )
             } else {
                 rustTemplate(
                     """
                     let parsed = <#{Final} as #{TryFrom}<#{Parsed}>>::try_from(parsed)
-                        .map_err(|err| err.to_string())?;
+                        .map_err(<$errorType as #{serde}::de::Error>::custom)?;
                     """,
                     "Final" to finalSymbol,
                     "Parsed" to targetInfo.symbol,
+                    *SupportStructures.codegenScope,
                     *RuntimeType.preludeScope,
                 )
             }
@@ -724,6 +1319,7 @@ class DeserializeImplGenerator(private val codegenContext: CodegenContext) {
     private fun finishStructure(
         shape: StructureShape,
         info: ReturnSymbolToParse,
+        errorType: String,
     ): Writable =
         writable {
             if (info.isUnconstrained) {
@@ -737,74 +1333,143 @@ class DeserializeImplGenerator(private val codegenContext: CodegenContext) {
                     ServerBuilderKindBehavior(codegenContext).hasFallibleBuilder(shape)
                 }
             if (fallible) {
-                rust("builder.build().map_err(|err| err.to_string())")
+                rustTemplate(
+                    """
+                    builder.build().map_err(<$errorType as #{serde}::de::Error>::custom)
+                    """,
+                    *SupportStructures.codegenScope,
+                )
             } else {
                 rustTemplate("#{Ok}(builder.build())", *RuntimeType.preludeScope)
             }
         }
 
-    private fun parseUnion(
+    private fun renderUnionVisitor(
         shape: UnionShape,
         info: ReturnSymbolToParse,
     ): Writable =
         writable {
+            renderUnionField(shape)(this)
+            visitorHeader(
+                shape,
+                info,
+                "an externally tagged union",
+                writable {
+                    rustTemplate(
+                        """
+                        fn visit_enum<A>(self, data: A) -> #{Result}<Self::Value, A::Error>
+                        where
+                            A: #{serde}::de::EnumAccess<'de>,
+                        {
+                            let (variant, access) = data.variant::<${fieldName(shape)}>()?;
+                            match variant {
+                                #{Variants}
+                            }
+                        }
+                        """,
+                        "Variants" to
+                            writable {
+                                shape.members().forEachIndexed { index, member ->
+                                    renderUnionVariant(shape, member, info, index)
+                                }
+                            },
+                        *SupportStructures.codegenScope,
+                        *RuntimeType.preludeScope,
+                    )
+                },
+            )(this)
+        }
+
+    private fun renderUnionField(shape: UnionShape): Writable =
+        writable {
             rustTemplate(
                 """
-                match value {
-                    #{Value}::String(name) => match name.as_str() {
-                        #{UnitVariants}
-                        _ => #{Err}("unknown union variant".to_string()),
-                    },
-                    #{Value}::Map(mut entries) if entries.len() == 1 => {
-                        let (key, value) = entries.pop().expect("length checked");
-                        let key = match key {
-                            #{Value}::String(key) => key,
-                            _ => return #{Err}("union variant names must be strings".to_string()),
-                        };
-                        match key.as_str() {
-                            #{Variants}
-                            _ => #{Err}("unknown union variant".to_string()),
+                enum ${fieldName(shape)} {
+                    #{Variants}
+                }
+
+                struct ${fieldVisitorName(shape)};
+
+                impl<'de> #{serde}::de::Visitor<'de> for ${fieldVisitorName(shape)} {
+                    type Value = ${fieldName(shape)};
+
+                    fn expecting(&self, formatter: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                        formatter.write_str("a union variant name")
+                    }
+
+                    fn visit_str<E>(self, value: &str) -> #{Result}<Self::Value, E>
+                    where
+                        E: #{serde}::de::Error,
+                    {
+                        match value {
+                            #{Matches}
+                            _ => #{Err}(E::unknown_variant(value, &[#{Names}])),
                         }
-                    },
-                    _ => #{Err}("expected an externally tagged union".to_string()),
+                    }
+
+                    fn visit_u64<E>(self, value: u64) -> #{Result}<Self::Value, E>
+                    where
+                        E: #{serde}::de::Error,
+                    {
+                        match value {
+                            #{IndexMatches}
+                            _ => #{Err}(E::invalid_value(
+                                #{serde}::de::Unexpected::Unsigned(value),
+                                &self,
+                            )),
+                        }
+                    }
+                }
+
+                impl<'de> #{serde}::Deserialize<'de> for ${fieldName(shape)} {
+                    fn deserialize<D>(deserializer: D) -> #{Result}<Self, D::Error>
+                    where
+                        D: #{serde}::Deserializer<'de>,
+                    {
+                        deserializer.deserialize_identifier(${fieldVisitorName(shape)})
+                    }
                 }
                 """,
-                "Value" to dynamicValue(),
-                "UnitVariants" to
-                    writable {
-                        shape.members().filter(MemberShape::isTargetUnit).forEach { member ->
-                            rustTemplate(
-                                "${member.memberName.dq()} => #{Ok}(#{Return}::${symbolProvider.toMemberName(member)}),",
-                                "Return" to info.symbol,
-                                *RuntimeType.preludeScope,
-                            )
-                        }
-                    },
                 "Variants" to
                     writable {
-                        shape.members().forEach { member ->
-                            renderUnionVariant(member, info)
+                        shape.members().indices.forEach { rust("Field$it,") }
+                    },
+                "Matches" to
+                    writable {
+                        shape.members().forEachIndexed { index, member ->
+                            rust("${member.memberName.dq()} => Ok(${fieldName(shape)}::Field$index),")
                         }
                     },
+                "Names" to
+                    writable {
+                        rust(shape.members().joinToString(", ") { it.memberName.dq() })
+                    },
+                "IndexMatches" to
+                    writable {
+                        shape.members().indices.forEach { rust("$it => Ok(${fieldName(shape)}::Field$it),") }
+                    },
+                *SupportStructures.codegenScope,
                 *RuntimeType.preludeScope,
             )
         }
 
     private fun RustWriter.renderUnionVariant(
+        container: UnionShape,
         member: MemberShape,
         unionInfo: ReturnSymbolToParse,
+        index: Int,
     ) {
         val variant = symbolProvider.toMemberName(member)
         if (member.isTargetUnit()) {
             rustTemplate(
                 """
-                ${member.memberName.dq()} => match value {
-                    #{Value}::Null => #{Ok}(#{Return}::$variant),
-                    _ => #{Err}("unit union variants must contain null".to_string()),
-                },
+                ${fieldName(container)}::Field$index => {
+                    #{serde}::de::VariantAccess::unit_variant(access)?;
+                    #{Ok}(#{Return}::$variant)
+                }
                 """,
-                "Value" to dynamicValue(),
                 "Return" to unionInfo.symbol,
+                *SupportStructures.codegenScope,
                 *RuntimeType.preludeScope,
             )
         } else {
@@ -812,22 +1477,29 @@ class DeserializeImplGenerator(private val codegenContext: CodegenContext) {
             val targetInfo = parseInfo(target)
             rustTemplate(
                 """
-                ${member.memberName.dq()} => {
-                    let parsed = #{TargetParser}(value, settings)
-                        .map_err(|err| format!("invalid union variant `${member.memberName}`: {err}"))?;
+                ${fieldName(container)}::Field$index => {
+                    let parsed = #{serde}::de::VariantAccess::newtype_variant_seed(
+                        access,
+                        #{TargetSeed} {
+                            settings: self.settings,
+                            depth: self.depth,
+                        },
+                    )?;
                     #{Prepare}
                     #{Ok}(#{Return}::$variant(parsed))
-                },
+                }
                 """,
-                "TargetParser" to parser(target),
+                "TargetSeed" to seed(target),
                 "Prepare" to
                     prepareMember(
-                        model.expectShape(member.container),
+                        container,
                         target,
                         targetInfo,
                         member.hasTrait<RustBoxTrait>(),
+                        "A::Error",
                     ),
                 "Return" to unionInfo.symbol,
+                *SupportStructures.codegenScope,
                 *RuntimeType.preludeScope,
             )
         }
@@ -838,41 +1510,25 @@ class DeserializeImplGenerator(private val codegenContext: CodegenContext) {
         info: ReturnSymbolToParse,
     ) {
         val finalSymbol = symbolProvider.toSymbol(shape)
-        val seedName = shape.contextName(codegenContext.serviceShape).toPascalCase() + "Seed"
         rustTemplate(
             """
-            struct $seedName<'a> {
-                settings: &'a #{DeserializationSettings},
-            }
-
-            impl<'de> #{serde}::de::DeserializeSeed<'de> for $seedName<'_> {
-                type Value = #{Final};
-
-                fn deserialize<D>(self, deserializer: D) -> #{Result}<Self::Value, D::Error>
-                where
-                    D: #{serde}::Deserializer<'de>,
-                {
-                    let value = <#{Value} as #{serde}::Deserialize>::deserialize(deserializer)?;
-                    let parsed = ${parseFunctionName(shape)}(value, self.settings)
-                        .map_err(<D::Error as #{serde}::de::Error>::custom)?;
-                    #{Finalize}
-                }
-            }
-
             impl<'de> #{serde}::Deserialize<'de> for #{Final} {
                 fn deserialize<D>(deserializer: D) -> #{Result}<Self, D::Error>
                 where
                     D: #{serde}::Deserializer<'de>,
                 {
                     let settings = #{DeserializationSettings}::current();
-                    #{serde}::de::DeserializeSeed::deserialize(
-                        $seedName { settings: &settings },
+                    let parsed = #{serde}::de::DeserializeSeed::deserialize(
+                        ${seedName(shape)} {
+                            settings: &settings,
+                            depth: 128,
+                        },
                         deserializer,
-                    )
+                    )?;
+                    #{Finalize}
                 }
             }
             """,
-            "Value" to dynamicValue(),
             "Final" to finalSymbol,
             "Finalize" to
                 writable {
@@ -904,108 +1560,52 @@ class DeserializeImplGenerator(private val codegenContext: CodegenContext) {
         info.isUnconstrained &&
             info.symbol.rustType() != symbolProvider.toSymbol(finalShape).rustType()
 
-    private fun dynamicValue(): RuntimeType =
-        RuntimeType.forInlineFun("SerdeDeserializeValue", DeserializerModule) {
+    private fun optionalSeed(): RuntimeType =
+        RuntimeType.forInlineFun("SerdeOptionalSeed", DeserializerModule) {
             rustTemplate(
                 """
-                ##[allow(dead_code)]
-                enum SerdeDeserializeValue {
-                    Null,
-                    Bool(bool),
-                    I64(i64),
-                    U64(u64),
-                    F64(f64),
-                    String(#{String}),
-                    Bytes(#{Vec}<u8>),
-                    Seq(#{Vec}<SerdeDeserializeValue>),
-                    Map(#{Vec}<(SerdeDeserializeValue, SerdeDeserializeValue)>),
-                }
+                struct SerdeOptionalSeed<S>(S);
 
-                struct SerdeDeserializeValueVisitor;
+                struct SerdeOptionalSeedVisitor<S>(#{Option}<S>);
 
-                impl<'de> #{serde}::de::Visitor<'de> for SerdeDeserializeValueVisitor {
-                    type Value = SerdeDeserializeValue;
+                impl<'de, S> #{serde}::de::Visitor<'de> for SerdeOptionalSeedVisitor<S>
+                where
+                    S: #{serde}::de::DeserializeSeed<'de>,
+                {
+                    type Value = #{Option}<S::Value>;
 
                     fn expecting(&self, formatter: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-                        formatter.write_str("a Serde value")
+                        formatter.write_str("an optional value")
                     }
 
-                    fn visit_unit<E>(self) -> #{Result}<SerdeDeserializeValue, E> { #{Ok}(SerdeDeserializeValue::Null) }
-                    fn visit_none<E>(self) -> #{Result}<SerdeDeserializeValue, E> { #{Ok}(SerdeDeserializeValue::Null) }
-                    fn visit_bool<E>(self, value: bool) -> #{Result}<SerdeDeserializeValue, E> { #{Ok}(SerdeDeserializeValue::Bool(value)) }
-                    fn visit_i8<E>(self, value: i8) -> #{Result}<SerdeDeserializeValue, E> { #{Ok}(SerdeDeserializeValue::I64(value as i64)) }
-                    fn visit_i16<E>(self, value: i16) -> #{Result}<SerdeDeserializeValue, E> { #{Ok}(SerdeDeserializeValue::I64(value as i64)) }
-                    fn visit_i32<E>(self, value: i32) -> #{Result}<SerdeDeserializeValue, E> { #{Ok}(SerdeDeserializeValue::I64(value as i64)) }
-                    fn visit_i64<E>(self, value: i64) -> #{Result}<SerdeDeserializeValue, E> { #{Ok}(SerdeDeserializeValue::I64(value)) }
-                    fn visit_u8<E>(self, value: u8) -> #{Result}<SerdeDeserializeValue, E> { #{Ok}(SerdeDeserializeValue::U64(value as u64)) }
-                    fn visit_u16<E>(self, value: u16) -> #{Result}<SerdeDeserializeValue, E> { #{Ok}(SerdeDeserializeValue::U64(value as u64)) }
-                    fn visit_u32<E>(self, value: u32) -> #{Result}<SerdeDeserializeValue, E> { #{Ok}(SerdeDeserializeValue::U64(value as u64)) }
-                    fn visit_u64<E>(self, value: u64) -> #{Result}<SerdeDeserializeValue, E> { #{Ok}(SerdeDeserializeValue::U64(value)) }
-                    fn visit_f32<E>(self, value: f32) -> #{Result}<SerdeDeserializeValue, E> { #{Ok}(SerdeDeserializeValue::F64(value as f64)) }
-                    fn visit_f64<E>(self, value: f64) -> #{Result}<SerdeDeserializeValue, E> { #{Ok}(SerdeDeserializeValue::F64(value)) }
-
-                    fn visit_str<E>(self, value: &str) -> #{Result}<SerdeDeserializeValue, E>
-                    where
-                        E: #{serde}::de::Error,
-                    {
-                        #{Ok}(SerdeDeserializeValue::String(value.to_string()))
+                    fn visit_none<E>(self) -> #{Result}<Self::Value, E> {
+                        #{Ok}(#{None})
                     }
 
-                    fn visit_string<E>(self, value: #{String}) -> #{Result}<SerdeDeserializeValue, E> {
-                        #{Ok}(SerdeDeserializeValue::String(value))
+                    fn visit_unit<E>(self) -> #{Result}<Self::Value, E> {
+                        #{Ok}(#{None})
                     }
 
-                    fn visit_bytes<E>(self, value: &[u8]) -> #{Result}<SerdeDeserializeValue, E> {
-                        #{Ok}(SerdeDeserializeValue::Bytes(value.to_vec()))
-                    }
-
-                    fn visit_byte_buf<E>(self, value: #{Vec}<u8>) -> #{Result}<SerdeDeserializeValue, E> {
-                        #{Ok}(SerdeDeserializeValue::Bytes(value))
-                    }
-
-                    fn visit_some<D>(self, deserializer: D) -> #{Result}<SerdeDeserializeValue, D::Error>
+                    fn visit_some<D>(mut self, deserializer: D) -> #{Result}<Self::Value, D::Error>
                     where
                         D: #{serde}::Deserializer<'de>,
                     {
-                        <SerdeDeserializeValue as #{serde}::Deserialize>::deserialize(deserializer)
-                    }
-
-                    fn visit_newtype_struct<D>(self, deserializer: D) -> #{Result}<SerdeDeserializeValue, D::Error>
-                    where
-                        D: #{serde}::Deserializer<'de>,
-                    {
-                        <SerdeDeserializeValue as #{serde}::Deserialize>::deserialize(deserializer)
-                    }
-
-                    fn visit_seq<A>(self, mut seq: A) -> #{Result}<SerdeDeserializeValue, A::Error>
-                    where
-                        A: #{serde}::de::SeqAccess<'de>,
-                    {
-                        let mut values = #{Vec}::with_capacity(seq.size_hint().unwrap_or(0));
-                        while let #{Some}(value) = seq.next_element()? {
-                            values.push(value);
-                        }
-                        #{Ok}(SerdeDeserializeValue::Seq(values))
-                    }
-
-                    fn visit_map<A>(self, mut map: A) -> #{Result}<SerdeDeserializeValue, A::Error>
-                    where
-                        A: #{serde}::de::MapAccess<'de>,
-                    {
-                        let mut entries = #{Vec}::with_capacity(map.size_hint().unwrap_or(0));
-                        while let #{Some}(entry) = map.next_entry()? {
-                            entries.push(entry);
-                        }
-                        #{Ok}(SerdeDeserializeValue::Map(entries))
+                        let seed = self.0.take().expect("optional seed is visited once");
+                        seed.deserialize(deserializer).map(#{Some})
                     }
                 }
 
-                impl<'de> #{serde}::Deserialize<'de> for SerdeDeserializeValue {
-                    fn deserialize<D>(deserializer: D) -> #{Result}<Self, D::Error>
+                impl<'de, S> #{serde}::de::DeserializeSeed<'de> for SerdeOptionalSeed<S>
+                where
+                    S: #{serde}::de::DeserializeSeed<'de>,
+                {
+                    type Value = #{Option}<S::Value>;
+
+                    fn deserialize<D>(self, deserializer: D) -> #{Result}<Self::Value, D::Error>
                     where
                         D: #{serde}::Deserializer<'de>,
                     {
-                        deserializer.deserialize_any(SerdeDeserializeValueVisitor)
+                        deserializer.deserialize_option(SerdeOptionalSeedVisitor(#{Some}(self.0)))
                     }
                 }
                 """,

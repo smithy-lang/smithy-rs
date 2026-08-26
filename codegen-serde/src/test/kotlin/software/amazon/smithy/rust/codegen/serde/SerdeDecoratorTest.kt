@@ -421,6 +421,11 @@ class SerdeDecoratorTest {
                         assert_eq!(value.float, Some(1.5));
                         assert_eq!(value.double, Some(2.5));
                         assert_eq!(value.defaulted, 7);
+
+                        let value: Payload = #{serde_json}::from_str(
+                            r##"{"message":null}"##
+                        ).expect("null optional field should deserialize");
+                        assert_eq!(value.message, None);
                         """,
                         *codegenScope,
                     )
@@ -533,6 +538,136 @@ class SerdeDecoratorTest {
                             )
                         }).expect("failed to deserialize customer-owned envelope");
                         assert_eq!(envelope.payload.float, Some(f32::INFINITY));
+                        """,
+                        *codegenScope,
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `all-required structure round trips through bincode`() {
+        val model =
+            """
+            namespace com.example
+            use smithy.rust#serde
+            use aws.protocols#awsJson1_0
+
+            @awsJson1_0
+            service BincodeService {
+                operations: [Put]
+            }
+
+            operation Put {
+                input: PutInput
+            }
+
+            structure PutInput {
+                record: BincodeRecord
+            }
+
+            @serde(serialize: true, deserialize: true)
+            structure BincodeRecord {
+                @required
+                nested: Nested
+                @required
+                text: String
+                @required
+                count: Integer
+                @required
+                ratio: Float
+                @required
+                labels: Labels
+                @required
+                counts: Counts
+                @required
+                kind: Kind
+                @required
+                choice: Choice
+            }
+
+            structure Nested {
+                @required
+                label: String
+                @required
+                number: Integer
+            }
+
+            list Labels {
+                member: String
+            }
+
+            map Counts {
+                key: String
+                value: Integer
+            }
+
+            enum Kind {
+                A
+                B
+            }
+
+            union Choice {
+                text: String
+                empty: Unit
+            }
+            """.asSmithyModel(smithyVersion = "2")
+
+        clientIntegrationTest(
+            model,
+            params =
+                IntegrationTestParams(
+                    cargoCommand = "cargo test --all-features",
+                    service = "com.example#BincodeService",
+                ),
+        ) { ctx, crate ->
+            val codegenScope =
+                arrayOf(
+                    "crate" to RustType.Opaque(ctx.moduleUseName()),
+                    "bincode" to CargoDependency("bincode", CratesIo("1")).toDevDependency().toType(),
+                )
+
+            crate.integrationTest("test_bincode_deserialization") {
+                unitTest("all_required_structure_round_trips") {
+                    rustTemplate(
+                        """
+                        use #{crate}::serde::{SerializationSettings, SerializeConfigured};
+                        use #{crate}::types::{BincodeRecord, Choice, Kind, Nested};
+
+                        fn record(choice: Choice) -> BincodeRecord {
+                            BincodeRecord::builder()
+                                .nested(
+                                    Nested::builder()
+                                        .label("nested")
+                                        .number(7)
+                                        .build()
+                                        .expect("nested structure should build")
+                                )
+                                .text("root")
+                                .count(42)
+                                .ratio(1.5)
+                                .labels("one")
+                                .labels("two")
+                                .counts("first", 1)
+                                .counts("second", 2)
+                                .kind(Kind::A)
+                                .choice(choice)
+                                .build()
+                                .expect("record should build")
+                        }
+
+                        fn round_trip(value: BincodeRecord) {
+                            let settings = SerializationSettings::default();
+                            let encoded = #{bincode}::serialize(&value.serialize_ref(&settings))
+                                .expect("record should serialize");
+                            let decoded: BincodeRecord = #{bincode}::deserialize(&encoded)
+                                .expect("record should deserialize");
+                            assert_eq!(decoded, value);
+                        }
+
+                        round_trip(record(Choice::Text("payload".to_string())));
+                        round_trip(record(Choice::Empty));
                         """,
                         *codegenScope,
                     )
