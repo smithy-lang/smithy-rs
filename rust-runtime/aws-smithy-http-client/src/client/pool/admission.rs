@@ -17,6 +17,8 @@ use std::collections::HashMap;
 use std::fmt;
 use std::num::NonZeroUsize;
 
+pub(in crate::client::pool) mod claims;
+
 /// Protocol capability required by the head waiter in a cell.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ProtocolRequirement {
@@ -163,29 +165,38 @@ impl OriginAdmission {
 
     /// Publishes a complete demand snapshot and drives any resulting delivery.
     pub(crate) fn publish_demand(origin: &Arc<Self>, target: CellId, snapshot: DemandSnapshot) {
-        let delivery = {
+        let action = {
             let mut state = origin.state.lock();
             state.publish_demand(target, snapshot);
-            Self::prepare_delivery(origin, &mut state)
+            Self::prepare_action(origin, &mut state)
         };
-        Self::drive(delivery);
+        Self::drive(action);
     }
 
-    /// Extracts one permit and ordered demand into an unlocked delivery guard.
-    fn prepare_delivery(
-        origin: &Arc<Self>,
-        state: &mut AdmissionState,
-    ) -> Option<CapacityDelivery> {
-        state.schedule_one().map(|pending| CapacityDelivery {
-            origin: origin.clone(),
-            delivery: pending.delivery,
-            target: pending.target,
-            demand: pending.demand,
-            state: CapacityDeliveryState::Undelivered {
-                permit: Some(pending.permit),
-                on_drop: TargetAckResult::RetrySameResidence,
-            },
-        })
+    /// Extracts the next bounded-origin action while admission is locked.
+    fn prepare_action(origin: &Arc<Self>, state: &mut AdmissionState) -> Option<AdmissionAction> {
+        if let Some(cancellation) = state.h1.prepare_cancellation() {
+            return Some(AdmissionAction::H1(claims::H1Action::cancel(
+                origin.clone(),
+                cancellation,
+            )));
+        }
+        if let Some(pending) = state.schedule_one() {
+            return Some(AdmissionAction::Capacity(CapacityDelivery {
+                origin: origin.clone(),
+                delivery: pending.delivery,
+                target: pending.target,
+                demand: pending.demand,
+                state: CapacityDeliveryState::Undelivered {
+                    permit: Some(pending.permit),
+                    on_drop: TargetAckResult::RetrySameResidence,
+                },
+            }));
+        }
+        state
+            .h1
+            .prepare_claim(&state.demand_schedule)
+            .map(|claim| AdmissionAction::H1(claims::H1Action::install(origin.clone(), claim)))
     }
 
     /// Upgrades a registered target without holding the admission lock.
@@ -197,10 +208,10 @@ impl OriginAdmission {
         target.and_then(|target| target.upgrade())
     }
 
-    /// Drives sequential deliveries until no completion schedules another.
-    fn drive(mut delivery: Option<CapacityDelivery>) {
-        while let Some(current) = delivery {
-            delivery = current.deliver_once();
+    /// Drives sequential unlocked actions until no completion schedules another.
+    pub(in crate::client::pool) fn drive(mut action: Option<AdmissionAction>) {
+        while let Some(current) = action {
+            action = current.drive_once();
         }
     }
 
@@ -213,12 +224,12 @@ impl OriginAdmission {
 
     /// Returns `permit` to admission and serves ordered demand when possible.
     fn return_permit(origin: &Arc<Self>, permit: PermitId) {
-        let delivery = {
+        let action = {
             let mut state = origin.state.lock();
             state.available.push(permit);
-            Self::prepare_delivery(origin, &mut state)
+            Self::prepare_action(origin, &mut state)
         };
-        Self::drive(delivery);
+        Self::drive(action);
     }
 
     /// Closes a delivery fence and prepares at most one successor.
@@ -232,13 +243,13 @@ impl OriginAdmission {
         target: &CellId,
         permit: Option<PermitId>,
         result: TargetAckResult,
-    ) -> Option<CapacityDelivery> {
+    ) -> Option<AdmissionAction> {
         let mut state = origin.state.lock();
         if let Some(permit) = permit {
             state.available.push(permit);
         }
         state.finish_delivery(delivery, target, result);
-        Self::prepare_delivery(origin, &mut state)
+        Self::prepare_action(origin, &mut state)
     }
 
     #[cfg(test)]
@@ -249,7 +260,13 @@ impl OriginAdmission {
     ) -> Option<CapacityDelivery> {
         let mut state = origin.state.lock();
         state.publish_demand(target, snapshot);
-        Self::prepare_delivery(origin, &mut state)
+        match Self::prepare_action(origin, &mut state) {
+            Some(AdmissionAction::Capacity(delivery)) => Some(delivery),
+            Some(AdmissionAction::H1(_)) => {
+                panic!("capacity-only test unexpectedly prepared an HTTP/1 action")
+            }
+            None => None,
+        }
     }
 
     #[cfg(test)]
@@ -279,7 +296,7 @@ impl OriginAdmission {
         self.state.lock().available_capacity()
     }
 
-    #[cfg(all(test, not(smithy_http_client_loom)))]
+    #[cfg(test)]
     pub(super) fn ordered_demand_count_for_test(&self) -> usize {
         self.state.lock().demand_schedule.len()
     }
@@ -290,6 +307,24 @@ impl OriginAdmission {
         // cells strongly. Explicit teardown prevents that model-only
         // substitution from appearing as an Arc leak.
         self.state.lock().cells.clear();
+    }
+}
+
+/// One unlocked step prepared while holding the bounded-origin lock.
+pub(super) enum AdmissionAction {
+    /// One connection permit crossing to the origin-order head.
+    Capacity(CapacityDelivery),
+    /// HTTP/1 source, claim, or borrowed-sender work.
+    H1(claims::H1Action),
+}
+
+impl AdmissionAction {
+    /// Executes one lock-domain crossing and returns the next prepared step.
+    fn drive_once(self) -> Option<Self> {
+        match self {
+            Self::Capacity(delivery) => delivery.deliver_once(),
+            Self::H1(action) => action.drive_once(),
+        }
     }
 }
 
@@ -389,7 +424,7 @@ impl CapacityDelivery {
     ///
     /// A live target either accepts or rejects the guard. An expired target
     /// refunnels the permit and retires the fenced demand.
-    fn deliver_once(self) -> Option<CapacityDelivery> {
+    fn deliver_once(self) -> Option<AdmissionAction> {
         let target = self.origin.target(&self.target);
         match target {
             Some(target) => OriginCell::receive_capacity(&target, self),
@@ -431,7 +466,7 @@ impl CapacityDelivery {
     }
 
     /// Disarms this guard and resolves its permit and demand fence together.
-    fn finish_undelivered(mut self, result: TargetAckResult) -> Option<CapacityDelivery> {
+    fn finish_undelivered(mut self, result: TargetAckResult) -> Option<AdmissionAction> {
         let permit = match &mut self.state {
             CapacityDeliveryState::Undelivered { permit, .. } => permit.take(),
             CapacityDeliveryState::Disarmed => None,
@@ -502,7 +537,7 @@ pub(crate) struct CapacityDeliveryAck {
 
 impl CapacityDeliveryAck {
     /// Completes this delivery fence and returns the next scheduled crossing.
-    pub(super) fn finish(mut self) -> Option<CapacityDelivery> {
+    pub(super) fn finish(mut self) -> Option<AdmissionAction> {
         let result = self
             .result
             .take()
@@ -541,6 +576,8 @@ struct AdmissionState {
     next_permit: u64,
     /// Cross-cell demand records and their origin-wide scheduling order.
     demand_schedule: DemandSchedule,
+    /// HTTP/1 source advertisements and return claims.
+    h1: claims::H1Coordination,
     /// Next never-reused delivery identity.
     next_delivery: u64,
 }
@@ -556,6 +593,7 @@ impl AdmissionState {
             unissued: limit,
             next_permit: 0,
             demand_schedule: DemandSchedule::default(),
+            h1: claims::H1Coordination::default(),
             next_delivery: 0,
         }
     }
@@ -587,7 +625,8 @@ impl AdmissionState {
 
     /// Applies one complete cell publication to cross-cell scheduling.
     fn publish_demand(&mut self, target: CellId, snapshot: DemandSnapshot) {
-        self.demand_schedule.publish(target, snapshot);
+        self.demand_schedule.publish(target.clone(), snapshot);
+        self.h1.reconcile_target(&target, &self.demand_schedule);
     }
 
     /// Pairs the oldest deliverable demand with one available permit.
@@ -602,12 +641,13 @@ impl AdmissionState {
             .demand_schedule
             .reserve_head(delivery)
             .expect("queued demand head disappeared");
+        self.h1
+            .reconcile_target(&scheduled.target, &self.demand_schedule);
         Some(PreparedCapacityDelivery {
             permit,
             delivery,
             target: scheduled.target,
             demand: scheduled.demand,
-            sequence: scheduled.sequence,
         })
     }
 
@@ -649,8 +689,6 @@ struct DemandSchedule {
     records: HashMap<CellId, DemandRecord>,
     /// Origin-wide order, including an outstanding delivery fence.
     order: DemandOrderState,
-    /// Next never-reused arrival sequence.
-    next_sequence: u64,
 }
 
 impl DemandSchedule {
@@ -700,7 +738,6 @@ impl DemandSchedule {
 
     /// Appends an idle active demand to the origin-wide order.
     fn enqueue(&mut self, target: CellId) {
-        let sequence = self.take_sequence();
         let previous = match &self.order {
             DemandOrderState::Empty => None,
             DemandOrderState::Active { tail, .. } => Some(tail.clone()),
@@ -725,7 +762,6 @@ impl DemandSchedule {
             links: OrderLinks {
                 previous,
                 next: None,
-                sequence,
             },
         };
 
@@ -825,6 +861,64 @@ impl DemandSchedule {
         )
     }
 
+    /// Returns the complete origin-order head when it may receive a claim.
+    fn queued_head(&self) -> Option<QueuedDemand> {
+        let DemandOrderState::Active { head, .. } = &self.order else {
+            return None;
+        };
+        let record = self.records.get(head).expect("order head disappeared");
+        let DemandResidence::Queued { demand, .. } = &record.residence else {
+            return None;
+        };
+        let DemandState::Active {
+            head: requirement,
+            eligibility_group,
+        } = &record.latest.state
+        else {
+            unreachable!("queued demand became inactive");
+        };
+        Some(QueuedDemand {
+            target: head.clone(),
+            demand: *demand,
+            requirement: *requirement,
+            eligibility_group: eligibility_group.clone(),
+        })
+    }
+
+    /// Returns whether `target` still has this demand queued for a new action.
+    fn is_current_queued(&self, target: &CellId, demand: DemandId) -> bool {
+        self.records.get(target).is_some_and(|record| {
+            record.latest.id == demand
+                && record.latest.is_active()
+                && matches!(
+                    record.residence,
+                    DemandResidence::Queued {
+                        demand: current,
+                        ..
+                    } if current == demand
+                )
+        })
+    }
+
+    /// Fences a claim's exact target when it is still the origin-order head.
+    fn reserve_claim_target(
+        &mut self,
+        target: &CellId,
+        demand: DemandId,
+        delivery: DeliveryId,
+    ) -> Option<ScheduledDemand> {
+        if !self.is_current_queued(target, demand) {
+            return None;
+        }
+        let DemandOrderState::Active { head, .. } = &self.order else {
+            return None;
+        };
+        if head != target {
+            return None;
+        }
+        self.reserve_head(delivery)
+    }
+
     /// Changes the queued head into a delivery fence at the same order position.
     fn reserve_head(&mut self, delivery: DeliveryId) -> Option<ScheduledDemand> {
         let DemandOrderState::Active { head, .. } = &self.order else {
@@ -840,18 +934,13 @@ impl DemandSchedule {
             DemandResidence::Queued { demand, links } => {
                 debug_assert_eq!(record.latest.id, demand);
                 debug_assert!(record.latest.is_active());
-                let sequence = links.sequence;
                 record.residence = DemandResidence::Delivering {
                     demand,
                     delivery,
                     links,
                 };
                 self.assert_consistent();
-                Some(ScheduledDemand {
-                    target,
-                    demand,
-                    sequence,
-                })
+                Some(ScheduledDemand { target, demand })
             }
             residence => {
                 record.residence = residence;
@@ -988,13 +1077,6 @@ impl DemandSchedule {
         self.assert_consistent();
     }
 
-    /// Allocates a shared arrival sequence that is never reused.
-    fn take_sequence(&mut self) -> u64 {
-        let value = self.next_sequence;
-        self.next_sequence = value.checked_add(1).expect("demand sequence exhausted");
-        value
-    }
-
     #[cfg(test)]
     fn len(&self) -> usize {
         match &self.order {
@@ -1101,6 +1183,19 @@ impl DemandSchedule {
     }
 }
 
+/// Complete origin-order head used to choose one HTTP/1 source action.
+#[derive(Clone, Debug)]
+struct QueuedDemand {
+    /// Cell whose oldest waiter owns this demand episode.
+    target: CellId,
+    /// Demand identity revalidated at each crossing.
+    demand: DemandId,
+    /// Protocol capability required by the target waiter.
+    requirement: ProtocolRequirement,
+    /// Sources whose H1 senders may be borrowed by the target.
+    eligibility_group: EligibilityGroup,
+}
+
 /// Latest snapshot and scheduling residence for one stable cell.
 #[derive(Debug)]
 struct DemandRecord {
@@ -1187,8 +1282,6 @@ struct OrderLinks {
     previous: Option<CellId>,
     /// Newer demand in origin order.
     next: Option<CellId>,
-    /// Monotonic arrival order shared with other scheduling views.
-    sequence: u64,
 }
 
 /// Demand reserved at the order head for one capacity delivery.
@@ -1197,8 +1290,6 @@ struct ScheduledDemand {
     target: CellId,
     /// Demand identity current when the crossing was prepared.
     demand: DemandId,
-    /// Demand's common arrival order for scheduling-view updates.
-    sequence: u64,
 }
 
 /// Connection capacity extracted under admission lock before crossing to a cell.
@@ -1212,8 +1303,6 @@ struct PreparedCapacityDelivery {
     target: CellId,
     /// Demand identity current when the crossing was prepared.
     demand: DemandId,
-    /// Demand's common arrival order for scheduling-view updates.
-    sequence: u64,
 }
 
 #[cfg(test)]
@@ -1239,6 +1328,7 @@ mod tests {
             OriginKey::from_parts(Scheme::HTTPS, "example.com", None).unwrap(),
             EligibilityGroup::Pool,
             Some(origin.clone()),
+            None,
         ));
         OriginAdmission::register_cell(origin, cell)
     }
@@ -1463,7 +1553,7 @@ mod tests {
 
         drop(target);
         assert!(origin.target(&target_id).is_none());
-        OriginAdmission::drive(Some(delivery));
+        OriginAdmission::drive(Some(AdmissionAction::Capacity(delivery)));
 
         let counts = origin.counts();
         assert_eq!(1, counts.available);

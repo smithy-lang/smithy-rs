@@ -3,27 +3,26 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Cell-local waiter order and delivered-capacity ownership.
+//! Cell-local acquisition order and delivered-result ownership.
 //!
-//! [`WaiterQueue`] is the complete mutable state behind an origin cell's lock.
-//! It keeps the request FIFO, aggregate head demand, delivery crossing state,
-//! and any delivered lease in one invariant domain. Values that require
-//! admission locking or task wakeup are detached for the caller to process
-//! only after releasing the cell lock.
+//! [`WaiterQueue`] is the complete waiter state behind an origin cell's lock.
+//! It keeps bounded-capacity order, attempts racing a returned H1, delivery
+//! crossings, and terminal results in one invariant domain. Admission updates,
+//! resource fallbacks, and task wakes are detached for the caller to process
+//! after releasing the cell lock.
 
-use super::super::admission::{
-    CapacityLease, DemandId, DemandSnapshot, ProtocolRequirement, SnapshotVersion,
-};
+use super::super::admission::{DemandId, DemandSnapshot, ProtocolRequirement, SnapshotVersion};
 use super::super::partition::EligibilityGroup;
-use std::collections::HashMap;
+use super::{AcquisitionEvent, AcquisitionResult, EstablishmentPermit};
+use std::collections::{BTreeSet, HashMap};
 use std::num::NonZeroUsize;
 use std::task::{Context, Poll, Waker};
 
 /// Local waiter identity within one cell.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(in crate::client::pool) struct WaiterId(pub(in crate::client::pool) u64);
 
-/// Cell-local acquisition waiters, their FIFO order, and aggregate demand.
+/// Cell-local acquisition episodes, bounded-capacity order, and H1 races.
 ///
 /// At every completed transition:
 ///
@@ -31,17 +30,21 @@ pub(in crate::client::pool) struct WaiterId(pub(in crate::client::pool) u64);
 /// - [`WaitingQueueState::Active`] contains exactly the [`WaiterState::Waiting`]
 ///   records.
 /// - The active queue's demand describes its head waiter.
-/// - Receiving, cancelled-receiving, and ready waiters remain in `records` but
-///   not in the FIFO.
+/// - `h1_candidates` contains each compatible receiving, ready-to-establish,
+///   or launching episode.
+/// - Receiving, ready-to-establish, launching, cancelled-receiving, and ready
+///   episodes remain in `records` but not in the bounded-capacity FIFO.
 ///
 /// The queue never invokes admission or wakes a task. Transition results carry
 /// that work across the cell lock boundary.
 #[derive(Debug, Default)]
 pub(super) struct WaiterQueue {
-    /// Every waiter still queued, receiving, or holding delivered capacity.
+    /// Every episode still waiting, launching, or holding a terminal result.
     records: HashMap<WaiterId, WaiterRecord>,
     /// FIFO endpoints and demand for the records currently waiting.
     waiting: WaitingQueueState,
+    /// H1-compatible attempts still competing with a returned sender.
+    h1_candidates: BTreeSet<WaiterId>,
     /// Next cell-local waiter identity.
     next_waiter: u64,
     /// Next identity for a head-waiter demand episode.
@@ -49,13 +52,34 @@ pub(super) struct WaiterQueue {
 }
 
 impl WaiterQueue {
-    /// Appends a waiter and returns demand when an empty queue becomes active.
+    /// Registers one acquisition episode.
+    ///
+    /// An unbounded episode starts ready to establish. A bounded episode joins
+    /// the capacity FIFO and returns a snapshot only when it becomes the head.
     pub(super) fn register_waiter(
         &mut self,
         requirement: ProtocolRequirement,
         eligibility_group: &EligibilityGroup,
+        bounded: bool,
     ) -> (WaiterId, Option<DemandSnapshot>) {
         let waiter = self.take_waiter_id();
+        if !bounded {
+            self.records.insert(
+                waiter,
+                WaiterRecord {
+                    requirement,
+                    state: WaiterState::ReadyToEstablish {
+                        permit: EstablishmentPermit::unbounded(),
+                    },
+                },
+            );
+            if requirement == ProtocolRequirement::H1Compatible {
+                self.h1_candidates.insert(waiter);
+            }
+            self.assert_consistent();
+            return (waiter, None);
+        }
+
         let previous = match &self.waiting {
             WaitingQueueState::Empty => None,
             WaitingQueueState::Active { tail, .. } => Some(*tail),
@@ -109,12 +133,125 @@ impl WaiterQueue {
         (waiter, snapshot)
     }
 
+    /// Returns the oldest acquisition episode that can accept HTTP/1.
+    ///
+    /// A bounded waiter remains a candidate after receiving capacity so a
+    /// returned sender can still beat its lazy or pool-owned establishment
+    /// attempt. Comparing waiter identities preserves arrival order between
+    /// that set and the current capacity-waiting head.
+    fn oldest_h1_candidate(&self) -> Option<WaiterId> {
+        let waiting = match &self.waiting {
+            WaitingQueueState::Active { head, .. }
+                if self.records[head].requirement == ProtocolRequirement::H1Compatible =>
+            {
+                Some(*head)
+            }
+            WaitingQueueState::Empty | WaitingQueueState::Active { .. } => None,
+        };
+        match (waiting, self.h1_candidates.first().copied()) {
+            (Some(waiting), Some(launching)) => Some(waiting.min(launching)),
+            (Some(waiting), None) => Some(waiting),
+            (None, launching) => launching,
+        }
+    }
+
+    /// Returns whether a returned H1 can satisfy a live acquisition episode.
+    pub(super) fn can_accept_h1(&self) -> bool {
+        self.oldest_h1_candidate().is_some()
+    }
+
+    /// Returns whether a previously admitted local attempt still accepts H1.
+    ///
+    /// These candidates left the capacity FIFO before its current head and
+    /// therefore precede a claim aimed at that newer aggregate demand.
+    pub(super) fn has_prior_h1_candidate(&self) -> bool {
+        !self.h1_candidates.is_empty()
+    }
+
+    /// Commits a returned HTTP/1 sender to the oldest compatible episode.
+    ///
+    /// A waiter still awaiting capacity leaves the demand FIFO. A waiter that
+    /// already owns establishment capacity returns that permit after unlock.
+    /// If capacity is crossing from admission, the H1 result remains pending
+    /// until that crossing returns its permit and closes its delivery fence.
+    pub(super) fn install_returned_h1(
+        &mut self,
+        result: AcquisitionResult,
+        eligibility_group: &EligibilityGroup,
+    ) -> H1Install {
+        let Some(waiter) = self.oldest_h1_candidate() else {
+            return H1Install::rejected(result);
+        };
+
+        if matches!(
+            self.records.get(&waiter).map(|record| &record.state),
+            Some(WaiterState::Waiting { .. })
+        ) {
+            let removed = self.pop_head(eligibility_group);
+            debug_assert_eq!(removed.waiter, waiter);
+            let record = self
+                .records
+                .get_mut(&waiter)
+                .expect("HTTP/1 target waiter disappeared");
+            let WaiterState::Waiting { waker, .. } = &mut record.state else {
+                unreachable!("HTTP/1 target waiter left the waiting state");
+            };
+            let waker = waker.take();
+            record.state = WaiterState::Ready(result);
+            let retired =
+                DemandSnapshot::inactive(removed.demand.id, removed.demand.version.next());
+            self.assert_consistent();
+            return H1Install {
+                demand_updates: [Some(retired), removed.successor],
+                returned_event: None,
+                waker,
+            };
+        }
+
+        let record = self
+            .records
+            .get_mut(&waiter)
+            .expect("HTTP/1 candidate waiter disappeared");
+        let (returned_event, waker) = match &mut record.state {
+            WaiterState::Receiving {
+                waker: _,
+                pending_h1,
+            } => {
+                debug_assert!(pending_h1.is_none());
+                *pending_h1 = Some(result);
+                (None, None)
+            }
+            WaiterState::ReadyToEstablish { .. } | WaiterState::Launching { .. } => {
+                let previous = std::mem::replace(&mut record.state, WaiterState::Ready(result));
+                match previous {
+                    WaiterState::ReadyToEstablish { permit } => {
+                        (Some(AcquisitionEvent::Establish(permit)), None)
+                    }
+                    WaiterState::Launching { waker, .. } => (None, waker),
+                    _ => unreachable!("HTTP/1 candidate changed state under the cell lock"),
+                }
+            }
+            WaiterState::Waiting { .. }
+            | WaiterState::CancelledReceiving { .. }
+            | WaiterState::Ready(_) => {
+                unreachable!("HTTP/1 candidate was not eligible for a returned sender")
+            }
+        };
+        self.h1_candidates.remove(&waiter);
+        self.assert_consistent();
+        H1Install {
+            demand_updates: [None, None],
+            returned_event,
+            waker,
+        }
+    }
+
     /// Cancels one waiter and detaches all cross-lock cleanup work.
     ///
     /// Removing the head retires its demand and starts a successor episode.
     /// Removing another waiting record leaves the active demand unchanged.
-    /// Cancellation during delivery leaves a marker for lease installation to
-    /// observe. A ready lease is returned to the caller for drop after unlock.
+    /// Cancellation during delivery leaves a marker for result installation to
+    /// observe. A ready result is returned to the caller for cleanup after unlock.
     pub(super) fn cancel_waiter(
         &mut self,
         waiter: WaiterId,
@@ -143,33 +280,46 @@ impl WaiterQueue {
             };
             WaiterCancellation {
                 demand_updates,
-                returned_lease: None,
+                returned_events: [None, None],
             }
         } else if matches!(state, WaiterState::Receiving { .. }) {
-            let record = self
-                .records
-                .get_mut(&waiter)
-                .expect("receiving waiter disappeared");
-            let WaiterState::Receiving { waker } = &mut record.state else {
+            self.h1_candidates.remove(&waiter);
+            let record = self.records.get_mut(&waiter)?;
+            let WaiterState::Receiving { waker, pending_h1 } = &mut record.state else {
                 unreachable!("receiving waiter changed state under the cell lock");
             };
             let waker = waker.take();
-            record.state = WaiterState::CancelledReceiving { waker };
+            let pending_h1 = pending_h1.take();
+            record.state = WaiterState::CancelledReceiving { waker, pending_h1 };
             WaiterCancellation {
                 demand_updates: [None, None],
-                returned_lease: None,
+                returned_events: [None, None],
             }
-        } else if matches!(state, WaiterState::Ready(_)) {
-            // Validate before detaching the lease. Once the lease is local,
+        } else if matches!(
+            state,
+            WaiterState::ReadyToEstablish { .. } | WaiterState::Ready(_)
+        ) {
+            // Validate before detaching the event. Once it is local,
             // this method must return without another panic-capable check.
             self.assert_consistent();
             let record = self.records.remove(&waiter)?;
-            let WaiterState::Ready(lease) = record.state else {
-                unreachable!("ready waiter changed state under the cell lock");
+            self.h1_candidates.remove(&waiter);
+            let event = match record.state {
+                WaiterState::ReadyToEstablish { permit } => AcquisitionEvent::Establish(permit),
+                WaiterState::Ready(result) => AcquisitionEvent::Complete(result),
+                _ => unreachable!("ready waiter changed state under the cell lock"),
             };
             return Some(WaiterCancellation {
                 demand_updates: [None, None],
-                returned_lease: Some(lease),
+                returned_events: [Some(event), None],
+            });
+        } else if matches!(state, WaiterState::Launching { .. }) {
+            self.assert_consistent();
+            self.h1_candidates.remove(&waiter);
+            self.records.remove(&waiter)?;
+            return Some(WaiterCancellation {
+                demand_updates: [None, None],
+                returned_events: [None, None],
             });
         } else {
             debug_assert!(matches!(state, WaiterState::CancelledReceiving { .. }));
@@ -180,7 +330,7 @@ impl WaiterQueue {
         Some(cancellation)
     }
 
-    /// Returns a ready lease or records the latest waker for a pending waiter.
+    /// Returns the next event or records the latest waker for a pending waiter.
     ///
     /// # Panics
     ///
@@ -190,25 +340,52 @@ impl WaiterQueue {
         &mut self,
         waiter: WaiterId,
         cx: &mut Context<'_>,
-    ) -> Poll<CapacityLease> {
+    ) -> Poll<AcquisitionEvent> {
+        if matches!(
+            self.records.get(&waiter).map(|record| &record.state),
+            Some(WaiterState::ReadyToEstablish { .. })
+        ) {
+            self.assert_consistent();
+            let record = self
+                .records
+                .get_mut(&waiter)
+                .expect("ready establishment waiter disappeared");
+            let previous = std::mem::replace(
+                &mut record.state,
+                WaiterState::Launching {
+                    started: false,
+                    waker: None,
+                },
+            );
+            let WaiterState::ReadyToEstablish { permit } = previous else {
+                unreachable!("ready establishment waiter changed state under the cell lock");
+            };
+            return Poll::Ready(AcquisitionEvent::Establish(permit));
+        }
+
         if matches!(
             self.records.get(&waiter).map(|record| &record.state),
             Some(WaiterState::Ready(_))
         ) {
             return Poll::Ready(
-                self.take_ready_lease(waiter)
-                    .expect("ready waiter lost its capacity lease"),
+                self.take_ready_result(waiter)
+                    .map(AcquisitionEvent::Complete)
+                    .expect("ready waiter lost its acquisition result"),
             );
         }
 
         let record = self
             .records
             .get_mut(&waiter)
-            .expect("polled a cancelled, consumed, or unknown capacity waiter");
+            .expect("polled a cancelled, consumed, or unknown acquisition waiter");
         let waker = match &mut record.state {
-            WaiterState::Waiting { waker, .. } | WaiterState::Receiving { waker } => waker,
-            WaiterState::CancelledReceiving { .. } => panic!("polled a cancelled capacity waiter"),
-            WaiterState::Ready(_) => {
+            WaiterState::Waiting { waker, .. }
+            | WaiterState::Receiving { waker, .. }
+            | WaiterState::Launching { waker, .. } => waker,
+            WaiterState::CancelledReceiving { .. } => {
+                panic!("polled a cancelled acquisition waiter")
+            }
+            WaiterState::ReadyToEstablish { .. } | WaiterState::Ready(_) => {
                 unreachable!("ready waiter changed state under the cell lock")
             }
         };
@@ -219,6 +396,30 @@ impl WaiterQueue {
             *waker = Some(cx.waker().clone());
         }
         Poll::Pending
+    }
+
+    /// Claims pool ownership immediately before an attempt's first poll.
+    ///
+    /// A returned H1 or cancellation that wins first removes the lazy
+    /// attempt's authority, allowing its unpolled future and permit to drop.
+    pub(super) fn start_establishment(&mut self, waiter: WaiterId) -> bool {
+        let Some(record) = self.records.get_mut(&waiter) else {
+            return false;
+        };
+        match &mut record.state {
+            WaiterState::Launching { started, .. } if !*started => {
+                *started = true;
+                self.assert_consistent();
+                true
+            }
+            WaiterState::Ready(AcquisitionResult::H1(_)) => false,
+            WaiterState::Launching { started: true, .. } => {
+                panic!("establishment attempt was started more than once")
+            }
+            _ => {
+                panic!("establishment start did not name a launching waiter")
+            }
+        }
     }
 
     /// Reserves the current head when a delivery still names its demand episode.
@@ -252,7 +453,14 @@ impl WaiterQueue {
             unreachable!("reserved queue head left the waiting state");
         };
         let waker = waker.take();
-        record.state = WaiterState::Receiving { waker };
+        let accepts_h1 = record.requirement == ProtocolRequirement::H1Compatible;
+        record.state = WaiterState::Receiving {
+            waker,
+            pending_h1: None,
+        };
+        if accepts_h1 {
+            self.h1_candidates.insert(removed.waiter);
+        }
 
         self.assert_consistent();
         DeliveryReservation::Reserved {
@@ -261,55 +469,170 @@ impl WaiterQueue {
         }
     }
 
-    /// Completes the unlocked delivery crossing without panicking while the
-    /// incoming lease remains a droppable local.
+    /// Completes the unlocked capacity crossing without panicking while the
+    /// incoming permit remains a droppable local.
     ///
-    /// A live receiver takes ownership of the lease in [`WaiterState::Ready`]
-    /// before its state is checked. If cancellation won, or the reserved
-    /// record is invalid, the lease is returned without another panic-capable
-    /// operation. The caller refunnels it and reports invalid state only after
-    /// unlocking.
-    pub(super) fn install_delivered_lease(
+    /// A live receiver takes ownership of the permit before another
+    /// panic-capable operation. If an H1 return already won, both resources
+    /// leave the lock as separate events and the permit is refunnelled.
+    pub(super) fn install_capacity(
         &mut self,
         waiter: WaiterId,
-        lease: CapacityLease,
-    ) -> LeaseInstallResult {
+        permit: EstablishmentPermit,
+    ) -> ResultInstall {
         let Some(record) = self.records.get_mut(&waiter) else {
-            return LeaseInstallResult::invalid(lease, LeaseInstallError::MissingWaiter);
+            return ResultInstall::invalid(
+                AcquisitionEvent::Establish(permit),
+                ResultInstallError::MissingWaiter,
+            );
         };
 
         match &mut record.state {
-            WaiterState::Receiving { waker } => {
+            WaiterState::Receiving { waker, pending_h1 } => {
                 let waker = waker.take();
-                record.state = WaiterState::Ready(lease);
-                // The lease is state-owned before this check can panic.
+                if let Some(h1) = pending_h1.take() {
+                    record.state = WaiterState::Ready(h1);
+                    self.h1_candidates.remove(&waiter);
+                    self.assert_consistent();
+                    return ResultInstall {
+                        returned_events: [Some(AcquisitionEvent::Establish(permit)), None],
+                        waker,
+                        error: None,
+                        accepted: false,
+                    };
+                }
+                record.state = WaiterState::ReadyToEstablish { permit };
+                // The permit is state-owned before this check can panic.
                 self.assert_consistent();
-                LeaseInstallResult {
-                    returned_lease: None,
+                ResultInstall {
+                    returned_events: [None, None],
                     waker,
                     error: None,
+                    accepted: true,
                 }
             }
-            WaiterState::CancelledReceiving { waker } => {
+            WaiterState::CancelledReceiving { waker, pending_h1 } => {
                 let waker = waker.take();
-                // The state was revalidated above while the same cell lock was
-                // held, so removal cannot fail. Avoid an assertion here:
-                // `lease` must cross the lock boundary even if state is broken.
+                let pending_h1 = pending_h1.take();
                 self.records.remove(&waiter);
-                LeaseInstallResult {
-                    returned_lease: Some(lease),
+                ResultInstall {
+                    returned_events: [
+                        pending_h1.map(AcquisitionEvent::Complete),
+                        Some(AcquisitionEvent::Establish(permit)),
+                    ],
                     waker,
                     error: None,
+                    accepted: false,
                 }
             }
-            WaiterState::Waiting { .. } | WaiterState::Ready(_) => {
-                LeaseInstallResult::invalid(lease, LeaseInstallError::UnexpectedState)
-            }
+            WaiterState::Waiting { .. }
+            | WaiterState::ReadyToEstablish { .. }
+            | WaiterState::Launching { .. }
+            | WaiterState::Ready(_) => ResultInstall::invalid(
+                AcquisitionEvent::Establish(permit),
+                ResultInstallError::UnexpectedState,
+            ),
         }
     }
 
-    /// Removes a ready waiter and transfers ownership of its lease.
-    pub(super) fn take_ready_lease(&mut self, waiter: WaiterId) -> Option<CapacityLease> {
+    /// Installs a borrowed HTTP/1 result after its target was reserved.
+    ///
+    /// A local return may have won while the borrowed sender crossed its
+    /// source and target locks. In that case the local result stays ready and
+    /// the borrowed result leaves the lock for ordinary source return.
+    pub(super) fn install_borrowed_h1(
+        &mut self,
+        waiter: WaiterId,
+        result: AcquisitionResult,
+    ) -> ResultInstall {
+        let Some(record) = self.records.get_mut(&waiter) else {
+            return ResultInstall::invalid(
+                AcquisitionEvent::Complete(result),
+                ResultInstallError::MissingWaiter,
+            );
+        };
+
+        match &mut record.state {
+            WaiterState::Receiving { waker, pending_h1 } => {
+                let waker = waker.take();
+                if let Some(local_h1) = pending_h1.take() {
+                    record.state = WaiterState::Ready(local_h1);
+                    self.h1_candidates.remove(&waiter);
+                    self.assert_consistent();
+                    return ResultInstall {
+                        returned_events: [Some(AcquisitionEvent::Complete(result)), None],
+                        waker,
+                        error: None,
+                        accepted: false,
+                    };
+                }
+                record.state = WaiterState::Ready(result);
+                self.h1_candidates.remove(&waiter);
+                self.assert_consistent();
+                ResultInstall {
+                    returned_events: [None, None],
+                    waker,
+                    error: None,
+                    accepted: true,
+                }
+            }
+            WaiterState::CancelledReceiving { waker, pending_h1 } => {
+                let waker = waker.take();
+                let pending_h1 = pending_h1.take();
+                self.records.remove(&waiter);
+                ResultInstall {
+                    returned_events: [
+                        pending_h1.map(AcquisitionEvent::Complete),
+                        Some(AcquisitionEvent::Complete(result)),
+                    ],
+                    waker,
+                    error: None,
+                    accepted: false,
+                }
+            }
+            WaiterState::Waiting { .. }
+            | WaiterState::ReadyToEstablish { .. }
+            | WaiterState::Launching { .. }
+            | WaiterState::Ready(_) => ResultInstall::invalid(
+                AcquisitionEvent::Complete(result),
+                ResultInstallError::UnexpectedState,
+            ),
+        }
+    }
+
+    /// Commits one establishment outcome if its launching waiter is still live.
+    pub(super) fn install_establishment_result(
+        &mut self,
+        waiter: WaiterId,
+        result: AcquisitionResult,
+    ) -> ResultInstall {
+        let Some(record) = self.records.get_mut(&waiter) else {
+            return ResultInstall::rejected(AcquisitionEvent::Complete(result));
+        };
+        if matches!(record.state, WaiterState::Ready(AcquisitionResult::H1(_))) {
+            return ResultInstall::rejected(AcquisitionEvent::Complete(result));
+        }
+        let WaiterState::Launching { started, waker } = &mut record.state else {
+            return ResultInstall::invalid(
+                AcquisitionEvent::Complete(result),
+                ResultInstallError::UnexpectedState,
+            );
+        };
+        debug_assert!(*started, "unstarted establishment attempt completed");
+        let waker = waker.take();
+        record.state = WaiterState::Ready(result);
+        self.h1_candidates.remove(&waiter);
+        self.assert_consistent();
+        ResultInstall {
+            returned_events: [None, None],
+            waker,
+            error: None,
+            accepted: true,
+        }
+    }
+
+    /// Removes a ready waiter and transfers ownership of its result.
+    pub(super) fn take_ready_result(&mut self, waiter: WaiterId) -> Option<AcquisitionResult> {
         if !matches!(
             self.records.get(&waiter).map(|record| &record.state),
             Some(WaiterState::Ready(_))
@@ -317,14 +640,14 @@ impl WaiterQueue {
             return None;
         }
 
-        // Validate before detaching the lease. Returning it must be the last
+        // Validate before detaching the result. Returning it must be the last
         // operation performed while the cell lock is held.
         self.assert_consistent();
         let record = self.records.remove(&waiter)?;
-        let WaiterState::Ready(lease) = record.state else {
+        let WaiterState::Ready(result) = record.state else {
             unreachable!("ready waiter changed state under the cell lock");
         };
-        Some(lease)
+        Some(result)
     }
 
     /// Unlinks the FIFO head and installs any successor demand.
@@ -550,6 +873,27 @@ impl WaiterQueue {
                 );
             }
         }
+
+        let expected_h1_candidates = self
+            .records
+            .iter()
+            .filter_map(|(waiter, record)| {
+                (record.requirement == ProtocolRequirement::H1Compatible
+                    && matches!(
+                        record.state,
+                        WaiterState::Receiving {
+                            pending_h1: None,
+                            ..
+                        } | WaiterState::ReadyToEstablish { .. }
+                            | WaiterState::Launching { .. }
+                    ))
+                .then_some(*waiter)
+            })
+            .collect::<BTreeSet<_>>();
+        assert_eq!(
+            expected_h1_candidates, self.h1_candidates,
+            "HTTP/1 acquisition candidates did not match waiter state"
+        );
     }
 
     #[cfg(test)]
@@ -585,12 +929,12 @@ enum WaitingQueueState {
     },
 }
 
-/// One request retained while waiting for or owning delivered capacity.
+/// One request retained while waiting for or owning an acquisition result.
 #[derive(Debug)]
 struct WaiterRecord {
     /// Protocol requirement published while this waiter is the head.
     requirement: ProtocolRequirement,
-    /// Queue residence, delivery state, and any owned lease.
+    /// Queue residence, delivery state, and any owned result.
     state: WaiterState,
 }
 
@@ -603,21 +947,37 @@ enum WaiterState {
         previous: Option<WaiterId>,
         /// Newer waiting record, or `None` at the tail.
         next: Option<WaiterId>,
-        /// Latest task waiting for capacity.
+        /// Latest task waiting for an acquisition result.
         waker: Option<Waker>,
     },
-    /// A delivery selected the waiter but has not installed its lease.
+    /// Capacity delivery selected the waiter but has not installed its permit.
     Receiving {
         /// Latest task waiting for the crossing delivery.
         waker: Option<Waker>,
+        /// H1 return that won while capacity was crossing.
+        pending_h1: Option<AcquisitionResult>,
     },
     /// Cancellation won while a delivery was crossing without locks held.
     CancelledReceiving {
         /// Task detached for wake after the delivery is refunnelled.
         waker: Option<Waker>,
+        /// H1 result returned after the crossing closes, if one arrived first.
+        pending_h1: Option<AcquisitionResult>,
     },
-    /// The waiter owns a delivered capacity lease.
-    Ready(CapacityLease),
+    /// Capacity is ready to start an establishment attempt.
+    ReadyToEstablish {
+        /// Optional bounded-origin capacity owned until connection install.
+        permit: EstablishmentPermit,
+    },
+    /// Establishment may be lazy or pool-owned and races a returned H1.
+    Launching {
+        /// Whether the owner partition claimed the first connector poll.
+        started: bool,
+        /// Latest task waiting for the attempt or returned H1 to complete.
+        waker: Option<Waker>,
+    },
+    /// The waiter owns its terminal acquisition result.
+    Ready(AcquisitionResult),
 }
 
 /// Cell-local ownership of the aggregate head demand.
@@ -643,7 +1003,7 @@ impl DemandTicket {
     }
 }
 
-/// Result of reserving a target for one unlocked capacity delivery.
+/// Result of reserving a target for one unlocked one-to-one delivery.
 pub(super) enum DeliveryReservation {
     /// The current head was reserved and may have a successor demand.
     Reserved {
@@ -658,36 +1018,73 @@ pub(super) enum DeliveryReservation {
 pub(super) struct WaiterCancellation {
     /// Demand retirement and optional successor published after unlocking.
     pub(super) demand_updates: [Option<DemandSnapshot>; 2],
-    /// Delivered capacity returned after unlocking.
-    pub(super) returned_lease: Option<CapacityLease>,
+    /// Intermediate and terminal events returned for cleanup after unlocking.
+    pub(super) returned_events: [Option<AcquisitionEvent>; 2],
 }
 
-/// Invalid state observed while a committed lease was crossing to the cell.
+/// Values detached after attempting cell-local HTTP/1 service.
+pub(super) struct H1Install {
+    /// Demand retirement and optional successor published after unlocking.
+    pub(super) demand_updates: [Option<DemandSnapshot>; 2],
+    /// Establishment permit or rejected H1 returned after unlocking.
+    pub(super) returned_event: Option<AcquisitionEvent>,
+    /// Target task woken after demand publication.
+    pub(super) waker: Option<Waker>,
+}
+
+impl H1Install {
+    /// Preserves a result when no live episode can accept HTTP/1.
+    fn rejected(result: AcquisitionResult) -> Self {
+        Self {
+            demand_updates: [None, None],
+            returned_event: Some(AcquisitionEvent::Complete(result)),
+            waker: None,
+        }
+    }
+}
+
+/// Invalid state observed while a committed event was crossing to the cell.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum LeaseInstallError {
+pub(super) enum ResultInstallError {
     /// The waiter reserved for the delivery no longer exists.
     MissingWaiter,
     /// The waiter exists but cannot receive the reserved delivery.
     UnexpectedState,
 }
 
-/// Values produced after installing or refunnelling a committed delivery.
-pub(super) struct LeaseInstallResult {
-    /// Capacity rejected by cancellation and returned after unlocking.
-    pub(super) returned_lease: Option<CapacityLease>,
+/// Values produced after installing or rejecting a committed event.
+pub(super) struct ResultInstall {
+    /// Events rejected by cancellation and returned after unlocking.
+    ///
+    /// When both are present, the H1 fallback precedes the capacity fallback
+    /// so successor demand can reuse the connection before starting another.
+    pub(super) returned_events: [Option<AcquisitionEvent>; 2],
     /// Waiting task woken after the delivery fence closes.
     pub(super) waker: Option<Waker>,
-    /// Invalid state reported only after the returned lease is refunnelled.
-    pub(super) error: Option<LeaseInstallError>,
+    /// Invalid state reported only after the returned result runs its fallback.
+    pub(super) error: Option<ResultInstallError>,
+    /// Whether target state became authoritative for the incoming event.
+    pub(super) accepted: bool,
 }
 
-impl LeaseInstallResult {
-    /// Preserves the incoming lease for unlocked cleanup after invalid state.
-    fn invalid(lease: CapacityLease, error: LeaseInstallError) -> Self {
+impl ResultInstall {
+    /// Preserves the incoming result for unlocked cleanup after invalid state.
+    fn invalid(event: AcquisitionEvent, error: ResultInstallError) -> Self {
         Self {
-            returned_lease: Some(lease),
+            returned_events: [Some(event), None],
             waker: None,
             error: Some(error),
+            accepted: false,
+        }
+    }
+
+    /// Preserves a losing result for its ordinary unlocked fallback.
+    fn rejected(event: AcquisitionEvent) -> Self {
+        Self {
+            returned_events: [Some(event), None],
+            waker: None,
+            error: None,
+            accepted: false,
         }
     }
 }
@@ -717,10 +1114,16 @@ mod tests {
     #[test]
     fn head_cancellation_uses_the_successors_protocol_requirement() {
         let mut queue = WaiterQueue::default();
-        let (head, initial) =
-            queue.register_waiter(ProtocolRequirement::H2Required, &EligibilityGroup::Pool);
-        let (_successor, no_new_demand) =
-            queue.register_waiter(ProtocolRequirement::H1Compatible, &EligibilityGroup::Pool);
+        let (head, initial) = queue.register_waiter(
+            ProtocolRequirement::H2Required,
+            &EligibilityGroup::Pool,
+            true,
+        );
+        let (_successor, no_new_demand) = queue.register_waiter(
+            ProtocolRequirement::H1Compatible,
+            &EligibilityGroup::Pool,
+            true,
+        );
         assert!(initial.is_some());
         assert!(no_new_demand.is_none());
 
@@ -741,9 +1144,16 @@ mod tests {
     #[test]
     fn retired_demand_cannot_reserve_the_successor() {
         let mut queue = WaiterQueue::default();
-        let (head, _initial) =
-            queue.register_waiter(ProtocolRequirement::H1Compatible, &EligibilityGroup::Pool);
-        queue.register_waiter(ProtocolRequirement::H1Compatible, &EligibilityGroup::Pool);
+        let (head, _initial) = queue.register_waiter(
+            ProtocolRequirement::H1Compatible,
+            &EligibilityGroup::Pool,
+            true,
+        );
+        queue.register_waiter(
+            ProtocolRequirement::H1Compatible,
+            &EligibilityGroup::Pool,
+            true,
+        );
         queue
             .cancel_waiter(head, &EligibilityGroup::Pool)
             .expect("head waiter was not cancelled");

@@ -12,10 +12,19 @@
 //! to finish.
 
 use super::admission::CapacityLease;
+use super::origin::OriginKey;
 use super::partition::PartitionId;
 use crate::sync::{Arc, Mutex};
 pub use aws_smithy_runtime_api::client::connection::ConnectionId;
+use aws_smithy_runtime_api::client::connection::ConnectionMetadata;
+use hyper::rt::{Read, ReadBufCursor, Write};
+use hyper_util::client::legacy::connect::{Connected, Connection};
+use pin_project_lite::pin_project;
 use std::fmt;
+use std::io::{self, IoSlice};
+use std::net::SocketAddr;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 
 /// Why a connection stopped accepting new work.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -39,12 +48,129 @@ pub enum CloseReason {
     OwnerRuntimeShutdown,
 }
 
+/// Protocol selected for one installed physical connection.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum NegotiatedProtocol {
+    /// HTTP/1.1 with one exclusive request sender.
+    Http1,
+    /// HTTP/2 with a multiplexed request sender.
+    Http2,
+}
+
+/// Immutable identity and transport facts shared by a connection's owners.
+///
+/// The protocol record, request metadata, tracing, and future lifecycle events
+/// all retain this one allocation rather than reconstructing origin or address
+/// data at each transition.
+#[derive(Debug)]
+pub(super) struct ConnectionInfo {
+    /// Stable identity assigned by the owning pool.
+    id: ConnectionId,
+    /// Canonical origin this connection may serve.
+    origin: OriginKey,
+    /// Partition that retains the transport and protocol driver.
+    owner_partition: PartitionId,
+    /// Protocol selected by configuration or ALPN.
+    protocol: NegotiatedProtocol,
+    /// Local socket address reported by the connector, when available.
+    local_addr: Option<SocketAddr>,
+    /// Remote socket address reported by the connector, when available.
+    remote_addr: Option<SocketAddr>,
+    /// Whether the transport reaches the origin through a proxy.
+    proxied: bool,
+}
+
+impl ConnectionInfo {
+    /// Captures immutable facts when protocol establishment succeeds.
+    pub(super) fn new(
+        id: ConnectionId,
+        origin: OriginKey,
+        owner_partition: PartitionId,
+        protocol: NegotiatedProtocol,
+        local_addr: Option<SocketAddr>,
+        remote_addr: Option<SocketAddr>,
+        proxied: bool,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            id,
+            origin,
+            owner_partition,
+            protocol,
+            local_addr,
+            remote_addr,
+            proxied,
+        })
+    }
+
+    /// Returns the pool-assigned physical connection identity.
+    pub(super) fn id(&self) -> ConnectionId {
+        self.id
+    }
+
+    /// Returns the canonical origin this connection may serve.
+    pub(super) fn origin(&self) -> &OriginKey {
+        &self.origin
+    }
+
+    /// Returns the partition that owns this connection's I/O and driver.
+    pub(super) fn owner_partition(&self) -> PartitionId {
+        self.owner_partition
+    }
+
+    /// Returns the established HTTP protocol.
+    pub(super) fn protocol(&self) -> NegotiatedProtocol {
+        self.protocol
+    }
+
+    /// Returns the connector-reported local socket address.
+    pub(super) fn local_addr(&self) -> Option<SocketAddr> {
+        self.local_addr
+    }
+
+    /// Returns the connector-reported remote socket address.
+    pub(super) fn remote_addr(&self) -> Option<SocketAddr> {
+        self.remote_addr
+    }
+
+    /// Returns whether the origin is reached through a proxy.
+    pub(super) fn is_proxied(&self) -> bool {
+        self.proxied
+    }
+
+    /// Builds Smithy metadata with close authority for this H1 generation.
+    pub(super) fn metadata(&self, close: super::cell::h1::H1CloseHandle) -> ConnectionMetadata {
+        let mut builder = ConnectionMetadata::builder()
+            .proxied(self.proxied)
+            .connection_id(self.id)
+            .poison_fn(move || {
+                close.close(CloseReason::Poisoned);
+            });
+        builder
+            .set_local_addr(self.local_addr)
+            .set_remote_addr(self.remote_addr);
+        builder.build()
+    }
+
+    /// Creates synthetic HTTP/1 information for state-machine tests.
+    #[cfg(test)]
+    pub(super) fn for_test(id: ConnectionId, owner_partition: PartitionId) -> Arc<Self> {
+        Self::new(
+            id,
+            OriginKey::from_parts(http_1x::uri::Scheme::HTTPS, "example.com", None)
+                .expect("synthetic test origin is valid"),
+            owner_partition,
+            NegotiatedProtocol::Http1,
+            None,
+            None,
+            false,
+        )
+    }
+}
+
 /// Shared protocol-independent ownership for one installed connection.
 pub(super) struct ConnectionState {
-    /// Stable identity shared with metadata and lifecycle events.
-    id: ConnectionId,
-    /// Partition that retains the connection's I/O and protocol driver.
-    owner_partition: PartitionId,
+    /// Identity and transport facts shared with metadata and lifecycle events.
+    info: Arc<ConnectionInfo>,
     /// Dispatch, logical-close, and root-I/O completion state.
     lifecycle: Mutex<LifecycleState>,
 }
@@ -54,11 +180,8 @@ impl ConnectionState {
     ///
     /// The returned guard is the unique physical-lifetime owner and must move
     /// with the root I/O task.
-    pub(super) fn unbounded(
-        id: ConnectionId,
-        owner_partition: PartitionId,
-    ) -> (Arc<Self>, PhysicalConnectionGuard) {
-        Self::new(id, owner_partition, None)
+    pub(super) fn unbounded(info: Arc<ConnectionInfo>) -> (Arc<Self>, PhysicalConnectionGuard) {
+        Self::new(info, None)
     }
 
     /// Creates a connection that takes ownership of one bounded-origin slot.
@@ -67,22 +190,19 @@ impl ConnectionState {
     /// with the root I/O task. Logical close returns `lease` independently of
     /// that guard.
     pub(super) fn bounded(
-        id: ConnectionId,
-        owner_partition: PartitionId,
+        info: Arc<ConnectionInfo>,
         lease: CapacityLease,
     ) -> (Arc<Self>, PhysicalConnectionGuard) {
-        Self::new(id, owner_partition, Some(lease))
+        Self::new(info, Some(lease))
     }
 
     /// Builds shared connection state and its unique physical-lifetime guard.
     fn new(
-        id: ConnectionId,
-        owner_partition: PartitionId,
+        info: Arc<ConnectionInfo>,
         lease: Option<CapacityLease>,
     ) -> (Arc<Self>, PhysicalConnectionGuard) {
         let connection = Arc::new(Self {
-            id,
-            owner_partition,
+            info,
             lifecycle: Mutex::new(LifecycleState {
                 logical: LogicalState::Open { lease },
                 in_flight: 0,
@@ -98,12 +218,17 @@ impl ConnectionState {
 
     /// Returns this connection's stable identity.
     pub(super) fn id(&self) -> ConnectionId {
-        self.id
+        self.info.id()
     }
 
     /// Returns the partition that owns this connection's I/O and driver.
     pub(super) fn owner_partition(&self) -> PartitionId {
-        self.owner_partition
+        self.info.owner_partition()
+    }
+
+    /// Returns immutable identity and transport facts for this connection.
+    pub(super) fn info(&self) -> &Arc<ConnectionInfo> {
+        &self.info
     }
 
     /// Attempts to commit one request against logical close.
@@ -146,6 +271,15 @@ impl ConnectionState {
             lease
         };
         drop(lease);
+        tracing::debug!(
+            connection_id = %self.id(),
+            owner_partition = ?self.owner_partition(),
+            origin_scheme = %self.info.origin().scheme(),
+            origin_host = self.info.origin().host(),
+            origin_port = ?self.info.origin().port(),
+            close_reason = ?reason,
+            "connection logically closed"
+        );
         true
     }
 
@@ -189,8 +323,7 @@ impl ConnectionState {
 impl fmt::Debug for ConnectionState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ConnectionState")
-            .field("id", &self.id)
-            .field("owner_partition", &self.owner_partition)
+            .field("info", &self.info)
             .field("lifecycle", &self.lifecycle)
             .finish()
     }
@@ -241,7 +374,7 @@ pub(super) struct DispatchGuard {
 impl DispatchGuard {
     /// Returns the identity of the connection carrying this dispatch.
     pub(super) fn connection_id(&self) -> ConnectionId {
-        self.connection.id
+        self.connection.id()
     }
 
     /// Consumes the guard and records request completion immediately.
@@ -293,18 +426,114 @@ impl Drop for PhysicalConnectionGuard {
     }
 }
 
+pin_project! {
+    /// Root transport wrapper whose drop proves physical connection completion.
+    ///
+    /// The wrapper moves intact through Hyper's driver and H1 upgrade path.
+    /// Logical close may happen earlier, but the physical guard remains armed
+    /// until the wrapped I/O itself is destroyed.
+    pub(super) struct ConnectionIo<T> {
+        #[pin]
+        inner: T,
+        // Declared after `inner` so transport destruction precedes the
+        // physical-completion signal.
+        physical: PhysicalConnectionGuard,
+    }
+}
+
+impl<T> ConnectionIo<T> {
+    /// Attaches the unique physical-lifetime guard to root transport I/O.
+    pub(super) fn new(inner: T, physical: PhysicalConnectionGuard) -> Self {
+        Self { inner, physical }
+    }
+
+    /// Returns the wrapped transport.
+    pub(super) fn get_ref(&self) -> &T {
+        &self.inner
+    }
+}
+
+impl<T> fmt::Debug for ConnectionIo<T>
+where
+    T: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ConnectionIo")
+            .field("inner", &self.inner)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<T> Connection for ConnectionIo<T>
+where
+    T: Connection,
+{
+    fn connected(&self) -> Connected {
+        self.inner.connected()
+    }
+}
+
+impl<T> Read for ConnectionIo<T>
+where
+    T: Read,
+{
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: ReadBufCursor<'_>,
+    ) -> Poll<io::Result<()>> {
+        Read::poll_read(self.project().inner, cx, buf)
+    }
+}
+
+impl<T> Write for ConnectionIo<T>
+where
+    T: Write,
+{
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        Write::poll_write(self.project().inner, cx, buf)
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Write::poll_flush(self.project().inner, cx)
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Write::poll_shutdown(self.project().inner, cx)
+    }
+
+    fn is_write_vectored(&self) -> bool {
+        self.inner.is_write_vectored()
+    }
+
+    fn poll_write_vectored(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        bufs: &[IoSlice<'_>],
+    ) -> Poll<io::Result<usize>> {
+        Write::poll_write_vectored(self.project().inner, cx, bufs)
+    }
+}
+
 #[cfg(all(test, not(smithy_http_client_loom)))]
 mod tests {
     use super::*;
     use crate::client::pool::admission::OriginAdmission;
     use std::num::NonZeroUsize;
 
+    fn test_info(id: u64) -> Arc<ConnectionInfo> {
+        ConnectionInfo::for_test(ConnectionId::new(id), PartitionId::from_index(0))
+    }
+
     #[test]
     fn logical_close_releases_capacity_before_physical_completion() {
         let origin = OriginAdmission::new(NonZeroUsize::new(1).unwrap());
         let lease = OriginAdmission::lease_for_test(&origin);
-        let (connection, physical) =
-            ConnectionState::bounded(ConnectionId::new(1), PartitionId::from_index(0), lease);
+        let (connection, physical) = ConnectionState::bounded(test_info(1), lease);
 
         assert!(connection.logical_close(CloseReason::Reclaimed));
         assert!(!connection.logical_close(CloseReason::PoolDropped));
@@ -321,8 +550,7 @@ mod tests {
 
     #[test]
     fn committed_dispatch_drains_after_logical_close() {
-        let (connection, _physical) =
-            ConnectionState::unbounded(ConnectionId::new(1), PartitionId::from_index(0));
+        let (connection, _physical) = ConnectionState::unbounded(test_info(1));
         let dispatch = ConnectionState::try_commit_dispatch(&connection).unwrap();
         assert_eq!(ConnectionId::new(1), dispatch.connection_id());
 
@@ -336,12 +564,49 @@ mod tests {
 
     #[test]
     fn physical_guard_is_created_once_with_the_connection() {
-        let (connection, physical) =
-            ConnectionState::unbounded(ConnectionId::new(1), PartitionId::from_index(0));
+        let (connection, physical) = ConnectionState::unbounded(test_info(1));
         assert_eq!(ConnectionId::new(1), connection.id());
         assert_eq!(PartitionId::from_index(0), connection.owner_partition());
         assert!(!connection.snapshot().physical_complete);
         physical.complete();
+        assert!(connection.snapshot().physical_complete);
+    }
+
+    #[test]
+    fn connection_state_retains_immutable_connection_info() {
+        let local_addr = "127.0.0.1:1234".parse().unwrap();
+        let remote_addr = "192.0.2.1:443".parse().unwrap();
+        let origin =
+            OriginKey::from_parts(http_1x::uri::Scheme::HTTPS, "example.com", None).unwrap();
+        let info = ConnectionInfo::new(
+            ConnectionId::new(7),
+            origin.clone(),
+            PartitionId::from_index(2),
+            NegotiatedProtocol::Http1,
+            Some(local_addr),
+            Some(remote_addr),
+            true,
+        );
+        let (connection, _physical) = ConnectionState::unbounded(info);
+
+        assert_eq!(ConnectionId::new(7), connection.info().id());
+        assert_eq!(&origin, connection.info().origin());
+        assert_eq!(PartitionId::from_index(2), connection.owner_partition());
+        assert_eq!(NegotiatedProtocol::Http1, connection.info().protocol());
+        assert_eq!(Some(local_addr), connection.info().local_addr());
+        assert_eq!(Some(remote_addr), connection.info().remote_addr());
+        assert!(connection.info().is_proxied());
+    }
+
+    #[test]
+    fn root_io_drop_completes_physical_lifetime() {
+        let (connection, physical) = ConnectionState::unbounded(test_info(1));
+        let io = ConnectionIo::new("transport", physical);
+        assert_eq!(&"transport", io.get_ref());
+        assert!(!connection.snapshot().physical_complete);
+
+        drop(io);
+
         assert!(connection.snapshot().physical_complete);
     }
 }
@@ -352,11 +617,14 @@ mod loom_tests {
     use crate::client::pool::admission::OriginAdmission;
     use std::num::NonZeroUsize;
 
+    fn test_info(id: u64) -> Arc<ConnectionInfo> {
+        ConnectionInfo::for_test(ConnectionId::new(id), PartitionId::from_index(0))
+    }
+
     #[test]
     fn dispatch_commit_linearizes_against_close() {
         loom::model(|| {
-            let (connection, _physical) =
-                ConnectionState::unbounded(ConnectionId::new(1), PartitionId::from_index(0));
+            let (connection, _physical) = ConnectionState::unbounded(test_info(1));
 
             let dispatch_connection = connection.clone();
             let dispatch = loom::thread::spawn(move || {
@@ -388,8 +656,7 @@ mod loom_tests {
         loom::model(|| {
             let origin = OriginAdmission::new(NonZeroUsize::new(1).unwrap());
             let lease = OriginAdmission::lease_for_test(&origin);
-            let (connection, _physical) =
-                ConnectionState::bounded(ConnectionId::new(1), PartitionId::from_index(0), lease);
+            let (connection, _physical) = ConnectionState::bounded(test_info(1), lease);
             let first_connection = connection.clone();
             let first =
                 loom::thread::spawn(move || first_connection.logical_close(CloseReason::Poisoned));

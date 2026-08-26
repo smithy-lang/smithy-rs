@@ -39,18 +39,7 @@ impl Partition {
     ///
     /// The binding is applied before connect. On Linux, using this setting
     /// may require `CAP_NET_RAW` or root privileges.
-    #[cfg(any(
-        target_os = "android",
-        target_os = "fuchsia",
-        target_os = "illumos",
-        target_os = "ios",
-        target_os = "linux",
-        target_os = "macos",
-        target_os = "solaris",
-        target_os = "tvos",
-        target_os = "visionos",
-        target_os = "watchos",
-    ))]
+    #[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
     pub fn interface(mut self, interface: impl Into<String>) -> Self {
         self.interface = Some(Arc::from(interface.into()));
         self
@@ -99,9 +88,13 @@ impl PartitionId {
     }
 }
 
-/// Spawns protocol drivers on a partition's owning runtime.
+/// Spawns connection-owned work on a partition's runtime.
+///
+/// This includes protocol drivers and short-lived tasks that finish connection
+/// establishment, return, or maintenance without moving the underlying I/O to
+/// the requesting runtime.
 pub trait DriverSpawner: fmt::Debug + Send + Sync + 'static {
-    /// Spawns a protocol driver future.
+    /// Spawns connection-owned work on the partition's runtime.
     fn spawn(&self, driver: Pin<Box<dyn Future<Output = ()> + Send + 'static>>);
 }
 
@@ -133,13 +126,6 @@ impl TokioDriverSpawner {
 #[cfg(feature = "rt-tokio")]
 impl DriverSpawner for TokioDriverSpawner {
     fn spawn(&self, driver: Pin<Box<dyn Future<Output = ()> + Send + 'static>>) {
-        debug_assert_eq!(
-            tokio::runtime::Handle::try_current()
-                .ok()
-                .map(|current| current.id()),
-            Some(self.handle.id()),
-            "driver spawned outside the partition's declared runtime"
-        );
         drop(self.handle.spawn(driver));
     }
 }
@@ -229,18 +215,32 @@ mod tests {
 
     #[cfg(all(feature = "rt-tokio", debug_assertions))]
     #[test]
-    #[should_panic(expected = "driver spawned outside the partition's declared runtime")]
-    fn tokio_spawner_diagnoses_foreign_runtime_use() {
+    fn tokio_spawner_accepts_work_from_a_foreign_runtime() {
         let owner = tokio::runtime::Builder::new_current_thread()
             .build()
             .unwrap();
         let foreign = tokio::runtime::Builder::new_current_thread()
             .build()
             .unwrap();
+        let owner_id = owner.handle().id();
+        let ran = Arc::new(AtomicBool::new(false));
+        let task_ran = ran.clone();
         let spawner = TokioDriverSpawner::from_handle(owner.handle().clone());
 
         foreign.block_on(async {
-            spawner.spawn(Box::pin(async {}));
+            spawner.spawn(Box::pin(async move {
+                assert_eq!(owner_id, tokio::runtime::Handle::current().id());
+                task_ran.store(true, Ordering::SeqCst);
+            }));
         });
+        owner.block_on(async {
+            for _ in 0..10 {
+                if ran.load(Ordering::SeqCst) {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        });
+        assert!(ran.load(Ordering::SeqCst));
     }
 }
