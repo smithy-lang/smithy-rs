@@ -154,17 +154,43 @@ private class SchemaProtocolCustomization(
                     val serviceNamespace = codegenContext.serviceShape.id.namespace
 
                     // Stored unconditionally, not just for the protocol this client was generated
-                    // for. Protocols whose wire format depends on model names — rpcv2Cbor routes to
-                    // `/service/{service}/operation/{operation}` — need the service shape name at
-                    // runtime, and `Config::builder().protocol(..)` lets a customer plug in such a
-                    // protocol regardless of what the model declared.
+                    // for. Protocols whose wire format depends on model facts — rpcv2Cbor routes to
+                    // `/service/{service}/operation/{operation}`, awsJson prefixes `X-Amz-Target`
+                    // with the service shape name, awsQuery sends `Version=`, restXml applies the
+                    // service `@xmlNamespace` as the root xmlns — need those facts at runtime, and
+                    // `Config::builder().protocol(..)` lets a customer plug in such a protocol
+                    // regardless of what the model declared. A customer cannot supply them because
+                    // only the model knows them.
+                    //
+                    // Kept as separate entries rather than one aggregate: `ConfigBag` is
+                    // `TypeId`-keyed, so each protocol loads exactly what it needs and no shared
+                    // struct accretes protocol-specific fields. They are service-scoped and stored
+                    // once per client here, unlike `Metadata`, which is operation-scoped and
+                    // re-emitted per operation.
                     // See https://github.com/smithy-lang/smithy-rs/issues/4801.
                     rustTemplate(
                         """
                         ${section.newLayerName}.store_put(#{ServiceShapeName}::new(${serviceShapeName.dq()}));
+                        ${section.newLayerName}.store_put(#{ServiceVersion}::new(${codegenContext.serviceShape.version.dq()}));
                         """,
                         "ServiceShapeName" to smithySchema.resolve("protocol::ServiceShapeName"),
+                        "ServiceVersion" to smithySchema.resolve("protocol::ServiceVersion"),
                     )
+
+                    // `@xmlNamespace` is a prelude trait, so it is resolvable from any model rather
+                    // than only from a restXml one — but it is optional, so there is nothing to
+                    // store when the service does not declare it.
+                    codegenContext.serviceShape.getTrait(XmlNamespaceTrait::class.java).orElse(null)
+                        ?.let { ns ->
+                            val prefix =
+                                ns.prefix.orElse(null)?.let { "Some(${it.dq()}.into())" } ?: "None"
+                            rustTemplate(
+                                """
+                                ${section.newLayerName}.store_put(#{ServiceXmlNamespace}::new(${ns.uri.dq()}, $prefix));
+                                """,
+                                "ServiceXmlNamespace" to smithySchema.resolve("protocol::ServiceXmlNamespace"),
+                            )
+                        }
 
                     val (protocolType, constructor) =
                         when {
@@ -173,27 +199,23 @@ private class SchemaProtocolCustomization(
                                     "new().with_default_namespace(${serviceNamespace.dq()})"
                             protocol == AwsJson1_0Trait.ID ->
                                 smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to
-                                    "aws_json_1_0(${serviceShapeName.dq()}).with_default_namespace(${serviceNamespace.dq()})"
+                                    "aws_json_1_0().with_default_namespace(${serviceNamespace.dq()})"
                             protocol == AwsJson1_1Trait.ID ->
                                 smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to
-                                    "aws_json_1_1(${serviceShapeName.dq()}).with_default_namespace(${serviceNamespace.dq()})"
+                                    "aws_json_1_1().with_default_namespace(${serviceNamespace.dq()})"
                             protocol == RestXmlTrait.ID -> {
                                 val smithyXml = RuntimeType.smithyXml(codegenContext.runtimeConfig)
                                 val noWrap = codegenContext.serviceShape.expectTrait<RestXmlTrait>().isNoErrorWrapping
-                                val serviceNs =
-                                    codegenContext.serviceShape.getTrait(XmlNamespaceTrait::class.java).orElse(null)
                                 val builderChain = StringBuilder("new()")
+                                // `noErrorWrapping` has no config-bag default and cannot have one:
+                                // it lives on the `@restXml` trait, which a non-restXml model does
+                                // not carry. The service `@xmlNamespace` is resolved from the bag.
                                 if (noWrap) builderChain.append(".with_no_error_wrapping(true)")
-                                if (serviceNs != null) {
-                                    val uri = serviceNs.uri.dq()
-                                    val prefix = serviceNs.prefix.orElse(null)?.let { "Some(${it.dq()}.to_owned())" } ?: "None"
-                                    builderChain.append(".with_service_xml_namespace($uri.to_owned(), $prefix)")
-                                }
                                 smithyXml.resolve("protocol::aws_rest_xml::AwsRestXmlProtocol") to builderChain.toString()
                             }
                             protocol == AwsQueryTrait.ID -> {
                                 val smithyQuery = RuntimeType.smithyQuery(codegenContext.runtimeConfig)
-                                smithyQuery.resolve("protocol::AwsQueryProtocol") to "new(${codegenContext.serviceShape.version.dq()})"
+                                smithyQuery.resolve("protocol::AwsQueryProtocol") to "new()"
                             }
                             protocol == Rpcv2CborTrait.ID ->
                                 smithyCbor.resolve("protocol::RpcV2CborProtocol") to "new()"

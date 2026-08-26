@@ -106,6 +106,53 @@ pub trait ClientProtocolInner: Send + Sync + std::fmt::Debug {
     fn protocol_id(&self) -> &ShapeId<'static>;
 
     /// Serializes an operation input into a request message.
+    ///
+    /// # The protocol owns its own wire format
+    ///
+    /// Anything this protocol puts on the wire that *the protocol alone determines* must be
+    /// resolved here, not emitted by codegen. A client generated for one protocol can be pointed at
+    /// another with `Config::builder().protocol(..)`, so anything codegen bakes in based on the
+    /// generated protocol is wrong after a swap: left behind when this protocol is swapped out, and
+    /// missing when it is swapped in. Concretely, an implementor owns:
+    ///
+    /// - **Framing headers.** rpcv2Cbor sets `smithy-protocol` and `accept`; awsJson sets
+    ///   `X-Amz-Target`. Codegen's schema path deliberately emits none of these.
+    /// - **The request path**, per the note on `endpoint` below.
+    /// - **Model facts the protocol needs but a caller cannot know**, read from `cfg`:
+    ///   [`ServiceShapeName`], [`ServiceVersion`], [`ServiceXmlNamespace`]. Generated clients store
+    ///   these regardless of which protocol they were generated for, precisely so a swapped-in
+    ///   protocol can find them. Keep an explicit builder as an override for what the model cannot
+    ///   express -- a target prefix that is not the service shape name, for instance.
+    ///
+    /// Headers determined by the *service* rather than the protocol -- `x-amzn-query-mode`, from
+    /// `@awsQueryCompatible` -- are outside this rule and stay in codegen, because their value does
+    /// not change when the protocol does.
+    ///
+    /// # `endpoint` is advisory
+    ///
+    /// `endpoint` is a request **path** (or `""`), never a host; scheme and authority are merged
+    /// later by [`apply_http_endpoint`]. It is whatever codegen computed *for the protocol the
+    /// client was generated for*, so a protocol that alone determines its route must ignore it:
+    ///
+    /// - **Fixed route** -- awsJson and awsQuery are specified to `POST /`, so they pass `/` and
+    ///   ignore the argument entirely. Forwarding it would let an rpcv2Cbor-generated client POST
+    ///   to `/service/{service}/operation/{operation}`.
+    /// - **Route derived from model facts** -- rpcv2Cbor computes
+    ///   `/service/{service}/operation/{operation}` from `cfg`, falling back to `endpoint` only
+    ///   when those facts are absent.
+    /// - **Route from `@http` bindings** -- REST protocols expand the operation's `@http` template
+    ///   from the schema, which is authoritative; `endpoint` is ignored. Generated REST clients
+    ///   pass `""`, so this costs them nothing, and it stops an RPC route from being prefixed onto
+    ///   the template after a swap. `endpoint` acts as the template only for a schema that carries
+    ///   no `@http` trait at all.
+    ///
+    /// The shared [`HttpRpcProtocol`](crate::schema::http_protocol::HttpRpcProtocol) helper
+    /// deliberately does *not* hard-code `/`; only a concrete protocol knows whether its route is
+    /// constant.
+    ///
+    /// [`ServiceShapeName`]: crate::protocol::ServiceShapeName
+    /// [`ServiceVersion`]: crate::protocol::ServiceVersion
+    /// [`ServiceXmlNamespace`]: crate::protocol::ServiceXmlNamespace
     fn serialize_request(
         &self,
         input: &dyn SerializableStruct,
@@ -228,6 +275,9 @@ pub trait ClientProtocol<
     fn protocol_id(&self) -> &ShapeId<'static>;
 
     /// Serializes an operation input into a request message.
+    ///
+    /// See [`ClientProtocolInner::serialize_request`] for the invariant an implementor must uphold:
+    /// the protocol owns its own framing headers and request path, and `endpoint` is advisory.
     fn serialize_request(
         &self,
         input: &dyn SerializableStruct,
@@ -402,6 +452,7 @@ pub fn apply_http_endpoint(
 ///
 /// See <https://github.com/smithy-lang/smithy-rs/issues/4801>.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ServiceShapeName(std::borrow::Cow<'static, str>);
 
 impl ServiceShapeName {
@@ -420,6 +471,78 @@ impl ServiceShapeName {
 }
 
 impl aws_smithy_types::config_bag::Storable for ServiceShapeName {
+    type Storer = aws_smithy_types::config_bag::StoreReplace<Self>;
+}
+
+/// The Smithy service shape's `version`, stored in a [`ConfigBag`] by generated clients.
+///
+/// awsQuery puts this on the wire as the `Version=` form parameter, so it is a request-shaping
+/// fact that only the model knows. Stored for the same reason as [`ServiceShapeName`]: a customer
+/// can select awsQuery via `Config::builder().protocol(..)` on a client generated for some other
+/// protocol, and could not otherwise supply the right value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ServiceVersion(std::borrow::Cow<'static, str>);
+
+impl ServiceVersion {
+    /// Creates a new [`ServiceVersion`].
+    ///
+    /// Accepts a codegen-emitted `&'static str` as well as a `String` materialized at runtime
+    /// from a parsed model.
+    pub fn new(version: impl Into<std::borrow::Cow<'static, str>>) -> Self {
+        Self(version.into())
+    }
+
+    /// Returns the service version.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl aws_smithy_types::config_bag::Storable for ServiceVersion {
+    type Storer = aws_smithy_types::config_bag::StoreReplace<Self>;
+}
+
+/// The service-level `@xmlNamespace` trait, stored in a [`ConfigBag`] by generated clients.
+///
+/// restXml applies this as the default `xmlns` on request and response root elements, so it is a
+/// request-shaping fact that only the model knows. Stored for the same reason as
+/// [`ServiceShapeName`].
+///
+/// `@xmlNamespace` is a prelude trait rather than a restXml-specific one, so it is resolvable from
+/// any model — unlike `@restXml(noErrorWrapping)`, which a non-restXml model simply does not carry
+/// and which therefore stays caller-supplied.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ServiceXmlNamespace {
+    uri: std::borrow::Cow<'static, str>,
+    prefix: Option<std::borrow::Cow<'static, str>>,
+}
+
+impl ServiceXmlNamespace {
+    /// Creates a new [`ServiceXmlNamespace`] from the trait's URI and optional prefix.
+    pub fn new(
+        uri: impl Into<std::borrow::Cow<'static, str>>,
+        prefix: Option<std::borrow::Cow<'static, str>>,
+    ) -> Self {
+        Self {
+            uri: uri.into(),
+            prefix,
+        }
+    }
+
+    /// Returns the namespace URI.
+    pub fn uri(&self) -> &str {
+        &self.uri
+    }
+
+    /// Returns the namespace prefix, if the trait declared one.
+    pub fn prefix(&self) -> Option<&str> {
+        self.prefix.as_deref()
+    }
+}
+
+impl aws_smithy_types::config_bag::Storable for ServiceXmlNamespace {
     type Storer = aws_smithy_types::config_bag::StoreReplace<Self>;
 }
 

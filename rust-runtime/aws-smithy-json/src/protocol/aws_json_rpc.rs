@@ -22,6 +22,7 @@
 use crate::codec::{JsonCodec, JsonCodecSettings};
 use aws_smithy_runtime_api::client::orchestrator::Metadata;
 use aws_smithy_schema::http_protocol::HttpRpcProtocol;
+use aws_smithy_schema::protocol::ServiceShapeName;
 use aws_smithy_schema::{shape_id, Schema, ShapeId};
 use aws_smithy_types::config_bag::ConfigBag;
 
@@ -29,38 +30,35 @@ use aws_smithy_types::config_bag::ConfigBag;
 #[derive(Debug)]
 pub struct AwsJsonRpcProtocol {
     inner: HttpRpcProtocol<JsonCodec>,
-    target_prefix: String,
+    /// Prefix of the `X-Amz-Target` header. `None` means "resolve from the config bag", which is
+    /// the normal case — see [`Self::with_target_prefix`].
+    target_prefix: Option<String>,
 }
 
 impl AwsJsonRpcProtocol {
     /// Creates an AWS JSON 1.0 protocol instance.
     ///
-    /// `target_prefix` is the Smithy service shape name used in the `X-Amz-Target` header
-    /// (e.g., `"TrentService"` for KMS, `"DynamoDB_20120810"` for DynamoDB).
-    pub fn aws_json_1_0(target_prefix: impl Into<String>) -> Self {
+    /// The `X-Amz-Target` prefix defaults to the Smithy service shape name from the config bag;
+    /// use [`Self::with_target_prefix`] to override it.
+    pub fn aws_json_1_0() -> Self {
         Self::new(
             shape_id!("aws.protocols", "awsJson1_0"),
             "application/x-amz-json-1.0",
-            target_prefix.into(),
         )
     }
 
     /// Creates an AWS JSON 1.1 protocol instance.
     ///
-    /// `target_prefix` is the Smithy service shape name used in the `X-Amz-Target` header.
-    pub fn aws_json_1_1(target_prefix: impl Into<String>) -> Self {
+    /// The `X-Amz-Target` prefix defaults to the Smithy service shape name from the config bag;
+    /// use [`Self::with_target_prefix`] to override it.
+    pub fn aws_json_1_1() -> Self {
         Self::new(
             shape_id!("aws.protocols", "awsJson1_1"),
             "application/x-amz-json-1.1",
-            target_prefix.into(),
         )
     }
 
-    fn new(
-        protocol_id: ShapeId<'static>,
-        content_type: &'static str,
-        target_prefix: String,
-    ) -> Self {
+    fn new(protocol_id: ShapeId<'static>, content_type: &'static str) -> Self {
         let codec = JsonCodec::new(
             JsonCodecSettings::builder()
                 .use_json_name(false)
@@ -70,8 +68,35 @@ impl AwsJsonRpcProtocol {
         );
         Self {
             inner: HttpRpcProtocol::new(protocol_id, codec, content_type),
-            target_prefix,
+            target_prefix: None,
         }
+    }
+
+    /// Overrides the prefix of the `X-Amz-Target` header.
+    ///
+    /// By default the prefix is the Smithy service shape name, read from the
+    /// [`ServiceShapeName`] config-bag entry that generated clients store regardless of which
+    /// protocol they were generated for. That default exists because a customer selecting this
+    /// protocol through `Config::builder().protocol(..)` has no way to know the shape name, and an
+    /// incorrect `X-Amz-Target` is unroutable.
+    ///
+    /// Override it when a service's target prefix is not its shape name.
+    ///
+    /// Note this is *not* the sdkId carried by
+    /// [`Metadata::service`](aws_smithy_runtime_api::client::orchestrator::Metadata::service) —
+    /// an sdkId may contain spaces (`"JSON RPC 10"`) and is not a valid header value here.
+    pub fn with_target_prefix(mut self, target_prefix: impl Into<String>) -> Self {
+        self.target_prefix = Some(target_prefix.into());
+        self
+    }
+
+    /// Resolves the `X-Amz-Target` prefix: an explicit override wins, otherwise the service shape
+    /// name from the config bag. `None` when neither is available, in which case there is no
+    /// correct value to send.
+    fn resolved_target_prefix<'a>(&'a self, cfg: &'a ConfigBag) -> Option<&'a str> {
+        self.target_prefix
+            .as_deref()
+            .or_else(|| cfg.load::<ServiceShapeName>().map(ServiceShapeName::as_str))
     }
 
     /// Configures the default Smithy namespace used to resolve relative
@@ -84,6 +109,14 @@ impl AwsJsonRpcProtocol {
     /// clients call this method with the service shape's namespace so
     /// that [`crate::codec::JsonDeserializer::read_discriminated_document`]
     /// can produce a fully-qualified discriminator.
+    ///
+    /// Unlike the `X-Amz-Target` prefix, this has **no config-bag default**. It is a
+    /// response-parsing concern rather than request shaping, and it is baked into the codec's
+    /// settings at construction: `JsonCodec` holds an `Arc<JsonCodecSettings>` that
+    /// `create_deserializer` clones by pointer, so consulting the config bag per response would
+    /// mean rebuilding the settings struct and its `String` on every response. A caller selecting
+    /// this protocol at runtime who needs relative `__type` resolution should set it explicitly;
+    /// without it, discriminators stay relative.
     pub fn with_default_namespace(self, namespace: impl Into<String>) -> Self {
         let new_settings = self
             .inner
@@ -129,11 +162,12 @@ impl aws_smithy_schema::protocol::ClientProtocolInner for AwsJsonRpcProtocol {
         let mut request = self
             .inner
             .serialize_request(input, input_schema, "/", cfg)?;
-        if let Some(metadata) = cfg.load::<Metadata>() {
-            request.headers_mut().insert(
-                "X-Amz-Target",
-                format!("{}.{}", self.target_prefix, metadata.name()),
-            );
+        if let (Some(prefix), Some(metadata)) =
+            (self.resolved_target_prefix(cfg), cfg.load::<Metadata>())
+        {
+            request
+                .headers_mut()
+                .insert("X-Amz-Target", format!("{}.{}", prefix, metadata.name()));
         }
         Ok(request)
     }
@@ -217,9 +251,65 @@ mod tests {
         ConfigBag::of_layers(vec![layer])
     }
 
+    /// The bag a schema-serde generated client actually builds: operation `Metadata` plus the
+    /// model's service shape name.
+    fn cfg_with_service_shape_name(shape_name: &'static str, operation: &str) -> ConfigBag {
+        let mut layer = Layer::new("test");
+        layer.store_put(Metadata::new(
+            operation.to_string(),
+            "Some Sdk Id".to_string(),
+        ));
+        layer.store_put(aws_smithy_schema::protocol::ServiceShapeName::new(
+            shape_name,
+        ));
+        ConfigBag::of_layers(vec![layer])
+    }
+
+    /// A customer selecting awsJson at runtime via `Config::builder().protocol(..)` has no way to
+    /// know the Smithy service shape name that belongs in `X-Amz-Target`, so the protocol defaults
+    /// it from the config-bag entry that every schema-serde client stores regardless of the
+    /// protocol it was generated for.
+    #[test]
+    fn target_prefix_defaults_to_service_shape_name_from_config_bag() {
+        let cfg = cfg_with_service_shape_name("MyService", "DoThing");
+        let request = AwsJsonRpcProtocol::aws_json_1_0()
+            .serialize_request(&EmptyStruct, &TEST_SCHEMA, "/", &cfg)
+            .unwrap();
+        assert_eq!(
+            request.headers().get("X-Amz-Target").unwrap(),
+            "MyService.DoThing"
+        );
+    }
+
+    /// An explicit prefix still wins, so a caller whose service uses a target prefix that is not
+    /// the shape name (DynamoDB's `DynamoDB_20120810`) can override it.
+    #[test]
+    fn with_target_prefix_overrides_config_bag() {
+        let cfg = cfg_with_service_shape_name("MyService", "DoThing");
+        let request = AwsJsonRpcProtocol::aws_json_1_0()
+            .with_target_prefix("DynamoDB_20120810")
+            .serialize_request(&EmptyStruct, &TEST_SCHEMA, "/", &cfg)
+            .unwrap();
+        assert_eq!(
+            request.headers().get("X-Amz-Target").unwrap(),
+            "DynamoDB_20120810.DoThing"
+        );
+    }
+
+    /// With neither an override nor a bag entry there is no correct value, so the header is
+    /// omitted rather than guessed — matching the existing behavior when `Metadata` is absent.
+    #[test]
+    fn x_amz_target_omitted_when_prefix_is_unknown() {
+        let cfg = cfg_with_metadata("Some Sdk Id", "DoThing");
+        let request = AwsJsonRpcProtocol::aws_json_1_0()
+            .serialize_request(&EmptyStruct, &TEST_SCHEMA, "/", &cfg)
+            .unwrap();
+        assert!(request.headers().get("X-Amz-Target").is_none());
+    }
+
     #[test]
     fn json_1_0_content_type() {
-        let request = AwsJsonRpcProtocol::aws_json_1_0("TestService")
+        let request = AwsJsonRpcProtocol::aws_json_1_0()
             .serialize_request(
                 &EmptyStruct,
                 &TEST_SCHEMA,
@@ -235,7 +325,7 @@ mod tests {
 
     #[test]
     fn json_1_1_content_type() {
-        let request = AwsJsonRpcProtocol::aws_json_1_1("TestService")
+        let request = AwsJsonRpcProtocol::aws_json_1_1()
             .serialize_request(
                 &EmptyStruct,
                 &TEST_SCHEMA,
@@ -252,7 +342,8 @@ mod tests {
     #[test]
     fn sets_x_amz_target() {
         let cfg = cfg_with_metadata("MyService", "DoThing");
-        let request = AwsJsonRpcProtocol::aws_json_1_0("MyService")
+        let request = AwsJsonRpcProtocol::aws_json_1_0()
+            .with_target_prefix("MyService")
             .serialize_request(&EmptyStruct, &TEST_SCHEMA, "https://example.com", &cfg)
             .unwrap();
         assert_eq!(
@@ -264,9 +355,7 @@ mod tests {
     #[test]
     fn json_1_0_protocol_id() {
         assert_eq!(
-            AwsJsonRpcProtocol::aws_json_1_0("Svc")
-                .protocol_id()
-                .as_str(),
+            AwsJsonRpcProtocol::aws_json_1_0().protocol_id().as_str(),
             "aws.protocols#awsJson1_0"
         );
     }
@@ -284,7 +373,7 @@ mod tests {
     fn serialize_request_ignores_a_route_computed_for_another_protocol() {
         let cfg = cfg_with_metadata("MyService", "DoThing");
         for foreign_route in ["/service/MyService/operation/DoThing", "/stats"] {
-            let request = AwsJsonRpcProtocol::aws_json_1_0("MyService")
+            let request = AwsJsonRpcProtocol::aws_json_1_0()
                 .serialize_request(&EmptyStruct, &TEST_SCHEMA, foreign_route, &cfg)
                 .unwrap();
             assert_eq!(
@@ -300,7 +389,7 @@ mod tests {
     #[test]
     fn serialize_request_defaults_to_slash() {
         let cfg = cfg_with_metadata("MyService", "DoThing");
-        let request = AwsJsonRpcProtocol::aws_json_1_0("MyService")
+        let request = AwsJsonRpcProtocol::aws_json_1_0()
             .serialize_request(&EmptyStruct, &TEST_SCHEMA, "", &cfg)
             .unwrap();
         assert_eq!("/", request.uri());
@@ -309,9 +398,7 @@ mod tests {
     #[test]
     fn json_1_1_protocol_id() {
         assert_eq!(
-            AwsJsonRpcProtocol::aws_json_1_1("Svc")
-                .protocol_id()
-                .as_str(),
+            AwsJsonRpcProtocol::aws_json_1_1().protocol_id().as_str(),
             "aws.protocols#awsJson1_1"
         );
     }
@@ -333,7 +420,7 @@ mod tests {
 
     #[test]
     fn parse_error_metadata_extracts_code_and_message_from_body() {
-        let proto = AwsJsonRpcProtocol::aws_json_1_0("Svc");
+        let proto = AwsJsonRpcProtocol::aws_json_1_0();
         let response = http_response(&[], r#"{"__type":"InvalidGreeting","message":"hi"}"#);
         let cfg = ConfigBag::base();
         let meta = proto.parse_error_metadata(&response, &cfg).unwrap().build();
@@ -343,7 +430,7 @@ mod tests {
 
     #[test]
     fn parse_error_metadata_header_takes_priority() {
-        let proto = AwsJsonRpcProtocol::aws_json_1_1("Svc");
+        let proto = AwsJsonRpcProtocol::aws_json_1_1();
         let response = http_response(
             &[("x-amzn-errortype", "FromHeader")],
             r#"{"__type":"FromBody","message":"go"}"#,
@@ -356,7 +443,7 @@ mod tests {
 
     #[test]
     fn parse_error_metadata_sanitizes_namespaced_code() {
-        let proto = AwsJsonRpcProtocol::aws_json_1_0("Svc");
+        let proto = AwsJsonRpcProtocol::aws_json_1_0();
         let response = http_response(&[], r#"{"__type":"aws.protocoltests.json#FooError"}"#);
         let cfg = ConfigBag::base();
         let meta = proto.parse_error_metadata(&response, &cfg).unwrap().build();
@@ -365,7 +452,7 @@ mod tests {
 
     #[test]
     fn parse_error_metadata_empty_body_returns_empty_builder() {
-        let proto = AwsJsonRpcProtocol::aws_json_1_0("Svc");
+        let proto = AwsJsonRpcProtocol::aws_json_1_0();
         let response = http_response(&[], "");
         let cfg = ConfigBag::base();
         let meta = proto.parse_error_metadata(&response, &cfg).unwrap().build();
@@ -375,7 +462,7 @@ mod tests {
 
     #[test]
     fn parse_error_metadata_malformed_body_returns_error() {
-        let proto = AwsJsonRpcProtocol::aws_json_1_0("Svc");
+        let proto = AwsJsonRpcProtocol::aws_json_1_0();
         let response = http_response(&[], r#"{"__type":"FooError""#); // truncated
         let cfg = ConfigBag::base();
         let err = proto.parse_error_metadata(&response, &cfg).unwrap_err();
@@ -389,7 +476,8 @@ mod tests {
         // codegen relies on so that wire-bytes `__type:"Capacity"`
         // lifts to a fully-qualified `com.amazonaws.dynamodb#Capacity`
         // discriminator on the resulting [`DiscriminatedDocument`].
-        let proto = AwsJsonRpcProtocol::aws_json_1_0("DynamoDB_20120810")
+        let proto = AwsJsonRpcProtocol::aws_json_1_0()
+            .with_target_prefix("DynamoDB_20120810")
             .with_default_namespace("com.amazonaws.dynamodb");
         assert_eq!(
             proto.inner.codec().settings().default_namespace(),
@@ -403,8 +491,7 @@ mod tests {
         // `default_namespace` doesn't reset other configured fields
         // — the AwsJsonRpc constructor already disables `@jsonName`
         // and sets epoch-seconds as the default timestamp format.
-        let proto =
-            AwsJsonRpcProtocol::aws_json_1_0("TestService").with_default_namespace("com.example");
+        let proto = AwsJsonRpcProtocol::aws_json_1_0().with_default_namespace("com.example");
         let settings = proto.inner.codec().settings();
         assert_eq!(settings.default_namespace(), Some("com.example"));
         assert_eq!(

@@ -251,6 +251,22 @@ internal class RpcV2CborRequestShapeTest {
             "Expected the generated request serializer to pass the canonical RPC route to " +
                 "`serialize_request`. Generated source:\n$serializer"
         }
+
+        // Same reasoning for the framing headers: `RpcV2CborProtocol::serialize_request` sets them,
+        // so a wire-level assertion passes whether or not codegen also emits them. But codegen's
+        // inserts run *after* the protocol returns and would persist after a swap to another
+        // protocol, so the absence has to be asserted directly on the generated source.
+        //
+        // `x-amzn-query-mode` is deliberately not in this list: it comes from `@awsQueryCompatible`
+        // on the service, is unchanged by a protocol swap, and must keep being emitted here. See
+        // `ProtocolFramingHeaderTest` for the guard on that classification.
+        listOf("smithy-protocol", "accept", "x-amz-target").forEach { header ->
+            assert(!serializer.contains("insert(\"$header\"")) {
+                "The schema-serde request path must not emit the protocol framing header " +
+                    "`$header`; the runtime protocol owns it so that it stays correct when a " +
+                    "different protocol is selected at runtime. Generated source:\n$serializer"
+            }
+        }
     }
 
     @Test

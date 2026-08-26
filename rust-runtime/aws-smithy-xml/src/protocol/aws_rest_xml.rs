@@ -65,6 +65,15 @@ impl AwsRestXmlProtocol {
     /// wrapped in `<ErrorResponse><Error>...</Error>...</ErrorResponse>`.
     /// Drives the parsing branch in `parse_error_metadata` and
     /// `deserialize_error_response`.
+    ///
+    /// Unlike the service XML namespace, this has **no config-bag default and cannot have one**:
+    /// it is read from `@restXml(noErrorWrapping)`, and a model that does not use restXml carries
+    /// no `@restXml` trait for a generated client to store. So when restXml is selected at runtime
+    /// on, say, a CBOR-modeled service, there is nothing to recover — the caller must set it, and
+    /// the documented default of `false` (wrapped envelopes, the spec default) applies otherwise.
+    ///
+    /// This is the general limit of runtime protocol swapping: a protocol's own trait data cannot
+    /// be recovered from a model that does not use that protocol.
     pub fn with_no_error_wrapping(mut self, v: bool) -> Self {
         self.no_error_wrapping = v;
         self
@@ -80,6 +89,12 @@ impl AwsRestXmlProtocol {
     /// service shape. Applied to request/response XML root elements that
     /// don't carry their own `@xmlNamespace` (e.g. S3's
     /// `http://s3.amazonaws.com/doc/2006-03-01/`).
+    ///
+    /// Overrides the default, which is the
+    /// [`ServiceXmlNamespace`](aws_smithy_schema::protocol::ServiceXmlNamespace) config-bag entry
+    /// that generated clients store regardless of which protocol they were generated for. That
+    /// default exists because a customer selecting restXml through
+    /// `Config::builder().protocol(..)` has no way to know the model's namespace.
     pub fn with_service_xml_namespace(
         mut self,
         uri: impl Into<String>,
@@ -87,6 +102,19 @@ impl AwsRestXmlProtocol {
     ) -> Self {
         self.service_xml_namespace = Some((uri.into(), prefix));
         self
+    }
+
+    /// Resolves the service-level `@xmlNamespace`: an explicit configuration wins, otherwise the
+    /// config-bag entry.
+    ///
+    /// Returns owned values because the codec takes ownership; the explicit branch clones exactly
+    /// as it did before this fell back to the bag.
+    fn resolved_service_xml_namespace(&self, cfg: &ConfigBag) -> Option<(String, Option<String>)> {
+        if let Some((uri, prefix)) = &self.service_xml_namespace {
+            return Some((uri.clone(), prefix.clone()));
+        }
+        cfg.load::<aws_smithy_schema::protocol::ServiceXmlNamespace>()
+            .map(|ns| (ns.uri().to_owned(), ns.prefix().map(str::to_owned)))
     }
 }
 
@@ -165,8 +193,8 @@ impl aws_smithy_schema::protocol::ClientProtocolInner for AwsRestXmlProtocol {
         // fallback. Consumed by the codec on the first root-level
         // `write_struct` only if the struct's schema has no own
         // `@xmlNamespace`.
-        if let Some((uri, prefix)) = &self.service_xml_namespace {
-            body.set_next_root_xml_namespace(uri.clone(), prefix.clone());
+        if let Some((uri, prefix)) = self.resolved_service_xml_namespace(cfg) {
+            body.set_next_root_xml_namespace(uri, prefix);
         }
         self.inner
             .serialize_request_with_body(body, input, input_schema, endpoint, cfg)
@@ -363,6 +391,69 @@ mod tests {
         );
         let body = std::str::from_utf8(request.body().bytes().unwrap()).unwrap();
         assert_eq!(body, "<OpRequest><name>Alice</name></OpRequest>");
+    }
+
+    /// The service-level `@xmlNamespace` becomes the root `xmlns`, and a customer selecting restXml
+    /// through `Config::builder().protocol(..)` has no way to know it, so it defaults from the
+    /// config-bag entry generated clients store regardless of their protocol.
+    #[test]
+    fn service_xml_namespace_defaults_from_config_bag() {
+        let mut layer = aws_smithy_types::config_bag::Layer::new("test");
+        layer.store_put(aws_smithy_schema::protocol::ServiceXmlNamespace::new(
+            "http://example.com/from-bag/",
+            None,
+        ));
+        let cfg = ConfigBag::of_layers(vec![layer]);
+
+        let request = AwsRestXmlProtocol::new()
+            .serialize_request(&TestInput, &OP_SCHEMA, "", &cfg)
+            .unwrap();
+        let body = std::str::from_utf8(request.body().bytes().unwrap()).unwrap();
+        assert_eq!(
+            body,
+            "<OpRequest xmlns=\"http://example.com/from-bag/\"><name>Alice</name></OpRequest>"
+        );
+    }
+
+    /// A prefix in the bag entry is honored too.
+    #[test]
+    fn service_xml_namespace_from_config_bag_honors_prefix() {
+        let mut layer = aws_smithy_types::config_bag::Layer::new("test");
+        layer.store_put(aws_smithy_schema::protocol::ServiceXmlNamespace::new(
+            "http://example.com/from-bag/",
+            Some("ex".into()),
+        ));
+        let cfg = ConfigBag::of_layers(vec![layer]);
+
+        let request = AwsRestXmlProtocol::new()
+            .serialize_request(&TestInput, &OP_SCHEMA, "", &cfg)
+            .unwrap();
+        let body = std::str::from_utf8(request.body().bytes().unwrap()).unwrap();
+        assert_eq!(
+            body,
+            "<OpRequest xmlns:ex=\"http://example.com/from-bag/\"><name>Alice</name></OpRequest>"
+        );
+    }
+
+    /// An explicitly configured namespace still wins over the bag.
+    #[test]
+    fn with_service_xml_namespace_overrides_config_bag() {
+        let mut layer = aws_smithy_types::config_bag::Layer::new("test");
+        layer.store_put(aws_smithy_schema::protocol::ServiceXmlNamespace::new(
+            "http://example.com/from-bag/",
+            None,
+        ));
+        let cfg = ConfigBag::of_layers(vec![layer]);
+
+        let request = AwsRestXmlProtocol::new()
+            .with_service_xml_namespace("http://example.com/explicit/".to_owned(), None)
+            .serialize_request(&TestInput, &OP_SCHEMA, "", &cfg)
+            .unwrap();
+        let body = std::str::from_utf8(request.body().bytes().unwrap()).unwrap();
+        assert_eq!(
+            body,
+            "<OpRequest xmlns=\"http://example.com/explicit/\"><name>Alice</name></OpRequest>"
+        );
     }
 
     #[test]

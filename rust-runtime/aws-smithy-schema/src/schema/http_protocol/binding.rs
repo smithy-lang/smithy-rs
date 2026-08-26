@@ -198,16 +198,23 @@ impl<C: Codec> HttpBindingProtocol<C> {
         // for the URI string itself; percent-encoding writes through
         // `percent_encode_into` to avoid per-segment String allocs.
         let template_opt = input_schema.http().map(|h| h.uri());
-        // Capacity heuristic: endpoint + template + slack for label expansion
-        // (greedy labels typically expand by O(1.5x)). Better-than-default
-        // initial capacity avoids the first 1-2 reallocs.
+        // Capacity heuristic: template + slack for label expansion (greedy
+        // labels typically expand by O(1.5x)), or the endpoint when it is
+        // serving as the template. Better-than-default initial capacity avoids
+        // the first 1-2 reallocs.
         let mut uri =
             String::with_capacity(endpoint.len() + template_opt.map(|t| t.len()).unwrap_or(1) + 64);
         match template_opt {
             Some(template) => {
-                if !endpoint.is_empty() {
-                    uri.push_str(endpoint);
-                }
+                // The `@http` template is authoritative and `endpoint` is ignored. A REST protocol
+                // owns its route, so a path computed for a different protocol must not be prefixed
+                // onto it — an rpcv2Cbor-generated client that selects restJson1 at runtime passes
+                // `/service/{service}/operation/{operation}` here, and awsJson passes `/`.
+                // Generated REST clients pass `""`, so this costs them nothing.
+                //
+                // This mirrors the assertion `AwsJsonRpcProtocol` and `AwsQueryProtocol` make about
+                // their own fixed routes. See `ClientProtocolInner::serialize_request` for the
+                // general rule that `endpoint` is advisory.
                 append_uri_with_labels(template, &labels, &mut uri);
             }
             None => {
@@ -1619,6 +1626,57 @@ mod tests {
             TestCodec,
             "application/test",
         )
+    }
+
+    /// A REST protocol resolves its route from the operation's `@http` template, so a path that
+    /// codegen computed for a *different* protocol must not be prefixed onto it.
+    ///
+    /// This is the mirror image of the assertion `AwsJsonRpcProtocol` and `AwsQueryProtocol` make
+    /// about their own fixed routes: whichever layer owns the route ignores a foreign one. It is
+    /// reachable only through `Config::builder().protocol(..)` — generated REST clients pass `""`,
+    /// so the request would otherwise be routed to the concatenation of both protocols' paths, e.g.
+    /// `/service/Svc/operation/GetStats/stats` on an rpcv2Cbor-generated client.
+    #[test]
+    fn serialize_request_ignores_a_route_computed_for_another_protocol() {
+        static HTTP_SCHEMA: Schema<'static> = Schema::new_struct(
+            crate::shape_id!("test", "GetStatsRequest"),
+            ShapeType::Structure,
+            &[],
+        )
+        .with_http(crate::traits::HttpTrait::new("PUT", "/stats", None));
+
+        for foreign_route in [
+            // An rpcv2Cbor route, as codegen emits for that protocol.
+            "/service/Svc/operation/GetStats",
+            // awsJson's and awsQuery's fixed route.
+            "/",
+        ] {
+            let request = make_protocol()
+                .serialize_request(
+                    &EmptyStruct,
+                    &HTTP_SCHEMA,
+                    foreign_route,
+                    &ConfigBag::base(),
+                )
+                .unwrap();
+            assert_eq!(
+                "/stats",
+                request.uri(),
+                "the `@http` template is authoritative; the route {foreign_route} was computed for \
+                 another protocol and must be ignored",
+            );
+            assert_eq!("PUT", request.method());
+        }
+    }
+
+    /// The counterpart guard: with no `@http` trait there is no template, so the endpoint *is* the
+    /// template and is still honored — including label expansion. Several tests below rely on this.
+    #[test]
+    fn serialize_request_uses_endpoint_as_template_without_an_http_trait() {
+        let request = make_protocol()
+            .serialize_request(&EmptyStruct, &TEST_SCHEMA, "/some/path", &ConfigBag::base())
+            .unwrap();
+        assert_eq!("/some/path", request.uri());
     }
 
     #[test]
