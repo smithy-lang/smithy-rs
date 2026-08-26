@@ -27,13 +27,10 @@ pub mod http_body_1_x;
 pub type Error = Box<dyn StdError + Send + Sync>;
 
 // Converts an `http` 0.2.x trailer `HeaderMap` into an `http` 1.x `HeaderMap`. Only needed on the
-// legacy http-body 0.4.x trailer code path inside `poll_next_trailers`, i.e. when the `HttpBody04`
-// box body exists (`http-body-0-4-x`, or `rt-tokio` together with `http-body-1-x`). It is never
-// needed for the `http-body-1-x`-only path, keeping that path free of the `http` 0.2.x crate.
-#[cfg(any(
-    feature = "http-body-0-4-x",
-    all(feature = "rt-tokio", feature = "http-body-1-x")
-))]
+// legacy http-body 0.4.x trailer code path inside `poll_next_trailers`, which exists only when the
+// `http-body-0-4-x` feature is enabled. The `http-body-1-x` path (including `rt-tokio`, which now
+// rides the 1.x body path) never needs the `http` 0.2.x crate.
+#[cfg(feature = "http-body-0-4-x")]
 fn convert_trailers_0x_1x(input: http::HeaderMap) -> http_1x::HeaderMap {
     let mut map = http_1x::HeaderMap::with_capacity(input.capacity());
     let mut mem: Option<http::HeaderName> = None;
@@ -83,12 +80,10 @@ impl Debug for SdkBody {
 /// A boxed generic HTTP body that, when consumed, will result in [`Bytes`] or an [`Error`].
 #[allow(dead_code)]
 enum BoxBody {
-    // This is enabled by the **dependency**, not the feature. This allows us to construct it
-    // whenever we have the dependency and keep the APIs private.
-    // NOTE: intentionally NOT enabled by `http-body-1-x`, so that the http-body 1.x path does
-    // not pull in the `http` 0.2.x / `http-body` 0.4.x crates transitively.
-    #[cfg(any(feature = "http-body-0-4-x", feature = "rt-tokio"))]
-    // will be dead code with `--no-default-features --features rt-tokio`
+    // The legacy http-body 0.4.x box body. Only exists when the `http-body-0-4-x` feature is
+    // enabled; the `http-body-1-x` path (including `rt-tokio`) does not pull in the `http` 0.2.x /
+    // `http-body` 0.4.x crates.
+    #[cfg(feature = "http-body-0-4-x")]
     HttpBody04(#[allow(dead_code)] http_body_0_4::combinators::BoxBody<Bytes, Error>),
 
     #[cfg(feature = "http-body-1-x")]
@@ -232,7 +227,7 @@ impl SdkBody {
     }
 
     #[allow(dead_code)]
-    #[cfg(any(feature = "http-body-0-4-x", feature = "rt-tokio"))]
+    #[cfg(feature = "http-body-0-4-x")]
     pub(crate) fn from_body_0_4_internal<T, E>(body: T) -> Self
     where
         T: http_body_0_4::Body<Data = Bytes, Error = E> + Send + Sync + 'static,
@@ -278,7 +273,7 @@ impl SdkBody {
         match this.inner.project() {
             InnerProj::Once { .. } => Poll::Ready(Ok(None)),
             InnerProj::Dyn { inner } => match inner.get_mut() {
-                #[cfg(any(feature = "http-body-0-4-x", feature = "rt-tokio"))]
+                #[cfg(feature = "http-body-0-4-x")]
                 BoxBody::HttpBody04(box_body) => {
                     use http_body_0_4::Body;
                     let polled = Pin::new(box_body).poll_trailers(cx);
