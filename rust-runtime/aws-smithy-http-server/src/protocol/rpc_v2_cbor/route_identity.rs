@@ -25,7 +25,10 @@ pub(super) fn is_word(character: u8) -> bool {
 /// Callers must first establish that every byte is a `Word` byte.
 #[inline]
 pub(super) fn has_valid_identifier_start(identifier: &[u8]) -> bool {
-    let underscores = identifier.iter().take_while(|&&character| character == b'_').count();
+    let underscores = identifier
+        .iter()
+        .take_while(|&&character| character == b'_')
+        .count();
     // An identifier cannot consist only of underscores.
     if underscores == identifier.len() {
         return false;
@@ -97,7 +100,9 @@ pub(super) fn parse_route_identity(path: &str) -> Option<RouteIdentity<'_>> {
 
     // Invalid if fewer than `/service` bytes precede the slash, or if it is not
     // immediately preceded by `/service`.
-    if service_slash < SERVICE.len() || &bytes[service_slash - SERVICE.len()..service_slash] != SERVICE {
+    if service_slash < SERVICE.len()
+        || &bytes[service_slash - SERVICE.len()..service_slash] != SERVICE
+    {
         return None;
     }
 
