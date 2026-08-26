@@ -105,7 +105,7 @@ class UnconstrainedUnionGenerator(
                 impl #{TryFrom}<$name> for #{ConstrainedSymbol} {
                     type Error = #{ConstraintViolationSymbol};
 
-                    fn try_from(value: $name) -> #{Result}<Self, Self::Error> {
+                    fn try_from(value: $name) -> #{Result}<Self, #{ConstraintViolationSymbol}> {
                         #{body:W}
                     }
                 }
@@ -273,6 +273,11 @@ class UnconstrainedUnionGenerator(
                     ""
                 }
 
+            // Refer to the constraint violation type by name instead of through `Self::Error`: if
+            // the union has a member named `error`, the generated variant `Self::Error` shadows the
+            // `TryFrom::Error` associated type and the path becomes ambiguous.
+            val constraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(shape)
+
             if (resolveToNonPublicConstrainedType) {
                 val constrainedSymbol =
                     if (!publicConstrainedTypes && targetShape.isDirectlyConstrained(symbolProvider)) {
@@ -285,21 +290,23 @@ class UnconstrainedUnionGenerator(
                     {
                         let constrained: #{ConstrainedSymbol} = $unconstrainedVar
                             .try_into()$boxIt$boxErr
-                            .map_err(Self::Error::${UnionConstraintTraitInfo(member).name()})?;
+                            .map_err(#{ConstraintViolationSymbol}::${UnionConstraintTraitInfo(member).name()})?;
                         constrained.into()
                     }
                     """,
                     "ConstrainedSymbol" to constrainedSymbol,
+                    "ConstraintViolationSymbol" to constraintViolationSymbol,
                 )
             } else {
-                rust(
+                rustTemplate(
                     """
                     $unconstrainedVar
                         .try_into()
                         $boxIt
                         $boxErr
-                        .map_err(Self::Error::${UnionConstraintTraitInfo(member).name()})?
+                        .map_err(#{ConstraintViolationSymbol}::${UnionConstraintTraitInfo(member).name()})?
                     """,
+                    "ConstraintViolationSymbol" to constraintViolationSymbol,
                 )
             }
         }
