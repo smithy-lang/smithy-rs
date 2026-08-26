@@ -5,62 +5,51 @@
 
 //! Partition-aware HTTP connection pooling.
 //!
-//! A [`Partition`] fixes where connections are established and driven. Pool
-//! state for one partition and one [`OriginKey`] meets in an `OriginCell`.
-//! Protocol-specific selection and establishment use that cell as follows:
+//! [`ConnectionPool`] owns a fixed set of [`Partition`]s. A [`Client`] selects
+//! one partition, and each request resolves its URI to that partition's stable
+//! origin cell. The cell is the local synchronization domain for acquisition,
+//! reusable protocol state, and connection return:
 //!
 //! ```text
-//! request (partition P, URI)
-//!   |
-//!   | resolve canonical origin in PartitionRegistry
-//!   v
-//! OriginCell(P, origin)
-//!   |
-//!   +-- local H1 available ----------------------------> H1Selection
-//!   |
-//!   `-- miss -> acquisition waiter <---------- returning H1
-//!               |
-//!               +-- unbounded ----------------> establishment permit
-//!               |
-//!               `-- bounded -> DemandSnapshot -> OriginAdmission
-//!                                                   |
-//!                                            CapacityDelivery
-//!                                                   |
-//!                                            establishment permit
-//!               |
-//!               `-- establishment and returning H1 race
-//!                            |
-//!                            `----------------------> terminal H1 or error
+//! ConnectionPool
+//!   `-- PartitionRegistry
+//!         |-- PartitionState(owner runtime, optional interface)
+//!         |     `-- OriginCell(origin)
+//!         |           |-- acquisition waiters
+//!         |           `-- source-owned H1 records
+//!         `-- OriginAdmission(origin, optional bound)
+//!               |-- capacity and demand order
+//!               `-- cross-cell H1 source claims
 //! ```
 //!
-//! `OriginAdmission` exists only when an origin has a connection limit. It is
-//! not another connection cache: cells retain protocol state, while admission
-//! decides which cell may consume the next connection slot. A
-//! [`ConnectionReuseScope`] determines which cells are eligible to relieve
-//! each other's demand without moving connection I/O or its protocol driver.
-//! Capacity starts establishment but does not complete the acquisition waiter;
-//! that same waiter remains until a returned H1 or the attempt result wins.
+//! A local idle H1 sender is the request fast path. A miss registers one
+//! waiter that remains authoritative while establishment races a returning
+//! sender. For a bounded origin, `OriginAdmission` grants connection
+//! capacity across every partition. It may also borrow an eligible peer's H1
+//! sender or reclaim an ineligible peer's idle connection so the waiting
+//! partition can establish without exceeding the origin-wide limit.
 //!
-//! An installed connection tracks reuse eligibility, committed requests, and
-//! root I/O independently:
+//! One `DeliveryGuard` carries either capacity or a claimed H1 sender from
+//! admission to a target cell. It materializes all fallible source state
+//! before reserving the target waiter, and its drop fallback restores the
+//! payload and demand fence. Pool coordination never holds two pool locks at
+//! once.
+//!
+//! Established connections separate three lifetimes:
 //!
 //! ```text
 //! ConnectionState
-//!   |-- logical_close ------> stop accepting work + return bounded capacity
-//!   |-- try_commit_dispatch -> DispatchGuard -------> request completion
-//!   `-- PhysicalConnectionGuard --------------------> root I/O is gone
+//!   |-- logical close ----------> reject dispatch and release bounded capacity
+//!   |-- DispatchGuard ----------> one accepted request
+//!   `-- PhysicalConnectionGuard -> root transport I/O
 //! ```
 //!
-//! Logical close releases the connection slot without waiting for committed
-//! requests or transport teardown. Those remaining lifetimes retain the
-//! shared `ConnectionState` until their own terminal transitions.
+//! Connector execution, handshakes, protocol drivers, pending H1 return, and
+//! maintenance run through the owning partition's [`DriverSpawner`]. Borrowing
+//! a sender moves dispatch authority only; its socket and driver stay on the
+//! source partition.
 
-// TODO(pool): Revisit this overview once protocol records and public construction are present.
-
-#![allow(
-    dead_code,
-    reason = "TODO(pool): remove when protocol paths consume the pool internals"
-)]
+#![cfg_attr(smithy_http_client_loom, allow(dead_code))]
 
 mod admission;
 mod builder;
@@ -82,8 +71,6 @@ pub use origin::{InvalidOrigin, OriginKey};
 pub use partition::TokioDriverSpawner;
 pub use partition::{ConnectionReuseScope, DriverSpawner, Partition, PartitionId};
 
-use aws_smithy_async::rt::sleep::SharedAsyncSleep;
-use aws_smithy_async::time::SharedTimeSource;
 use handshake::TransportFactory;
 use registry::PartitionRegistry;
 use std::fmt;
@@ -126,8 +113,6 @@ impl fmt::Debug for ConnectionPool {
 #[derive(Clone, Debug)]
 struct PoolConfig {
     idle_timeout: Option<Duration>,
-    time_source: SharedTimeSource,
-    sleep_impl: Option<SharedAsyncSleep>,
     max_connections_per_host: Option<NonZeroUsize>,
     reuse_scope: ConnectionReuseScope,
 }

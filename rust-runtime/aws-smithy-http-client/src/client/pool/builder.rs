@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Construction and validation for [`ConnectionPool`](super::ConnectionPool).
+//! Construction and validation for [`ConnectionPool`].
 
 use super::handshake::{self, TransportFactory};
 use super::maintenance::MaintenanceConfig;
@@ -12,9 +12,15 @@ use super::{ConnectionPool, ConnectionReuseScope, Partition, PoolConfig, PoolInn
 use crate::client::TlsUnset;
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
 use aws_smithy_async::time::{SharedTimeSource, TimeSource};
-#[cfg(any(test, all(feature = "test-util", aws_sdk_unstable)))]
+#[cfg(any(
+    all(test, feature = "rt-tokio"),
+    all(feature = "test-util", aws_sdk_unstable)
+))]
 use aws_smithy_runtime_api::box_error::BoxError;
-#[cfg(any(test, all(feature = "test-util", aws_sdk_unstable)))]
+#[cfg(any(
+    all(test, feature = "rt-tokio"),
+    all(feature = "test-util", aws_sdk_unstable)
+))]
 use http_1x::Uri;
 use hyper_util::client::legacy::connect::dns::GaiResolver;
 use hyper_util::client::legacy::connect::HttpConnector;
@@ -24,7 +30,10 @@ use std::num::NonZeroUsize;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::time::Duration;
-#[cfg(any(test, all(feature = "test-util", aws_sdk_unstable)))]
+#[cfg(any(
+    all(test, feature = "rt-tokio"),
+    all(feature = "test-util", aws_sdk_unstable)
+))]
 use tower::Service;
 
 const DEFAULT_IDLE_TIMEOUT: Duration = Duration::from_secs(90);
@@ -209,7 +218,7 @@ impl Builder<TlsUnset> {
         self.finish(handshake::transport_factory(move |_| connector.clone()))
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "rt-tokio"))]
     pub(super) fn build_with_connector<C, IO>(
         self,
         connector: C,
@@ -262,8 +271,6 @@ impl Builder<TlsUnset> {
         };
         let config = PoolConfig {
             idle_timeout,
-            time_source,
-            sleep_impl,
             max_connections_per_host,
             reuse_scope: self.reuse_scope,
         };
@@ -306,14 +313,36 @@ impl From<PartitionRegistryError> for BuildError {
     }
 }
 
-#[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
+#[cfg(any(
+    target_os = "android",
+    target_os = "fuchsia",
+    target_os = "illumos",
+    target_os = "ios",
+    target_os = "linux",
+    target_os = "macos",
+    target_os = "solaris",
+    target_os = "tvos",
+    target_os = "visionos",
+    target_os = "watchos",
+))]
 fn set_interface(connector: &mut HttpConnector<GaiResolver>, interface: Option<&str>) {
     if let Some(interface) = interface {
         connector.set_interface(interface);
     }
 }
 
-#[cfg(not(any(target_os = "android", target_os = "fuchsia", target_os = "linux")))]
+#[cfg(not(any(
+    target_os = "android",
+    target_os = "fuchsia",
+    target_os = "illumos",
+    target_os = "ios",
+    target_os = "linux",
+    target_os = "macos",
+    target_os = "solaris",
+    target_os = "tvos",
+    target_os = "visionos",
+    target_os = "watchos",
+)))]
 fn set_interface(_connector: &mut HttpConnector<GaiResolver>, _interface: Option<&str>) {}
 
 #[cfg(all(test, not(smithy_http_client_loom)))]
@@ -322,6 +351,15 @@ mod tests {
     use crate::client::pool::{DriverSpawner, PartitionId};
     use std::future::Future;
     use std::pin::Pin;
+
+    #[derive(Debug)]
+    struct PendingSleep;
+
+    impl AsyncSleep for PendingSleep {
+        fn sleep(&self, _duration: Duration) -> aws_smithy_async::rt::sleep::Sleep {
+            aws_smithy_async::rt::sleep::Sleep::new(std::future::pending())
+        }
+    }
 
     #[derive(Debug)]
     struct TestSpawner;
@@ -334,6 +372,73 @@ mod tests {
 
     fn partition(index: usize) -> Partition {
         Partition::new(PartitionId::from_index(index), TestSpawner)
+    }
+
+    #[test]
+    fn builder_defaults_and_nested_option_setters_are_distinct() {
+        let mut builder = Builder::default();
+        assert_eq!(None, builder.idle_timeout);
+        assert_eq!(None, builder.tcp_keepalive);
+        assert!(builder.tcp_nodelay);
+        assert_eq!(None, builder.max_connections_per_host);
+        assert!(builder.partitions.is_none());
+
+        builder.set_idle_timeout(Some(None));
+        builder.set_tcp_keepalive(Some(None));
+        builder.set_tcp_nodelay(false);
+        builder.set_max_connections_per_host(Some(3));
+        builder.set_partitions(Some(vec![partition(7)]));
+        assert_eq!(Some(None), builder.idle_timeout);
+        assert_eq!(Some(None), builder.tcp_keepalive);
+        assert!(!builder.tcp_nodelay);
+        assert_eq!(Some(3), builder.max_connections_per_host);
+        assert_eq!(1, builder.partitions.as_ref().unwrap().len());
+
+        builder.set_idle_timeout(None);
+        builder.set_tcp_keepalive(None);
+        builder.set_max_connections_per_host(None);
+        builder.set_partitions(None);
+        assert_eq!(None, builder.idle_timeout);
+        assert_eq!(None, builder.tcp_keepalive);
+        assert_eq!(None, builder.max_connections_per_host);
+        assert!(builder.partitions.is_none());
+    }
+
+    #[test]
+    fn terminal_build_resolves_the_default_idle_timeout() {
+        let pool = Builder::default()
+            .sleep_impl(PendingSleep)
+            .build_http()
+            .unwrap();
+
+        assert_eq!(
+            Some(Duration::from_secs(90)),
+            pool.inner.config.idle_timeout
+        );
+    }
+
+    #[test]
+    #[cfg(any(
+        target_os = "android",
+        target_os = "fuchsia",
+        target_os = "illumos",
+        target_os = "ios",
+        target_os = "linux",
+        target_os = "macos",
+        target_os = "solaris",
+        target_os = "tvos",
+        target_os = "visionos",
+        target_os = "watchos",
+    ))]
+    fn terminal_build_rejects_interface_names_with_nul_bytes() {
+        let error = Builder::default()
+            .partitions([partition(7).interface("eth\0invalid")])
+            .build_http()
+            .unwrap_err();
+        assert_eq!(
+            "partition PartitionId(7) has an invalid network-interface name",
+            error.to_string()
+        );
     }
 
     #[test]

@@ -17,8 +17,9 @@ use super::partition::PartitionId;
 use crate::sync::{Arc, Mutex};
 pub use aws_smithy_runtime_api::client::connection::ConnectionId;
 use aws_smithy_runtime_api::client::connection::ConnectionMetadata;
+use http_1x::Extensions;
 use hyper::rt::{Read, ReadBufCursor, Write};
-use hyper_util::client::legacy::connect::{Connected, Connection};
+use hyper_util::client::legacy::connect::{Connected, Connection, HttpInfo};
 use pin_project_lite::pin_project;
 use std::fmt;
 use std::io::{self, IoSlice};
@@ -54,6 +55,10 @@ pub(super) enum NegotiatedProtocol {
     /// HTTP/1.1 with one exclusive request sender.
     Http1,
     /// HTTP/2 with a multiplexed request sender.
+    #[allow(
+        dead_code,
+        reason = "constructed once HTTP/2 generations are implemented"
+    )]
     Http2,
 }
 
@@ -71,6 +76,10 @@ pub(super) struct ConnectionInfo {
     /// Partition that retains the transport and protocol driver.
     owner_partition: PartitionId,
     /// Protocol selected by configuration or ALPN.
+    #[allow(
+        dead_code,
+        reason = "read when HTTP/2 generation selection is implemented"
+    )]
     protocol: NegotiatedProtocol,
     /// Local socket address reported by the connector, when available.
     local_addr: Option<SocketAddr>,
@@ -78,6 +87,8 @@ pub(super) struct ConnectionInfo {
     remote_addr: Option<SocketAddr>,
     /// Whether the transport reaches the origin through a proxy.
     proxied: bool,
+    /// Connector metadata copied into every response on this connection.
+    connected: Connected,
 }
 
 impl ConnectionInfo {
@@ -87,18 +98,20 @@ impl ConnectionInfo {
         origin: OriginKey,
         owner_partition: PartitionId,
         protocol: NegotiatedProtocol,
-        local_addr: Option<SocketAddr>,
-        remote_addr: Option<SocketAddr>,
-        proxied: bool,
+        connected: Connected,
     ) -> Arc<Self> {
+        let mut extras = Extensions::new();
+        connected.get_extras(&mut extras);
+        let http_info = extras.get::<HttpInfo>();
         Arc::new(Self {
             id,
             origin,
             owner_partition,
             protocol,
-            local_addr,
-            remote_addr,
-            proxied,
+            local_addr: http_info.map(HttpInfo::local_addr),
+            remote_addr: http_info.map(HttpInfo::remote_addr),
+            proxied: connected.is_proxied(),
+            connected,
         })
     }
 
@@ -118,16 +131,19 @@ impl ConnectionInfo {
     }
 
     /// Returns the established HTTP protocol.
+    #[cfg(test)]
     pub(super) fn protocol(&self) -> NegotiatedProtocol {
         self.protocol
     }
 
     /// Returns the connector-reported local socket address.
+    #[cfg(test)]
     pub(super) fn local_addr(&self) -> Option<SocketAddr> {
         self.local_addr
     }
 
     /// Returns the connector-reported remote socket address.
+    #[cfg(test)]
     pub(super) fn remote_addr(&self) -> Option<SocketAddr> {
         self.remote_addr
     }
@@ -135,6 +151,11 @@ impl ConnectionInfo {
     /// Returns whether the origin is reached through a proxy.
     pub(super) fn is_proxied(&self) -> bool {
         self.proxied
+    }
+
+    /// Copies connector-provided values into a response extension map.
+    pub(super) fn apply_connector_extras(&self, extensions: &mut Extensions) {
+        self.connected.get_extras(extensions);
     }
 
     /// Builds Smithy metadata with close authority for this H1 generation.
@@ -160,9 +181,7 @@ impl ConnectionInfo {
                 .expect("synthetic test origin is valid"),
             owner_partition,
             NegotiatedProtocol::Http1,
-            None,
-            None,
-            false,
+            Connected::new(),
         )
     }
 }
@@ -283,6 +302,46 @@ impl ConnectionState {
         true
     }
 
+    /// Refines a driver-observed close after Hyper confirms an upgrade.
+    ///
+    /// Hyper transfers upgraded I/O and completes its HTTP/1 driver in the same
+    /// poll. The request task may therefore observe the upgrading response only
+    /// after the driver recorded `ProtocolClosed`. Refinement changes no ownership
+    /// and never releases capacity a second time.
+    pub(super) fn refine_protocol_close_as_upgrade(&self) -> bool {
+        let refined = {
+            let mut lifecycle = self.lifecycle.lock();
+            match &mut lifecycle.logical {
+                LogicalState::Closed { reason } if *reason == CloseReason::ProtocolClosed => {
+                    *reason = CloseReason::Upgraded;
+                    true
+                }
+                _ => false,
+            }
+        };
+        if refined {
+            tracing::debug!(
+                connection_id = %self.id(),
+                owner_partition = ?self.owner_partition(),
+                previous_close_reason = ?CloseReason::ProtocolClosed,
+                close_reason = ?CloseReason::Upgraded,
+                "refined connection close reason after HTTP/1 upgrade"
+            );
+        }
+        refined
+    }
+
+    /// Verifies a close reason at a protocol handoff boundary in debug builds.
+    #[cfg(debug_assertions)]
+    pub(super) fn debug_assert_close_reason(&self, expected: CloseReason) {
+        let lifecycle = self.lifecycle.lock();
+        let actual = match lifecycle.logical {
+            LogicalState::Open { .. } => None,
+            LogicalState::Closed { reason } => Some(reason),
+        };
+        debug_assert_eq!(Some(expected), actual);
+    }
+
     /// Removes one dispatch previously committed by [`Self::try_commit_dispatch`].
     fn finish_dispatch(&self) {
         let mut lifecycle = self.lifecycle.lock();
@@ -307,6 +366,7 @@ impl ConnectionState {
     }
 
     /// Returns a consistent lifecycle snapshot.
+    #[cfg(test)]
     pub(super) fn snapshot(&self) -> ConnectionSnapshot {
         let lifecycle = self.lifecycle.lock();
         ConnectionSnapshot {
@@ -349,6 +409,7 @@ enum LogicalState {
     Closed { reason: CloseReason },
 }
 
+#[cfg(test)]
 /// Observable lifecycle state used by protocol coordination and focused tests.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct ConnectionSnapshot {
@@ -373,6 +434,7 @@ pub(super) struct DispatchGuard {
 
 impl DispatchGuard {
     /// Returns the identity of the connection carrying this dispatch.
+    #[cfg(test)]
     pub(super) fn connection_id(&self) -> ConnectionId {
         self.connection.id()
     }
@@ -412,6 +474,7 @@ impl PhysicalConnectionGuard {
     ///
     /// Dropping an uncompleted guard performs the same transition during task
     /// cancellation or runtime shutdown.
+    #[cfg(test)]
     pub(super) fn complete(mut self) {
         self.active = false;
         self.connection.finish_physical();
@@ -448,6 +511,7 @@ impl<T> ConnectionIo<T> {
     }
 
     /// Returns the wrapped transport.
+    #[cfg(test)]
     pub(super) fn get_ref(&self) -> &T {
         &self.inner
     }
@@ -549,6 +613,30 @@ mod tests {
     }
 
     #[test]
+    fn upgrade_refines_only_a_driver_observed_protocol_close() {
+        let origin = OriginAdmission::new(NonZeroUsize::new(1).unwrap());
+        let lease = OriginAdmission::lease_for_test(&origin);
+        let (connection, _physical) = ConnectionState::bounded(test_info(1), lease);
+
+        assert!(connection.logical_close(CloseReason::ProtocolClosed));
+        assert!(connection.refine_protocol_close_as_upgrade());
+        assert_eq!(
+            Some(CloseReason::Upgraded),
+            connection.snapshot().close_reason
+        );
+        assert_eq!(1, origin.available_capacity_for_test());
+        assert!(!connection.refine_protocol_close_as_upgrade());
+
+        let (poisoned, _physical) = ConnectionState::unbounded(test_info(2));
+        assert!(poisoned.logical_close(CloseReason::Poisoned));
+        assert!(!poisoned.refine_protocol_close_as_upgrade());
+        assert_eq!(
+            Some(CloseReason::Poisoned),
+            poisoned.snapshot().close_reason
+        );
+    }
+
+    #[test]
     fn committed_dispatch_drains_after_logical_close() {
         let (connection, _physical) = ConnectionState::unbounded(test_info(1));
         let dispatch = ConnectionState::try_commit_dispatch(&connection).unwrap();
@@ -574,8 +662,9 @@ mod tests {
 
     #[test]
     fn connection_state_retains_immutable_connection_info() {
-        let local_addr = "127.0.0.1:1234".parse().unwrap();
-        let remote_addr = "192.0.2.1:443".parse().unwrap();
+        #[derive(Clone, Debug, Eq, PartialEq)]
+        struct ConnectorMarker(&'static str);
+
         let origin =
             OriginKey::from_parts(http_1x::uri::Scheme::HTTPS, "example.com", None).unwrap();
         let info = ConnectionInfo::new(
@@ -583,9 +672,9 @@ mod tests {
             origin.clone(),
             PartitionId::from_index(2),
             NegotiatedProtocol::Http1,
-            Some(local_addr),
-            Some(remote_addr),
-            true,
+            Connected::new()
+                .proxy(true)
+                .extra(ConnectorMarker("connector-extra")),
         );
         let (connection, _physical) = ConnectionState::unbounded(info);
 
@@ -593,9 +682,15 @@ mod tests {
         assert_eq!(&origin, connection.info().origin());
         assert_eq!(PartitionId::from_index(2), connection.owner_partition());
         assert_eq!(NegotiatedProtocol::Http1, connection.info().protocol());
-        assert_eq!(Some(local_addr), connection.info().local_addr());
-        assert_eq!(Some(remote_addr), connection.info().remote_addr());
+        assert_eq!(None, connection.info().local_addr());
+        assert_eq!(None, connection.info().remote_addr());
         assert!(connection.info().is_proxied());
+        let mut extensions = Extensions::new();
+        connection.info().apply_connector_extras(&mut extensions);
+        assert_eq!(
+            Some(&ConnectorMarker("connector-extra")),
+            extensions.get::<ConnectorMarker>()
+        );
     }
 
     #[test]

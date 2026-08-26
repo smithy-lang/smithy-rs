@@ -21,8 +21,7 @@ use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::connection::ConnectionId;
 use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_types::body::SdkBody;
-use http_1x::{Extensions, Uri};
-use hyper_util::client::legacy::connect::HttpInfo;
+use http_1x::Uri;
 use std::error::Error;
 use std::fmt;
 use std::future::{poll_fn, Future};
@@ -115,10 +114,10 @@ pub(super) async fn establish_h1(
     partition: Arc<PartitionState>,
     cell: Arc<OriginCell>,
     uri: Uri,
+    spawner: StdArc<dyn DriverSpawner>,
     permit: EstablishmentPermit,
     connect_timeout: Option<ConnectTimeout>,
 ) -> Result<H1Selection, ConnectorError> {
-    let spawner = owner_spawner(&partition)?;
     tracing::debug!(
         owner_partition = ?partition.id(),
         origin = %uri,
@@ -134,18 +133,14 @@ pub(super) async fn establish_h1(
         return Err(ConnectorError::user(UnsupportedNegotiatedProtocol.into()));
     }
 
-    let mut extras = Extensions::new();
-    connected.get_extras(&mut extras);
-    let http_info = extras.get::<HttpInfo>();
-    let id = next_connection_id(&pool)?;
+    let id =
+        next_connection_id(&pool).map_err(|error| ConnectorError::other(error.into(), None))?;
     let info = ConnectionInfo::new(
         id,
         cell.id().origin().clone(),
         partition.id(),
         NegotiatedProtocol::Http1,
-        http_info.map(HttpInfo::local_addr),
-        http_info.map(HttpInfo::remote_addr),
-        connected.is_proxied(),
+        connected,
     );
     let (connection, physical) = match permit.into_lease() {
         Some(lease) => ConnectionState::bounded(info, lease),
@@ -186,34 +181,39 @@ pub(super) async fn establish_h1(
 }
 
 /// Mints one non-wrapping connection identity.
-fn next_connection_id(pool: &PoolInner) -> Result<ConnectionId, ConnectorError> {
+fn next_connection_id(pool: &PoolInner) -> Result<ConnectionId, ConnectionIdExhausted> {
     let value = pool
         .next_connection_id
         .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
             current.checked_add(1)
         })
-        .map_err(|_| ConnectorError::other(ConnectionIdExhausted.into(), None))?;
+        .map_err(|_| ConnectionIdExhausted)?;
     Ok(ConnectionId::new(value))
 }
 
 /// Resolves the retained explicit spawner or captures the anonymous runtime.
 pub(super) fn owner_spawner(
     partition: &PartitionState,
-) -> Result<StdArc<dyn DriverSpawner>, ConnectorError> {
+) -> Result<StdArc<dyn DriverSpawner>, MissingAnonymousRuntime> {
+    if let Some(spawner) = partition.driver_spawner() {
+        return Ok(spawner);
+    }
+
+    if !partition.id().is_anonymous() {
+        unreachable!("an explicit partition always has a driver spawner");
+    }
+
     #[cfg(feature = "rt-tokio")]
     {
-        Ok(partition
-            .driver_spawner_with(|| StdArc::new(super::partition::TokioDriverSpawner::current())))
+        let handle = tokio::runtime::Handle::try_current().map_err(|_| MissingAnonymousRuntime)?;
+        Ok(partition.driver_spawner_with(|| {
+            StdArc::new(super::partition::TokioDriverSpawner::from_handle(handle))
+        }))
     }
 
     #[cfg(not(feature = "rt-tokio"))]
     {
-        if partition.id().is_anonymous() {
-            return Err(ConnectorError::user(MissingAnonymousRuntime.into()));
-        }
-        Ok(partition.driver_spawner_with(|| {
-            unreachable!("an explicit partition always has a driver spawner")
-        }))
+        Err(MissingAnonymousRuntime)
     }
 }
 
@@ -239,16 +239,15 @@ impl fmt::Display for ConnectionIdExhausted {
 
 impl Error for ConnectionIdExhausted {}
 
-#[cfg(not(feature = "rt-tokio"))]
 #[derive(Debug)]
-struct MissingAnonymousRuntime;
+pub(super) struct MissingAnonymousRuntime;
 
-#[cfg(not(feature = "rt-tokio"))]
 impl fmt::Display for MissingAnonymousRuntime {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("the anonymous connection-pool partition requires the `rt-tokio` feature")
+        f.write_str(
+            "the anonymous connection-pool partition requires an active Tokio runtime on first use",
+        )
     }
 }
 
-#[cfg(not(feature = "rt-tokio"))]
 impl Error for MissingAnonymousRuntime {}

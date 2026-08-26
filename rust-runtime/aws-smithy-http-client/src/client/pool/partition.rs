@@ -38,11 +38,46 @@ impl Partition {
     /// Binds connections established by this partition to an interface.
     ///
     /// The binding is applied before connect. On Linux, using this setting
-    /// may require `CAP_NET_RAW` or root privileges.
-    #[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
+    /// sets `SO_BINDTODEVICE` and may require `CAP_NET_RAW` or root
+    /// privileges. Apple platforms, illumos, and Solaris use `IP_BOUND_IF`.
+    ///
+    /// This method is available on Linux and Android, Fuchsia, illumos,
+    /// Solaris, macOS, iOS, tvOS, visionOS, and watchOS.
+    #[cfg(any(
+        target_os = "android",
+        target_os = "fuchsia",
+        target_os = "illumos",
+        target_os = "ios",
+        target_os = "linux",
+        target_os = "macos",
+        target_os = "solaris",
+        target_os = "tvos",
+        target_os = "visionos",
+        target_os = "watchos",
+    ))]
+    #[cfg_attr(
+        docsrs,
+        doc(cfg(any(
+            target_os = "android",
+            target_os = "fuchsia",
+            target_os = "illumos",
+            target_os = "ios",
+            target_os = "linux",
+            target_os = "macos",
+            target_os = "solaris",
+            target_os = "tvos",
+            target_os = "visionos",
+            target_os = "watchos",
+        )))
+    )]
     pub fn interface(mut self, interface: impl Into<String>) -> Self {
         self.interface = Some(Arc::from(interface.into()));
         self
+    }
+
+    /// Returns the configured network-interface name for validation.
+    pub(super) fn interface_name(&self) -> Option<&str> {
+        self.interface.as_deref()
     }
 
     /// Returns this partition's declared identity.
@@ -213,7 +248,7 @@ mod tests {
         assert!(ran.load(Ordering::SeqCst));
     }
 
-    #[cfg(all(feature = "rt-tokio", debug_assertions))]
+    #[cfg(feature = "rt-tokio")]
     #[test]
     fn tokio_spawner_accepts_work_from_a_foreign_runtime() {
         let owner = tokio::runtime::Builder::new_current_thread()

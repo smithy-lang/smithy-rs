@@ -10,12 +10,19 @@
 //! arbitration. The residence says where that one sender must be:
 //!
 //! ```text
-//! Idle(sender) -> Selected -----------------------> Closing
-//!                    |                                ^
-//!                    `-> Returning(sender outside) ---|
-//!                              |
-//!                              +-> Selected
-//!                              `-> Idle(sender)
+//! completed handshake -- install_selected --------------------> Selected
+//! test fixture ------- install_idle ---------------------------> Idle(sender)
+//!
+//! Idle(sender) -- select_idle --------------------------------> Selected
+//! Idle(sender) -- take_idle_for_claim ------------------------> Returning
+//! Selected ---- begin_return ---------------------------------> Returning
+//! Returning --- commit_return_to_waiter ----------------------> Selected
+//! Selected ---- return_idle ----------------------------------> Idle(sender)
+//! Returning --- return_idle ----------------------------------> Idle(sender)
+//!
+//! Idle(sender) ------------ begin_close ----------------------> Closing
+//! Selected / Returning ---- begin_close / close_owned --------> Closing
+//! Closing -------- finish_close ------------------------------> removed
 //! ```
 //!
 //! [`H1Selection`], [`H1ReturnTask`], [`H1ReturnOffer`], and
@@ -74,6 +81,16 @@ impl H1Sender {
             Self::Hyper(sender) => sender,
             #[cfg(test)]
             Self::Test(_) => panic!("test HTTP/1 sender reached Hyper dispatch"),
+        }
+    }
+
+    /// Returns whether Hyper already permits another request.
+    #[cfg(feature = "default-client")]
+    fn is_ready(&self) -> bool {
+        match self {
+            Self::Hyper(sender) => sender.is_ready(),
+            #[cfg(test)]
+            Self::Test(_) => panic!("test HTTP/1 sender reached Hyper readiness"),
         }
     }
 
@@ -137,6 +154,7 @@ impl H1Records {
     }
 
     /// Installs a connection that completed without a live launching waiter.
+    #[cfg(test)]
     pub(super) fn install_idle(
         &mut self,
         connection: Arc<ConnectionState>,
@@ -214,6 +232,30 @@ impl H1Records {
         })
     }
 
+    /// Returns whether `owner` may still re-enter reusable return policy.
+    pub(super) fn accepts_return(&self, owner: &H1Owner) -> bool {
+        self.records.get(&owner.id()).is_some_and(|record| {
+            matches!(
+                record.residence,
+                H1Residence::Selected | H1Residence::Returning
+            )
+        })
+    }
+
+    /// Returns whether an installed claim still has a source-side endpoint.
+    ///
+    /// Logical close may move an externally owned sender to `Closing` before
+    /// its return resolves the installed claim, so claim consistency is
+    /// intentionally broader than current reuse eligibility.
+    pub(super) fn supports_installed_claim(&self) -> bool {
+        self.records.values().any(|record| {
+            matches!(
+                record.residence,
+                H1Residence::Selected | H1Residence::Returning | H1Residence::Closing
+            )
+        })
+    }
+
     /// Returns whether this cell should remain advertised as an H1 source.
     pub(super) fn is_advertisable(&self) -> bool {
         self.has_returnable()
@@ -269,19 +311,6 @@ impl H1Records {
             }
             H1Residence::Idle { .. } | H1Residence::Closing => false,
         }
-    }
-
-    /// Recommits a returning sender to a request without making it idle.
-    pub(super) fn reselect_returning(&mut self, owner: &H1Owner) -> bool {
-        let Some(record) = self.records.get_mut(&owner.id()) else {
-            return false;
-        };
-        if !matches!(record.residence, H1Residence::Returning) {
-            return false;
-        }
-        record.residence = H1Residence::Selected;
-        self.assert_consistent();
-        true
     }
 
     /// Marks a selected or returning sender as closing.
@@ -356,6 +385,22 @@ impl H1Records {
         (self.records.len(), self.idle.len())
     }
 
+    /// Returns the sole installed connection for focused dispatch tests.
+    #[cfg(all(test, feature = "rt-tokio"))]
+    pub(super) fn only_connection_for_test(&self) -> Arc<ConnectionState> {
+        assert_eq!(
+            1,
+            self.records.len(),
+            "expected exactly one installed HTTP/1 record"
+        );
+        self.records
+            .values()
+            .next()
+            .expect("HTTP/1 record count changed under the cell lock")
+            .connection
+            .clone()
+    }
+
     /// Returns idle records whose configured deadline has elapsed.
     pub(super) fn expired_idle(&self, now: SystemTime) -> Vec<ConnectionId> {
         self.idle
@@ -425,6 +470,30 @@ impl H1Records {
                 );
             }
         }
+    }
+}
+
+#[cfg(all(test, not(smithy_http_client_loom)))]
+mod tests {
+    use super::*;
+    use crate::client::pool::connection::ConnectionInfo;
+    use crate::client::pool::PartitionId;
+
+    #[test]
+    fn closing_a_selected_record_rejects_its_later_return() {
+        let info = ConnectionInfo::for_test(ConnectionId::new(1), PartitionId::from_index(1));
+        let (connection, _physical) = ConnectionState::unbounded(info);
+        let mut records = H1Records::default();
+        let owner = records
+            .install_selected(connection, H1Sender::test(11))
+            .expect("fresh HTTP/1 record was rejected");
+
+        assert!(records.accepts_return(&owner));
+        assert!(records.begin_close(owner.id()).is_some());
+        assert!(!records.accepts_return(&owner));
+
+        drop(owner);
+        records.finish_close(ConnectionId::new(1));
     }
 }
 
@@ -658,6 +727,16 @@ pub(in crate::client::pool) struct H1ReturnTask {
 }
 
 impl H1ReturnTask {
+    /// Returns whether Hyper already permits another request.
+    #[cfg(feature = "default-client")]
+    pub(in crate::client::pool) fn is_ready(&self) -> bool {
+        self.owner
+            .as_ref()
+            .expect("HTTP/1 return task consumed more than once")
+            .sender
+            .is_ready()
+    }
+
     /// Polls Hyper for proof that the sender can accept another request.
     #[cfg(feature = "default-client")]
     pub(in crate::client::pool) fn poll_ready(
@@ -697,7 +776,13 @@ impl H1ReturnTask {
     /// Retires the sender instead of returning it to the source cell.
     pub(in crate::client::pool) fn retire(mut self, reason: CloseReason) {
         if let Some(owner) = self.owner.take() {
+            let upgrade = (reason == CloseReason::Upgraded).then(|| owner.connection().clone());
             retire_at_source(&self.source, owner, reason);
+            if let Some(connection) = upgrade {
+                connection.refine_protocol_close_as_upgrade();
+                #[cfg(debug_assertions)]
+                connection.debug_assert_close_reason(CloseReason::Upgraded);
+            }
         }
     }
 }
@@ -738,14 +823,6 @@ impl H1ReturnOffer {
     pub(in crate::client::pool) fn resolve(mut self) {
         if let Some(owner) = self.owner.take() {
             return_to_source(&self.source, owner);
-        }
-    }
-
-    /// Transfers the returning sender into cross-cell claim resolution.
-    pub(in crate::client::pool) fn into_provisional(mut self) -> ProvisionalH1 {
-        ProvisionalH1 {
-            source: self.source.clone(),
-            owner: self.owner.take(),
         }
     }
 }
@@ -804,21 +881,6 @@ impl ProvisionalH1 {
             source,
             owner: Some(owner),
         }
-    }
-
-    /// Recommits this sender as selected by a target request.
-    pub(in crate::client::pool) fn commit(mut self) -> Option<H1Selection> {
-        let owner = self
-            .owner
-            .take()
-            .expect("provisional HTTP/1 sender consumed more than once");
-        if let Some(source) = self.source.upgrade() {
-            if source.reselect_returning_h1(&owner) {
-                return Some(H1Selection::new(&source, owner));
-            }
-        }
-        retire_at_source(&self.source, owner, CloseReason::ProtocolClosed);
-        None
     }
 }
 

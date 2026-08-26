@@ -24,7 +24,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::num::{NonZeroU16, NonZeroUsize};
-use std::sync::Arc as StdArc;
+use std::sync::{Arc as StdArc, OnceLock};
 
 /// Fixed partition set and the origin-wide admission states it shares.
 #[derive(Debug)]
@@ -67,6 +67,12 @@ impl PartitionRegistry {
         let mut by_id = HashMap::new();
         for partition in partitions {
             let id = partition.id();
+            if partition
+                .interface_name()
+                .is_some_and(|interface| interface.as_bytes().contains(&0))
+            {
+                return Err(PartitionRegistryError::InvalidInterface(id));
+            }
             if id.is_anonymous() {
                 return Err(PartitionRegistryError::ReservedAnonymousPartition);
             }
@@ -183,8 +189,11 @@ impl PartitionRegistry {
         }
     }
 
-    /// Logically closes every retained connection after snapshotting cells.
+    /// Stops partition maintenance and logically closes every connection.
     pub(crate) fn close_all(&self, reason: CloseReason) {
+        for partition in self.partitions.values() {
+            partition.shutdown_maintenance();
+        }
         let cells = self
             .partitions
             .values()
@@ -202,7 +211,7 @@ pub(crate) struct PartitionState {
     /// Stable identity copied into every cell and owned connection.
     id: PartitionId,
     /// Declared spawner, or the first spawner published for the anonymous partition.
-    spawner: Mutex<Option<StdArc<dyn DriverSpawner>>>,
+    spawner: OnceLock<StdArc<dyn DriverSpawner>>,
     /// Network interface used for placement and reuse eligibility.
     interface: Option<StdArc<str>>,
     /// Cells retained for the lifetime of this partition.
@@ -216,7 +225,7 @@ impl PartitionState {
     fn anonymous(maintenance: MaintenanceConfig) -> Self {
         Self {
             id: PartitionId::ANONYMOUS,
-            spawner: Mutex::new(None),
+            spawner: OnceLock::new(),
             interface: None,
             origins: RwLock::new(OriginMap::default()),
             maintenance: PartitionMaintenance::new(maintenance),
@@ -228,7 +237,7 @@ impl PartitionState {
         let (id, spawner, interface) = partition.into_parts();
         Self {
             id,
-            spawner: Mutex::new(Some(spawner)),
+            spawner: OnceLock::from(spawner),
             interface,
             origins: RwLock::new(OriginMap::default()),
             maintenance: PartitionMaintenance::new(maintenance),
@@ -245,31 +254,21 @@ impl PartitionState {
         self.interface.as_ref()
     }
 
+    /// Returns the partition's already-published driver spawner.
+    pub(crate) fn driver_spawner(&self) -> Option<StdArc<dyn DriverSpawner>> {
+        self.spawner.get().cloned()
+    }
+
     /// Returns the declared spawner or lazily publishes an anonymous spawner.
     ///
-    /// Candidate construction and destruction both happen without the
-    /// spawner lock held. Concurrent callers receive the one published value.
+    /// Concurrent callers receive the one published value.
+    #[cfg(any(feature = "rt-tokio", test))]
     pub(crate) fn driver_spawner_with(
         &self,
         make_anonymous: impl FnOnce() -> StdArc<dyn DriverSpawner>,
     ) -> StdArc<dyn DriverSpawner> {
-        if let Some(spawner) = self.spawner.lock().as_ref() {
-            return spawner.clone();
-        }
-
         debug_assert!(self.id.is_anonymous());
-        let candidate = make_anonymous();
-        let selected = {
-            let mut spawner = self.spawner.lock();
-            if let Some(spawner) = spawner.as_ref() {
-                spawner.clone()
-            } else {
-                *spawner = Some(candidate.clone());
-                candidate.clone()
-            }
-        };
-        drop(candidate);
-        selected
+        self.spawner.get_or_init(make_anonymous).clone()
     }
 
     /// Looks up a cell without materializing an owned origin key.
@@ -283,6 +282,7 @@ impl PartitionState {
     }
 
     /// Returns the number of cells retained by this partition.
+    #[cfg(test)]
     pub(crate) fn cell_count(&self) -> usize {
         self.origins.read().len()
     }
@@ -290,6 +290,11 @@ impl PartitionState {
     /// Starts idle maintenance on this partition's declared runtime.
     pub(crate) fn start_maintenance(&self, spawner: &dyn DriverSpawner) {
         PartitionMaintenance::start(&self.maintenance, spawner);
+    }
+
+    /// Stops this partition's maintenance task during pool teardown.
+    fn shutdown_maintenance(&self) {
+        self.maintenance.shutdown();
     }
 
     /// Snapshots retained cells before invoking any cell transition.
@@ -337,6 +342,7 @@ impl OriginMap {
     }
 
     /// Returns the cached number of cells across every scheme-port bucket.
+    #[cfg(test)]
     fn len(&self) -> usize {
         self.cell_count
     }
@@ -378,6 +384,8 @@ pub(crate) enum PartitionRegistryError {
     DuplicatePartition(PartitionId),
     /// An explicit partition used the identity reserved for the default.
     ReservedAnonymousPartition,
+    /// A network-interface name contained an interior NUL byte.
+    InvalidInterface(PartitionId),
 }
 
 impl fmt::Display for PartitionRegistryError {
@@ -389,6 +397,9 @@ impl fmt::Display for PartitionRegistryError {
             Self::DuplicatePartition(id) => write!(f, "duplicate partition identifier: {id:?}"),
             Self::ReservedAnonymousPartition => {
                 f.write_str("the anonymous partition identifier is reserved")
+            }
+            Self::InvalidInterface(id) => {
+                write!(f, "partition {id:?} has an invalid network-interface name")
             }
         }
     }
@@ -457,48 +468,7 @@ mod tests {
             .iter()
             .skip(1)
             .all(|spawner| Arc::ptr_eq(&spawners[0], spawner)));
-        assert!((1..=THREADS).contains(&calls.load(Ordering::SeqCst)));
-    }
-
-    #[test]
-    fn losing_spawner_is_dropped_without_the_registry_lock() {
-        #[derive(Debug)]
-        struct DropChecksLock {
-            other_lock: Arc<Mutex<()>>,
-        }
-
-        impl DriverSpawner for DropChecksLock {
-            fn spawn(&self, driver: Pin<Box<dyn Future<Output = ()> + Send + 'static>>) {
-                drop(driver);
-            }
-        }
-
-        impl Drop for DropChecksLock {
-            fn drop(&mut self) {
-                drop(self.other_lock.lock());
-            }
-        }
-
-        let registry = PartitionRegistry::anonymous(ConnectionReuseScope::default(), None);
-        let partition = registry.partition(PartitionId::ANONYMOUS).unwrap();
-        let barrier = Arc::new(Barrier::new(2));
-        let other_lock = Arc::new(Mutex::new(()));
-        let mut threads = Vec::new();
-        for _ in 0..2 {
-            let partition = partition.clone();
-            let barrier = barrier.clone();
-            let other_lock = other_lock.clone();
-            threads.push(std::thread::spawn(move || {
-                partition.driver_spawner_with(|| {
-                    barrier.wait();
-                    Arc::new(DropChecksLock { other_lock })
-                })
-            }));
-        }
-
-        for thread in threads {
-            thread.join().unwrap();
-        }
+        assert_eq!(1, calls.load(Ordering::SeqCst));
     }
 
     #[test]
@@ -714,8 +684,7 @@ mod tests {
         assert_eq!(1, partition.cell_count());
 
         let waiter = cells[0].register_waiter(ProtocolRequirement::H1Compatible);
-        let lease = cells[0]
-            .take_ready_lease(waiter)
+        let lease = OriginCell::take_ready_lease(&cells[0], waiter)
             .expect("admission targeted a different cell than the registry retained");
         drop(lease);
     }

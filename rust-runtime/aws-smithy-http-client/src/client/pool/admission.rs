@@ -18,6 +18,9 @@ use std::fmt;
 use std::num::NonZeroUsize;
 
 pub(in crate::client::pool) mod claims;
+mod delivery;
+
+pub(in crate::client::pool) use delivery::DeliveryGuard;
 
 /// Protocol capability required by the head waiter in a cell.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -25,6 +28,7 @@ pub(crate) enum ProtocolRequirement {
     /// The waiter may dispatch over HTTP/1 or HTTP/2.
     H1Compatible,
     /// The waiter requires HTTP/2.
+    #[allow(dead_code, reason = "used when HTTP/2-only acquisition is implemented")]
     H2Required,
 }
 
@@ -128,11 +132,11 @@ impl DemandSnapshot {
 
 /// Stable identity of one admitted connection slot within an origin.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-struct PermitId(u64);
+pub(super) struct PermitId(u64);
 
 /// Stable identity of one admission-to-cell delivery.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-struct DeliveryId(u64);
+pub(super) struct DeliveryId(u64);
 
 /// Shared admission authority for one bounded origin.
 ///
@@ -182,16 +186,13 @@ impl OriginAdmission {
             )));
         }
         if let Some(pending) = state.schedule_one() {
-            return Some(AdmissionAction::Capacity(CapacityDelivery {
-                origin: origin.clone(),
-                delivery: pending.delivery,
-                target: pending.target,
-                demand: pending.demand,
-                state: CapacityDeliveryState::Undelivered {
-                    permit: Some(pending.permit),
-                    on_drop: TargetAckResult::RetrySameResidence,
-                },
-            }));
+            return Some(AdmissionAction::Delivery(DeliveryGuard::capacity(
+                origin.clone(),
+                pending.delivery,
+                pending.target,
+                pending.demand,
+                pending.permit,
+            )));
         }
         state
             .h1
@@ -216,6 +217,7 @@ impl OriginAdmission {
     }
 
     /// Returns whether the named delivery still owns the target's demand fence.
+    #[cfg(test)]
     fn delivery_is_current(&self, delivery: DeliveryId, target: &CellId, demand: DemandId) -> bool {
         self.state
             .lock()
@@ -253,15 +255,24 @@ impl OriginAdmission {
     }
 
     #[cfg(test)]
+    pub(super) fn publish_action_without_driving(
+        origin: &Arc<Self>,
+        target: CellId,
+        snapshot: DemandSnapshot,
+    ) -> Option<AdmissionAction> {
+        let mut state = origin.state.lock();
+        state.publish_demand(target, snapshot);
+        Self::prepare_action(origin, &mut state)
+    }
+
+    #[cfg(test)]
     pub(super) fn publish_without_driving(
         origin: &Arc<Self>,
         target: CellId,
         snapshot: DemandSnapshot,
-    ) -> Option<CapacityDelivery> {
-        let mut state = origin.state.lock();
-        state.publish_demand(target, snapshot);
-        match Self::prepare_action(origin, &mut state) {
-            Some(AdmissionAction::Capacity(delivery)) => Some(delivery),
+    ) -> Option<DeliveryGuard> {
+        match Self::publish_action_without_driving(origin, target, snapshot) {
+            Some(AdmissionAction::Delivery(delivery)) => Some(delivery),
             Some(AdmissionAction::H1(_)) => {
                 panic!("capacity-only test unexpectedly prepared an HTTP/1 action")
             }
@@ -312,8 +323,8 @@ impl OriginAdmission {
 
 /// One unlocked step prepared while holding the bounded-origin lock.
 pub(super) enum AdmissionAction {
-    /// One connection permit crossing to the origin-order head.
-    Capacity(CapacityDelivery),
+    /// One capacity or borrowed-H1 payload crossing to a target cell.
+    Delivery(DeliveryGuard),
     /// HTTP/1 source, claim, or borrowed-sender work.
     H1(claims::H1Action),
 }
@@ -322,9 +333,15 @@ impl AdmissionAction {
     /// Executes one lock-domain crossing and returns the next prepared step.
     fn drive_once(self) -> Option<Self> {
         match self {
-            Self::Capacity(delivery) => delivery.deliver_once(),
+            Self::Delivery(delivery) => delivery.deliver_once(),
             Self::H1(action) => action.drive_once(),
         }
+    }
+
+    /// Advances one crossing without recursively driving its successor.
+    #[cfg(all(test, smithy_http_client_loom))]
+    pub(super) fn drive_once_for_test(self) -> Option<Self> {
+        self.drive_once()
     }
 }
 
@@ -390,183 +407,13 @@ enum TargetAckResult {
     Rejected { successor: Option<DemandSnapshot> },
 }
 
-/// An available bounded-origin slot being delivered to a waiting cell.
-///
-/// Until committed or rejected, this value owns both the permit and the
-/// delivery fence. Dropping it refunnels the permit, restores the demand's
-/// scheduling residence, and may drive the next delivery synchronously.
-pub(crate) struct CapacityDelivery {
-    /// Admission state that issued the permit.
-    origin: Arc<OriginAdmission>,
-    /// Identity of the outstanding delivery fence.
-    delivery: DeliveryId,
-    /// Cell selected while the admission lock was held.
-    target: CellId,
-    /// Demand episode the target must revalidate.
-    demand: DemandId,
-    /// Permit and fallback ownership before the terminal transition.
-    state: CapacityDeliveryState,
-}
-
-impl CapacityDelivery {
-    /// Returns the demand identity fenced by this delivery.
-    pub(crate) fn demand(&self) -> DemandId {
-        self.demand
-    }
-
-    /// Returns whether this guard still owns the target's delivery fence.
-    pub(crate) fn is_current(&self) -> bool {
-        self.origin
-            .delivery_is_current(self.delivery, &self.target, self.demand)
-    }
-
-    /// Attempts one delivery to the registered target cell.
-    ///
-    /// A live target either accepts or rejects the guard. An expired target
-    /// refunnels the permit and retires the fenced demand.
-    fn deliver_once(self) -> Option<AdmissionAction> {
-        let target = self.origin.target(&self.target);
-        match target {
-            Some(target) => OriginCell::receive_capacity(&target, self),
-            None => self.finish_undelivered(TargetAckResult::Rejected { successor: None }),
-        }
-    }
-
-    /// Transfers the admitted slot to target-owned state.
-    ///
-    /// The returned acknowledgement keeps the scheduling fence installed
-    /// until target state contains the lease.
-    pub(crate) fn commit(
-        mut self,
-        successor: Option<DemandSnapshot>,
-    ) -> (CapacityLease, CapacityDeliveryAck) {
-        let CapacityDeliveryState::Undelivered { permit, .. } = &mut self.state else {
-            unreachable!("capacity delivery committed after terminal transition");
-        };
-        let permit = permit
-            .take()
-            .expect("capacity delivery payload moved more than once");
-        self.state = CapacityDeliveryState::Disarmed;
-
-        (
-            CapacityLease::new(self.origin.clone(), permit),
-            CapacityDeliveryAck {
-                origin: self.origin.clone(),
-                delivery: self.delivery,
-                target: self.target.clone(),
-                result: Some(TargetAckResult::Accepted { successor }),
-            },
-        )
-    }
-
-    /// Rejects this delivery and refunnels its permit with the acknowledgement.
-    pub(crate) fn reject(self, successor: Option<DemandSnapshot>) {
-        let next = self.finish_undelivered(TargetAckResult::Rejected { successor });
-        OriginAdmission::drive(next);
-    }
-
-    /// Disarms this guard and resolves its permit and demand fence together.
-    fn finish_undelivered(mut self, result: TargetAckResult) -> Option<AdmissionAction> {
-        let permit = match &mut self.state {
-            CapacityDeliveryState::Undelivered { permit, .. } => permit.take(),
-            CapacityDeliveryState::Disarmed => None,
-        };
-        self.state = CapacityDeliveryState::Disarmed;
-        OriginAdmission::finish_delivery(&self.origin, self.delivery, &self.target, permit, result)
-    }
-}
-
-impl fmt::Debug for CapacityDelivery {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("CapacityDelivery")
-            .field("delivery", &self.delivery)
-            .field("target", &self.target)
-            .field("demand", &self.demand)
-            .field("state", &self.state)
-            .finish()
-    }
-}
-
-impl Drop for CapacityDelivery {
-    fn drop(&mut self) {
-        let CapacityDeliveryState::Undelivered { permit, on_drop } = &mut self.state else {
-            return;
-        };
-        let permit = permit.take();
-        let result = on_drop.clone();
-        self.state = CapacityDeliveryState::Disarmed;
-        let next = OriginAdmission::finish_delivery(
-            &self.origin,
-            self.delivery,
-            &self.target,
-            permit,
-            result,
-        );
-        OriginAdmission::drive(next);
-    }
-}
-
-/// Drop state for a permit crossing between admission and a cell.
-#[derive(Debug)]
-enum CapacityDeliveryState {
-    /// The guard still owns the permit and fallback acknowledgement.
-    Undelivered {
-        permit: Option<PermitId>,
-        on_drop: TargetAckResult,
-    },
-    /// Ownership and fallback responsibility moved to another guard.
-    Disarmed,
-}
-
-/// Target-owned acknowledgement that closes one delivery fence on completion.
-///
-/// A committed delivery has already moved its lease into target-owned state.
-/// This value is then the sole owner of fence completion; dropping it performs
-/// the acknowledgement and drives any successor delivery.
-#[derive(Debug)]
-pub(crate) struct CapacityDeliveryAck {
-    /// Admission authority that owns the fence.
-    origin: Arc<OriginAdmission>,
-    /// Identity of the outstanding fence.
-    delivery: DeliveryId,
-    /// Cell whose delivery is being acknowledged.
-    target: CellId,
-    /// Terminal result consumed by explicit completion or `Drop`.
-    result: Option<TargetAckResult>,
-}
-
-impl CapacityDeliveryAck {
-    /// Completes this delivery fence and returns the next scheduled crossing.
-    pub(super) fn finish(mut self) -> Option<AdmissionAction> {
-        let result = self
-            .result
-            .take()
-            .expect("new capacity delivery acknowledgement had no result");
-        OriginAdmission::finish_delivery(&self.origin, self.delivery, &self.target, None, result)
-    }
-}
-
-impl Drop for CapacityDeliveryAck {
-    fn drop(&mut self) {
-        if let Some(result) = self.result.take() {
-            let next = OriginAdmission::finish_delivery(
-                &self.origin,
-                self.delivery,
-                &self.target,
-                None,
-                result,
-            );
-            OriginAdmission::drive(next);
-        }
-    }
-}
-
 /// Mutable bounded-origin state protected by one admission lock.
 #[derive(Debug)]
 struct AdmissionState {
     /// Cells available as delivery targets, held weakly to avoid an ownership cycle.
     cells: HashMap<CellId, Weak<OriginCell>>,
     /// Configured number of permits for this origin.
+    #[cfg(test)]
     limit: usize,
     /// Issued permits returned by failed attempts or closed connections.
     available: Vec<PermitId>,
@@ -588,6 +435,7 @@ impl AdmissionState {
         let limit = limit.get();
         Self {
             cells: HashMap::new(),
+            #[cfg(test)]
             limit,
             available: Vec::new(),
             unissued: limit,
@@ -652,6 +500,7 @@ impl AdmissionState {
     }
 
     /// Delegates delivery-fence revalidation to the demand schedule.
+    #[cfg(test)]
     fn delivery_is_current(&self, delivery: DeliveryId, target: &CellId, demand: DemandId) -> bool {
         self.demand_schedule
             .delivery_is_current(delivery, target, demand)
@@ -953,6 +802,7 @@ impl DemandSchedule {
     ///
     /// Cell-side reservation uses this identity check to reject a crossing
     /// prepared for demand that was replaced while no pool lock was held.
+    #[cfg(test)]
     fn delivery_is_current(&self, delivery: DeliveryId, target: &CellId, demand: DemandId) -> bool {
         let Some(record) = self.records.get(target) else {
             return false;
@@ -1229,6 +1079,7 @@ enum DemandResidence {
 }
 
 impl DemandResidence {
+    #[cfg(debug_assertions)]
     /// Borrows order links while this record is queued or delivering.
     fn links(&self) -> Option<&OrderLinks> {
         match self {
@@ -1528,15 +1379,13 @@ mod tests {
         }
         drop(delivery);
 
-        let first_lease = first
-            .take_ready_lease(first_waiter)
+        let first_lease = OriginCell::take_ready_lease(&first, first_waiter)
             .expect("dropped delivery did not retry the original head");
-        assert!(second.take_ready_lease(second_waiter).is_none());
+        assert!(OriginCell::take_ready_lease(&second, second_waiter).is_none());
         assert_eq!(1, origin.counts().ordered);
 
         drop(first_lease);
-        let second_lease = second
-            .take_ready_lease(second_waiter)
+        let second_lease = OriginCell::take_ready_lease(&second, second_waiter)
             .expect("younger demand did not run after the original head");
         drop(second_lease);
     }
@@ -1553,7 +1402,7 @@ mod tests {
 
         drop(target);
         assert!(origin.target(&target_id).is_none());
-        OriginAdmission::drive(Some(AdmissionAction::Capacity(delivery)));
+        OriginAdmission::drive(Some(AdmissionAction::Delivery(delivery)));
 
         let counts = origin.counts();
         assert_eq!(1, counts.available);
@@ -1574,25 +1423,15 @@ mod tests {
         let second_delivery =
             OriginAdmission::publish_without_driving(&second, second_cell.id().clone(), demand(1))
                 .unwrap();
-        assert_eq!(
-            first_delivery
-                .state
-                .permit_id()
-                .expect("first delivery lost permit"),
-            second_delivery
-                .state
-                .permit_id()
-                .expect("second delivery lost permit")
-        );
-    }
+        assert_eq!(0, first.available_capacity_for_test());
+        assert_eq!(0, second.available_capacity_for_test());
 
-    impl CapacityDeliveryState {
-        fn permit_id(&self) -> Option<u64> {
-            match self {
-                Self::Undelivered { permit, .. } => permit.map(|permit| permit.0),
-                Self::Disarmed => None,
-            }
-        }
+        drop(first_delivery);
+        assert_eq!(1, first.available_capacity_for_test());
+        assert_eq!(0, second.available_capacity_for_test());
+
+        drop(second_delivery);
+        assert_eq!(1, second.available_capacity_for_test());
     }
 }
 
