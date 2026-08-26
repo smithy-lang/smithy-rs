@@ -318,15 +318,16 @@ Drivers are spawned only through their partition's `DriverSpawner` and never mov
 keeps a connection's I/O on the runtime that established it, whichever partition later dispatches on it: a
 reused connection carries only its dispatch handle across the boundary, never its driver.
 
-The interface binding is applied to the socket before connect — `SO_BINDTODEVICE` on Linux-like systems,
-`IP_BOUND_IF` on macOS-like and Solaris-like ones — so a connected socket's egress interface is fixed for its
-lifetime. That immutability is what makes handing a dispatch handle to another partition safe: it cannot move
-bytes off the interface the caller chose.
+On Android, Fuchsia, and Linux, the interface binding is applied to the socket before connect through the
+underlying HTTP connector. A connected socket's egress interface is then fixed for its lifetime. That
+immutability is what makes handing a dispatch handle to another partition safe: it cannot move bytes off the
+interface the caller chose. Other targets do not expose the interface-binding builder method.
 
 A pool with no declared partitions has exactly one, unbound, which is the right shape for a program that has
-not reasoned about placement and uses one Tokio runtime. Its first establishment binds that anonymous
-partition to the current runtime; later requests may run on any worker thread of the same runtime. Partitions
-without an interface compare as one group, so the common case does no per-request interface work. The
+not reasoned about placement and uses one Tokio runtime. Its first use binds that anonymous partition to the
+current runtime; later requests may run on any requester runtime while connection-owned work is submitted
+back to that captured owner. Partitions without an interface compare as one group, so the common case does no
+per-request interface work. The
 anonymous partition has the reserved identity `PartitionId::ANONYMOUS`, used by events and statistics;
 callers cannot declare it explicitly. Every explicit identifier is caller-owned. A thread-per-core caller can
 therefore reconstruct `PartitionId::from_index(thread_id)` when it declares the topology, creates each
@@ -335,7 +336,7 @@ thread's client, and reads per-partition statistics, without plumbing pool-issue
 `TokioDriverSpawner::current` captures the current Tokio handle eagerly and panics when called outside a
 runtime. `from_handle` takes a specific handle. Both spawn on the captured runtime regardless of which thread
 invokes `spawn`; neither is supplied by the caller for the anonymous partition, which captures its runtime on
-first establishment as [Connection establishment](#connection-establishment) describes.
+first use as [Connection establishment](#connection-establishment) describes.
 
 `Partition::interface` is available only on platforms where the binding can be applied. The interface is a
 construction-time value but its existence and permissions are properties of the host when a socket is opened;
@@ -481,8 +482,8 @@ Partitions:
 * **Binding immutability** [safety] — a partition's interface binding is fixed at construction and applied
   before connect.
 * **Default partition** [safety] — a pool with no declared partitions has exactly one anonymous partition;
-  its first establishment binds one runtime, and every later establishment and driver uses that same runtime
-  while requests may move among its worker threads.
+  its first use binds one owner runtime, every later establishment and driver uses that runtime, and request
+  tasks may execute on another runtime.
 * **Interface comparison cost** [optimization] — comparing two unbound partitions performs no string work.
 
 Origins:
@@ -628,31 +629,22 @@ on another, every readiness event would cross runtimes, and the socket's reactor
 the driver that holds it. So establishment — connector, transport, TLS, ALPN, handshake — and the driver it
 produces run on the same runtime.
 
-Which runtime that is depends on the partition. The **anonymous partition** has no caller-supplied runtime. Its
-first establishment captures the current Tokio runtime, and every later establishment and its driver run on
-that same runtime. The default `Client` — the shape every generated smithy-rs client uses — may therefore
-travel freely across worker threads of one multithreaded runtime, which share its I/O driver, but not across
-independent runtime instances. An **explicit partition** names a specific runtime through its
-`DriverSpawner`, and its client must be driven from that runtime; a thread-per-core service that pins a
-runtime per core holds each partition's client on its core, so the precondition costs nothing. Driving either
-kind of partition's client from a different runtime contradicts its placement.
+Which runtime that is depends on the partition. An **explicit partition** names its owner runtime through its
+`DriverSpawner`. The **anonymous partition** has no caller-supplied runtime, so its first request captures the
+current Tokio runtime as that partition's owner. A request may itself be polled on another runtime: after a
+miss acquires establishment capacity, the pool submits the still-unpolled connector, transport, TLS/ALPN, and
+Hyper handshake future through the owner partition's spawner. Completion commits the result to the cell and
+wakes the requesting task. The resulting protocol driver and pending return work use the same spawner.
 
-`TokioDriverSpawner` always submits the driver to its captured handle and debug-asserts that the current
-runtime's stable `Handle::id()` matches the captured handle. The assertion turns foreign-runtime use into a
-test or debug-build failure; it is a diagnostic rather than enforcement because the socket is created before
-the driver is spawned. Tokio may reuse an ID after its runtime is dropped, so the check is not a persistent
-runtime identity or a substitute for the placement ownership rule.
+This transfer keeps socket creation, handshake, and driver polling on one runtime while allowing a
+partition-specific `Client` to move between independent requester runtimes. Dispatch may cross that boundary
+through Hyper's request handle; connection I/O and the driver never do.
 
 Hyper spawns work of its own, and it follows the connection. An HTTP/2 connection hands Hyper a connection
 task at handshake and per-stream and upgrade tasks as it runs, through an
 [`Executor`](https://github.com/hyperium/hyper/blob/v1.11.0/src/rt/mod.rs#L45) the caller
-supplies; the pool supplies one that forwards to the connection's runtime. HTTP/1 spawns nothing and needs no
-adapter.
-
-Enforcing placement for an explicit partition driven from a foreign runtime — rather than requiring the
-caller to honor it — would mean running establishment as a task on the partition's spawner and delivering its
-result back to the requester, at the cost of a spawn and a wake on every establishment. That path is
-[future work](#future-work).
+supplies; the pool supplies one that forwards to the connection's runtime. HTTP/1 uses the partition spawner
+for its connection driver and for readiness work that outlives a response body.
 
 #### Connection ownership
 
@@ -2242,20 +2234,6 @@ each admit the full bound. Revisit this after measuring the retained size of an 
 partition-by-origin cardinality. A cell-count ceiling is not an alternative because it converts memory growth
 into request failure.
 
-### Transfer-based explicit-partition establishment
-
-An explicit partition's client is initially required to be driven from the runtime named by its
-`DriverSpawner`. Driving it from another independent runtime is unsupported; the consequence is a caller
-contract rather than an extra spawn and wake on every establishment. The anonymous default does not have this
-explicit-client affinity precondition: it binds one runtime on first establishment and already moves freely
-among that runtime's worker threads.
-
-A future implementation can transfer an unpolled connector, TLS, and Hyper-handshake task to the explicit
-partition's spawner and return the result through a one-shot delivery. That would remove the explicit-client
-affinity precondition, but it also adds cancellation and result-refunnelling ownership plus a cross-runtime
-wake to the create path. Add it when a concrete caller must move one explicit client among independent Tokio
-runtimes, not merely among worker threads of one runtime.
-
 ### Active HTTP/2 drain for cross-scope reclaim
 
 A waiter may remain parked when an origin is bounded, every permit is held indefinitely by active H2
@@ -2478,8 +2456,8 @@ The evidence levels have distinct jobs:
   generation publication, logical close, and response-guard transfer. Loom models these kernels rather than
   the complete network client.
 * **Controlled-runtime tests** use injected time, sleep, connectors, and executors to force cancellation at
-  each await boundary, guarded-driver drop, runtime shutdown, idle deadlines, same-runtime anonymous movement,
-  independent-runtime misuse, explicit placement checks, and connector or handshake failure.
+  each await boundary, guarded-driver drop, runtime shutdown, idle deadlines, independent-runtime request
+  movement, explicit placement checks, and connector or handshake failure.
 * The **wire harness** verifies HTTP/1.1 and HTTP/2 behavior against scripted peers, including reuse,
   multiplexing, ALPN, GOAWAY, stream reset, incomplete bodies, upgrades, poisoning, and transport close.
 * **Differential tests** run the same implementation-neutral behavior contracts against the current

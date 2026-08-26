@@ -12,6 +12,8 @@
 
 use super::admission::OriginAdmission;
 use super::cell::OriginCell;
+use super::connection::CloseReason;
+use super::maintenance::{MaintenanceConfig, PartitionMaintenance};
 use super::origin::{InvalidOrigin, OriginKey, OriginLookup, SchemeKey};
 use super::partition::{
     ConnectionReuseScope, DriverSpawner, EligibilityGroup, Partition, PartitionId,
@@ -39,11 +41,12 @@ pub(crate) struct PartitionRegistry {
 
 impl PartitionRegistry {
     /// Creates a registry containing its implicit anonymous partition.
-    pub(crate) fn anonymous(
+    pub(crate) fn anonymous_with_maintenance(
         reuse_scope: ConnectionReuseScope,
         max_connections_per_host: Option<NonZeroUsize>,
+        maintenance: MaintenanceConfig,
     ) -> Self {
-        let partition = Arc::new(PartitionState::anonymous());
+        let partition = Arc::new(PartitionState::anonymous(maintenance));
         let mut partitions = HashMap::new();
         partitions.insert(PartitionId::ANONYMOUS, partition.clone());
         Self {
@@ -55,10 +58,11 @@ impl PartitionRegistry {
     }
 
     /// Creates a registry from a nonempty set of explicit partitions.
-    pub(crate) fn explicit(
+    pub(crate) fn explicit_with_maintenance(
         partitions: impl IntoIterator<Item = Partition>,
         reuse_scope: ConnectionReuseScope,
         max_connections_per_host: Option<NonZeroUsize>,
+        maintenance: MaintenanceConfig,
     ) -> Result<Self, PartitionRegistryError> {
         let mut by_id = HashMap::new();
         for partition in partitions {
@@ -67,7 +71,10 @@ impl PartitionRegistry {
                 return Err(PartitionRegistryError::ReservedAnonymousPartition);
             }
             if by_id
-                .insert(id, Arc::new(PartitionState::explicit(partition)))
+                .insert(
+                    id,
+                    Arc::new(PartitionState::explicit(partition, maintenance.clone())),
+                )
                 .is_some()
             {
                 return Err(PartitionRegistryError::DuplicatePartition(id));
@@ -84,6 +91,34 @@ impl PartitionRegistry {
             max_connections_per_host,
             bounded_origins: Mutex::new(HashMap::new()),
         })
+    }
+
+    /// Creates an anonymous registry with maintenance disabled for state tests.
+    #[cfg(test)]
+    fn anonymous(
+        reuse_scope: ConnectionReuseScope,
+        max_connections_per_host: Option<NonZeroUsize>,
+    ) -> Self {
+        Self::anonymous_with_maintenance(
+            reuse_scope,
+            max_connections_per_host,
+            MaintenanceConfig::default(),
+        )
+    }
+
+    /// Creates an explicit registry with maintenance disabled for state tests.
+    #[cfg(test)]
+    fn explicit(
+        partitions: impl IntoIterator<Item = Partition>,
+        reuse_scope: ConnectionReuseScope,
+        max_connections_per_host: Option<NonZeroUsize>,
+    ) -> Result<Self, PartitionRegistryError> {
+        Self::explicit_with_maintenance(
+            partitions,
+            reuse_scope,
+            max_connections_per_host,
+            MaintenanceConfig::default(),
+        )
     }
 
     /// Resolves a declared partition once during client construction.
@@ -110,12 +145,15 @@ impl PartitionRegistry {
             origin,
             eligibility_group,
             admission.clone(),
+            Some(partition.maintenance.clone()),
         ));
         let cell = match admission {
             Some(admission) => OriginAdmission::register_cell(&admission, candidate),
             None => candidate,
         };
-        Ok(partition.publish_cell(cell))
+        let cell = partition.publish_cell(cell);
+        partition.maintenance.register(&cell);
+        Ok(cell)
     }
 
     /// Returns the shared admission authority for a bounded origin.
@@ -144,6 +182,18 @@ impl PartitionRegistry {
             ConnectionReuseScope::Pool => EligibilityGroup::Pool,
         }
     }
+
+    /// Logically closes every retained connection after snapshotting cells.
+    pub(crate) fn close_all(&self, reason: CloseReason) {
+        let cells = self
+            .partitions
+            .values()
+            .flat_map(|partition| partition.cells())
+            .collect::<Vec<_>>();
+        for cell in cells {
+            OriginCell::close_all_h1(&cell, reason);
+        }
+    }
 }
 
 /// Runtime placement and retained origin cells for one partition.
@@ -157,27 +207,31 @@ pub(crate) struct PartitionState {
     interface: Option<StdArc<str>>,
     /// Cells retained for the lifetime of this partition.
     origins: RwLock<OriginMap>,
+    /// Owner-runtime idle maintenance for this partition.
+    maintenance: Arc<PartitionMaintenance>,
 }
 
 impl PartitionState {
     /// Creates the implicit partition whose spawner is published on first use.
-    fn anonymous() -> Self {
+    fn anonymous(maintenance: MaintenanceConfig) -> Self {
         Self {
             id: PartitionId::ANONYMOUS,
             spawner: Mutex::new(None),
             interface: None,
             origins: RwLock::new(OriginMap::default()),
+            maintenance: PartitionMaintenance::new(maintenance),
         }
     }
 
     /// Moves one validated explicit declaration into retained partition state.
-    fn explicit(partition: Partition) -> Self {
+    fn explicit(partition: Partition, maintenance: MaintenanceConfig) -> Self {
         let (id, spawner, interface) = partition.into_parts();
         Self {
             id,
             spawner: Mutex::new(Some(spawner)),
             interface,
             origins: RwLock::new(OriginMap::default()),
+            maintenance: PartitionMaintenance::new(maintenance),
         }
     }
 
@@ -232,6 +286,16 @@ impl PartitionState {
     pub(crate) fn cell_count(&self) -> usize {
         self.origins.read().len()
     }
+
+    /// Starts idle maintenance on this partition's declared runtime.
+    pub(crate) fn start_maintenance(&self, spawner: &dyn DriverSpawner) {
+        PartitionMaintenance::start(&self.maintenance, spawner);
+    }
+
+    /// Snapshots retained cells before invoking any cell transition.
+    fn cells(&self) -> Vec<Arc<OriginCell>> {
+        self.origins.read().cells()
+    }
 }
 
 /// Retained origin cells owned by one partition.
@@ -275,6 +339,14 @@ impl OriginMap {
     /// Returns the cached number of cells across every scheme-port bucket.
     fn len(&self) -> usize {
         self.cell_count
+    }
+
+    /// Clones every retained cell without holding a lock during callbacks.
+    fn cells(&self) -> Vec<Arc<OriginCell>> {
+        self.indexes
+            .values()
+            .flat_map(|hosts| hosts.values().cloned())
+            .collect()
     }
 }
 
