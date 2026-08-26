@@ -10,23 +10,82 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.SourceLocation
+import software.amazon.smithy.model.knowledge.OperationIndex
+import software.amazon.smithy.model.knowledge.TopDownIndex
+import software.amazon.smithy.model.node.ArrayNode
 import software.amazon.smithy.model.node.Node
+import software.amazon.smithy.model.node.ObjectNode
+import software.amazon.smithy.model.node.StringNode
+import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.DoubleShape
+import software.amazon.smithy.model.shapes.FloatShape
+import software.amazon.smithy.model.shapes.MapShape
+import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.HttpHeaderTrait
 import software.amazon.smithy.model.transform.ModelTransformer
+import software.amazon.smithy.protocoltests.traits.AppliesTo
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientInstantiator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.generators.Instantiator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.BrokenTest
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.FailingTest
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTestGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.REST_JSON
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.TestCase
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
+import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
+import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
+import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerInstantiator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerRestJsonFactory
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.io.File
+import java.util.logging.Logger
 
 class SerdeProtocolTestTest {
+    private val semanticallyLossyRoundTripTests =
+        setOf(
+            // These values contain Some(Document::Null). Serde encodes both that and None as null.
+            "RestJsonServerPopulatesDefaultsWhenMissingInRequestBody",
+            "RestJsonServerPopulatesDefaultsInResponseWhenMissingInParams",
+        )
+
+    private enum class NonFiniteValues {
+        NONE,
+        INFINITY,
+        NAN,
+        ;
+
+        fun combine(other: NonFiniteValues): NonFiniteValues = maxOf(this, other)
+    }
+
     private val behaviorModel =
         """
         namespace com.example
@@ -70,6 +129,399 @@ class SerdeProtocolTestTest {
         return ModelTransformer.create().mapShapes(this) { serviceShape ->
             serviceShape.letIf(serviceShape.id == serviceShapeId) {
                 service
+            }
+        }
+    }
+
+    private fun restJsonProtocolTestModel(): Model {
+        val serviceShapeId = ShapeId.from(REST_JSON)
+        val model =
+            Model.assembler()
+                .discoverModels()
+                .assemble()
+                .result
+                .get()
+                .attachSerdeToService(serviceShapeId)
+        val service = model.expectShape(serviceShapeId, ServiceShape::class.java)
+        val operationIndex = OperationIndex.of(model)
+        val errorShapeIds =
+            TopDownIndex.of(model)
+                .getContainedOperations(service)
+                .flatMap(operationIndex::getErrors)
+                .mapTo(mutableSetOf()) { it.id }
+
+        // Operation serializers cover inputs and outputs. Directly annotate modeled errors so
+        // response test cases can exercise the same public serde entry point.
+        return ModelTransformer.create().mapShapes(model) { shape ->
+            shape.letIf(shape.id in errorShapeIds) {
+                (shape as StructureShape).toBuilder()
+                    .addTrait(SerdeTrait(true, true, null, null, SourceLocation.NONE))
+                    .build()
+            }
+        }
+    }
+
+    private fun noRenderedProtocolTests(base: ProtocolTestGenerator): ProtocolTestGenerator =
+        object : ProtocolTestGenerator() {
+            override val codegenContext: CodegenContext
+                get() = base.codegenContext
+            override val protocolSupport: ProtocolSupport
+                get() = base.protocolSupport
+            override val operationShape: OperationShape
+                get() = base.operationShape
+            override val appliesTo: AppliesTo
+                get() = base.appliesTo
+            override val logger: Logger
+                get() = base.logger
+            override val expectFail: Set<FailingTest>
+                get() = base.expectFail
+            override val brokenTests: Set<BrokenTest>
+                get() = base.brokenTests
+            override val generateOnly: Set<String>
+                get() = base.generateOnly
+            override val disabledTests: Set<String>
+                get() = base.disabledTests
+
+            override fun RustWriter.renderAllTestCases(allTests: List<TestCase>) {}
+        }
+
+    private fun nonFiniteValues(
+        model: Model,
+        shape: Shape,
+        value: Node,
+    ): NonFiniteValues =
+        when (shape) {
+            is MemberShape -> nonFiniteValues(model, model.expectShape(shape.target), value)
+            is FloatShape, is DoubleShape ->
+                when ((value as? StringNode)?.value) {
+                    "NaN" -> NonFiniteValues.NAN
+                    "Infinity", "-Infinity" -> NonFiniteValues.INFINITY
+                    else -> NonFiniteValues.NONE
+                }
+            is StructureShape, is UnionShape -> {
+                val objectValue = value as? ObjectNode ?: return NonFiniteValues.NONE
+                objectValue.members.entries.fold(NonFiniteValues.NONE) { result, (name, memberValue) ->
+                    val member = shape.getMember(name.value).orElse(null)
+                    if (member == null) result else result.combine(nonFiniteValues(model, member, memberValue))
+                }
+            }
+            is CollectionShape -> {
+                val arrayValue = value as? ArrayNode ?: return NonFiniteValues.NONE
+                arrayValue.elements.fold(NonFiniteValues.NONE) { result, memberValue ->
+                    result.combine(nonFiniteValues(model, shape.member, memberValue))
+                }
+            }
+            is MapShape -> {
+                val objectValue = value as? ObjectNode ?: return NonFiniteValues.NONE
+                objectValue.members.values.fold(NonFiniteValues.NONE) { result, memberValue ->
+                    result.combine(nonFiniteValues(model, shape.value, memberValue))
+                }
+            }
+            else -> NonFiniteValues.NONE
+        }
+
+    private fun nonFiniteHeaderValues(
+        model: Model,
+        shape: StructureShape,
+        headers: Map<String, String>,
+    ): NonFiniteValues =
+        shape.members().fold(NonFiniteValues.NONE) { result, member ->
+            val headerName = member.getTrait(HttpHeaderTrait::class.java).orElse(null)?.value
+            val headerValue = headerName?.let(headers::get)
+            if (headerValue == null) {
+                result
+            } else {
+                result.combine(nonFiniteValues(model, member, Node.from(headerValue)))
+            }
+        }
+
+    private fun RustWriter.renderRoundTripSupport() {
+        rustTemplate(
+            """
+            use crate::serde::{
+                DeserializationSettings,
+                SerializationSettings,
+                SerializeConfigured,
+            };
+            use #{rstest}::rstest;
+
+            ##[derive(Clone, Copy, Debug)]
+            enum RoundTripFormat {
+                Json,
+                Cbor,
+            }
+
+            fn assert_round_trip<T>(
+                expected: T,
+                format: RoundTripFormat,
+                out_of_range_floats_as_strings: bool,
+                contains_nan: bool,
+            )
+            where
+                T: SerializeConfigured + #{DeserializeOwned} + #{PartialEq} + #{Debug},
+            {
+                let mut serialization = SerializationSettings::default();
+                serialization.out_of_range_floats_as_strings =
+                    out_of_range_floats_as_strings;
+
+                let encoded = match format {
+                    RoundTripFormat::Json => {
+                        #{serde_json}::to_vec(&expected.serialize_ref(&serialization))
+                            .expect("failed to serialize JSON")
+                    }
+                    RoundTripFormat::Cbor => {
+                        // Direct CBOR serialization is covered separately from this
+                        // deserializer corpus because omitted optional fields currently
+                        // leave definite-length struct maps with an incorrect length.
+                        let value = #{serde_json}::to_value(
+                            &expected.serialize_ref(&serialization),
+                        ).expect("failed to capture the serde representation");
+                        let mut encoded = #{Vec}::new();
+                        #{ciborium}::ser::into_writer(&value, &mut encoded)
+                            .expect("failed to serialize CBOR");
+                        encoded
+                    }
+                };
+
+                let mut deserialization = DeserializationSettings::default();
+                deserialization.allow_non_finite_float_strings =
+                    out_of_range_floats_as_strings;
+                let actual: T = deserialization.scope(|| match format {
+                    RoundTripFormat::Json => {
+                        #{serde_json}::from_slice(&encoded)
+                            .expect("failed to deserialize JSON")
+                    }
+                    RoundTripFormat::Cbor => {
+                        #{ciborium}::de::from_reader(encoded.as_slice())
+                            .expect("failed to deserialize CBOR")
+                    }
+                });
+
+                if contains_nan {
+                    let expected_representation = #{serde_json}::to_value(
+                        &expected.serialize_ref(&serialization),
+                    ).expect("failed to capture expected serde representation");
+                    let actual_representation = #{serde_json}::to_value(
+                        &actual.serialize_ref(&serialization),
+                    ).expect("failed to capture actual serde representation");
+                    assert_eq!(
+                        expected_representation,
+                        actual_representation,
+                        "serde representation changed after {format:?} round trip \
+                         with out_of_range_floats_as_strings={out_of_range_floats_as_strings}",
+                    );
+                } else {
+                    assert_eq!(
+                        expected,
+                        actual,
+                        "semantic value changed after {format:?} round trip \
+                         with out_of_range_floats_as_strings={out_of_range_floats_as_strings}",
+                    );
+                }
+            }
+            """,
+            "rstest" to CargoDependency("rstest", CratesIo("0.23")).toDevDependency().toType(),
+            "serde_json" to CargoDependency.SerdeJson.toDevDependency().toType(),
+            "ciborium" to CargoDependency.Ciborium.toDevDependency().toType(),
+            "DeserializeOwned" to CargoDependency.Serde.toDevDependency().toType().resolve("de::DeserializeOwned"),
+            "PartialEq" to RuntimeType.std.resolve("cmp::PartialEq"),
+            "Debug" to RuntimeType.std.resolve("fmt::Debug"),
+            *RuntimeType.preludeScope,
+        )
+    }
+
+    private fun RustWriter.renderRoundTripTest(
+        operationShape: OperationShape,
+        testCase: TestCase,
+        expected: software.amazon.smithy.rust.codegen.core.rustlang.Writable,
+        nonFiniteValues: NonFiniteValues,
+    ) {
+        val kind =
+            when (testCase) {
+                is TestCase.RequestTest -> "request"
+                is TestCase.ResponseTest -> "response"
+                is TestCase.MalformedRequestTest -> error("malformed requests do not contain semantic values")
+            }
+        val testName =
+            listOf("round_trip", operationShape.id.name, testCase.id, kind)
+                .joinToString("_")
+                .toSnakeCase()
+        val containsNan = nonFiniteValues == NonFiniteValues.NAN
+
+        rustTemplate(
+            """
+            ##[rstest]
+            #{DefaultCases:W}
+            ##[case::json_non_finite_strings(RoundTripFormat::Json, true)]
+            ##[case::cbor_non_finite_strings(RoundTripFormat::Cbor, true)]
+            fn $testName(
+                ##[case] format: RoundTripFormat,
+                ##[case] out_of_range_floats_as_strings: bool,
+            ) {
+                let expected = #{Expected:W};
+                assert_round_trip(
+                    expected,
+                    format,
+                    out_of_range_floats_as_strings,
+                    $containsNan,
+                );
+            }
+            """,
+            "DefaultCases" to
+                software.amazon.smithy.rust.codegen.core.rustlang.writable {
+                    if (nonFiniteValues == NonFiniteValues.NONE) {
+                        rustTemplate(
+                            """
+                            ##[case::json_default(RoundTripFormat::Json, false)]
+                            ##[case::cbor_default(RoundTripFormat::Cbor, false)]
+                            """,
+                        )
+                    }
+                },
+            "Expected" to expected,
+        )
+    }
+
+    private fun renderProtocolRoundTrips(
+        codegenContext: CodegenContext,
+        rustCrate: RustCrate,
+        instantiator: Instantiator,
+        protocolTestGenerator: (OperationShape) -> ProtocolTestGenerator,
+    ) {
+        val model = codegenContext.model
+        val operationShapes =
+            TopDownIndex.of(model)
+                .getContainedOperations(codegenContext.serviceShape)
+                .sortedBy { it.id.toString() }
+
+        rustCrate.testModule {
+            renderRoundTripSupport()
+
+            for (operationShape in operationShapes) {
+                val generator = protocolTestGenerator(operationShape)
+                val inputShape = operationShape.inputShape(model)
+
+                for (testCase in generator.requestTestCases().filter { it.protocol == codegenContext.protocol }) {
+                    check(testCase is TestCase.RequestTest)
+                    if (
+                        inputShape.hasStreamingMember(model) ||
+                        testCase.id in semanticallyLossyRoundTripTests
+                    ) {
+                        continue
+                    }
+
+                    val values =
+                        nonFiniteValues(model, inputShape, testCase.testCase.params)
+                            .combine(nonFiniteHeaderValues(model, inputShape, testCase.testCase.headers))
+
+                    renderRoundTripTest(
+                        operationShape,
+                        testCase,
+                        instantiator.generate(
+                            inputShape,
+                            testCase.testCase.params,
+                            testCase.testCase.headers,
+                        ),
+                        values,
+                    )
+                }
+
+                for (testCase in generator.responseTestCases().filter { it.protocol == codegenContext.protocol }) {
+                    check(testCase is TestCase.ResponseTest)
+                    if (
+                        testCase.targetShape.hasStreamingMember(model) ||
+                        testCase.id in semanticallyLossyRoundTripTests
+                    ) {
+                        continue
+                    }
+
+                    val values = nonFiniteValues(model, testCase.targetShape, testCase.testCase.params)
+
+                    renderRoundTripTest(
+                        operationShape,
+                        testCase,
+                        instantiator.generate(testCase.targetShape, testCase.testCase.params),
+                        values,
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun testClientRestJsonProtocolValuesRoundTripThroughSerde() {
+        val noProtocolTestsDecorator =
+            object : ClientCodegenDecorator {
+                override val name: String = "Suppress HTTP protocol tests for serde round trips"
+                override val order: Byte = 0
+
+                override fun protocolTestGenerator(
+                    codegenContext: ClientCodegenContext,
+                    baseGenerator: ProtocolTestGenerator,
+                ): ProtocolTestGenerator = noRenderedProtocolTests(baseGenerator)
+            }
+        val clientProtocolSupport =
+            ProtocolSupport(
+                requestSerialization = true,
+                requestBodySerialization = true,
+                responseDeserialization = true,
+                errorDeserialization = true,
+                requestDeserialization = false,
+                requestBodyDeserialization = false,
+                responseSerialization = false,
+                errorSerialization = false,
+            )
+
+        clientIntegrationTest(
+            restJsonProtocolTestModel(),
+            IntegrationTestParams(
+                service = REST_JSON,
+                cargoCommand = "cargo test --quiet --all-features round_trip_ -- --test-threads=1",
+            ),
+            additionalDecorators = listOf(noProtocolTestsDecorator),
+        ) { codegenContext, rustCrate ->
+            renderProtocolRoundTrips(
+                codegenContext,
+                rustCrate,
+                ClientInstantiator(codegenContext),
+            ) { operationShape ->
+                ClientProtocolTestGenerator(codegenContext, clientProtocolSupport, operationShape)
+            }
+        }
+    }
+
+    @Test
+    fun testServerRestJsonProtocolValuesRoundTripThroughSerde() {
+        val noProtocolTestsDecorator =
+            object : ServerCodegenDecorator {
+                override val name: String = "Suppress HTTP protocol tests for serde round trips"
+                override val order: Byte = 0
+
+                override fun protocolTestGenerator(
+                    codegenContext: ServerCodegenContext,
+                    baseGenerator: ProtocolTestGenerator,
+                ): ProtocolTestGenerator = noRenderedProtocolTests(baseGenerator)
+            }
+
+        serverIntegrationTest(
+            restJsonProtocolTestModel(),
+            IntegrationTestParams(
+                service = REST_JSON,
+                cargoCommand = "cargo test --quiet --all-features round_trip_ -- --test-threads=1",
+            ),
+            additionalDecorators = listOf(noProtocolTestsDecorator),
+            testCoverage = HttpTestType.Default,
+        ) { codegenContext, rustCrate ->
+            renderProtocolRoundTrips(
+                codegenContext,
+                rustCrate,
+                ServerInstantiator(codegenContext),
+            ) { operationShape ->
+                ServerProtocolTestGenerator(
+                    codegenContext,
+                    ServerRestJsonFactory().support(),
+                    operationShape,
+                )
             }
         }
     }
