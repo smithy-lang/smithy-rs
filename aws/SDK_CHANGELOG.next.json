@@ -6,87 +6,6 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Improve default credential chain error reporting and align missing-profile behavior with other SDKs. When all providers in the chain are exhausted, the error now includes a per-provider summary showing why each was skipped. Additionally, providers whose source is not applicable no longer hard-fail the chain; they are skipped and the chain continues to the next provider. Here are the cases affected:\n\n- `AWS_PROFILE` refers to a profile that does not exist in `~/.aws/config`\n- The selected profile is configured for the token provider chain (has `sso_session` but no `sso_account_id`/`sso_role_name`)\n- `AWS_WEB_IDENTITY_TOKEN_FILE` is set but `AWS_ROLE_ARN` is not\n",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "ysaito1001",
-      "references": [],
-      "since-commit": "d3b1903d494ed2b56ef6d3f665bef5a12d79f210",
-      "age": 5
-    },
-    {
-      "message": "Update the `User-Agent` header to contain the same information as the `x-amz-user-agent` header (including `AppName`, environment metadata, business metrics, etc.)\n",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "iconara",
-      "references": [
-        "aws-sdk-rust#1433",
-        "aws-sdk-rust#1418"
-      ],
-      "since-commit": "d3b1903d494ed2b56ef6d3f665bef5a12d79f210",
-      "age": 5
-    },
-    {
-      "message": "Fix codegen emitting integer literals for f64/f32 non-zero default value comparisons in serializers. When a Smithy model specifies a non-zero `@default` on a Double or Float member using a JSON integer (e.g., `1` instead of `1.0`), the generated \"skip if default\" check produced `if value != 1` which fails to compile in Rust. The fix appends `_f64`/`_f32` type suffixes to the rendered default value.\n",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "ysaito1001",
-      "references": [
-        "smithy-rs#4729"
-      ],
-      "since-commit": "d3b1903d494ed2b56ef6d3f665bef5a12d79f210",
-      "age": 5
-    },
-    {
-      "message": "Upgrade MSRV to Rust 1.94.1.\n",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "ysaito1001",
-      "references": [
-        "smithy-rs#4692"
-      ],
-      "since-commit": "d3b1903d494ed2b56ef6d3f665bef5a12d79f210",
-      "age": 5
-    },
-    {
-      "message": "Fix `AWS_IGNORE_CONFIGURED_ENDPOINT_URLS` not suppressing service-specific endpoint URLs. Previously, the flag correctly suppressed the global `AWS_ENDPOINT_URL` but service-specific endpoint URLs (e.g. `AWS_ENDPOINT_URL_DYNAMODB` or `endpoint_url` in a `[services]` config section) bypassed the guard. Now all environment and config file endpoint URL sources are suppressed when the flag is set.\n",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "ysaito1001",
-      "references": [
-        "smithy-rs#4730"
-      ],
-      "since-commit": "d3b1903d494ed2b56ef6d3f665bef5a12d79f210",
-      "age": 5
-    },
-    {
-      "message": "Add a `customizationConfig.awsSdk.endpointBasedAuthScheme.enabled` flag that opts a service into endpoint-based auth scheme resolution without requiring an addition to the built-in `EndpointBasedAuthSchemeAllowList`. The existing curated allowlist (`CloudFront KeyValueStore`, `EventBridge`, `S3`, `SESv2`) continues to work unchanged; the flag is additive and intended for services that need partition-specific auth resolution (e.g. sigv4a vs sigv4) driven by endpoint rules and cannot express that statically in the model. New AWS services should still prefer the static `auth` trait whenever possible.\n",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "lauzadis",
-      "references": [],
-      "since-commit": "d3b1903d494ed2b56ef6d3f665bef5a12d79f210",
-      "age": 5
-    },
-    {
       "message": "Add support for third-party libraries to self-identify in the SDK user agent via framework metadata, addressing the long-standing request to customize the user agent ([aws-sdk-rust#146](https://github.com/awslabs/aws-sdk-rust/issues/146)).\n\nA new public `FrameworkMetadata` type (re-exported as `aws_config::FrameworkMetadata` and on each client's `config` module) can be set on the client config builder, on `SdkConfig`, and via `aws_config::ConfigLoader::framework_metadata`:\n\n```rust\nlet config = aws_config::from_env()\n    .framework_metadata(FrameworkMetadata::new(\"some-framework\", Some(\"1.0\"))?)\n    .load()\n    .await;\n```\n\nFramework metadata is additive — multiple libraries (and the application) can each self-identify without clobbering one another. The name/version are validated against the same charset as `AppName` (rejecting, not sanitizing, invalid characters to prevent header injection). The `UserAgentInterceptor` de-duplicates entries on `(name, version)` preserving first-seen order, caps the total at 10 unique entries, and renders each as `lib/{name}/{version}` in the `x-amz-user-agent` header.\n",
       "meta": {
         "bug": false,
@@ -98,7 +17,7 @@
         "aws-sdk-rust#146"
       ],
       "since-commit": "a79144dbd3984d4b41ddaa192974d7cef74772f8",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Fix endpoint rules codegen emitting invalid Rust when a templated static segment\nis a single character requiring escape in a Rust `char` literal (e.g. `'`, `\"`,\n`\\`). Previously produced `out.push(''');` in `internals.rs`; now always emits\n`out.push_str(...)` with proper string escaping.\n",
@@ -110,7 +29,7 @@
       "author": "lauzmata",
       "references": [],
       "since-commit": "2692a5da3f8f52781c6e30a79b0d05eebfda5132",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Replace the hardcoded 5-second identity cache `load_timeout` with a pessimistic timeout derived from the configured `RetryConfig` and `TimeoutConfig`. The new default ensures the inner credential provider's retry strategy has enough time to exhaust all configured attempts before the cache kills the resolution future. With default settings (3 attempts, 3.1s connect timeout), the derived timeout is approximately 22 seconds. Customers who explicitly set `load_timeout` are unaffected.\n\nIf you rely on the legacy 5-second timeout behavior, you can restore it explicitly:\n\n```rust\nuse aws_smithy_runtime::client::identity::IdentityCache;\nuse std::time::Duration;\n\nIdentityCache::lazy()\n    .load_timeout(Duration::from_secs(5))\n    .build()\n```\n",
@@ -122,7 +41,7 @@
       "author": "ysaito1001",
       "references": [],
       "since-commit": "2692a5da3f8f52781c6e30a79b0d05eebfda5132",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Credential providers in the default chain now honor the outer `RetryConfig` and `TimeoutConfig`\nwhen talking to remote endpoints (e.g., STS, SSO):\n\n- **Retry:** the customer-configured `RetryConfig` (for example `AWS_MAX_ATTEMPTS`) is propagated\n  to the inner STS client used by the default chain. Previously the inner STS client always used\n  the default retry configuration (3 attempts), ignoring the outer setting. Now, setting\n  `AWS_MAX_ATTEMPTS=5` causes the inner STS client to retry up to 5 times as well.\n- **Timeout:** the customer-configured `TimeoutConfig` is likewise propagated to those inner\n  clients (also settable directly via the new `ProviderConfig::with_timeout_config`).\n\nIMDS and ECS providers are unaffected — they talk to local metadata endpoints and keep their own\nretry/timeout configuration.\n\nIf you wish to opt out of the propagated behavior, pass a `ProviderConfig` with the desired\nretry/timeout config to the default chain builder:\n\n```rust\nuse aws_config::default_provider::credentials::DefaultCredentialsChain;\nuse aws_config::provider_config::ProviderConfig;\nuse aws_config::retry::RetryConfig;\nuse aws_config::timeout::TimeoutConfig;\nuse std::time::Duration;\n\nlet provider_config = ProviderConfig::default()\n    // Pin credential-resolution retries independently of the service client\n    // (use `RetryConfig::disabled()` to turn retries off entirely).\n    .with_retry_config(RetryConfig::standard().with_max_attempts(3))\n    // Optionally give the inner clients their own timeouts.\n    .with_timeout_config(\n        TimeoutConfig::builder()\n            .operation_timeout(Duration::from_secs(5))\n            .build(),\n    );\n\nlet credentials_provider = DefaultCredentialsChain::builder()\n    .configure(provider_config)\n    .build()\n    .await;\n\nlet sdk_config = aws_config::defaults(aws_config::BehaviorVersion::latest())\n    .credentials_provider(credentials_provider)\n    // other configurations\n    .load()\n    .await;\n```\n",
@@ -134,7 +53,7 @@
       "author": "ysaito1001",
       "references": [],
       "since-commit": "2692a5da3f8f52781c6e30a79b0d05eebfda5132",
-      "age": 3
+      "age": 4
     },
     {
       "message": "STS clients now retry the `IDPCommunicationError` error code on all operations, not just those that model the `IDPCommunicationErrorException` shape.\n",
@@ -148,7 +67,7 @@
         "smithy-rs#4749"
       ],
       "since-commit": "2692a5da3f8f52781c6e30a79b0d05eebfda5132",
-      "age": 3
+      "age": 4
     },
     {
       "message": "`Blob` now stores its contents as `Bytes` and provides `from_maybe_shared` and `into_bytes` methods to avoid copies in `Bytes`-based protocol paths.\n",
@@ -162,7 +81,7 @@
         "smithy-rs#4758"
       ],
       "since-commit": "de8b7468a3bb944fab212e02e88eef70abf9948b",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Add opt-in capture of selected operation-input members for telemetry. Naming input members via\n`Config::builder().emit_input_attributes([...])` makes the SDK capture those members' values into\nthe `ConfigBag` (as `CapturedTelemetryAttributes`) during `read_before_execution`, before the input\nis consumed by serialization. Any interceptor can then read a value via\n`cfg.load::<CapturedTelemetryAttributes>()`, without threading it through a `task_local!`. Only\nstring-valued, non-`@sensitive` members are eligible; capture is off by default.\n\n```rust,ignore\nuse aws_smithy_types::telemetry::CapturedTelemetryAttributes;\n\n// Opt in to capturing the S3 `Bucket` input member.\nlet config = aws_sdk_s3::Config::builder()\n    .emit_input_attributes([\"Bucket\"])\n    // ...\n    .build();\n\n// In any interceptor, read the captured value off the config bag — no `task_local!`.\nif let Some(bucket) = cfg\n    .load::<CapturedTelemetryAttributes>()\n    .and_then(|a| a.get(\"Bucket\"))\n{\n    // use `bucket`\n}\n```\n",
@@ -174,7 +93,7 @@
       "author": "vcjana",
       "references": [],
       "since-commit": "de8b7468a3bb944fab212e02e88eef70abf9948b",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Improve discoverability of the retry token bucket: the `config::retry` module docs, the `retry_config` builder method, and the `TokenBucket` type now point to `RetryPartition::custom().token_bucket(...)` for sizing or isolating the bucket.\n",
@@ -188,7 +107,7 @@
         "smithy-rs#4764"
       ],
       "since-commit": "de8b7468a3bb944fab212e02e88eef70abf9948b",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Emit captured telemetry attributes and transfer sizes on the built-in client metrics. Values\nselected via `emit_input_attributes([...])` are now attached as attributes on\n`smithy.client.call.duration` and `smithy.client.call.attempt.duration`. The operation-duration metric additionally\ncarries the outcome as `error.type` (a coarse category, set only on failure) and the raw\n`http.status_code` when a response was received. Real transferred-byte counts are recorded on their\nown histograms, `smithy.client.call.request.size` / `smithy.client.call.response.size`, counted per\nframe and emitted when the body completes — so a streaming body reports its true size rather than the\n`0` that content-length reports for it.\n\n```rust,ignore\n// The same opt-in that captures a member now also emits it on the built-in metrics.\nlet config = aws_sdk_s3::Config::builder()\n    .emit_input_attributes([\"Bucket\"])\n    // ...\n    .build();\n\n// `smithy.client.call.duration` is now emitted with, e.g.:\n//   rpc.service=\"S3\", rpc.method=\"GetObject\", Bucket=\"my-bucket\",\n//   error.type=\"connector\" (on failure), http.status_code=200\n//\n// and body sizes on their own instruments, e.g.:\n//   smithy.client.call.response.size { rpc.service=\"S3\", rpc.method=\"GetObject\" } = 1024\n```\n",
@@ -200,7 +119,7 @@
       "author": "vcjana",
       "references": [],
       "since-commit": "de8b7468a3bb944fab212e02e88eef70abf9948b",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Add support for configuring additional server names in TLS certificate verification.\nWhen standard hostname verification fails, the client retries verification against\neach configured additional server name. This is useful when a server presents a\ncertificate whose Subject Alternative Names (SANs) do not include the hostname used\nto connect, but do include an alternative name the client has been configured to accept.\n",
@@ -212,7 +131,7 @@
       "author": "jasgin",
       "references": [],
       "since-commit": "de8b7468a3bb944fab212e02e88eef70abf9948b",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Add `pool_max_idle_per_host` setter to HTTP client `Builder` and `ConnectorBuilder`,\nexposing hyper's `pool_max_idle_per_host` setting to control the maximum number of idle\nconnections kept alive per host.\n",
@@ -224,7 +143,7 @@
       "author": "jasgin",
       "references": [],
       "since-commit": "9aebb128d60f0ac4bd5502fe214b98751a6a4d43",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Fix `credential_process` on Windows when the executable path contains spaces. The\ncommand was passed to `cmd.exe /C` as a single ordinary argument, whose default\nescaping combined with `cmd.exe`'s quote-stripping rules to mangle a quoted first\ntoken containing spaces (for example an executable installed under\n`C:\\Program Files\\...`, such as AWS AppStream 2.0's `appstream_machine_role`\nprovider). The command is now appended to the `cmd.exe` command line verbatim\n(via `raw_arg`) and wrapped in an extra pair of quotes as `cmd.exe` requires, so a\nquoted path containing spaces is preserved. Behavior on non-Windows platforms is\nunchanged.\n",
@@ -236,6 +155,20 @@
       "author": "lnj",
       "references": [],
       "since-commit": "9aebb128d60f0ac4bd5502fe214b98751a6a4d43",
+      "age": 2
+    },
+    {
+      "message": "Update the `lru` dependency to 0.18.2 to address RUSTSEC-2026-0253.",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "shrey4796",
+      "references": [
+        "aws-sdk-rust#1451"
+      ],
+      "since-commit": "f1b64a9c0dd001d4bac4277fec4041da59c1f48d",
       "age": 1
     }
   ],
