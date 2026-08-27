@@ -6,8 +6,6 @@
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.parse
 
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
-import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpTraitHttpBindingResolver
@@ -97,7 +95,7 @@ class CborParserGeneratorTest {
     }
 
     @Test
-    fun `throws CodegenException when deserializing BigDecimal with CBOR`() {
+    fun `generates parser for BigDecimal with CBOR`() {
         val model = OperationNormalizer.transform(modelWithBigDecimal)
         val codegenContext = testCodegenContext(model)
         val symbolProvider = codegenContext.symbolProvider
@@ -111,24 +109,19 @@ class CborParserGeneratorTest {
 
         val project = TestWorkspace.testProject(symbolProvider)
 
-        val exception =
-            assertThrows<CodegenException> {
-                project.lib {
-                    unitTest(
-                        "cbor_parser",
-                        """
-                        let bytes = &[];
-                        let _output = ${format(operationParser!!)};
-                        """,
-                    )
-                }
+        project.lib {
+            unitTest(
+                "cbor_big_decimal_parser",
+                """
+                let bytes: &[u8] = &[];
+                let _output = ${format(operationParser!!)};
+                """,
+            )
+        }
 
-                model.lookup<OperationShape>("test#TestOp").outputShape(model).also { output ->
-                    output.renderWithModelBuilder(model, symbolProvider, project)
-                }
-                project.compileAndTest()
-            }
-
-        assert(exception.message!!.contains("BigDecimal is not supported with Concise Binary Object Representation (CBOR)"))
+        model.lookup<OperationShape>("test#TestOp").outputShape(model).also { output ->
+            output.renderWithModelBuilder(model, symbolProvider, project)
+        }
+        project.compileAndTest()
     }
 }
