@@ -60,6 +60,99 @@ enum EstablishmentPhase {
     Started,
 }
 
+/// Whether the cell has an active FIFO and aggregate head demand.
+#[derive(Debug, Default)]
+enum WaitingQueueState {
+    /// No waiter is linked and no demand is active.
+    #[default]
+    Empty,
+    /// A nonempty FIFO represented by its endpoints, length, and head demand.
+    Active {
+        /// Oldest waiting record.
+        head: WaiterId,
+        /// Youngest waiting record.
+        tail: WaiterId,
+        /// Number of records linked from `head` through `tail`.
+        len: NonZeroUsize,
+        /// Demand episode representing `head`.
+        demand: DemandTicket,
+    },
+}
+
+/// One request retained while waiting for or owning an acquisition result.
+#[derive(Debug)]
+struct WaiterRecord {
+    /// Protocol requirement published while this waiter is the head.
+    requirement: ProtocolRequirement,
+    /// Queue residence, delivery state, and any owned result.
+    state: WaiterState,
+}
+
+/// Authoritative cell-local ownership state for one waiter.
+#[derive(Debug)]
+enum WaiterState {
+    /// The waiter is linked in the cell-local FIFO.
+    Waiting {
+        /// Older waiting record, or `None` at the head.
+        previous: Option<WaiterId>,
+        /// Newer waiting record, or `None` at the tail.
+        next: Option<WaiterId>,
+        /// Latest task waiting for an acquisition result.
+        waker: Option<Waker>,
+    },
+    /// Capacity delivery selected the waiter but has not installed its permit.
+    Receiving {
+        /// Latest task waiting for the crossing delivery.
+        waker: Option<Waker>,
+        /// H1 return that won while capacity was crossing.
+        pending_h1: Option<AcquisitionResult>,
+    },
+    /// Cancellation won while a delivery was crossing without locks held.
+    CancelledReceiving {
+        /// Task detached for wake after the delivery is refunnelled.
+        waker: Option<Waker>,
+        /// H1 result returned after the crossing closes, if one arrived first.
+        pending_h1: Option<AcquisitionResult>,
+    },
+    /// Capacity is ready to start an establishment attempt.
+    ReadyToEstablish {
+        /// Optional bounded-origin capacity owned until connection install.
+        permit: EstablishmentPermit,
+    },
+    /// Establishment was submitted to the owner runtime and may be unpolled.
+    Launching {
+        /// Ownership phase used to distinguish submission from first poll.
+        phase: EstablishmentPhase,
+        /// Latest task waiting for the attempt or returned H1 to complete.
+        waker: Option<Waker>,
+    },
+    /// The waiter owns its terminal acquisition result.
+    Ready(AcquisitionResult),
+}
+
+/// Cell-local ownership of the aggregate head demand.
+#[derive(Debug)]
+struct DemandTicket {
+    /// Identity of this head-waiter episode.
+    id: DemandId,
+    /// Version of the next complete publication.
+    version: SnapshotVersion,
+    /// Protocol capability required by this head waiter.
+    requirement: ProtocolRequirement,
+}
+
+impl DemandTicket {
+    /// Creates the complete active state published for this head episode.
+    fn snapshot(&self, eligibility_group: &EligibilityGroup) -> DemandSnapshot {
+        DemandSnapshot::active(
+            self.id,
+            self.version,
+            self.requirement,
+            eligibility_group.clone(),
+        )
+    }
+}
+
 impl WaiterQueue {
     /// Registers one acquisition episode.
     ///
@@ -927,99 +1020,6 @@ impl WaiterQueue {
             retained: self.records.len(),
             demand,
         }
-    }
-}
-
-/// Whether the cell has an active FIFO and aggregate head demand.
-#[derive(Debug, Default)]
-enum WaitingQueueState {
-    /// No waiter is linked and no demand is active.
-    #[default]
-    Empty,
-    /// A nonempty FIFO represented by its endpoints, length, and head demand.
-    Active {
-        /// Oldest waiting record.
-        head: WaiterId,
-        /// Youngest waiting record.
-        tail: WaiterId,
-        /// Number of records linked from `head` through `tail`.
-        len: NonZeroUsize,
-        /// Demand episode representing `head`.
-        demand: DemandTicket,
-    },
-}
-
-/// One request retained while waiting for or owning an acquisition result.
-#[derive(Debug)]
-struct WaiterRecord {
-    /// Protocol requirement published while this waiter is the head.
-    requirement: ProtocolRequirement,
-    /// Queue residence, delivery state, and any owned result.
-    state: WaiterState,
-}
-
-/// Authoritative cell-local ownership state for one waiter.
-#[derive(Debug)]
-enum WaiterState {
-    /// The waiter is linked in the cell-local FIFO.
-    Waiting {
-        /// Older waiting record, or `None` at the head.
-        previous: Option<WaiterId>,
-        /// Newer waiting record, or `None` at the tail.
-        next: Option<WaiterId>,
-        /// Latest task waiting for an acquisition result.
-        waker: Option<Waker>,
-    },
-    /// Capacity delivery selected the waiter but has not installed its permit.
-    Receiving {
-        /// Latest task waiting for the crossing delivery.
-        waker: Option<Waker>,
-        /// H1 return that won while capacity was crossing.
-        pending_h1: Option<AcquisitionResult>,
-    },
-    /// Cancellation won while a delivery was crossing without locks held.
-    CancelledReceiving {
-        /// Task detached for wake after the delivery is refunnelled.
-        waker: Option<Waker>,
-        /// H1 result returned after the crossing closes, if one arrived first.
-        pending_h1: Option<AcquisitionResult>,
-    },
-    /// Capacity is ready to start an establishment attempt.
-    ReadyToEstablish {
-        /// Optional bounded-origin capacity owned until connection install.
-        permit: EstablishmentPermit,
-    },
-    /// Establishment was submitted to the owner runtime and may be unpolled.
-    Launching {
-        /// Ownership phase used to distinguish submission from first poll.
-        phase: EstablishmentPhase,
-        /// Latest task waiting for the attempt or returned H1 to complete.
-        waker: Option<Waker>,
-    },
-    /// The waiter owns its terminal acquisition result.
-    Ready(AcquisitionResult),
-}
-
-/// Cell-local ownership of the aggregate head demand.
-#[derive(Debug)]
-struct DemandTicket {
-    /// Identity of this head-waiter episode.
-    id: DemandId,
-    /// Version of the next complete publication.
-    version: SnapshotVersion,
-    /// Protocol capability required by this head waiter.
-    requirement: ProtocolRequirement,
-}
-
-impl DemandTicket {
-    /// Creates the complete active state published for this head episode.
-    fn snapshot(&self, eligibility_group: &EligibilityGroup) -> DemandSnapshot {
-        DemandSnapshot::active(
-            self.id,
-            self.version,
-            self.requirement,
-            eligibility_group.clone(),
-        )
     }
 }
 

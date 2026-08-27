@@ -194,6 +194,26 @@ pub(super) struct ConnectionState {
     lifecycle: Mutex<LifecycleState>,
 }
 
+/// Connection lifetime state serialized with dispatch commitment and close.
+#[derive(Debug)]
+struct LifecycleState {
+    /// Dispatch eligibility and ownership of bounded capacity.
+    logical: LogicalState,
+    /// Requests that committed before logical close.
+    in_flight: usize,
+    /// Whether ownership of root transport I/O has ended.
+    physical_complete: bool,
+}
+
+/// Whether a connection may accept dispatch and still owns bounded capacity.
+#[derive(Debug)]
+enum LogicalState {
+    /// Dispatch may commit; the optional lease is released by logical close.
+    Open { lease: Option<CapacityLease> },
+    /// New dispatch is rejected while existing work may still drain.
+    Closed { reason: CloseReason },
+}
+
 impl ConnectionState {
     /// Creates a connection whose origin has no admission bound.
     ///
@@ -387,26 +407,6 @@ impl fmt::Debug for ConnectionState {
             .field("lifecycle", &self.lifecycle)
             .finish()
     }
-}
-
-/// Connection lifetime state serialized with dispatch commitment and close.
-#[derive(Debug)]
-struct LifecycleState {
-    /// Dispatch eligibility and ownership of bounded capacity.
-    logical: LogicalState,
-    /// Requests that committed before logical close.
-    in_flight: usize,
-    /// Whether ownership of root transport I/O has ended.
-    physical_complete: bool,
-}
-
-/// Whether a connection may accept dispatch and still owns bounded capacity.
-#[derive(Debug)]
-enum LogicalState {
-    /// Dispatch may commit; the optional lease is released by logical close.
-    Open { lease: Option<CapacityLease> },
-    /// New dispatch is rejected while existing work may still drain.
-    Closed { reason: CloseReason },
 }
 
 #[cfg(test)]

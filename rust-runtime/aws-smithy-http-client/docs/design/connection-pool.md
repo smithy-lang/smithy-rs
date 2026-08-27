@@ -1701,8 +1701,8 @@ protocol state cannot prove the boundary, the connection logically closes. The p
 HTTP independently of Hyper.
 
 The response path polls H1 readiness once. If readiness is pending after the response reaches a reusable
-protocol boundary, it transfers the exclusive sender and return cleanup to an `H1ReturnTask` spawned through
-the connection's owner-partition `DriverSpawner`. The response body does not retain responsibility for polling
+protocol boundary, it transfers an `H1Exchange` into a readiness task spawned through the connection's
+owner-partition `DriverSpawner`. The response body does not retain responsibility for polling
 that sender, and `Drop` never waits. The task enters source return only after Hyper proves both the message
 boundary and readiness for another request. Closed, poisoned, upgraded, or owner-runtime-shutdown outcomes
 logically close the record; dropping the task owns the same source-close fallback.
@@ -2464,7 +2464,11 @@ aws-smithy-http-client/src/client/
     origin.rs          — owned OriginKey, borrowed lookup, and canonicalization
     registry.rs        — PartitionRegistry, PartitionState, and stable cell publication
     cell.rs            — OriginCell, local selection, waiters, H1/H2 residency
-    admission.rs       — permits, demand orders, return claims, delivery
+    admission.rs       — bounded-origin capacity and unlocked action driving
+    admission/
+      demand.rs        — versioned demand order and delivery fences
+      claims.rs        — H1 source scheduling and return claims
+      delivery.rs      — capacity/H1 crossing guards and acknowledgements
     handshake.rs       — HTTP/1 attempts, HTTP/2 flights, ALPN convergence
     dispatch.rs        — request preparation, Hyper dispatch, response guards
     connection.rs      — records, leases, logical close, physical completion

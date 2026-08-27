@@ -25,7 +25,21 @@
 //! Closing -------- finish_close ------------------------------> removed
 //! ```
 //!
-//! [`H1Selection`], [`H1ReturnTask`], [`H1ReturnOffer`], and
+//! Outside the lock, ownership moves through values whose drop behavior is
+//! specific to the protocol phase:
+//!
+//! ```text
+//! H1Selection
+//!   |-- rejected or dropped ------------------------------> source return
+//!   `-- request accepted --> H1Exchange
+//!                              |-- incomplete or dropped --> logical close
+//!                              `-- reusable -------------> H1ReturnOffer
+//!                                                           `-- source return
+//!
+//! source claim --> ProvisionalH1 --> H1Selection or source return
+//! ```
+//!
+//! [`H1Selection`], [`H1Exchange`], [`H1ReturnOffer`], and
 //! [`ProvisionalH1`] are the sender-owning values outside the cell lock. Their
 //! drop behavior returns or retires the sender so a cancellation cannot leave
 //! a record with no terminal owner. They retain the source cell weakly because
@@ -131,14 +145,41 @@ pub(super) struct H1Records {
     idle: VecDeque<ConnectionId>,
 }
 
+/// One source-owned HTTP/1 connection record.
+#[derive(Debug)]
+struct H1Record {
+    /// Shared logical and physical connection lifetime.
+    connection: Arc<ConnectionState>,
+    /// Location of the record's exclusive sender.
+    residence: H1Residence,
+}
+
+/// Authoritative location of one exclusive HTTP/1 sender.
+#[derive(Debug)]
+enum H1Residence {
+    /// The sender is stored in this record and available for local selection.
+    Idle {
+        /// Exclusive sender available for the next local request.
+        sender: H1Sender,
+        /// Maintenance deadline, absent when idle expiry is disabled.
+        deadline: Option<SystemTime>,
+    },
+    /// A request-side [`H1Selection`] or [`H1Exchange`] owns the sender.
+    Selected,
+    /// [`H1ReturnOffer`] or [`ProvisionalH1`] owns the sender.
+    Returning,
+    /// Logical close has started and no new selection or return may commit.
+    Closing,
+}
+
 impl H1Records {
     /// Installs a fresh connection as selected by its launching acquisition.
     pub(super) fn install_selected(
         &mut self,
         connection: Arc<ConnectionState>,
         sender: H1Sender,
-    ) -> Result<H1Owner, H1Owner> {
-        let owner = H1Owner::new(connection, sender, false);
+    ) -> Result<OwnedH1, OwnedH1> {
+        let owner = OwnedH1::new(connection, sender, false);
         if self.records.contains_key(&owner.id()) {
             return Err(owner);
         }
@@ -160,13 +201,13 @@ impl H1Records {
         connection: Arc<ConnectionState>,
         sender: H1Sender,
         deadline: Option<SystemTime>,
-    ) -> Result<(), H1Owner> {
-        let owner = H1Owner::new(connection, sender, true);
+    ) -> Result<(), OwnedH1> {
+        let owner = OwnedH1::new(connection, sender, true);
         if self.records.contains_key(&owner.id()) {
             return Err(owner);
         }
         let id = owner.id();
-        let H1Owner {
+        let OwnedH1 {
             connection, sender, ..
         } = owner;
         self.records.insert(
@@ -182,7 +223,7 @@ impl H1Records {
     }
 
     /// Takes the most recently returned idle sender for one request.
-    pub(super) fn select_idle(&mut self) -> Option<H1Owner> {
+    pub(super) fn select_idle(&mut self) -> Option<OwnedH1> {
         let id = self.idle.pop_back()?;
         let record = self
             .records
@@ -196,7 +237,7 @@ impl H1Records {
         else {
             unreachable!("HTTP/1 residence changed under the cell lock");
         };
-        let owner = H1Owner::new(record.connection.clone(), sender, true);
+        let owner = OwnedH1::new(record.connection.clone(), sender, true);
         self.assert_consistent();
         Some(owner)
     }
@@ -205,7 +246,7 @@ impl H1Records {
     ///
     /// A return claim uses this path so rejection can follow the same ordinary
     /// return fallback as a sender intercepted after an active exchange.
-    pub(super) fn take_idle_for_claim(&mut self) -> Option<H1Owner> {
+    pub(super) fn take_idle_for_claim(&mut self) -> Option<OwnedH1> {
         let id = self.idle.pop_back()?;
         let record = self
             .records
@@ -216,7 +257,7 @@ impl H1Records {
         else {
             panic!("idle HTTP/1 order named a non-idle record");
         };
-        let mut owner = H1Owner::new(record.connection.clone(), sender, true);
+        let mut owner = OwnedH1::new(record.connection.clone(), sender, true);
         owner.mark_reused();
         self.assert_consistent();
         Some(owner)
@@ -233,7 +274,7 @@ impl H1Records {
     }
 
     /// Returns whether `owner` may still re-enter reusable return policy.
-    pub(super) fn accepts_return(&self, owner: &H1Owner) -> bool {
+    pub(super) fn accepts_return(&self, owner: &OwnedH1) -> bool {
         self.records.get(&owner.id()).is_some_and(|record| {
             matches!(
                 record.residence,
@@ -277,9 +318,9 @@ impl H1Records {
     /// Restores a returned sender to idle storage.
     pub(super) fn return_idle(
         &mut self,
-        owner: H1Owner,
+        owner: OwnedH1,
         deadline: Option<SystemTime>,
-    ) -> Result<(), H1Owner> {
+    ) -> Result<(), OwnedH1> {
         let Some(record) = self.records.get_mut(&owner.id()) else {
             return Err(owner);
         };
@@ -290,7 +331,7 @@ impl H1Records {
             return Err(owner);
         }
         let id = owner.id();
-        let H1Owner { sender, .. } = owner;
+        let OwnedH1 { sender, .. } = owner;
         record.residence = H1Residence::Idle { sender, deadline };
         self.idle.push_back(id);
         self.assert_consistent();
@@ -298,7 +339,7 @@ impl H1Records {
     }
 
     /// Commits a selected or returning sender to a waiting request.
-    pub(super) fn commit_return_to_waiter(&mut self, owner: &H1Owner) -> bool {
+    pub(super) fn commit_return_to_waiter(&mut self, owner: &OwnedH1) -> bool {
         let Some(record) = self.records.get_mut(&owner.id()) else {
             return false;
         };
@@ -317,7 +358,7 @@ impl H1Records {
     ///
     /// The caller still owns the sender and must complete logical close after
     /// releasing the cell lock.
-    pub(super) fn close_owned(&mut self, owner: &H1Owner) -> bool {
+    pub(super) fn close_owned(&mut self, owner: &OwnedH1) -> bool {
         let should_close = match self.records.get_mut(&owner.id()) {
             Some(record) => match record.residence {
                 H1Residence::Selected | H1Residence::Returning => {
@@ -473,60 +514,9 @@ impl H1Records {
     }
 }
 
-#[cfg(all(test, not(smithy_http_client_loom)))]
-mod tests {
-    use super::*;
-    use crate::client::pool::connection::ConnectionInfo;
-    use crate::client::pool::PartitionId;
-
-    #[test]
-    fn closing_a_selected_record_rejects_its_later_return() {
-        let info = ConnectionInfo::for_test(ConnectionId::new(1), PartitionId::from_index(1));
-        let (connection, _physical) = ConnectionState::unbounded(info);
-        let mut records = H1Records::default();
-        let owner = records
-            .install_selected(connection, H1Sender::test(11))
-            .expect("fresh HTTP/1 record was rejected");
-
-        assert!(records.accepts_return(&owner));
-        assert!(records.begin_close(owner.id()).is_some());
-        assert!(!records.accepts_return(&owner));
-
-        drop(owner);
-        records.finish_close(ConnectionId::new(1));
-    }
-}
-
-/// One source-owned HTTP/1 connection record.
+/// Exclusive sender and connection state detached from a source-cell record.
 #[derive(Debug)]
-struct H1Record {
-    /// Shared logical and physical connection lifetime.
-    connection: Arc<ConnectionState>,
-    /// Location of the record's exclusive sender.
-    residence: H1Residence,
-}
-
-/// Authoritative location of one exclusive HTTP/1 sender.
-#[derive(Debug)]
-enum H1Residence {
-    /// The sender is stored in this record and available for local selection.
-    Idle {
-        /// Exclusive sender available for the next local request.
-        sender: H1Sender,
-        /// Maintenance deadline, absent when idle expiry is disabled.
-        deadline: Option<SystemTime>,
-    },
-    /// A request-side [`H1Selection`] or [`H1ReturnTask`] owns the sender.
-    Selected,
-    /// [`H1ReturnOffer`] or [`ProvisionalH1`] owns the sender.
-    Returning,
-    /// Logical close has started and no new selection or return may commit.
-    Closing,
-}
-
-/// Sender and connection state detached from a source-cell record.
-#[derive(Debug)]
-pub(super) struct H1Owner {
+pub(super) struct OwnedH1 {
     /// Shared lifetime state for the physical connection.
     connection: Arc<ConnectionState>,
     /// The one Hyper HTTP/1 sender for the connection.
@@ -535,7 +525,7 @@ pub(super) struct H1Owner {
     reused: bool,
 }
 
-impl H1Owner {
+impl OwnedH1 {
     /// Creates detached sender ownership.
     fn new(connection: Arc<ConnectionState>, sender: H1Sender, reused: bool) -> Self {
         Self {
@@ -578,7 +568,7 @@ impl H1Owner {
 }
 
 /// Returns an external sender to its source or closes it after source teardown.
-fn return_to_source(source: &Weak<OriginCell>, owner: H1Owner) {
+fn return_to_source(source: &Weak<OriginCell>, owner: OwnedH1) {
     if let Some(source) = source.upgrade() {
         OriginCell::return_h1_owner(&source, owner);
     } else {
@@ -588,7 +578,7 @@ fn return_to_source(source: &Weak<OriginCell>, owner: H1Owner) {
 }
 
 /// Retires an external sender through its source or directly after teardown.
-fn retire_at_source(source: &Weak<OriginCell>, owner: H1Owner, reason: CloseReason) {
+fn retire_at_source(source: &Weak<OriginCell>, owner: OwnedH1, reason: CloseReason) {
     if let Some(source) = source.upgrade() {
         OriginCell::retire_h1_owner(&source, owner, reason);
     } else {
@@ -608,18 +598,18 @@ pub(super) struct CloseRecord {
 /// An exclusive H1 sender selected for request preparation and dispatch.
 ///
 /// Dropping an undispatched selection follows ordinary source return. Once
-/// Hyper accepts a request, convert this into [`H1ReturnTask`] so cancellation
-/// retires the connection unless message-boundary completion proves reuse.
+/// Hyper accepts a request, convert this into [`H1Exchange`]. Dropping that
+/// exchange retires the connection unless Hyper proves a reusable boundary.
 pub(in crate::client::pool) struct H1Selection {
     /// Non-retaining reference to the cell that owns the installed record.
     source: Weak<OriginCell>,
     /// Sender ownership until return, retirement, or response transfer.
-    owner: Option<H1Owner>,
+    owner: Option<OwnedH1>,
 }
 
 impl H1Selection {
     /// Creates a selected sender owned outside the source-cell lock.
-    pub(super) fn new(source: &Arc<OriginCell>, owner: H1Owner) -> Self {
+    pub(super) fn new(source: &Arc<OriginCell>, owner: OwnedH1) -> Self {
         Self {
             source: Weak::from_arc(source),
             owner: Some(owner),
@@ -659,8 +649,8 @@ impl H1Selection {
     }
 
     /// Transfers an accepted request's sender to response-lifecycle cleanup.
-    pub(in crate::client::pool) fn into_return_task(mut self) -> H1ReturnTask {
-        H1ReturnTask {
+    pub(in crate::client::pool) fn into_exchange(mut self) -> H1Exchange {
+        H1Exchange {
             source: self.source.clone(),
             owner: self.owner.take(),
         }
@@ -703,7 +693,7 @@ impl fmt::Debug for H1Selection {
                 "source",
                 &self.source.upgrade().map(|source| source.id().clone()),
             )
-            .field("connection_id", &self.owner.as_ref().map(H1Owner::id))
+            .field("connection_id", &self.owner.as_ref().map(OwnedH1::id))
             .finish()
     }
 }
@@ -718,21 +708,22 @@ impl Drop for H1Selection {
 
 /// Accepted HTTP/1 exchange awaiting a reusable message boundary.
 ///
-/// Dropping this value means reuse was not proven and closes the connection.
-pub(in crate::client::pool) struct H1ReturnTask {
+/// This value follows the response lifecycle and may later move into an
+/// owner-runtime readiness task. Dropping it means reuse was not proven.
+pub(in crate::client::pool) struct H1Exchange {
     /// Non-retaining reference to the cell that owns the selected record.
     source: Weak<OriginCell>,
     /// Sender held until Hyper proves it may return.
-    owner: Option<H1Owner>,
+    owner: Option<OwnedH1>,
 }
 
-impl H1ReturnTask {
+impl H1Exchange {
     /// Returns whether Hyper already permits another request.
     #[cfg(feature = "default-client")]
     pub(in crate::client::pool) fn is_ready(&self) -> bool {
         self.owner
             .as_ref()
-            .expect("HTTP/1 return task consumed more than once")
+            .expect("HTTP/1 exchange consumed more than once")
             .sender
             .is_ready()
     }
@@ -745,7 +736,7 @@ impl H1ReturnTask {
     ) -> Poll<Result<(), hyper::Error>> {
         self.owner
             .as_mut()
-            .expect("HTTP/1 return task consumed more than once")
+            .expect("HTTP/1 exchange consumed more than once")
             .sender_mut()
             .hyper_mut()
             .poll_ready(cx)
@@ -756,7 +747,7 @@ impl H1ReturnTask {
         let mut owner = self
             .owner
             .take()
-            .expect("HTTP/1 return task consumed more than once");
+            .expect("HTTP/1 exchange consumed more than once");
         owner.mark_reused();
         if self
             .source
@@ -787,19 +778,19 @@ impl H1ReturnTask {
     }
 }
 
-impl fmt::Debug for H1ReturnTask {
+impl fmt::Debug for H1Exchange {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("H1ReturnTask")
+        f.debug_struct("H1Exchange")
             .field(
                 "source",
                 &self.source.upgrade().map(|source| source.id().clone()),
             )
-            .field("connection_id", &self.owner.as_ref().map(H1Owner::id))
+            .field("connection_id", &self.owner.as_ref().map(OwnedH1::id))
             .finish()
     }
 }
 
-impl Drop for H1ReturnTask {
+impl Drop for H1Exchange {
     fn drop(&mut self) {
         if let Some(owner) = self.owner.take() {
             retire_at_source(&self.source, owner, CloseReason::IncompleteH1Exchange);
@@ -815,7 +806,7 @@ pub(in crate::client::pool) struct H1ReturnOffer {
     /// Non-retaining reference to the cell that owns the returning record.
     source: Weak<OriginCell>,
     /// Reusable sender being offered.
-    owner: Option<H1Owner>,
+    owner: Option<OwnedH1>,
 }
 
 impl H1ReturnOffer {
@@ -834,7 +825,7 @@ impl fmt::Debug for H1ReturnOffer {
                 "source",
                 &self.source.upgrade().map(|source| source.id().clone()),
             )
-            .field("connection_id", &self.owner.as_ref().map(H1Owner::id))
+            .field("connection_id", &self.owner.as_ref().map(OwnedH1::id))
             .finish()
     }
 }
@@ -854,12 +845,12 @@ pub(in crate::client::pool) struct ProvisionalH1 {
     /// Non-retaining source whose record remains in `Returning`.
     source: Weak<OriginCell>,
     /// Sender reserved by the provisional action.
-    owner: Option<H1Owner>,
+    owner: Option<OwnedH1>,
 }
 
 impl ProvisionalH1 {
     /// Creates provisional ownership for a sender extracted by a source claim.
-    pub(super) fn new(source: &Arc<OriginCell>, owner: H1Owner) -> Self {
+    pub(super) fn new(source: &Arc<OriginCell>, owner: OwnedH1) -> Self {
         Self {
             source: Weak::from_arc(source),
             owner: Some(owner),
@@ -867,7 +858,7 @@ impl ProvisionalH1 {
     }
 
     /// Detaches the source and sender for a source-cell claim transition.
-    pub(super) fn into_parts(mut self) -> (Weak<OriginCell>, H1Owner) {
+    pub(super) fn into_parts(mut self) -> (Weak<OriginCell>, OwnedH1) {
         let owner = self
             .owner
             .take()
@@ -876,7 +867,7 @@ impl ProvisionalH1 {
     }
 
     /// Rebuilds provisional ownership after a failed claim transition.
-    pub(super) fn from_parts(source: Weak<OriginCell>, owner: H1Owner) -> Self {
+    pub(super) fn from_parts(source: Weak<OriginCell>, owner: OwnedH1) -> Self {
         Self {
             source,
             owner: Some(owner),
@@ -891,7 +882,7 @@ impl fmt::Debug for ProvisionalH1 {
                 "source",
                 &self.source.upgrade().map(|source| source.id().clone()),
             )
-            .field("connection_id", &self.owner.as_ref().map(H1Owner::id))
+            .field("connection_id", &self.owner.as_ref().map(OwnedH1::id))
             .finish()
     }
 }
@@ -969,5 +960,29 @@ impl Drop for H1DriverGuard {
         if self.active {
             self.close.close(CloseReason::OwnerRuntimeShutdown);
         }
+    }
+}
+
+#[cfg(all(test, not(smithy_http_client_loom)))]
+mod tests {
+    use super::*;
+    use crate::client::pool::connection::ConnectionInfo;
+    use crate::client::pool::PartitionId;
+
+    #[test]
+    fn closing_a_selected_record_rejects_its_later_return() {
+        let info = ConnectionInfo::for_test(ConnectionId::new(1), PartitionId::from_index(1));
+        let (connection, _physical) = ConnectionState::unbounded(info);
+        let mut records = H1Records::default();
+        let owner = records
+            .install_selected(connection, H1Sender::test(11))
+            .expect("fresh HTTP/1 record was rejected");
+
+        assert!(records.accepts_return(&owner));
+        assert!(records.begin_close(owner.id()).is_some());
+        assert!(!records.accepts_return(&owner));
+
+        drop(owner);
+        records.finish_close(ConnectionId::new(1));
     }
 }

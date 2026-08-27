@@ -6,7 +6,7 @@
 //! Local HTTP/1 acquisition, dispatch, and response completion.
 
 use super::admission::ProtocolRequirement;
-use super::cell::h1::{H1ReturnTask, H1Selection};
+use super::cell::h1::{H1Exchange, H1Selection};
 use super::cell::{AcquisitionEvent, AcquisitionResult, OriginCell};
 use super::connection::{CloseReason, ConnectionState, DispatchGuard};
 use super::handshake::{self, ConnectTimeout};
@@ -100,7 +100,7 @@ impl ConnectionPool {
             };
             let send = selection.sender_mut().hyper_mut().try_send_request(request);
 
-            let return_task = selection.into_return_task();
+            let exchange = selection.into_exchange();
             let response = send.await;
             match response {
                 Ok(mut response) => {
@@ -110,14 +110,14 @@ impl ConnectionPool {
                     return Ok(guard_response(
                         response,
                         request_method,
-                        return_task,
+                        exchange,
                         dispatch,
                         owner_spawner.clone(),
                     ));
                 }
                 Err(mut error) => {
                     if let Some(mut returned) = error.take_message() {
-                        return_task.retire(CloseReason::ProtocolClosed);
+                        exchange.retire(CloseReason::ProtocolClosed);
                         drop(dispatch);
                         if reused {
                             tracing::trace!(
@@ -133,7 +133,7 @@ impl ConnectionPool {
                         return Err(super::super::downcast_error(Box::new(error.into_error()))
                             .with_connection(metadata));
                     }
-                    return_task.retire(CloseReason::IncompleteH1Exchange);
+                    exchange.retire(CloseReason::IncompleteH1Exchange);
                     drop(dispatch);
                     let metadata = captured_metadata
                         .unwrap_or_else(|| connection.info().metadata(close_handle));
@@ -327,7 +327,7 @@ impl Drop for WaiterGuard {
 fn guard_response(
     response: Response<hyper::body::Incoming>,
     method: Method,
-    return_task: H1ReturnTask,
+    exchange: H1Exchange,
     dispatch: DispatchGuard,
     spawner: StdArc<dyn DriverSpawner>,
 ) -> Response<SdkBody> {
@@ -335,31 +335,34 @@ fn guard_response(
         || (method == Method::CONNECT && response.status().is_success());
     let (parts, body) = response.into_parts();
     if upgrade {
-        return_task.retire(CloseReason::Upgraded);
+        exchange.retire(CloseReason::Upgraded);
         dispatch.complete();
         return Response::from_parts(parts, SdkBody::from_body_1_x(body));
     }
-    let body = H1ResponseBody::new(body, return_task, dispatch, spawner);
+    let body = H1ResponseBody::new(body, exchange, dispatch, spawner);
     Response::from_parts(parts, SdkBody::from_body_1_x(body))
 }
 
 /// Response body that owns accepted H1 cleanup through a message boundary.
 struct H1ResponseBody {
+    /// Hyper response body whose terminal state determines message completion.
     inner: hyper::body::Incoming,
+    /// Sender and dispatch ownership until one terminal body observation.
     lifecycle: Option<H1ResponseLifecycle>,
 }
 
 impl H1ResponseBody {
+    /// Wraps a response and immediately completes a body already at end stream.
     fn new(
         inner: hyper::body::Incoming,
-        return_task: H1ReturnTask,
+        exchange: H1Exchange,
         dispatch: DispatchGuard,
         spawner: StdArc<dyn DriverSpawner>,
     ) -> Self {
         let mut body = Self {
             inner,
             lifecycle: Some(H1ResponseLifecycle {
-                return_task: Some(return_task),
+                exchange: Some(exchange),
                 dispatch: Some(dispatch),
                 spawner,
             }),
@@ -370,22 +373,25 @@ impl H1ResponseBody {
         body
     }
 
+    /// Completes response ownership using the current body-task waker.
     fn finish_with_context(&mut self, cx: &mut Context<'_>) {
         if let Some(lifecycle) = self.lifecycle.take() {
             lifecycle.finish(Some(cx));
         }
     }
 
+    /// Completes response ownership without a task context when already ready.
     fn finish_without_context(&mut self) {
         if let Some(lifecycle) = self.lifecycle.take() {
             lifecycle.finish(None);
         }
     }
 
+    /// Retires an exchange whose response body ended with an error.
     fn fail(&mut self) {
         if let Some(mut lifecycle) = self.lifecycle.take() {
-            if let Some(return_task) = lifecycle.return_task.take() {
-                return_task.retire(CloseReason::IncompleteH1Exchange);
+            if let Some(exchange) = lifecycle.exchange.take() {
+                exchange.retire(CloseReason::IncompleteH1Exchange);
             }
             drop(lifecycle.dispatch.take());
         }
@@ -433,7 +439,7 @@ impl Drop for H1ResponseBody {
 /// Sender return work detached from a response body.
 struct H1ResponseLifecycle {
     /// Sender retained until Hyper proves the exchange reusable.
-    return_task: Option<H1ReturnTask>,
+    exchange: Option<H1Exchange>,
     /// Accepted-dispatch accounting completed with response cleanup.
     dispatch: Option<DispatchGuard>,
     /// Owner-runtime placement for readiness work that outlives the body.
@@ -443,31 +449,35 @@ struct H1ResponseLifecycle {
 /// Owns sender cleanup while a detached readiness future is submitted.
 struct H1ReadinessTask {
     /// Return task retired as owner-runtime shutdown if the future is dropped.
-    return_task: Option<H1ReturnTask>,
+    exchange: Option<H1Exchange>,
 }
 
 impl H1ResponseLifecycle {
+    /// Resolves sender reuse and completes accepted-dispatch accounting.
+    ///
+    /// Pending readiness moves into an owner-runtime task; ready or terminal
+    /// outcomes complete synchronously without retaining the response body.
     fn finish(mut self, cx: Option<&mut Context<'_>>) {
-        let mut return_task = self
-            .return_task
+        let mut exchange = self
+            .exchange
             .take()
-            .expect("HTTP/1 response lifecycle lost its return task");
+            .expect("HTTP/1 response lifecycle lost its exchange");
         let ready = match cx {
-            Some(cx) => return_task.poll_ready(cx),
-            None if return_task.is_ready() => Poll::Ready(Ok(())),
+            Some(cx) => exchange.poll_ready(cx),
+            None if exchange.is_ready() => Poll::Ready(Ok(())),
             None => Poll::Pending,
         };
         match ready {
             Poll::Ready(Ok(())) => {
-                if let Some(offer) = return_task.into_offer() {
+                if let Some(offer) = exchange.into_offer() {
                     offer.resolve();
                 }
             }
             Poll::Ready(Err(_)) => {
-                return_task.retire(CloseReason::ProtocolClosed);
+                exchange.retire(CloseReason::ProtocolClosed);
             }
             Poll::Pending => {
-                let mut readiness = H1ReadinessTask::new(return_task);
+                let mut readiness = H1ReadinessTask::new(exchange);
                 self.spawner.spawn(Box::pin(async move {
                     match poll_fn(|cx| readiness.poll_ready(cx)).await {
                         Ok(()) => readiness.reuse(),
@@ -484,15 +494,15 @@ impl H1ResponseLifecycle {
 
 impl H1ReadinessTask {
     /// Arms owner-runtime fallback around one pending sender.
-    fn new(return_task: H1ReturnTask) -> Self {
+    fn new(exchange: H1Exchange) -> Self {
         Self {
-            return_task: Some(return_task),
+            exchange: Some(exchange),
         }
     }
 
     /// Polls the retained sender for Hyper's reusable-boundary proof.
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), hyper::Error>> {
-        self.return_task
+        self.exchange
             .as_mut()
             .expect("HTTP/1 readiness task consumed more than once")
             .poll_ready(cx)
@@ -500,18 +510,18 @@ impl H1ReadinessTask {
 
     /// Returns the ready sender through ordinary source arbitration.
     fn reuse(mut self) {
-        let return_task = self
-            .return_task
+        let exchange = self
+            .exchange
             .take()
             .expect("HTTP/1 readiness task consumed more than once");
-        if let Some(offer) = return_task.into_offer() {
+        if let Some(offer) = exchange.into_offer() {
             offer.resolve();
         }
     }
 
     /// Retires the sender with a terminal readiness result.
     fn retire(mut self, reason: CloseReason) {
-        self.return_task
+        self.exchange
             .take()
             .expect("HTTP/1 readiness task consumed more than once")
             .retire(reason);
@@ -520,8 +530,8 @@ impl H1ReadinessTask {
 
 impl Drop for H1ReadinessTask {
     fn drop(&mut self) {
-        if let Some(return_task) = self.return_task.take() {
-            return_task.retire(CloseReason::OwnerRuntimeShutdown);
+        if let Some(exchange) = self.exchange.take() {
+            exchange.retire(CloseReason::OwnerRuntimeShutdown);
         }
     }
 }
@@ -826,7 +836,7 @@ mod tests {
         let selection =
             OriginCell::install_selected_h1(&cell, connection.clone(), H1Sender::test(11));
 
-        drop(H1ReadinessTask::new(selection.into_return_task()));
+        drop(H1ReadinessTask::new(selection.into_exchange()));
 
         assert_eq!(
             Some(CloseReason::OwnerRuntimeShutdown),
@@ -1025,11 +1035,11 @@ mod tests {
         let connection = selection.connection().clone();
         let dispatch =
             ConnectionState::try_commit_dispatch(&connection).expect("connection was not open");
-        let return_task = selection.into_return_task();
-        assert!(return_task.is_ready());
+        let exchange = selection.into_exchange();
+        assert!(exchange.is_ready());
 
         H1ResponseLifecycle {
-            return_task: Some(return_task),
+            exchange: Some(exchange),
             dispatch: Some(dispatch),
             spawner: StdArc::new(CountingSpawner {
                 submitted: submitted.clone(),
