@@ -22,6 +22,18 @@ pub(super) struct SourceClaimSlot {
     local_turn_owed: bool,
 }
 
+/// Authoritative source-cell residence of a nonterminal claim.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum SourceClaimState {
+    /// No claim may intercept a sender return.
+    #[default]
+    Available,
+    /// The next reusable sender return is reserved for this claim.
+    Installed(ClaimId),
+    /// A provisional sender is outside the source lock for this claim.
+    Resolving(ClaimId),
+}
+
 impl SourceClaimSlot {
     /// Installs a claim that will intercept a future reusable return.
     pub(super) fn install(&mut self, claim: ClaimId) -> bool {
@@ -121,18 +133,6 @@ impl SourceClaimSlot {
     pub(super) fn local_turn_owed(&self) -> bool {
         self.local_turn_owed
     }
-}
-
-/// Authoritative source-cell residence of a nonterminal claim.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-enum SourceClaimState {
-    /// No claim may intercept a sender return.
-    #[default]
-    Available,
-    /// The next reusable sender return is reserved for this claim.
-    Installed(ClaimId),
-    /// A provisional sender is outside the source lock for this claim.
-    Resolving(ClaimId),
 }
 
 #[cfg(all(test, not(smithy_http_client_loom)))]

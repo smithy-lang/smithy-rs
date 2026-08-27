@@ -3,12 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Partition-aware HTTP connection pooling.
+//! HTTP connection pooling with optional runtime and network partitions.
 //!
-//! [`ConnectionPool`] owns a fixed set of [`Partition`]s. A [`Client`] selects
-//! one partition, and each request resolves its URI to that partition's stable
-//! origin cell. The cell is the local synchronization domain for acquisition,
-//! reusable protocol state, and connection return:
+//! Build one [`ConnectionPool`], then create a [`Client`] for its anonymous
+//! partition or for one explicitly declared [`Partition`]. Each partition
+//! fixes where its connections are established and driven. The configured
+//! [`ConnectionReuseScope`] controls which partitions may dispatch through
+//! each other's connections without moving the underlying I/O.
+//!
+//! # Implementation model
+//!
+//! A request resolves its URI to the selected partition's stable origin cell.
+//! The cell is the local synchronization domain for acquisition, reusable
+//! protocol state, and connection return:
 //!
 //! ```text
 //! ConnectionPool
@@ -30,10 +37,19 @@
 //! partition can establish without exceeding the origin-wide limit.
 //!
 //! One `DeliveryGuard` carries either capacity or a claimed H1 sender from
-//! admission to a target cell. It materializes all fallible source state
-//! before reserving the target waiter, and its drop fallback restores the
-//! payload and demand fence. Pool coordination never holds two pool locks at
-//! once.
+//! admission to a target cell. `DeliveryAck` retains the admission fence after
+//! the target accepts ownership:
+//!
+//! ```text
+//! source OriginCell -- source report / claim result --> OriginAdmission
+//! OriginAdmission --- DeliveryGuard -----------------> target OriginCell
+//! OriginAdmission <-- DeliveryAck -------------------- target OriginCell
+//! ```
+//!
+//! The guard materializes all fallible source state before reserving the
+//! target waiter. Dropping either crossing value restores its resource before
+//! making demand schedulable again. Pool coordination never holds two pool
+//! locks at once.
 //!
 //! Established connections separate three lifetimes:
 //!
@@ -85,6 +101,7 @@ use std::time::Duration;
 /// for its anonymous or explicitly declared partition.
 #[derive(Clone)]
 pub struct ConnectionPool {
+    /// Shared pool policy, topology, connector, and connection-ID allocator.
     inner: StdArc<PoolInner>,
 }
 
@@ -112,16 +129,23 @@ impl fmt::Debug for ConnectionPool {
 /// Immutable pool policy retained with the partition registry.
 #[derive(Clone, Debug)]
 struct PoolConfig {
+    /// Duration after which a reusable idle connection is retired.
     idle_timeout: Option<Duration>,
+    /// Optional logical-connection bound shared by every partition for one origin.
     max_connections_per_host: Option<NonZeroUsize>,
+    /// Partitions allowed to dispatch through one another's connections.
     reuse_scope: ConnectionReuseScope,
 }
 
 /// Shared implementation state behind [`ConnectionPool`].
 struct PoolInner {
+    /// Immutable settings retained for diagnostics and future policy facades.
     config: PoolConfig,
+    /// Fixed partitions and lazily published per-origin state.
     registry: PartitionRegistry,
+    /// Type-erased construction of one partition-bound transport.
     transport: StdArc<dyn TransportFactory>,
+    /// Monotonic identity source shared by every physical connection.
     next_connection_id: AtomicU64,
 }
 

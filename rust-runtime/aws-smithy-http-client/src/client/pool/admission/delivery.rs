@@ -348,6 +348,10 @@ impl Drop for DeliveryGuard {
 }
 
 /// Target-side acknowledgement after an event becomes target-owned.
+///
+/// Explicit rejection returns the event before closing the delivery fence.
+/// Once target state owns the event, dropping this value acknowledges success
+/// and completes any borrowed-source endpoint.
 pub(in crate::client::pool) struct DeliveryAck {
     /// Admission authority that owns the outstanding fence.
     origin: Arc<OriginAdmission>,

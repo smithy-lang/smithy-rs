@@ -51,7 +51,7 @@ use self::claims::SourceClaimSlot;
 use self::h1::H1CloseHandle;
 #[cfg(all(test, not(smithy_http_client_loom)))]
 use self::h1::H1DriverGuard;
-use self::h1::{H1Owner, H1Records, H1Selection, H1Sender, ProvisionalH1};
+use self::h1::{H1Records, H1Selection, H1Sender, OwnedH1, ProvisionalH1};
 #[cfg(test)]
 use self::waiters::CellSnapshot;
 pub(in crate::client::pool) use self::waiters::WaiterId;
@@ -75,6 +75,30 @@ use aws_smithy_runtime_api::client::connection::ConnectionId;
 use aws_smithy_runtime_api::client::result::ConnectorError;
 use std::task::{Context, Poll};
 use std::time::SystemTime;
+
+/// Stable identity of an [`OriginCell`].
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub(crate) struct CellId {
+    partition: PartitionId,
+    origin: OriginKey,
+}
+
+impl CellId {
+    /// Creates an identity from its complete partition and origin axes.
+    pub(super) fn new(partition: PartitionId, origin: OriginKey) -> Self {
+        Self { partition, origin }
+    }
+
+    /// Returns the partition axis.
+    pub(crate) fn partition(&self) -> PartitionId {
+        self.partition
+    }
+
+    /// Returns the canonical origin axis.
+    pub(crate) fn origin(&self) -> &OriginKey {
+        &self.origin
+    }
+}
 
 /// Stable state shared by requests for one partition and canonical origin.
 pub(crate) struct OriginCell {
@@ -206,7 +230,7 @@ impl CellState {
     }
 
     /// Revalidates a claim and sender residence as one cell transition.
-    fn commit_source_claim(&mut self, claim: ClaimId, owner: &H1Owner) -> bool {
+    fn commit_source_claim(&mut self, claim: ClaimId, owner: &OwnedH1) -> bool {
         let committed = self.claims.names(claim) && self.h1.commit_return_to_waiter(owner);
         self.assert_consistent();
         committed
@@ -230,7 +254,7 @@ enum SourceClaimInstall {
     /// The endpoint will intercept a future sender return.
     Installed,
     /// An idle sender was detached for immediate resolution.
-    Candidate(H1Owner),
+    Candidate(OwnedH1),
     /// The endpoint could not accept the claim.
     Rejected(SourceSnapshot),
 }
@@ -525,7 +549,7 @@ impl OriginCell {
     ///
     /// Demand publication, task wakeup, and any rejected-result fallback all
     /// run after the cell lock is released.
-    fn return_h1_owner(cell: &Arc<Self>, owner: H1Owner) {
+    fn return_h1_owner(cell: &Arc<Self>, owner: OwnedH1) {
         let connection_id = owner.id();
         let mut owner = Some(owner);
         let mut installation = None;
@@ -663,7 +687,7 @@ impl OriginCell {
     /// Retires an externally owned H1 sender and removes its source record.
     ///
     /// Returns whether this path won the connection's logical-close race.
-    fn retire_h1_owner(cell: &Arc<Self>, owner: H1Owner, reason: CloseReason) -> bool {
+    fn retire_h1_owner(cell: &Arc<Self>, owner: OwnedH1, reason: CloseReason) -> bool {
         let should_close = {
             let mut state = cell.state.lock();
             let should_close = state.h1.close_owned(&owner);
@@ -1027,30 +1051,6 @@ impl std::fmt::Debug for OriginCell {
     }
 }
 
-/// Stable identity of an [`OriginCell`].
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(crate) struct CellId {
-    partition: PartitionId,
-    origin: OriginKey,
-}
-
-impl CellId {
-    /// Creates an identity from its complete partition and origin axes.
-    pub(super) fn new(partition: PartitionId, origin: OriginKey) -> Self {
-        Self { partition, origin }
-    }
-
-    /// Returns the partition axis.
-    pub(crate) fn partition(&self) -> PartitionId {
-        self.partition
-    }
-
-    /// Returns the canonical origin axis.
-    pub(crate) fn origin(&self) -> &OriginKey {
-        &self.origin
-    }
-}
-
 #[cfg(all(test, not(smithy_http_client_loom)))]
 mod tests {
     use super::*;
@@ -1229,7 +1229,7 @@ mod tests {
         assert!(!selection.is_reused());
 
         let offer = selection
-            .into_return_task()
+            .into_exchange()
             .into_offer()
             .expect("open selection did not enter return arbitration");
         assert_eq!((1, 0), cell.h1_counts());
@@ -1245,7 +1245,7 @@ mod tests {
         let selection =
             OriginCell::install_selected_h1(&cell, connection.clone(), H1Sender::test(11));
 
-        drop(selection.into_return_task());
+        drop(selection.into_exchange());
 
         assert_eq!((0, 0), cell.h1_counts());
         assert_eq!(1, admission.available_capacity_for_test());
@@ -1764,7 +1764,7 @@ mod tests {
         let selection =
             OriginCell::install_selected_h1(&cell, connection.clone(), H1Sender::test(11));
         let driver = H1DriverGuard::new(H1CloseHandle::new(&cell, &connection));
-        let return_task = selection.into_return_task();
+        let return_task = selection.into_exchange();
 
         driver.protocol_closed();
         return_task.retire(CloseReason::Upgraded);
@@ -2242,7 +2242,7 @@ mod loom_tests {
             let selection =
                 OriginCell::install_selected_h1(&cell, connection.clone(), H1Sender::test(11));
             let offer = selection
-                .into_return_task()
+                .into_exchange()
                 .into_offer()
                 .expect("selection did not enter return arbitration");
             let close = H1CloseHandle::new(&cell, &connection);
