@@ -119,7 +119,7 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.9.1"
+version = "1.9.2"
 dependencies = [
  "aws-credential-types",
  "aws-sigv4",
@@ -391,7 +391,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.15.0"
+version = "1.16.0"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api-macros",
