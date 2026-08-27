@@ -13,7 +13,8 @@ or `RequestTimeTooSkewed`). The SDK measures the offset between the two clocks f
 response `Date` header, and when that offset exceeds 4 minutes it treats the failure as clock
 skew: it adjusts the timestamp it signs with, retries the request, and remembers the offset on
 the client so later requests are signed correctly the first time. This is enabled by default
-and needs no code changes.
+and needs no code changes. Presigned requests are unaffected: a presigned URL is always signed
+at the `start_time` you give it, so it stays a function of its inputs.
 
 If you need to turn it off, the correction can be disabled three ways (highest precedence first):
 

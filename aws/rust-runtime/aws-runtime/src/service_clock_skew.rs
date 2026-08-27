@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::auth::HttpSignatureType;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeDeserializationInterceptorContextMut, BeforeTransmitInterceptorContextMut,
@@ -72,6 +73,23 @@ impl ClockSkew {
 pub(crate) struct AttemptSkew(pub(crate) ClockSkew);
 impl Storable for AttemptSkew {
     type Storer = StoreReplace<Self>;
+}
+
+// The timestamp to sign with: `now` shifted by the operation's `AttemptSkew`.
+//
+// Presigned requests are never shifted. A presigned URL is a function of its inputs, and
+// presigning stops before transmit, so it never reads a response: it can neither contribute to the
+// skew nor be corrected by one.
+pub(crate) fn signing_time(
+    now: SystemTime,
+    signature_type: HttpSignatureType,
+    cfg: &ConfigBag,
+) -> SystemTime {
+    if signature_type == HttpSignatureType::HttpRequestQueryParams {
+        return now;
+    }
+    cfg.load::<AttemptSkew>()
+        .map_or(now, |skew| skew.0.apply(now))
 }
 
 // The client's raw local time when the request was sent (no skew applied), used to compute
@@ -366,6 +384,29 @@ mod tests {
         assert_eq!(
             signed_skew(midpoint - Duration::from_secs(10), midpoint),
             ClockSkew(-10_000)
+        );
+    }
+
+    #[test]
+    fn presigning_is_not_shifted_by_skew() {
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(1000);
+        let mut cfg = ConfigBag::base();
+
+        assert_eq!(
+            signing_time(now, HttpSignatureType::HttpRequestHeaders, &cfg),
+            now,
+            "nothing to apply before a skew is recorded",
+        );
+
+        cfg.interceptor_state().store_put(AttemptSkew(TEN_MIN));
+        assert_eq!(
+            signing_time(now, HttpSignatureType::HttpRequestHeaders, &cfg),
+            now + Duration::from_secs(10 * 60),
+        );
+        assert_eq!(
+            signing_time(now, HttpSignatureType::HttpRequestQueryParams, &cfg),
+            now,
+            "a presigned URL must not move with the client's skew",
         );
     }
 
