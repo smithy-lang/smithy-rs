@@ -273,11 +273,12 @@ impl<'b> Decoder<'b> {
     /// two-element array containing a base-10 exponent and an integer or
     /// bignum mantissa.
     pub fn big_decimal(&mut self) -> Result<BigDecimal, DeserializeError> {
+        let tag_position = self.decoder.position();
         let tag = self.decoder.tag().map_err(DeserializeError::new)?;
         if tag.as_u64() != 4 {
-            return Err(DeserializeError::new(Error::message(
-                "expected CBOR tag 4 (decimal fraction)",
-            )));
+            return Err(DeserializeError::new(
+                Error::message("expected CBOR tag 4 (decimal fraction)").at(tag_position),
+            ));
         }
 
         let len = self.decoder.array().map_err(DeserializeError::new)?;
@@ -307,7 +308,7 @@ impl<'b> Decoder<'b> {
 
         let scale = exponent.checked_neg().ok_or_else(|| {
             DeserializeError::new(Error::message(
-                "decimal fraction exponent is outside the supported range",
+                "big decimal fraction exponent is outside the supported range",
             ))
         })?;
         let value = bigdecimal::BigDecimal::new(mantissa, scale);
@@ -326,7 +327,7 @@ impl<'b> Decoder<'b> {
                 let value = self.decoder.u64().map_err(DeserializeError::new)?;
                 i64::try_from(value).map_err(|_| {
                     DeserializeError::new(Error::message(
-                        "decimal fraction exponent is outside the supported range",
+                        "big decimal fraction exponent is outside the supported range",
                     ))
                 })?
             }
@@ -338,7 +339,7 @@ impl<'b> Decoder<'b> {
                 let value: i128 = self.decoder.int().map_err(DeserializeError::new)?.into();
                 i64::try_from(value).map_err(|_| {
                     DeserializeError::new(Error::message(
-                        "decimal fraction exponent is outside the supported range",
+                        "big decimal fraction exponent is outside the supported range",
                     ))
                 })?
             }
@@ -707,9 +708,14 @@ mod tests {
 
     #[test]
     fn big_decimal_rejects_invalid_tag() {
-        let bytes = [0xc5, 0x82, 0x00, 0x01];
+        let bytes = [0x00, 0xc5, 0x82, 0x00, 0x01];
         let mut decoder = Decoder::new(&bytes);
-        assert!(decoder.big_decimal().is_err());
+        decoder.set_position(1);
+        let error = decoder.big_decimal().expect_err("tag 5 must be rejected");
+        assert_eq!(
+            error.to_string(),
+            "decode error at position 1: expected CBOR tag 4 (decimal fraction)"
+        );
     }
 
     #[test]
@@ -745,7 +751,13 @@ mod tests {
             ][..],
         ] {
             let mut decoder = Decoder::new(bytes);
-            assert!(decoder.big_decimal().is_err());
+            let error = decoder
+                .big_decimal()
+                .expect_err("unsupported exponent must be rejected");
+            assert_eq!(
+                error.to_string(),
+                "decode error: big decimal fraction exponent is outside the supported range"
+            );
         }
     }
 
