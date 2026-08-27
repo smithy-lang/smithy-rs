@@ -45,6 +45,24 @@ fn convert_trailers_0x_1x(input: http::HeaderMap) -> http_1x::HeaderMap {
     map
 }
 
+// Converts an `http` 1.x `HeaderMap` into an `http` 0.2.x `HeaderMap`. Shared by the http-body
+// 0.4.x adapters in `body/http_body_0_4_x.rs` and `body/http_body_1_x.rs`, so it lives here to
+// avoid duplication. Only needed on the legacy 0.4.x path (gated on `http-body-0-4-x`).
+#[cfg(feature = "http-body-0-4-x")]
+pub(crate) fn convert_headers_1x_0x(input: http_1x::HeaderMap) -> http::HeaderMap {
+    let mut map = http::HeaderMap::with_capacity(input.capacity());
+    let mut mem: Option<http_1x::HeaderName> = None;
+    for (k, v) in input.into_iter() {
+        let name = k.or_else(|| mem.clone()).unwrap();
+        map.append(
+            http::HeaderName::from_bytes(name.as_str().as_bytes()).expect("already validated"),
+            http::HeaderValue::from_bytes(v.as_bytes()).expect("already validated"),
+        );
+        mem = Some(name);
+    }
+    map
+}
+
 pin_project! {
     /// SdkBody type
     ///

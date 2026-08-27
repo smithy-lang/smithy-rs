@@ -224,15 +224,24 @@ impl TryFrom<http_02x::HeaderMap> for Headers {
         }) {
             Err(HttpError::non_utf8_header(utf8_error))
         } else {
+            // `http` 0.2.x accepts some header names that `http` 1.x rejects (for example names
+            // containing `"`). Convert fallibly and surface an error instead of panicking.
+            //
+            // A `None` key in `HeaderMap`'s iterator means "same name as the previous entry"
+            // (multi-value headers), so the converted names are collected in order before being
+            // extended into the map to preserve that association.
+            let converted: Vec<(Option<http_1x::HeaderName>, HeaderValue)> = value
+                .into_iter()
+                .map(|(k, v)| {
+                    let name = k
+                        .map(|n| http_1x::HeaderName::from_bytes(n.as_str().as_bytes()))
+                        .transpose()
+                        .map_err(HttpError::invalid_header_name)?;
+                    Ok((name, HeaderValue::from_http02x(v).expect("validated above")))
+                })
+                .collect::<Result<_, HttpError>>()?;
             let mut string_safe_headers: http_1x::HeaderMap<HeaderValue> = Default::default();
-            string_safe_headers.extend(value.into_iter().map(|(k, v)| {
-                (
-                    k.map(|n| {
-                        http_1x::HeaderName::from_bytes(n.as_str().as_bytes()).expect("known valid")
-                    }),
-                    HeaderValue::from_http02x(v).expect("validated above"),
-                )
-            }));
+            string_safe_headers.extend(converted);
             Ok(Headers {
                 headers: string_safe_headers,
             })
@@ -634,6 +643,39 @@ mod tests {
             let mut headers = Headers::new();
             let _ = headers.try_append(input.clone(), input);
         }
+    }
+
+    // `http` 0.2.x accepts header names (e.g. containing `"`) that `http` 1.x rejects. Converting
+    // such a map must return an `Err`, not panic.
+    #[cfg(feature = "http-02x")]
+    #[test]
+    fn converting_an_http02x_headermap_never_panics() {
+        let name = http_02x::HeaderName::from_bytes(b"a\"b").expect("http 0.2.x accepts this");
+        let mut map = http_02x::HeaderMap::new();
+        map.insert(name, http_02x::HeaderValue::from_static("v"));
+        let res = std::panic::catch_unwind(|| Headers::try_from(map));
+        assert!(
+            res.is_ok(),
+            "TryFrom<http_02x::HeaderMap> for Headers panicked on a name that http 0.2.x \
+             considers valid but http 1.x does not; a TryFrom should return Err"
+        );
+        assert!(
+            res.unwrap().is_err(),
+            "expected an Err for a header name that http 1.x rejects"
+        );
+    }
+
+    // Multi-value headers rely on the `None`-key semantics of `HeaderMap`'s iterator; make sure the
+    // fallible conversion preserves all values for a repeated name.
+    #[cfg(feature = "http-02x")]
+    #[test]
+    fn converting_an_http02x_headermap_preserves_multi_value_headers() {
+        let mut map = http_02x::HeaderMap::new();
+        map.append("multi", http_02x::HeaderValue::from_static("v1"));
+        map.append("multi", http_02x::HeaderValue::from_static("v2"));
+        let headers = Headers::try_from(map).expect("valid headers");
+        let values: Vec<_> = headers.get_all("multi").collect();
+        assert_eq!(values, vec!["v1", "v2"]);
     }
 }
 

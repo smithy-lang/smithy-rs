@@ -106,6 +106,14 @@ impl HttpError {
         }
     }
 
+    #[cfg(feature = "http-02x")]
+    pub(super) fn invalid_uri_h0(err: http_02x::uri::InvalidUri) -> Self {
+        Self {
+            kind: Kind::InvalidUri,
+            source: Some(Box::new(err)),
+        }
+    }
+
     pub(super) fn invalid_uri_parts(err: http_1x::Error) -> Self {
         Self {
             kind: Kind::InvalidUriParts,

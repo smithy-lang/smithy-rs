@@ -123,10 +123,25 @@ impl Uri {
     }
 
     #[cfg(feature = "http-02x")]
-    fn into_h0(self) -> http_02x::Uri {
+    fn into_h0(self) -> Result<http_02x::Uri, HttpError> {
         match self.parsed {
-            ParsedUri::H0(uri) => uri,
-            ParsedUri::H1(_uri) => self.as_string.parse().unwrap(),
+            ParsedUri::H0(uri) => Ok(uri),
+            // The internal storage is now http 1.x, which accepts some URIs that http 0.2.x does
+            // not. Surface those as an error instead of panicking.
+            ParsedUri::H1(_uri) => self.as_string.parse().map_err(HttpError::invalid_uri_h0),
+        }
+    }
+
+    #[cfg(feature = "http-1x")]
+    fn into_h1(self) -> http_1x::Uri {
+        match self.parsed {
+            // The internal storage is http 1.x, so this is free (no re-parse).
+            ParsedUri::H1(uri) => uri,
+            #[cfg(feature = "http-02x")]
+            ParsedUri::H0(_uri) => self
+                .as_string
+                .parse()
+                .expect("an http 0.2.x uri is a valid http 1.x uri"),
         }
     }
 }
@@ -211,7 +226,7 @@ impl<B> Request<B> {
     #[cfg(feature = "http-02x")]
     pub fn try_into_http02x(self) -> Result<http_02x::Request<B>, HttpError> {
         let mut req = http_02x::Request::builder()
-            .uri(self.uri.into_h0())
+            .uri(self.uri.into_h0()?)
             .method(
                 http_02x::Method::from_bytes(self.method.as_str().as_bytes())
                     .expect("valid method"),
@@ -230,7 +245,7 @@ impl<B> Request<B> {
     #[cfg(feature = "http-1x")]
     pub fn try_into_http1x(self) -> Result<http_1x::Request<B>, HttpError> {
         let mut req = http_1x::Request::builder()
-            .uri(self.uri.as_string)
+            .uri(self.uri.into_h1())
             .method(self.method)
             .body(self.body)
             .expect("known valid");
@@ -498,8 +513,26 @@ mod test {
 
 #[cfg(all(test, feature = "http-02x", feature = "http-1x"))]
 mod cross_version_test {
+    use super::Request;
     use aws_smithy_types::body::SdkBody;
     use http_02x::header::{AUTHORIZATION, CONTENT_LENGTH};
+
+    // The internal URI storage is http 1.x, which accepts some URIs that http 0.2.x rejects.
+    // `try_into_http02x` must surface that as an `Err` rather than panicking in `Uri::into_h0`.
+    #[test]
+    fn converting_a_non_ascii_uri_to_http02x_does_not_panic() {
+        let mut req = Request::empty();
+        if req.set_uri("http://foo.com/\u{80}").is_err() {
+            // If the URI is rejected up front there is nothing to demonstrate.
+            return;
+        }
+        let result =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| req.try_into_http02x()));
+        assert!(
+            result.is_ok(),
+            "Uri::into_h0's `self.as_string.parse()` panicked instead of surfacing an HttpError"
+        );
+    }
 
     #[test]
     fn valid_round_trips() {

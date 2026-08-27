@@ -139,7 +139,7 @@ where
         // already read everything
         let this = self.project();
         match this.trailers.take() {
-            Some(headers) => Poll::Ready(Ok(Some(convert_headers_1x_0x(headers)))),
+            Some(headers) => Poll::Ready(Ok(Some(crate::body::convert_headers_1x_0x(headers)))),
             None => Poll::Ready(Ok(None)),
         }
     }
@@ -163,21 +163,6 @@ where
     }
 }
 
-#[cfg(feature = "http-body-0-4-x")]
-pub(crate) fn convert_headers_1x_0x(input: http_1x::HeaderMap) -> http::HeaderMap {
-    let mut map = http::HeaderMap::with_capacity(input.capacity());
-    let mut mem: Option<http_1x::HeaderName> = None;
-    for (k, v) in input.into_iter() {
-        let name = k.or_else(|| mem.clone()).unwrap();
-        map.append(
-            http::HeaderName::from_bytes(name.as_str().as_bytes()).expect("already validated"),
-            http::HeaderValue::from_bytes(v.as_bytes()).expect("already validated"),
-        );
-        mem = Some(name);
-    }
-    map
-}
-
 #[cfg(test)]
 mod test {
     use std::collections::VecDeque;
@@ -194,7 +179,9 @@ mod test {
     use http_body_util::BodyExt;
 
     #[cfg(feature = "http-body-0-4-x")]
-    use crate::body::http_body_1_x::{convert_headers_1x_0x, Http1toHttp04};
+    use crate::body::convert_headers_1x_0x;
+    #[cfg(feature = "http-body-0-4-x")]
+    use crate::body::http_body_1_x::Http1toHttp04;
     use crate::body::{Error, SdkBody};
     use crate::byte_stream::ByteStream;
 
