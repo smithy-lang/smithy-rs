@@ -228,19 +228,24 @@ impl Intercept for ServiceClockSkewInterceptor {
             .ok_or("a time source is required (clock skew)")?
             .now();
         let Some(time_sent) = cfg.load::<TimeRequestSent>().map(|t| t.0) else {
+            tracing::debug!("no recorded request send time; skipping clock skew measurement");
             return Ok(());
         };
         // Cached response (RFC 7234 §5.1): the `Date` is stale, so don't trust it.
         if ctx.response().headers().get("age").is_some() {
+            tracing::debug!("response came from a cache; skipping clock skew measurement");
             return Ok(());
         }
-        // Missing or unparseable `Date`: no candidate.
         let Some(server) = server_time(ctx.response()) else {
+            tracing::debug!("no usable `Date` response header; skipping clock skew measurement");
             return Ok(());
         };
         let elapsed = time_received.duration_since(time_sent).unwrap_or_default();
-        // Slow request: the measurement is unreliable, so discard it.
         if elapsed > MAX_TRUSTED_REQUEST_DURATION {
+            tracing::debug!(
+                ?elapsed,
+                "request too slow to measure clock skew reliably; skipping"
+            );
             return Ok(());
         }
         let midpoint = time_sent + elapsed / 2;
@@ -249,6 +254,7 @@ impl Intercept for ServiceClockSkewInterceptor {
         // corrected without any special-case healing logic.
         cfg.interceptor_state().store_put(AttemptSkew(candidate));
         *self.client_skew.lock().unwrap() = candidate;
+        tracing::trace!(skew_ms = candidate.0, "recorded clock skew");
         // Hand the surviving candidate to the retry classifier via the response.
         ctx.response_mut()
             .add_extension(ResponseClockSkew(candidate));
