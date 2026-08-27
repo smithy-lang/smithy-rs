@@ -153,8 +153,7 @@ impl OriginCell {
         };
 
         let DeliveryReservation::Reserved { waiter, successor } = reservation else {
-            delivery.reject(None);
-            return None;
+            return delivery.reject(None);
         };
 
         let (lease, acknowledgement) = delivery.commit(successor);
@@ -418,12 +417,67 @@ mod tests {
                 .expect("first demand did not reserve capacity");
 
         assert!(cell.cancel_waiter(first));
-        assert!(OriginCell::receive_capacity(&cell, stale).is_none());
+        OriginAdmission::drive(OriginCell::receive_capacity(&cell, stale));
 
         let lease = cell
             .take_ready_lease(second)
             .expect("replacement demand did not receive refunnelled capacity");
         drop(lease);
+    }
+
+    #[test]
+    fn stale_delivery_returns_its_successor_to_the_driver() {
+        let admission = OriginAdmission::new(NonZeroUsize::new(1).unwrap());
+        let stale = OriginAdmission::register_cell(
+            &admission,
+            Arc::new(OriginCell::new(
+                PartitionId::from_index(1),
+                OriginKey::from_parts(Scheme::HTTPS, "example.com", None).unwrap(),
+                EligibilityGroup::Pool,
+                Some(admission.clone()),
+            )),
+        );
+        let target = OriginAdmission::register_cell(
+            &admission,
+            Arc::new(OriginCell::new(
+                PartitionId::from_index(2),
+                OriginKey::from_parts(Scheme::HTTPS, "example.com", None).unwrap(),
+                EligibilityGroup::Pool,
+                Some(admission.clone()),
+            )),
+        );
+
+        let (stale_waiter, stale_demand) =
+            stale.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
+        let delivery =
+            OriginAdmission::publish_without_driving(&admission, stale.id().clone(), stale_demand)
+                .expect("stale demand did not reserve capacity");
+        let (target_waiter, target_demand) =
+            target.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
+        OriginAdmission::publish_demand(&admission, target.id().clone(), target_demand);
+
+        // Model cancellation winning in the cell before its retirement
+        // publication reaches admission.
+        let cancelled = stale
+            .state
+            .lock()
+            .cancel_waiter(stale_waiter, &stale.eligibility_group)
+            .expect("stale waiter was not cancelled");
+        drop(cancelled.returned_lease);
+
+        let next = OriginCell::receive_capacity(&stale, delivery)
+            .expect("stale rejection did not return the successor delivery");
+        assert!(
+            target.take_ready_lease(target_waiter).is_none(),
+            "stale rejection recursively drove its successor"
+        );
+
+        OriginAdmission::drive(Some(next));
+        drop(
+            target
+                .take_ready_lease(target_waiter)
+                .expect("existing driver did not deliver the successor"),
+        );
     }
 
     #[test]

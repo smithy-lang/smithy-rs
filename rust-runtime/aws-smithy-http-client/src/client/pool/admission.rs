@@ -153,12 +153,24 @@ impl OriginAdmission {
     /// Registers or returns the unique retained cell for an identity.
     pub(crate) fn register_cell(origin: &Arc<Self>, candidate: Arc<OriginCell>) -> Arc<OriginCell> {
         let id = candidate.id().clone();
-        let mut state = origin.state.lock();
-        if let Some(existing) = state.cells.get(&id).and_then(Weak::upgrade) {
-            return existing;
+        let existing = {
+            let mut state = origin.state.lock();
+            match state.cells.get(&id).and_then(Weak::upgrade) {
+                Some(existing) => Some(existing),
+                None => {
+                    state.cells.insert(id, Weak::from_arc(&candidate));
+                    None
+                }
+            }
+        };
+        if let Some(existing) = existing {
+            // Dropping the losing cell may drop a CapacityLease and re-enter
+            // this admission lock, so release the lock first.
+            drop(candidate);
+            existing
+        } else {
+            candidate
         }
-        state.cells.insert(id, Weak::from_arc(&candidate));
-        candidate
     }
 
     /// Publishes a complete demand snapshot and drives any resulting delivery.
@@ -198,7 +210,7 @@ impl OriginAdmission {
     }
 
     /// Drives sequential deliveries until no completion schedules another.
-    fn drive(mut delivery: Option<CapacityDelivery>) {
+    pub(super) fn drive(mut delivery: Option<CapacityDelivery>) {
         while let Some(current) = delivery {
             delivery = current.deliver_once();
         }
@@ -424,10 +436,9 @@ impl CapacityDelivery {
         )
     }
 
-    /// Rejects this delivery and refunnels its permit with the acknowledgement.
-    pub(crate) fn reject(self, successor: Option<DemandSnapshot>) {
-        let next = self.finish_undelivered(TargetAckResult::Rejected { successor });
-        OriginAdmission::drive(next);
+    /// Refunnels this rejected delivery and returns the next scheduled crossing.
+    pub(crate) fn reject(self, successor: Option<DemandSnapshot>) -> Option<CapacityDelivery> {
+        self.finish_undelivered(TargetAckResult::Rejected { successor })
     }
 
     /// Disarms this guard and resolves its permit and demand fence together.
@@ -1395,7 +1406,7 @@ mod tests {
             .lock()
             .publish_demand(target.id().clone(), demand(2));
         assert!(!delivery.is_current());
-        delivery.reject(None);
+        OriginAdmission::drive(delivery.reject(None));
     }
 
     #[test]
@@ -1414,7 +1425,7 @@ mod tests {
                 EligibilityGroup::Pool,
             ),
         );
-        delivery.reject(Some(demand(1)));
+        OriginAdmission::drive(delivery.reject(Some(demand(1))));
 
         assert_eq!(1, origin.counts().available);
         assert_eq!(0, origin.counts().ordered);
@@ -1449,6 +1460,35 @@ mod tests {
             .take_ready_lease(second_waiter)
             .expect("younger demand did not run after the original head");
         drop(second_lease);
+    }
+
+    #[test]
+    fn losing_registered_cell_returns_capacity_after_admission_unlocks() {
+        let origin = OriginAdmission::new(NonZeroUsize::new(1).unwrap());
+        let retained = cell(&origin, 1);
+        let candidate = Arc::new(OriginCell::new(
+            retained.id().partition(),
+            retained.id().origin().clone(),
+            EligibilityGroup::Pool,
+            Some(origin.clone()),
+        ));
+        assert_eq!(retained.id(), candidate.id());
+
+        let (_waiter, snapshot) =
+            candidate.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
+        let delivery =
+            OriginAdmission::publish_without_driving(&origin, candidate.id().clone(), snapshot)
+                .expect("candidate demand did not reserve capacity");
+        assert!(OriginCell::receive_capacity(&candidate, delivery).is_none());
+        assert_eq!(0, origin.available_capacity_for_test());
+
+        let winner = OriginAdmission::register_cell(&origin, candidate);
+        assert!(Arc::ptr_eq(&retained, &winner));
+        assert_eq!(
+            1,
+            origin.available_capacity_for_test(),
+            "losing candidate did not return capacity after registration"
+        );
     }
 
     #[test]
