@@ -19,6 +19,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.createInlineModuleCreat
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestJsonProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.renderInlineMemoryModules
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 
@@ -114,5 +116,62 @@ class UnconstrainedUnionGeneratorTest {
         }
         project.renderInlineMemoryModules()
         project.compileAndTest()
+    }
+
+    @Test
+    fun `a constrained union with a member named error should compile`() {
+        // A union member named `error` renders as an `Error` variant on the constrained union. In the
+        // generated `impl TryFrom<...> for Union`, that variant makes the path `Self::Error` ambiguous
+        // with the `TryFrom::Error` associated type, so the generator must name the constraint
+        // violation type explicitly. Both `try_from` code paths are exercised: the member targeting a
+        // structure resolves to a public constrained type, and the member targeting an unconstrained
+        // list that can reach a constrained shape resolves to a `pub(crate)` constrained type.
+        val model =
+            """
+            ${'$'}version: "2"
+            namespace com.example
+            use aws.protocols#restJson1
+            use smithy.framework#ValidationException
+
+            @restJson1
+            service TestService {
+                version: "0.1",
+                operations: [TestOperation]
+            }
+
+            @http(uri: "/test", method: "POST")
+            operation TestOperation {
+                input := {
+                    @required
+                    unionWithErrorStructure: UnionWithErrorStructure
+
+                    @required
+                    unionWithErrorList: UnionWithErrorList
+                }
+                errors: [ValidationException]
+            }
+
+            union UnionWithErrorStructure {
+                error: ConstrainedStructure
+                other: String
+            }
+
+            union UnionWithErrorList {
+                error: ConstrainedStructureList
+                other: String
+            }
+
+            structure ConstrainedStructure {
+                @required
+                requiredMember: String
+            }
+
+            list ConstrainedStructureList {
+                member: ConstrainedStructure
+            }
+            """.asSmithyModel()
+
+        // Ensure the generated SDK compiles.
+        serverIntegrationTest(model, testCoverage = HttpTestType.Default) { _, _ -> }
     }
 }
