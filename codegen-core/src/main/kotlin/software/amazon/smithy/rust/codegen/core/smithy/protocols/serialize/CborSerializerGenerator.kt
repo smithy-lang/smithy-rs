@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize
 
-import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.shapes.BigDecimalShape
 import software.amazon.smithy.model.shapes.BigIntegerShape
 import software.amazon.smithy.model.shapes.BlobShape
@@ -497,10 +496,7 @@ class CborSerializerGenerator(
             is TimestampShape -> rust("$encoder.timestamp(${value.asRef()});")
 
             is BigIntegerShape -> rust("$encoder.big_integer(${value.asRef()});")
-            is BigDecimalShape ->
-                throw CodegenException(
-                    "BigDecimal is not supported with Concise Binary Object Representation (CBOR) protocol",
-                )
+            is BigDecimalShape -> rust("$encoder.big_decimal(${value.asRef()});")
 
             is DocumentShape -> UNREACHABLE("Smithy RPC v2 CBOR does not support `document` shapes")
 
