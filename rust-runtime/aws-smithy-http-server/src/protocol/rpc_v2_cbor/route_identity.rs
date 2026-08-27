@@ -21,14 +21,9 @@ pub(super) fn is_word(character: u8) -> bool {
 }
 
 /// Checks the leading-character portion of the Smithy `Identifier` production.
-///
-/// Callers must first establish that every byte is a `Word` byte.
 #[inline]
 pub(super) fn has_valid_identifier_start(identifier: &[u8]) -> bool {
-    let underscores = identifier
-        .iter()
-        .take_while(|&&character| character == b'_')
-        .count();
+    let underscores = identifier.iter().take_while(|&&character| character == b'_').count();
     // An identifier cannot consist only of underscores.
     if underscores == identifier.len() {
         return false;
@@ -42,73 +37,85 @@ pub(super) fn has_valid_identifier_start(identifier: &[u8]) -> bool {
 /// the contiguous `{service}/operation/{operation}` tail directly from the request URI.
 pub(super) fn parse_route_identity(path: &str) -> Option<RouteIdentity<'_>> {
     let bytes = path.as_bytes();
+    // A route must have at least `/service/operation` length bytes in it.
     if bytes.len() < MIN_BYTES {
         return None;
     }
 
-    let mut position = bytes.len() - 1;
-    while position > 0 {
-        if bytes[position] == b'/' {
-            break;
+    let (operation_start, service_end) = {
+        // Find the first `/` from the right to figure out the operation name. When found,
+        // there must at least be `/service/operation/` still left in the string, otherwise
+        // it is invalid.
+        let mut position = bytes.len() - 1;
+        while position > MIN_BYTES && bytes[position] != b'/' {
+            // It must be a valid operation.
+            if !is_word(bytes[position]) {
+                return None;
+            }
+            position -= 1;
         }
-        if !is_word(bytes[position]) {
+
+        let operation_slash = position;
+        let operation_start = operation_slash + 1;
+        // The request is invalid if:
+        // 1. There is no operation name following the first `/` found from right.
+        // 2. Bytes to the left of the first `/` from right must at least have the keywords `/service/operation` in it.
+        if operation_start >= bytes.len() || operation_slash < MIN_BYTES {
             return None;
         }
-        position -= 1;
-    }
+        // String must have `/operation` to the left of the first `/` from right.
+        if &bytes[operation_slash - OPERATION.len()..operation_slash] != OPERATION {
+            return None;
+        }
+        // Can't be all underscores, must be a valid operation name.
+        if !has_valid_identifier_start(&bytes[operation_start..]) {
+            return None;
+        }
 
-    let operation_slash = position;
-    let operation_start = operation_slash + 1;
-    if operation_start >= bytes.len() || operation_slash < OPERATION.len() {
-        return None;
-    }
-    if &bytes[operation_slash - OPERATION.len()..operation_slash] != OPERATION {
-        return None;
-    }
-    if !has_valid_identifier_start(&bytes[operation_start..]) {
-        return None;
-    }
+        // Extract the service name preceding `/operation/`.
+        let service_end = operation_slash - OPERATION.len();
+        (operation_start, service_end)
+    };
 
-    let service_end = operation_slash - OPERATION.len();
-    position = service_end;
-    let mut segment_end = service_end;
-    let mut service_start = None;
-    while position > 0 {
-        position -= 1;
-        match bytes[position] {
-            b'/' => {
-                if !has_valid_identifier_start(&bytes[position + 1..segment_end]) {
-                    return None;
-                }
-                break;
-            }
-            b'.' => {
+    let service_start = {
+        let mut position = service_end - 1;
+
+        let mut segment_end = service_end;
+        let mut service_start = None;
+        // Look for the `/` from right starting from service_end. There must at least be as many characters
+        // as `/service` still left in the router otherwise it is invalid.
+        while position > SERVICE.len() && bytes[position] != b'/' {
+            if bytes[position] == b'.' {
+                //  Each segment in a namespaced service (e.g `com.alpha.service`) name must be a valid identifier.
                 if !has_valid_identifier_start(&bytes[position + 1..segment_end]) {
                     return None;
                 }
                 service_start.get_or_insert(position + 1);
                 segment_end = position;
+            } else if !is_word(bytes[position]) {
+                return None;
             }
-            character if is_word(character) => {}
-            _ => return None,
+            position -= 1;
         }
-    }
-    if bytes[position] != b'/' {
-        return None;
-    }
-    let service_slash = position;
 
-    // Invalid if fewer than `/service` bytes precede the slash, or if it is not
-    // immediately preceded by `/service`.
-    if service_slash < SERVICE.len()
-        || &bytes[service_slash - SERVICE.len()..service_slash] != SERVICE
-    {
-        return None;
-    }
+        let service_slash = position;
+        // Invalid if fewer than `/service` bytes precede the slash, or if it is not
+        // immediately preceded by `/service`.
+        if service_slash < SERVICE.len() || &bytes[service_slash - SERVICE.len()..service_slash] != SERVICE {
+            return None;
+        }
 
-    // If the service name is dotted, use the shape name after the last dot;
-    // otherwise, use the complete service name.
-    let service_start = service_start.unwrap_or(service_slash + 1);
+        // The remaining text is either the entire service name or its first namespace
+        // segment. Subsequent segments were validated at their preceding `.` delimiters.
+        if !has_valid_identifier_start(&bytes[service_slash + 1..segment_end]) {
+            return None;
+        }
+
+        // If the service name is dotted, use the shape name after the last dot;
+        // otherwise, use the complete service name.
+        service_start.unwrap_or(service_slash + 1)
+    };
+
     Some(RouteIdentity {
         service: &path[service_start..service_end],
         operation: &path[operation_start..],

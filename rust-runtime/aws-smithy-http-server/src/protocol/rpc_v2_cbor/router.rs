@@ -59,14 +59,7 @@ const SMITHY_PROTOCOL_HEADER: HeaderName = HeaderName::from_static("smithy-proto
 const X_AMZ_TARGET_HEADER: HeaderName = HeaderName::from_static("x-amz-target");
 const X_AMZN_TARGET_HEADER: HeaderName = HeaderName::from_static("x-amzn-target");
 
-#[cfg(test)]
-use super::route_identity::has_valid_identifier_start;
 use super::route_identity::{is_word, parse_route_identity, RouteIdentity};
-
-#[cfg(test)]
-fn is_valid_identifier(identifier: &str) -> bool {
-    identifier.as_bytes().iter().copied().all(is_word) && has_valid_identifier_start(identifier.as_bytes())
-}
 
 fn wire_format_name(header: &str) -> Option<&str> {
     let format = header.strip_prefix("rpc-v2-")?;
@@ -216,19 +209,25 @@ impl<S> FromIterator<(&'static str, S)> for RpcV2CborRouter<S> {
 
 #[cfg(test)]
 mod tests {
+    use crate::protocol::rpc_v2_cbor::route_identity::{has_valid_identifier_start, is_word};
     use crate::protocol::test_helpers::req;
     use http::{HeaderMap, HeaderValue, Method};
 
-    use super::{
-        is_valid_identifier, parse_route_identity, wire_format_name, Error, RouteIdentity, Router, RpcV2CborRouter,
-    };
+    fn is_valid_identifier(identifier: &str) -> bool {
+        identifier.as_bytes().iter().copied().all(is_word) && has_valid_identifier_start(identifier.as_bytes())
+    }
+
+    use super::{parse_route_identity, wire_format_name, Error, RouteIdentity, Router, RpcV2CborRouter};
 
     #[test]
     fn valid_identifiers() {
         let valid_identifiers = ["a", "_a", "_0", "__0", "variable123", "_underscored_variable"];
-
         for id in valid_identifiers {
             assert!(is_valid_identifier(id), "'{id}' is incorrectly rejected");
+            assert!(
+                is_valid_identifier(&id.to_uppercase()),
+                "'{id}' is incorrectly rejected"
+            );
         }
     }
 
@@ -248,6 +247,10 @@ mod tests {
 
         for id in invalid_identifiers {
             assert!(!is_valid_identifier(id), "'{id}' is incorrectly accepted");
+            assert!(
+                !is_valid_identifier(&id.to_uppercase()),
+                "'{id}' is incorrectly accepted"
+            );
         }
     }
 
@@ -274,6 +277,25 @@ mod tests {
                 "uri: {uri}",
             );
         }
+        for (uri, service, operation, route_key) in [
+            ("/service/a/operation/b", "a", "b", "a/operation/b"),
+            ("/service/_a/operation/b", "_a", "b", "_a/operation/b"),
+            ("/service/a___/operation/b", "a___", "b", "a___/operation/b"),
+            ("/service/_a_/operation/b", "_a_", "b", "_a_/operation/b"),
+            ("/service/a/operation/b_", "a", "b_", "a/operation/b_"),
+            ("/service/a/operation/_b", "a", "_b", "a/operation/_b"),
+            ("/service/com.x._a/operation/b", "_a", "b", "_a/operation/b"),
+        ] {
+            assert_eq!(
+                Some(RouteIdentity {
+                    service,
+                    operation,
+                    route_key,
+                }),
+                parse_route_identity(uri),
+                "uri: {uri}",
+            );
+        }
     }
 
     #[test]
@@ -281,6 +303,15 @@ mod tests {
         for uri in [
             "",
             "foo",
+            "/",
+            "/servicee/operation/Operation",
+            "/service/operation/",
+            "/service//operation/",
+            "/service//operation/a",
+            "/service/operation",
+            "/service/a/Operation/b",
+            "/Service/a/operation/b",
+            "service/operation",
             "/servicee/Service/operation/Operation",
             "/service/Service",
             "/service/Service/operation/",
@@ -289,7 +320,10 @@ mod tests {
             "/service/namespace.foo#Service/operation/Operation",
             "/service/namespace-Service/operation/Operation",
             "/service/.Service/operation/Operation",
+            "/service/._Service/operation/Operation",
             "/service/namespace./operation/Operation",
+            "prefix/service/namespace./operation/Operation",
+            "prefix/69/service/namespace./operation/Operation",
         ] {
             assert_eq!(None, parse_route_identity(uri), "uri: {uri}");
         }
@@ -299,6 +333,8 @@ mod tests {
     fn wire_format_parser_works() {
         assert_eq!(Some("something"), wire_format_name("rpc-v2-something"));
         assert_eq!(Some("SomethingElse"), wire_format_name("rpc-v2-SomethingElse"));
+        assert_eq!(Some("cbor"), wire_format_name("rpc-v2-cbor"));
+        assert_eq!(Some("sparrowhawk"), wire_format_name("rpc-v2-sparrowhawk"));
         assert_eq!(None, wire_format_name("rpc-v1-something"));
         assert_eq!(None, wire_format_name("rpc-v2-"));
         assert_eq!(None, wire_format_name("rpc-v2-cbor-suffix"));
@@ -398,10 +434,12 @@ mod tests {
             "/service/",
             "/operation/",
             "service/",
+            "operation/",
             "operation",
             "com.example.",
             "Foo",
             "_",
+            "__",
             ".",
             "/",
             "Bar_1",
@@ -433,6 +471,7 @@ mod tests {
         let identity = parse_route_identity(&path).expect("valid route");
         assert_eq!(identity.route_key, "Service/operation/Operation");
 
+        // The borrowed pointer must be within the path's memory range.
         let path_range = path.as_ptr() as usize..path.as_ptr() as usize + path.len();
         assert!(path_range.contains(&(identity.route_key.as_ptr() as usize)));
     }
