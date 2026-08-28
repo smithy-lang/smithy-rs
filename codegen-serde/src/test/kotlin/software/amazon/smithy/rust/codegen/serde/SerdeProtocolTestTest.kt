@@ -10,7 +10,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.SourceLocation
-import software.amazon.smithy.model.knowledge.OperationIndex
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.node.ArrayNode
 import software.amazon.smithy.model.node.Node
@@ -135,30 +134,12 @@ class SerdeProtocolTestTest {
 
     private fun restJsonProtocolTestModel(): Model {
         val serviceShapeId = ShapeId.from(REST_JSON)
-        val model =
-            Model.assembler()
-                .discoverModels()
-                .assemble()
-                .result
-                .get()
-                .attachSerdeToService(serviceShapeId)
-        val service = model.expectShape(serviceShapeId, ServiceShape::class.java)
-        val operationIndex = OperationIndex.of(model)
-        val errorShapeIds =
-            TopDownIndex.of(model)
-                .getContainedOperations(service)
-                .flatMap(operationIndex::getErrors)
-                .mapTo(mutableSetOf()) { it.id }
-
-        // Operation serializers cover inputs and outputs. Directly annotate modeled errors so
-        // response test cases can exercise the same public serde entry point.
-        return ModelTransformer.create().mapShapes(model) { shape ->
-            shape.letIf(shape.id in errorShapeIds) {
-                (shape as StructureShape).toBuilder()
-                    .addTrait(SerdeTrait(true, true, null, null, SourceLocation.NONE))
-                    .build()
-            }
-        }
+        return Model.assembler()
+            .discoverModels()
+            .assemble()
+            .result
+            .get()
+            .attachSerdeToService(serviceShapeId)
     }
 
     private fun noRenderedProtocolTests(base: ProtocolTestGenerator): ProtocolTestGenerator =
@@ -833,7 +814,7 @@ class SerdeProtocolTestTest {
     }
 
     @Test
-    fun testLegacySetAndModeledErrorDeserialization() {
+    fun testLegacySetAndModeledErrorSerde() {
         val model =
             """
             namespace com.example
@@ -841,7 +822,7 @@ class SerdeProtocolTestTest {
             use aws.protocols#awsJson1_0
 
             @awsJson1_0
-            @serde(serialize: false, deserialize: true)
+            @serde(serialize: true, deserialize: true)
             service LegacyService {
                 operations: [UseSet]
             }
@@ -878,11 +859,12 @@ class SerdeProtocolTestTest {
                     "serde_json" to CargoDependency.SerdeJson.toDevDependency().toType(),
                 )
 
-            rustCrate.integrationTest("legacy_set_and_error_deserialization") {
+            rustCrate.integrationTest("legacy_set_and_error_serde") {
                 unitTest("set_uses_generated_container_and_errors_are_in_the_service_closure") {
                     rustTemplate(
                         """
                         use #{crate}::operation::use_set::UseSetInput;
+                        use #{crate}::serde::{SerializationSettings, SerializeConfigured};
                         use #{crate}::types::error::CustomError;
 
                         let input: UseSetInput = #{serde_json}::from_str(
@@ -897,6 +879,11 @@ class SerdeProtocolTestTest {
                             r##"{"message":"failed"}"##
                         ).expect("modeled error should deserialize");
                         assert_eq!(error.message(), Some("failed"));
+
+                        let settings = SerializationSettings::default();
+                        let serialized = #{serde_json}::to_string(&error.serialize_ref(&settings))
+                            .expect("modeled error should serialize");
+                        assert_eq!(serialized, r##"{"message":"failed"}"##);
                         """,
                         *codegenScope,
                     )

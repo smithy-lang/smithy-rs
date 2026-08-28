@@ -10,7 +10,7 @@ namespace smithy.rust
   representations are not guaranteed to match any protocol wire format. When applied to a service,
   all supported shapes in the service closure will support the enabled directions."
 )
-@trait(selector: ":is(structure, union, enum, string, map, service, operation)")
+@trait(selector: ":is(structure, union, enum, string, service, operation)")
 @internal
 structure serde {
     @documentation("Generate support for serde::ser::Serialize")

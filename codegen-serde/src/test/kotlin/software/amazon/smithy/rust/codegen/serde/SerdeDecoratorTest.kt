@@ -6,7 +6,9 @@
 package software.amazon.smithy.rust.codegen.serde
 
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import software.amazon.smithy.model.node.Node
+import software.amazon.smithy.model.validation.ValidatedResultException
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.cfg
@@ -183,6 +185,22 @@ class SerdeDecoratorTest {
         }
         structure NotSerde {}
         """.asSmithyModel(smithyVersion = "2")
+
+    @Test
+    fun `serde trait cannot be applied directly to maps`() {
+        assertThrows<ValidatedResultException> {
+            """
+            namespace com.example
+            use smithy.rust#serde
+
+            @serde(deserialize: true)
+            map Values {
+                key: String
+                value: String
+            }
+            """.asSmithyModel(smithyVersion = "2")
+        }
+    }
 
     @Test
     fun `decorator should traverse resources`() {
