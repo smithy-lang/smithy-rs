@@ -1,0 +1,84 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Ships the locally built Docker base image to the jobs that consume it, for runs that cannot pull
+# it from a remote repository. Paired with `../download-all-artifacts`, which reassembles it.
+#
+# The image is ~2GB, and a single artifact that large has been aborting mid-download while still
+# exiting 0: `actions/download-artifact` never printed its closing `Total of N artifact(s)
+# downloaded` line, so it died inside its download loop rather than throwing. That left an empty
+# directory behind which the consumer mistook for a cached image, and `docker load` then failed in
+# every job needing the image. The cause is unknown and it is not deterministic -- the same
+# artifact size, action version and runner group succeeded on one run and aborted on another.
+#
+# So the image is split into five smaller artifacts instead. Artifacts in that size class have not
+# shown the failure, and the checksum uploaded alongside them lets a consumer prove it reassembled
+# the image byte-for-byte before loading it.
+name: Upload Base Image
+description: Splits the saved Docker base image into parts and uploads them as separate artifacts
+
+runs:
+  using: composite
+  steps:
+  - name: Split base image
+    shell: bash
+    run: |
+      set -euo pipefail
+      # Recorded before splitting so a consumer verifies against the image as it was produced here,
+      # not against whatever the parts happen to concatenate to.
+      sha256sum smithy-rs-base-image | cut -d' ' -f1 > smithy-rs-base-image.sha256
+      # `-n 5` yields exactly five parts whatever the image size, so the upload steps below can be a
+      # fixed list. `-d -a 1` names them `.part0`..`.part4`, which glob in the order they must be
+      # concatenated in.
+      split -n 5 -d -a 1 smithy-rs-base-image smithy-rs-base-image.part
+      # Reclaim the 2GB now that the parts exist; nothing after this reads the whole image, and the
+      # runner has already had `free-disk-space` run against it.
+      rm -f smithy-rs-base-image
+      ls -l smithy-rs-base-image.part* smithy-rs-base-image.sha256
+  # One artifact per part. `if-no-files-found: error` matters here: a silently absent part would
+  # reach the consumer as an unexplained fall-through to a remote pull, which is exactly the failure
+  # mode this action exists to remove.
+  - name: Upload base image part 0
+    uses: actions/upload-artifact@v4
+    with:
+      name: smithy-rs-base-image-part-0
+      path: smithy-rs-base-image.part0
+      retention-days: 1
+      if-no-files-found: error
+  - name: Upload base image part 1
+    uses: actions/upload-artifact@v4
+    with:
+      name: smithy-rs-base-image-part-1
+      path: smithy-rs-base-image.part1
+      retention-days: 1
+      if-no-files-found: error
+  - name: Upload base image part 2
+    uses: actions/upload-artifact@v4
+    with:
+      name: smithy-rs-base-image-part-2
+      path: smithy-rs-base-image.part2
+      retention-days: 1
+      if-no-files-found: error
+  - name: Upload base image part 3
+    uses: actions/upload-artifact@v4
+    with:
+      name: smithy-rs-base-image-part-3
+      path: smithy-rs-base-image.part3
+      retention-days: 1
+      if-no-files-found: error
+  - name: Upload base image part 4
+    uses: actions/upload-artifact@v4
+    with:
+      name: smithy-rs-base-image-part-4
+      path: smithy-rs-base-image.part4
+      retention-days: 1
+      if-no-files-found: error
+  # Uploaded last so its presence means all five parts were uploaded first. The consumer treats a
+  # missing checksum as "this run does not ship the image through artifacts" and skips reassembly.
+  - name: Upload base image checksum
+    uses: actions/upload-artifact@v4
+    with:
+      name: smithy-rs-base-image-checksum
+      path: smithy-rs-base-image.sha256
+      retention-days: 1
+      if-no-files-found: error
