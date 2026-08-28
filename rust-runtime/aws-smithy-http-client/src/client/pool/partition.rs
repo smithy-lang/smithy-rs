@@ -17,8 +17,11 @@ use std::sync::Arc;
 /// Declares where a client's connections are established and driven.
 #[derive(Clone)]
 pub struct Partition {
+    /// Stable identity used to resolve clients and index cells.
     id: PartitionId,
+    /// Runtime placement for connection-owned tasks.
     spawner: Arc<dyn DriverSpawner>,
+    /// Optional network-interface binding for new connections.
     interface: Option<Arc<str>>,
 }
 
@@ -138,6 +141,7 @@ pub trait DriverSpawner: fmt::Debug + Send + Sync + 'static {
 #[cfg_attr(docsrs, doc(cfg(feature = "rt-tokio")))]
 #[derive(Clone, Debug)]
 pub struct TokioDriverSpawner {
+    /// Runtime that receives connection-owned tasks.
     handle: tokio::runtime::Handle,
 }
 

@@ -6,10 +6,12 @@
 //! Protocol-independent connection lifetime.
 //!
 //! [`ConnectionState`] serializes dispatch commitment with logical close.
-//! [`DispatchGuard`] accounts for accepted requests, while
-//! [`PhysicalConnectionGuard`] follows root I/O until the transport is gone.
-//! Logical close returns bounded capacity without waiting for either lifetime
-//! to finish.
+//! [`DispatchGuard`] accounts for accepted requests.
+//! [`PhysicalConnectionGuard`] follows root I/O until the pool no longer owns
+//! it, including transfer through a protocol upgrade. This physical transition
+//! does not assert that the peer or kernel has completed the underlying TCP
+//! close. Logical close returns bounded capacity without waiting for either
+//! lifetime to finish.
 
 use super::admission::CapacityLease;
 use super::origin::OriginKey;
@@ -208,10 +210,16 @@ struct LifecycleState {
 /// Whether a connection may accept dispatch and still owns bounded capacity.
 #[derive(Debug)]
 enum LogicalState {
-    /// Dispatch may commit; the optional lease is released by logical close.
-    Open { lease: Option<CapacityLease> },
-    /// New dispatch is rejected while existing work may still drain.
-    Closed { reason: CloseReason },
+    /// Dispatch may commit.
+    Open {
+        /// Bounded-origin slot released by logical close, when configured.
+        lease: Option<CapacityLease>,
+    },
+    /// New dispatch is rejected while accepted work may still drain.
+    Closed {
+        /// Reason recorded by the first logical-close transition.
+        reason: CloseReason,
+    },
 }
 
 impl ConnectionState {
@@ -324,10 +332,14 @@ impl ConnectionState {
 
     /// Refines a driver-observed close after Hyper confirms an upgrade.
     ///
-    /// Hyper transfers upgraded I/O and completes its HTTP/1 driver in the same
-    /// poll. The request task may therefore observe the upgrading response only
-    /// after the driver recorded `ProtocolClosed`. Refinement changes no ownership
-    /// and never releases capacity a second time.
+    /// Hyper may transfer upgraded I/O and complete its HTTP/1 driver in one
+    /// poll. The driver can therefore record [`CloseReason::ProtocolClosed`]
+    /// before the request task observes the upgrading response. This method
+    /// changes that stored reason to [`CloseReason::Upgraded`].
+    ///
+    /// Returns `true` only when that refinement was applied. It does not close
+    /// the connection again, change I/O ownership, or release capacity a second
+    /// time.
     pub(super) fn refine_protocol_close_as_upgrade(&self) -> bool {
         let refined = {
             let mut lifecycle = self.lifecycle.lock();
@@ -457,10 +469,11 @@ impl Drop for DispatchGuard {
     }
 }
 
-/// Unique root-I/O ownership whose drop records physical completion.
+/// Unique root-I/O ownership whose drop records the end of pool ownership.
 ///
 /// The guard is created with the connection and moves with root I/O through
-/// protocol drain or upgrade.
+/// protocol drain or upgrade. Completion says only that the pool no longer
+/// owns the root transport; the operating system may continue TCP teardown.
 #[derive(Debug)]
 pub(super) struct PhysicalConnectionGuard {
     /// Shared state whose physical lifetime this guard owns.
@@ -490,11 +503,12 @@ impl Drop for PhysicalConnectionGuard {
 }
 
 pin_project! {
-    /// Root transport wrapper whose drop proves physical connection completion.
+    /// Root transport wrapper that tracks how long the pool owns the I/O.
     ///
     /// The wrapper moves intact through Hyper's driver and H1 upgrade path.
-    /// Logical close may happen earlier, but the physical guard remains armed
-    /// until the wrapped I/O itself is destroyed.
+    /// Logical close may happen earlier. Dropping the wrapper records that pool
+    /// ownership ended after the wrapped I/O was destroyed; it does not observe
+    /// peer or kernel TCP completion.
     pub(super) struct ConnectionIo<T> {
         #[pin]
         inner: T,

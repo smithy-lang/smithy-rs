@@ -34,17 +34,20 @@ use tower::Service;
 /// Connect timeout supplied by one Smithy operation.
 #[derive(Clone, Debug)]
 pub(super) struct ConnectTimeout {
+    /// Maximum duration of connector readiness and transport connection.
     duration: Duration,
+    /// Runtime timer used to enforce the deadline.
     sleep: SharedAsyncSleep,
 }
 
 impl ConnectTimeout {
-    /// Pairs a configured duration with the runtime sleep implementation.
+    /// Creates a timeout enforced by the supplied runtime timer.
     pub(super) fn new(duration: Duration, sleep: SharedAsyncSleep) -> Self {
         Self { duration, sleep }
     }
 }
 
+/// Future returned by a type-erased transport factory.
 type TransportFuture = Pin<Box<dyn Future<Output = Result<BoxConn, BoxError>> + Send + 'static>>;
 
 /// Type-erased construction of one partition-bound transport operation.
@@ -60,7 +63,8 @@ pub(super) trait TransportFactory: Send + Sync + 'static {
 
 /// Generic connector factory erased at pool construction.
 struct ServiceTransportFactory<F> {
-    make_connector: F,
+    /// Builds a connector with the selected network-interface binding.
+    connector_for_interface: F,
 }
 
 impl<F, C, IO> TransportFactory for ServiceTransportFactory<F>
@@ -77,8 +81,8 @@ where
         uri: Uri,
         timeout: Option<ConnectTimeout>,
     ) -> TransportFuture {
-        let mut connector =
-            (self.make_connector)(partition.interface().map(|value| value.as_ref()));
+        let interface = partition.interface().map(|interface| interface.as_ref());
+        let mut connector = (self.connector_for_interface)(interface);
         Box::pin(async move {
             poll_fn(|cx| connector.poll_ready(cx))
                 .await
@@ -96,8 +100,28 @@ where
     }
 }
 
-/// Erases a clonable connector constructor for pool storage.
-pub(super) fn transport_factory<F, C, IO>(make_connector: F) -> StdArc<dyn TransportFactory>
+#[cfg(any(
+    all(feature = "test-util", aws_sdk_unstable),
+    all(test, feature = "rt-tokio")
+))]
+/// Erases a clonable connector for pool storage.
+pub(super) fn transport_factory<C, IO>(connector: C) -> StdArc<dyn TransportFactory>
+where
+    C: Service<Uri, Response = IO> + Clone + Send + Sync + 'static,
+    C::Error: Into<BoxError>,
+    C::Future: Send + 'static,
+    IO: AsyncConn,
+{
+    transport_factory_for_interface(move |_| connector.clone())
+}
+
+/// Erases a connector constructor that applies an optional interface binding.
+///
+/// The default HTTP connector consumes this value. Custom connectors use
+/// `transport_factory` and ignore pool interface placement.
+pub(super) fn transport_factory_for_interface<F, C, IO>(
+    connector_for_interface: F,
+) -> StdArc<dyn TransportFactory>
 where
     F: Fn(Option<&str>) -> C + Send + Sync + 'static,
     C: Service<Uri, Response = IO> + Send + 'static,
@@ -105,12 +129,14 @@ where
     C::Future: Send + 'static,
     IO: AsyncConn,
 {
-    StdArc::new(ServiceTransportFactory { make_connector })
+    StdArc::new(ServiceTransportFactory {
+        connector_for_interface,
+    })
 }
 
 /// Connects, handshakes, installs, and starts the owner-partition driver.
 pub(super) async fn establish_h1(
-    pool: StdArc<PoolInner>,
+    pool: Arc<PoolInner>,
     partition: Arc<PartitionState>,
     cell: Arc<OriginCell>,
     uri: Uri,
@@ -191,32 +217,7 @@ fn next_connection_id(pool: &PoolInner) -> Result<ConnectionId, ConnectionIdExha
     Ok(ConnectionId::new(value))
 }
 
-/// Resolves the retained explicit spawner or captures the anonymous runtime.
-pub(super) fn owner_spawner(
-    partition: &PartitionState,
-) -> Result<StdArc<dyn DriverSpawner>, MissingAnonymousRuntime> {
-    if let Some(spawner) = partition.driver_spawner() {
-        return Ok(spawner);
-    }
-
-    if !partition.id().is_anonymous() {
-        unreachable!("an explicit partition always has a driver spawner");
-    }
-
-    #[cfg(feature = "rt-tokio")]
-    {
-        let handle = tokio::runtime::Handle::try_current().map_err(|_| MissingAnonymousRuntime)?;
-        Ok(partition.driver_spawner_with(|| {
-            StdArc::new(super::partition::TokioDriverSpawner::from_handle(handle))
-        }))
-    }
-
-    #[cfg(not(feature = "rt-tokio"))]
-    {
-        Err(MissingAnonymousRuntime)
-    }
-}
-
+/// The cleartext HTTP/1 path rejected a connector-selected HTTP/2 transport.
 #[derive(Debug)]
 struct UnsupportedNegotiatedProtocol;
 
@@ -228,6 +229,7 @@ impl fmt::Display for UnsupportedNegotiatedProtocol {
 
 impl Error for UnsupportedNegotiatedProtocol {}
 
+/// The pool exhausted its monotonic physical-connection identity space.
 #[derive(Debug)]
 struct ConnectionIdExhausted;
 
@@ -238,16 +240,3 @@ impl fmt::Display for ConnectionIdExhausted {
 }
 
 impl Error for ConnectionIdExhausted {}
-
-#[derive(Debug)]
-pub(super) struct MissingAnonymousRuntime;
-
-impl fmt::Display for MissingAnonymousRuntime {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(
-            "the anonymous connection-pool partition requires an active Tokio runtime on first use",
-        )
-    }
-}
-
-impl Error for MissingAnonymousRuntime {}
