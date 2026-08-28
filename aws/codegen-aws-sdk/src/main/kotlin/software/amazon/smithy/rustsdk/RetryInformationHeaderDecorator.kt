@@ -32,8 +32,9 @@ private class AddRetryInformationHeaderInterceptors(codegenContext: ClientCodege
     override fun section(section: ServiceRuntimePluginSection): Writable =
         writable {
             if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
-                // Track the latency between client and server.
-                section.registerPermanentInterceptor(runtimeConfig, this) {
+                // Not permanent: presigning disables it, since a presigned URL must
+                // stay a function of its inputs.
+                section.registerInterceptor(this) {
                     rust(
                         "#T::new()",
                         awsRuntime.resolve("service_clock_skew::ServiceClockSkewInterceptor"),
