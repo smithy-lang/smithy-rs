@@ -64,8 +64,40 @@ object SchemaSerdeAllowlist {
             Rpcv2CborTrait.ID,
         )
 
-    /** Individual services allowed regardless of protocol. */
-    private val allowedServices: Set<String> = setOf<String>()
+    /**
+     * Individual services allowed regardless of protocol.
+     */
+    private val allowedServices: Set<String> =
+        setOf(
+            // Test model names, listed explicitly until protocols are fully enabled
+            // restJson1
+            "aws.protocoltests.restjson#RestJson",
+            "aws.protocoltests.restjson#RestJsonExtras",
+            "aws.protocoltests.misc#MiscService",
+            "com.aws.example#PokemonService",
+            "com.amazonaws.ebs#Ebs",
+            // awsJson1_0 / awsJson1_1
+            "aws.protocoltests.json10#JsonRpc10",
+            "aws.protocoltests.json#JsonProtocol",
+            "aws.protocoltests.json#TestService",
+            "aws.protocoltests.misc#QueryCompatService",
+            "com.amazonaws.simple#SimpleService",
+            "com.amazonaws.bignumbers#BigNumberService",
+            // restXml
+            "aws.protocoltests.restxml#RestXml",
+            "aws.protocoltests.restxml#RestXmlExtras",
+            "aws.protocoltests.restxml.xmlns#RestXmlWithNamespace",
+            "aws.protocoltests.restxmlunwrapped#RestXmlExtrasUnwrappedErrors",
+            // rpcv2Cbor
+            "smithy.protocoltests.rpcv2Cbor#RpcV2Protocol",
+            "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
+            "aws.protocoltests.rpcv2cbor#QueryCompatibleRpcV2Protocol",
+            "aws.protocoltests.rpcv2cbor#NonQueryCompatibleRpcV2Protocol",
+            // naming obstacle courses (protocol-independent codegen coverage)
+            "crate#Config",
+            "casing#ACRONYMInside_Service",
+            "naming_obs_structs#NamingObstacleCourseStructs",
+        )
 
     /**
      * Returns true if schema-based serde should be used exclusively (no fallback).

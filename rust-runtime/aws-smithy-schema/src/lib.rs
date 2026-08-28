@@ -6,6 +6,7 @@
 /* Automatically managed default lints */
 #![cfg_attr(docsrs, feature(doc_cfg))]
 /* End of automatically managed default lints */
+#![forbid(unsafe_code)]
 #![warn(
     missing_docs,
     rustdoc::missing_crate_level_docs,
