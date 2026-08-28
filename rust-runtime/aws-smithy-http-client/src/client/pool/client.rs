@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Smithy HTTP client handles resolved to one pool partition.
+//! Partition-bound handles for Smithy HTTP operations.
 
 use super::partition::PartitionId;
 use super::registry::PartitionState;
@@ -16,35 +16,48 @@ use aws_smithy_runtime_api::client::http::{
     HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpConnector,
 };
 use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
+use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use std::borrow::Cow;
 use std::error::Error;
 use std::fmt;
 use std::time::Duration;
 
-/// A cheap connection-pool handle fixed to one declared partition.
+/// A cheap connection-pool handle fixed to one partition.
+///
+/// A client resolves its partition when it is constructed and uses that
+/// partition for every request. Cloning a client shares the same pool,
+/// partition state, and reusable connections.
 #[derive(Clone)]
 pub struct Client {
+    /// Shared connection pool and immutable policy.
     pool: ConnectionPool,
+    /// Resolved runtime and network placement for this client.
     partition: Arc<PartitionState>,
 }
 
 impl Client {
-    /// Resolves the pool's anonymous partition.
-    pub fn new(pool: &ConnectionPool) -> Result<Self, InvalidPartition> {
+    /// Creates a client for the pool's anonymous partition.
+    ///
+    /// The anonymous partition exists only when the pool was built without an
+    /// explicit partition set.
+    pub fn new(pool: &ConnectionPool) -> Result<Self, ClientBuildError> {
         Self::from_partition(pool, PartitionId::ANONYMOUS)
     }
 
-    /// Resolves one explicitly declared partition.
+    /// Creates a client for `id`.
+    ///
+    /// This accepts any partition retained by the pool, including the
+    /// anonymous partition's identity.
     pub fn from_partition(
         pool: &ConnectionPool,
         id: PartitionId,
-    ) -> Result<Self, InvalidPartition> {
+    ) -> Result<Self, ClientBuildError> {
         let partition = pool
             .inner
             .registry
             .partition(id)
-            .ok_or(InvalidPartition { partition: id })?;
+            .ok_or_else(|| ClientBuildError::invalid_partition(id))?;
         Ok(Self {
             pool: pool.clone(),
             partition,
@@ -70,9 +83,6 @@ impl HttpClient for Client {
         let connect_timeout = settings.connect_timeout();
         let read_timeout = settings.read_timeout();
         let sleep = components.sleep_impl().or_else(default_async_sleep);
-        if (connect_timeout.is_some() || read_timeout.is_some()) && sleep.is_none() {
-            panic!("an async sleep implementation is required for HTTP connect or read timeouts");
-        }
 
         SharedHttpConnector::new(PoolConnector {
             pool: self.pool.clone(),
@@ -88,37 +98,66 @@ impl HttpClient for Client {
     }
 }
 
-/// Error returned when a client names no partition in the pool.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct InvalidPartition {
-    partition: PartitionId,
+/// Error returned when a [`Client`] cannot be resolved from a pool.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClientBuildError {
+    /// Construction failure represented without exposing the internal enum.
+    kind: ClientBuildErrorKind,
 }
 
-impl InvalidPartition {
-    /// Returns the unresolved partition identity.
-    pub fn partition(&self) -> PartitionId {
-        self.partition
+impl ClientBuildError {
+    /// Creates an unresolved-partition error.
+    fn invalid_partition(partition: PartitionId) -> Self {
+        Self {
+            kind: ClientBuildErrorKind::InvalidPartition(partition),
+        }
+    }
+
+    /// Returns the unresolved partition identity, when applicable.
+    pub fn partition(&self) -> Option<PartitionId> {
+        match &self.kind {
+            ClientBuildErrorKind::InvalidPartition(partition) => Some(*partition),
+        }
     }
 }
 
-impl fmt::Display for InvalidPartition {
+impl fmt::Display for ClientBuildError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "connection pool does not contain partition {:?}",
-            self.partition
-        )
+        match &self.kind {
+            ClientBuildErrorKind::InvalidPartition(partition) => {
+                write!(
+                    f,
+                    "connection pool does not contain partition {partition:?}"
+                )
+            }
+        }
     }
 }
 
-impl Error for InvalidPartition {}
+impl Error for ClientBuildError {}
 
-/// Per-operation timeout facade over one resolved pool partition.
+/// Internal categories represented by [`ClientBuildError`].
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum ClientBuildErrorKind {
+    /// The pool retained no partition with this identity.
+    InvalidPartition(PartitionId),
+}
+
+/// Per-operation connector over one resolved pool partition.
+///
+/// [`HttpClient::http_connector`] creates this facade by combining the
+/// client's retained pool and partition with operation-specific timeout
+/// settings. It does not create another pool or re-resolve the partition.
 struct PoolConnector {
+    /// Shared pool used for acquisition and dispatch.
     pool: ConnectionPool,
+    /// Partition selected when the client was constructed.
     partition: Arc<PartitionState>,
+    /// Maximum duration of connector readiness and transport connection.
     connect_timeout: Option<Duration>,
+    /// Maximum duration through response headers.
     read_timeout: Option<Duration>,
+    /// Runtime timer used by operation timeouts.
     sleep: Option<SharedAsyncSleep>,
 }
 
@@ -140,6 +179,10 @@ impl HttpConnector for PoolConnector {
         let read_timeout = self.read_timeout;
         let sleep = self.sleep.clone();
         HttpConnectorFuture::new(async move {
+            if (connect_timeout.is_some() || read_timeout.is_some()) && sleep.is_none() {
+                return Err(ConnectorError::user(MissingAsyncSleep.into()));
+            }
+
             let request = request.try_into_http1x().map_err(|error| {
                 aws_smithy_runtime_api::client::result::ConnectorError::user(error.into())
             })?;
@@ -162,5 +205,54 @@ impl HttpConnector for PoolConnector {
                 aws_smithy_runtime_api::client::result::ConnectorError::other(error.into(), None)
             })
         })
+    }
+}
+
+/// Operation timeouts were configured without a runtime timer.
+#[derive(Debug)]
+struct MissingAsyncSleep;
+
+impl fmt::Display for MissingAsyncSleep {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("an async sleep implementation is required for HTTP connect or read timeouts")
+    }
+}
+
+impl Error for MissingAsyncSleep {}
+
+#[cfg(all(test, feature = "rt-tokio", not(smithy_http_client_loom)))]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn configured_timeout_without_sleep_returns_a_user_error() {
+        let pool = ConnectionPool::builder()
+            .idle_timeout(None)
+            .build_http()
+            .unwrap();
+        let client = Client::new(&pool).unwrap();
+
+        for (connect_timeout, read_timeout) in [
+            (Some(Duration::from_secs(1)), None),
+            (None, Some(Duration::from_secs(1))),
+        ] {
+            let connector = PoolConnector {
+                pool: client.pool.clone(),
+                partition: client.partition.clone(),
+                connect_timeout,
+                read_timeout,
+                sleep: None,
+            };
+
+            let error = connector
+                .call(HttpRequest::get("http://example.com/").unwrap())
+                .await
+                .expect_err("a timeout without sleep unexpectedly started a request");
+            assert!(error.is_user(), "unexpected connector error: {error:?}");
+            assert_eq!(
+                "an async sleep implementation is required for HTTP connect or read timeouts",
+                std::error::Error::source(&error).unwrap().to_string()
+            );
+        }
     }
 }

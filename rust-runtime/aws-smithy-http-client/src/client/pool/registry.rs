@@ -15,6 +15,8 @@ use super::cell::OriginCell;
 use super::connection::CloseReason;
 use super::maintenance::{MaintenanceConfig, PartitionMaintenance};
 use super::origin::{InvalidOrigin, OriginKey, OriginLookup, SchemeKey};
+#[cfg(feature = "rt-tokio")]
+use super::partition::TokioDriverSpawner;
 use super::partition::{
     ConnectionReuseScope, DriverSpawner, EligibilityGroup, Partition, PartitionId,
 };
@@ -40,39 +42,28 @@ pub(crate) struct PartitionRegistry {
 }
 
 impl PartitionRegistry {
-    /// Creates a registry containing its implicit anonymous partition.
-    pub(crate) fn anonymous_with_maintenance(
-        reuse_scope: ConnectionReuseScope,
-        max_connections_per_host: Option<NonZeroUsize>,
-        maintenance: MaintenanceConfig,
-    ) -> Self {
-        let partition = Arc::new(PartitionState::anonymous(maintenance));
-        let mut partitions = HashMap::new();
-        partitions.insert(PartitionId::ANONYMOUS, partition.clone());
-        Self {
-            partitions,
-            reuse_scope,
-            max_connections_per_host,
-            bounded_origins: Mutex::new(HashMap::new()),
-        }
-    }
-
-    /// Creates a registry from a nonempty set of explicit partitions.
-    pub(crate) fn explicit_with_maintenance(
-        partitions: impl IntoIterator<Item = Partition>,
+    /// Creates the anonymous partition or validates and retains explicit partitions.
+    pub(crate) fn new(
+        partitions: Option<Vec<Partition>>,
         reuse_scope: ConnectionReuseScope,
         max_connections_per_host: Option<NonZeroUsize>,
         maintenance: MaintenanceConfig,
     ) -> Result<Self, PartitionRegistryError> {
+        let Some(partitions) = partitions else {
+            let partition = Arc::new(PartitionState::anonymous(maintenance));
+            let mut partitions = HashMap::new();
+            partitions.insert(PartitionId::ANONYMOUS, partition);
+            return Ok(Self {
+                partitions,
+                reuse_scope,
+                max_connections_per_host,
+                bounded_origins: Mutex::new(HashMap::new()),
+            });
+        };
+
         let mut by_id = HashMap::new();
         for partition in partitions {
             let id = partition.id();
-            if partition
-                .interface_name()
-                .is_some_and(|interface| interface.as_bytes().contains(&0))
-            {
-                return Err(PartitionRegistryError::InvalidInterface(id));
-            }
             if id.is_anonymous() {
                 return Err(PartitionRegistryError::ReservedAnonymousPartition);
             }
@@ -99,35 +90,7 @@ impl PartitionRegistry {
         })
     }
 
-    /// Creates an anonymous registry with maintenance disabled for state tests.
-    #[cfg(test)]
-    fn anonymous(
-        reuse_scope: ConnectionReuseScope,
-        max_connections_per_host: Option<NonZeroUsize>,
-    ) -> Self {
-        Self::anonymous_with_maintenance(
-            reuse_scope,
-            max_connections_per_host,
-            MaintenanceConfig::default(),
-        )
-    }
-
-    /// Creates an explicit registry with maintenance disabled for state tests.
-    #[cfg(test)]
-    fn explicit(
-        partitions: impl IntoIterator<Item = Partition>,
-        reuse_scope: ConnectionReuseScope,
-        max_connections_per_host: Option<NonZeroUsize>,
-    ) -> Result<Self, PartitionRegistryError> {
-        Self::explicit_with_maintenance(
-            partitions,
-            reuse_scope,
-            max_connections_per_host,
-            MaintenanceConfig::default(),
-        )
-    }
-
-    /// Resolves a declared partition once during client construction.
+    /// Resolves a retained partition once during client construction.
     pub(crate) fn partition(&self, id: PartitionId) -> Option<Arc<PartitionState>> {
         self.partitions.get(&id).cloned()
     }
@@ -210,7 +173,8 @@ impl PartitionRegistry {
 pub(crate) struct PartitionState {
     /// Stable identity copied into every cell and owned connection.
     id: PartitionId,
-    /// Declared spawner, or the first spawner published for the anonymous partition.
+    /// Configured spawner, or the first spawner published for the anonymous
+    /// partition.
     spawner: OnceLock<StdArc<dyn DriverSpawner>>,
     /// Network interface used for placement and reuse eligibility.
     interface: Option<StdArc<str>>,
@@ -254,21 +218,36 @@ impl PartitionState {
         self.interface.as_ref()
     }
 
-    /// Returns the partition's already-published driver spawner.
-    pub(crate) fn driver_spawner(&self) -> Option<StdArc<dyn DriverSpawner>> {
-        self.spawner.get().cloned()
-    }
-
-    /// Returns the declared spawner or lazily publishes an anonymous spawner.
+    /// Returns the runtime that owns connection drivers for this partition.
     ///
-    /// Concurrent callers receive the one published value.
-    #[cfg(any(feature = "rt-tokio", test))]
-    pub(crate) fn driver_spawner_with(
+    /// Explicit partitions retain their declared spawner. The anonymous
+    /// partition captures the first Tokio runtime on which it is used, and
+    /// all later requests use that same runtime.
+    pub(crate) fn owner_spawner(
         &self,
-        make_anonymous: impl FnOnce() -> StdArc<dyn DriverSpawner>,
-    ) -> StdArc<dyn DriverSpawner> {
-        debug_assert!(self.id.is_anonymous());
-        self.spawner.get_or_init(make_anonymous).clone()
+    ) -> Result<StdArc<dyn DriverSpawner>, MissingAnonymousRuntime> {
+        if let Some(spawner) = self.spawner.get() {
+            return Ok(spawner.clone());
+        }
+
+        if !self.id.is_anonymous() {
+            unreachable!("an explicit partition always has a driver spawner");
+        }
+
+        #[cfg(feature = "rt-tokio")]
+        {
+            let handle =
+                tokio::runtime::Handle::try_current().map_err(|_| MissingAnonymousRuntime)?;
+            Ok(self
+                .spawner
+                .get_or_init(|| StdArc::new(TokioDriverSpawner::from_handle(handle)))
+                .clone())
+        }
+
+        #[cfg(not(feature = "rt-tokio"))]
+        {
+            Err(MissingAnonymousRuntime)
+        }
     }
 
     /// Looks up a cell without materializing an owned origin key.
@@ -287,7 +266,7 @@ impl PartitionState {
         self.origins.read().len()
     }
 
-    /// Starts idle maintenance on this partition's declared runtime.
+    /// Starts idle maintenance on this partition's owner runtime.
     pub(crate) fn start_maintenance(&self, spawner: &dyn DriverSpawner) {
         PartitionMaintenance::start(&self.maintenance, spawner);
     }
@@ -384,8 +363,6 @@ pub(crate) enum PartitionRegistryError {
     DuplicatePartition(PartitionId),
     /// An explicit partition used the identity reserved for the default.
     ReservedAnonymousPartition,
-    /// A network-interface name contained an interior NUL byte.
-    InvalidInterface(PartitionId),
 }
 
 impl fmt::Display for PartitionRegistryError {
@@ -398,14 +375,25 @@ impl fmt::Display for PartitionRegistryError {
             Self::ReservedAnonymousPartition => {
                 f.write_str("the anonymous partition identifier is reserved")
             }
-            Self::InvalidInterface(id) => {
-                write!(f, "partition {id:?} has an invalid network-interface name")
-            }
         }
     }
 }
 
 impl Error for PartitionRegistryError {}
+
+/// Anonymous partition use requires a runtime that can own connection tasks.
+#[derive(Debug)]
+pub(super) struct MissingAnonymousRuntime;
+
+impl fmt::Display for MissingAnonymousRuntime {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(
+            "the anonymous connection-pool partition requires an active Tokio runtime on first use",
+        )
+    }
+}
+
+impl Error for MissingAnonymousRuntime {}
 
 #[cfg(all(test, not(smithy_http_client_loom)))]
 mod tests {
@@ -413,7 +401,6 @@ mod tests {
     use crate::client::pool::admission::ProtocolRequirement;
     use std::future::Future;
     use std::pin::Pin;
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Barrier;
 
     #[derive(Debug)]
@@ -429,6 +416,33 @@ mod tests {
         Partition::new(PartitionId::from_index(index), TestSpawner)
     }
 
+    #[cfg(feature = "rt-tokio")]
+    fn anonymous_registry(
+        reuse_scope: ConnectionReuseScope,
+        max_connections_per_host: Option<NonZeroUsize>,
+    ) -> PartitionRegistry {
+        PartitionRegistry::new(
+            None,
+            reuse_scope,
+            max_connections_per_host,
+            MaintenanceConfig::default(),
+        )
+        .unwrap()
+    }
+
+    fn explicit_registry(
+        partitions: impl IntoIterator<Item = Partition>,
+        reuse_scope: ConnectionReuseScope,
+        max_connections_per_host: Option<NonZeroUsize>,
+    ) -> Result<PartitionRegistry, PartitionRegistryError> {
+        PartitionRegistry::new(
+            Some(partitions.into_iter().collect()),
+            reuse_scope,
+            max_connections_per_host,
+            MaintenanceConfig::default(),
+        )
+    }
+
     fn explicit_partition(registry: &PartitionRegistry, index: usize) -> Arc<PartitionState> {
         registry
             .partition(PartitionId::from_index(index))
@@ -436,27 +450,30 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "rt-tokio")]
     fn anonymous_partition_publishes_one_spawner() {
         const THREADS: usize = 8;
-        let registry = Arc::new(PartitionRegistry::anonymous(
+
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        let handle = runtime.handle().clone();
+        let registry = Arc::new(anonymous_registry(
             ConnectionReuseScope::NetworkInterface,
             None,
         ));
         let partition = registry.partition(PartitionId::ANONYMOUS).unwrap();
-        let barrier = Arc::new(Barrier::new(THREADS));
-        let calls = Arc::new(AtomicUsize::new(0));
+        let barrier = Arc::new(std::sync::Barrier::new(THREADS));
         let mut threads = Vec::new();
 
         for _ in 0..THREADS {
+            let handle = handle.clone();
             let partition = partition.clone();
             let barrier = barrier.clone();
-            let calls = calls.clone();
             threads.push(std::thread::spawn(move || {
+                let _entered = handle.enter();
                 barrier.wait();
-                partition.driver_spawner_with(|| {
-                    calls.fetch_add(1, Ordering::SeqCst);
-                    Arc::new(TestSpawner)
-                })
+                partition.owner_spawner().unwrap()
             }));
         }
 
@@ -467,20 +484,18 @@ mod tests {
         assert!(spawners
             .iter()
             .skip(1)
-            .all(|spawner| Arc::ptr_eq(&spawners[0], spawner)));
-        assert_eq!(1, calls.load(Ordering::SeqCst));
+            .all(|spawner| StdArc::ptr_eq(&spawners[0], spawner)));
     }
 
     #[test]
     fn explicit_registry_rejects_invalid_partition_sets() {
         assert_eq!(
             PartitionRegistryError::EmptyExplicitPartitionSet,
-            PartitionRegistry::explicit(Vec::new(), ConnectionReuseScope::default(), None)
-                .unwrap_err()
+            explicit_registry(Vec::new(), ConnectionReuseScope::default(), None).unwrap_err()
         );
         assert_eq!(
             PartitionRegistryError::ReservedAnonymousPartition,
-            PartitionRegistry::explicit(
+            explicit_registry(
                 [Partition::new(PartitionId::ANONYMOUS, TestSpawner)],
                 ConnectionReuseScope::default(),
                 None,
@@ -489,7 +504,7 @@ mod tests {
         );
         assert_eq!(
             PartitionRegistryError::DuplicatePartition(PartitionId::from_index(1)),
-            PartitionRegistry::explicit(
+            explicit_registry(
                 [partition(1), partition(1)],
                 ConnectionReuseScope::default(),
                 None,
@@ -499,10 +514,36 @@ mod tests {
     }
 
     #[test]
+    #[cfg(any(
+        target_os = "android",
+        target_os = "fuchsia",
+        target_os = "illumos",
+        target_os = "ios",
+        target_os = "linux",
+        target_os = "macos",
+        target_os = "solaris",
+        target_os = "tvos",
+        target_os = "visionos",
+        target_os = "watchos",
+    ))]
+    fn registry_does_not_validate_default_connector_interface_names() {
+        let registry = explicit_registry(
+            [partition(1).interface("eth\0invalid")],
+            ConnectionReuseScope::default(),
+            None,
+        )
+        .unwrap();
+
+        assert!(
+            registry.partition(PartitionId::from_index(1)).is_some(),
+            "transport-independent registry rejected connector-specific configuration"
+        );
+    }
+
+    #[test]
     fn canonical_spellings_resolve_one_stable_cell() {
         let registry =
-            PartitionRegistry::explicit([partition(1)], ConnectionReuseScope::default(), None)
-                .unwrap();
+            explicit_registry([partition(1)], ConnectionReuseScope::default(), None).unwrap();
         let partition = explicit_partition(&registry, 1);
         let first = registry
             .resolve_cell(&partition, &"https://EXAMPLE.com:443/a".parse().unwrap())
@@ -525,7 +566,7 @@ mod tests {
 
     #[test]
     fn scheme_origin_and_partition_form_cell_identity() {
-        let registry = PartitionRegistry::explicit(
+        let registry = explicit_registry(
             [partition(1), partition(2)],
             ConnectionReuseScope::Pool,
             None,
@@ -556,8 +597,7 @@ mod tests {
         );
         let uri: Uri = "https://example.com/".parse().unwrap();
         let resolve = |scope| {
-            let registry =
-                PartitionRegistry::explicit([partition(1), partition(2)], scope, None).unwrap();
+            let registry = explicit_registry([partition(1), partition(2)], scope, None).unwrap();
             let first_partition = explicit_partition(&registry, 1);
             let second_partition = explicit_partition(&registry, 2);
             let first = registry.resolve_cell(&first_partition, &uri).unwrap();
@@ -590,7 +630,7 @@ mod tests {
         target_os = "watchos",
     ))]
     fn network_interface_scope_forms_exact_groups() {
-        let registry = PartitionRegistry::explicit(
+        let registry = explicit_registry(
             [
                 partition(1).interface("eth0"),
                 partition(2).interface("eth0"),
@@ -614,7 +654,7 @@ mod tests {
 
     #[test]
     fn bounded_origins_share_one_admission_across_partitions() {
-        let registry = PartitionRegistry::explicit(
+        let registry = explicit_registry(
             [partition(1), partition(2)],
             ConnectionReuseScope::Pool,
             NonZeroUsize::new(1),
@@ -636,8 +676,7 @@ mod tests {
 
     #[test]
     fn unbounded_origins_construct_no_admission_state() {
-        let registry =
-            PartitionRegistry::explicit([partition(1)], ConnectionReuseScope::Pool, None).unwrap();
+        let registry = explicit_registry([partition(1)], ConnectionReuseScope::Pool, None).unwrap();
         let partition = explicit_partition(&registry, 1);
         let cell = registry
             .resolve_cell(&partition, &"https://example.com/".parse().unwrap())
@@ -651,7 +690,7 @@ mod tests {
     fn first_cell_publication_is_stable_under_contention() {
         const THREADS: usize = 8;
         let registry = Arc::new(
-            PartitionRegistry::explicit(
+            explicit_registry(
                 [partition(1)],
                 ConnectionReuseScope::default(),
                 NonZeroUsize::new(1),
@@ -705,11 +744,24 @@ mod loom_tests {
         }
     }
 
+    fn explicit_registry(
+        partitions: impl IntoIterator<Item = Partition>,
+        reuse_scope: ConnectionReuseScope,
+        max_connections_per_host: Option<NonZeroUsize>,
+    ) -> Result<PartitionRegistry, PartitionRegistryError> {
+        PartitionRegistry::new(
+            Some(partitions.into_iter().collect()),
+            reuse_scope,
+            max_connections_per_host,
+            MaintenanceConfig::default(),
+        )
+    }
+
     #[test]
     fn first_cell_publication_is_stable_under_contention() {
         loom::model(|| {
             let registry = Arc::new(
-                PartitionRegistry::explicit(
+                explicit_registry(
                     [Partition::new(PartitionId::from_index(1), TestSpawner)],
                     ConnectionReuseScope::default(),
                     None,

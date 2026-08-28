@@ -7,11 +7,11 @@
 //!
 //! Each retained cell publishes a complete demand snapshot. Active snapshots
 //! occupy one origin-wide FIFO, and a delivery remains at the head as a fence
-//! until its target acknowledges ownership or rejection.
+//! until its requesting cell acknowledges ownership or rejection.
 
 use super::{
-    DeliveryId, DemandId, DemandSnapshot, DemandState, PermitId, ProtocolRequirement,
-    TargetAckResult,
+    DeliveryAckResult, DeliveryId, DemandId, DemandSnapshot, DemandState, PermitId,
+    ProtocolRequirement,
 };
 use crate::client::pool::cell::CellId;
 use crate::client::pool::partition::EligibilityGroup;
@@ -38,16 +38,16 @@ pub(super) struct DemandSchedule {
     order: DemandOrderState,
 }
 
-/// Complete origin-order head used to choose one HTTP/1 source action.
+/// Complete origin-order head used to choose one HTTP/1 reuse action.
 #[derive(Clone, Debug)]
 pub(super) struct QueuedDemand {
-    /// Cell whose oldest waiter owns this demand episode.
-    pub(super) target: CellId,
+    /// Cell whose oldest waiter owns this demand generation.
+    pub(super) requesting_cell: CellId,
     /// Demand identity revalidated at each crossing.
     pub(super) demand: DemandId,
-    /// Protocol capability required by the target waiter.
+    /// Protocol capability required by the requesting cell waiter.
     pub(super) requirement: ProtocolRequirement,
-    /// Sources whose H1 senders may be borrowed by the target.
+    /// Connection-owning cells whose H1 senders may satisfy this demand.
     pub(super) eligibility_group: EligibilityGroup,
 }
 
@@ -67,14 +67,14 @@ enum DemandResidence {
     Idle,
     /// The demand is waiting in origin order.
     Queued {
-        /// Demand episode represented by this residence.
+        /// Demand generation represented by this residence.
         demand: DemandId,
         /// Origin-wide scheduling links and arrival sequence.
         links: OrderLinks,
     },
     /// One delivery guard owns capacity for this demand.
     Delivering {
-        /// Demand episode fenced at the order head.
+        /// Demand generation fenced at the order head.
         demand: DemandId,
         /// Delivery allowed to complete this fence.
         delivery: DeliveryId,
@@ -143,7 +143,7 @@ struct OrderLinks {
 /// Demand reserved at the order head for one capacity delivery.
 pub(super) struct ScheduledDemand {
     /// Selected destination cell.
-    pub(super) target: CellId,
+    pub(super) requesting_cell: CellId,
     /// Demand identity current when the crossing was prepared.
     pub(super) demand: DemandId,
 }
@@ -156,21 +156,21 @@ pub(super) struct PreparedCapacityDelivery {
     /// Fence identity allocated for this crossing.
     pub(super) delivery: DeliveryId,
     /// Selected destination cell.
-    pub(super) target: CellId,
+    pub(super) requesting_cell: CellId,
     /// Demand identity current when the crossing was prepared.
     pub(super) demand: DemandId,
 }
 
 impl DemandSchedule {
     /// Applies a complete snapshot and updates its cell's scheduling residence.
-    pub(super) fn publish(&mut self, target: CellId, snapshot: DemandSnapshot) {
-        if let Some(current) = self.records.get(&target) {
+    pub(super) fn publish(&mut self, requesting_cell: CellId, snapshot: DemandSnapshot) {
+        if let Some(current) = self.records.get(&requesting_cell) {
             if !snapshot.is_newer_than(&current.latest) {
                 return;
             }
         } else {
             self.records.insert(
-                target.clone(),
+                requesting_cell.clone(),
                 DemandRecord {
                     latest: snapshot.clone(),
                     residence: DemandResidence::Idle,
@@ -181,33 +181,33 @@ impl DemandSchedule {
         let should_remove = matches!(
             &self
                 .records
-                .get(&target)
+                .get(&requesting_cell)
                 .expect("published demand record disappeared")
                 .residence,
             DemandResidence::Queued { demand, .. }
                 if *demand != snapshot.id || !snapshot.is_active()
         );
         if should_remove {
-            self.remove_from_order(&target);
+            self.remove_from_order(&requesting_cell);
         }
 
         self.records
-            .get_mut(&target)
+            .get_mut(&requesting_cell)
             .expect("published demand record disappeared")
             .latest = snapshot;
 
         let record = self
             .records
-            .get(&target)
+            .get(&requesting_cell)
             .expect("published demand record disappeared");
         if record.latest.is_active() && matches!(&record.residence, DemandResidence::Idle) {
-            self.enqueue(target);
+            self.enqueue(requesting_cell);
         }
         self.assert_consistent();
     }
 
     /// Appends an idle active demand to the origin-wide order.
-    fn enqueue(&mut self, target: CellId) {
+    fn enqueue(&mut self, requesting_cell: CellId) {
         let previous = match &self.order {
             DemandOrderState::Empty => None,
             DemandOrderState::Active { tail, .. } => Some(tail.clone()),
@@ -218,12 +218,12 @@ impl DemandSchedule {
                 .expect("order tail disappeared")
                 .residence
                 .links_mut()
-                .next = Some(target.clone());
+                .next = Some(requesting_cell.clone());
         }
 
         let record = self
             .records
-            .get_mut(&target)
+            .get_mut(&requesting_cell)
             .expect("queued demand record disappeared");
         debug_assert!(matches!(record.residence, DemandResidence::Idle));
         let demand = record.latest.id;
@@ -238,24 +238,24 @@ impl DemandSchedule {
         match &mut self.order {
             order @ DemandOrderState::Empty => {
                 *order = DemandOrderState::Active {
-                    head: target.clone(),
-                    tail: target,
+                    head: requesting_cell.clone(),
+                    tail: requesting_cell,
                     len: NonZeroUsize::MIN,
                 };
             }
             DemandOrderState::Active { tail, len, .. } => {
-                *tail = target;
+                *tail = requesting_cell;
                 *len = len.checked_add(1).expect("demand order length exhausted");
             }
         }
     }
 
     /// Removes an ordered demand and leaves its retained record idle.
-    fn remove_from_order(&mut self, target: &CellId) {
+    fn remove_from_order(&mut self, requesting_cell: &CellId) {
         let residence = {
             let record = self
                 .records
-                .get_mut(target)
+                .get_mut(requesting_cell)
                 .expect("removed demand record disappeared");
             std::mem::replace(&mut record.residence, DemandResidence::Idle)
         };
@@ -284,8 +284,8 @@ impl DemandSchedule {
         let DemandOrderState::Active { head, tail, len } = order else {
             unreachable!("removed a demand from an empty order");
         };
-        debug_assert_eq!(head == *target, links.previous.is_none());
-        debug_assert_eq!(tail == *target, links.next.is_none());
+        debug_assert_eq!(head == *requesting_cell, links.previous.is_none());
+        debug_assert_eq!(tail == *requesting_cell, links.next.is_none());
 
         if len == NonZeroUsize::MIN {
             debug_assert!(links.previous.is_none());
@@ -294,12 +294,12 @@ impl DemandSchedule {
         }
 
         self.order = DemandOrderState::Active {
-            head: if head == *target {
+            head: if head == *requesting_cell {
                 links.next.clone().expect("removed head had no successor")
             } else {
                 head
             },
-            tail: if tail == *target {
+            tail: if tail == *requesting_cell {
                 links
                     .previous
                     .clone()
@@ -331,7 +331,7 @@ impl DemandSchedule {
         )
     }
 
-    /// Returns the complete origin-order head when it may receive a claim.
+    /// Returns the complete origin-order head when it may begin reuse.
     pub(super) fn queued_head(&self) -> Option<QueuedDemand> {
         let DemandOrderState::Active { head, .. } = &self.order else {
             return None;
@@ -348,16 +348,16 @@ impl DemandSchedule {
             unreachable!("queued demand became inactive");
         };
         Some(QueuedDemand {
-            target: head.clone(),
+            requesting_cell: head.clone(),
             demand: *demand,
             requirement: *requirement,
             eligibility_group: eligibility_group.clone(),
         })
     }
 
-    /// Returns whether `target` still has this demand queued for a new action.
-    pub(super) fn is_current_queued(&self, target: &CellId, demand: DemandId) -> bool {
-        self.records.get(target).is_some_and(|record| {
+    /// Returns whether `requesting cell` still has this demand queued for a new action.
+    pub(super) fn is_current_queued(&self, requesting_cell: &CellId, demand: DemandId) -> bool {
+        self.records.get(requesting_cell).is_some_and(|record| {
             record.latest.id == demand
                 && record.latest.is_active()
                 && matches!(
@@ -370,20 +370,20 @@ impl DemandSchedule {
         })
     }
 
-    /// Fences a claim's exact target when it is still the origin-order head.
-    pub(super) fn reserve_claim_target(
+    /// Fences one reuse operation's demand while it remains the origin-order head.
+    pub(super) fn reserve_reuse_demand(
         &mut self,
-        target: &CellId,
+        requesting_cell: &CellId,
         demand: DemandId,
         delivery: DeliveryId,
     ) -> Option<ScheduledDemand> {
-        if !self.is_current_queued(target, demand) {
+        if !self.is_current_queued(requesting_cell, demand) {
             return None;
         }
         let DemandOrderState::Active { head, .. } = &self.order else {
             return None;
         };
-        if head != target {
+        if head != requesting_cell {
             return None;
         }
         self.reserve_head(delivery)
@@ -394,10 +394,10 @@ impl DemandSchedule {
         let DemandOrderState::Active { head, .. } = &self.order else {
             return None;
         };
-        let target = head.clone();
+        let requesting_cell = head.clone();
         let record = self
             .records
-            .get_mut(&target)
+            .get_mut(&requesting_cell)
             .expect("order head disappeared");
         let residence = std::mem::replace(&mut record.residence, DemandResidence::Idle);
         match residence {
@@ -410,7 +410,10 @@ impl DemandSchedule {
                     links,
                 };
                 self.assert_consistent();
-                Some(ScheduledDemand { target, demand })
+                Some(ScheduledDemand {
+                    requesting_cell,
+                    demand,
+                })
             }
             residence => {
                 record.residence = residence;
@@ -419,7 +422,7 @@ impl DemandSchedule {
         }
     }
 
-    /// Returns whether a delivery still owns the target demand's head fence.
+    /// Returns whether a delivery still owns the requesting cell's demand fence.
     ///
     /// Cell-side reservation uses this identity check to reject a crossing
     /// prepared for demand that was replaced while no pool lock was held.
@@ -427,10 +430,10 @@ impl DemandSchedule {
     pub(super) fn delivery_is_current(
         &self,
         delivery: DeliveryId,
-        target: &CellId,
+        requesting_cell: &CellId,
         demand: DemandId,
     ) -> bool {
-        let Some(record) = self.records.get(target) else {
+        let Some(record) = self.records.get(requesting_cell) else {
             return false;
         };
         matches!(
@@ -448,20 +451,20 @@ impl DemandSchedule {
 
     /// Closes one delivery fence and resolves the demand's next residence.
     ///
-    /// `Accepted` consumes the delivered episode and installs a newer
-    /// successor when the target supplied one. `RetrySameResidence` restores
-    /// the same episode at its existing order position when it remains live;
-    /// if it was replaced, the latest active episode is appended as new
-    /// demand. `Rejected` removes the fenced episode after its permit has
-    /// already been refunnelled and applies the same successor arbitration as
-    /// acceptance.
+    /// `Accepted` consumes the delivered generation and installs a newer
+    /// successor when the requesting cell supplied one. `RetrySameResidence`
+    /// restores the same generation at its existing order position when it
+    /// remains live; if it was replaced, the latest active generation is
+    /// appended as new demand. `Rejected` removes the fenced generation after
+    /// its permit has been refunnelled and applies the same successor
+    /// arbitration as acceptance.
     pub(super) fn finish_delivery(
         &mut self,
         delivery: DeliveryId,
-        target: &CellId,
-        result: TargetAckResult,
+        requesting_cell: &CellId,
+        result: DeliveryAckResult,
     ) {
-        let Some(record) = self.records.get(target) else {
+        let Some(record) = self.records.get(requesting_cell) else {
             return;
         };
         let delivered_demand = match &record.residence {
@@ -474,15 +477,15 @@ impl DemandSchedule {
         };
 
         match result {
-            TargetAckResult::RetrySameResidence => {
+            DeliveryAckResult::RetrySameResidence => {
                 let record = self
                     .records
-                    .get(target)
+                    .get(requesting_cell)
                     .expect("delivery demand record disappeared");
                 if record.latest.id == delivered_demand && record.latest.is_active() {
                     let record = self
                         .records
-                        .get_mut(target)
+                        .get_mut(requesting_cell)
                         .expect("delivery demand record disappeared");
                     let residence = std::mem::replace(&mut record.residence, DemandResidence::Idle);
                     let DemandResidence::Delivering {
@@ -499,38 +502,39 @@ impl DemandSchedule {
                     return;
                 }
 
-                self.remove_from_order(target);
+                self.remove_from_order(requesting_cell);
                 if self
                     .records
-                    .get(target)
+                    .get(requesting_cell)
                     .expect("delivery demand record disappeared")
                     .latest
                     .is_active()
                 {
-                    self.enqueue(target.clone());
+                    self.enqueue(requesting_cell.clone());
                 }
             }
-            TargetAckResult::Accepted { successor } | TargetAckResult::Rejected { successor } => {
-                self.remove_from_order(target);
+            DeliveryAckResult::Accepted { successor }
+            | DeliveryAckResult::Rejected { successor } => {
+                self.remove_from_order(requesting_cell);
 
                 let install_successor = successor.as_ref().is_some_and(|successor| {
                     successor.id > delivered_demand
                         && successor.is_newer_than(
                             &self
                                 .records
-                                .get(target)
+                                .get(requesting_cell)
                                 .expect("delivery demand record disappeared")
                                 .latest,
                         )
                 });
                 if install_successor {
                     self.records
-                        .get_mut(target)
+                        .get_mut(requesting_cell)
                         .expect("delivery demand record disappeared")
                         .latest = successor.expect("validated successor disappeared");
                 } else if self
                     .records
-                    .get(target)
+                    .get(requesting_cell)
                     .expect("delivery demand record disappeared")
                     .latest
                     .id
@@ -538,7 +542,7 @@ impl DemandSchedule {
                 {
                     let record = self
                         .records
-                        .get_mut(target)
+                        .get_mut(requesting_cell)
                         .expect("delivery demand record disappeared");
                     record.latest =
                         DemandSnapshot::inactive(delivered_demand, record.latest.version.next());
@@ -546,22 +550,24 @@ impl DemandSchedule {
 
                 if self
                     .records
-                    .get(target)
+                    .get(requesting_cell)
                     .expect("delivery demand record disappeared")
                     .latest
                     .is_active()
                 {
-                    self.enqueue(target.clone());
+                    self.enqueue(requesting_cell.clone());
                 }
             }
         }
         self.assert_consistent();
     }
 
-    /// Returns the latest complete snapshot retained for `target`.
+    /// Returns the latest complete snapshot retained for `requesting cell`.
     #[cfg(test)]
-    pub(super) fn latest_for_test(&self, target: &CellId) -> Option<&DemandSnapshot> {
-        self.records.get(target).map(|record| &record.latest)
+    pub(super) fn latest_for_test(&self, requesting_cell: &CellId) -> Option<&DemandSnapshot> {
+        self.records
+            .get(requesting_cell)
+            .map(|record| &record.latest)
     }
 
     #[cfg(test)]
@@ -610,14 +616,14 @@ impl DemandSchedule {
                 let mut previous = None;
                 let mut traversed = 0;
                 let mut delivering = 0;
-                while let Some(target) = current {
+                while let Some(requesting_cell) = current {
                     assert!(
                         traversed < self.records.len(),
                         "demand order contains a cycle"
                     );
                     let record = self
                         .records
-                        .get(&target)
+                        .get(&requesting_cell)
                         .expect("ordered demand disappeared");
                     let links = record
                         .residence
@@ -639,7 +645,7 @@ impl DemandSchedule {
                         DemandResidence::Delivering { demand, .. } => {
                             delivering += 1;
                             assert_eq!(
-                                target, *head,
+                                requesting_cell, *head,
                                 "delivery fence moved away from the order head"
                             );
                             assert!(
@@ -650,7 +656,7 @@ impl DemandSchedule {
                     }
 
                     traversed += 1;
-                    previous = Some(target);
+                    previous = Some(requesting_cell);
                     current = links.next.clone();
                 }
 

@@ -10,6 +10,7 @@ use super::maintenance::MaintenanceConfig;
 use super::registry::{PartitionRegistry, PartitionRegistryError};
 use super::{ConnectionPool, ConnectionReuseScope, Partition, PoolConfig, PoolInner};
 use crate::client::TlsUnset;
+use crate::sync::Arc;
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
 use aws_smithy_async::time::{SharedTimeSource, TimeSource};
 #[cfg(any(
@@ -28,7 +29,6 @@ use std::error::Error;
 use std::fmt;
 use std::num::NonZeroUsize;
 use std::sync::atomic::AtomicU64;
-use std::sync::Arc;
 use std::time::Duration;
 #[cfg(any(
     all(test, feature = "rt-tokio"),
@@ -36,30 +36,73 @@ use std::time::Duration;
 ))]
 use tower::Service;
 
+/// Default duration for retaining an idle reusable connection.
 const DEFAULT_IDLE_TIMEOUT: Duration = Duration::from_secs(90);
+
+// TODO(pool): Revisit sharing this type if more runtime builders need the
+// distinction between an unset setting and an explicitly disabled setting.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+enum TriStateOption<T> {
+    /// No option was set by the user, so construction applies its default.
+    #[default]
+    NotSet,
+    /// The option was explicitly unset, so construction does not apply a default.
+    ExplicitlyUnset,
+    /// The caller supplied this value.
+    Set(T),
+}
+
+impl<T> TriStateOption<T> {
+    /// Preserves the public nested-option setter contract internally.
+    fn from_nested(value: Option<Option<T>>) -> Self {
+        match value {
+            None => Self::NotSet,
+            Some(None) => Self::ExplicitlyUnset,
+            Some(Some(value)) => Self::Set(value),
+        }
+    }
+
+    /// Resolves the setting, applying `default` only when it was never set.
+    fn resolve(self, default: Option<T>) -> Option<T> {
+        match self {
+            Self::NotSet => default,
+            Self::ExplicitlyUnset => None,
+            Self::Set(value) => Some(value),
+        }
+    }
+}
 
 /// Builds a partition-aware connection pool.
 #[derive(Clone)]
 pub struct Builder<Tls = TlsUnset> {
-    idle_timeout: Option<Option<Duration>>,
+    /// Idle retention setting, including explicit disablement.
+    idle_timeout: TriStateOption<Duration>,
+    /// Clock used to assign and evaluate idle deadlines.
     time_source: Option<SharedTimeSource>,
+    /// Runtime timer used by idle maintenance.
     sleep_impl: Option<SharedAsyncSleep>,
+    /// Whether newly created TCP sockets disable Nagle's algorithm.
     tcp_nodelay: bool,
-    tcp_keepalive: Option<Option<Duration>>,
+    /// TCP keepalive setting, including explicit disablement.
+    tcp_keepalive: TriStateOption<Duration>,
+    /// Optional origin-wide connection limit.
     max_connections_per_host: Option<usize>,
+    /// Partitions allowed to reuse each other's connections.
     reuse_scope: ConnectionReuseScope,
+    /// Complete explicit partition set, or `None` for anonymous topology.
     partitions: Option<Vec<Partition>>,
+    /// TLS typestate carried into protocol-specific terminal builders.
     tls: Tls,
 }
 
 impl Default for Builder<TlsUnset> {
     fn default() -> Self {
         Self {
-            idle_timeout: None,
+            idle_timeout: TriStateOption::NotSet,
             time_source: None,
             sleep_impl: None,
             tcp_nodelay: true,
-            tcp_keepalive: None,
+            tcp_keepalive: TriStateOption::NotSet,
             max_connections_per_host: None,
             reuse_scope: ConnectionReuseScope::default(),
             partitions: None,
@@ -90,7 +133,10 @@ impl<Tls> Builder<Tls> {
     /// Passing `None` disables idle expiration. When unset, the pool uses a
     /// 90-second timeout.
     pub fn idle_timeout(mut self, timeout: impl Into<Option<Duration>>) -> Self {
-        self.idle_timeout = Some(timeout.into());
+        self.idle_timeout = match timeout.into() {
+            Some(timeout) => TriStateOption::Set(timeout),
+            None => TriStateOption::ExplicitlyUnset,
+        };
         self
     }
 
@@ -98,7 +144,7 @@ impl<Tls> Builder<Tls> {
     ///
     /// The outer `None` restores the default; `Some(None)` disables expiry.
     pub fn set_idle_timeout(&mut self, timeout: Option<Option<Duration>>) -> &mut Self {
-        self.idle_timeout = timeout;
+        self.idle_timeout = TriStateOption::from_nested(timeout);
         self
     }
 
@@ -140,13 +186,16 @@ impl<Tls> Builder<Tls> {
 
     /// Configures TCP keepalive for newly created sockets.
     pub fn tcp_keepalive(mut self, time: impl Into<Option<Duration>>) -> Self {
-        self.tcp_keepalive = Some(time.into());
+        self.tcp_keepalive = match time.into() {
+            Some(time) => TriStateOption::Set(time),
+            None => TriStateOption::ExplicitlyUnset,
+        };
         self
     }
 
     /// Mutably configures TCP keepalive.
     pub fn set_tcp_keepalive(&mut self, time: Option<Option<Duration>>) -> &mut Self {
-        self.tcp_keepalive = time;
+        self.tcp_keepalive = TriStateOption::from_nested(time);
         self
     }
 
@@ -191,15 +240,16 @@ impl Builder<TlsUnset> {
     /// Builds a pool for cleartext HTTP connections.
     #[doc(hidden)]
     pub fn build_http(self) -> Result<ConnectionPool, BuildError> {
+        validate_default_connector_interfaces(self.partitions.as_deref())?;
         let mut connector = HttpConnector::new_with_resolver(GaiResolver::new());
         connector.set_nodelay(self.tcp_nodelay);
-        connector.set_keepalive(self.tcp_keepalive.flatten());
-        let transport = handshake::transport_factory(move |interface| {
+        connector.set_keepalive(self.tcp_keepalive.clone().resolve(None));
+        let transport = handshake::transport_factory_for_interface(move |interface| {
             let mut connector = connector.clone();
-            set_interface(&mut connector, interface);
+            set_default_connector_interface(&mut connector, interface);
             connector
         });
-        self.finish(transport)
+        self.build_with_transport(transport)
     }
 
     /// Builds a pool around a test transport connector.
@@ -213,9 +263,15 @@ impl Builder<TlsUnset> {
         C: Service<Uri, Response = IO> + Clone + Send + Sync + 'static,
         C::Error: Into<BoxError>,
         C::Future: Send + 'static,
-        IO: crate::client::connect::AsyncConn,
+        IO: hyper::rt::Read
+            + hyper::rt::Write
+            + hyper_util::client::legacy::connect::Connection
+            + Send
+            + Sync
+            + Unpin
+            + 'static,
     {
-        self.finish(handshake::transport_factory(move |_| connector.clone()))
+        self.build_with_transport(handshake::transport_factory(connector))
     }
 
     #[cfg(all(test, feature = "rt-tokio"))]
@@ -227,12 +283,22 @@ impl Builder<TlsUnset> {
         C: Service<Uri, Response = IO> + Clone + Send + Sync + 'static,
         C::Error: Into<BoxError>,
         C::Future: Send + 'static,
-        IO: crate::client::connect::AsyncConn,
+        IO: hyper::rt::Read
+            + hyper::rt::Write
+            + hyper_util::client::legacy::connect::Connection
+            + Send
+            + Sync
+            + Unpin
+            + 'static,
     {
-        self.finish(handshake::transport_factory(move |_| connector.clone()))
+        self.build_with_transport(handshake::transport_factory(connector))
     }
 
-    fn finish(self, transport: Arc<dyn TransportFactory>) -> Result<ConnectionPool, BuildError> {
+    /// Validates pool policy and installs the type-erased transport factory.
+    fn build_with_transport(
+        self,
+        transport: std::sync::Arc<dyn TransportFactory>,
+    ) -> Result<ConnectionPool, BuildError> {
         let max_connections_per_host = match self.max_connections_per_host {
             Some(0) => {
                 return Err(BuildError::new(
@@ -242,7 +308,7 @@ impl Builder<TlsUnset> {
             Some(limit) => NonZeroUsize::new(limit),
             None => None,
         };
-        let idle_timeout = self.idle_timeout.unwrap_or(Some(DEFAULT_IDLE_TIMEOUT));
+        let idle_timeout = self.idle_timeout.resolve(Some(DEFAULT_IDLE_TIMEOUT));
         let time_source = self.time_source.unwrap_or_default();
         let sleep_impl = self.sleep_impl.or_else(default_async_sleep);
         if idle_timeout.is_some() && sleep_impl.is_none() {
@@ -255,20 +321,13 @@ impl Builder<TlsUnset> {
             time_source: time_source.clone(),
             sleep: sleep_impl.clone(),
         };
-        let registry = match self.partitions {
-            None => PartitionRegistry::anonymous_with_maintenance(
-                self.reuse_scope,
-                max_connections_per_host,
-                maintenance.clone(),
-            ),
-            Some(partitions) => PartitionRegistry::explicit_with_maintenance(
-                partitions,
-                self.reuse_scope,
-                max_connections_per_host,
-                maintenance,
-            )
-            .map_err(BuildError::from)?,
-        };
+        let registry = PartitionRegistry::new(
+            self.partitions,
+            self.reuse_scope,
+            max_connections_per_host,
+            maintenance,
+        )
+        .map_err(BuildError::from)?;
         let config = PoolConfig {
             idle_timeout,
             max_connections_per_host,
@@ -288,6 +347,7 @@ impl Builder<TlsUnset> {
 /// Error returned when a pool configuration is internally inconsistent.
 #[derive(Debug)]
 pub struct BuildError {
+    /// Stable configuration diagnostic.
     message: String,
 }
 
@@ -313,6 +373,8 @@ impl From<PartitionRegistryError> for BuildError {
     }
 }
 
+/// Rejects interface values the default connector cannot convert to its
+/// platform socket representation.
 #[cfg(any(
     target_os = "android",
     target_os = "fuchsia",
@@ -325,12 +387,23 @@ impl From<PartitionRegistryError> for BuildError {
     target_os = "visionos",
     target_os = "watchos",
 ))]
-fn set_interface(connector: &mut HttpConnector<GaiResolver>, interface: Option<&str>) {
-    if let Some(interface) = interface {
-        connector.set_interface(interface);
+fn validate_default_connector_interfaces(
+    partitions: Option<&[Partition]>,
+) -> Result<(), BuildError> {
+    if let Some(partition) = partitions.into_iter().flatten().find(|partition| {
+        partition
+            .interface_name()
+            .is_some_and(|interface| interface.as_bytes().contains(&0))
+    }) {
+        return Err(BuildError::new(format!(
+            "partition {:?} has an invalid network-interface name",
+            partition.id()
+        )));
     }
+    Ok(())
 }
 
+/// Performs no interface validation on targets without connector support.
 #[cfg(not(any(
     target_os = "android",
     target_os = "fuchsia",
@@ -343,7 +416,52 @@ fn set_interface(connector: &mut HttpConnector<GaiResolver>, interface: Option<&
     target_os = "visionos",
     target_os = "watchos",
 )))]
-fn set_interface(_connector: &mut HttpConnector<GaiResolver>, _interface: Option<&str>) {}
+fn validate_default_connector_interfaces(
+    _partitions: Option<&[Partition]>,
+) -> Result<(), BuildError> {
+    Ok(())
+}
+
+/// Applies this partition's interface to the default connector.
+#[cfg(any(
+    target_os = "android",
+    target_os = "fuchsia",
+    target_os = "illumos",
+    target_os = "ios",
+    target_os = "linux",
+    target_os = "macos",
+    target_os = "solaris",
+    target_os = "tvos",
+    target_os = "visionos",
+    target_os = "watchos",
+))]
+fn set_default_connector_interface(
+    connector: &mut HttpConnector<GaiResolver>,
+    interface: Option<&str>,
+) {
+    if let Some(interface) = interface {
+        connector.set_interface(interface);
+    }
+}
+
+/// Leaves the default connector unchanged on unsupported targets.
+#[cfg(not(any(
+    target_os = "android",
+    target_os = "fuchsia",
+    target_os = "illumos",
+    target_os = "ios",
+    target_os = "linux",
+    target_os = "macos",
+    target_os = "solaris",
+    target_os = "tvos",
+    target_os = "visionos",
+    target_os = "watchos",
+)))]
+fn set_default_connector_interface(
+    _connector: &mut HttpConnector<GaiResolver>,
+    _interface: Option<&str>,
+) {
+}
 
 #[cfg(all(test, not(smithy_http_client_loom)))]
 mod tests {
@@ -375,21 +493,32 @@ mod tests {
     }
 
     #[test]
-    fn builder_defaults_and_nested_option_setters_are_distinct() {
+    fn builder_preserves_unset_disabled_and_configured_settings() {
         let mut builder = Builder::default();
-        assert_eq!(None, builder.idle_timeout);
-        assert_eq!(None, builder.tcp_keepalive);
+        assert_eq!(TriStateOption::NotSet, builder.idle_timeout);
+        assert_eq!(TriStateOption::NotSet, builder.tcp_keepalive);
         assert!(builder.tcp_nodelay);
         assert_eq!(None, builder.max_connections_per_host);
         assert!(builder.partitions.is_none());
 
         builder.set_idle_timeout(Some(None));
         builder.set_tcp_keepalive(Some(None));
+        assert_eq!(TriStateOption::ExplicitlyUnset, builder.idle_timeout);
+        assert_eq!(TriStateOption::ExplicitlyUnset, builder.tcp_keepalive);
+
+        builder.set_idle_timeout(Some(Some(Duration::from_secs(5))));
+        builder.set_tcp_keepalive(Some(Some(Duration::from_secs(10))));
         builder.set_tcp_nodelay(false);
         builder.set_max_connections_per_host(Some(3));
         builder.set_partitions(Some(vec![partition(7)]));
-        assert_eq!(Some(None), builder.idle_timeout);
-        assert_eq!(Some(None), builder.tcp_keepalive);
+        assert_eq!(
+            TriStateOption::Set(Duration::from_secs(5)),
+            builder.idle_timeout
+        );
+        assert_eq!(
+            TriStateOption::Set(Duration::from_secs(10)),
+            builder.tcp_keepalive
+        );
         assert!(!builder.tcp_nodelay);
         assert_eq!(Some(3), builder.max_connections_per_host);
         assert_eq!(1, builder.partitions.as_ref().unwrap().len());
@@ -398,8 +527,8 @@ mod tests {
         builder.set_tcp_keepalive(None);
         builder.set_max_connections_per_host(None);
         builder.set_partitions(None);
-        assert_eq!(None, builder.idle_timeout);
-        assert_eq!(None, builder.tcp_keepalive);
+        assert_eq!(TriStateOption::NotSet, builder.idle_timeout);
+        assert_eq!(TriStateOption::NotSet, builder.tcp_keepalive);
         assert_eq!(None, builder.max_connections_per_host);
         assert!(builder.partitions.is_none());
     }
@@ -415,6 +544,13 @@ mod tests {
             Some(Duration::from_secs(90)),
             pool.inner.config.idle_timeout
         );
+    }
+
+    #[test]
+    fn terminal_build_preserves_explicitly_disabled_idle_timeout() {
+        let pool = Builder::default().idle_timeout(None).build_http().unwrap();
+
+        assert_eq!(None, pool.inner.config.idle_timeout);
     }
 
     #[test]

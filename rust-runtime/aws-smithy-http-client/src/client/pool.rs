@@ -3,67 +3,92 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! HTTP connection pooling with optional runtime and network partitions.
+//! HTTP connection pooling across runtime and network partitions.
 //!
-//! Build one [`ConnectionPool`], then create a [`Client`] for its anonymous
-//! partition or for one explicitly declared [`Partition`]. Each partition
-//! fixes where its connections are established and driven. The configured
-//! [`ConnectionReuseScope`] controls which partitions may dispatch through
-//! each other's connections without moving the underlying I/O.
+//! A [`ConnectionPool`] owns connection policy and a fixed set of partitions.
+//! A [`Client`] is a cheap handle resolved to one of those partitions. A pool
+//! built without explicit [`Partition`] values has one anonymous partition;
+//! otherwise clients select an explicit partition by [`PartitionId`].
 //!
-//! # Implementation model
+//! A partition determines where connections are established, driven, and
+//! maintained. [`ConnectionReuseScope`] determines which partitions may send
+//! requests through each other's connections. Reuse never moves a connection's
+//! socket or protocol driver between runtimes.
 //!
-//! A request resolves its URI to the selected partition's stable origin cell.
-//! The cell is the local synchronization domain for acquisition, reusable
-//! protocol state, and connection return:
+//! # State ownership
+//!
+//! Pool state is divided by the scope of each decision:
 //!
 //! ```text
 //! ConnectionPool
-//!   `-- PartitionRegistry
-//!         |-- PartitionState(owner runtime, optional interface)
-//!         |     `-- OriginCell(origin)
-//!         |           |-- acquisition waiters
-//!         |           `-- source-owned H1 records
-//!         `-- OriginAdmission(origin, optional bound)
-//!               |-- capacity and demand order
-//!               `-- cross-cell H1 source claims
+//!   `-- PoolInner
+//!         |-- PartitionRegistry
+//!         |     |-- PartitionState per partition
+//!         |     |     |-- OriginCell per canonical origin
+//!         |     |     `-- runtime placement and idle maintenance
+//!         |     `-- OriginAdmission per bounded origin
+//!         `-- immutable policy and transport construction
 //! ```
 //!
-//! A local idle H1 sender is the request fast path. A miss registers one
-//! waiter that remains authoritative while establishment races a returning
-//! sender. For a bounded origin, `OriginAdmission` grants connection
-//! capacity across every partition. It may also borrow an eligible peer's H1
-//! sender or reclaim an ineligible peer's idle connection so the waiting
-//! partition can establish without exceeding the origin-wide limit.
+//! An `OriginCell` is the only lock domain that combines a partition's local
+//! acquisition order with its protocol connections. For a bounded origin,
+//! `OriginAdmission` separately owns the origin-wide capacity limit, demand
+//! order, and cross-cell reuse decisions. Values crossing between a cell and
+//! admission own their payload and cancellation fallback; pool coordination
+//! never holds both locks at once.
 //!
-//! One `DeliveryGuard` carries either capacity or a claimed H1 sender from
-//! admission to a target cell. `DeliveryAck` retains the admission fence after
-//! the target accepts ownership:
+//! An HTTP/1 sender is Hyper's exclusive `SendRequest<SdkBody>` request
+//! handle. It is the authority to send over one
+//! HTTP/1 connection, not the socket or the protocol driver.
+//!
+//! # Request flow
+//!
+//! Each request follows the same ownership path:
 //!
 //! ```text
-//! source OriginCell -- source report / claim result --> OriginAdmission
-//! OriginAdmission --- DeliveryGuard -----------------> target OriginCell
-//! OriginAdmission <-- DeliveryAck -------------------- target OriginCell
+//! Client(partition)
+//!   `-- resolve OriginCell(partition, origin)
+//!         |-- select a local idle HTTP/1 sender
+//!         `-- register one waiter
+//!               |-- establish with new capacity
+//!               |-- borrow an eligible partition's sender
+//!               `-- reclaim capacity from an ineligible partition
+//!                         |
+//!                         v
+//!                    H1Selection
+//!                         |
+//!                  commit dispatch
+//!                         |
+//!                    H1Exchange
+//!                         |
+//!               complete response body
+//!                         |
+//!                   H1ReturnOffer
+//!                         |
+//!                 connection-owning cell
 //! ```
 //!
-//! The guard materializes all fallible source state before reserving the
-//! target waiter. Dropping either crossing value restores its resource before
-//! making demand schedulable again. Pool coordination never holds two pool
-//! locks at once.
+//! A local idle sender is selected without origin-wide coordination. On a
+//! miss, one waiter remains authoritative while capacity, a returning sender,
+//! and connection establishment race to satisfy it. A bounded origin may lend
+//! an eligible partition's sender or close an ineligible idle connection and
+//! transfer its capacity. Active connections are not reclaimed.
 //!
-//! Established connections separate three lifetimes:
+//! Dispatch commits against logical close before Hyper receives the request.
+//! An accepted response retains the sender until Hyper proves a complete,
+//! reusable HTTP/1 message boundary. Errors retire the connection. A protocol
+//! upgrade logically closes the pool record before upgraded root I/O is
+//! exposed to the caller.
 //!
-//! ```text
-//! ConnectionState
-//!   |-- logical close ----------> reject dispatch and release bounded capacity
-//!   |-- DispatchGuard ----------> one accepted request
-//!   `-- PhysicalConnectionGuard -> root transport I/O
-//! ```
+//! `ConnectionState` separates logical close, accepted-request accounting,
+//! and root-I/O ownership. Logical close rejects new dispatch and releases
+//! bounded capacity. `DispatchGuard` follows one accepted request.
+//! `PhysicalConnectionGuard` follows the root transport until the pool no
+//! longer owns that I/O; it does not describe the kernel's TCP state.
 //!
-//! Connector execution, handshakes, protocol drivers, pending H1 return, and
-//! maintenance run through the owning partition's [`DriverSpawner`]. Borrowing
-//! a sender moves dispatch authority only; its socket and driver stay on the
-//! source partition.
+//! Connector execution, handshakes, protocol drivers, pending HTTP/1 return,
+//! and idle maintenance run through the connection-owning partition's
+//! [`DriverSpawner`].
 
 #![cfg_attr(smithy_http_client_loom, allow(dead_code))]
 
@@ -80,13 +105,14 @@ mod partition;
 mod registry;
 
 pub use builder::{BuildError, Builder};
-pub use client::{Client, InvalidPartition};
+pub use client::{Client, ClientBuildError};
 pub use connection::{CloseReason, ConnectionId};
 pub use origin::{InvalidOrigin, OriginKey};
 #[cfg(feature = "rt-tokio")]
 pub use partition::TokioDriverSpawner;
 pub use partition::{ConnectionReuseScope, DriverSpawner, Partition, PartitionId};
 
+use crate::sync::Arc;
 use handshake::TransportFactory;
 use registry::PartitionRegistry;
 use std::fmt;
@@ -95,18 +121,22 @@ use std::sync::atomic::AtomicU64;
 use std::sync::Arc as StdArc;
 use std::time::Duration;
 
-/// A connection pool shared by one or more partition-specific clients.
+/// Shared owner of connection topology, reusable connections, and pool policy.
 ///
-/// Build a pool with [`ConnectionPool::builder`], then resolve a [`Client`]
-/// for its anonymous or explicitly declared partition.
+/// Cloning a pool shares its connections. Create a [`Client`] to bind requests
+/// to the anonymous partition or to an explicit [`PartitionId`]. A pool built
+/// with explicit partitions does not also create an anonymous partition.
+///
+/// Dropping the final owner of the shared pool state logically closes retained
+/// connections and stops partition maintenance.
 #[derive(Clone)]
 pub struct ConnectionPool {
     /// Shared pool policy, topology, connector, and connection-ID allocator.
-    inner: StdArc<PoolInner>,
+    inner: Arc<PoolInner>,
 }
 
 impl ConnectionPool {
-    /// Creates a connection-pool builder.
+    /// Returns a builder for a new connection pool.
     pub fn builder() -> Builder<super::TlsUnset> {
         Builder::default()
     }
@@ -139,7 +169,7 @@ struct PoolConfig {
 
 /// Shared implementation state behind [`ConnectionPool`].
 struct PoolInner {
-    /// Immutable settings retained for diagnostics and future policy facades.
+    /// Immutable settings shared by pool operations.
     config: PoolConfig,
     /// Fixed partitions and lazily published per-origin state.
     registry: PartitionRegistry,

@@ -22,7 +22,7 @@ use std::task::{Context, Poll, Waker};
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(in crate::client::pool) struct WaiterId(pub(in crate::client::pool) u64);
 
-/// Cell-local acquisition episodes, bounded-capacity order, and H1 races.
+/// Cell-local acquisition attempts, bounded-capacity order, and H1 races.
 ///
 /// At every completed transition:
 ///
@@ -31,15 +31,15 @@ pub(in crate::client::pool) struct WaiterId(pub(in crate::client::pool) u64);
 ///   records.
 /// - The active queue's demand describes its head waiter.
 /// - `h1_candidates` contains each compatible receiving, ready-to-establish,
-///   or launching episode.
+///   or launching attempt.
 /// - Receiving, ready-to-establish, launching, cancelled-receiving, and ready
-///   episodes remain in `records` but not in the bounded-capacity FIFO.
+///   attempts remain in `records` but not in the bounded-capacity FIFO.
 ///
 /// The queue never invokes admission or wakes a task. Transition results carry
 /// that work across the cell lock boundary.
 #[derive(Debug, Default)]
 pub(super) struct WaiterQueue {
-    /// Every episode still waiting, launching, or holding a terminal result.
+    /// Every attempt still waiting, launching, or holding a terminal result.
     records: HashMap<WaiterId, WaiterRecord>,
     /// FIFO endpoints and demand for the records currently waiting.
     waiting: WaitingQueueState,
@@ -47,14 +47,14 @@ pub(super) struct WaiterQueue {
     h1_candidates: BTreeSet<WaiterId>,
     /// Next cell-local waiter identity.
     next_waiter: u64,
-    /// Next identity for a head-waiter demand episode.
+    /// Next identity for a head-waiter demand generation.
     next_demand_id: u64,
 }
 
 /// Owner-runtime progress of one submitted establishment task.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum EstablishmentPhase {
-    /// The task was submitted but has not claimed its first connector poll.
+    /// The task was submitted but has not begun polling the connector.
     Submitted,
     /// The owner runtime polled the task and the pool owns completion.
     Started,
@@ -74,7 +74,7 @@ enum WaitingQueueState {
         tail: WaiterId,
         /// Number of records linked from `head` through `tail`.
         len: NonZeroUsize,
-        /// Demand episode representing `head`.
+        /// Demand generation represented by `head`.
         demand: DemandTicket,
     },
 }
@@ -133,7 +133,7 @@ enum WaiterState {
 /// Cell-local ownership of the aggregate head demand.
 #[derive(Debug)]
 struct DemandTicket {
-    /// Identity of this head-waiter episode.
+    /// Identity of this head-waiter generation.
     id: DemandId,
     /// Version of the next complete publication.
     version: SnapshotVersion,
@@ -142,7 +142,7 @@ struct DemandTicket {
 }
 
 impl DemandTicket {
-    /// Creates the complete active state published for this head episode.
+    /// Creates the complete active state published for this head generation.
     fn snapshot(&self, eligibility_group: &EligibilityGroup) -> DemandSnapshot {
         DemandSnapshot::active(
             self.id,
@@ -154,10 +154,10 @@ impl DemandTicket {
 }
 
 impl WaiterQueue {
-    /// Registers one acquisition episode.
+    /// Registers one acquisition attempt.
     ///
-    /// An unbounded episode starts ready to establish. A bounded episode joins
-    /// the capacity FIFO and returns a snapshot only when it becomes the head.
+    /// An unbounded attempt starts ready to establish. A bounded attempt joins
+    /// the capacity FIFO and publishes demand only when it becomes the head.
     pub(super) fn register_waiter(
         &mut self,
         requirement: ProtocolRequirement,
@@ -235,7 +235,7 @@ impl WaiterQueue {
         (waiter, snapshot)
     }
 
-    /// Returns the oldest acquisition episode that can accept HTTP/1.
+    /// Returns the oldest acquisition attempt that can accept HTTP/1.
     ///
     /// A bounded waiter remains a candidate after receiving capacity so a
     /// returned sender can still beat its lazy or pool-owned establishment
@@ -257,7 +257,7 @@ impl WaiterQueue {
         }
     }
 
-    /// Returns whether a returned H1 can satisfy a live acquisition episode.
+    /// Returns whether a returned H1 can satisfy a live acquisition attempt.
     pub(super) fn can_accept_h1(&self) -> bool {
         self.oldest_h1_candidate().is_some()
     }
@@ -265,14 +265,14 @@ impl WaiterQueue {
     /// Returns whether a previously admitted local attempt still accepts H1.
     ///
     /// These candidates left the capacity FIFO before its current head and
-    /// therefore precede a claim aimed at that newer aggregate demand.
+    /// therefore precede cross-cell reuse for that newer aggregate demand.
     pub(super) fn has_prior_h1_candidate(&self) -> bool {
         !self.h1_candidates.is_empty()
     }
 
-    /// Commits a returned HTTP/1 sender to the oldest compatible episode.
+    /// Commits a returned HTTP/1 sender to the oldest compatible attempt.
     ///
-    /// Payload construction is delayed until all panic-capable target checks
+    /// Payload construction is delayed until all panic-capable requesting-cell checks
     /// have completed. Once constructed, the result is either state-owned or
     /// returned to the caller for cleanup after the cell lock is released.
     pub(super) fn install_returned_h1(
@@ -293,9 +293,9 @@ impl WaiterQueue {
             let record = self
                 .records
                 .get_mut(&waiter)
-                .expect("HTTP/1 target waiter disappeared");
+                .expect("HTTP/1 requesting waiter disappeared");
             let WaiterState::Waiting { waker, .. } = &mut record.state else {
-                unreachable!("HTTP/1 target waiter left the waiting state");
+                unreachable!("HTTP/1 requesting waiter left the waiting state");
             };
             let waker = waker.take();
             record.state = WaiterState::Ready(result());
@@ -353,7 +353,7 @@ impl WaiterQueue {
 
     /// Cancels one waiter and detaches all cross-lock cleanup work.
     ///
-    /// Removing the head retires its demand and starts a successor episode.
+    /// Removing the head retires its demand and starts a successor generation.
     /// Removing another waiting record leaves the active demand unchanged.
     /// Cancellation during delivery leaves a marker for result installation to
     /// observe. A ready result is returned to the caller for cleanup after unlock.
@@ -503,7 +503,7 @@ impl WaiterQueue {
         Poll::Pending
     }
 
-    /// Claims pool ownership immediately before an attempt's first poll.
+    /// Transfers completion ownership to the pool immediately before the first poll.
     ///
     /// A returned H1 or cancellation that wins first removes the submitted
     /// attempt's authority, allowing its unpolled future and permit to drop.
@@ -530,12 +530,13 @@ impl WaiterQueue {
         }
     }
 
-    /// Reserves the current head when a delivery still names its demand episode.
+    /// Reserves the current head when a delivery still names its demand
+    /// generation.
     ///
     /// The reserved waiter leaves the FIFO and changes in place to
     /// [`WaiterState::Receiving`]. Any remaining head receives a new demand
-    /// episode returned for admission acknowledgement.
-    pub(super) fn reserve_delivery_target(
+    /// generation returned for admission acknowledgement.
+    pub(super) fn reserve_delivery_waiter(
         &mut self,
         demand: DemandId,
         eligibility_group: &EligibilityGroup,
@@ -644,11 +645,11 @@ impl WaiterQueue {
         }
     }
 
-    /// Installs a borrowed HTTP/1 result after its target was reserved.
+    /// Installs a borrowed HTTP/1 result after its requesting waiter was reserved.
     ///
     /// A local return may have won while the borrowed sender crossed its
-    /// source and target locks. In that case the local result stays ready and
-    /// the borrowed result leaves the lock for ordinary source return.
+    /// owning-cell and requesting-cell locks. In that case the local result stays ready and
+    /// the borrowed result leaves the lock for ordinary owning-cell return.
     pub(super) fn install_borrowed_h1(
         &mut self,
         waiter: WaiterId,
@@ -905,7 +906,7 @@ impl WaiterQueue {
         WaiterId(value)
     }
 
-    /// Starts a demand episode for a waiter that became the FIFO head.
+    /// Starts a demand generation for a waiter that became the FIFO head.
     fn new_demand(&mut self, requirement: ProtocolRequirement) -> DemandTicket {
         let value = self.next_demand_id;
         self.next_demand_id = value.checked_add(1).expect("demand identity exhausted");
@@ -1023,7 +1024,7 @@ impl WaiterQueue {
     }
 }
 
-/// Result of reserving a target for one unlocked one-to-one delivery.
+/// Result of reserving a requesting waiter for one unlocked delivery.
 pub(super) enum DeliveryReservation {
     /// The current head was reserved and may have a successor demand.
     Reserved {
@@ -1048,12 +1049,12 @@ pub(super) struct H1Install {
     pub(super) demand_updates: [Option<DemandSnapshot>; 2],
     /// Establishment permit or rejected H1 returned after unlocking.
     pub(super) returned_event: Option<AcquisitionEvent>,
-    /// Target task woken after demand publication.
+    /// Waiting task woken after demand publication.
     pub(super) waker: Option<Waker>,
 }
 
 impl H1Install {
-    /// Preserves a result when no live episode can accept HTTP/1.
+    /// Preserves a result when no live attempt can accept HTTP/1.
     fn rejected(result: AcquisitionResult) -> Self {
         Self {
             demand_updates: [None, None],
@@ -1083,7 +1084,7 @@ pub(super) struct ResultInstall {
     pub(super) waker: Option<Waker>,
     /// Invalid state reported only after the returned result runs its fallback.
     pub(super) error: Option<ResultInstallError>,
-    /// Whether target state became authoritative for the incoming event.
+    /// Whether cell state became authoritative for the incoming event.
     pub(super) accepted: bool,
 }
 
@@ -1113,7 +1114,7 @@ impl ResultInstall {
 struct RemovedHead {
     /// Identity of the unlinked waiter.
     waiter: WaiterId,
-    /// Retired demand episode that represented this head.
+    /// Retired demand generation that represented this head.
     demand: DemandTicket,
     /// New demand published if another waiter became the head.
     successor: Option<DemandSnapshot>,
@@ -1179,7 +1180,7 @@ mod tests {
             .expect("head waiter was not cancelled");
 
         assert!(matches!(
-            queue.reserve_delivery_target(DemandId::from_u64(0), &EligibilityGroup::Pool),
+            queue.reserve_delivery_waiter(DemandId::from_u64(0), &EligibilityGroup::Pool),
             DeliveryReservation::Rejected
         ));
     }
