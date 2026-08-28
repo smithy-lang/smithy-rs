@@ -6,6 +6,7 @@ package software.amazon.smithy.rust.codegen.fuzz
 
 import io.kotest.matchers.collections.shouldContain
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
 import software.amazon.smithy.build.FileManifest
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.Model
@@ -32,6 +33,7 @@ class RpcV2CborFuzzHarnessGenerationTest {
     private val service = "smithy.protocoltests.rpcv2Cbor#RpcV2Protocol"
 
     @Test
+    @EnabledIfEnvironmentVariable(named = "RPCV2_FUZZ_GENERATE", matches = "true")
     fun generateRpcV2CborFuzzHarness() {
         val outputDir = File(System.getenv("RPCV2_FUZZ_OUTPUT") ?: "/tmp/rpcv2-cbor-fuzz")
         val serverDir = outputDir.resolve("server-http-1x")

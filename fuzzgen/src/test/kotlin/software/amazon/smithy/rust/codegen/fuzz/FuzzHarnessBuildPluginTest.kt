@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
 class FuzzHarnessBuildPluginTest {
     private data class ProtocolCase(
         val id: String,
+        val crateName: String,
         val service: String,
         val model: Model,
     )
@@ -33,6 +34,7 @@ class FuzzHarnessBuildPluginTest {
         listOf(
             ProtocolCase(
                 id = "rpcv2Cbor",
+                crateName = "rpcv2_cbor",
                 service = "com.example#RpcV2CborService",
                 model =
                     """
@@ -51,6 +53,7 @@ class FuzzHarnessBuildPluginTest {
             ),
             ProtocolCase(
                 id = "restJson1",
+                crateName = "rest_json_1",
                 service = "com.example#RestJsonService",
                 model =
                     """
@@ -123,7 +126,7 @@ class FuzzHarnessBuildPluginTest {
             generatedServers.map { server ->
                 ObjectNode.objectNode()
                     .withMember("relativePath", server.path.toString())
-                    .withMember("name", protocolCase.id)
+                    .withMember("name", protocolCase.crateName)
             }
 
         val context =
@@ -148,6 +151,6 @@ class FuzzHarnessBuildPluginTest {
         FuzzHarnessBuildPlugin().execute(context)
         context.fileManifest.printGeneratedFiles()
         context.fileManifest.files.map { it.fileName.toString() } shouldContain "lexicon.json"
-        "cargo check".runCommand(context.fileManifest.baseDir.resolve(protocolCase.id))
+        "cargo check".runCommand(context.fileManifest.baseDir.resolve(protocolCase.crateName))
     }
 }
