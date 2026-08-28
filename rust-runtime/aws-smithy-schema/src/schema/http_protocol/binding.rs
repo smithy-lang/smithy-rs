@@ -13,6 +13,7 @@ use aws_smithy_runtime_api::http::{Headers, Request, Response};
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::config_bag::ConfigBag;
 use std::borrow::Cow;
+use std::cell::Cell;
 
 /// An HTTP protocol for REST-style APIs that use HTTP bindings.
 ///
@@ -108,15 +109,15 @@ impl<C: Codec> HttpBindingProtocol<C> {
         // and any `@httpPayload` is on a scalar that bypasses the codec),
         // we can skip body-codec invocation entirely. The wasted work would be:
         //   - XmlSerializer/JsonSerializer::write_struct opens a wrapper element
-        //   - Proxy::serialize_members re-enters the binder
+        //   - Proxy::serialize_members routes members through a BindingRouter
         //   - close-element is emitted
         //   - bytes are collected by `body.finish()` and then discarded
         //     (since `has_body_members == false` later forces `body = Vec::new()`)
         // Skipping all of that just calls `serialize_members` directly through
-        // the binder so HTTP-bound members are still routed to headers / query /
-        // labels. `is_top_level` is cleared first so any nested struct that
-        // happens to still pass through (none do in this branch by definition,
-        // but defensive) takes the body-delegation path.
+        // a `BindingRouter` so HTTP-bound members are still routed to headers /
+        // query / labels. No `Proxy` is involved, so nothing can emit framing;
+        // a nested struct that happened to pass through (none do in this branch
+        // by definition) would delegate straight to the body serializer.
         //
         // Codegen sets `with_no_body_members()` on operation input shapes whose
         // members are all HTTP-bound (e.g., S3 PutObjectInput, CopyObjectInput).
@@ -129,8 +130,8 @@ impl<C: Codec> HttpBindingProtocol<C> {
         // is released before we mutate the request again (set_uri / body swap
         // / Content-Type / Content-Length).
         let (raw_payload, body_bytes, query_params, labels) = {
-            let mut binder =
-                HttpBindingSerializer::new(body, Some(input_schema), request.headers_mut());
+            let mut body = body;
+            let mut state = BindingState::new(Some(input_schema), request.headers_mut());
 
             if skip_body_codec || has_struct_payload {
                 // skip_body_codec: input has no body members at all → all members
@@ -138,21 +139,40 @@ impl<C: Codec> HttpBindingProtocol<C> {
                 // has_struct_payload: an @httpPayload struct member writes itself
                 //                     to the body without wrapping — call
                 //                     serialize_members directly so framing comes
-                //                     from the payload struct, not from the binder.
-                binder.is_top_level = false;
-                input.serialize_members(&mut binder)?;
+                //                     from the payload struct, not from the codec.
+                //
+                // No codec framing is wanted, so route members directly and skip
+                // the `Proxy` entirely.
+                let mut router = BindingRouter {
+                    state: &mut state,
+                    body: &mut body,
+                };
+                input.serialize_members(&mut router)?;
             } else {
-                binder.write_struct(input_schema, input)?;
+                // Framing comes from the codec: hand it a `Proxy` in place of the
+                // real input so that `{`/`}` (JSON) or the enclosing element (XML)
+                // is emitted by the codec, while each member still routes through
+                // `BindingRouter`.
+                //
+                // `state` is lent to the proxy for the duration of this call only.
+                // The disjoint borrows of `state` and `body` are what make this
+                // safe without a raw pointer; see `BindingState`'s documentation
+                // for the aliasing UB this replaced.
+                let proxy = Proxy {
+                    state: Cell::new(Some(&mut state)),
+                    value: input,
+                };
+                body.write_struct(input_schema, &proxy)?;
             }
-            let raw_payload = binder.raw_payload;
+            let raw_payload = state.raw_payload;
             let body_bytes = if raw_payload.is_some() || skip_body_codec {
                 // @httpPayload blob/string — don't use the codec output.
                 // skip_body_codec — body codec was never written to.
                 Vec::new()
             } else {
-                binder.body.finish()
+                body.finish()
             };
-            (raw_payload, body_bytes, binder.query_params, binder.labels)
+            (raw_payload, body_bytes, state.query_params, state.labels)
         };
 
         // Per the REST-JSON content-type handling spec:
@@ -402,17 +422,25 @@ fn append_uri_with_labels<'sc>(
 
 pub(crate) const HEX: &[u8; 16] = b"0123456789ABCDEF";
 
-/// A ShapeSerializer that intercepts member writes and routes HTTP-bound
-/// members to headers, query params, or URI labels instead of the body.
+/// The HTTP-binding half of request serialization: everything a member can be
+/// routed *to* other than the body.
 ///
-/// Members without HTTP binding traits are forwarded to the inner body
-/// serializer unchanged.
-struct HttpBindingSerializer<'a, S> {
-    body: S,
+/// Deliberately holds no body serializer. Keeping the two apart is what makes
+/// the routing sound: [`BindingRouter`] borrows this and the body codec as two
+/// disjoint fields, so the compiler proves they cannot alias. An earlier version
+/// combined them into one `HttpBindingSerializer` that owned the codec, which
+/// forced the re-entrant `serialize_members` call to resurrect the combined
+/// object through a `*mut` derived from a shared reference — undefined behavior
+/// under both Stacked Borrows and Tree Borrows, and reproducible under Miri from
+/// this crate's own tests. Do not reunite these two halves.
+///
+/// Members without HTTP binding traits never reach this type; [`BindingRouter`]
+/// forwards them to the body serializer.
+struct BindingState<'a> {
     /// Headers are inserted directly into the `Request`'s header map as they
     /// are encountered, avoiding the cost of a `Vec<(...)>` intermediate plus
-    /// a late flush loop. The borrow ends when the binder is dropped at the
-    /// end of `serialize_request_with_body`'s binder-scope.
+    /// a late flush loop. The borrow ends when this state is dropped at the
+    /// end of `serialize_request_with_body`'s binder scope.
     headers: &'a mut Headers,
     query_params: Vec<(Cow<'a, str>, String)>,
     labels: Vec<(Cow<'a, str>, String)>,
@@ -420,9 +448,6 @@ struct HttpBindingSerializer<'a, S> {
     /// HTTP binding traits. This allows the protocol to override bindings
     /// (e.g., for presigning where body members become query params).
     input_schema: Option<&'a Schema<'a>>,
-    /// True for the top-level input struct in serialize_request.
-    /// Cleared after the first write_struct so nested structs delegate directly.
-    is_top_level: bool,
     /// Raw payload bytes for `@httpPayload` blob/string members. When a member
     /// has `@httpPayload` and targets a blob or string, the raw bytes bypass
     /// the codec serializer entirely and are used as the HTTP body directly.
@@ -518,15 +543,13 @@ impl VisitedMembers {
     }
 }
 
-impl<'a, S> HttpBindingSerializer<'a, S> {
-    fn new(body: S, input_schema: Option<&'a Schema<'a>>, headers: &'a mut Headers) -> Self {
+impl<'a> BindingState<'a> {
+    fn new(input_schema: Option<&'a Schema<'a>>, headers: &'a mut Headers) -> Self {
         Self {
-            body,
             headers,
             query_params: Vec::new(),
             labels: Vec::new(),
             input_schema,
-            is_top_level: true,
             raw_payload: None,
             visited_bound_members: VisitedMembers::new(),
         }
@@ -625,73 +648,85 @@ fn header_name(header: &crate::traits::HttpHeaderTrait<'_>) -> Cow<'static, str>
     }
 }
 
-impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
+/// Routes each member of the top-level input struct either into
+/// [`BindingState`] (HTTP-bound members) or into the body codec (everything
+/// else).
+///
+/// The two references are separate fields precisely so that the compiler can
+/// see they do not alias. `body` is the `&mut dyn ShapeSerializer` that the
+/// codec hands to `SerializableStruct::serialize_members`; an earlier version
+/// discarded that argument and reconstructed the body serializer from a raw
+/// pointer instead, which was the source of the aliasing UB. Use the argument.
+///
+/// The three lifetimes are load-bearing and must stay distinct. Collapsing
+/// `'s` and `'b` into one shortens the state borrow to the body serializer's
+/// and produces an unfixable variance error at the [`Cell`] in `Proxy`, because
+/// `Cell<T>` is invariant over `T`.
+struct BindingRouter<'s, 'b, 'a> {
+    state: &'s mut BindingState<'a>,
+    body: &'b mut dyn ShapeSerializer,
+}
+
+/// Bridges the codec's `write_struct` framing back into HTTP-binding routing.
+///
+/// The body codec is asked to serialize *this* rather than the real input, so
+/// that framing (`{`/`}` for JSON, the element for XML) comes from the codec
+/// while member routing still passes through [`BindingRouter`].
+///
+/// `serialize_members` receives `&self`, so the state is lent out through a
+/// [`Cell`] take/put rather than held as `&mut`. A `Cell` is used over a
+/// `RefCell` to stay allocation-free and to avoid a second panicking path; the
+/// take/put is required rather than merely convenient because some codecs
+/// (notably XML) call `serialize_members` more than once and each call needs
+/// the state back.
+struct Proxy<'p, 'a> {
+    state: Cell<Option<&'p mut BindingState<'a>>>,
+    value: &'p dyn SerializableStruct,
+}
+
+impl<'p, 'a> SerializableStruct for Proxy<'p, 'a> {
+    fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+        // Returning an error rather than panicking: this is unreachable with
+        // every codec in this repo, because a codec that nests
+        // `serialize_members` on the *same* struct value would have to call it
+        // re-entrantly rather than sequentially. Sequential calls (XML's two
+        // passes) put the state back before the next one begins. A future codec
+        // that does nest should get a serialization error, not a panic in a
+        // customer's request path.
+        let state = self.state.take().ok_or_else(|| {
+            SerdeError::custom(
+                "HTTP binding state is already borrowed: the body codec re-entered \
+                 serialize_members on the same struct before the previous call returned",
+            )
+        })?;
+        let mut router = BindingRouter {
+            state,
+            body: serializer,
+        };
+        let result = self.value.serialize_members(&mut router);
+        // Put the state back even on the error path, so a codec that ignores
+        // one member's error and continues does not then hit the branch above.
+        self.state.set(Some(router.state));
+        result
+    }
+}
+
+impl<'s, 'b, 'a> ShapeSerializer for BindingRouter<'s, 'b, 'a> {
     fn write_struct(
         &mut self,
         schema: &Schema<'_>,
         value: &dyn SerializableStruct,
     ) -> Result<(), SerdeError> {
-        if self.is_top_level {
-            // Top-level input struct: route serialize_members through the binder
-            // so HTTP-bound members are intercepted. The body serializer's
-            // write_struct is used for framing (e.g., { } for JSON), with a
-            // proxy whose serialize_members delegates back to the binder.
-            struct Proxy<'a, 'b, S> {
-                binder: &'a mut HttpBindingSerializer<'b, S>,
-                value: &'a dyn SerializableStruct,
-            }
-            impl<S: ShapeSerializer> SerializableStruct for Proxy<'_, '_, S> {
-                fn serialize_members(
-                    &self,
-                    _serializer: &mut dyn ShapeSerializer,
-                ) -> Result<(), SerdeError> {
-                    let binder = self.binder as *const HttpBindingSerializer<'_, S>
-                        as *mut HttpBindingSerializer<'_, S>;
-                    // SAFETY: The body serializer called serialize_members on
-                    // this proxy, passing &mut self (body). The binder wraps
-                    // that same body serializer. We need mutable access to the
-                    // binder to route writes. This is safe because:
-                    // 1. The body serializer's write_struct only calls
-                    //    serialize_members once, synchronously.
-                    // 2. Body member writes from the binder go back to the
-                    //    body serializer, which is in a valid state (between
-                    //    the { and } it emitted).
-                    self.value.serialize_members(unsafe { &mut *binder })
-                }
-            }
-            // Clear is_top_level so nested write_struct calls (from body members)
-            // take the else branch and delegate directly to the body serializer.
-            // input_schema is preserved so resolve_member continues to work.
-            self.is_top_level = false;
-            let proxy = Proxy {
-                binder: self,
-                value,
-            };
-            let binder_ptr = &mut *proxy.binder as *mut HttpBindingSerializer<'_, S>;
-            // SAFETY: `proxy` holds a shared reference to `binder` (via &mut that
-            // we reborrow). We need to call `binder.body.write_struct(schema, &proxy)`
-            // but can't do so through normal references because `proxy` borrows `binder`.
-            // The raw pointer dereference is safe because:
-            // 1. `binder_ptr` points to a valid, live `HttpBindingSerializer` (it was
-            //    just derived from `proxy.binder`).
-            // 2. `body.write_struct` is called synchronously and returns before `proxy`
-            //    is dropped, so the binder is not moved or deallocated.
-            // 3. The only re-entrant access is through `proxy.serialize_members`, which
-            //    uses the same raw-pointer pattern with its own safety justification above.
-            unsafe { (*binder_ptr).body.write_struct(schema, &proxy) }
-        } else {
-            // Nested struct (a body member targeting a structure): delegate
-            // entirely to the body serializer.
-            let schema = self.resolve_member(schema);
-            if schema.http_payload().is_some() {
-                // @httpPayload struct/union: codegen routes these by passing the
-                // target struct's schema directly (not the member schema), so this
-                // path is normally unreachable. Kept as a safety net.
-                self.body.write_struct(schema, value)?;
-                return Ok(());
-            }
-            self.body.write_struct(schema, value)
-        }
+        // A nested struct (a body member targeting a structure): delegate
+        // entirely to the body serializer. Only the top-level input struct is
+        // routed, and that entry point is `serialize_request_with_body`'s
+        // explicit `Proxy` construction rather than a flag checked here.
+        let schema = self.state.resolve_member(schema);
+        // `@httpPayload` struct/union: codegen routes these by passing the
+        // target struct's schema directly (not the member schema), so the
+        // payload branch is normally unreachable. Both arms are the same call;
+        // the `if` is kept as documentation of that intent.
+        self.body.write_struct(schema, value)
     }
 
     fn write_list(
@@ -699,10 +734,10 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         schema: &Schema<'_>,
         write_elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
-        let schema = self.resolve_member(schema);
+        let schema = self.state.resolve_member(schema);
         // @httpHeader on a list: collect elements as comma-separated header value
         if let Some(header) = schema.http_header() {
-            if !self.should_route_binding(schema) {
+            if !self.state.should_route_binding(schema) {
                 return Ok(());
             }
             let mut collector = ListElementCollector::for_header();
@@ -722,12 +757,12 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
                 })
                 .collect::<Vec<_>>()
                 .join(", ");
-            self.headers.insert(header_name(header), header_val);
+            self.state.headers.insert(header_name(header), header_val);
             return Ok(());
         }
         // @httpQuery on a list: add each element as a separate query param
         if let Some(query) = schema.http_query() {
-            if !self.should_route_binding(schema) {
+            if !self.state.should_route_binding(schema) {
                 return Ok(());
             }
             let mut collector = ListElementCollector::for_query();
@@ -737,9 +772,9 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
             // `&Schema<'_>` has an anonymous lifetime unrelated to `'a`, and
             // `@httpQuery` values carry the schema's data lifetime, so we fall
             // back to allocating when the member cannot be resolved.
-            let name = self.query_param_name(schema, query);
+            let name = self.state.query_param_name(schema, query);
             for val in collector.values {
-                self.query_params.push((name.clone(), val));
+                self.state.query_params.push((name.clone(), val));
             }
             return Ok(());
         }
@@ -751,10 +786,10 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         schema: &Schema<'_>,
         write_entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
-        let schema = self.resolve_member(schema);
+        let schema = self.state.resolve_member(schema);
         // @httpPrefixHeaders: serialize map entries as prefixed headers
         if let Some(prefix) = schema.http_prefix_headers() {
-            if !self.should_route_binding(schema) {
+            if !self.state.should_route_binding(schema) {
                 return Ok(());
             }
             // Collect entries via a temporary serializer
@@ -762,13 +797,13 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
             write_entries(&mut collector)?;
             // Names are dynamic (prefix + map key) — owned Strings.
             for (k, v) in collector.entries {
-                self.headers.insert(k, v);
+                self.state.headers.insert(k, v);
             }
             return Ok(());
         }
         // @httpQueryParams: serialize map entries as query params
         if schema.http_query_params().is_some() {
-            if !self.should_route_binding(schema) {
+            if !self.state.should_route_binding(schema) {
                 return Ok(());
             }
             let mut collector = MapEntryCollector::new(String::new());
@@ -776,6 +811,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
             // Filter out keys that overlap with explicit @httpQuery params
             // (query params take precedence over query params map entries)
             let explicit_query_keys: Vec<&str> = self
+                .state
                 .input_schema
                 .map(|s| {
                     s.members()
@@ -786,7 +822,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
                 .unwrap_or_default();
             for (k, v) in collector.entries {
                 if !explicit_query_keys.contains(&k.as_str()) {
-                    self.query_params.push((Cow::Owned(k), v));
+                    self.state.query_params.push((Cow::Owned(k), v));
                 }
             }
             return Ok(());
@@ -795,57 +831,61 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
     }
 
     fn write_boolean(&mut self, schema: &Schema<'_>, value: bool) -> Result<(), SerdeError> {
-        let schema = self.resolve_member(schema);
+        let schema = self.state.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
-            return self.add_binding(binding, schema, &value.to_string());
+            return self.state.add_binding(binding, schema, &value.to_string());
         }
         self.body.write_boolean(schema, value)
     }
 
     fn write_byte(&mut self, schema: &Schema<'_>, value: i8) -> Result<(), SerdeError> {
-        let schema = self.resolve_member(schema);
+        let schema = self.state.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
-            return self.add_binding(binding, schema, &value.to_string());
+            return self.state.add_binding(binding, schema, &value.to_string());
         }
         self.body.write_byte(schema, value)
     }
 
     fn write_short(&mut self, schema: &Schema<'_>, value: i16) -> Result<(), SerdeError> {
-        let schema = self.resolve_member(schema);
+        let schema = self.state.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
-            return self.add_binding(binding, schema, &value.to_string());
+            return self.state.add_binding(binding, schema, &value.to_string());
         }
         self.body.write_short(schema, value)
     }
 
     fn write_integer(&mut self, schema: &Schema<'_>, value: i32) -> Result<(), SerdeError> {
-        let schema = self.resolve_member(schema);
+        let schema = self.state.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
-            return self.add_binding(binding, schema, &value.to_string());
+            return self.state.add_binding(binding, schema, &value.to_string());
         }
         self.body.write_integer(schema, value)
     }
 
     fn write_long(&mut self, schema: &Schema<'_>, value: i64) -> Result<(), SerdeError> {
-        let schema = self.resolve_member(schema);
+        let schema = self.state.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
-            return self.add_binding(binding, schema, &value.to_string());
+            return self.state.add_binding(binding, schema, &value.to_string());
         }
         self.body.write_long(schema, value)
     }
 
     fn write_float(&mut self, schema: &Schema<'_>, value: f32) -> Result<(), SerdeError> {
-        let schema = self.resolve_member(schema);
+        let schema = self.state.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
-            return self.add_binding(binding, schema, &format_float_f32(value));
+            return self
+                .state
+                .add_binding(binding, schema, &format_float_f32(value));
         }
         self.body.write_float(schema, value)
     }
 
     fn write_double(&mut self, schema: &Schema<'_>, value: f64) -> Result<(), SerdeError> {
-        let schema = self.resolve_member(schema);
+        let schema = self.state.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
-            return self.add_binding(binding, schema, &format_float_f64(value));
+            return self
+                .state
+                .add_binding(binding, schema, &format_float_f64(value));
         }
         self.body.write_double(schema, value)
     }
@@ -855,9 +895,9 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         schema: &Schema<'_>,
         value: &aws_smithy_types::BigInteger,
     ) -> Result<(), SerdeError> {
-        let schema = self.resolve_member(schema);
+        let schema = self.state.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
-            return self.add_binding(binding, schema, value.as_ref());
+            return self.state.add_binding(binding, schema, value.as_ref());
         }
         self.body.write_big_integer(schema, value)
     }
@@ -867,25 +907,25 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         schema: &Schema<'_>,
         value: &aws_smithy_types::BigDecimal,
     ) -> Result<(), SerdeError> {
-        let schema = self.resolve_member(schema);
+        let schema = self.state.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
-            return self.add_binding(binding, schema, value.as_ref());
+            return self.state.add_binding(binding, schema, value.as_ref());
         }
         self.body.write_big_decimal(schema, value)
     }
 
     fn write_string(&mut self, schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
-        let schema = self.resolve_member(schema);
+        let schema = self.state.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
             // @mediaType on a header: base64-encode the value
             if schema.media_type().is_some() {
                 let encoded = aws_smithy_types::base64::encode(value.as_bytes());
-                return self.add_binding(binding, schema, &encoded);
+                return self.state.add_binding(binding, schema, &encoded);
             }
-            return self.add_binding(binding, schema, value);
+            return self.state.add_binding(binding, schema, value);
         }
         if schema.http_payload().is_some() {
-            if !self.should_route_binding(schema) {
+            if !self.state.should_route_binding(schema) {
                 return Ok(());
             }
             // One copy, and it is unavoidable: `write_string` hands over a `&str`
@@ -896,7 +936,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
             // payload into a local. `should_route_binding` above means the XML
             // codec's second `serialize_members` pass returns before we get
             // here, so this copy happens at most once per payload.
-            self.raw_payload = Some(aws_smithy_types::Blob::new(value));
+            self.state.raw_payload = Some(aws_smithy_types::Blob::new(value));
             return Ok(());
         }
         self.body.write_string(schema, value)
@@ -907,25 +947,26 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         schema: &Schema<'_>,
         value: aws_smithy_types::Blob,
     ) -> Result<(), SerdeError> {
-        let schema = self.resolve_member(schema);
+        let schema = self.state.resolve_member(schema);
         if schema.http_header().is_some() {
-            if !self.should_route_binding(schema) {
+            if !self.state.should_route_binding(schema) {
                 return Ok(());
             }
             let encoded = aws_smithy_types::base64::encode(value.as_ref());
-            self.headers
+            self.state
+                .headers
                 .insert(header_name(schema.http_header().unwrap()), encoded);
             return Ok(());
         }
         if schema.http_payload().is_some() {
-            if !self.should_route_binding(schema) {
+            if !self.state.should_route_binding(schema) {
                 return Ok(());
             }
             // Zero copies: `Blob` is `bytes::Bytes`-backed, so this moves a
             // refcounted handle, and `SdkBody::from(Bytes)` at the consume site
             // takes another handle rather than copying. This is the reason
             // `write_blob` takes an owned `Blob` — see its trait documentation.
-            self.raw_payload = Some(value);
+            self.state.raw_payload = Some(value);
             return Ok(());
         }
         self.body.write_blob(schema, value)
@@ -936,7 +977,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         schema: &Schema<'_>,
         value: &aws_smithy_types::DateTime,
     ) -> Result<(), SerdeError> {
-        let schema = self.resolve_member(schema);
+        let schema = self.state.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
             // Headers default to http-date, query/label default to date-time
             let format = if let Some(ts_trait) = schema.timestamp_format() {
@@ -960,7 +1001,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
             let formatted = value
                 .fmt(format)
                 .map_err(|e| SerdeError::custom(format!("failed to format timestamp: {e}")))?;
-            return self.add_binding(binding, schema, &formatted);
+            return self.state.add_binding(binding, schema, &formatted);
         }
         self.body.write_timestamp(schema, value)
     }
@@ -981,7 +1022,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
 /// Which HTTP location a member is bound to.
 ///
 /// Carries no name: every caller passes the same member schema to
-/// [`HttpBindingSerializer::add_binding`], which resolves the name there. That
+/// [`BindingState::add_binding`], which resolves the name there. That
 /// keeps `@httpQuery`'s schema-lifetime value out of a `'static` slot.
 enum HttpBinding {
     Header,
@@ -1003,7 +1044,7 @@ fn http_string_binding(schema: &Schema<'_>) -> Option<HttpBinding> {
     None
 }
 
-impl<'a, S> HttpBindingSerializer<'a, S> {
+impl<'a> BindingState<'a> {
     fn add_binding(
         &mut self,
         binding: HttpBinding,
