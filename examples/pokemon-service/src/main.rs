@@ -37,6 +37,7 @@ use metrique::writer::FormatExt;
 use metrique::ServiceMetrics;
 use pokemon_service::do_nothing_but_log_request_ids;
 use pokemon_service::get_storage_with_local_approved;
+use pokemon_service::middleware_data::MiddlewareDataPlugin;
 use pokemon_service::DEFAULT_ADDRESS;
 use pokemon_service::DEFAULT_PORT;
 use pokemon_service_common::capture_pokemon;
@@ -99,7 +100,9 @@ pub async fn main() {
         .instrument();
 
     let authz_plugin = AuthorizationPlugin::new();
-    let model_plugins = ModelPlugins::new().push(authz_plugin);
+    let model_plugins = ModelPlugins::new()
+        .push(authz_plugin)
+        .push(MiddlewareDataPlugin);
 
     let config = PokemonServiceConfig::builder()
         // Set up shared state and middlewares.
