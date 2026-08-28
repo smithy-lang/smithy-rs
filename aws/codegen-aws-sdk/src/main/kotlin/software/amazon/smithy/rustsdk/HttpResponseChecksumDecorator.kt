@@ -45,6 +45,7 @@ private fun RuntimeConfig.awsInlineableHttpResponseChecksum() =
             CargoDependency.smithyHttp(this),
             CargoDependency.smithyRuntimeApiClient(this),
             CargoDependency.smithyTypes(this),
+            CargoDependency.Tokio.toDevDependency(),
         ),
     )
 

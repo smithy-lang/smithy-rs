@@ -14,7 +14,17 @@ RUN yum -y updateinfo && yum clean all && rm -rf /var/cache/yum
 
 FROM bare_base_image as musl_toolchain
 RUN yum -y install --allowerasing tar gzip gcc make && \
-    curl https://musl.libc.org/releases/musl-1.2.5.tar.gz -o musl-1.2.5.tar.gz && \
+    # musl.libc.org is a small volunteer-run host and has taken this stage down three times in the
+    # last two weeks (connect timeouts and resets). Retry, and cap the connect wait -- the bare form
+    # sat for 135s before giving up. `-f` matters too: without it an HTTP error page is written to
+    # the tarball and the failure surfaces as a confusing `tar` error instead.
+    #
+    # The checksum is not optional hardening: this was the only download in this file without one,
+    # while rustup-init and node both verify. Fork PRs build this image locally on every run, so this
+    # stage is on the critical path for external contributions.
+    curl -fL --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
+        https://musl.libc.org/releases/musl-1.2.5.tar.gz -o musl-1.2.5.tar.gz && \
+    echo "a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4  musl-1.2.5.tar.gz" | sha256sum --check && \
     tar xzf musl-1.2.5.tar.gz && \
     (cd musl-1.2.5 && ./configure && make install) && \
     rm -rf musl-1.2.5* && \
@@ -70,10 +80,10 @@ RUN yum -y install --allowerasing \
     yum clean all && rm -rf /var/cache/yum && \
     set -eux; \
     if [[ "$(uname -m)" == "aarch64" || "$(uname -m)" == "arm64" ]]; then \
-        curl https://static.rust-lang.org/rustup/archive/1.24.3/aarch64-unknown-linux-gnu/rustup-init --output rustup-init; \
+        curl -fL --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 https://static.rust-lang.org/rustup/archive/1.24.3/aarch64-unknown-linux-gnu/rustup-init --output rustup-init; \
         echo "32a1532f7cef072a667bac53f1a5542c99666c4071af0c9549795bbdb2069ec1 rustup-init" | sha256sum --check; \
     else \
-        curl https://static.rust-lang.org/rustup/archive/1.24.3/x86_64-unknown-linux-gnu/rustup-init --output rustup-init; \
+        curl -fL --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 https://static.rust-lang.org/rustup/archive/1.24.3/x86_64-unknown-linux-gnu/rustup-init --output rustup-init; \
         echo "3dc5ef50861ee18657f9db2eeb7392f9c2a6c95c90ab41e45ab4ca71476b4338 rustup-init" | sha256sum --check; \
     fi; \
     chmod +x rustup-init; \
@@ -180,7 +190,7 @@ RUN set -eux; \
             ;; \
     esac; \
     # Download and verify Node.js
-    curl -fsSL "${NODE_URL}" -o node.tar.xz; \
+    curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 "${NODE_URL}" -o node.tar.xz; \
     echo "${NODE_CHECKSUM}  node.tar.xz" | sha256sum --check; \
     # Extract and install
     mkdir -p "${NODE_HOME}"; \
@@ -224,7 +234,7 @@ RUN set -eux; \
     useradd -m -g build build && \
     chmod 775 /home/build && \
     cd /tmp && \
-    curl 'https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip' -o awscliv2.zip && \
+    curl -fL --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 'https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip' -o awscliv2.zip && \
     unzip awscliv2.zip && \
     ./aws/install && \
     rm -rf awscliv2.zip aws && \
