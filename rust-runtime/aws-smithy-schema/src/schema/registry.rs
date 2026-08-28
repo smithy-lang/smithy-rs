@@ -595,6 +595,25 @@ mod tests {
         &[&M_WIDGET_DATA],
     );
 
+    // -- Test assertion helpers -----------------------------------------------------------------
+
+    /// Assert that `actual` is the same function as `expected`.
+    ///
+    /// This is a no-op under Miri. Miri does not guarantee that a function has a
+    /// single unique address, so two separate reifications of the same `fn` item
+    /// may compare unequal and `fn_addr_eq` would spuriously fail. Gating only
+    /// the comparison (rather than `#[cfg_attr(miri, ignore)]` on the whole test)
+    /// keeps the surrounding assertions running under Miri.
+    fn assert_same_fn(actual: DeserializeFn, expected: DeserializeFn) {
+        #[cfg(not(miri))]
+        assert!(
+            std::ptr::fn_addr_eq(actual, expected),
+            "expected the registered deserialize fn"
+        );
+        #[cfg(miri)]
+        let _ = (actual, expected);
+    }
+
     // -- Test types and their deserialize fns ---------------------------------------------------
 
     #[derive(Debug, PartialEq)]
@@ -718,10 +737,7 @@ mod tests {
             .unwrap();
         assert_eq!(entry.schema().shape_id(), FOO_SCHEMA.shape_id());
         // Function pointer comparison: same fn we registered.
-        assert!(std::ptr::fn_addr_eq(
-            entry.deserialize_fn(),
-            deserialize_foo as DeserializeFn
-        ));
+        assert_same_fn(entry.deserialize_fn(), deserialize_foo as DeserializeFn);
     }
 
     #[test]
@@ -858,10 +874,7 @@ mod tests {
         // Collision: primary wins — the entry carries deserialize_foo, not the
         // fallback's replacement fn.
         let foo = composed.entry_for_error_code("Foo").unwrap();
-        assert!(std::ptr::fn_addr_eq(
-            foo.deserialize_fn(),
-            deserialize_foo as DeserializeFn
-        ));
+        assert_same_fn(foo.deserialize_fn(), deserialize_foo as DeserializeFn);
 
         // Widen: Bar resolves from the fallback.
         let bar = composed.entry_for_error_code("Bar").unwrap();
@@ -1200,9 +1213,6 @@ mod tests {
         let entry = registry
             .entry_for_fqn("smithy.example#Foo")
             .expect("registered");
-        assert!(std::ptr::fn_addr_eq(
-            entry.deserialize_fn(),
-            deserialize_foo as DeserializeFn
-        ));
+        assert_same_fn(entry.deserialize_fn(), deserialize_foo as DeserializeFn);
     }
 }

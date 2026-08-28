@@ -329,7 +329,7 @@ class SchemaGenerator(
                 } else {
                     "ser.write_string(&$memberSchemaRef, $varName)?;"
                 }
-            is BlobShape -> "ser.write_blob(&$memberSchemaRef, $varName.as_ref())?;"
+            is BlobShape -> "ser.write_blob(&$memberSchemaRef, $varName.clone())?;"
             is TimestampShape -> "ser.write_timestamp(&$memberSchemaRef, $varName)?;"
             is StructureShape -> "ser.write_struct(&$memberSchemaRef, $varName)?;"
             is ListShape -> {
@@ -518,7 +518,7 @@ class SchemaGenerator(
                 if (target.hasTrait(StreamingTrait::class.java)) {
                     "// streaming blob is serialized as the HTTP body by the protocol, not the codec"
                 } else {
-                    "ser.write_blob(&$memberSchemaRef, val.as_ref())?;"
+                    "ser.write_blob(&$memberSchemaRef, val.clone())?;"
                 }
 
             is TimestampShape -> "ser.write_timestamp(&$memberSchemaRef, val)?;"
@@ -624,7 +624,7 @@ class SchemaGenerator(
                     "ser.write_string(&$prelude::STRING, $varName)?;"
                 }
 
-            is BlobShape -> "ser.write_blob(&$prelude::BLOB, $varName.as_ref())?;"
+            is BlobShape -> "ser.write_blob(&$prelude::BLOB, $varName.clone())?;"
             is TimestampShape -> "ser.write_timestamp(&$prelude::TIMESTAMP, $varName)?;"
             is DocumentShape -> "ser.write_document(&$prelude::DOCUMENT, $varName)?;"
             is StructureShape -> {
@@ -755,7 +755,7 @@ class SchemaGenerator(
                     "ser.write_string(&$prelude::STRING, $varName)?;"
                 }
 
-            is BlobShape -> "ser.write_blob(&$prelude::BLOB, $varName.as_ref())?;"
+            is BlobShape -> "ser.write_blob(&$prelude::BLOB, $varName.clone())?;"
             is TimestampShape -> "ser.write_timestamp(&$prelude::TIMESTAMP, $varName)?;"
             is DocumentShape -> "ser.write_document(&$prelude::DOCUMENT, $varName)?;"
             is StructureShape -> {

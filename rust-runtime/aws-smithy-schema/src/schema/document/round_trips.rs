@@ -199,7 +199,7 @@ impl SerializableStruct for AllTypes {
             ser.write_string(&M_STRING, v)?;
         }
         if let Some(v) = &self.a_blob {
-            ser.write_blob(&M_BLOB, v.as_ref())?;
+            ser.write_blob(&M_BLOB, v.clone())?;
         }
         if let Some(v) = self.a_timestamp {
             ser.write_timestamp(&M_TIMESTAMP, &v)?;

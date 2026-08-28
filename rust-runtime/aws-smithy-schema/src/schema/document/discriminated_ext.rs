@@ -413,7 +413,10 @@ mod tests {
         }
         impl SerializableStruct for Blobby {
             fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
-                ser.write_blob(&BLOBBY_DATA_MEMBER, &self.data)
+                ser.write_blob(
+                    &BLOBBY_DATA_MEMBER,
+                    aws_smithy_types::Blob::new(self.data.clone()),
+                )
             }
         }
 

@@ -266,7 +266,11 @@ mod test {
             Ok(())
         }
 
-        fn write_blob(&mut self, _schema: &Schema<'_>, _value: &[u8]) -> Result<(), SerdeError> {
+        fn write_blob(
+            &mut self,
+            _schema: &Schema<'_>,
+            _value: aws_smithy_types::Blob,
+        ) -> Result<(), SerdeError> {
             Ok(())
         }
 

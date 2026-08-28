@@ -124,8 +124,13 @@ mod test {
             Ok(())
         }
 
-        fn write_blob(&mut self, _schema: &Schema<'_>, value: &[u8]) -> Result<(), SerdeError> {
-            self.output.push(format!("blob({} bytes)", value.len()));
+        fn write_blob(
+            &mut self,
+            _schema: &Schema<'_>,
+            value: aws_smithy_types::Blob,
+        ) -> Result<(), SerdeError> {
+            self.output
+                .push(format!("blob({} bytes)", value.as_ref().len()));
             Ok(())
         }
 

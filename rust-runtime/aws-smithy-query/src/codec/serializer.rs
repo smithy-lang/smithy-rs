@@ -6,7 +6,7 @@
 use aws_smithy_schema::codec::FinishSerializer;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::Schema;
-use aws_smithy_types::{BigDecimal, BigInteger, DateTime, Document};
+use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
 use std::fmt::Write;
 use urlencoding::encode;
 
@@ -456,8 +456,8 @@ impl ShapeSerializer for QueryShapeSerializer {
         self.write_scalar(schema, value.as_ref())
     }
 
-    fn write_blob(&mut self, schema: &Schema<'_>, value: &[u8]) -> Result<(), SerdeError> {
-        self.write_scalar(schema, &aws_smithy_types::base64::encode(value))
+    fn write_blob(&mut self, schema: &Schema<'_>, value: Blob) -> Result<(), SerdeError> {
+        self.write_scalar(schema, &aws_smithy_types::base64::encode(value.as_ref()))
     }
 
     fn write_timestamp(&mut self, schema: &Schema<'_>, value: &DateTime) -> Result<(), SerdeError> {
@@ -1385,7 +1385,8 @@ mod edge_cases {
         static M: Schema<'static> =
             Schema::new_member(shape_id!("test", "I"), ShapeType::Blob, "Data", 0);
         let mut ser = QueryShapeSerializer::new("Op", "1.0");
-        ser.write_blob(&M, b"hello").unwrap();
+        ser.write_blob(&M, aws_smithy_types::Blob::new(&b"hello"[..]))
+            .unwrap();
         assert_eq!(
             String::from_utf8(ser.finish()).unwrap(),
             "Action=Op&Version=1.0&Data=aGVsbG8%3D"

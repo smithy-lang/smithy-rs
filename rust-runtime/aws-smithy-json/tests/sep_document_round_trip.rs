@@ -175,7 +175,7 @@ impl SerializableStruct for OmniWidget {
             ser.write_string(&M_VALUE_STRING, v)?;
         }
         if let Some(v) = &self.value_blob {
-            ser.write_blob(&M_VALUE_BLOB, v.as_ref())?;
+            ser.write_blob(&M_VALUE_BLOB, v.clone())?;
         }
         if let Some(v) = self.value_timestamp_default {
             ser.write_timestamp(&M_VALUE_TIMESTAMP_DEFAULT, &v)?;

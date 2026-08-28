@@ -385,8 +385,14 @@ impl ShapeSerializer for DocumentShapeSerializer {
         self.commit_value(schema, Document::String(value.to_string()))
     }
 
-    fn write_blob(&mut self, schema: &Schema<'_>, value: &[u8]) -> Result<(), SerdeError> {
-        self.commit_value(schema, Document::Blob(value.to_vec()))
+    fn write_blob(
+        &mut self,
+        schema: &Schema<'_>,
+        value: aws_smithy_types::Blob,
+    ) -> Result<(), SerdeError> {
+        // `into_inner` consumes the `Blob`, so this no longer copies the payload
+        // when the underlying `Bytes` uniquely owns its allocation.
+        self.commit_value(schema, Document::Blob(value.into_inner()))
     }
 
     fn write_timestamp(&mut self, schema: &Schema<'_>, value: &DateTime) -> Result<(), SerdeError> {

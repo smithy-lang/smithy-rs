@@ -8,7 +8,7 @@
 use aws_smithy_schema::codec::FinishSerializer;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::Schema;
-use aws_smithy_types::{BigDecimal, BigInteger, DateTime, Document};
+use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
 
 /// CBOR serializer that implements the ShapeSerializer trait.
 ///
@@ -172,9 +172,9 @@ impl ShapeSerializer for CborSerializer {
         Ok(())
     }
 
-    fn write_blob(&mut self, schema: &Schema<'_>, value: &[u8]) -> Result<(), SerdeError> {
+    fn write_blob(&mut self, schema: &Schema<'_>, value: Blob) -> Result<(), SerdeError> {
         self.write_member_key(schema);
-        self.encoder.blob_bytes(value);
+        self.encoder.blob_bytes(value.as_ref());
         Ok(())
     }
 
@@ -264,7 +264,7 @@ mod tests {
     #[test]
     fn test_write_blob() {
         let blob = Blob::new(b"binary data");
-        let bytes = round_trip(|s| s.write_blob(&BLOB, blob.as_ref()).unwrap());
+        let bytes = round_trip(|s| s.write_blob(&BLOB, blob.clone()).unwrap());
         let mut dec = crate::Decoder::new(&bytes);
         assert_eq!(dec.blob().unwrap(), blob);
     }

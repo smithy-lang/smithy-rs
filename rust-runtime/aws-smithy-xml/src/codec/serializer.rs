@@ -908,8 +908,12 @@ impl ShapeSerializer for XmlSerializer {
         Ok(())
     }
 
-    fn write_blob(&mut self, schema: &Schema<'_>, value: &[u8]) -> Result<(), SerdeError> {
-        let encoded = aws_smithy_types::base64::encode(value);
+    fn write_blob(
+        &mut self,
+        schema: &Schema<'_>,
+        value: aws_smithy_types::Blob,
+    ) -> Result<(), SerdeError> {
+        let encoded = aws_smithy_types::base64::encode(value.as_ref());
         self.write_safe_element(schema, &encoded);
         Ok(())
     }
@@ -1210,7 +1214,7 @@ mod tests {
     #[test]
     fn write_blob_base64() {
         let blob = Blob::new(b"hello");
-        let out = serialize(|ser| ser.write_blob(&SCALAR_MEMBER, blob.as_ref()));
+        let out = serialize(|ser| ser.write_blob(&SCALAR_MEMBER, blob.clone()));
         assert_eq!(out, "<v>aGVsbG8=</v>");
     }
 

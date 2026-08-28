@@ -20,8 +20,11 @@ pub use serializer::JsonSerializer;
 /// Maps between Smithy member names and JSON wire field names.
 ///
 /// When `@jsonName` is enabled, the wire name may differ from the member name.
-/// This type handles the mapping in both directions and caches the reverse
-/// lookup (wire name → member index) per struct schema.
+/// This type handles the mapping in both directions.
+///
+/// Nothing is cached, and cannot be: this is a fieldless `Copy` enum with
+/// nowhere to store a cache. Reverse lookups are a linear scan over the
+/// struct's members — see [`JsonFieldMapper::field_to_member`].
 #[derive(Debug, Clone, Copy)]
 enum JsonFieldMapper {
     /// Uses member names directly, ignoring `@jsonName`.
@@ -46,6 +49,20 @@ impl JsonFieldMapper {
     }
 
     /// Resolves a JSON wire field name to a member schema within a struct schema.
+    ///
+    /// This is `O(M)` in the number of struct members and is called once per field
+    /// present on the wire, so deserializing a struct is `O(M²)` in the worst case.
+    /// An unknown field costs a full scan before returning `None`.
+    ///
+    /// **Both** arms scan: `UseJsonName` loops below, and `UseMemberName` delegates
+    /// to `Schema::member_schema`, which is itself a `find` over the members.
+    ///
+    /// Real member counts across AWS models are p50=2, p90=6, p99=20, so this is
+    /// not measurable for the large majority of structs. If it ever needs fixing,
+    /// the fix is a codegen-emitted name→index table, not a runtime cache:
+    /// `Schema::member_schema_by_index` is already `O(1)` and generated code
+    /// already matches on `member_index()` downstream, so only the name→index hop
+    /// is linear.
     fn field_to_member<'s>(
         &self,
         schema: &'s Schema<'s>,
@@ -54,9 +71,9 @@ impl JsonFieldMapper {
         match self {
             JsonFieldMapper::UseMemberName => schema.member_schema(field_name),
             JsonFieldMapper::UseJsonName => {
-                // Check @jsonName on each member. For typical struct sizes
-                // (< 50 members), linear scan is faster than a cached HashMap
-                // behind a Mutex.
+                // Check @jsonName on each member. A HashMap cache behind a Mutex
+                // would be slower than this scan at realistic member counts; see
+                // the doc comment for the approach that would actually help.
                 for member in schema.members() {
                     if let Some(jn) = member.json_name() {
                         if jn.value() == field_name {

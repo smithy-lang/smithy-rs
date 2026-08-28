@@ -245,7 +245,9 @@ impl<C: Codec> HttpBindingProtocol<C> {
         // Swap the body in place. Headers were inserted directly during the
         // binder phase, so no flush loop is needed here.
         *request.body_mut() = if let Some(payload) = raw_payload {
-            SdkBody::from(payload)
+            // `into_bytes` unwraps the `Blob`'s `Bytes` and `SdkBody::from(Bytes)`
+            // clones the handle, so no payload bytes are copied here.
+            SdkBody::from(payload.into_bytes())
         } else {
             SdkBody::from(body_bytes)
         };
@@ -424,9 +426,20 @@ struct HttpBindingSerializer<'a, S> {
     /// Raw payload bytes for `@httpPayload` blob/string members. When a member
     /// has `@httpPayload` and targets a blob or string, the raw bytes bypass
     /// the codec serializer entirely and are used as the HTTP body directly.
-    /// Safety: the referenced bytes are borrowed from the input struct passed to
-    /// `serialize_request`, which outlives this serializer.
-    raw_payload: Option<&'a [u8]>,
+    ///
+    /// Owned rather than borrowed. `ShapeSerializer::write_blob` takes an owned
+    /// [`Blob`], which is `bytes::Bytes`-backed, so storing a blob payload here
+    /// is a refcount bump and handing it to `SdkBody` is another — no payload
+    /// copy anywhere on the blob path. A string payload does cost one copy,
+    /// because `write_string` takes `&str` and `str` has no shared
+    /// representation.
+    ///
+    /// This field used to be `Option<&'a [u8]>`, populated by transmuting the
+    /// `write_*` argument's anonymous lifetime to `'a`. That was unsound: `'a`
+    /// is tied to the input schema and headers, not to the serialized value, so
+    /// a caller whose `serialize_members` wrote a locally-computed payload
+    /// produced a use-after-free. Do not reintroduce a borrow here.
+    raw_payload: Option<aws_smithy_types::Blob>,
     /// Tracks member indices that have already been routed to HTTP bindings
     /// (`@httpHeader`, `@httpQuery`, `@httpLabel`, `@httpPrefixHeaders`,
     /// `@httpQueryParams`). Some body codecs (notably `XmlSerializer`) call
@@ -875,30 +888,31 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
             if !self.should_route_binding(schema) {
                 return Ok(());
             }
-            // SAFETY: We extend the lifetime of `value.as_bytes()` from its anonymous
-            // lifetime to `'a`. This is sound because:
-            // 1. `value` is borrowed from the input struct passed to `serialize_request`.
-            // 2. `HttpBindingSerializer` is a local variable within `serialize_request`
-            //    and is dropped before `serialize_request` returns.
-            // 3. The input struct (and thus `value`) outlives the serializer.
-            // 4. `raw_payload` is read in `serialize_request` immediately after
-            //    `serialize_members` returns, before the input is dropped.
-            // We use transmute rather than copying to avoid allocating for potentially
-            // multi-GB string payloads.
-            self.raw_payload =
-                Some(unsafe { std::mem::transmute::<&[u8], &'a [u8]>(value.as_bytes()) });
+            // One copy, and it is unavoidable: `write_string` hands over a `&str`
+            // with an anonymous lifetime that has no relationship to `'a`, and
+            // `str` has no shared representation to take a cheap handle on. The
+            // previous implementation transmuted the lifetime to `'a` instead,
+            // which was a use-after-free for any caller that computed its
+            // payload into a local. `should_route_binding` above means the XML
+            // codec's second `serialize_members` pass returns before we get
+            // here, so this copy happens at most once per payload.
+            self.raw_payload = Some(aws_smithy_types::Blob::new(value));
             return Ok(());
         }
         self.body.write_string(schema, value)
     }
 
-    fn write_blob(&mut self, schema: &Schema<'_>, value: &[u8]) -> Result<(), SerdeError> {
+    fn write_blob(
+        &mut self,
+        schema: &Schema<'_>,
+        value: aws_smithy_types::Blob,
+    ) -> Result<(), SerdeError> {
         let schema = self.resolve_member(schema);
         if schema.http_header().is_some() {
             if !self.should_route_binding(schema) {
                 return Ok(());
             }
-            let encoded = aws_smithy_types::base64::encode(value);
+            let encoded = aws_smithy_types::base64::encode(value.as_ref());
             self.headers
                 .insert(header_name(schema.http_header().unwrap()), encoded);
             return Ok(());
@@ -907,17 +921,11 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
             if !self.should_route_binding(schema) {
                 return Ok(());
             }
-            // SAFETY: We extend the lifetime of `value` (a `&[u8]`) from its
-            // anonymous lifetime to `'a`. This is sound because:
-            // 1. `value` is borrowed from the input struct passed to `serialize_request`.
-            // 2. `HttpBindingSerializer` is a local variable within `serialize_request`
-            //    and is dropped before `serialize_request` returns.
-            // 3. The input struct (and thus `value`) outlives the serializer.
-            // 4. `raw_payload` is read in `serialize_request` immediately after
-            //    `serialize_members` returns, before the input is dropped.
-            // We use transmute rather than copying to avoid allocating for potentially
-            // multi-GB blob payloads.
-            self.raw_payload = Some(unsafe { std::mem::transmute::<&[u8], &'a [u8]>(value) });
+            // Zero copies: `Blob` is `bytes::Bytes`-backed, so this moves a
+            // refcounted handle, and `SdkBody::from(Bytes)` at the consume site
+            // takes another handle rather than copying. This is the reason
+            // `write_blob` takes an owned `Blob` — see its trait documentation.
+            self.raw_payload = Some(value);
             return Ok(());
         }
         self.body.write_blob(schema, value)
@@ -1172,8 +1180,12 @@ impl ShapeSerializer for ListElementCollector {
         );
         Ok(())
     }
-    fn write_blob(&mut self, _schema: &Schema<'_>, value: &[u8]) -> Result<(), SerdeError> {
-        self.push(aws_smithy_types::base64::encode(value));
+    fn write_blob(
+        &mut self,
+        _schema: &Schema<'_>,
+        value: aws_smithy_types::Blob,
+    ) -> Result<(), SerdeError> {
+        self.push(aws_smithy_types::base64::encode(value.as_ref()));
         Ok(())
     }
     // Remaining writes are no-ops for list element collection.
@@ -1278,7 +1290,7 @@ impl ShapeSerializer for MapEntryCollector {
         write_double(f64),
         write_big_integer(&aws_smithy_types::BigInteger),
         write_big_decimal(&aws_smithy_types::BigDecimal),
-        write_blob(&[u8]),
+        write_blob(aws_smithy_types::Blob),
         write_timestamp(&aws_smithy_types::DateTime),
         write_document(&aws_smithy_types::Document),
         write_null(),
@@ -1467,7 +1479,11 @@ mod tests {
             self.output.extend_from_slice(v.as_bytes());
             Ok(())
         }
-        fn write_blob(&mut self, _: &Schema<'_>, _: &[u8]) -> Result<(), SerdeError> {
+        fn write_blob(
+            &mut self,
+            _: &Schema<'_>,
+            _: aws_smithy_types::Blob,
+        ) -> Result<(), SerdeError> {
             Ok(())
         }
         fn write_timestamp(
@@ -1863,7 +1879,11 @@ mod tests {
             fn write_string(&mut self, _: &Schema<'_>, _: &str) -> Result<(), SerdeError> {
                 panic!("body codec write_string() called");
             }
-            fn write_blob(&mut self, _: &Schema<'_>, _: &[u8]) -> Result<(), SerdeError> {
+            fn write_blob(
+                &mut self,
+                _: &Schema<'_>,
+                _: aws_smithy_types::Blob,
+            ) -> Result<(), SerdeError> {
                 panic!("body codec write_blob() called");
             }
             fn write_timestamp(
@@ -1992,6 +2012,135 @@ mod tests {
             )
             .unwrap();
         assert_eq!(request.body().bytes().unwrap(), b"{Alice}");
+    }
+
+    // -- @httpPayload must not borrow from the caller's stack ------------------------------------
+
+    static BLOB_PAYLOAD_MEMBER: Schema<'static> = Schema::new_member(
+        crate::shape_id!("test", "PayloadStruct"),
+        ShapeType::Blob,
+        "data",
+        0,
+    )
+    .with_http_payload();
+    static BLOB_PAYLOAD_MEMBERS: &[&Schema<'_>] = &[&BLOB_PAYLOAD_MEMBER];
+    static BLOB_PAYLOAD_STRUCT: Schema<'static> = Schema::new_struct(
+        crate::shape_id!("test", "PayloadStruct"),
+        ShapeType::Structure,
+        BLOB_PAYLOAD_MEMBERS,
+    );
+
+    static STRING_PAYLOAD_MEMBER: Schema<'static> = Schema::new_member(
+        crate::shape_id!("test", "PayloadStruct"),
+        ShapeType::String,
+        "data",
+        0,
+    )
+    .with_http_payload();
+    static STRING_PAYLOAD_MEMBERS: &[&Schema<'_>] = &[&STRING_PAYLOAD_MEMBER];
+    static STRING_PAYLOAD_STRUCT: Schema<'static> = Schema::new_struct(
+        crate::shape_id!("test", "PayloadStruct"),
+        ShapeType::Structure,
+        STRING_PAYLOAD_MEMBERS,
+    );
+
+    /// Computes its payload into a local that is dropped before `serialize_members` returns.
+    ///
+    /// This is legal against the public `ShapeSerializer` contract: neither `write_blob` nor
+    /// `write_string` requires its argument to outlive the serializer. Generated code happens to
+    /// pass values derived from the input struct, but a hand-written `SerializableStruct` — the
+    /// case the dynamic-client and type-registry work exists to enable — need not.
+    struct LocallyComputedPayload {
+        blob: bool,
+    }
+
+    impl SerializableStruct for LocallyComputedPayload {
+        fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+            if self.blob {
+                // Heap-allocated here and freed at the end of this scope.
+                let computed: Vec<u8> = (0u8..64).collect();
+                s.write_blob(&BLOB_PAYLOAD_MEMBER, aws_smithy_types::Blob::new(computed))
+            } else {
+                let computed: String = (0..16).map(|i| char::from(b'a' + (i % 26) as u8)).collect();
+                s.write_string(&STRING_PAYLOAD_MEMBER, &computed)
+            }
+        }
+    }
+
+    /// Regression test for a use-after-free in the `@httpPayload` binding.
+    ///
+    /// `raw_payload` used to be `Option<&'a [u8]>`, populated by transmuting the `write_blob` /
+    /// `write_string` argument's anonymous lifetime up to `'a`. `'a` is bound by the input schema
+    /// and the headers, *not* by the serialized value, so the assertion was unfounded: a payload
+    /// computed into a local was freed before `serialize_request` read `raw_payload` back. Miri
+    /// reported `encountered a dangling reference (use-after-free)` while constructing the
+    /// `Option<&[u8]>`.
+    ///
+    /// Both members are now owned, so the payload outlives the frame that produced it. Run this
+    /// under Miri — a plain `cargo test` may well pass on freed-but-unreused memory:
+    ///
+    /// ```text
+    /// cargo +nightly miri test -p aws-smithy-schema --lib http_payload_from_a_local
+    /// ```
+    #[test]
+    fn http_payload_from_a_local_does_not_dangle() {
+        let request = make_protocol()
+            .serialize_request(
+                &LocallyComputedPayload { blob: true },
+                &BLOB_PAYLOAD_STRUCT,
+                "https://example.com",
+                &ConfigBag::base(),
+            )
+            .unwrap();
+        // Reading the bytes is the point: it dereferences what `raw_payload` retained.
+        let expected: Vec<u8> = (0u8..64).collect();
+        assert_eq!(request.body().bytes().unwrap(), &expected[..]);
+
+        let request = make_protocol()
+            .serialize_request(
+                &LocallyComputedPayload { blob: false },
+                &STRING_PAYLOAD_STRUCT,
+                "https://example.com",
+                &ConfigBag::base(),
+            )
+            .unwrap();
+        assert_eq!(request.body().bytes().unwrap(), b"abcdefghijklmnop");
+    }
+
+    /// The blob payload path must not copy: `write_blob` takes an owned `Blob`, so the `Bytes`
+    /// handed to `SdkBody` should be the very same allocation the caller built.
+    ///
+    /// Asserting on the pointer is the only way to observe this; a byte-equality assertion passes
+    /// either way and would not notice a regression back to copying.
+    #[test]
+    fn blob_payload_reaches_the_body_without_copying() {
+        struct OwnedBlobPayload(aws_smithy_types::Blob);
+        impl SerializableStruct for OwnedBlobPayload {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_blob(&BLOB_PAYLOAD_MEMBER, self.0.clone())
+            }
+        }
+
+        let payload = aws_smithy_types::Blob::new(vec![7u8; 4096]);
+        let src_ptr = payload.as_ref().as_ptr();
+
+        let request = make_protocol()
+            .serialize_request(
+                &OwnedBlobPayload(payload),
+                &BLOB_PAYLOAD_STRUCT,
+                "https://example.com",
+                &ConfigBag::base(),
+            )
+            .unwrap();
+
+        let body = request.body().bytes().expect("payload body is in memory");
+        assert_eq!(body.len(), 4096);
+        assert_eq!(
+            body.as_ptr(),
+            src_ptr,
+            "blob payload was copied; `write_blob` should move the `Bytes` handle all the way \
+             into `SdkBody`"
+        );
     }
 
     #[test]

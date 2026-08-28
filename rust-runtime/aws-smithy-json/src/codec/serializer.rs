@@ -470,10 +470,14 @@ impl ShapeSerializer for JsonSerializer {
         Ok(())
     }
 
-    fn write_blob(&mut self, schema: &Schema<'_>, value: &[u8]) -> Result<(), SerdeError> {
+    fn write_blob(
+        &mut self,
+        schema: &Schema<'_>,
+        value: aws_smithy_types::Blob,
+    ) -> Result<(), SerdeError> {
         use aws_smithy_types::base64;
         self.prefix(schema);
-        let encoded = base64::encode(value);
+        let encoded = base64::encode(value.as_ref());
         self.output.push('"');
         self.output.push_str(&encoded);
         self.output.push('"');
