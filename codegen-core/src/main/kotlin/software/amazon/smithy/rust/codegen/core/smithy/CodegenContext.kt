@@ -13,7 +13,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderInstantiator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructSettings
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolCodegenModules
 
 /**
  * [CodegenContext] contains code-generation context that is _common to all_  smithy-rs plugins.
@@ -60,9 +60,12 @@ abstract class CodegenContext(
      * to just look up this flag.
      */
     open val target: CodegenTarget,
-    /** Module that owns protocol serialization and deserialization. */
-    open val protocolSerdeModule: RustModule.LeafModule = ProtocolFunctions.defaultSerDeModule,
+    /** Modules that own protocol serde and event-stream support code. */
+    open val protocolCodegenModules: ProtocolCodegenModules = ProtocolCodegenModules.Default,
 ) {
+    /** Module that owns protocol serialization and deserialization. */
+    val protocolSerdeModule: RustModule.LeafModule get() = protocolCodegenModules.serde
+
     /**
      * Configuration of the runtime package:
      * - Where are the runtime crates (smithy-*) located on the file system? Or are they versioned?

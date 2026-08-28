@@ -53,7 +53,7 @@ data class EventStreamBodyParams(
 )
 
 class HttpBoundProtocolPayloadGenerator(
-    codegenContext: CodegenContext,
+    private val codegenContext: CodegenContext,
     private val protocol: Protocol,
     private val httpMessageType: HttpMessageType = HttpMessageType.REQUEST,
     private val renderEventStreamBody: (RustWriter, EventStreamBodyParams) -> Unit,
@@ -264,10 +264,7 @@ class HttpBoundProtocolPayloadGenerator(
 
         val errorMarshallerConstructorFn =
             EventStreamErrorMarshallerGenerator(
-                model,
-                target,
-                runtimeConfig,
-                symbolProvider,
+                codegenContext,
                 unionShape,
                 serializerGenerator,
                 payloadContentType,
@@ -276,10 +273,7 @@ class HttpBoundProtocolPayloadGenerator(
 
         val eventStreamMarshallerGenerator =
             EventStreamMarshallerGenerator(
-                model,
-                target,
-                runtimeConfig,
-                symbolProvider,
+                codegenContext,
                 unionShape,
                 serializerGenerator,
                 payloadContentType,

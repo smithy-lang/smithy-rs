@@ -49,6 +49,9 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 fun RustModule.Companion.eventStreamSerdeModule(): RustModule.LeafModule = private("event_stream_serde")
 
+fun RustModule.Companion.eventStreamSerdeModule(codegenContext: CodegenContext): RustModule.LeafModule =
+    codegenContext.protocolCodegenModules.eventStreamSerde
+
 class EventStreamUnmarshallerGenerator(
     private val protocol: Protocol,
     codegenContext: CodegenContext,
@@ -70,7 +73,7 @@ class EventStreamUnmarshallerGenerator(
         }
     private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)
     private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
-    private val eventStreamSerdeModule = RustModule.eventStreamSerdeModule()
+    private val eventStreamSerdeModule = RustModule.eventStreamSerdeModule(codegenContext)
     private val codegenScope =
         arrayOf(
             "Blob" to RuntimeType.blob(runtimeConfig),
@@ -593,6 +596,6 @@ class EventStreamUnmarshallerGenerator(
 
     private fun UnionShape.eventStreamUnmarshallerType(): RuntimeType {
         val symbol = symbolProvider.toSymbol(this)
-        return RuntimeType("crate::event_stream_serde::${symbol.name.toPascalCase()}Unmarshaller")
+        return RuntimeType("${eventStreamSerdeModule.fullyQualifiedPath()}::${symbol.name.toPascalCase()}Unmarshaller")
     }
 }

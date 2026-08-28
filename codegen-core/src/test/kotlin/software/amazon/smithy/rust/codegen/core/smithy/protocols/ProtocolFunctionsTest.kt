@@ -136,7 +136,11 @@ class ProtocolFunctionsTest {
     @Test
     fun `protocol functions can use an arbitrary module`() {
         val module = RustModule.private("protocol_serde_cbor")
-        val codegenContext = testCodegenContext(testModel, protocolSerDeModule = module)
+        val codegenContext =
+            testCodegenContext(
+                testModel,
+                protocolCodegenModules = ProtocolCodegenModules.Default.copy(serde = module),
+            )
         val serializeFn =
             ProtocolFunctions(codegenContext)
                 .serializeFn(testModel.lookup("test#SomeStruct1")) { fnName ->
