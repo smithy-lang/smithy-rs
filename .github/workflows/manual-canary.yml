@@ -29,6 +29,15 @@ on:
         type: string
 run-name: ${{ github.workflow }} for Pull Request ${{ inputs.pull_request_number }}
 
+# Every checkout below sets `allow-unsafe-pr-checkout: true`. `actions/checkout` refuses to fetch a
+# fork's ref when the run was triggered by `pull_request_target` -- the fork-canary door -- because
+# doing so executes untrusted code with the base repo's secrets. That is exactly what this workflow
+# does, knowingly: running the contributor's code against the canary credentials is the whole point,
+# and the gate is the `safe-to-run-canary` label, not the checkout action. `fork-canary.yml` holds
+# the reasoning and the guards (write-access labeler, fork-only, SHA pinned and re-asserted below,
+# label revoked on every push). The flag is inert on the `workflow_dispatch` door, where a
+# maintainer's dispatch is already the attestation.
+
 # Allow one instance of this workflow per pull request, and cancel older runs when new changes are pushed
 concurrency:
   group: manual-canary-${{ inputs.pull_request_number }}
@@ -82,6 +91,7 @@ jobs:
             # the `docker-build` action won't find the built Docker image.
         ref: ${{ inputs.commit_sha }}
         fetch-depth: 0
+        allow-unsafe-pr-checkout: true
     - uses: ./smithy-rs/.github/actions/free-disk-space
     - name: Acquire base image
       id: acquire
@@ -101,6 +111,7 @@ jobs:
       with:
         path: smithy-rs
         ref: ${{ inputs.commit_sha }}
+        allow-unsafe-pr-checkout: true
     - name: Generate a subset of SDKs for the canary
       uses: ./smithy-rs/.github/actions/docker-build
       with:
@@ -121,6 +132,7 @@ jobs:
       with:
         path: smithy-rs
         ref: ${{ inputs.commit_sha }}
+        allow-unsafe-pr-checkout: true
     - name: Configure credentials
       id: creds
       uses: aws-actions/configure-aws-credentials@v4
@@ -149,6 +161,7 @@ jobs:
       with:
         path: smithy-rs
         ref: ${{ inputs.commit_sha }}
+        allow-unsafe-pr-checkout: true
     - name: Download artifacts
       uses: actions/download-artifact@v4
       with:
