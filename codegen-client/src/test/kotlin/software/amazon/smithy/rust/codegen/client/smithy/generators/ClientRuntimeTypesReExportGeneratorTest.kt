@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 
@@ -60,6 +61,20 @@ class ClientRuntimeTypesReExportGeneratorTest {
 
                         use crate::error::BoxError;
                     }
+                    """,
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `it should reexport EventStreamSender for event stream clients`() {
+        clientIntegrationTest(EventStreamTestModels.TEST_CASES.first().model) { _, crate ->
+            crate.unitTest {
+                rust(
+                    """
+                    ##[allow(unused_imports)]
+                    use crate::primitives::event_stream::EventStreamSender;
                     """,
                 )
             }
