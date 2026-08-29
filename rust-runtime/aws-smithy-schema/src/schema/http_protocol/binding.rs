@@ -453,10 +453,10 @@ struct BindingState<'a> {
     /// the codec serializer entirely and are used as the HTTP body directly.
     ///
     /// Owned rather than borrowed. `ShapeSerializer::write_blob` takes an owned
-    /// [`Blob`], which is `bytes::Bytes`-backed, so storing a blob payload here
-    /// is a refcount bump and handing it to `SdkBody` is another — no payload
-    /// copy anywhere on the blob path. A string payload does cost one copy,
-    /// because `write_string` takes `&str` and `str` has no shared
+    /// [`Blob`](aws_smithy_types::Blob), which is `bytes::Bytes`-backed, so storing
+    /// a blob payload here is a refcount bump and handing it to `SdkBody` is
+    /// another — no payload copy anywhere on the blob path. A string payload does
+    /// cost one copy, because `write_string` takes `&str` and `str` has no shared
     /// representation.
     ///
     /// This field used to be `Option<&'a [u8]>`, populated by transmuting the

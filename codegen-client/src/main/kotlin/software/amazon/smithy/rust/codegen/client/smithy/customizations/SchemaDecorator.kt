@@ -189,7 +189,9 @@ private class SchemaProtocolCustomization(
                     // for. Protocols whose wire format depends on model facts — rpcv2Cbor routes to
                     // `/service/{service}/operation/{operation}`, awsJson prefixes `X-Amz-Target`
                     // with the service shape name, awsQuery sends `Version=`, restXml applies the
-                    // service `@xmlNamespace` as the root xmlns — need those facts at runtime, and
+                    // service `@xmlNamespace` as the root xmlns, and the JSON protocols resolve
+                    // relative `__type` document discriminators against the service's shape-ID
+                    // namespace — need those facts at runtime, and
                     // `Config::builder().protocol(..)` lets a customer plug in such a protocol
                     // regardless of what the model declared. A customer cannot supply them because
                     // only the model knows them.
@@ -200,12 +202,21 @@ private class SchemaProtocolCustomization(
                     // once per client here, unlike `Metadata`, which is operation-scoped and
                     // re-emitted per operation.
                     // See https://github.com/smithy-lang/smithy-rs/issues/4801.
+                    //
+                    // `ServiceShapeNamespace` is the namespace half of the service's shape ID and
+                    // is always present, so unlike `ServiceXmlNamespace` below it is unconditional.
+                    // The two are unrelated values: a service's shape-ID namespace is not derivable
+                    // from its `@xmlNamespace` URI or vice versa (CloudWatch Logs is
+                    // `com.amazonaws.cloudwatchlogs` but declares
+                    // `http://monitoring.amazonaws.com/doc/2014-03-28/`).
                     rustTemplate(
                         """
                         ${section.newLayerName}.store_put(#{ServiceShapeName}::new(${serviceShapeName.dq()}));
+                        ${section.newLayerName}.store_put(#{ServiceShapeNamespace}::new(${serviceNamespace.dq()}));
                         ${section.newLayerName}.store_put(#{ServiceVersion}::new(${codegenContext.serviceShape.version.dq()}));
                         """,
                         "ServiceShapeName" to smithySchema.resolve("protocol::ServiceShapeName"),
+                        "ServiceShapeNamespace" to smithySchema.resolve("protocol::ServiceShapeNamespace"),
                         "ServiceVersion" to smithySchema.resolve("protocol::ServiceVersion"),
                     )
 

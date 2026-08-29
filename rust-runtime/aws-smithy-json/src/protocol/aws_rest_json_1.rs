@@ -54,6 +54,15 @@ impl AwsRestJsonProtocol {
     /// typed members; code-generated clients call this method with the
     /// service shape's namespace so the deserializer can produce a fully-
     /// qualified discriminator.
+    ///
+    /// Setting this explicitly *overrides* the default, which is the
+    /// [`ServiceShapeNamespace`](aws_smithy_schema::protocol::ServiceShapeNamespace) config-bag
+    /// entry that generated clients store regardless of which protocol they were generated for.
+    /// That fallback exists because a customer selecting restJson1 through
+    /// `Config::builder().protocol(..)` has no way to know the model's namespace, and without it
+    /// every relative discriminator would stay unresolved. See
+    /// the internal `codec_with_bag_namespace` helper in `protocol/mod.rs` for how it is applied
+    /// and what it costs.
     pub fn with_default_namespace(self, namespace: impl Into<String>) -> Self {
         let new_settings = self
             .inner
@@ -108,6 +117,18 @@ impl aws_smithy_schema::protocol::ClientProtocolInner for AwsRestJsonProtocol {
         Box<dyn aws_smithy_schema::serde::ShapeDeserializer + 'a>,
         aws_smithy_schema::serde::SerdeError,
     > {
+        // When no namespace was configured explicitly, fall back to the one generated clients
+        // store in the config bag, so a protocol selected at runtime can still resolve relative
+        // `__type` discriminators. See `crate::protocol::codec_with_bag_namespace`.
+        if let Some(codec) = crate::protocol::codec_with_bag_namespace(self.inner.codec(), cfg) {
+            // Body extraction mirrors `HttpBindingProtocol::deserialize_response`, which carries
+            // the rationale for tolerating an unreadable (streaming) body; `&[]` means "no body
+            // members to read". Kept in step with that method.
+            let body = response.body().bytes().unwrap_or(&[]);
+            return Ok(Box::new(
+                aws_smithy_schema::codec::Codec::create_deserializer(&codec, body),
+            ));
+        }
         self.inner
             .deserialize_response(response, output_schema, cfg)
     }

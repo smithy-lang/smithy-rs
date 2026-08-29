@@ -110,13 +110,23 @@ impl AwsJsonRpcProtocol {
     /// that [`crate::codec::JsonDeserializer::read_discriminated_document`]
     /// can produce a fully-qualified discriminator.
     ///
-    /// Unlike the `X-Amz-Target` prefix, this has **no config-bag default**. It is a
-    /// response-parsing concern rather than request shaping, and it is baked into the codec's
-    /// settings at construction: `JsonCodec` holds an `Arc<JsonCodecSettings>` that
-    /// `create_deserializer` clones by pointer, so consulting the config bag per response would
-    /// mean rebuilding the settings struct and its `String` on every response. A caller selecting
-    /// this protocol at runtime who needs relative `__type` resolution should set it explicitly;
-    /// without it, discriminators stay relative.
+    /// Unlike the `X-Amz-Target` prefix, this is a response-parsing concern rather than request
+    /// shaping — nothing on the serialization path reads it, because a serializer must always
+    /// emit an absolute shape ID.
+    ///
+    /// Setting it explicitly *overrides* the default, which is the
+    /// [`ServiceShapeNamespace`](aws_smithy_schema::protocol::ServiceShapeNamespace) config-bag
+    /// entry that generated clients store regardless of which protocol they were generated for.
+    /// A caller selecting this protocol at runtime therefore gets relative `__type` resolution
+    /// without having to know the model's namespace; previously it had to be set by hand or
+    /// discriminators stayed relative, which made the type registry silently miss the shape.
+    ///
+    /// The fallback is applied per response because `JsonCodec` holds an `Arc<JsonCodecSettings>`
+    /// that `create_deserializer` clones by pointer, so there is nowhere to store the resolved
+    /// value on an immutable protocol. That costs ~46 ns per response and only when no explicit
+    /// namespace was configured. The internal `codec_with_bag_namespace` helper in
+    /// `protocol/mod.rs` carries the
+    /// measurement and the memoization option if it ever matters.
     pub fn with_default_namespace(self, namespace: impl Into<String>) -> Self {
         let new_settings = self
             .inner
@@ -181,6 +191,18 @@ impl aws_smithy_schema::protocol::ClientProtocolInner for AwsJsonRpcProtocol {
         Box<dyn aws_smithy_schema::serde::ShapeDeserializer + 'a>,
         aws_smithy_schema::serde::SerdeError,
     > {
+        // When no namespace was configured explicitly, fall back to the one generated clients
+        // store in the config bag, so a protocol selected at runtime can still resolve relative
+        // `__type` discriminators. See `crate::protocol::codec_with_bag_namespace`.
+        if let Some(codec) = crate::protocol::codec_with_bag_namespace(self.inner.codec(), cfg) {
+            // Body extraction mirrors `HttpRpcProtocol::deserialize_response`, which defers to
+            // `HttpBindingProtocol::deserialize_response` for the rationale behind tolerating an
+            // unreadable (streaming) body. Kept in step with those methods.
+            let body = response.body().bytes().unwrap_or(&[]);
+            return Ok(Box::new(
+                aws_smithy_schema::codec::Codec::create_deserializer(&codec, body),
+            ));
+        }
         self.inner
             .deserialize_response(response, output_schema, cfg)
     }

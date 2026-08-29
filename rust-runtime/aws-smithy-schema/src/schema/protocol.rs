@@ -474,6 +474,57 @@ impl aws_smithy_types::config_bag::Storable for ServiceShapeName {
     type Storer = aws_smithy_types::config_bag::StoreReplace<Self>;
 }
 
+/// The namespace of the Smithy `service` shape a client was generated for.
+///
+/// This is the `com.amazonaws.dynamodb` in `com.amazonaws.dynamodb#DynamoDB_20120810`.
+/// Together with [`ServiceShapeName`] it forms the service's full shape ID; the two are
+/// separate entries rather than one because [`ConfigBag`] is keyed by type, so each protocol
+/// loads exactly the facts it needs and new facts stay additive.
+///
+/// **Not to be confused with [`ServiceXmlNamespace`]**, despite the shared word. That one is
+/// the `@xmlNamespace` *trait* — a URI restXml applies as the default `xmlns` on root
+/// elements — and neither value is derivable from the other. CloudWatch Logs is the clearest
+/// illustration: its shape-ID namespace is `com.amazonaws.cloudwatchlogs` while its
+/// `@xmlNamespace` URI is `http://monitoring.amazonaws.com/doc/2014-03-28/`. The trait is
+/// also optional, carried by roughly half of AWS service shapes, whereas every shape ID has
+/// a namespace by construction — which is why this entry is stored unconditionally and
+/// `ServiceXmlNamespace` is not.
+///
+/// Protocols use this as the *default namespace* when resolving a document type's shape
+/// discriminator. Some services serialize a discriminator as a bare shape name rather than an
+/// absolute shape ID — a `__type` of `Widget` instead of `com.example#Widget` — and the
+/// receiving client is expected to qualify it with the service's namespace. Without it a
+/// relative discriminator cannot be resolved to a registered type at all.
+///
+/// Stored for the same reason as [`ServiceShapeName`]: it is knowable only from the model, and
+/// a customer may select a different protocol at runtime via `Config::builder().protocol(..)`
+/// on a client generated for some other protocol. Baking it into a constructor call at codegen
+/// time means a swapped-in protocol either gets no value or gets one the caller had to know to
+/// supply. Generated clients therefore store it regardless of which protocol they were
+/// generated for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ServiceShapeNamespace(std::borrow::Cow<'static, str>);
+
+impl ServiceShapeNamespace {
+    /// Creates a new [`ServiceShapeNamespace`] from the Smithy service shape's namespace.
+    ///
+    /// Accepts a codegen-emitted `&'static str` as well as a `String` materialized at runtime
+    /// from a parsed model.
+    pub fn new(namespace: impl Into<std::borrow::Cow<'static, str>>) -> Self {
+        Self(namespace.into())
+    }
+
+    /// Returns the service shape's namespace.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl aws_smithy_types::config_bag::Storable for ServiceShapeNamespace {
+    type Storer = aws_smithy_types::config_bag::StoreReplace<Self>;
+}
+
 /// The Smithy service shape's `version`, stored in a [`ConfigBag`] by generated clients.
 ///
 /// awsQuery puts this on the wire as the `Version=` form parameter, so it is a request-shaping
