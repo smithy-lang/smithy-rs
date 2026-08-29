@@ -13,6 +13,8 @@ use thiserror::Error;
 pub enum ResponseRejection {
     #[error("invalid bound HTTP status code; status codes must be inside the 100-999 range: {0}")]
     InvalidHttpStatusCode(TryFromIntError),
+    #[error("error building HTTP response: {0}")]
+    Build(#[from] aws_smithy_types::error::operation::BuildError),
     #[error("error serializing CBOR-encoded body: {0}")]
     Serialization(#[from] aws_smithy_types::error::operation::SerializationError),
     #[error("error building HTTP response: {0}")]

@@ -64,6 +64,7 @@ class ServerProtocolTestGenerator(
     override val codegenContext: CodegenContext,
     override val protocolSupport: ProtocolSupport,
     override val operationShape: OperationShape,
+    private val protocol: ServerProtocol? = null,
 ) : ProtocolTestGenerator() {
     companion object {
         private val ExpectFail: Set<FailingTest> =
@@ -395,10 +396,30 @@ class ServerProtocolTestGenerator(
         }
         rustTemplate(
             """
-            use #{SmithyHttpServer}::response::IntoResponse;
-            let http_response = output.into_response();
+            #{IntoResponseImport:W}
+            let http_response = #{IntoResponse:W};
             """,
             *codegenScope,
+            "IntoResponseImport" to
+                writable {
+                    if (protocol == null) {
+                        rustTemplate("use #{SmithyHttpServer}::response::IntoResponse;", *codegenScope)
+                    }
+                },
+            "IntoResponse" to
+                writable {
+                    if (protocol == null) {
+                        rust("output.into_response()")
+                    } else {
+                        rustTemplate(
+                            "<_ as #{IntoResponse}<#{Protocol}>>::into_response(output)",
+                            "IntoResponse" to
+                                ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType()
+                                    .resolve("response::IntoResponse"),
+                            "Protocol" to protocol.markerStruct(),
+                        )
+                    }
+                },
         )
         checkResponse(this, testCase)
     }

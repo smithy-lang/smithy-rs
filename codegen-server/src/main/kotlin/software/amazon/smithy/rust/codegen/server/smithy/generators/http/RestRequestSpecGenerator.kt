@@ -13,6 +13,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 
 /**
  * [RestRequestSpecGenerator] generates a restJson1 or restXml specific `RequestSpec`. Both protocols are routed the same.
@@ -21,6 +24,7 @@ class RestRequestSpecGenerator(
     private val httpBindingResolver: HttpBindingResolver,
     private val requestSpecModule: RuntimeType,
     private val runtimeConfig: RuntimeConfig,
+    private val defaultRequestContentType: String,
 ) {
     fun generate(operationShape: OperationShape): Writable {
         val httpTrait = httpBindingResolver.httpTrait(operationShape)
@@ -35,7 +39,11 @@ class RestRequestSpecGenerator(
                 "QuerySegment",
             ).map {
                 it to requestSpecModule.resolve(it)
-            }.toTypedArray()
+            }.toTypedArray() +
+                arrayOf(
+                    "RestRouteSpec" to restRouterModule().resolve("RestRouteSpec"),
+                    "RequestContentType" to restRouterModule().resolve("RequestContentType"),
+                )
 
         // TODO(https://github.com/smithy-lang/smithy-rs/issues/950): Support the `endpoint` trait.
         val pathSegmentsVec =
@@ -71,17 +79,22 @@ class RestRequestSpecGenerator(
                 }
             }
 
+        val requestContentType = requestContentTypeClaim(operationShape)
+
         return writable {
             rustTemplate(
                 """
-                #{RequestSpec}::new(
-                    #{Method}::${httpTrait.method},
-                    #{UriSpec}::new(
-                        #{PathAndQuerySpec}::new(
-                            #{PathSpec}::from_vector_unchecked(#{PathSegmentsVec:W}),
-                            #{QuerySpec}::from_vector_unchecked(#{QuerySegmentsVec:W})
+                #{RestRouteSpec}::new(
+                    #{RequestSpec}::new(
+                        #{Method}::${httpTrait.method},
+                        #{UriSpec}::new(
+                            #{PathAndQuerySpec}::new(
+                                #{PathSpec}::from_vector_unchecked(#{PathSegmentsVec:W}),
+                                #{QuerySpec}::from_vector_unchecked(#{QuerySegmentsVec:W})
+                            )
                         )
                     ),
+                    #{RequestContentType}::$requestContentType
                 )
                 """,
                 *extraCodegenScope,
@@ -91,4 +104,22 @@ class RestRequestSpecGenerator(
             )
         }
     }
+
+    private fun requestContentTypeClaim(operationShape: OperationShape): String {
+        val defaultContentType = httpBindingResolver.requestContentType(operationShape)
+            ?: defaultRequestContentType
+        val hasContentTypeHeaderBinding =
+            httpBindingResolver.requestBindings(operationShape).any {
+                it.location == HttpLocation.HEADER && it.locationName.equals("content-type", ignoreCase = true)
+            }
+        return if (hasContentTypeHeaderBinding) {
+            "AnyValidContentType { default: ${defaultContentType.dq()} }"
+        } else {
+            "Expected(${defaultContentType.dq()})"
+        }
+    }
+
+    private fun restRouterModule(): RuntimeType =
+        ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+            .resolve("protocol::rest::router")
 }

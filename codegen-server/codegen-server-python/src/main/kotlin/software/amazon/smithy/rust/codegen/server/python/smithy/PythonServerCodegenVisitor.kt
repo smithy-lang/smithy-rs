@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.ConstrainedPythonBlobGenerator
@@ -238,6 +239,9 @@ class PythonServerCodegenVisitor(
     override fun protocolTestsForOperation(
         writer: RustWriter,
         operationShape: OperationShape,
+        testContext: ServerCodegenContext,
+        protocolSupport: ProtocolSupport,
+        testProtocol: ServerProtocol,
     ) {
         logger.warning("[python-server-codegen] Protocol tests are disabled for this language")
     }

@@ -9,6 +9,10 @@ import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
 import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
+import software.amazon.smithy.codegen.core.CodegenException
+import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.ServiceIndex
+import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -17,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJsonVersion
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolLoader
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.core.util.isOutputEventStream
@@ -57,8 +62,35 @@ class StreamPayloadSerializerCustomization : ServerHttpBoundProtocolCustomizatio
         }
 }
 
-class ServerProtocolLoader(supportedProtocols: ProtocolMap<ServerProtocolGenerator, ServerCodegenContext>) :
-    ProtocolLoader<ServerProtocolGenerator, ServerCodegenContext>(supportedProtocols) {
+data class ServerProtocolRegistration(
+    val protocolId: ShapeId,
+    val factory: ProtocolGeneratorFactory<ServerProtocolGenerator, ServerCodegenContext>,
+)
+
+internal fun List<ServerProtocolRegistration>.protocolIds(): Set<ShapeId> =
+    mapTo(linkedSetOf(), ServerProtocolRegistration::protocolId)
+
+class ServerProtocolLoader(
+    private val supportedServerProtocols: ProtocolMap<ServerProtocolGenerator, ServerCodegenContext>,
+) : ProtocolLoader<ServerProtocolGenerator, ServerCodegenContext>(supportedServerProtocols) {
+    /** Returns every server-supported protocol declared by the service, in loader order. */
+    fun protocolsFor(
+        model: Model,
+        serviceShape: ServiceShape,
+    ): List<ServerProtocolRegistration> {
+        val serviceProtocols = ServiceIndex.of(model).getProtocols(serviceShape)
+        val matchingProtocols =
+            supportedServerProtocols.mapNotNull { (protocolId, factory) ->
+                serviceProtocols[protocolId]?.let { ServerProtocolRegistration(protocolId, factory) }
+            }
+        if (matchingProtocols.isEmpty()) {
+            throw CodegenException(
+                "No matching protocol — service offers: ${serviceProtocols.keys}. We offer: ${supportedServerProtocols.keys}",
+            )
+        }
+        return matchingProtocols
+    }
+
     companion object {
         fun defaultProtocols(
             httpBindingCustomizations: (ShapeId) -> List<HttpBindingCustomization> = { _ -> listOf() },

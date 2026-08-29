@@ -19,7 +19,6 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Error as ErrorModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Input as InputModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Output as OutputModule
@@ -32,7 +31,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Output
  *  - Re-exports
  */
 open class ServerRootGenerator(
-    val protocol: ServerProtocol,
     private val codegenContext: ServerCodegenContext,
     private val isConfigBuilderFallible: Boolean,
 ) {
@@ -99,7 +97,7 @@ open class ServerRootGenerator(
                         //!     .expect("unable to parse the server bind address and port");
                         //! #{Hyper0}::Server::bind(&bind).serve(server).await.unwrap();
                         //! ## }
-                        //! 
+                        //!
                         //! ```
                         """,
                         "Hyper0" to ServerCargoDependency.hyperDev(codegenContext.runtimeConfig).toType(),
@@ -400,6 +398,12 @@ open class ServerRootGenerator(
             } else {
                 ""
             }
+        val routerReExport =
+            if (codegenContext.isMultiProtocol) {
+                "${serviceName}Router,"
+            } else {
+                ""
+            }
         rustWriter.rust(
             """
             pub use crate::service::{
@@ -408,6 +412,7 @@ open class ServerRootGenerator(
                 ${serviceName}ConfigBuilder,
                 $configErrorReExport
                 ${serviceName}Builder,
+                $routerReExport
                 MissingOperationsError
             };
             """,

@@ -37,6 +37,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ValidationEx
 import software.amazon.smithy.rust.codegen.server.smithy.generators.isKeyConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.generators.isValueConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.serverProtocolSerdeModule
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
 
 /**
@@ -70,12 +71,19 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
     override val shapeId: ShapeId =
         ShapeId.from(codegenContext.settings.codegenConfig.experimentalCustomValidationExceptionWithReasonPleaseDoNotUse)
 
-    override fun renderImplFromConstraintViolationForRequestRejection(protocol: ServerProtocol): Writable =
+    // Multi-protocol conversion impls are emitted outside the input builder module.
+    // Pass the fully qualified ConstraintViolation type because its local name is no longer in scope.
+    override fun renderImplFromConstraintViolationForRequestRejection(
+        protocol: ServerProtocol,
+        constraintViolation: RuntimeType,
+    ): Writable =
         writable {
+            val serDeModule =
+                serverProtocolSerdeModule(protocol.protocolShapeId, codegenContext)
             rustTemplate(
                 """
-                impl #{From}<ConstraintViolation> for #{RequestRejection} {
-                    fn from(constraint_violation: ConstraintViolation) -> Self {
+                impl #{From}<#{ConstraintViolation}> for #{RequestRejection} {
+                    fn from(constraint_violation: #{ConstraintViolation}) -> Self {
                         let first_validation_exception_field = constraint_violation.as_validation_exception_field("".to_owned());
                         let validation_exception = crate::error::ValidationException {
                             message: format!("1 validation error detected. {}", &first_validation_exception_field.message),
@@ -83,13 +91,15 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
                             fields: Some(vec![first_validation_exception_field]),
                         };
                         Self::ConstraintViolation(
-                            crate::protocol_serde::shape_validation_exception::ser_validation_exception_error(&validation_exception)
+                            #{Serde}::shape_validation_exception::ser_validation_exception_error(&validation_exception)
                                 .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
                         )
                     }
                 }
                 """,
                 "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
+                "ConstraintViolation" to constraintViolation,
+                "Serde" to serDeModule.toType(),
                 "From" to RuntimeType.From,
             )
         }

@@ -21,6 +21,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.ShapeVisitor
 import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.shapes.StringShape
@@ -36,11 +37,14 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
+import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.lifetimeDeclaration
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
@@ -54,6 +58,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
+import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerProtocolOrderDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.CollectionConstraintViolationGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.CollectionTraitInfo
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedBlobGenerator
@@ -84,7 +89,14 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.isBuilderFal
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.PerProtocolCodegenRenderer
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.SelectedServerProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolSelection
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolRegistration
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolModules
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolOrder
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.protocolIds
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.AttachValidationExceptionToConstrainedOperationInputs
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ConstrainedMemberTransform
@@ -112,6 +124,17 @@ open class ServerCodegenVisitor(
     protected var protocolGeneratorFactory: ProtocolGeneratorFactory<ServerProtocolGenerator, ServerCodegenContext>
     protected var protocolGenerator: ServerProtocolGenerator
     protected var validationExceptionConversionGenerator: ValidationExceptionConversionGenerator
+    private lateinit var perProtocolCodegenRenderer: PerProtocolCodegenRenderer<SelectedServerProtocol>
+
+    /** Loader-supported protocols selected for this service, in detection order. */
+    private var protocolSelection: ServerProtocolSelection
+
+    private class ServerProtocolDiscovery(
+        val symbolProviders: ServerSymbolProviders,
+        val protocolRegistrations: List<ServerProtocolRegistration>,
+    ) {
+        val protocolIds: Set<ShapeId> = protocolRegistrations.protocolIds()
+    }
 
     init {
         val rustSymbolProviderConfig =
@@ -122,46 +145,87 @@ open class ServerCodegenVisitor(
                 moduleProvider = ServerModuleProvider,
             )
 
+        // Apply protocol-independent baseline transformations before decorators inspect or modify the model.
+        // A ServiceShape belongs to the Model it was resolved from, so resolve it again after decorators return the
+        // decorated model rather than carrying the pre-decoration instance forward.
         val baseModel = baselineTransform(context.model)
-        val service = settings.getService(baseModel)
-        model = codegenDecorator.transformModel(service, baseModel, settings)
-        val serverSymbolProviders =
-            ServerSymbolProviders.from(
-                settings,
-                model,
-                service,
-                rustSymbolProviderConfig,
-                settings.codegenConfig.publicConstrainedTypes,
-                codegenDecorator,
-                RustServerCodegenPlugin::baseSymbolProvider,
-            )
-        val (protocolShape, protocolGeneratorFactory) =
-            ServerProtocolLoader(
-                codegenDecorator.protocols(
-                    service.id,
-                    ServerProtocolLoader.defaultProtocols { it ->
-                        codegenDecorator.httpCustomizations(
+        val untransformedService = settings.getService(baseModel)
+        val decoratedModel = codegenDecorator.transformModel(untransformedService, baseModel, settings)
+        val decoratedService = settings.getService(decoratedModel)
+
+        // Constructing the protocol registry requires a symbol provider because protocol decorators may use it to
+        // build HTTP customizations. Build preliminary providers from the decorated model to discover the supported
+        // service protocols, then rebuild them after protocol-specific transformations so code generation uses
+        // providers backed by the final model and its corresponding service.
+        // Discover selected protocols before applying protocol-specific model transformations.
+        val preliminaryProtocolDiscovery =
+            discoverProtocols(decoratedModel, decoratedService, rustSymbolProviderConfig)
+        val selectedProtocolIds = preliminaryProtocolDiscovery.protocolIds
+
+        // All selected protocols share this model, so apply protocol-based transformations only when they are safe for
+        // every selected protocol. For example, traits needed by one protocol must not be removed for another.
+        model =
+            ServerProtocolBasedTransformationFactory.transform(decoratedModel, selectedProtocolIds)
+                .let(EventStreamNormalizer::transform)
+        val service = settings.getService(model)
+        val protocolDiscovery = discoverProtocols(model, service, rustSymbolProviderConfig)
+        val serverSymbolProviders = protocolDiscovery.symbolProviders
+        val protocolRegistrations = protocolDiscovery.protocolRegistrations
+        check(protocolDiscovery.protocolIds == selectedProtocolIds) {
+            "Protocol selection changed while applying protocol-specific model transformations"
+        }
+
+        val isMultiProtocol = protocolRegistrations.size > 1
+        if (isMultiProtocol && settings.runtimeConfig.httpVersion != HttpVersion.Http1x) {
+            throw CodegenException("Multi-protocol servers require the HTTP 1.x server runtime")
+        }
+
+        // Resolve detection order once, then derive every protocol-dependent artifact from it.
+        val factoriesByProtocol = protocolRegistrations.associate { it.protocolId to it.factory }
+        val protocolOrderConstraints =
+            (codegenDecorator as? ServerProtocolOrderDecorator)
+                ?.protocolOrderConstraints(service.id, selectedProtocolIds)
+                .orEmpty()
+        val orderedProtocolIds =
+            ServerProtocolOrder.resolve(factoriesByProtocol.keys.toList(), protocolOrderConstraints)
+        val protocolSelectionMetadata = ServerProtocolSelectionMetadata(orderedProtocolIds)
+
+        // Materialize every protocol that is both declared by the service and supported by the protocol loader, in
+        // canonical detection order. Each selected protocol receives its own context, generator, and private modules.
+        protocolSelection =
+            ServerProtocolSelection(
+                orderedProtocolIds.map { protocolId ->
+                    val factory = factoriesByProtocol.getValue(protocolId)
+                    val protocolModules = ServerProtocolModules.forProtocol(protocolId, protocolSelectionMetadata)
+                    val protocolContext =
+                        ServerCodegenContext(
+                            model,
                             serverSymbolProviders.symbolProvider,
-                            it,
+                            null,
+                            service,
+                            protocolId,
+                            settings,
+                            serverSymbolProviders.unconstrainedShapeSymbolProvider,
+                            serverSymbolProviders.constrainedShapeSymbolProvider,
+                            serverSymbolProviders.constraintViolationSymbolProvider,
+                            serverSymbolProviders.pubCrateConstrainedShapeSymbolProvider,
+                            protocolSelectionMetadata = protocolSelectionMetadata,
+                            protocolCodegenModules = protocolModules.protocolCodegenModules,
                         )
-                    },
-                ),
+                    SelectedServerProtocol(
+                        factory,
+                        protocolContext,
+                        factory.buildProtocolGenerator(protocolContext),
+                        protocolModules,
+                    )
+                },
+                protocolSelectionMetadata,
             )
-                .protocolFor(context.model, service)
-        codegenContext =
-            ServerCodegenContext(
-                model,
-                serverSymbolProviders.symbolProvider,
-                null,
-                service,
-                protocolShape,
-                settings,
-                serverSymbolProviders.unconstrainedShapeSymbolProvider,
-                serverSymbolProviders.constrainedShapeSymbolProvider,
-                serverSymbolProviders.constraintViolationSymbolProvider,
-                serverSymbolProviders.pubCrateConstrainedShapeSymbolProvider,
-            )
-        this.protocolGeneratorFactory = protocolGeneratorFactory
+
+        val primaryProtocol = protocolSelection.primary
+        codegenContext = primaryProtocol.context
+        protocolGeneratorFactory = primaryProtocol.factory
+        protocolGenerator = primaryProtocol.generator
 
         // We can use a not-null assertion because [CombinedServerCodegenDecorator] returns a not null value.
         validationExceptionConversionGenerator = codegenDecorator.validationExceptionConversion(codegenContext)!!
@@ -182,8 +246,52 @@ open class ServerCodegenVisitor(
                 settings.codegenConfig,
                 codegenContext.expectModuleDocProvider(),
             )
-        protocolGenerator = this.protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
+        perProtocolCodegenRenderer =
+            PerProtocolCodegenRenderer(
+                rustCrate,
+                protocolSelection,
+            )
     }
+
+    private fun discoverProtocols(
+        model: Model,
+        service: ServiceShape,
+        rustSymbolProviderConfig: RustSymbolProviderConfig,
+    ): ServerProtocolDiscovery {
+        val symbolProviders = symbolProvidersFor(model, service, rustSymbolProviderConfig)
+        val protocolRegistrations =
+            protocolLoader(service.id, symbolProviders.symbolProvider)
+                .protocolsFor(model, service)
+        return ServerProtocolDiscovery(symbolProviders, protocolRegistrations)
+    }
+
+    private fun symbolProvidersFor(
+        model: Model,
+        service: ServiceShape,
+        rustSymbolProviderConfig: RustSymbolProviderConfig,
+    ): ServerSymbolProviders =
+        ServerSymbolProviders.from(
+            settings,
+            model,
+            service,
+            rustSymbolProviderConfig,
+            settings.codegenConfig.publicConstrainedTypes,
+            codegenDecorator,
+            RustServerCodegenPlugin::baseSymbolProvider,
+        )
+
+    private fun protocolLoader(
+        serviceId: ShapeId,
+        symbolProvider: RustSymbolProvider,
+    ): ServerProtocolLoader =
+        ServerProtocolLoader(
+            codegenDecorator.protocols(
+                serviceId,
+                ServerProtocolLoader.defaultProtocols { protocolId ->
+                    codegenDecorator.httpCustomizations(symbolProvider, protocolId)
+                },
+            ),
+        )
 
     /**
      * Base model transformation applied to all services.
@@ -211,10 +319,6 @@ open class ServerCodegenVisitor(
             .let { AttachValidationExceptionToConstrainedOperationInputs.transform(it, settings) }
             // Tag aggregate shapes reachable from operation input
             .let(ShapesReachableFromOperationInputTagger::transform)
-            // Remove traits that are not supported by the chosen protocol.
-            .let { ServerProtocolBasedTransformationFactory.transform(it, settings) }
-            // Normalize event stream operations
-            .let(EventStreamNormalizer::transform)
 
     /**
      * Exposure purely for unit test purposes.
@@ -342,12 +446,16 @@ open class ServerCodegenVisitor(
         writer: RustWriter,
     ) {
         if (codegenContext.settings.codegenConfig.publicConstrainedTypes || shape.isReachableFromOperationInput()) {
+            // The builder is shared, but a fallible operation input needs a conversion from `ConstraintViolation` into
+            // each protocol's `RequestRejection` in that protocol's operations module.
+            val constraintViolationToRequestRejectionConversions =
+                protocolSelection.map { it.constraintViolationToRequestRejectionConversion }
             val serverBuilderGenerator =
                 ServerBuilderGenerator(
                     codegenContext,
                     shape,
                     validationExceptionConversionGenerator,
-                    protocolGenerator.protocol,
+                    constraintViolationToRequestRejectionConversions,
                 )
             serverBuilderGenerator.render(rustCrate, writer)
 
@@ -374,7 +482,7 @@ open class ServerCodegenVisitor(
                     codegenContext,
                     shape,
                     validationExceptionConversionGenerator,
-                    protocolGenerator.protocol,
+                    protocolSelection.first().protocol,
                 )
             serverBuilderGeneratorWithoutPublicConstrainedTypes.render(rustCrate, writer)
 
@@ -633,13 +741,17 @@ open class ServerCodegenVisitor(
     open fun protocolTestsForOperation(
         writer: RustWriter,
         shape: OperationShape,
+        testContext: ServerCodegenContext,
+        protocolSupport: ProtocolSupport,
+        testProtocol: ServerProtocol,
     ) {
         codegenDecorator.protocolTestGenerator(
-            codegenContext,
+            testContext,
             ServerProtocolTestGenerator(
-                codegenContext,
-                protocolGeneratorFactory.support(),
+                testContext,
+                protocolSupport,
                 shape,
+                testProtocol,
             ),
         ).render(writer)
     }
@@ -655,15 +767,12 @@ open class ServerCodegenVisitor(
      */
     override fun serviceShape(shape: ServiceShape) {
         logger.info("[rust-server-codegen] Generating a service $shape")
-        val serverProtocol = protocolGeneratorFactory.protocol(codegenContext) as ServerProtocol
-
         val configMethods = codegenDecorator.configMethods(codegenContext)
         val isConfigBuilderFallible = configMethods.isBuilderFallible()
 
         // Generate root.
         rustCrate.lib {
             ServerRootGenerator(
-                serverProtocol,
                 codegenContext,
                 isConfigBuilderFallible,
             ).render(this)
@@ -678,8 +787,8 @@ open class ServerCodegenVisitor(
         rustCrate.withModule(ServerRustModule.Service) {
             ServerServiceGenerator(
                 codegenContext,
-                serverProtocol,
                 isConfigBuilderFallible,
+                protocolSelection.map { it.protocol },
             ).render(this)
 
             ServiceConfigGenerator(codegenContext, configMethods).render(this)
@@ -699,27 +808,55 @@ open class ServerCodegenVisitor(
      *  - Additional structure shapes via `postprocessGenerateAdditionalStructures`
      */
     override fun operationShape(shape: OperationShape) {
-        // Generate errors.
+        // Generate protocol-independent operation artifacts, then render serialization
+        // and deserialization for each selected protocol.
         rustCrate.withModule(ServerRustModule.Error) {
             ServerOperationErrorGenerator(model, codegenContext.symbolProvider, shape).render(this)
         }
 
-        // Generate operation shapes.
         rustCrate.withModule(ServerRustModule.OperationShape) {
             ServerOperationGenerator(shape, codegenContext).render(this)
         }
 
-        // Generate operations ser/de.
-        rustCrate.withModule(ServerRustModule.Operation) {
-            protocolGenerator.renderOperation(this, shape)
+        // In multi-protocol mode, use the primary generator to emit protocol-independent supporting types exactly
+        // once into the shared operation module. Per-protocol rendering below disables their generation.
+        if (codegenContext.isMultiProtocol) {
+            rustCrate.withModule(ServerRustModule.Operation) {
+                protocolSelection.primary.generator.renderSharedOperationTypes(this, shape)
+            }
+        }
+        perProtocolCodegenRenderer.renderEach({ it.modules.operations }) { context ->
+            context.protocol.generator.renderOperation(
+                this,
+                shape,
+                generateSharedTypes = !codegenContext.isMultiProtocol,
+            )
         }
 
         codegenDecorator.postprocessOperationGenerateAdditionalStructures(shape)
             .forEach { structureShape -> this.structureShape(structureShape) }
 
-        // Generate protocol tests.
-        rustCrate.withModule(ServerRustModule.Operation) {
-            protocolTestsForOperation(this, shape)
+        // Generate each selected protocol's tests in its own module. Every request test still constructs the full
+        // multi-protocol service, installs its own handler, and verifies that the target protocol reaches that handler.
+        protocolSelection.forEach { testProtocol ->
+            rustCrate.withModule(testProtocol.modules.protocolTests) {
+                // Language-specific visitors replace the primary context and factory after this visitor is initialized.
+                // Preserve that legacy single-protocol behavior; multi-protocol generation uses each selection directly.
+                val testContext = if (codegenContext.isMultiProtocol) testProtocol.context else codegenContext
+                val protocolSupport =
+                    if (codegenContext.isMultiProtocol) {
+                        testProtocol.factory.support()
+                    } else {
+                        protocolGeneratorFactory.support()
+                    }
+                val protocol =
+                    if (codegenContext.isMultiProtocol) {
+                        testProtocol.protocol
+                    } else {
+                        protocolGeneratorFactory.protocol(testContext) as ServerProtocol
+                    }
+                protocolTestsForOperation(this, shape, testContext, protocolSupport, protocol)
+            }
         }
     }
 

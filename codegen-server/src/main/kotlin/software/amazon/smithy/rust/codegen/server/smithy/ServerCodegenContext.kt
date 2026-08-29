@@ -13,8 +13,26 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderInstantiator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolCodegenModules
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderInstantiator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.returnSymbolToParseFn
+
+class ServerProtocolSelectionMetadata(protocolIds: List<ShapeId>) {
+    val protocolIds: List<ShapeId> = protocolIds.toList()
+
+    init {
+        require(this.protocolIds.isNotEmpty()) { "At least one server protocol must be selected" }
+        require(this.protocolIds.distinct().size == this.protocolIds.size) {
+            "Selected server protocols must not contain duplicates"
+        }
+    }
+
+    val isMultiProtocol: Boolean
+        get() = protocolIds.size > 1
+
+    val primaryProtocolId: ShapeId
+        get() = protocolIds.first()
+}
 
 /**
  * [ServerCodegenContext] contains code-generation context that is _specific_ to the [RustServerCodegenPlugin] plugin
@@ -36,9 +54,23 @@ data class ServerCodegenContext(
     val constrainedShapeSymbolProvider: RustSymbolProvider,
     val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
     val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
+    val protocolSelectionMetadata: ServerProtocolSelectionMetadata =
+        ServerProtocolSelectionMetadata(listOf(protocol)),
+    override val protocolCodegenModules: ProtocolCodegenModules = ProtocolCodegenModules.Default,
 ) : CodegenContext(
-        model, symbolProvider, moduleDocProvider, serviceShape, protocol, settings, CodegenTarget.SERVER,
+        model,
+        symbolProvider,
+        moduleDocProvider,
+        serviceShape,
+        protocol,
+        settings,
+        CodegenTarget.SERVER,
+        protocolCodegenModules,
     ) {
+    /** Whether this server is generating more than one protocol. */
+    val isMultiProtocol: Boolean
+        get() = protocolSelectionMetadata.isMultiProtocol
+
     override fun builderInstantiator(): BuilderInstantiator {
         return ServerBuilderInstantiator(symbolProvider, returnSymbolToParseFn(this))
     }

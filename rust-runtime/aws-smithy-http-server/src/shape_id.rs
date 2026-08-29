@@ -22,7 +22,7 @@
 pub use crate::request::extension::{Extension, MissingExtension};
 
 /// Represents a [Smithy Shape ID](https://smithy.io/2.0/spec/model.html#shape-id).
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ShapeId {
     absolute: &'static str,
 

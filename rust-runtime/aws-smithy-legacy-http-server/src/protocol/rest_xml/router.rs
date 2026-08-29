@@ -9,6 +9,7 @@ use crate::extension::RuntimeErrorExtension;
 use crate::response::IntoResponse;
 use crate::routing::{method_disallowed, UNKNOWN_OPERATION_EXCEPTION};
 
+use super::runtime_error::RuntimeError;
 use super::RestXml;
 
 pub use crate::protocol::rest::router::*;
@@ -27,6 +28,17 @@ impl IntoResponse<RestXml> for Error {
                 .body(empty())
                 .expect("invalid HTTP response for REST XML routing error; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues"),
             Error::MethodNotAllowed => method_disallowed(),
+        }
+    }
+}
+
+impl IntoResponse<RestXml> for RestProtocolRejection {
+    fn into_response(self) -> http::Response<BoxBody> {
+        match self.reason {
+            RestClaimRejection::MethodNotAllowed => {
+                <Error as IntoResponse<RestXml>>::into_response(Error::MethodNotAllowed)
+            }
+            RestClaimRejection::UnsupportedMediaType => RuntimeError::UnsupportedMediaType.into_response(),
         }
     }
 }

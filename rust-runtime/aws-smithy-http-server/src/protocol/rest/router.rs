@@ -10,6 +10,7 @@ use crate::routing::request_spec::Match;
 use crate::routing::request_spec::RequestSpec;
 use crate::routing::Route;
 use crate::routing::Router;
+use http::header::CONTENT_TYPE;
 use tower::Layer;
 use tower::Service;
 
@@ -32,7 +33,7 @@ pub enum Error {
 /// [AWS restXml]: https://awslabs.github.io/smithy/2.0/aws/protocols/aws-restxml-protocol.html
 #[derive(Debug, Clone)]
 pub struct RestRouter<S> {
-    routes: Vec<(RequestSpec, S)>,
+    routes: Vec<(RestRouteSpec, S)>,
 }
 
 impl<S> RestRouter<S> {
@@ -45,7 +46,7 @@ impl<S> RestRouter<S> {
             routes: self
                 .routes
                 .into_iter()
-                .map(|(request_spec, route)| (request_spec, layer.layer(route)))
+                .map(|(route_spec, route)| (route_spec, layer.layer(route)))
                 .collect(),
         }
     }
@@ -61,6 +62,45 @@ impl<S> RestRouter<S> {
             routes: self.routes.into_iter().map(|(spec, s)| (spec, Route::new(s))).collect(),
         }
     }
+
+    /// Claims a REST route for multi-protocol routing.
+    pub fn claim_route<B>(&self, request: &http::Request<B>) -> RestRouteClaim<S>
+    where
+        S: Clone,
+    {
+        let mut best_rejection = None;
+
+        for (route_spec, route) in &self.routes {
+            let route_rank = route_spec.request_spec.rank();
+            match route_spec.request_spec.matches(request) {
+                Match::Yes => {
+                    if route_spec.request_content_type.claims(request) {
+                        return RestRouteClaim::RouteMatched {
+                            route: route.clone(),
+                            route_rank,
+                        };
+                    }
+                    if best_rejection.is_none() {
+                        best_rejection = Some(RestRouteClaim::RejectedNonExclusive {
+                            route_rank,
+                            reason: RestClaimRejection::UnsupportedMediaType,
+                        });
+                    }
+                }
+                Match::MethodNotAllowed => {
+                    if best_rejection.is_none() {
+                        best_rejection = Some(RestRouteClaim::RejectedNonExclusive {
+                            route_rank,
+                            reason: RestClaimRejection::MethodNotAllowed,
+                        });
+                    }
+                }
+                Match::No => {}
+            }
+        }
+
+        best_rejection.unwrap_or(RestRouteClaim::NoClaim)
+    }
 }
 
 impl<B, S> Router<B> for RestRouter<S>
@@ -74,7 +114,7 @@ where
         let mut method_allowed = true;
 
         for (request_spec, route) in &self.routes {
-            match request_spec.matches(request) {
+            match request_spec.request_spec.matches(request) {
                 // Match found.
                 Match::Yes => return Ok(route.clone()),
                 // Match found, but method disallowed.
@@ -92,18 +132,105 @@ where
     }
 }
 
-impl<S> FromIterator<(RequestSpec, S)> for RestRouter<S> {
+impl<S> FromIterator<(RestRouteSpec, S)> for RestRouter<S> {
     #[inline]
-    fn from_iter<T: IntoIterator<Item = (RequestSpec, S)>>(iter: T) -> Self {
-        let mut routes: Vec<(RequestSpec, S)> = iter.into_iter().collect();
+    fn from_iter<T: IntoIterator<Item = (RestRouteSpec, S)>>(iter: T) -> Self {
+        let mut routes: Vec<(RestRouteSpec, S)> = iter.into_iter().collect();
 
         // Sort them once by specificity, with the more specific routes sorted before the less
         // specific ones, so that when routing a request we can simply iterate through the routes
         // and pick the first one that matches.
-        routes.sort_by_key(|(request_spec, _route)| std::cmp::Reverse(request_spec.rank()));
+        routes.sort_by_key(|(route_spec, _route)| std::cmp::Reverse(route_spec.request_spec.rank()));
 
         Self { routes }
     }
+}
+
+impl<S> FromIterator<(RequestSpec, S)> for RestRouter<S> {
+    #[inline]
+    fn from_iter<T: IntoIterator<Item = (RequestSpec, S)>>(iter: T) -> Self {
+        iter.into_iter()
+            .map(|(request_spec, route)| {
+                (
+                    RestRouteSpec::new(request_spec, RequestContentType::AnyValidContentType { default: "" }),
+                    route,
+                )
+            })
+            .collect::<RestRouter<S>>()
+    }
+}
+
+/// REST-specific route metadata used during multi-protocol route claiming.
+#[derive(Debug, Clone)]
+pub struct RestRouteSpec {
+    request_spec: RequestSpec,
+    request_content_type: RequestContentType,
+}
+
+impl RestRouteSpec {
+    pub fn new(request_spec: RequestSpec, request_content_type: RequestContentType) -> Self {
+        Self {
+            request_spec,
+            request_content_type,
+        }
+    }
+}
+
+/// Request `Content-Type` rule for REST protocol route claiming.
+#[derive(Debug, Clone)]
+pub enum RequestContentType {
+    Expected(&'static str),
+    AnyValidContentType { default: &'static str },
+}
+
+impl RequestContentType {
+    fn claims<B>(&self, request: &http::Request<B>) -> bool {
+        let Some(actual) = request.headers().get(CONTENT_TYPE) else {
+            return false;
+        };
+        let Ok(actual) = actual.to_str() else {
+            return false;
+        };
+        let Ok(actual) = actual.parse::<mime::Mime>() else {
+            return false;
+        };
+
+        match self {
+            Self::Expected(expected) => {
+                let expected = expected
+                    .parse::<mime::Mime>()
+                    .expect("BUG: expected REST request content type generated by codegen must be valid MIME");
+                expected == actual.essence_str()
+            }
+            Self::AnyValidContentType { default: _ } => true,
+        }
+    }
+}
+
+/// Result of REST route claiming.
+#[derive(Debug, Clone)]
+pub enum RestRouteClaim<S> {
+    NoClaim,
+    RouteMatched {
+        route: S,
+        route_rank: usize,
+    },
+    RejectedNonExclusive {
+        route_rank: usize,
+        reason: RestClaimRejection,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RestClaimRejection {
+    MethodNotAllowed,
+    UnsupportedMediaType,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RestProtocolRejection {
+    pub route_rank: usize,
+    pub reason: RestClaimRejection,
 }
 
 #[cfg(test)]
@@ -112,6 +239,18 @@ mod tests {
     use crate::{protocol::test_helpers::req, routing::request_spec::*};
 
     use http::Method;
+
+    fn rest_route_spec(
+        method: Method,
+        path_segments: Vec<PathSegment>,
+        query_segments: Vec<QuerySegment>,
+        request_content_type: RequestContentType,
+    ) -> RestRouteSpec {
+        RestRouteSpec::new(
+            RequestSpec::from_parts(method, path_segments, query_segments),
+            request_content_type,
+        )
+    }
 
     // This test is a rewrite of `mux.spec.ts`.
     // https://github.com/awslabs/smithy-typescript/blob/fbf97a9bf4c1d8cf7f285ea7c24e1f0ef280142a/smithy-typescript-ssdk-libs/server-common/src/httpbinding/mux.spec.ts
@@ -260,5 +399,135 @@ mod tests {
         for (svc_name, method, uri) in hits {
             assert_eq!(router.match_route(&req(&method, uri, None)).unwrap(), svc_name);
         }
+    }
+
+    #[test]
+    fn claim_route_requires_expected_content_type() {
+        let router: RestRouter<_> = vec![(
+            rest_route_spec(
+                Method::POST,
+                vec![PathSegment::Literal(String::from("items"))],
+                Vec::new(),
+                RequestContentType::Expected("application/json"),
+            ),
+            "handler",
+        )]
+        .into_iter()
+        .collect();
+
+        let request = http::Request::builder()
+            .method(Method::POST)
+            .uri("/items")
+            .header(http::header::CONTENT_TYPE, "application/json; charset=utf-8")
+            .body(())
+            .unwrap();
+        assert!(matches!(
+            router.claim_route(&request),
+            RestRouteClaim::RouteMatched {
+                route: "handler",
+                route_rank: 1
+            }
+        ));
+
+        let request = http::Request::builder()
+            .method(Method::POST)
+            .uri("/items")
+            .header(http::header::CONTENT_TYPE, "application/xml")
+            .body(())
+            .unwrap();
+        assert!(matches!(
+            router.claim_route(&request),
+            RestRouteClaim::RejectedNonExclusive {
+                route_rank: 1,
+                reason: RestClaimRejection::UnsupportedMediaType
+            }
+        ));
+
+        let request = http::Request::builder()
+            .method(Method::POST)
+            .uri("/items")
+            .body(())
+            .unwrap();
+        assert!(matches!(
+            router.claim_route(&request),
+            RestRouteClaim::RejectedNonExclusive {
+                route_rank: 1,
+                reason: RestClaimRejection::UnsupportedMediaType
+            }
+        ));
+    }
+
+    #[test]
+    fn claim_route_allows_any_valid_content_type_when_modeled() {
+        let router: RestRouter<_> = vec![(
+            rest_route_spec(
+                Method::POST,
+                vec![PathSegment::Literal(String::from("items"))],
+                Vec::new(),
+                RequestContentType::AnyValidContentType {
+                    default: "application/json",
+                },
+            ),
+            "handler",
+        )]
+        .into_iter()
+        .collect();
+
+        let request = http::Request::builder()
+            .method(Method::POST)
+            .uri("/items")
+            .header(http::header::CONTENT_TYPE, "text/plain")
+            .body(())
+            .unwrap();
+        assert!(matches!(
+            router.claim_route(&request),
+            RestRouteClaim::RouteMatched {
+                route: "handler",
+                route_rank: 1
+            }
+        ));
+
+        let request = http::Request::builder()
+            .method(Method::POST)
+            .uri("/items")
+            .header(http::header::CONTENT_TYPE, "not a valid mime")
+            .body(())
+            .unwrap();
+        assert!(matches!(
+            router.claim_route(&request),
+            RestRouteClaim::RejectedNonExclusive {
+                reason: RestClaimRejection::UnsupportedMediaType,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn claim_route_wrong_method_is_non_exclusive_rejection() {
+        let router: RestRouter<_> = vec![(
+            rest_route_spec(
+                Method::POST,
+                vec![PathSegment::Literal(String::from("items"))],
+                Vec::new(),
+                RequestContentType::Expected("application/json"),
+            ),
+            "handler",
+        )]
+        .into_iter()
+        .collect();
+
+        let request = http::Request::builder()
+            .method(Method::GET)
+            .uri("/items")
+            .header(http::header::CONTENT_TYPE, "application/json")
+            .body(())
+            .unwrap();
+        assert!(matches!(
+            router.claim_route(&request),
+            RestRouteClaim::RejectedNonExclusive {
+                route_rank: 1,
+                reason: RestClaimRejection::MethodNotAllowed
+            }
+        ));
     }
 }

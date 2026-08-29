@@ -6,8 +6,10 @@
 use crate::body::BoxBody;
 use crate::extension::RuntimeErrorExtension;
 use crate::response::IntoResponse;
+use crate::routing::multi_protocol::FallbackRejection;
 use crate::routing::{method_disallowed, UNKNOWN_OPERATION_EXCEPTION};
 
+use super::runtime_error::RuntimeError;
 use super::RestJson1;
 
 pub use crate::protocol::rest::router::*;
@@ -29,4 +31,36 @@ impl IntoResponse<RestJson1> for Error {
             Error::MethodNotAllowed => method_disallowed(),
         }
     }
+}
+
+impl IntoResponse<RestJson1> for RestProtocolRejection {
+    fn into_response(self) -> http::Response<BoxBody> {
+        match self.reason {
+            RestClaimRejection::MethodNotAllowed => {
+                <Error as IntoResponse<RestJson1>>::into_response(Error::MethodNotAllowed)
+            }
+            RestClaimRejection::UnsupportedMediaType => RuntimeError::UnsupportedMediaType.into_response(),
+        }
+    }
+}
+
+impl FallbackRejection<RestJson1> for RestProtocolRejection {
+    fn route_rank(&self) -> usize {
+        self.route_rank
+    }
+
+    fn response_factory(&self) -> fn() -> http::Response<BoxBody> {
+        match self.reason {
+            RestClaimRejection::MethodNotAllowed => rest_json_method_not_allowed_response,
+            RestClaimRejection::UnsupportedMediaType => rest_json_unsupported_media_type_response,
+        }
+    }
+}
+
+fn rest_json_method_not_allowed_response() -> http::Response<BoxBody> {
+    <Error as IntoResponse<RestJson1>>::into_response(Error::MethodNotAllowed)
+}
+
+fn rest_json_unsupported_media_type_response() -> http::Response<BoxBody> {
+    RuntimeError::UnsupportedMediaType.into_response()
 }

@@ -122,3 +122,32 @@ async fn health_check() {
         .to_bytes();
     assert!(body.is_empty());
 }
+
+#[tokio::test]
+async fn empty_uri_label_reaches_handler() {
+    let server = common::run_server().await;
+
+    let uri = (common::base_url(server.port) + "/pokemon-species/")
+        .parse::<hyper::Uri>()
+        .expect("invalid URL");
+    let request = hyper::Request::builder()
+        .uri(uri)
+        .header(http::header::ACCEPT, "application/json")
+        .body(http_body_util::Empty::<bytes::Bytes>::new())
+        .expect("failed to build request");
+
+    let client = Client::builder(TokioExecutor::new()).build_http();
+    let response = client
+        .request(request)
+        .await
+        .expect("failed to get response");
+
+    assert_eq!(response.status(), hyper::StatusCode::NOT_FOUND);
+
+    let statistics = common::client(server.port)
+        .get_server_statistics()
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(statistics.calls_count, 1);
+}
