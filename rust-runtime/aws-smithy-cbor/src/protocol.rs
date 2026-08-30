@@ -107,6 +107,26 @@ impl ClientProtocolInner for RpcV2CborProtocol {
         self.inner.payload_codec()
     }
 
+    /// This protocol labels structured event-stream payloads `application/cbor`.
+    ///
+    /// Must stay in agreement with the code generator's
+    /// `eventStreamMessageContentType` for this protocol (`RpcV2Cbor.kt:115`), which supplies
+    /// the fallback when a protocol declares no media type.
+    fn event_stream_media_type(&self) -> Option<&str> {
+        Some("application/cbor")
+    }
+
+    /// Parses the same CBOR error envelope as
+    /// [`ClientProtocolInner::parse_error_metadata`], from an event-stream
+    /// frame's payload rather than an HTTP response body. An event-stream frame has
+    /// no HTTP headers, so an empty header map is passed.
+    fn parse_event_stream_error_metadata(
+        &self,
+        payload: &[u8],
+    ) -> Result<ErrorMetadataBuilder, SerdeError> {
+        parse_error_envelope_metadata(payload, &Headers::new())
+    }
+
     fn update_endpoint(
         &self,
         request: &mut Request,

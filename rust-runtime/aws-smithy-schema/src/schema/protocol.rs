@@ -254,6 +254,92 @@ pub trait ClientProtocolInner: Send + Sync + std::fmt::Debug {
     fn payload_codec(&self) -> Option<&dyn crate::codec::DynCodec> {
         None
     }
+
+    /// The media type used to label a **structured event-stream payload**, if this
+    /// protocol supports event streams — for example `application/cbor` or
+    /// `application/json`.
+    ///
+    /// Every event-stream frame carries a `:content-type` header describing its
+    /// payload. The payload itself is encoded by whichever protocol is selected at
+    /// runtime, so this label has to come from that same protocol; a label baked in
+    /// when the client was generated contradicts the bytes as soon as a different
+    /// protocol is selected, and a peer that honours the header then decodes with
+    /// the wrong codec.
+    ///
+    /// # Why this is on the protocol and not on [`Codec`](crate::codec::Codec)
+    ///
+    /// The value is protocol-determined, not format-determined, and one codec
+    /// serves several protocols that disagree about it. A single `JsonCodec` backs
+    /// restJson1, awsJson1_0 and awsJson1_1, whose request content types are
+    /// `application/json`, `application/x-amz-json-1.0` and
+    /// `application/x-amz-json-1.1` respectively. A codec-level accessor could
+    /// therefore only ever return one of those, and would describe event payloads
+    /// correctly only because the three JSON protocols happen to agree *there*.
+    ///
+    /// # What this is not
+    ///
+    /// This is **not** the request `Content-Type`. For awsJson the two differ, per
+    /// the above. It is also not the content type of a payload whose type is fixed
+    /// by the *shape* rather than the format: an `@eventPayload` blob is
+    /// `application/octet-stream` and a string is `text/plain` under every
+    /// protocol, so those stay with the code generator and must not be sourced
+    /// from here.
+    ///
+    /// Returns `None` by default, meaning the protocol declares no such media type
+    /// — callers must keep a fallback. The default keeps this addition
+    /// non-breaking for third-party protocols, which the SEP requires be able to
+    /// exist without modifying a code generator.
+    fn event_stream_media_type(&self) -> Option<&str> {
+        None
+    }
+
+    /// Extracts canonical error metadata from the payload of an event-stream
+    /// `exception` frame.
+    ///
+    /// This is the event-stream counterpart of
+    /// [`parse_error_metadata`](Self::parse_error_metadata), and it exists
+    /// separately for a typing reason rather than a behavioral one: that method
+    /// takes `&Self::Response`, an HTTP response, and an event-stream frame is not
+    /// one. The parsing itself is identical — both read a protocol-specific error
+    /// envelope out of a byte payload — so implementors should delegate to the same
+    /// helper they use there.
+    ///
+    /// # Why this must be resolved by the protocol
+    ///
+    /// The frame's payload is encoded by whichever protocol is selected at runtime
+    /// (via [`payload_codec`](Self::payload_codec)), so its error envelope must be
+    /// parsed by that same protocol. A code generator cannot decide this: it knows
+    /// only the protocol the client was generated for, and after a runtime protocol
+    /// swap that is the wrong one. Getting it wrong is not silent — the parse fails
+    /// and the caller reports an unhandled error — but it costs the error code, and
+    /// with it the modeled error variant and any retry classification keyed on that
+    /// code.
+    ///
+    /// # Scope
+    ///
+    /// Takes the payload only. An event-stream frame carries no HTTP headers, so
+    /// there is nothing to pass for the header-borne discriminators some protocols
+    /// also accept (restJson1's `x-amzn-errortype`, awsQuery-compatible's
+    /// `x-amzn-query-error`); implementors should parse as though the header map
+    /// were empty. The frame's own `:exception-type` header is a separate mechanism
+    /// and is handled by generated dispatch code before this is called.
+    ///
+    /// The default returns an empty
+    /// [`Builder`](ErrorMetadataBuilder), matching
+    /// [`parse_error_metadata`](Self::parse_error_metadata): callers see
+    /// `Option::None` for `code()` / `message()` and treat the frame as an
+    /// unhandled error. The default keeps this addition non-breaking for
+    /// third-party protocols, which the SEP requires be able to exist without
+    /// modifying a code generator.
+    ///
+    /// Implementors of a protocol without event streams should leave this alone.
+    fn parse_event_stream_error_metadata(
+        &self,
+        payload: &[u8],
+    ) -> Result<ErrorMetadataBuilder, SerdeError> {
+        let _ = payload;
+        Ok(ErrorMetadata::builder())
+    }
 }
 
 /// Object-safe view of [`ClientProtocolInner`] parameterized over concrete
@@ -323,6 +409,23 @@ pub trait ClientProtocol<
 
     /// Returns the codec used for payload (de)serialization, if any.
     fn payload_codec(&self) -> Option<&dyn crate::codec::DynCodec>;
+
+    /// The media type used to label a structured event-stream payload, if any.
+    ///
+    /// See [`ClientProtocolInner::event_stream_media_type`] for why this is a
+    /// protocol-level fact rather than a codec-level one.
+    fn event_stream_media_type(&self) -> Option<&str>;
+
+    /// Extracts canonical error metadata from an event-stream `exception` frame's
+    /// payload.
+    ///
+    /// See [`ClientProtocolInner::parse_event_stream_error_metadata`] for the
+    /// contract and for why the payload's envelope must be parsed by the protocol
+    /// selected at runtime.
+    fn parse_event_stream_error_metadata(
+        &self,
+        payload: &[u8],
+    ) -> Result<ErrorMetadataBuilder, SerdeError>;
 }
 
 // Blanket impl: any `ClientProtocolInner` is automatically a `ClientProtocol`
@@ -381,6 +484,17 @@ where
 
     fn payload_codec(&self) -> Option<&dyn crate::codec::DynCodec> {
         <Self as ClientProtocolInner>::payload_codec(self)
+    }
+
+    fn event_stream_media_type(&self) -> Option<&str> {
+        <Self as ClientProtocolInner>::event_stream_media_type(self)
+    }
+
+    fn parse_event_stream_error_metadata(
+        &self,
+        payload: &[u8],
+    ) -> Result<ErrorMetadataBuilder, SerdeError> {
+        <Self as ClientProtocolInner>::parse_event_stream_error_metadata(self, payload)
     }
 }
 

@@ -239,6 +239,31 @@ impl aws_smithy_schema::protocol::ClientProtocolInner for AwsJsonRpcProtocol {
         self.inner.payload_codec()
     }
 
+    /// This protocol labels structured event-stream payloads `application/json`.
+    ///
+    /// Must stay in agreement with the code generator's
+    /// `eventStreamMessageContentType` for this protocol (`AwsJson.kt:95`), which supplies
+    /// the fallback when a protocol declares no media type.
+    fn event_stream_media_type(&self) -> Option<&str> {
+        Some("application/json")
+    }
+
+    /// Parses the same JSON error envelope as
+    /// [`ClientProtocolInner::parse_error_metadata`](aws_smithy_schema::protocol::ClientProtocolInner::parse_error_metadata), from an event-stream
+    /// frame's payload rather than an HTTP response body. An event-stream frame has
+    /// no HTTP headers, so an empty header map is passed; the discriminator comes
+    /// from the payload's `__type`.
+    fn parse_event_stream_error_metadata(
+        &self,
+        payload: &[u8],
+    ) -> Result<aws_smithy_types::error::metadata::Builder, aws_smithy_schema::serde::SerdeError>
+    {
+        crate::protocol::error::parse_error_envelope_metadata(
+            payload,
+            &aws_smithy_runtime_api::http::Headers::new(),
+        )
+    }
+
     fn update_endpoint(
         &self,
         request: &mut aws_smithy_runtime_api::http::Request,

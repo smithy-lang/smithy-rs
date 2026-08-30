@@ -38,6 +38,7 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.findStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.isOutputEventStream
 
 class RequestSerializerGenerator(
     private val codegenContext: ClientCodegenContext,
@@ -309,15 +310,47 @@ class RequestSerializerGenerator(
                         rust("request.headers_mut().insert(${header.first.dq()}, ${header.second.dq()});")
                     }
                 }
-            val addServiceHeaders = headerInserts(protocol.serviceRequestHeaders(operationShape))
-            // The event-stream branch is an exception. It already performs protocol-specific request
-            // surgery of its own — replacing the body with a marshaller, removing `Content-Length`,
-            // and overriding the `Content-Type` the protocol chose — so those requests are not
-            // swap-safe regardless of headers, and its `accept` is operation-dependent
-            // (`application/vnd.amazon.eventstream, application/cbor`) in a way the runtime cannot
-            // see from the input schema alone. It therefore keeps emitting the full set; codegen's
-            // inserts run after `serialize_request` returns and `insert` replaces, so these win.
-            val addAllHeaders = headerInserts(protocol.additionalRequestHeaders(operationShape))
+            // `accept` for an event stream *response* is the event stream marker followed by the
+            // protocol's own media type. Splitting it this way keeps each half with whoever owns it:
+            //
+            // - "the output is an event stream" is a *model* fact, and the runtime protocol cannot
+            //   see it — `serialize_request` receives only the input schema, and `Schema`'s
+            //   `streaming` field has no accessor — so codegen has to contribute it.
+            // - the media type, and whether this protocol sends `accept` at all, are *protocol*
+            //   facts. Emitting those as a literal is exactly what goes stale when
+            //   `Config::builder().protocol(..)` selects a different protocol.
+            //
+            // So instead of emitting the whole value, prepend the marker to whatever the selected
+            // protocol already put in `accept`. rpcv2Cbor sets `application/cbor`, reproducing the
+            // string codegen used to emit; awsJson, restJson1 and restXml set no `accept`, so the
+            // guard leaves them alone, matching what they emit today.
+            //
+            // This is deliberately keyed on the *output* rather than on the input-event-stream
+            // branch below, because the two are independent: an operation may return an event
+            // stream while taking an ordinary request body, and that operation is routed to
+            // `renderStandardRequest`.
+            val upgradeAcceptForEventStream =
+                writable {
+                    if (operationShape.isOutputEventStream(codegenContext.model)) {
+                        rustTemplate(
+                            """
+                            let accept = request
+                                .headers()
+                                .get("accept")
+                                .map(|accept| format!("application/vnd.amazon.eventstream, {}", accept));
+                            if let #{Some}(accept) = accept {
+                                request.headers_mut().insert("accept", accept);
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    }
+                }
+            val addServiceHeaders =
+                writable {
+                    headerInserts(protocol.serviceRequestHeaders(operationShape))(this)
+                    upgradeAcceptForEventStream(this)
+                }
             // Which side resolves the request path depends on the *protocol*, not on whether the
             // operation happens to carry an `@http` trait:
             //
@@ -349,7 +382,7 @@ class RequestSerializerGenerator(
 
             when {
                 isBlobStreaming -> renderBlobStreamingRequest(streamingMember!!, schemaRef, uriPath, addServiceHeaders)
-                isEventStream -> renderEventStreamRequest(operationShape, streamingMember!!, schemaRef, uriPath, addAllHeaders)
+                isEventStream -> renderEventStreamRequest(operationShape, streamingMember!!, schemaRef, uriPath, addServiceHeaders)
                 else -> renderStandardRequest(operationShape, inputShape, schemaRef, uriPath, addServiceHeaders)
             }
         }

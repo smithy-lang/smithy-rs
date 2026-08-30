@@ -237,75 +237,10 @@ impl aws_smithy_schema::protocol::ClientProtocolInner for AwsRestXmlProtocol {
         response: &aws_smithy_runtime_api::http::Response,
         _cfg: &ConfigBag,
     ) -> Result<ErrorMetadataBuilder, SerdeError> {
-        let body = response.body().bytes().unwrap_or(&[]);
-        // An empty body carries no error metadata. Some services signal errors
-        // with a status code and an empty body (e.g. S3 HEAD operations, whose
-        // responses have no body to hold an error code). Return an empty builder
-        // rather than failing to locate a root XML element; the error code for
-        // such responses is derived from the HTTP status by the generated
-        // dispatch's error-metadata customizations.
-        if body.is_empty() {
-            return Ok(ErrorMetadata::builder());
-        }
-        let body_str = std::str::from_utf8(body)
-            .map_err(|e| SerdeError::custom(format!("invalid UTF-8: {e}")))?;
-        let mut doc = Document::new(body_str);
-        let mut root = doc
-            .root_element()
-            .map_err(|e| SerdeError::custom(format!("{e}")))?;
-        let mut builder = ErrorMetadata::builder();
-
-        if self.no_error_wrapping {
-            // <Error><Code>...</Code><Message>...</Message>...members...</Error>
-            while let Some(mut tag) = root.next_tag() {
-                match tag.start_el().local() {
-                    "Code" => {
-                        builder = builder.code(
-                            try_data(&mut tag).map_err(|e| SerdeError::custom(format!("{e}")))?,
-                        );
-                    }
-                    "Message" => {
-                        builder = builder.message(
-                            try_data(&mut tag).map_err(|e| SerdeError::custom(format!("{e}")))?,
-                        );
-                    }
-                    _ => {}
-                }
-            }
-        } else {
-            // <ErrorResponse><Error><Code>...</Code>...</Error><RequestId>...</RequestId></ErrorResponse>
-            while let Some(mut tag) = root.next_tag() {
-                match tag.start_el().local() {
-                    "Error" => {
-                        while let Some(mut error_field) = tag.next_tag() {
-                            match error_field.start_el().local() {
-                                "Code" => {
-                                    builder = builder.code(
-                                        try_data(&mut error_field)
-                                            .map_err(|e| SerdeError::custom(format!("{e}")))?,
-                                    );
-                                }
-                                "Message" => {
-                                    builder = builder.message(
-                                        try_data(&mut error_field)
-                                            .map_err(|e| SerdeError::custom(format!("{e}")))?,
-                                    );
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                    "RequestId" => {
-                        builder = builder.custom(
-                            "request_id",
-                            try_data(&mut tag).map_err(|e| SerdeError::custom(format!("{e}")))?,
-                        );
-                    }
-                    _ => {}
-                }
-            }
-        }
-        Ok(builder)
+        parse_error_envelope_metadata(
+            response.body().bytes().unwrap_or(&[]),
+            self.no_error_wrapping,
+        )
     }
 
     /// Returns a [`ShapeDeserializer`](aws_smithy_schema::serde::ShapeDeserializer)
@@ -336,6 +271,25 @@ impl aws_smithy_schema::protocol::ClientProtocolInner for AwsRestXmlProtocol {
         self.inner.payload_codec()
     }
 
+    /// This protocol labels structured event-stream payloads `application/xml`.
+    ///
+    /// Must stay in agreement with the code generator's
+    /// `eventStreamMessageContentType` for this protocol (`RestXml.kt:47`), which supplies
+    /// the fallback when a protocol declares no media type.
+    fn event_stream_media_type(&self) -> Option<&str> {
+        Some("application/xml")
+    }
+
+    /// Parses the same restXml error envelope as
+    /// [`ClientProtocolInner::parse_error_metadata`](aws_smithy_schema::protocol::ClientProtocolInner::parse_error_metadata), from an event-stream
+    /// frame's payload rather than an HTTP response body.
+    fn parse_event_stream_error_metadata(
+        &self,
+        payload: &[u8],
+    ) -> Result<ErrorMetadataBuilder, SerdeError> {
+        parse_error_envelope_metadata(payload, self.no_error_wrapping)
+    }
+
     fn update_endpoint(
         &self,
         request: &mut aws_smithy_runtime_api::http::Request,
@@ -344,6 +298,86 @@ impl aws_smithy_schema::protocol::ClientProtocolInner for AwsRestXmlProtocol {
     ) -> Result<(), aws_smithy_schema::serde::SerdeError> {
         self.inner.update_endpoint(request, endpoint, cfg)
     }
+}
+
+/// Parses a restXml error envelope out of a response or event-stream payload.
+///
+/// Shared by [`ClientProtocolInner::parse_error_metadata`](aws_smithy_schema::protocol::ClientProtocolInner::parse_error_metadata) and
+/// [`ClientProtocolInner::parse_event_stream_error_metadata`](aws_smithy_schema::protocol::ClientProtocolInner::parse_event_stream_error_metadata) so the two cannot
+/// drift. Takes `no_error_wrapping` rather than `&self` because it needs no other
+/// protocol state, and takes the bytes rather than a response because an
+/// event-stream frame is not one.
+fn parse_error_envelope_metadata(
+    body: &[u8],
+    no_error_wrapping: bool,
+) -> Result<ErrorMetadataBuilder, SerdeError> {
+    // An empty body carries no error metadata. Some services signal errors
+    // with a status code and an empty body (e.g. S3 HEAD operations, whose
+    // responses have no body to hold an error code). Return an empty builder
+    // rather than failing to locate a root XML element; the error code for
+    // such responses is derived from the HTTP status by the generated
+    // dispatch's error-metadata customizations.
+    if body.is_empty() {
+        return Ok(ErrorMetadata::builder());
+    }
+    let body_str =
+        std::str::from_utf8(body).map_err(|e| SerdeError::custom(format!("invalid UTF-8: {e}")))?;
+    let mut doc = Document::new(body_str);
+    let mut root = doc
+        .root_element()
+        .map_err(|e| SerdeError::custom(format!("{e}")))?;
+    let mut builder = ErrorMetadata::builder();
+
+    if no_error_wrapping {
+        // <Error><Code>...</Code><Message>...</Message>...members...</Error>
+        while let Some(mut tag) = root.next_tag() {
+            match tag.start_el().local() {
+                "Code" => {
+                    builder = builder
+                        .code(try_data(&mut tag).map_err(|e| SerdeError::custom(format!("{e}")))?);
+                }
+                "Message" => {
+                    builder = builder.message(
+                        try_data(&mut tag).map_err(|e| SerdeError::custom(format!("{e}")))?,
+                    );
+                }
+                _ => {}
+            }
+        }
+    } else {
+        // <ErrorResponse><Error><Code>...</Code>...</Error><RequestId>...</RequestId></ErrorResponse>
+        while let Some(mut tag) = root.next_tag() {
+            match tag.start_el().local() {
+                "Error" => {
+                    while let Some(mut error_field) = tag.next_tag() {
+                        match error_field.start_el().local() {
+                            "Code" => {
+                                builder = builder.code(
+                                    try_data(&mut error_field)
+                                        .map_err(|e| SerdeError::custom(format!("{e}")))?,
+                                );
+                            }
+                            "Message" => {
+                                builder = builder.message(
+                                    try_data(&mut error_field)
+                                        .map_err(|e| SerdeError::custom(format!("{e}")))?,
+                                );
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                "RequestId" => {
+                    builder = builder.custom(
+                        "request_id",
+                        try_data(&mut tag).map_err(|e| SerdeError::custom(format!("{e}")))?,
+                    );
+                }
+                _ => {}
+            }
+        }
+    }
+    Ok(builder)
 }
 
 #[cfg(test)]
