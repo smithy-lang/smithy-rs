@@ -57,7 +57,7 @@
 //!
 //! H1Selection -- Hyper accepts request --> H1Exchange
 //! H1Exchange
-//!     |-- complete response + ready --> H1ReturnOffer --> owning OriginCell
+//!     |-- complete response + ready --> offer to owning OriginCell
 //!     `-- failure, cancellation, or upgrade ----------> retire pool record
 //! ```
 //!
@@ -79,7 +79,13 @@
 //! that transport; neither describes the operating system TCP state. All
 //! connection-owned work runs through the partition [`DriverSpawner`].
 
-#![cfg_attr(smithy_http_client_loom, allow(dead_code))]
+#![cfg_attr(
+    smithy_http_client_loom,
+    allow(
+        dead_code,
+        reason = "Loom builds replace runtime and transport paths with focused coordination models"
+    )
+)]
 
 mod admission;
 mod builder;
