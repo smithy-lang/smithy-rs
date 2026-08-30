@@ -297,26 +297,50 @@ class RequestSerializerGenerator(
         schemaRef: String = "$operationName::INPUT_SCHEMA",
     ): Writable =
         writable {
-            val additionalHeaders = protocol.additionalRequestHeaders(operationShape)
-            // Helper: generates code to add protocol-level headers to a `request` variable.
-            // x-amz-target is excluded because the runtime protocol (AwsJsonRpcProtocol)
-            // sets it in serialize_request(). Emitting it here would prevent protocol swapping
-            // from removing it when switching to a non-RPC protocol like restJson1.
-            val addAdditionalHeaders =
+            // Protocol framing (`x-amz-target`, `smithy-protocol`, `accept`) is deliberately not
+            // emitted here: the runtime `ClientProtocol` sets it in `serialize_request`, so it stays
+            // correct when a customer selects a different protocol via
+            // `Config::builder().protocol(..)`. Service-determined headers (`x-amzn-query-mode`,
+            // from `@awsQueryCompatible` on the service) are emitted, because their value does not
+            // change with the protocol. See `Protocol.protocolFramingHeaders`.
+            fun headerInserts(headers: List<Pair<String, String>>) =
                 writable {
-                    for (header in additionalHeaders) {
-                        if (header.first == "x-amz-target") continue
+                    for (header in headers) {
                         rust("request.headers_mut().insert(${header.first.dq()}, ${header.second.dq()});")
                     }
                 }
-            // Operations with @http trait in the Smithy model have it encoded in the schema,
-            // so the protocol resolves the URI at runtime — pass "". Operations without @http
-            // (e.g., rpcv2Cbor) need the path passed from the httpBindingResolver.
+            val addServiceHeaders = headerInserts(protocol.serviceRequestHeaders(operationShape))
+            // The event-stream branch is an exception. It already performs protocol-specific request
+            // surgery of its own — replacing the body with a marshaller, removing `Content-Length`,
+            // and overriding the `Content-Type` the protocol chose — so those requests are not
+            // swap-safe regardless of headers, and its `accept` is operation-dependent
+            // (`application/vnd.amazon.eventstream, application/cbor`) in a way the runtime cannot
+            // see from the input schema alone. It therefore keeps emitting the full set; codegen's
+            // inserts run after `serialize_request` returns and `insert` replaces, so these win.
+            val addAllHeaders = headerInserts(protocol.additionalRequestHeaders(operationShape))
+            // Which side resolves the request path depends on the *protocol*, not on whether the
+            // operation happens to carry an `@http` trait:
+            //
+            // - REST protocols encode `@http` into the schema and the runtime
+            //   `HttpBindingProtocol` expands that URI template itself (including `@httpLabel`
+            //   substitution), so codegen passes "" and lets the runtime resolve it.
+            // - RPC protocols ignore HTTP bindings and use a path fixed by the protocol, which
+            //   the protocol's `HttpBindingResolver` computes, `/` for awsJson and awsQuery,
+            //   `/service/{service}/operation/{operation}` for rpcv2Cbor.
+            //
+            // Keying off `operationShape.hasTrait<HttpTrait>()` instead broke rpcv2Cbor models
+            // whose operations carry inert `@http` traits (the Pokémon example model is one):
+            // an empty path was passed and every request went to `/`.
+            // See https://github.com/smithy-lang/smithy-rs/issues/4801.
+            //
+            // A protocol with a model-derived route is expected to re-resolve it at runtime from
+            // the config bag rather than trust this value, since it may have been computed for a
+            // different protocol when one is plugged in via `Config::builder().protocol(..)`.
             val uriPath =
-                if (operationShape.hasTrait(software.amazon.smithy.model.traits.HttpTrait::class.java)) {
-                    ""
-                } else {
+                if (httpBindingResolver.isRpcProtocol()) {
                     httpBindingResolver.httpTrait(operationShape).uri.toString()
+                } else {
+                    ""
                 }
             val streamingMember = inputShape.findStreamingMember(codegenContext.model)
             val isBlobStreaming =
@@ -324,9 +348,9 @@ class RequestSerializerGenerator(
             val isEventStream = streamingMember != null && !isBlobStreaming
 
             when {
-                isBlobStreaming -> renderBlobStreamingRequest(streamingMember!!, schemaRef, uriPath, addAdditionalHeaders)
-                isEventStream -> renderEventStreamRequest(operationShape, streamingMember!!, schemaRef, uriPath, addAdditionalHeaders)
-                else -> renderStandardRequest(operationShape, inputShape, schemaRef, uriPath, addAdditionalHeaders)
+                isBlobStreaming -> renderBlobStreamingRequest(streamingMember!!, schemaRef, uriPath, addServiceHeaders)
+                isEventStream -> renderEventStreamRequest(operationShape, streamingMember!!, schemaRef, uriPath, addAllHeaders)
+                else -> renderStandardRequest(operationShape, inputShape, schemaRef, uriPath, addServiceHeaders)
             }
         }
 
@@ -506,7 +530,7 @@ class RequestSerializerGenerator(
                     ).map_err(#{BoxError}::from)?;
                     if let #{Some}(payload) = payload {
                         let mut json = String::new();
-                        ::aws_smithy_json::serialize::JsonValueWriter::new(&mut json).document(&payload);
+                        ::aws_smithy_json::serialize::JsonValueWriter::new(&mut json).document(&payload, &::aws_smithy_json::codec::JsonCodecSettings::default()).map_err(#{BoxError}::from)?;
                         *request.body_mut() = #{SdkBody}::from(json.into_bytes());
                         let _hss = _cfg
                             .load::<#{HeaderSerializationSettings}>()

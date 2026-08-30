@@ -7,7 +7,8 @@
 
 use super::error::SerdeError;
 use crate::Schema;
-use aws_smithy_types::{BigDecimal, BigInteger, DateTime, Document};
+use aws_smithy_types::Document;
+use aws_smithy_types::{BigDecimal, BigInteger, DateTime};
 
 /// Serializes Smithy shapes to a target format.
 ///
@@ -38,7 +39,7 @@ pub trait ShapeSerializer {
     /// * `value` - The structure to serialize
     fn write_struct(
         &mut self,
-        schema: &Schema,
+        schema: &Schema<'_>,
         value: &dyn SerializableStruct,
     ) -> Result<(), SerdeError>;
 
@@ -50,7 +51,7 @@ pub trait ShapeSerializer {
     /// * `write_elements` - Callback that writes the list elements
     fn write_list(
         &mut self,
-        schema: &Schema,
+        schema: &Schema<'_>,
         write_elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError>;
 
@@ -62,39 +63,47 @@ pub trait ShapeSerializer {
     /// * `write_entries` - Callback that writes the map entries
     fn write_map(
         &mut self,
-        schema: &Schema,
+        schema: &Schema<'_>,
         write_entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError>;
 
     /// Writes a boolean value.
-    fn write_boolean(&mut self, schema: &Schema, value: bool) -> Result<(), SerdeError>;
+    fn write_boolean(&mut self, schema: &Schema<'_>, value: bool) -> Result<(), SerdeError>;
 
     /// Writes a byte (i8) value.
-    fn write_byte(&mut self, schema: &Schema, value: i8) -> Result<(), SerdeError>;
+    fn write_byte(&mut self, schema: &Schema<'_>, value: i8) -> Result<(), SerdeError>;
 
     /// Writes a short (i16) value.
-    fn write_short(&mut self, schema: &Schema, value: i16) -> Result<(), SerdeError>;
+    fn write_short(&mut self, schema: &Schema<'_>, value: i16) -> Result<(), SerdeError>;
 
     /// Writes an integer (i32) value.
-    fn write_integer(&mut self, schema: &Schema, value: i32) -> Result<(), SerdeError>;
+    fn write_integer(&mut self, schema: &Schema<'_>, value: i32) -> Result<(), SerdeError>;
 
     /// Writes a long (i64) value.
-    fn write_long(&mut self, schema: &Schema, value: i64) -> Result<(), SerdeError>;
+    fn write_long(&mut self, schema: &Schema<'_>, value: i64) -> Result<(), SerdeError>;
 
     /// Writes a float (f32) value.
-    fn write_float(&mut self, schema: &Schema, value: f32) -> Result<(), SerdeError>;
+    fn write_float(&mut self, schema: &Schema<'_>, value: f32) -> Result<(), SerdeError>;
 
     /// Writes a double (f64) value.
-    fn write_double(&mut self, schema: &Schema, value: f64) -> Result<(), SerdeError>;
+    fn write_double(&mut self, schema: &Schema<'_>, value: f64) -> Result<(), SerdeError>;
 
     /// Writes a big integer value.
-    fn write_big_integer(&mut self, schema: &Schema, value: &BigInteger) -> Result<(), SerdeError>;
+    fn write_big_integer(
+        &mut self,
+        schema: &Schema<'_>,
+        value: &BigInteger,
+    ) -> Result<(), SerdeError>;
 
     /// Writes a big decimal value.
-    fn write_big_decimal(&mut self, schema: &Schema, value: &BigDecimal) -> Result<(), SerdeError>;
+    fn write_big_decimal(
+        &mut self,
+        schema: &Schema<'_>,
+        value: &BigDecimal,
+    ) -> Result<(), SerdeError>;
 
     /// Writes a string value.
-    fn write_string(&mut self, schema: &Schema, value: &str) -> Result<(), SerdeError>;
+    fn write_string(&mut self, schema: &Schema<'_>, value: &str) -> Result<(), SerdeError>;
 
     /// Writes a blob (byte array) value.
     ///
@@ -103,16 +112,20 @@ pub trait ShapeSerializer {
     /// receiving payload bytes from elsewhere) don't need to wrap them in
     /// a `Blob` just to satisfy the API. Generated client code sources
     /// blobs from `Blob` data carriers and passes `blob.as_ref()`.
-    fn write_blob(&mut self, schema: &Schema, value: &[u8]) -> Result<(), SerdeError>;
+    fn write_blob(&mut self, schema: &Schema<'_>, value: &[u8]) -> Result<(), SerdeError>;
 
     /// Writes a timestamp value.
-    fn write_timestamp(&mut self, schema: &Schema, value: &DateTime) -> Result<(), SerdeError>;
+    fn write_timestamp(&mut self, schema: &Schema<'_>, value: &DateTime) -> Result<(), SerdeError>;
 
     /// Writes a document value.
-    fn write_document(&mut self, schema: &Schema, value: &Document) -> Result<(), SerdeError>;
+    ///
+    /// `value` is the [`aws_smithy_types::Document`] (fully
+    /// owned, no lifetime). Implementors clone the value into their
+    /// output representation.
+    fn write_document(&mut self, schema: &Schema<'_>, value: &Document) -> Result<(), SerdeError>;
 
     /// Writes a null value (for sparse collections).
-    fn write_null(&mut self, schema: &Schema) -> Result<(), SerdeError>;
+    fn write_null(&mut self, schema: &Schema<'_>) -> Result<(), SerdeError>;
 
     // --- Collection helper methods ---
     //
@@ -131,7 +144,11 @@ pub trait ShapeSerializer {
     //    generated `serialize_members`/`deserialize` methods.
 
     /// Writes a list of strings.
-    fn write_string_list(&mut self, schema: &Schema, values: &[String]) -> Result<(), SerdeError> {
+    fn write_string_list(
+        &mut self,
+        schema: &Schema<'_>,
+        values: &[String],
+    ) -> Result<(), SerdeError> {
         self.write_list(schema, &|ser| {
             for item in values {
                 ser.write_string(&crate::prelude::STRING, item)?;
@@ -143,7 +160,7 @@ pub trait ShapeSerializer {
     /// Writes a list of blobs.
     fn write_blob_list(
         &mut self,
-        schema: &Schema,
+        schema: &Schema<'_>,
         values: &[aws_smithy_types::Blob],
     ) -> Result<(), SerdeError> {
         self.write_list(schema, &|ser| {
@@ -155,7 +172,11 @@ pub trait ShapeSerializer {
     }
 
     /// Writes a list of integers.
-    fn write_integer_list(&mut self, schema: &Schema, values: &[i32]) -> Result<(), SerdeError> {
+    fn write_integer_list(
+        &mut self,
+        schema: &Schema<'_>,
+        values: &[i32],
+    ) -> Result<(), SerdeError> {
         self.write_list(schema, &|ser| {
             for item in values {
                 ser.write_integer(&crate::prelude::INTEGER, *item)?;
@@ -165,7 +186,7 @@ pub trait ShapeSerializer {
     }
 
     /// Writes a list of longs.
-    fn write_long_list(&mut self, schema: &Schema, values: &[i64]) -> Result<(), SerdeError> {
+    fn write_long_list(&mut self, schema: &Schema<'_>, values: &[i64]) -> Result<(), SerdeError> {
         self.write_list(schema, &|ser| {
             for item in values {
                 ser.write_long(&crate::prelude::LONG, *item)?;
@@ -177,7 +198,7 @@ pub trait ShapeSerializer {
     /// Writes a map with string keys and string values.
     fn write_string_string_map(
         &mut self,
-        schema: &Schema,
+        schema: &Schema<'_>,
         values: &std::collections::HashMap<String, String>,
     ) -> Result<(), SerdeError> {
         self.write_map(schema, &|ser| {

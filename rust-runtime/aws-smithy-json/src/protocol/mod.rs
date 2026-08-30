@@ -7,3 +7,4 @@
 
 pub mod aws_json_rpc;
 pub mod aws_rest_json_1;
+pub(crate) mod error;
