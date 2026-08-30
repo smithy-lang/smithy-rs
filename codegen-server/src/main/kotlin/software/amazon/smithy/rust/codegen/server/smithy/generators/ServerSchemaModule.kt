@@ -41,7 +41,7 @@ fun serverSchemaShapeModule(
     val operations = TopDownIndex.of(model).getContainedOperations(service)
     val inputs = operations.map { it.inputShape(model).id }.toSet()
     val outputs = operations.map { it.outputShape(model).id }.toSet()
-    val errors = operations.flatMap { it.errors }.toSet()
+    val errors = operations.flatMap { it.errorsSet }.toSet()
 
     return when (shape.id) {
         in inputs -> ServerSchemaShapeModule.Input
@@ -59,7 +59,7 @@ fun serverSchemaShapeConstName(
 /**
  * Returns the module path that matches the generated schema layout.
  *
- * Example: `GetPokemonInput` maps to `crate::schema::input::get_pokemon_input`.
+ * Example: `GetPokemonInput` maps to `crate::schema::input::shape_get_pokemon_input`.
  */
 fun serverSchemaShapePath(
     codegenContext: ServerCodegenContext,

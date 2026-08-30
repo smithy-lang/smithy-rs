@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceSchemaGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverSchemaShapeConstName
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverSchemaShapeModule
 
@@ -61,14 +62,38 @@ class ServerSchemaDecorator : ServerCodegenDecorator {
                 rust("##![allow(dead_code)]")
                 val schemaConstName = serverSchemaShapeConstName(codegenContext, shape)
                 // Emit the schema constant for this server shape into its role-specific module.
-                // For example, `GetPokemonInput` becomes `crate::schema::input::get_pokemon_input::GET_POKEMON_INPUT`.
+                // For example, `GetPokemonInput` becomes `crate::schema::input::shape_get_pokemon_input::GET_POKEMON_INPUT`.
                 SchemaGenerator(
                     codegenContext,
                     this,
                     shape,
                     schemaPrefix = schemaConstName,
                 ).renderSchemaOnly()
+                rust(
+                    """
+                    pub(crate) const $schemaConstName: &'static ::aws_smithy_schema::Schema<'static> =
+                        &${schemaConstName}_SCHEMA;
+                    """,
+                )
             }
+        }
+        renderServiceSchemaMetadata(codegenContext, rustCrate)
+    }
+
+    private fun renderServiceSchemaMetadata(
+        codegenContext: ServerCodegenContext,
+        rustCrate: RustCrate,
+    ) {
+        val generator = ServerServiceSchemaGenerator(codegenContext)
+        val schemaModule = RustModule.pubCrate("schema")
+        rustCrate.withModule(schemaModule) {
+            generator.renderSchemaModule(this)
+        }
+        rustCrate.withModule(RustModule.pubCrate("operations", parent = schemaModule)) {
+            generator.renderOperationsModule(this)
+        }
+        rustCrate.withModule(RustModule.pubCrate("service", parent = schemaModule)) {
+            generator.renderServiceModule(this)
         }
     }
 
@@ -83,7 +108,7 @@ class ServerSchemaDecorator : ServerCodegenDecorator {
             .forEach { operation ->
                 val roots =
                     listOf(operation.inputShape(codegenContext.model).id, operation.outputShape(codegenContext.model).id) +
-                        operation.errors
+                        operation.errorsSet
                 roots.forEach { rootId ->
                     walker.walkShapes(codegenContext.model.expectShape(rootId)).forEach { reachable: Shape ->
                         // `smithy.api#Unit` is the synthetic shape used when an operation has no input or output.

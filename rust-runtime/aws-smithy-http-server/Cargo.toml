@@ -24,6 +24,7 @@ aws-smithy-cbor = { path = "../aws-smithy-cbor" }
 aws-smithy-http = { path = "../aws-smithy-http", features = ["rt-tokio"] }
 aws-smithy-json = { path = "../aws-smithy-json" }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api" }
+aws-smithy-schema = { path = "../aws-smithy-schema" }
 aws-smithy-types = { path = "../aws-smithy-types", features = [
     "http-body-1-x",
 ] }

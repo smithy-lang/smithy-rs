@@ -6,7 +6,8 @@
 /// Enumeration of Smithy shape types.
 ///
 /// This represents the core shape types from the Smithy specification,
-/// including simple types, aggregate types, and the special member type.
+/// including simple types, aggregate types, service/operation entity types,
+/// and the special member type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum ShapeType {
@@ -47,6 +48,12 @@ pub enum ShapeType {
     Structure,
     /// Union type
     Union,
+
+    // Entity types
+    /// Service type
+    Service,
+    /// Operation type
+    Operation,
 
     // Member
     /// Member shape

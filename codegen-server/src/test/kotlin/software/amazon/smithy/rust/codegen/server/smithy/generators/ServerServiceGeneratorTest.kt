@@ -114,12 +114,22 @@ internal class ServerServiceGeneratorTest {
             val outputSchema = src.resolve("schema/output/shape_echo_output.rs")
             val errorSchema = src.resolve("schema/error/shape_bad_thing.rs")
             val modelSchema = src.resolve("schema/model/shape_nested.rs")
+            val operationsSchema = src.resolve("schema/operations.rs")
+            val serviceSchema = src.resolve("schema/service.rs")
 
             assert(inputSchema.toFile().exists()) { "missing $inputSchema" }
             assert(outputSchema.toFile().exists()) { "missing $outputSchema" }
             assert(errorSchema.toFile().exists()) { "missing $errorSchema" }
             assert(modelSchema.toFile().exists()) { "missing $modelSchema" }
+            assert(operationsSchema.toFile().exists()) { "missing $operationsSchema" }
+            assert(serviceSchema.toFile().exists()) { "missing $serviceSchema" }
             assert(inputSchema.readText().contains("ECHO_INPUT_SCHEMA")) { inputSchema.readText() }
+            assert(operationsSchema.readText().contains("OperationSchema::new")) { operationsSchema.readText() }
+            assert(operationsSchema.readText().contains("crate::schema::input::shape_echo_input::ECHO_INPUT")) {
+                operationsSchema.readText()
+            }
+            assert(serviceSchema.readText().contains("ServiceSchema::new")) { serviceSchema.readText() }
+            assert(serviceSchema.readText().contains("&crate::schema::operations::ECHO")) { serviceSchema.readText() }
         }
     }
 }
