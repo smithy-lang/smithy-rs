@@ -43,7 +43,7 @@ pub(in crate::client::pool) async fn establish_h1(
         "HTTP/1 connection establishment started"
     );
 
-    let result = establish_h1_inner(context, permit).await;
+    let result = connect_handshake_and_install_h1(context, permit).await;
     match &result {
         Ok(selection) => {
             let connection = selection.connection();
@@ -71,7 +71,7 @@ pub(in crate::client::pool) async fn establish_h1(
 }
 
 /// Connects, handshakes, and installs one HTTP/1 connection.
-async fn establish_h1_inner(
+async fn connect_handshake_and_install_h1(
     context: AcquisitionContext,
     permit: EstablishmentPermit,
 ) -> Result<H1Selection, ConnectorError> {

@@ -5,13 +5,33 @@
 
 //! Capacity and demand shared by the cells of one bounded origin.
 //!
-//! [`OriginAdmission`] is the authority for connection permits and cross-cell
-//! demand order. Its state lives behind one lock. Values that cross to a cell
-//! carry their own fallback so delivery and cancellation complete without
-//! nesting admission and cell locks.
+//! [`OriginAdmission`] stores the origin once and keys its partition cells,
+//! demand records, and availability indexes by [`PartitionId`]. Its lock is the
+//! sole authority for available capacity, origin-wide demand order, and reuse
+//! operations. Cell locks are never held with the admission lock.
+//!
+//! A bounded acquisition crosses the layer in this order:
+//!
+//! 1. A cell publishes a complete [`DemandSnapshot`] after releasing its lock.
+//! 2. [`DemandSchedule`] replaces that partition snapshot and links active
+//!    demand in origin-wide FIFO order.
+//! 3. Admission takes one unit of capacity or reserves a peer HTTP/1 sender for
+//!    the oldest demand that can make progress.
+//! 4. [`DeliveryGuard`] carries the demand fence and payload out of admission.
+//!    It completes fallible connection-cell work before locking the requesting
+//!    cell. If peer-sender revalidation fails, no requesting waiter has been
+//!    reserved.
+//! 5. The requesting cell reserves its waiter, then `commit` transfers the
+//!    materialized payload into the waiter result.
+//! 6. `DeliveryAck` closes the fence. Rejection and drop return owned values
+//!    before admission makes the demand schedulable again.
+//!
+//! Values crossing either lock boundary own their fallback, so cancellation
+//! cannot lose capacity or an HTTP/1 sender.
 
-use super::cell::{CellId, OriginCell};
-use super::partition::EligibilityGroup;
+use super::cell::OriginCell;
+use super::origin::OriginKey;
+use super::partition::{EligibilityGroup, PartitionId};
 use crate::sync::{Arc, Mutex, Weak};
 use std::collections::HashMap;
 use std::fmt;
@@ -19,9 +39,11 @@ use std::num::NonZeroUsize;
 
 mod delivery;
 mod demand;
+mod order;
 pub(in crate::client::pool) mod reuse;
 
 use self::demand::{DemandSchedule, PreparedCapacityDelivery};
+use self::order::{IntrusiveLinks, IntrusiveOrder};
 pub(in crate::client::pool) use delivery::DeliveryGuard;
 
 /// Protocol capability required by the head waiter in a cell.
@@ -30,7 +52,7 @@ pub(crate) enum ProtocolRequirement {
     /// The waiter may dispatch over HTTP/1 or HTTP/2.
     H1Compatible,
     /// The waiter requires HTTP/2.
-    #[allow(dead_code, reason = "used when HTTP/2-only acquisition is implemented")]
+    #[allow(dead_code, reason = "reserved for HTTP/2-only acquisition")]
     H2Required,
 }
 
@@ -65,7 +87,7 @@ impl SnapshotVersion {
     /// # Panics
     ///
     /// Panics after `u64::MAX` replacements of one generation. Wrapping would
-    /// break stale-publication rejection; a new head waiter normally starts a
+    /// break stale-publication rejection; a new head waiter starts a
     /// new generation and resets this counter.
     pub(crate) fn next(self) -> Self {
         Self(
@@ -145,9 +167,18 @@ impl DemandSnapshot {
     }
 }
 
-/// Stable identity of one admitted connection slot within an origin.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub(super) struct PermitId(u64);
+/// One conserved unit of bounded-origin connection capacity.
+///
+/// This non-`Copy` value proves that admission removed one unit from its
+/// available count. Identities are never reused so diagnostics remain
+/// unambiguous.
+pub(super) struct Permit(u64);
+
+impl fmt::Debug for Permit {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Permit").field(&self.0).finish()
+    }
+}
 
 /// Stable identity of one admission-to-cell delivery.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -155,42 +186,64 @@ pub(super) struct DeliveryId(u64);
 
 /// Shared admission authority for one bounded origin.
 ///
-/// The state lock is the only authority for permit ownership while capacity
+/// The state lock is the only authority for available capacity while it
 /// resides in admission, and for demand order while no delivery is crossing
 /// to a cell. Delivery work is detached before this lock is released.
 pub(crate) struct OriginAdmission {
-    /// Permit, demand, and delivery-fence state for this origin.
+    /// Canonical origin shared by every partition represented in `state`.
+    origin: OriginKey,
+    /// Capacity, demand, and delivery-fence state for this origin.
     state: Mutex<AdmissionState>,
 }
 
 impl OriginAdmission {
     /// Creates admission for at most `limit` logically open connections.
-    pub(crate) fn new(limit: NonZeroUsize) -> Arc<Self> {
+    pub(crate) fn new(origin: OriginKey, limit: NonZeroUsize) -> Arc<Self> {
         Arc::new(Self {
+            origin,
             state: Mutex::new(AdmissionState::new(limit)),
         })
     }
 
+    #[cfg(test)]
+    pub(super) fn for_test(limit: NonZeroUsize) -> Arc<Self> {
+        Self::new(
+            OriginKey::from_parts(http_1x::uri::Scheme::HTTPS, "example.com", None)
+                .expect("test origin is valid"),
+            limit,
+        )
+    }
+
+    /// Returns the canonical origin coordinated by this admission authority.
+    fn origin(&self) -> &OriginKey {
+        &self.origin
+    }
+
     /// Registers or returns the unique retained cell for an identity.
     pub(crate) fn register_cell(origin: &Arc<Self>, candidate: Arc<OriginCell>) -> Arc<OriginCell> {
-        let id = candidate.id().clone();
+        let partition = candidate.id().partition();
+        assert_eq!(
+            origin.origin(),
+            candidate.id().origin(),
+            "cell origin did not match its admission authority"
+        );
         let mut state = origin.state.lock();
-        if let Some(existing) = state.cells.get(&id).and_then(Weak::upgrade) {
+        if let Some(existing) = state.cells.get(&partition).and_then(Weak::upgrade) {
             return existing;
         }
-        state.cells.insert(id, Weak::from_arc(&candidate));
+        state.cells.insert(partition, Weak::from_arc(&candidate));
         candidate
     }
 
     /// Publishes a complete demand snapshot and drives any resulting delivery.
     pub(crate) fn publish_demand(
         origin: &Arc<Self>,
-        requesting_cell: CellId,
+        requesting_partition: PartitionId,
         snapshot: DemandSnapshot,
     ) {
         let action = {
             let mut state = origin.state.lock();
-            state.publish_demand(requesting_cell, snapshot);
+            state.publish_demand(requesting_partition, snapshot);
             Self::prepare_action(origin, &mut state)
         };
         Self::drive(action);
@@ -208,7 +261,7 @@ impl OriginAdmission {
             return Some(AdmissionAction::Delivery(DeliveryGuard::capacity(
                 origin.clone(),
                 pending.delivery,
-                pending.requesting_cell,
+                pending.requesting_partition,
                 pending.demand,
                 pending.permit,
             )));
@@ -220,12 +273,12 @@ impl OriginAdmission {
     }
 
     /// Upgrades a registered requesting cell without holding the admission lock.
-    fn cell(&self, id: &CellId) -> Option<Arc<OriginCell>> {
-        let requesting_cell = {
+    fn cell(&self, id: &PartitionId) -> Option<Arc<OriginCell>> {
+        let cell = {
             let state = self.state.lock();
             state.cells.get(id).cloned()
         };
-        requesting_cell.and_then(|requesting_cell| requesting_cell.upgrade())
+        cell.and_then(|cell| cell.upgrade())
     }
 
     /// Drives sequential unlocked actions until no completion schedules another.
@@ -240,19 +293,19 @@ impl OriginAdmission {
     fn delivery_is_current(
         &self,
         delivery: DeliveryId,
-        requesting_cell: &CellId,
+        requesting_partition: &PartitionId,
         demand: DemandId,
     ) -> bool {
         self.state
             .lock()
-            .delivery_is_current(delivery, requesting_cell, demand)
+            .delivery_is_current(delivery, requesting_partition, demand)
     }
 
     /// Returns `permit` to admission and serves ordered demand when possible.
-    fn return_permit(origin: &Arc<Self>, permit: PermitId) {
+    fn return_permit(origin: &Arc<Self>, permit: Permit) {
         let action = {
             let mut state = origin.state.lock();
-            state.available.push(permit);
+            state.return_permit(permit);
             Self::prepare_action(origin, &mut state)
         };
         Self::drive(action);
@@ -266,36 +319,36 @@ impl OriginAdmission {
     fn finish_delivery(
         origin: &Arc<Self>,
         delivery: DeliveryId,
-        requesting_cell: &CellId,
-        permit: Option<PermitId>,
+        requesting_partition: &PartitionId,
+        permit: Option<Permit>,
         result: DeliveryAckResult,
     ) -> Option<AdmissionAction> {
         let mut state = origin.state.lock();
         if let Some(permit) = permit {
-            state.available.push(permit);
+            state.return_permit(permit);
         }
-        state.finish_delivery(delivery, requesting_cell, result);
+        state.finish_delivery(delivery, requesting_partition, result);
         Self::prepare_action(origin, &mut state)
     }
 
     #[cfg(test)]
     pub(super) fn publish_action_without_driving(
         origin: &Arc<Self>,
-        requesting_cell: CellId,
+        requesting_partition: PartitionId,
         snapshot: DemandSnapshot,
     ) -> Option<AdmissionAction> {
         let mut state = origin.state.lock();
-        state.publish_demand(requesting_cell, snapshot);
+        state.publish_demand(requesting_partition, snapshot);
         Self::prepare_action(origin, &mut state)
     }
 
     #[cfg(test)]
     pub(super) fn publish_without_driving(
         origin: &Arc<Self>,
-        requesting_cell: CellId,
+        requesting_partition: PartitionId,
         snapshot: DemandSnapshot,
     ) -> Option<DeliveryGuard> {
-        match Self::publish_action_without_driving(origin, requesting_cell, snapshot) {
+        match Self::publish_action_without_driving(origin, requesting_partition, snapshot) {
             Some(AdmissionAction::Delivery(delivery)) => Some(delivery),
             Some(AdmissionAction::H1(_)) => {
                 panic!("capacity-only test unexpectedly prepared an HTTP/1 action")
@@ -321,7 +374,7 @@ impl OriginAdmission {
         let permit = origin
             .state
             .lock()
-            .take_available()
+            .take_permit()
             .expect("test origin had no available capacity");
         CapacityLease::new(origin.clone(), permit)
     }
@@ -390,13 +443,13 @@ impl fmt::Debug for OriginAdmission {
 pub(crate) struct CapacityLease {
     /// Admission state to which this slot returns when the lease ends.
     origin: Arc<OriginAdmission>,
-    /// Internal identity of the occupied slot.
-    permit: Option<PermitId>,
+    /// Permit returned to admission when this lease ends.
+    permit: Option<Permit>,
 }
 
 impl CapacityLease {
     /// Takes ownership of a permit removed from admission's available set.
-    fn new(origin: Arc<OriginAdmission>, permit: PermitId) -> Self {
+    fn new(origin: Arc<OriginAdmission>, permit: Permit) -> Self {
         Self {
             origin,
             permit: Some(permit),
@@ -435,72 +488,71 @@ enum DeliveryAckResult {
 #[derive(Debug)]
 struct AdmissionState {
     /// Requesting cells, held weakly to avoid an ownership cycle.
-    cells: HashMap<CellId, Weak<OriginCell>>,
-    /// Issued permits returned by failed attempts or closed connections.
-    available: Vec<PermitId>,
-    /// Permits not yet materialized from the configured limit.
-    unissued: usize,
+    cells: HashMap<PartitionId, Weak<OriginCell>>,
+    /// Permits not owned by a delivery, attempt, or connection.
+    available: usize,
     /// Next never-reused permit identity.
-    next_permit: u64,
+    next_permit_id: u64,
     /// Cross-cell demand records and their origin-wide scheduling order.
     demand_schedule: DemandSchedule,
     /// HTTP/1 availability reports and cross-cell reuse operations.
     h1: reuse::H1Reuse,
     /// Next never-reused delivery identity.
     next_delivery: u64,
-    /// Configured number of permits, retained only for test snapshots.
-    #[cfg(test)]
+    /// Configured connection bound used to check capacity conservation.
     limit: usize,
 }
 
 impl AdmissionState {
-    /// Creates a lazy permit ledger with no materialized permit identities.
+    /// Creates a ledger with all configured capacity available.
     fn new(limit: NonZeroUsize) -> Self {
         let limit = limit.get();
         Self {
             cells: HashMap::new(),
-            available: Vec::new(),
-            unissued: limit,
-            next_permit: 0,
+            available: limit,
+            next_permit_id: 0,
             demand_schedule: DemandSchedule::default(),
             h1: reuse::H1Reuse::default(),
             next_delivery: 0,
-            #[cfg(test)]
             limit,
         }
     }
 
-    /// Removes an available permit or materializes the next configured slot.
-    fn take_available(&mut self) -> Option<PermitId> {
-        if let Some(permit) = self.available.pop() {
-            return Some(permit);
-        }
-        if self.unissued == 0 {
+    /// Removes one available permit from admission.
+    fn take_permit(&mut self) -> Option<Permit> {
+        if self.available == 0 {
             return None;
         }
+        let id = self.next_permit_id;
+        let next_permit_id = id.checked_add(1).expect("permit identity exhausted");
+        self.available -= 1;
+        self.next_permit_id = next_permit_id;
+        Some(Permit(id))
+    }
 
-        let permit = PermitId(self.next_permit);
-        self.next_permit = self
-            .next_permit
+    /// Consumes a returned permit and restores one available slot.
+    fn return_permit(&mut self, _permit: Permit) {
+        let available = self
+            .available
             .checked_add(1)
-            .expect("capacity identity exhausted");
-        self.unissued -= 1;
-        Some(permit)
+            .expect("available capacity count overflowed");
+        assert!(
+            available <= self.limit,
+            "available capacity exceeded the configured limit"
+        );
+        self.available = available;
     }
 
     #[cfg(test)]
     fn available_capacity(&self) -> usize {
-        self.unissued
-            .checked_add(self.available.len())
-            .expect("available capacity count overflowed")
+        self.available
     }
 
     /// Applies one complete cell publication to cross-cell scheduling.
-    fn publish_demand(&mut self, requesting_cell: CellId, snapshot: DemandSnapshot) {
-        self.demand_schedule
-            .publish(requesting_cell.clone(), snapshot);
+    fn publish_demand(&mut self, requesting_partition: PartitionId, snapshot: DemandSnapshot) {
+        self.demand_schedule.publish(requesting_partition, snapshot);
         self.h1
-            .reconcile_requesting_cell(&requesting_cell, &self.demand_schedule);
+            .reconcile_requesting_cell(&requesting_partition, &self.demand_schedule);
     }
 
     /// Pairs the oldest deliverable demand with one available permit.
@@ -509,18 +561,18 @@ impl AdmissionState {
             return None;
         }
 
-        let permit = self.take_available()?;
+        let permit = self.take_permit()?;
         let delivery = self.take_delivery_id();
         let scheduled = self
             .demand_schedule
             .reserve_head(delivery)
             .expect("queued demand head disappeared");
         self.h1
-            .reconcile_requesting_cell(&scheduled.requesting_cell, &self.demand_schedule);
+            .reconcile_requesting_cell(&scheduled.requesting_partition, &self.demand_schedule);
         Some(PreparedCapacityDelivery {
             permit,
             delivery,
-            requesting_cell: scheduled.requesting_cell,
+            requesting_partition: scheduled.requesting_partition,
             demand: scheduled.demand,
         })
     }
@@ -530,22 +582,22 @@ impl AdmissionState {
     fn delivery_is_current(
         &self,
         delivery: DeliveryId,
-        requesting_cell: &CellId,
+        requesting_partition: &PartitionId,
         demand: DemandId,
     ) -> bool {
         self.demand_schedule
-            .delivery_is_current(delivery, requesting_cell, demand)
+            .delivery_is_current(delivery, requesting_partition, demand)
     }
 
     /// Applies a requesting cell acknowledgement to the demand schedule.
     fn finish_delivery(
         &mut self,
         delivery: DeliveryId,
-        requesting_cell: &CellId,
+        requesting_partition: &PartitionId,
         result: DeliveryAckResult,
     ) {
         self.demand_schedule
-            .finish_delivery(delivery, requesting_cell, result);
+            .finish_delivery(delivery, requesting_partition, result);
     }
 
     /// Allocates a delivery-fence identity that is never reused by this origin.
@@ -556,11 +608,11 @@ impl AdmissionState {
     }
 }
 
-/// Test snapshot of the bounded-origin permit and demand ledger.
+/// Test snapshot of the bounded-origin capacity and demand ledger.
 #[cfg(test)]
 #[derive(Debug, Eq, PartialEq)]
 struct AdmissionCounts {
-    /// Configured permit count.
+    /// Configured connection capacity.
     limit: usize,
     /// Permits not currently owned by a connection or delivery.
     available: usize,
@@ -575,14 +627,12 @@ struct AdmissionCounts {
 #[cfg(all(test, not(smithy_http_client_loom)))]
 mod tests {
     use super::*;
-    use crate::client::pool::origin::OriginKey;
     use crate::client::pool::partition::PartitionId;
-    use http_1x::uri::Scheme;
 
     fn cell(origin: &Arc<OriginAdmission>, partition: usize) -> Arc<OriginCell> {
         let cell = Arc::new(OriginCell::new(
             PartitionId::from_index(partition),
-            OriginKey::from_parts(Scheme::HTTPS, "example.com", None).unwrap(),
+            OriginKey::from_parts(http_1x::uri::Scheme::HTTPS, "example.com", None).unwrap(),
             EligibilityGroup::Pool,
             Some(origin.clone()),
             None,
@@ -600,52 +650,68 @@ mod tests {
     }
 
     #[test]
-    fn configured_limit_materializes_permits_only_when_used() {
-        let limit = NonZeroUsize::new(4096).unwrap();
-        let mut state = AdmissionState::new(limit);
+    #[should_panic(expected = "cell origin did not match its admission authority")]
+    fn registration_rejects_a_cell_from_another_origin() {
+        let admission = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
+        let candidate = Arc::new(OriginCell::new(
+            PartitionId::from_index(1),
+            OriginKey::from_parts(http_1x::uri::Scheme::HTTPS, "other.example.com", None).unwrap(),
+            EligibilityGroup::Pool,
+            Some(admission.clone()),
+            None,
+        ));
 
-        assert!(state.available.is_empty());
-        assert_eq!(limit.get(), state.unissued);
-        assert_eq!(PermitId(0), state.take_available().unwrap());
-        assert!(state.available.is_empty());
-        assert_eq!(limit.get() - 1, state.unissued);
+        OriginAdmission::register_cell(&admission, candidate);
+    }
+
+    #[test]
+    fn permits_are_linear_and_never_reused() {
+        let mut state = AdmissionState::new(NonZeroUsize::new(2).unwrap());
+
+        assert_eq!(2, state.available);
+        let first = state.take_permit().unwrap();
+        let first_id = first.0;
+        let second = state.take_permit().unwrap();
+        assert_eq!(0, state.available);
+        assert!(state.take_permit().is_none());
+
+        state.return_permit(first);
+        let third = state.take_permit().unwrap();
+        assert_ne!(first_id, third.0);
+        state.return_permit(second);
+        state.return_permit(third);
+        assert_eq!(2, state.available);
     }
 
     #[test]
     fn equal_or_older_snapshots_do_not_replace_current_demand() {
         let mut state = AdmissionState::new(NonZeroUsize::new(1).unwrap());
-        let requesting_cell = CellId::new(
-            PartitionId::from_index(1),
-            OriginKey::from_parts(Scheme::HTTPS, "example.com", None).unwrap(),
-        );
+        let requesting_partition = PartitionId::from_index(1);
         let current = demand(2);
-        state.publish_demand(requesting_cell.clone(), current.clone());
+        state.publish_demand(requesting_partition, current.clone());
         state.publish_demand(
-            requesting_cell.clone(),
+            requesting_partition,
             DemandSnapshot::inactive(DemandId::from_u64(2), SnapshotVersion::INITIAL),
         );
-        state.publish_demand(requesting_cell.clone(), demand(1));
+        state.publish_demand(requesting_partition, demand(1));
 
         assert_eq!(1, state.demand_schedule.len());
         assert_eq!(
             Some(&current),
-            state.demand_schedule.latest_for_test(&requesting_cell)
+            state.demand_schedule.latest_for_test(&requesting_partition)
         );
     }
 
     #[test]
     fn cancellation_churn_does_not_retain_order_entries() {
         let mut state = AdmissionState::new(NonZeroUsize::new(1).unwrap());
-        let held = state.take_available().unwrap();
-        let requesting_cell = CellId::new(
-            PartitionId::from_index(1),
-            OriginKey::from_parts(Scheme::HTTPS, "example.com", None).unwrap(),
-        );
+        let held = state.take_permit().unwrap();
+        let requesting_partition = PartitionId::from_index(1);
 
         for id in 0..2_000 {
             let id = DemandId::from_u64(id);
             state.publish_demand(
-                requesting_cell.clone(),
+                requesting_partition,
                 DemandSnapshot::active(
                     id,
                     SnapshotVersion::INITIAL,
@@ -654,52 +720,45 @@ mod tests {
                 ),
             );
             state.publish_demand(
-                requesting_cell.clone(),
+                requesting_partition,
                 DemandSnapshot::inactive(id, SnapshotVersion::INITIAL.next()),
             );
         }
 
         assert_eq!(0, state.demand_schedule.len());
-        state.available.push(held);
+        state.return_permit(held);
     }
 
     #[test]
     fn removing_middle_and_tail_demands_repairs_order() {
         let mut state = AdmissionState::new(NonZeroUsize::new(1).unwrap());
-        let held = state.take_available().unwrap();
-        let targets: Vec<_> = (1..=5)
-            .map(|partition| {
-                CellId::new(
-                    PartitionId::from_index(partition),
-                    OriginKey::from_parts(Scheme::HTTPS, "example.com", None).unwrap(),
-                )
-            })
-            .collect();
+        let held = state.take_permit().unwrap();
+        let targets: Vec<_> = (1..=5).map(PartitionId::from_index).collect();
 
-        for (index, requesting_cell) in targets[..4].iter().enumerate() {
-            state.publish_demand(requesting_cell.clone(), demand(index as u64 + 1));
+        for (index, requesting_partition) in targets[..4].iter().enumerate() {
+            state.publish_demand(*requesting_partition, demand(index as u64 + 1));
         }
         state.publish_demand(
-            targets[1].clone(),
+            targets[1],
             DemandSnapshot::inactive(DemandId::from_u64(2), SnapshotVersion::INITIAL.next()),
         );
         state.publish_demand(
-            targets[3].clone(),
+            targets[3],
             DemandSnapshot::inactive(DemandId::from_u64(4), SnapshotVersion::INITIAL.next()),
         );
-        state.publish_demand(targets[4].clone(), demand(5));
+        state.publish_demand(targets[4], demand(5));
         assert_eq!(3, state.demand_schedule.len());
 
-        state.available.push(held);
+        state.return_permit(held);
         for expected in [&targets[0], &targets[2], &targets[4]] {
             let pending = state.schedule_one().unwrap();
-            assert_eq!(expected, &pending.requesting_cell);
+            assert_eq!(expected, &pending.requesting_partition);
             state.finish_delivery(
                 pending.delivery,
-                &pending.requesting_cell,
+                &pending.requesting_partition,
                 DeliveryAckResult::Accepted { successor: None },
             );
-            state.available.push(pending.permit);
+            state.return_permit(pending.permit);
         }
         assert_eq!(0, state.demand_schedule.len());
     }
@@ -707,30 +766,24 @@ mod tests {
     #[test]
     fn new_demand_moves_queued_cell_to_the_tail() {
         let mut state = AdmissionState::new(NonZeroUsize::new(1).unwrap());
-        let held = state.take_available().unwrap();
-        let first = CellId::new(
-            PartitionId::from_index(1),
-            OriginKey::from_parts(Scheme::HTTPS, "example.com", None).unwrap(),
-        );
-        let second = CellId::new(
-            PartitionId::from_index(2),
-            OriginKey::from_parts(Scheme::HTTPS, "example.com", None).unwrap(),
-        );
-        state.publish_demand(first.clone(), demand(1));
-        state.publish_demand(second.clone(), demand(2));
+        let held = state.take_permit().unwrap();
+        let first = PartitionId::from_index(1);
+        let second = PartitionId::from_index(2);
+        state.publish_demand(first, demand(1));
+        state.publish_demand(second, demand(2));
         state.publish_demand(first, demand(3));
-        state.available.push(held);
+        state.return_permit(held);
 
-        assert_eq!(second, state.schedule_one().unwrap().requesting_cell);
+        assert_eq!(second, state.schedule_one().unwrap().requesting_partition);
     }
 
     #[test]
     fn delivery_currency_includes_the_demand_id() {
-        let origin = OriginAdmission::new(NonZeroUsize::new(1).unwrap());
-        let requesting_cell = cell(&origin, 1);
+        let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
+        let requesting_partition = cell(&origin, 1);
         let delivery = OriginAdmission::publish_without_driving(
             &origin,
-            requesting_cell.id().clone(),
+            requesting_partition.id().partition(),
             demand(1),
         )
         .unwrap();
@@ -739,23 +792,23 @@ mod tests {
         origin
             .state
             .lock()
-            .publish_demand(requesting_cell.id().clone(), demand(2));
+            .publish_demand(requesting_partition.id().partition(), demand(2));
         assert!(!delivery.is_current());
         delivery.reject(None);
     }
 
     #[test]
     fn stale_successor_cannot_leave_active_demand_idle() {
-        let origin = OriginAdmission::new(NonZeroUsize::new(1).unwrap());
-        let requesting_cell = cell(&origin, 1);
+        let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
+        let requesting_partition = cell(&origin, 1);
         let delivery = OriginAdmission::publish_without_driving(
             &origin,
-            requesting_cell.id().clone(),
+            requesting_partition.id().partition(),
             demand(1),
         )
         .unwrap();
         origin.state.lock().publish_demand(
-            requesting_cell.id().clone(),
+            requesting_partition.id().partition(),
             DemandSnapshot::active(
                 DemandId::from_u64(1),
                 SnapshotVersion::INITIAL.next(),
@@ -771,7 +824,7 @@ mod tests {
 
     #[test]
     fn dropped_delivery_refunnels_capacity_and_preserves_order() {
-        let origin = OriginAdmission::new(NonZeroUsize::new(1).unwrap());
+        let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
         let first = cell(&origin, 1);
         let second = cell(&origin, 2);
         let (first_waiter, first_demand) =
@@ -779,11 +832,11 @@ mod tests {
         let (second_waiter, second_demand) =
             second.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
         let delivery =
-            OriginAdmission::publish_without_driving(&origin, first.id().clone(), first_demand)
+            OriginAdmission::publish_without_driving(&origin, first.id().partition(), first_demand)
                 .unwrap();
         {
             let mut state = origin.state.lock();
-            state.publish_demand(second.id().clone(), second_demand);
+            state.publish_demand(second.id().partition(), second_demand);
         }
         drop(delivery);
 
@@ -800,16 +853,16 @@ mod tests {
 
     #[test]
     fn expired_requesting_cell_refunnels_capacity() {
-        let origin = OriginAdmission::new(NonZeroUsize::new(1).unwrap());
-        let requesting_cell = cell(&origin, 1);
-        let requesting_cell_id = requesting_cell.id().clone();
+        let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
+        let requesting_partition = cell(&origin, 1);
+        let requesting_cell_id = requesting_partition.id().partition();
         let (_waiter, snapshot) =
-            requesting_cell.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
+            requesting_partition.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
         let delivery =
-            OriginAdmission::publish_without_driving(&origin, requesting_cell_id.clone(), snapshot)
+            OriginAdmission::publish_without_driving(&origin, requesting_cell_id, snapshot)
                 .unwrap();
 
-        drop(requesting_cell);
+        drop(requesting_partition);
         assert!(origin.cell(&requesting_cell_id).is_none());
         OriginAdmission::drive(Some(AdmissionAction::Delivery(delivery)));
 
@@ -821,17 +874,23 @@ mod tests {
 
     #[test]
     fn separate_origins_conserve_capacity_independently() {
-        let first = OriginAdmission::new(NonZeroUsize::new(1).unwrap());
-        let second = OriginAdmission::new(NonZeroUsize::new(1).unwrap());
+        let first = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
+        let second = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
         let first_cell = cell(&first, 1);
         let second_cell = cell(&second, 1);
 
-        let first_delivery =
-            OriginAdmission::publish_without_driving(&first, first_cell.id().clone(), demand(1))
-                .unwrap();
-        let second_delivery =
-            OriginAdmission::publish_without_driving(&second, second_cell.id().clone(), demand(1))
-                .unwrap();
+        let first_delivery = OriginAdmission::publish_without_driving(
+            &first,
+            first_cell.id().partition(),
+            demand(1),
+        )
+        .unwrap();
+        let second_delivery = OriginAdmission::publish_without_driving(
+            &second,
+            second_cell.id().partition(),
+            demand(1),
+        )
+        .unwrap();
         assert_eq!(0, first.available_capacity_for_test());
         assert_eq!(0, second.available_capacity_for_test());
 
@@ -847,15 +906,10 @@ mod tests {
 #[cfg(all(test, smithy_http_client_loom))]
 mod loom_tests {
     use super::*;
-    use crate::client::pool::origin::OriginKey;
     use crate::client::pool::partition::PartitionId;
-    use http_1x::uri::Scheme;
 
-    fn id() -> CellId {
-        CellId::new(
-            PartitionId::from_index(1),
-            OriginKey::from_parts(Scheme::HTTPS, "example.com", None).unwrap(),
-        )
+    fn id() -> PartitionId {
+        PartitionId::from_index(1)
     }
 
     fn demand() -> DemandSnapshot {
@@ -870,8 +924,8 @@ mod loom_tests {
     #[test]
     fn release_and_demand_publication_conserve_one_permit() {
         loom::model(|| {
-            let origin = OriginAdmission::new(NonZeroUsize::new(1).unwrap());
-            let permit = origin.state.lock().take_available().unwrap();
+            let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
+            let permit = origin.state.lock().take_permit().unwrap();
             let lease = CapacityLease::new(origin.clone(), permit);
 
             let release = loom::thread::spawn(move || drop(lease));
@@ -894,14 +948,11 @@ mod loom_tests {
         loom::model(|| {
             use loom::sync::atomic::{AtomicBool, Ordering};
 
-            let origin = OriginAdmission::new(NonZeroUsize::new(2).unwrap());
-            let requesting_cell = id();
-            let delivery = OriginAdmission::publish_without_driving(
-                &origin,
-                requesting_cell.clone(),
-                demand(),
-            )
-            .unwrap();
+            let origin = OriginAdmission::for_test(NonZeroUsize::new(2).unwrap());
+            let requesting_partition = id();
+            let delivery =
+                OriginAdmission::publish_without_driving(&origin, requesting_partition, demand())
+                    .unwrap();
             let release = Arc::new(AtomicBool::new(false));
 
             let delivery_release = release.clone();
@@ -913,12 +964,12 @@ mod loom_tests {
             });
 
             origin.state.lock().publish_demand(
-                requesting_cell.clone(),
+                requesting_partition,
                 DemandSnapshot::inactive(DemandId::from_u64(1), SnapshotVersion::INITIAL.next()),
             );
             let duplicate = OriginAdmission::publish_without_driving(
                 &origin,
-                requesting_cell,
+                requesting_partition,
                 DemandSnapshot::active(
                     DemandId::from_u64(2),
                     SnapshotVersion::INITIAL,

@@ -622,7 +622,7 @@ mod tests {
 
     #[test]
     fn logical_close_releases_capacity_before_physical_completion() {
-        let origin = OriginAdmission::new(NonZeroUsize::new(1).unwrap());
+        let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
         let lease = OriginAdmission::lease_for_test(&origin);
         let (connection, physical) = ConnectionState::bounded(test_info(1), lease);
 
@@ -641,7 +641,7 @@ mod tests {
 
     #[test]
     fn upgrade_refines_only_a_driver_observed_protocol_close() {
-        let origin = OriginAdmission::new(NonZeroUsize::new(1).unwrap());
+        let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
         let lease = OriginAdmission::lease_for_test(&origin);
         let (connection, _physical) = ConnectionState::bounded(test_info(1), lease);
 
@@ -776,7 +776,7 @@ mod loom_tests {
     #[test]
     fn concurrent_logical_close_releases_one_capacity_lease() {
         loom::model(|| {
-            let origin = OriginAdmission::new(NonZeroUsize::new(1).unwrap());
+            let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
             let lease = OriginAdmission::lease_for_test(&origin);
             let (connection, _physical) = ConnectionState::bounded(test_info(1), lease);
             let first_connection = connection.clone();

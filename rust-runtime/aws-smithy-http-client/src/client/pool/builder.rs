@@ -39,8 +39,6 @@ use tower::Service;
 /// Default duration for retaining an idle reusable connection.
 const DEFAULT_IDLE_TIMEOUT: Duration = Duration::from_secs(90);
 
-// TODO(pool): Revisit sharing this type if more runtime builders need the
-// distinction between an unset setting and an explicitly disabled setting.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 enum TriStateOption<T> {
     /// No option was set by the user, so construction applies its default.
@@ -85,7 +83,7 @@ pub struct Builder<Tls = TlsUnset> {
     tcp_nodelay: bool,
     /// TCP keepalive setting, including explicit disablement.
     tcp_keepalive: TriStateOption<Duration>,
-    /// Optional origin-wide connection limit.
+    /// Optional live-connection limit per scheme, host, and port.
     max_connections_per_host: Option<usize>,
     /// Partitions allowed to reuse each other's connections.
     reuse_scope: ConnectionReuseScope,
@@ -199,13 +197,19 @@ impl<Tls> Builder<Tls> {
         self
     }
 
-    /// Bounds live connections for one canonical origin across the pool.
+    /// Bounds live connections to one origin across every partition in the pool.
+    ///
+    /// An origin is a scheme, host, and port, so `https://example.com` and
+    /// `http://example.com` are bounded separately, as is each non-default
+    /// port. The bound includes establishing, idle, and active connections; it
+    /// is not an idle-connection limit.
     pub fn max_connections_per_host(mut self, limit: usize) -> Self {
         self.max_connections_per_host = Some(limit);
         self
     }
 
-    /// Mutably sets the per-origin connection bound.
+    /// Mutably sets the live-connection bound described by
+    /// [`Builder::max_connections_per_host`].
     pub fn set_max_connections_per_host(&mut self, limit: Option<usize>) -> &mut Self {
         self.max_connections_per_host = limit;
         self

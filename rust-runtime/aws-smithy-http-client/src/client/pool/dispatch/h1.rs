@@ -91,7 +91,7 @@ impl ConnectionPool {
                     "HTTP/1 selection became stale before dispatch; reacquiring"
                 );
                 *request.uri_mut() = context.absolute_uri.clone();
-                selection.retire(CloseReason::ProtocolClosed);
+                selection.retire_connection(CloseReason::ProtocolClosed);
                 continue;
             };
             let send = selection.sender_mut().hyper_mut().try_send_request(request);
@@ -115,7 +115,7 @@ impl ConnectionPool {
                 }
                 Err(mut error) => {
                     if let Some(mut returned) = error.take_message() {
-                        exchange.retire(CloseReason::ProtocolClosed);
+                        exchange.retire_connection(CloseReason::ProtocolClosed);
                         drop(dispatch);
                         if reused {
                             tracing::trace!(
@@ -140,7 +140,7 @@ impl ConnectionPool {
                         ))
                         .with_connection(metadata));
                     }
-                    exchange.retire(CloseReason::IncompleteH1Exchange);
+                    exchange.retire_connection(CloseReason::IncompleteH1Exchange);
                     drop(dispatch);
                     let metadata = captured_metadata
                         .unwrap_or_else(|| connection.info().metadata(close_handle));
@@ -360,7 +360,7 @@ fn guard_response(
         || (method == Method::CONNECT && response.status().is_success());
     let (parts, body) = response.into_parts();
     if upgrade {
-        exchange.retire(CloseReason::Upgraded);
+        exchange.retire_connection(CloseReason::Upgraded);
         dispatch.complete();
         return Response::from_parts(parts, SdkBody::from_body_1_x(body));
     }
@@ -420,7 +420,7 @@ impl H1ResponseBody {
     fn fail(&mut self) {
         if let Some(mut lifecycle) = self.lifecycle.take() {
             if let Some(exchange) = lifecycle.exchange.take() {
-                exchange.retire(CloseReason::IncompleteH1Exchange);
+                exchange.retire_connection(CloseReason::IncompleteH1Exchange);
             }
             drop(lifecycle.dispatch.take());
         }
@@ -487,7 +487,7 @@ struct H1ResponseLifecycle {
 ///
 /// [`H1ResponseLifecycle`] creates this only after the response reaches
 /// end-of-stream while sender readiness is still pending. Readiness success
-/// returns the sender through [`H1Exchange::into_offer`]; readiness failure
+/// returns the sender through [`H1Exchange::offer_for_reuse`]; readiness failure
 /// retires the connection. Dropping the submitted task before either result retires the
 /// exchange as [`CloseReason::OwnerRuntimeShutdown`], so an unproven sender can
 /// never re-enter the pool.
@@ -514,19 +514,17 @@ impl H1ResponseLifecycle {
         };
         match ready {
             Poll::Ready(Ok(())) => {
-                if let Some(offer) = exchange.into_offer() {
-                    offer.resolve();
-                }
+                exchange.offer_for_reuse();
             }
             Poll::Ready(Err(_)) => {
-                exchange.retire(CloseReason::ProtocolClosed);
+                exchange.retire_connection(CloseReason::ProtocolClosed);
             }
             Poll::Pending => {
                 let mut readiness = H1ReadinessTask::new(exchange);
                 self.spawner.spawn(Box::pin(async move {
                     match poll_fn(|cx| readiness.poll_ready(cx)).await {
                         Ok(()) => readiness.reuse(),
-                        Err(_) => readiness.retire(CloseReason::ProtocolClosed),
+                        Err(_) => readiness.retire_connection(CloseReason::ProtocolClosed),
                     }
                 }));
             }
@@ -559,24 +557,22 @@ impl H1ReadinessTask {
             .exchange
             .take()
             .expect("HTTP/1 readiness task consumed more than once");
-        if let Some(offer) = exchange.into_offer() {
-            offer.resolve();
-        }
+        exchange.offer_for_reuse();
     }
 
     /// Retires the connection after a terminal readiness result.
-    fn retire(mut self, reason: CloseReason) {
+    fn retire_connection(mut self, reason: CloseReason) {
         self.exchange
             .take()
             .expect("HTTP/1 readiness task consumed more than once")
-            .retire(reason);
+            .retire_connection(reason);
     }
 }
 
 impl Drop for H1ReadinessTask {
     fn drop(&mut self) {
         if let Some(exchange) = self.exchange.take() {
-            exchange.retire(CloseReason::OwnerRuntimeShutdown);
+            exchange.retire_connection(CloseReason::OwnerRuntimeShutdown);
         }
     }
 }

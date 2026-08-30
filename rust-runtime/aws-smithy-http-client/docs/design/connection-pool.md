@@ -15,8 +15,9 @@ decision rather than an implicit change in the pool.
 ### Connections to one origin are bounded
 
 `max_connections_per_host = N` bounds admitted connections to one origin across every partition.
-Connecting, handshaking, open active, and open idle connections count against the bound. Each origin has
-an independent bound. The default is unbounded, and a configured value of zero is rejected.
+An origin is a scheme, host, and port, so HTTP and HTTPS are bounded separately, as is each
+non-default port. Connecting, handshaking, open active, and open idle connections count against the bound.
+Each origin has an independent bound. The default is unbounded, and a configured value of zero is rejected.
 
 The bound applies to connections admitted by the pool, not to sockets still held by the operating system
 while replaced connections finish tearing down. It is therefore not a file-descriptor ceiling;
@@ -114,7 +115,9 @@ owns its own map from origin to cell, so the structure that grows is always insi
 no request has asked for does not exist.
 
 An **`OriginAdmission`** holds what all partitions sharing a bounded origin must agree on: its connection
-budget, cross-cell demand order, and index of cells for that origin. Nothing else spans partitions.
+budget, cross-cell demand order, and index of cells for that origin. It stores the shared `OriginKey` once and
+keys its internal cell, demand, and availability records by `PartitionId`; the origin component is invariant
+inside this authority. Nothing else spans partitions.
 
 #### Ownership and lifetime
 
@@ -646,6 +649,11 @@ cancellation, or runtime shutdown returns the permit to admission before the lea
 record. After that transfer, the record remains the sole lease owner and its logical-close transition is the
 only path that releases the permit.
 
+Admission stores free capacity as a count. Removing one unit creates a non-`Copy` `Permit` with a
+never-reused diagnostic identity. Delivery materializes that value into the `CapacityLease`; lease return
+increments the free count rather than storing returned permits. The representation avoids an allocation
+on capacity return while the permit and lease types preserve linear ownership.
+
 The spawned connection driver is wrapped by a **driver lifecycle guard** armed only after the record and its
 generation-specific close authority exist. The guard holds a non-retaining close handle, not the lease. If
 the driver completes, the wrapper requests logical close with `ProtocolClosed` and the driver's source error.
@@ -980,8 +988,8 @@ enum ReusePhase {
 
 struct ReuseOperation {
     id: ReuseId,
-    connection_cell: CellId,
-    requesting_cell: CellId,
+    connection_partition: PartitionId,
+    requesting_partition: PartitionId,
     demand: DemandId,
     mode: ReuseMode,
     phase: ReusePhase,
@@ -1190,10 +1198,10 @@ enum DemandResidence {
 }
 
 enum AcquisitionPayload {
-    Capacity(PermitId),
+    Capacity(Permit),
     BorrowedH1 {
         reuse_id: ReuseId,
-        connection_cell: CellId,
+        connection_partition: PartitionId,
         candidate: ReuseCandidate,
     },
 }
@@ -1202,7 +1210,7 @@ enum MaterializedPayload {
     Capacity(EstablishmentPermit),
     BorrowedH1 {
         reuse_id: ReuseId,
-        connection_cell: CellId,
+        connection_partition: PartitionId,
         selection: H1Selection,
     },
 }
@@ -1211,7 +1219,7 @@ enum DeliveryKind {
     Capacity,
     BorrowedH1 {
         reuse_id: ReuseId,
-        connection_cell: CellId,
+        connection_partition: PartitionId,
     },
 }
 
@@ -1235,7 +1243,7 @@ enum DeliveryGuardState {
 
 struct DeliveryAck {
     delivery: DeliveryId,
-    requesting_cell: CellId,
+    requesting_partition: PartitionId,
     successor: Option<DemandSnapshot>,
     kind: DeliveryKind,
 }
@@ -1666,7 +1674,7 @@ cell-local; a returning sender does not synchronously consult admission.
 After the cell transition, a bounded connection-owning cell publishes an
 availability change only when its complete advertised or blocked state changed.
 Demand-driven admission may then install a future peer reuse operation, but it
-cannot interpose between the just-completed local return decision and its sender ownership. `Returning` is
+cannot interpose between the just-completed local return decision and its sender ownership. `Reserved` is
 counted as active rather than idle because no request may select it. Every transition revalidates retirement
 state, so a body that finishes concurrently with poison, reclaim, driver failure, or pool shutdown cannot
 republish a connection after retirement.
@@ -1833,7 +1841,7 @@ physical completion, so capacity and lifecycle accounting do not depend on what 
   lease, after both endpoints terminate, without retiring a healthy accepting generation.
 * **Return revalidation** [safety] — an H1 return checks generation and retirement state under its
   connection-owning cell before becoming visible; a sender awaiting admission remains owned by that cell and
-  non-dispatchable in `Returning`, so a late completion cannot reverse logical close or bypass return ordering.
+  non-dispatchable in `Reserved`, so a late completion cannot reverse logical close or bypass return ordering.
 * **Physical completion tracking** [safety] — root-I/O drop, not logical close or driver-future completion
   alone, terminates the physical connection lifetime, including after H1 upgrade.
 
@@ -2005,7 +2013,7 @@ impl ConnectionPool {
 ```
 
 `establishing` starts when an attempt or flight is admitted and ends when it fails or installs a record.
-`h1_idle` and `h1_active` partition logically open H1 records; checked-out and `Returning` H1 records are
+`h1_idle` and `h1_active` partition logically open H1 records; checked-out and `Reserved` H1 records are
 active, while only dispatch-eligible records in the idle set are idle.
 `h2_accepting` counts generations that may issue request leases, while `h2_active_streams` counts accepted
 request leases across accepting and draining generations. Logical close moves a connection out of those
@@ -2372,8 +2380,10 @@ failed and implements `Error`; callers are not expected to branch on an exhausti
 
 When `partitions` is never set, construction creates the one anonymous, unbound partition. Once set, the
 supplied nonempty set is the complete explicit topology and no anonymous partition is added.
-`max_connections_per_host` is unset by default, and an unset bound constructs no admission machinery; when
-set, it bounds one origin across all partitions and interface groups, not per partition.
+`max_connections_per_host` is unset by default, and an unset bound constructs no admission machinery. When
+set, it bounds one scheme-host-port origin across all partitions and interface groups, not per partition. HTTP
+and HTTPS and distinct non-default ports are bounded separately. The limit counts every establishing, idle, and
+active connection rather than only idle connections.
 
 The initial builder exposes no pool-wide HTTP/1-only or HTTP/2-only policy. The connector determines the
 negotiated protocol, while request version controls dispatch compatibility after negotiation and does not

@@ -135,7 +135,7 @@ impl PartitionRegistry {
             let mut origins = self.bounded_origins.lock();
             origins
                 .entry(origin.clone())
-                .or_insert_with(|| OriginAdmission::new(limit))
+                .or_insert_with(|| OriginAdmission::new(origin.clone(), limit))
                 .clone()
         };
         Some(admission)

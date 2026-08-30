@@ -8,7 +8,7 @@
 //! Every installed connection remains in its connection-owning [`H1Records`]
 //! until logical close. While the record is live, its exclusive sender exists
 //! in exactly one place: inside an `Idle` record or in one external owner while
-//! the record is `Selected` or `Returning`. Transitions move the sender; they
+//! the record is `Selected` or `Reserved`. Transitions move the sender; they
 //! never copy it. The residence records that ownership:
 //!
 //! ```text
@@ -16,14 +16,14 @@
 //! test fixture ------- install_idle ---------------------------> Idle(sender)
 //!
 //! Idle(sender) -- select_idle --------------------------------> Selected
-//! Idle(sender) -- take_idle_for_reuse ------------------------> Returning
-//! Selected ---- begin_return ---------------------------------> Returning
-//! Returning --- commit_return_to_waiter ----------------------> Selected
+//! Idle(sender) -- take_idle_for_reuse ------------------------> Reserved
+//! Selected ---- reserve_for_reuse ----------------------------> Reserved
+//! Reserved ---- commit_return_to_waiter ----------------------> Selected
 //! Selected ---- return_idle ----------------------------------> Idle(sender)
-//! Returning --- return_idle ----------------------------------> Idle(sender)
+//! Reserved ---- return_idle ----------------------------------> Idle(sender)
 //!
 //! Idle(sender) ------------ begin_close ----------------------> Closing
-//! Selected / Returning ---- begin_close / close_owned --------> Closing
+//! Selected / Reserved ---- begin_close / close_owned --------> Closing
 //! Closing -------- finish_close ------------------------------> removed
 //! ```
 //!
@@ -33,11 +33,10 @@
 //! ```text
 //! H1Selection
 //!   |-- dropped ------------------------------> return to connection-owning cell
-//!   |-- retire -------------------------------------------> logical close
+//!   |-- retire_connection --------------------------------> logical close
 //!   `-- request accepted --> H1Exchange
 //!                              |-- incomplete or dropped --> logical close
-//!                              `-- reusable -------------> H1ReturnOffer
-//!                                                           `-- return to connection-owning cell
+//!                              `-- offer_for_reuse --------> return to connection-owning cell
 //!
 //! cross-cell reuse --> ProvisionalH1
 //!                        |-- borrow ----------------------> H1Selection
@@ -45,12 +44,12 @@
 //!                        `-- rejected or dropped ---------> return to connection-owning cell
 //! ```
 //!
-//! [`H1Selection`], [`H1Exchange`], [`H1ReturnOffer`], and
-//! [`ProvisionalH1`] are the sender-owning values outside the cell lock. Their
-//! drop behavior returns or retires the sender so a cancellation cannot leave
-//! a record with no terminal owner. They retain the owning cell weakly because
-//! a selected sender may temporarily be the ready result in that same cell;
-//! cell teardown makes the fallback close the connection directly.
+//! [`H1Selection`], [`H1Exchange`], and [`ProvisionalH1`] are the
+//! sender-owning values outside the cell lock. Their drop behavior returns or
+//! retires the sender so a cancellation cannot leave a record with no terminal
+//! owner. They retain the owning cell weakly because a selected sender may
+//! temporarily be the ready result in that same cell; cell teardown makes the
+//! fallback close the connection directly.
 
 use super::super::admission::reuse::ReuseId;
 use super::super::connection::{CloseReason, ConnectionState};
@@ -295,8 +294,8 @@ enum H1Residence {
     },
     /// A request-side [`H1Selection`] or [`H1Exchange`] owns the sender.
     Selected,
-    /// [`H1ReturnOffer`] or [`ProvisionalH1`] owns the sender.
-    Returning,
+    /// A [`ProvisionalH1`] owns the sender for cross-cell reuse.
+    Reserved,
     /// Logical close has started and no new selection or return may commit.
     Closing,
 }
@@ -382,12 +381,11 @@ impl H1Records {
             .get_mut(&id)
             .expect("idle HTTP/1 record disappeared");
         let H1Residence::Idle { sender, .. } =
-            std::mem::replace(&mut record.residence, H1Residence::Returning)
+            std::mem::replace(&mut record.residence, H1Residence::Reserved)
         else {
             panic!("idle HTTP/1 order named a non-idle record");
         };
-        let mut owner = OwnedH1::new(record.connection.clone(), sender, true);
-        owner.mark_reused();
+        let owner = OwnedH1::new(record.connection.clone(), sender, true);
         self.assert_consistent();
         Some(owner)
     }
@@ -397,7 +395,7 @@ impl H1Records {
         self.records.values().any(|record| {
             matches!(
                 record.residence,
-                H1Residence::Idle { .. } | H1Residence::Selected | H1Residence::Returning
+                H1Residence::Idle { .. } | H1Residence::Selected | H1Residence::Reserved
             )
         })
     }
@@ -407,7 +405,7 @@ impl H1Records {
         self.records.get(&owner.id()).is_some_and(|record| {
             matches!(
                 record.residence,
-                H1Residence::Selected | H1Residence::Returning
+                H1Residence::Selected | H1Residence::Reserved
             )
         })
     }
@@ -416,32 +414,30 @@ impl H1Records {
     ///
     /// Logical close may move an externally owned sender to `Closing` before
     /// its return resolves the installed reuse, so reuse consistency is
-    /// intentionally broader than current reuse eligibility.
+    /// broader than current reuse eligibility.
     pub(super) fn supports_installed_reuse(&self) -> bool {
         self.records.values().any(|record| {
             matches!(
                 record.residence,
-                H1Residence::Selected | H1Residence::Returning | H1Residence::Closing
+                H1Residence::Selected | H1Residence::Reserved | H1Residence::Closing
             )
         })
     }
 
-    /// Returns whether this cell should remain advertised as an H1 connection-owning cell.
-    pub(super) fn is_advertisable(&self) -> bool {
-        self.has_returnable()
-    }
-
-    /// Moves an externally selected sender into return arbitration.
-    pub(super) fn begin_return(&mut self, id: ConnectionId) -> bool {
-        let Some(record) = self.records.get_mut(&id) else {
+    /// Reserves an external sender for cross-cell reuse.
+    pub(super) fn reserve_for_reuse(&mut self, owner: &OwnedH1) -> bool {
+        let Some(record) = self.records.get_mut(&owner.id()) else {
             return false;
         };
-        if !matches!(record.residence, H1Residence::Selected) {
-            return false;
+        match record.residence {
+            H1Residence::Selected => {
+                record.residence = H1Residence::Reserved;
+                self.assert_consistent();
+                true
+            }
+            H1Residence::Reserved => true,
+            H1Residence::Idle { .. } | H1Residence::Closing => false,
         }
-        record.residence = H1Residence::Returning;
-        self.assert_consistent();
-        true
     }
 
     /// Restores a returned sender to idle storage.
@@ -455,7 +451,7 @@ impl H1Records {
         };
         if !matches!(
             record.residence,
-            H1Residence::Selected | H1Residence::Returning
+            H1Residence::Selected | H1Residence::Reserved
         ) {
             return Err(owner);
         }
@@ -474,7 +470,7 @@ impl H1Records {
         };
         match record.residence {
             H1Residence::Selected => true,
-            H1Residence::Returning => {
+            H1Residence::Reserved => {
                 record.residence = H1Residence::Selected;
                 self.assert_consistent();
                 true
@@ -490,7 +486,7 @@ impl H1Records {
     pub(super) fn close_owned(&mut self, owner: &OwnedH1) -> bool {
         let should_close = match self.records.get_mut(&owner.id()) {
             Some(record) => match record.residence {
-                H1Residence::Selected | H1Residence::Returning => {
+                H1Residence::Selected | H1Residence::Reserved => {
                     record.residence = H1Residence::Closing;
                     true
                 }
@@ -527,7 +523,7 @@ impl H1Records {
                 };
                 Some(sender)
             }
-            H1Residence::Selected | H1Residence::Returning => {
+            H1Residence::Selected | H1Residence::Reserved => {
                 record.residence = H1Residence::Closing;
                 None
             }
@@ -812,7 +808,7 @@ impl H1Selection {
     }
 
     /// Retires this selection instead of returning it for reuse.
-    pub(in crate::client::pool) fn retire(mut self, reason: CloseReason) {
+    pub(in crate::client::pool) fn retire_connection(mut self, reason: CloseReason) {
         if let Some(owner) = self.owner.take() {
             retire_at_connection_cell(&self.connection_cell, owner, reason);
         }
@@ -855,10 +851,10 @@ impl Drop for H1Selection {
 ///
 /// The installed record remains `Selected` while response-body processing owns
 /// this value. After a complete response and successful Hyper readiness,
-/// [`H1Exchange::into_offer`] moves the record to `Returning`. Explicit
-/// retirement handles protocol failure or upgrade. Dropping the exchange means
-/// a reusable message boundary was not proven and closes the connection as an
-/// incomplete HTTP/1 exchange.
+/// [`H1Exchange::offer_for_reuse`] runs owning-cell return arbitration.
+/// Explicit retirement handles protocol failure or upgrade. Dropping the
+/// exchange means a reusable message boundary was not proven and closes the
+/// connection as an incomplete HTTP/1 exchange.
 pub(in crate::client::pool) struct H1Exchange {
     /// Non-retaining reference to the cell that owns the selected record.
     connection_cell: Weak<OriginCell>,
@@ -889,30 +885,18 @@ impl H1Exchange {
             .poll_ready(cx)
     }
 
-    /// Begins owning-cell return after Hyper proves a complete exchange.
-    pub(in crate::client::pool) fn into_offer(mut self) -> Option<H1ReturnOffer> {
+    /// Offers a proven-ready sender to owning-cell reuse policy.
+    pub(in crate::client::pool) fn offer_for_reuse(mut self) {
         let mut owner = self
             .owner
             .take()
             .expect("HTTP/1 exchange consumed more than once");
         owner.mark_reused();
-        if self
-            .connection_cell
-            .upgrade()
-            .is_some_and(|connection_cell| connection_cell.begin_h1_return(owner.id()))
-        {
-            Some(H1ReturnOffer {
-                connection_cell: self.connection_cell.clone(),
-                owner: Some(owner),
-            })
-        } else {
-            retire_at_connection_cell(&self.connection_cell, owner, CloseReason::ProtocolClosed);
-            None
-        }
+        return_to_connection_cell(&self.connection_cell, owner);
     }
 
     /// Retires the sender instead of returning it to the connection-owning cell.
-    pub(in crate::client::pool) fn retire(mut self, reason: CloseReason) {
+    pub(in crate::client::pool) fn retire_connection(mut self, reason: CloseReason) {
         if let Some(owner) = self.owner.take() {
             let upgrade = (reason == CloseReason::Upgraded).then(|| owner.connection().clone());
             retire_at_connection_cell(&self.connection_cell, owner, reason);
@@ -952,53 +936,7 @@ impl Drop for H1Exchange {
     }
 }
 
-/// Reusable sender committed to connection-owning-cell return policy.
-///
-/// [`H1Exchange::into_offer`] creates this value after Hyper proves readiness
-/// and changes the installed record from `Selected` to `Returning`. Resolving
-/// it runs return arbitration, which may satisfy local demand, satisfy reserved
-/// peer reuse, or store the sender as `Idle`. Dropping it runs the same ordinary
-/// return fallback.
-pub(in crate::client::pool) struct H1ReturnOffer {
-    /// Non-retaining reference to the cell that owns the returning record.
-    connection_cell: Weak<OriginCell>,
-    /// Reusable sender being offered.
-    owner: Option<OwnedH1>,
-}
-
-impl H1ReturnOffer {
-    /// Runs ordinary owning-cell return now.
-    pub(in crate::client::pool) fn resolve(mut self) {
-        if let Some(owner) = self.owner.take() {
-            return_to_connection_cell(&self.connection_cell, owner);
-        }
-    }
-}
-
-impl fmt::Debug for H1ReturnOffer {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("H1ReturnOffer")
-            .field(
-                "connection-owning cell",
-                &self
-                    .connection_cell
-                    .upgrade()
-                    .map(|connection_cell| connection_cell.id().clone()),
-            )
-            .field("connection_id", &self.owner.as_ref().map(OwnedH1::id))
-            .finish()
-    }
-}
-
-impl Drop for H1ReturnOffer {
-    fn drop(&mut self) {
-        if let Some(owner) = self.owner.take() {
-            return_to_connection_cell(&self.connection_cell, owner);
-        }
-    }
-}
-
-/// Sender temporarily detached from a `Returning` record for peer reuse.
+/// Sender temporarily detached from a `Reserved` record for peer reuse.
 ///
 /// Reuse arbitration creates this value before crossing from the
 /// connection-owning cell to a requesting cell. A successful borrow converts
@@ -1006,7 +944,7 @@ impl Drop for H1ReturnOffer {
 /// capacity. Rejection, cancellation, or `Drop` returns the sender through
 /// ordinary connection-owning-cell policy.
 pub(in crate::client::pool) struct ProvisionalH1 {
-    /// Non-retaining connection-owning cell whose record remains in `Returning`.
+    /// Non-retaining connection-owning cell whose record remains in `Reserved`.
     connection_cell: Weak<OriginCell>,
     /// Sender reserved by the provisional action.
     owner: Option<OwnedH1>,

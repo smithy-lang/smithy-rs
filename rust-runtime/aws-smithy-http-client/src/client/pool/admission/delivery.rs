@@ -7,7 +7,7 @@
 //!
 //! Admission reserves one demand generation and moves either bounded capacity
 //! or a provisional HTTP/1 sender into a [`DeliveryGuard`]. The guard
-//! commits any connection-owning cell transition before taking the requesting
+//! commits any connection cell transition before taking the requesting
 //! cell lock, then owns the payload until that cell accepts it. Its
 //! acknowledgement keeps the demand fence installed until requesting-cell
 //! state is authoritative.
@@ -15,12 +15,13 @@
 use super::reuse::{H1AvailabilityOutcome, ReuseCandidate, ReuseId};
 use super::{
     AdmissionAction, DeliveryAckResult, DeliveryId, DemandId, DemandSnapshot, OriginAdmission,
-    PermitId,
+    Permit,
 };
 use crate::client::pool::cell::h1::H1Selection;
 use crate::client::pool::cell::{
-    AcquisitionEvent, AcquisitionResult, CellId, EstablishmentPermit, OriginCell,
+    AcquisitionEvent, AcquisitionResult, EstablishmentPermit, OriginCell,
 };
+use crate::client::pool::partition::PartitionId;
 use crate::sync::Arc;
 use aws_smithy_runtime_api::client::connection::ConnectionId;
 use std::fmt;
@@ -28,19 +29,19 @@ use std::fmt;
 /// Capacity or a borrowed HTTP/1 sender crossing to waiting demand.
 enum AcquisitionPayload {
     /// Permit removed from admission but not yet represented by a lease.
-    Capacity(PermitId),
+    Capacity(Permit),
     /// Provisional sender whose owning-cell reservation must revalidate.
     BorrowedH1 {
         /// Reuse operation that selected this sender.
         reuse_id: ReuseId,
         /// Cell that owns the sender and local reservation.
-        connection_cell: CellId,
+        connection_partition: PartitionId,
         /// Sender owner with cancellation fallback.
         candidate: ReuseCandidate,
     },
 }
 
-/// Payload after every connection-owning cell-side fallible transition has completed.
+/// Payload after every connection cell-side fallible transition has completed.
 enum MaterializedPayload {
     /// Establishment authority ready to move into the requesting cell.
     Capacity(EstablishmentPermit),
@@ -49,7 +50,7 @@ enum MaterializedPayload {
         /// Reuse operation that selected this sender.
         reuse_id: ReuseId,
         /// Cell that owns the installed connection record.
-        connection_cell: CellId,
+        connection_partition: PartitionId,
         /// Dispatch-ready sender ownership.
         selection: H1Selection,
     },
@@ -66,7 +67,7 @@ pub(in crate::client::pool) struct DeliveryGuard {
     /// Never-reused identity of this one crossing.
     delivery: DeliveryId,
     /// Cell selected while admission was locked.
-    requesting_cell: CellId,
+    requesting_partition: PartitionId,
     /// Exact requesting-cell demand generation that must revalidate the
     /// payload.
     demand: DemandId,
@@ -75,8 +76,18 @@ pub(in crate::client::pool) struct DeliveryGuard {
 }
 
 /// Ownership phase of one admission-to-cell delivery.
+///
+/// ```text
+/// Undelivered -- materialize connection-cell work ----------> Materialized
+/// Undelivered -- peer sender rejection or drop ------------------> admission fallback
+/// Materialized -- commit to requesting cell ----------------> Disarmed + DeliveryAck
+/// Materialized -- drop -------------------------------------> admission fallback
+/// ```
+///
+/// `Disarmed` owns no payload. After commit, `DeliveryAck` owns fence and
+/// connection-cell completion.
 enum DeliveryGuardState {
-    /// Admission removed the payload, but connection-owning cell-side work may still fail.
+    /// Admission removed the payload, but connection cell-side work may still fail.
     Undelivered {
         /// Payload still owned by this fallback.
         payload: Option<AcquisitionPayload>,
@@ -100,14 +111,14 @@ impl DeliveryGuard {
     pub(super) fn capacity(
         origin: Arc<OriginAdmission>,
         delivery: DeliveryId,
-        requesting_cell: CellId,
+        requesting_partition: PartitionId,
         demand: DemandId,
-        permit: PermitId,
+        permit: Permit,
     ) -> Self {
         Self {
             origin,
             delivery,
-            requesting_cell,
+            requesting_partition,
             demand,
             state: DeliveryGuardState::Undelivered {
                 payload: Some(AcquisitionPayload::Capacity(permit)),
@@ -120,21 +131,21 @@ impl DeliveryGuard {
     pub(super) fn borrowed_h1(
         origin: Arc<OriginAdmission>,
         delivery: DeliveryId,
-        requesting_cell: CellId,
+        requesting_partition: PartitionId,
         demand: DemandId,
         reuse_id: ReuseId,
-        connection_cell: CellId,
+        connection_partition: PartitionId,
         candidate: ReuseCandidate,
     ) -> Self {
         Self {
             origin,
             delivery,
-            requesting_cell,
+            requesting_partition,
             demand,
             state: DeliveryGuardState::Undelivered {
                 payload: Some(AcquisitionPayload::BorrowedH1 {
                     reuse_id,
-                    connection_cell,
+                    connection_partition,
                     candidate,
                 }),
                 on_drop: DeliveryAckResult::RetrySameResidence,
@@ -151,7 +162,7 @@ impl DeliveryGuard {
     #[cfg(test)]
     pub(in crate::client::pool) fn is_current(&self) -> bool {
         self.origin
-            .delivery_is_current(self.delivery, &self.requesting_cell, self.demand)
+            .delivery_is_current(self.delivery, &self.requesting_partition, self.demand)
     }
 
     /// Materializes owning-cell state and attempts one requesting-cell delivery.
@@ -159,7 +170,7 @@ impl DeliveryGuard {
         if !self.materialize() {
             return None;
         }
-        match self.origin.cell(&self.requesting_cell) {
+        match self.origin.cell(&self.requesting_partition) {
             Some(requesting_cell) => OriginCell::receive_delivery(&requesting_cell, self),
             None => self.reject(None),
         }
@@ -186,12 +197,12 @@ impl DeliveryGuard {
             }
             AcquisitionPayload::BorrowedH1 {
                 reuse_id,
-                connection_cell,
+                connection_partition,
                 candidate,
             } => match candidate.commit() {
                 Ok(selection) => MaterializedPayload::BorrowedH1 {
                     reuse_id,
-                    connection_cell,
+                    connection_partition,
                     selection,
                 },
                 Err(candidate) => {
@@ -199,7 +210,7 @@ impl DeliveryGuard {
                     let next = OriginAdmission::finish_delivery(
                         &self.origin,
                         self.delivery,
-                        &self.requesting_cell,
+                        &self.requesting_partition,
                         None,
                         on_drop,
                     );
@@ -239,7 +250,7 @@ impl DeliveryGuard {
             }
             MaterializedPayload::BorrowedH1 {
                 reuse_id,
-                connection_cell,
+                connection_partition,
                 selection,
             } => {
                 let connection_id = selection.connection_id();
@@ -248,7 +259,7 @@ impl DeliveryGuard {
                     DeliveryKind::BorrowedH1 {
                         connection_id,
                         reuse_id,
-                        connection_cell,
+                        connection_partition,
                     },
                 )
             }
@@ -259,7 +270,7 @@ impl DeliveryGuard {
             DeliveryAck {
                 origin: self.origin.clone(),
                 delivery: self.delivery,
-                requesting_cell: self.requesting_cell.clone(),
+                requesting_partition: self.requesting_partition,
                 successor,
                 kind: Some(kind),
             },
@@ -294,7 +305,7 @@ impl DeliveryGuard {
                 OriginAdmission::finish_delivery(
                     &self.origin,
                     self.delivery,
-                    &self.requesting_cell,
+                    &self.requesting_partition,
                     permit,
                     result,
                 )
@@ -305,30 +316,30 @@ impl DeliveryGuard {
                     OriginAdmission::finish_delivery(
                         &self.origin,
                         self.delivery,
-                        &self.requesting_cell,
+                        &self.requesting_partition,
                         None,
                         result,
                     )
                 }
                 Some(MaterializedPayload::BorrowedH1 {
                     reuse_id,
-                    connection_cell,
+                    connection_partition,
                     selection,
                 }) => {
-                    let owning_cell = self.origin.cell(&connection_cell);
+                    let owning_cell = self.origin.cell(&connection_partition);
                     drop(selection);
                     let outcome = match owning_cell {
                         Some(owning_cell) => H1AvailabilityOutcome::reported(
-                            connection_cell,
+                            connection_partition,
                             owning_cell.cancel_h1_reuse(reuse_id),
                         ),
-                        None => H1AvailabilityOutcome::expired(connection_cell),
+                        None => H1AvailabilityOutcome::expired(connection_partition),
                     };
                     OriginAdmission::finish_borrow_delivery(
                         &self.origin,
                         reuse_id,
                         self.delivery,
-                        &self.requesting_cell,
+                        &self.requesting_partition,
                         result,
                         None,
                         Some(outcome),
@@ -346,7 +357,7 @@ impl fmt::Debug for DeliveryGuard {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("DeliveryGuard")
             .field("delivery", &self.delivery)
-            .field("requesting_cell", &self.requesting_cell)
+            .field("requesting_partition", &self.requesting_partition)
             .field("demand", &self.demand)
             .finish_non_exhaustive()
     }
@@ -376,10 +387,10 @@ pub(in crate::client::pool) struct DeliveryAck {
     /// Delivery fence closed by this acknowledgement.
     delivery: DeliveryId,
     /// Cell that now owns or rejected the acquisition event.
-    requesting_cell: CellId,
+    requesting_partition: PartitionId,
     /// Successor demand to publish after the old generation finishes.
     successor: Option<DemandSnapshot>,
-    /// Payload-specific connection-owning cell completion still owed by this guard.
+    /// Payload-specific connection cell completion still owed by this guard.
     kind: Option<DeliveryKind>,
 }
 
@@ -387,14 +398,14 @@ pub(in crate::client::pool) struct DeliveryAck {
 enum DeliveryKind {
     /// Only the admission delivery fence remains to acknowledge.
     Capacity,
-    /// The connection-owning cell must learn whether sender transfer succeeded.
+    /// The connection cell must learn whether sender transfer succeeded.
     BorrowedH1 {
         /// Connection whose sender crossed to the requesting cell.
         connection_id: ConnectionId,
         /// Reuse operation completed by this acknowledgement.
         reuse_id: ReuseId,
         /// Cell whose local reuse reservation must complete.
-        connection_cell: CellId,
+        connection_partition: PartitionId,
     },
 }
 
@@ -439,7 +450,7 @@ impl DeliveryAck {
                 OriginAdmission::finish_delivery(
                     &self.origin,
                     self.delivery,
-                    &self.requesting_cell,
+                    &self.requesting_partition,
                     None,
                     result,
                 )
@@ -447,26 +458,26 @@ impl DeliveryAck {
             DeliveryKind::BorrowedH1 {
                 connection_id,
                 reuse_id,
-                connection_cell,
+                connection_partition,
             } => {
                 let rejected = returned_events.is_some();
                 let owning_cell = rejected
-                    .then(|| self.origin.cell(&connection_cell))
+                    .then(|| self.origin.cell(&connection_partition))
                     .flatten();
                 drop(returned_events);
                 let rejected_outcome = rejected.then(|| match owning_cell {
                     Some(owning_cell) => H1AvailabilityOutcome::reported(
-                        connection_cell.clone(),
+                        connection_partition,
                         owning_cell.cancel_h1_reuse(reuse_id),
                     ),
-                    None => H1AvailabilityOutcome::expired(connection_cell.clone()),
+                    None => H1AvailabilityOutcome::expired(connection_partition),
                 });
-                let transferred_connection_cell = (!rejected).then_some(connection_cell.clone());
+                let transferred_connection_cell = (!rejected).then_some(connection_partition);
                 let action = OriginAdmission::finish_borrow_delivery(
                     &self.origin,
                     reuse_id,
                     self.delivery,
-                    &self.requesting_cell,
+                    &self.requesting_partition,
                     result,
                     transferred_connection_cell,
                     rejected_outcome,
@@ -474,11 +485,11 @@ impl DeliveryAck {
                 if !rejected {
                     tracing::trace!(
                         connection_id = %connection_id,
-                        request_partition = ?self.requesting_cell.partition(),
-                        connection_partition = ?connection_cell.partition(),
-                        origin_scheme = %self.requesting_cell.origin().scheme(),
-                        origin_host = self.requesting_cell.origin().host(),
-                        origin_port = ?self.requesting_cell.origin().port(),
+                        request_partition = ?self.requesting_partition,
+                        connection_partition = ?connection_partition,
+                        origin_scheme = %self.origin.origin().scheme(),
+                        origin_host = self.origin.origin().host(),
+                        origin_port = ?self.origin.origin().port(),
                         "HTTP/1 connection borrowed for peer demand"
                     );
                 }
@@ -492,7 +503,7 @@ impl fmt::Debug for DeliveryAck {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("DeliveryAck")
             .field("delivery", &self.delivery)
-            .field("requesting_cell", &self.requesting_cell)
+            .field("requesting_partition", &self.requesting_partition)
             .finish_non_exhaustive()
     }
 }
