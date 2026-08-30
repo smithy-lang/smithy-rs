@@ -5,9 +5,11 @@
 
 //! HTTP/1 connection records and exclusive request-sender ownership.
 //!
-//! An installed record stays in [`H1Records`] while its sender moves through
-//! idle storage, request selection, response completion, and return
-//! arbitration. The residence says where that one sender must be:
+//! Every installed connection remains in its connection-owning [`H1Records`]
+//! until logical close. While the record is live, its exclusive sender exists
+//! in exactly one place: inside an `Idle` record or in one external owner while
+//! the record is `Selected` or `Returning`. Transitions move the sender; they
+//! never copy it. The residence records that ownership:
 //!
 //! ```text
 //! completed handshake -- install_selected --------------------> Selected
@@ -57,11 +59,9 @@ use crate::sync::{Arc, Weak};
 use aws_smithy_runtime_api::client::connection::ConnectionId;
 use std::collections::{HashMap, VecDeque};
 use std::fmt;
-#[cfg(feature = "default-client")]
 use std::task::{Context, Poll};
 use std::time::SystemTime;
 
-#[cfg(feature = "default-client")]
 use aws_smithy_types::body::SdkBody;
 
 /// Exclusive request handle for one Hyper HTTP/1 client connection.
@@ -73,7 +73,6 @@ use aws_smithy_types::body::SdkBody;
 /// ownership transitions without running Hyper.
 pub(in crate::client::pool) enum H1Sender {
     /// Hyper's exclusive HTTP/1 request sender.
-    #[cfg(feature = "default-client")]
     Hyper(hyper::client::conn::http1::SendRequest<SdkBody>),
     /// Synthetic sender identity used only by ownership tests.
     #[cfg(test)]
@@ -82,7 +81,6 @@ pub(in crate::client::pool) enum H1Sender {
 
 impl H1Sender {
     /// Wraps a sender returned by a successful Hyper HTTP/1 handshake.
-    #[cfg(feature = "default-client")]
     pub(in crate::client::pool) fn from_hyper(
         sender: hyper::client::conn::http1::SendRequest<SdkBody>,
     ) -> Self {
@@ -94,7 +92,6 @@ impl H1Sender {
     /// # Panics
     ///
     /// Panics when a test-only sender reaches the real dispatch path.
-    #[cfg(feature = "default-client")]
     pub(in crate::client::pool) fn hyper_mut(
         &mut self,
     ) -> &mut hyper::client::conn::http1::SendRequest<SdkBody> {
@@ -106,7 +103,6 @@ impl H1Sender {
     }
 
     /// Returns whether Hyper already permits another request.
-    #[cfg(feature = "default-client")]
     fn is_ready(&self) -> bool {
         match self {
             Self::Hyper(sender) => sender.is_ready(),
@@ -126,7 +122,6 @@ impl H1Sender {
     pub(super) fn test_id(&self) -> u64 {
         match self {
             Self::Test(id) => *id,
-            #[cfg(feature = "default-client")]
             Self::Hyper(_) => panic!("Hyper sender used in a synthetic ownership test"),
         }
     }
@@ -135,7 +130,6 @@ impl H1Sender {
 impl fmt::Debug for H1Sender {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            #[cfg(feature = "default-client")]
             Self::Hyper(_) => f.write_str("H1Sender::Hyper"),
             #[cfg(test)]
             Self::Test(id) => f.debug_tuple("H1Sender::Test").field(id).finish(),
@@ -738,11 +732,13 @@ pub(super) struct CloseRecord {
     pub(super) sender: Option<H1Sender>,
 }
 
-/// An exclusive H1 sender selected for request preparation and dispatch.
+/// Exclusive sender checked out for readiness and one request dispatch.
 ///
-/// Dropping an undispatched selection follows ordinary owning-cell return. Once
-/// Hyper accepts a request, convert this into [`H1Exchange`]. Dropping that
-/// exchange retires the connection unless Hyper proves a reusable boundary.
+/// Local selection, successful establishment, or peer reuse creates this value
+/// while the installed record is `Selected`. The value alone may use the
+/// sender. Hyper accepting the request transfers ownership to [`H1Exchange`];
+/// explicit retirement closes the installed record. Dropping an undispatched
+/// selection returns the sender through ordinary connection-owning-cell policy.
 pub(in crate::client::pool) struct H1Selection {
     /// Non-retaining reference to the cell that owns the installed record.
     connection_cell: Weak<OriginCell>,
@@ -791,7 +787,10 @@ impl H1Selection {
             .sender_mut()
     }
 
-    /// Transfers an accepted request's sender to response-lifecycle cleanup.
+    /// Transfers the sender after Hyper accepts the request.
+    ///
+    /// The installed record remains `Selected`; [`H1Exchange`] now owns the
+    /// sender until the response proves reuse or requires retirement.
     pub(in crate::client::pool) fn into_exchange(mut self) -> H1Exchange {
         H1Exchange {
             connection_cell: self.connection_cell.clone(),
@@ -852,10 +851,14 @@ impl Drop for H1Selection {
     }
 }
 
-/// Accepted HTTP/1 exchange awaiting a reusable message boundary.
+/// Exclusive sender for a request Hyper accepted on this connection.
 ///
-/// This value follows the response lifecycle and may later move into an
-/// owner-runtime readiness task. Dropping it means reuse was not proven.
+/// The installed record remains `Selected` while response-body processing owns
+/// this value. After a complete response and successful Hyper readiness,
+/// [`H1Exchange::into_offer`] moves the record to `Returning`. Explicit
+/// retirement handles protocol failure or upgrade. Dropping the exchange means
+/// a reusable message boundary was not proven and closes the connection as an
+/// incomplete HTTP/1 exchange.
 pub(in crate::client::pool) struct H1Exchange {
     /// Non-retaining reference to the cell that owns the selected record.
     connection_cell: Weak<OriginCell>,
@@ -865,7 +868,6 @@ pub(in crate::client::pool) struct H1Exchange {
 
 impl H1Exchange {
     /// Returns whether Hyper already permits another request.
-    #[cfg(feature = "default-client")]
     pub(in crate::client::pool) fn is_ready(&self) -> bool {
         self.owner
             .as_ref()
@@ -875,7 +877,6 @@ impl H1Exchange {
     }
 
     /// Polls Hyper for proof that the sender can accept another request.
-    #[cfg(feature = "default-client")]
     pub(in crate::client::pool) fn poll_ready(
         &mut self,
         cx: &mut Context<'_>,
@@ -951,10 +952,13 @@ impl Drop for H1Exchange {
     }
 }
 
-/// Reusable sender awaiting connection-owning cell return policy.
+/// Reusable sender committed to connection-owning-cell return policy.
 ///
-/// Until this value resolves, its installed record is `Returning` and cannot
-/// be selected. Dropping the offer performs ordinary local return.
+/// [`H1Exchange::into_offer`] creates this value after Hyper proves readiness
+/// and changes the installed record from `Selected` to `Returning`. Resolving
+/// it runs return arbitration, which may satisfy local demand, satisfy reserved
+/// peer reuse, or store the sender as `Idle`. Dropping it runs the same ordinary
+/// return fallback.
 pub(in crate::client::pool) struct H1ReturnOffer {
     /// Non-retaining reference to the cell that owns the returning record.
     connection_cell: Weak<OriginCell>,
@@ -994,9 +998,13 @@ impl Drop for H1ReturnOffer {
     }
 }
 
-/// Returning H1 sender detached for one reuse or delivery attempt.
+/// Sender temporarily detached from a `Returning` record for peer reuse.
 ///
-/// Rejection or cancellation drops back into ordinary owning-cell return.
+/// Reuse arbitration creates this value before crossing from the
+/// connection-owning cell to a requesting cell. A successful borrow converts
+/// it into [`H1Selection`]; reclaim closes the connection and releases its
+/// capacity. Rejection, cancellation, or `Drop` returns the sender through
+/// ordinary connection-owning-cell policy.
 pub(in crate::client::pool) struct ProvisionalH1 {
     /// Non-retaining connection-owning cell whose record remains in `Returning`.
     connection_cell: Weak<OriginCell>,
@@ -1005,7 +1013,7 @@ pub(in crate::client::pool) struct ProvisionalH1 {
 }
 
 impl ProvisionalH1 {
-    /// Creates provisional ownership for a sender extracted by a connection-owning cell reuse.
+    /// Creates a provisional owner for a sender extracted by reuse arbitration.
     pub(super) fn new(connection_cell: &Arc<OriginCell>, owner: OwnedH1) -> Self {
         Self {
             connection_cell: Weak::from_arc(connection_cell),
@@ -1013,7 +1021,15 @@ impl ProvisionalH1 {
         }
     }
 
-    /// Detaches the connection-owning cell and sender for a connection-owning cell reuse transition.
+    /// Returns the selected connection identity without consuming the sender.
+    pub(in crate::client::pool) fn connection_id(&self) -> ConnectionId {
+        self.owner
+            .as_ref()
+            .expect("provisional HTTP/1 sender consumed more than once")
+            .id()
+    }
+
+    /// Transfers the cell reference and sender into the next reuse transition.
     pub(super) fn into_parts(mut self) -> (Weak<OriginCell>, OwnedH1) {
         let owner = self
             .owner
@@ -1022,7 +1038,7 @@ impl ProvisionalH1 {
         (self.connection_cell.clone(), owner)
     }
 
-    /// Rebuilds provisional ownership after a failed reuse transition.
+    /// Restores provisional ownership when a reuse transition cannot commit.
     pub(super) fn from_parts(connection_cell: Weak<OriginCell>, owner: OwnedH1) -> Self {
         Self {
             connection_cell,

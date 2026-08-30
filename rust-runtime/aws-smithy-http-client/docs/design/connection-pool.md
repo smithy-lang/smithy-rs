@@ -60,6 +60,11 @@ and physically live transports.
 
 ## Architecture
 
+The architecture proceeds from topology and ownership through local selection,
+establishment, bounded coordination, dispatch, retirement, and telemetry. The
+model below summarizes the state and request path; the later sections define
+each contract.
+
 ### The model
 
 The pool sits between Hyper and a connector. Hyper provides the HTTP/1.1 and HTTP/2 implementations:
@@ -80,7 +85,7 @@ Connections are indexed by two things that vary independently.
 
 A **partition** is a placement scope for connection establishment and drivers, plus an optional network
 interface its sockets bind to. An explicit partition names its runtime; the anonymous partition binds to the
-current Tokio runtime on first establishment. The set is fixed at construction.
+current Tokio runtime on first use. The set is fixed at construction.
 
 An **origin** is a scheme, host, and port — the web's origin as
 [RFC 6454](https://www.rfc-editor.org/rfc/rfc6454) defines it, canonicalized so two spellings of one server
@@ -127,7 +132,7 @@ Client
 
 | Type              | Created                                | Destroyed                                     | Shared across partitions |
 | ----------------- | -------------------------------------- | --------------------------------------------- | ------------------------ |
-| `ConnectionPool`  | by the builder                         | when the last `Client` and request release it | —                        |
+| `ConnectionPool`  | by the builder                         | when the last pool, client, and request release it | —                        |
 | `Partition`       | at construction, from the declared set | at pool drop                                  | no                       |
 | `OriginCell`      | first request for (partition, origin)  | not while the origin is live                  | no                       |
 | `OriginAdmission` | first request for a *bounded* origin   | not while the pool lives                      | yes                      |
@@ -136,12 +141,12 @@ Client
 `Client` is what a caller holds and what implements the smithy runtime's `HttpClient`. It pairs the pool with
 one resolved partition, so a request never searches for its partition — the handle already names it.
 
-An `OriginAdmission` exists only for a bounded origin. It has work to do only when a bound can force borrow or
-reclaim: on a local miss a partition establishes its own connection, and it borrows a peer's HTTP/1 request
-handle only when it cannot establish because no permit is free. An unbounded origin never borrows
-or reclaims, so it has no origin-wide admission or cross-partition structure; its cells are the whole of it.
-Reuse scope governs which cells may relieve one another's admission pressure, so it has no effect until a
-bound makes that pressure possible.
+An `OriginAdmission` exists only for a bounded origin. A local miss normally
+establishes on the requesting partition. When no permit is free, admission may
+use compatible peer protocol state or reclaim peer capacity for that demand.
+An unbounded origin never needs cross-partition admission or peer indexes; its
+cells are independent. Reuse scope controls which peer protocol state is
+compatible, while reclaim may recover capacity across eligibility groups.
 
 Pool retention, request accounting, root-I/O ownership, and bounded capacity
 have different lifetimes.
@@ -190,32 +195,33 @@ installed `ConnectionState`. Logical close returns it. Dispatch handles,
 
 #### Request path
 
-A request first resolves its partition-local cell and attempts local reuse. A
-miss creates one waiter; the available capacity and protocol determine how that
-waiter is served.
+A request resolves its partition-local cell and first attempts compatible
+local selection. A miss registers one acquisition. Capacity and available
+protocol state determine how that acquisition completes.
 
 ```text
-Client(partition P, URI)
-  `-- resolve P.origins[origin] -> OriginCell
+Client(partition P, request URI)
+`-- resolve OriginCell(P, origin)
+    |
+    |-- compatible local connection ------------------> dispatch
+    |
+    `-- local miss -> register one acquisition
         |
-        +-- local H1/H2 selection succeeds -> dispatch
+        |-- unbounded origin or free permit
+        |   `-- establish on P owner runtime ----------> dispatch
         |
-        `-- local miss -> register one waiter
-              |
-              +-- unbounded origin or free permit
-              |     `-- establish on P's owner runtime
-              |
-              `-- bounded origin at capacity
-                    +-- borrow eligible peer H1
-                    +-- reclaim peer H1 capacity
-                    `-- wait for a return, publication, or released permit
+        `-- bounded origin at capacity
+            |-- compatible peer connection ------------> dispatch
+            |-- reclaimable peer capacity
+            |   `-- close peer; transfer permit
+            |       `-- establish on P owner runtime --> dispatch
+            `-- otherwise park until state changes
 
-selection
-  `-- commit dispatch -> Hyper
-        +-- reusable H1 -----------> return to connection-owning cell
-        +-- H2 request ends -------> release request lease
-        +-- protocol upgrade ------> transfer protocol ownership
-        `-- terminal failure ------> logical close
+selected protocol handle
+`-- commit against logical close -> Hyper
+    |-- request completes ------------> return or release protocol state
+    |-- protocol upgrade ------------> caller owns upgraded lifecycle
+    `-- connection-terminal failure -> logical then physical close
 ```
 
 [Local connection selection](#local-connection-selection) defines local selection.
@@ -225,8 +231,7 @@ and resource delivery, with [Liveness](#liveness) stating when those paths guara
 [Dispatching and completing a request](#dispatching-and-completing-a-request) defines request preparation,
 stale-reuse retry, and the transfer to response or upgrade ownership. The path ends in
 [return or retirement](#connection-retirement-and-maintenance), where each terminal outcome either makes the
-connection reusable or closes it. This diagram is a map of those sections, not a second specification of
-their transitions.
+connection reusable or closes it.
 
 ### Topology and identity
 
@@ -295,15 +300,12 @@ Drivers are spawned only through their partition's `DriverSpawner` and never mov
 keeps a connection's I/O on the runtime that established it, whichever partition later dispatches on it: a
 reused connection carries only its dispatch handle across the boundary, never its driver.
 
-The interface binding is applied before connect through the underlying HTTP connector. A connected socket's
-egress interface is then fixed for its lifetime. That immutability is what makes handing a dispatch handle to
-another partition safe: it cannot move bytes off the interface the caller chose.
-
-`Partition::interface` is compile-time gated to the target set supported by the
-default HTTP connector. That connector validates and applies the configured
-interface before opening a socket; host-specific failures are reported during
-establishment. The unstable injected connector used by tests does not receive
-or honor partition interface placement.
+`Partition::interface` configures placement through the default HTTP connector.
+The binding is applied before connect, so a connected socket retains its egress
+placement when another partition uses its dispatch authority. Interface
+existence, permissions, and other host-specific failures are connector errors
+reported during establishment. Custom connector construction has no pool-level
+interface-placement contract.
 
 A pool with no declared partitions has exactly one unbound owner partition. Its first use binds that anonymous
 partition to one Tokio runtime for connection-owned work; requests may originate on that runtime or on other
@@ -400,10 +402,8 @@ scheme other than HTTP or HTTPS, an invalid host or port, and any input that doe
 `InvalidOrigin` carries the offending component and source error for diagnostics, implements `Error`, and
 exposes no second, less strict public key representation.
 
-The implementation reads explicit port text from the already-validated `Authority` rather than relying only
-on `Authority::port_u16()`. That accessor returns `None` for both an absent port and text that cannot be
-represented as a nonzero `u16`; preserving the distinction prevents malformed, zero, or out-of-range ports
-from aliasing the scheme's default-port origin.
+Canonicalization distinguishes an absent port from malformed, zero, or
+out-of-range port text. Invalid explicit ports cannot alias the scheme default.
 
 The request's HTTP version is absent. A request marked HTTP/1.1 may dispatch on an HTTP/2
 connection, so version is a dispatch-eligibility question decided per connection, not an identity question
@@ -525,11 +525,11 @@ and the resolved partition, not live origin or cell state.
 A request arrives on a `Client`, which already names its partition. Reuse is therefore two steps: the
 partition's origin map, then the cell.
 
-```
+```text
 request on partition P for origin O
-  P is resolved on the client handle              no lookup
-  → P.origins[O]                                  partition-local
-  → cell: take a live idle connection             cell-local
+  |-- P already resolved by Client
+  `-- P.origins[O]                     partition-local origin lookup
+      `-- select compatible state      one OriginCell lock
 ```
 
 That is the entire path for a reuse hit. It performs no origin-wide coordination, reads no other partition's
@@ -607,19 +607,14 @@ on another, every readiness event would cross runtimes, and the socket's reactor
 the driver that holds it. So establishment — connector, transport, TLS, ALPN, handshake — and the driver it
 produces run on the same runtime.
 
-Which runtime that is depends on the partition. An **explicit partition** names its owner runtime through its
-`DriverSpawner`. The **anonymous partition** has no caller-supplied runtime, so its first request captures the
-current Tokio runtime as that partition's owner. A request may itself be polled on another runtime: after a
-miss acquires establishment capacity, the pool submits the still-unpolled connector, transport, TLS/ALPN, and
-Hyper handshake future through the owner partition's spawner. Completion commits the result to the cell and
-wakes the requesting task. The resulting protocol driver and pending return work use the same spawner.
-The handoff costs one task submission and wake for each new connection.
-Requests are normally issued from their partition's runtime, but correctness
-does not depend on that convention: polling establishment on the requesting
-task could register a socket with a different reactor after a client moves
-between runtimes. Local reuse and dispatch on an established connection do not
-pay this handoff. A same-runtime shortcut would add a second establishment path
-and is deferred until measurement shows the submission cost is material.
+An **explicit partition** names its owner runtime through `DriverSpawner`. The
+**anonymous partition** captures the current Tokio runtime on first use. A
+request may be polled on another runtime, so every new connection submits the
+still-unpolled connector, transport, TLS/ALPN, and Hyper handshake future to
+the partition owner. Completion updates the cell and wakes the requesting task;
+the resulting driver and pending return work use the same spawner. This policy
+costs one task submission and wake per new connection. Local reuse and dispatch
+on an established connection do not pay that handoff.
 
 The submitted establishment future carries its own completion guard. If a spawner discards the future before
 polling it, or its owner task is dropped after polling begins, that guard completes the waiter with a terminal
@@ -1105,8 +1100,8 @@ lock, turning the no-nesting rule into an executable check across the ordinary s
 Both stay within one origin, and neither moves a driver, so the I/O-placement guarantee from
 [Connection placement follows declared topology](#connection-placement-follows-declared-topology)
 holds under both. This is why `max_connections_per_host` below the partition count is valid rather than an
-error: a partition with no permit of its own borrows a peer's request handle
-or receives capacity through reclaim, and makes progress without a connection of its own. The
+error: a partition with no permit of its own may dispatch through an eligible
+peer HTTP/1 sender or receive capacity through reclaim. The
 default `NetworkInterface` scope uses both; `Partition` and `Pool` are the same machinery with a narrower or
 wider eligibility group.
 
@@ -2418,7 +2413,9 @@ aws-smithy-http-client/src/client/
       demand.rs        — versioned demand order and delivery fences
       reuse.rs         — H1 availability order and cross-cell reuse operations
       delivery.rs      — capacity/H1 crossing guards and acknowledgements
-    handshake.rs       — HTTP/1 attempts, HTTP/2 flights, ALPN convergence
+    establish.rs       — transport construction below protocol establishment
+    establish/
+      h1.rs            — HTTP/1 connect, handshake, installation, and driver
     dispatch.rs        — protocol-neutral request routing
     dispatch/
       h1.rs            — HTTP/1 acquisition, dispatch, retry, and response ownership

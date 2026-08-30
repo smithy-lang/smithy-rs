@@ -22,6 +22,7 @@ use crate::client::pool::cell::{
     AcquisitionEvent, AcquisitionResult, CellId, EstablishmentPermit, OriginCell,
 };
 use crate::sync::Arc;
+use aws_smithy_runtime_api::client::connection::ConnectionId;
 use std::fmt;
 
 /// Capacity or a borrowed HTTP/1 sender crossing to waiting demand.
@@ -240,13 +241,17 @@ impl DeliveryGuard {
                 reuse_id,
                 connection_cell,
                 selection,
-            } => (
-                AcquisitionEvent::Complete(AcquisitionResult::H1(selection)),
-                DeliveryKind::BorrowedH1 {
-                    reuse_id,
-                    connection_cell,
-                },
-            ),
+            } => {
+                let connection_id = selection.connection_id();
+                (
+                    AcquisitionEvent::Complete(AcquisitionResult::H1(selection)),
+                    DeliveryKind::BorrowedH1 {
+                        connection_id,
+                        reuse_id,
+                        connection_cell,
+                    },
+                )
+            }
         };
         self.state = DeliveryGuardState::Disarmed;
         (
@@ -384,6 +389,8 @@ enum DeliveryKind {
     Capacity,
     /// The connection-owning cell must learn whether sender transfer succeeded.
     BorrowedH1 {
+        /// Connection whose sender crossed to the requesting cell.
+        connection_id: ConnectionId,
         /// Reuse operation completed by this acknowledgement.
         reuse_id: ReuseId,
         /// Cell whose local reuse reservation must complete.
@@ -438,6 +445,7 @@ impl DeliveryAck {
                 )
             }
             DeliveryKind::BorrowedH1 {
+                connection_id,
                 reuse_id,
                 connection_cell,
             } => {
@@ -453,15 +461,28 @@ impl DeliveryAck {
                     ),
                     None => H1AvailabilityOutcome::expired(connection_cell.clone()),
                 });
-                OriginAdmission::finish_borrow_delivery(
+                let transferred_connection_cell = (!rejected).then_some(connection_cell.clone());
+                let action = OriginAdmission::finish_borrow_delivery(
                     &self.origin,
                     reuse_id,
                     self.delivery,
                     &self.requesting_cell,
                     result,
-                    (!rejected).then_some(connection_cell),
+                    transferred_connection_cell,
                     rejected_outcome,
-                )
+                );
+                if !rejected {
+                    tracing::trace!(
+                        connection_id = %connection_id,
+                        request_partition = ?self.requesting_cell.partition(),
+                        connection_partition = ?connection_cell.partition(),
+                        origin_scheme = %self.requesting_cell.origin().scheme(),
+                        origin_host = self.requesting_cell.origin().host(),
+                        origin_port = ?self.requesting_cell.origin().port(),
+                        "HTTP/1 connection borrowed for peer demand"
+                    );
+                }
+                action
             }
         }
     }

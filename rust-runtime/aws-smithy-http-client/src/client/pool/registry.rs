@@ -266,8 +266,8 @@ impl PartitionState {
         self.origins.read().len()
     }
 
-    /// Starts idle maintenance on this partition's owner runtime.
-    pub(crate) fn start_maintenance(&self, spawner: &dyn DriverSpawner) {
+    /// Ensures idle maintenance is running on this partition's owner runtime.
+    pub(crate) fn ensure_maintenance_started(&self, spawner: &dyn DriverSpawner) {
         PartitionMaintenance::start(&self.maintenance, spawner);
     }
 

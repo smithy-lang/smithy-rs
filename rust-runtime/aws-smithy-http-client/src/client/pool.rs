@@ -3,92 +3,81 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! HTTP connection pooling across runtime and network partitions.
+//! Connection pooling with explicit runtime and network placement.
 //!
 //! A [`ConnectionPool`] owns connection policy and a fixed set of partitions.
-//! A [`Client`] is a cheap handle resolved to one of those partitions. A pool
-//! built without explicit [`Partition`] values has one anonymous partition;
-//! otherwise clients select an explicit partition by [`PartitionId`].
+//! A [`Client`] binds Smithy HTTP operations to one partition. Pools without
+//! explicit [`Partition`] values contain one anonymous partition; otherwise a
+//! client selects a declared partition by [`PartitionId`].
 //!
-//! A partition determines where connections are established, driven, and
-//! maintained. [`ConnectionReuseScope`] determines which partitions may send
-//! requests through each other's connections. Reuse never moves a connection's
-//! socket or protocol driver between runtimes.
+//! A partition owns connection establishment, protocol drivers, and idle
+//! maintenance. [`ConnectionReuseScope`] controls whether another partition may
+//! dispatch through those connections. Reuse transfers protocol dispatch
+//! authority; it never moves the socket, driver, or capacity accounting.
 //!
 //! # State ownership
 //!
-//! Pool state is divided by the scope of each decision:
-//!
 //! ```text
 //! ConnectionPool
-//!   `-- PoolInner
-//!         |-- PartitionRegistry
-//!         |     |-- PartitionState per partition
-//!         |     |     |-- OriginCell per canonical origin
-//!         |     |     `-- runtime placement and idle maintenance
-//!         |     `-- OriginAdmission per bounded origin
-//!         `-- immutable policy and transport construction
+//! `-- PoolInner
+//!     |-- immutable policy and transport factory
+//!     `-- PartitionRegistry
+//!         |-- PartitionState per partition
+//!         |   |-- runtime placement and idle maintenance
+//!         |   `-- OriginCell per canonical origin
+//!         |       |-- acquisition queue
+//!         |       `-- protocol connection records
+//!         `-- OriginAdmission per bounded origin
+//!             |-- connection permits
+//!             |-- cross-cell demand order
+//!             `-- peer reuse indexes
 //! ```
 //!
-//! An `OriginCell` is the only lock domain that combines a partition's local
-//! acquisition order with its protocol connections. For a bounded origin,
-//! `OriginAdmission` separately owns the origin-wide capacity limit, demand
-//! order, and cross-cell reuse decisions. Values crossing between a cell and
-//! admission own their payload and cancellation fallback; pool coordination
-//! never holds both locks at once.
+//! One `OriginCell` lock owns local acquisition order and protocol residence.
+//! For a bounded origin, `OriginAdmission` separately owns the origin-wide
+//! connection limit and cross-cell scheduling. Delivery values carry their own
+//! payload and cancellation fallback between those lock domains; cell and
+//! admission locks are never held together.
 //!
-//! An HTTP/1 sender is Hyper's exclusive `SendRequest<SdkBody>` request
-//! handle. It is the authority to send over one
-//! HTTP/1 connection, not the socket or the protocol driver.
+//! # HTTP/1 request lifecycle
 //!
-//! # Request flow
-//!
-//! Each request follows the same ownership path:
+//! Hyper represents an HTTP/1 connection with one exclusive
+//! `SendRequest<SdkBody>` handle. This module calls that handle the sender. The
+//! sender authorizes request dispatch but does not own the socket or protocol
+//! driver.
 //!
 //! ```text
-//! Client(partition)
-//!   `-- resolve OriginCell(partition, origin)
-//!         |-- select a local idle HTTP/1 sender
-//!         `-- register one waiter
-//!               |-- establish with new capacity
-//!               |-- borrow an eligible partition's sender
-//!               `-- reclaim capacity from an ineligible partition
-//!                         |
-//!                         v
-//!                    H1Selection
-//!                         |
-//!                  commit dispatch
-//!                         |
-//!                    H1Exchange
-//!                         |
-//!               complete response body
-//!                         |
-//!                   H1ReturnOffer
-//!                         |
-//!                 connection-owning cell
+//! Client(partition, request)
+//! `-- OriginCell(partition, origin)
+//!     |-- local idle sender --------------------------> H1Selection
+//!     `-- acquisition queue
+//!         |-- returned local or eligible peer sender -> H1Selection
+//!         |-- capacity permit -> establish HTTP/1 ---> H1Selection
+//!         `-- reclaimed peer capacity -> establish ---> H1Selection
+//!
+//! H1Selection -- Hyper accepts request --> H1Exchange
+//! H1Exchange
+//!     |-- complete response + ready --> H1ReturnOffer --> owning OriginCell
+//!     `-- failure, cancellation, or upgrade ----------> retire pool record
 //! ```
 //!
-//! A local idle sender is selected without origin-wide coordination. On a
-//! miss, one waiter remains authoritative while capacity, a returning sender,
-//! and connection establishment race to satisfy it. A bounded origin may lend
-//! an eligible partition's sender or close an ineligible idle connection and
-//! transfer its capacity. Active connections are not reclaimed.
+//! A local hit touches only the cell lock. On a miss, one queued acquisition
+//! remains authoritative while a returned sender and establishment race to
+//! satisfy it. Bounded origins may borrow an eligible peer sender or reclaim a
+//! peer connection and transfer its permit; active connections are not
+//! reclaimed.
 //!
 //! Dispatch commits against logical close before Hyper receives the request.
-//! An accepted response retains the sender until Hyper proves a complete,
-//! reusable HTTP/1 message boundary. Errors retire the connection. A protocol
-//! upgrade logically closes the pool record before upgraded root I/O is
-//! exposed to the caller.
+//! Once accepted, the response lifecycle retains the sender until Hyper proves
+//! a complete reusable message boundary. Failure retires the connection, and
+//! an upgrade closes the pool record before exposing upgraded root I/O.
 //!
-//! `ConnectionState` separates logical close, accepted-request accounting,
-//! and root-I/O ownership. Logical close rejects new dispatch and releases
-//! bounded capacity. `DispatchGuard` follows one accepted request.
-//! `PhysicalConnectionGuard` follows the root transport until the pool no
-//! longer owns that I/O; it does not describe the kernel's TCP state.
-//!
-//! Connector execution, handshakes, protocol drivers, pending HTTP/1 return,
-//! and idle maintenance run through the connection-owning partition's
-//! [`DriverSpawner`].
+//! `ConnectionState` separates logical close, accepted-request accounting, and
+//! root-I/O ownership. Logical close rejects new dispatch and releases bounded
+//! capacity. `DispatchGuard` follows an accepted request, while
+//! `PhysicalConnectionGuard` follows root I/O until the pool no longer owns
+//! that transport; neither describes the operating system TCP state. All
+//! connection-owned work runs through the partition [`DriverSpawner`].
 
 #![cfg_attr(smithy_http_client_loom, allow(dead_code))]
 
@@ -98,7 +87,7 @@ mod cell;
 mod client;
 mod connection;
 mod dispatch;
-mod handshake;
+mod establish;
 mod maintenance;
 mod origin;
 mod partition;
@@ -113,7 +102,7 @@ pub use partition::TokioDriverSpawner;
 pub use partition::{ConnectionReuseScope, DriverSpawner, Partition, PartitionId};
 
 use crate::sync::Arc;
-use handshake::TransportFactory;
+use establish::TransportFactory;
 use registry::PartitionRegistry;
 use std::fmt;
 use std::num::NonZeroUsize;
@@ -121,13 +110,15 @@ use std::sync::atomic::AtomicU64;
 use std::sync::Arc as StdArc;
 use std::time::Duration;
 
-/// Shared owner of connection topology, reusable connections, and pool policy.
+/// Shared connection topology and pooling policy.
 ///
-/// Cloning a pool shares its connections. Create a [`Client`] to bind requests
-/// to the anonymous partition or to an explicit [`PartitionId`]. A pool built
-/// with explicit partitions does not also create an anonymous partition.
+/// Construct a pool with [`ConnectionPool::builder`], then create [`Client`]
+/// handles for its anonymous or explicit partitions. The pool itself owns no
+/// request placement; each client supplies that partition choice. Cloning a
+/// pool or client shares all retained connections and admission state.
 ///
-/// Dropping the final owner of the shared pool state logically closes retained
+/// A pool built with explicit partitions does not also create an anonymous
+/// partition. Dropping the final shared owner logically closes retained
 /// connections and stops partition maintenance.
 #[derive(Clone)]
 pub struct ConnectionPool {

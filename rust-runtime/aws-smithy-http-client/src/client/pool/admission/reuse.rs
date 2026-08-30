@@ -36,6 +36,7 @@ use crate::client::pool::cell::h1::{H1Selection, ProvisionalH1};
 use crate::client::pool::cell::{CellId, OriginCell};
 use crate::client::pool::partition::EligibilityGroup;
 use crate::sync::Arc;
+use aws_smithy_runtime_api::client::connection::ConnectionId;
 use std::collections::{HashMap, VecDeque};
 use std::fmt;
 use std::num::NonZeroUsize;
@@ -1052,6 +1053,14 @@ impl ReuseCandidate {
         }
     }
 
+    /// Returns the connection selected by this reuse operation.
+    fn connection_id(&self) -> ConnectionId {
+        self.provisional
+            .as_ref()
+            .expect("HTTP/1 reuse operation candidate consumed more than once")
+            .connection_id()
+    }
+
     /// Revalidates the cell reservation and turns the sender into a selection.
     ///
     /// Failure returns this guard intact so dropping it restores the sender to
@@ -1073,26 +1082,35 @@ impl ReuseCandidate {
         }
     }
 
-    /// Attempts reclaim and returns the connection-owning cell's explicit terminal outcome.
-    fn reclaim(mut self) -> H1AvailabilityOutcome {
+    /// Attempts reclaim and reports its terminal cell outcome and close result.
+    fn reclaim(mut self) -> (H1AvailabilityOutcome, bool) {
         let Some(connection_cell) = self.origin.cell(&self.connection_cell) else {
             drop(self.provisional.take());
-            return H1AvailabilityOutcome::expired(self.connection_cell.clone());
+            return (
+                H1AvailabilityOutcome::expired(self.connection_cell.clone()),
+                false,
+            );
         };
         let provisional = self
             .provisional
             .take()
             .expect("HTTP/1 reuse operation candidate consumed more than once");
-        let availability =
+        let (availability, reclaimed) =
             match OriginCell::reclaim_h1_reuse(&connection_cell, self.reuse_id, provisional) {
-                Ok(availability) => availability,
-                Err(provisional) => OriginCell::reject_h1_reuse_candidate(
-                    &connection_cell,
-                    self.reuse_id,
-                    provisional,
+                Ok(result) => result,
+                Err(provisional) => (
+                    OriginCell::reject_h1_reuse_candidate(
+                        &connection_cell,
+                        self.reuse_id,
+                        provisional,
+                    ),
+                    false,
                 ),
             };
-        H1AvailabilityOutcome::reported(self.connection_cell.clone(), availability)
+        (
+            H1AvailabilityOutcome::reported(self.connection_cell.clone(), availability),
+            reclaimed,
+        )
     }
 }
 
@@ -1130,6 +1148,8 @@ impl Drop for ReuseCandidate {
 pub(in crate::client::pool) struct ReclaimAction {
     /// Admission authority that selected reclaim.
     origin: Arc<OriginAdmission>,
+    /// Cell whose demand receives capacity released by reclaim.
+    requesting_cell: CellId,
     /// Reuse operation completed by the reclaim attempt.
     reuse_id: ReuseId,
     /// Candidate whose `Drop` is the fallback before execution.
@@ -1143,7 +1163,20 @@ impl ReclaimAction {
             .candidate
             .take()
             .expect("HTTP/1 reclaim action consumed more than once");
-        let outcome = candidate.reclaim();
+        let connection_id = candidate.connection_id();
+        let connection_cell = candidate.connection_cell.clone();
+        let (outcome, reclaimed) = candidate.reclaim();
+        if reclaimed {
+            tracing::trace!(
+                connection_id = %connection_id,
+                request_partition = ?self.requesting_cell.partition(),
+                connection_partition = ?connection_cell.partition(),
+                origin_scheme = %self.requesting_cell.origin().scheme(),
+                origin_host = self.requesting_cell.origin().host(),
+                origin_port = ?self.requesting_cell.origin().port(),
+                "HTTP/1 connection reclaimed for peer demand"
+            );
+        }
         OriginAdmission::finish_h1_reuse(&self.origin, self.reuse_id, outcome)
     }
 }
@@ -1318,6 +1351,7 @@ impl OriginAdmission {
                 ReuseMode::Reclaim => {
                     Some(AdmissionAction::H1(H1ReuseAction::Reclaim(ReclaimAction {
                         origin: origin.clone(),
+                        requesting_cell: record.requesting_cell,
                         reuse_id: id,
                         candidate: Some(candidate),
                     })))
