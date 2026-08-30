@@ -48,7 +48,11 @@ impl DemandId {
     }
 }
 
-/// Version of a complete publication within one [`DemandId`].
+/// Strict ordering of complete publications within one [`DemandId`].
+///
+/// Versions never wrap. Preserving strict order prevents a delayed publication
+/// from becoming current again after counter reuse (an ABA). A new FIFO head
+/// receives a new [`DemandId`] and starts again at [`SnapshotVersion::INITIAL`].
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub(crate) struct SnapshotVersion(u64);
 
@@ -60,8 +64,9 @@ impl SnapshotVersion {
     ///
     /// # Panics
     ///
-    /// Panics after `u64::MAX` replacements of one generation. A new head
-    /// waiter starts a new generation and resets this counter.
+    /// Panics after `u64::MAX` replacements of one generation. Wrapping would
+    /// break stale-publication rejection; a new head waiter normally starts a
+    /// new generation and resets this counter.
     pub(crate) fn next(self) -> Self {
         Self(
             self.0

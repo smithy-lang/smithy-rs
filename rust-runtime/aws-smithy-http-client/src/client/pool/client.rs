@@ -23,11 +23,12 @@ use std::error::Error;
 use std::fmt;
 use std::time::Duration;
 
-/// A cheap connection-pool handle fixed to one partition.
+/// Smithy HTTP client bound to one connection-pool partition.
 ///
-/// A client resolves its partition when it is constructed and uses that
-/// partition for every request. Cloning a client shares the same pool,
-/// partition state, and reusable connections.
+/// Construction resolves the partition once. Every request uses that partition
+/// for establishment placement and local reuse, while the configured reuse
+/// scope may permit dispatch through a peer partition's connection. Cloning a
+/// client shares the pool, resolved partition state, and reusable connections.
 #[derive(Clone)]
 pub struct Client {
     /// Shared connection pool and immutable policy.
@@ -37,18 +38,24 @@ pub struct Client {
 }
 
 impl Client {
-    /// Creates a client for the pool's anonymous partition.
+    /// Creates a client for a pool built without explicit partitions.
     ///
-    /// The anonymous partition exists only when the pool was built without an
-    /// explicit partition set.
+    /// # Errors
+    ///
+    /// Returns [`ClientBuildError`] when the pool contains only explicit
+    /// partitions.
     pub fn new(pool: &ConnectionPool) -> Result<Self, ClientBuildError> {
         Self::from_partition(pool, PartitionId::ANONYMOUS)
     }
 
-    /// Creates a client for `id`.
+    /// Creates a client bound to `id`.
     ///
-    /// This accepts any partition retained by the pool, including the
-    /// anonymous partition's identity.
+    /// The identity may name a declared partition or the anonymous partition
+    /// retained by a pool built without declarations.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientBuildError`] when the pool does not contain `id`.
     pub fn from_partition(
         pool: &ConnectionPool,
         id: PartitionId,
@@ -143,17 +150,22 @@ enum ClientBuildErrorKind {
     InvalidPartition(PartitionId),
 }
 
-/// Per-operation connector over one resolved pool partition.
+/// Per-operation Smithy adapter over one resolved pool partition.
 ///
-/// [`HttpClient::http_connector`] creates this facade by combining the
-/// client's retained pool and partition with operation-specific timeout
-/// settings. It does not create another pool or re-resolve the partition.
+/// [`HttpClient::http_connector`] combines the retained pool and partition
+/// with that operation's timeout settings. Each call validates timeout timer
+/// availability, converts the Smithy request, and routes it through the shared
+/// pool. The connect timeout covers a newly started transport operation; the
+/// read timeout covers dispatch through response headers. The adapter neither
+/// creates another pool nor resolves the partition again.
 struct PoolConnector {
     /// Shared pool used for acquisition and dispatch.
     pool: ConnectionPool,
     /// Partition selected when the client was constructed.
     partition: Arc<PartitionState>,
-    /// Maximum duration of connector readiness and transport connection.
+    /// Maximum duration of the transport connection operation.
+    ///
+    /// Connector readiness completes before this timeout starts.
     connect_timeout: Option<Duration>,
     /// Maximum duration through response headers.
     read_timeout: Option<Duration>,
@@ -190,7 +202,7 @@ impl HttpConnector for PoolConnector {
                 partition,
                 request,
                 connect_timeout.zip(sleep.clone()).map(|(duration, sleep)| {
-                    super::handshake::ConnectTimeout::new(duration, sleep)
+                    super::establish::TransportTimeout::new(duration, sleep)
                 }),
             );
             let response = timeout::maybe_timeout_future(

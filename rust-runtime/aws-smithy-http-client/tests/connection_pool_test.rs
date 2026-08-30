@@ -31,12 +31,14 @@ use std::time::Duration;
 
 const IP1: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
 
+/// Resolves one declared partition through the public Smithy client boundary.
 fn shared_client(pool: &ConnectionPool, partition: PartitionId) -> SharedHttpClient {
     SharedHttpClient::new(
         Client::from_partition(pool, partition).expect("declared partition should resolve"),
     )
 }
 
+/// Builds an operation connector with the shared test runtime components.
 fn connector(client: &SharedHttpClient) -> SharedHttpConnector {
     test_client::connector(client)
 }

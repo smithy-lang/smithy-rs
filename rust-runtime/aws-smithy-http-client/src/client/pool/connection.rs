@@ -320,7 +320,7 @@ impl ConnectionState {
         drop(lease);
         tracing::debug!(
             connection_id = %self.id(),
-            owner_partition = ?self.owner_partition(),
+            connection_partition = ?self.owner_partition(),
             origin_scheme = %self.info.origin().scheme(),
             origin_host = self.info.origin().host(),
             origin_port = ?self.info.origin().port(),
@@ -354,7 +354,10 @@ impl ConnectionState {
         if refined {
             tracing::debug!(
                 connection_id = %self.id(),
-                owner_partition = ?self.owner_partition(),
+                connection_partition = ?self.owner_partition(),
+                origin_scheme = %self.info.origin().scheme(),
+                origin_host = self.info.origin().host(),
+                origin_port = ?self.info.origin().port(),
                 previous_close_reason = ?CloseReason::ProtocolClosed,
                 close_reason = ?CloseReason::Upgraded,
                 "refined connection close reason after HTTP/1 upgrade"
@@ -389,12 +392,22 @@ impl ConnectionState {
     ///
     /// Panics if physical ownership completes more than once.
     fn finish_physical(&self) {
-        let mut lifecycle = self.lifecycle.lock();
-        assert!(
-            !lifecycle.physical_complete,
-            "physical connection ownership completed more than once"
+        {
+            let mut lifecycle = self.lifecycle.lock();
+            assert!(
+                !lifecycle.physical_complete,
+                "physical connection ownership completed more than once"
+            );
+            lifecycle.physical_complete = true;
+        }
+        tracing::debug!(
+            connection_id = %self.id(),
+            connection_partition = ?self.owner_partition(),
+            origin_scheme = %self.info.origin().scheme(),
+            origin_host = self.info.origin().host(),
+            origin_port = ?self.info.origin().port(),
+            "connection root I/O ownership ended"
         );
-        lifecycle.physical_complete = true;
     }
 
     /// Returns a consistent lifecycle snapshot.

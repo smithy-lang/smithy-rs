@@ -5,11 +5,42 @@
 
 //! Cell-local acquisition order and delivered-result ownership.
 //!
-//! [`WaiterQueue`] is the complete waiter state behind an origin cell's lock.
-//! It keeps bounded-capacity order, attempts racing a returned H1, delivery
-//! crossings, and terminal results in one invariant domain. Admission updates,
-//! resource fallbacks, and task wakes are detached for the caller to process
-//! after releasing the cell lock.
+//! [`AcquisitionQueue`] is the sole owner of every live acquisition attempt
+//! in one origin cell. It combines the bounded FIFO, unlocked delivery
+//! crossings, establishment launch, and terminal result handoff in one state
+//! machine.
+//!
+//! Normal transitions are:
+//!
+//! ```text
+//! bounded register ----------------------------------> Waiting
+//! unbounded register --------------------------------> ReadyToEstablish
+//! Waiting --reserve admission or reuse delivery-----> DeliveryPending
+//! Waiting --local H1 return--------------------------> Ready
+//! DeliveryPending --capacity-------------------------> ReadyToEstablish
+//! DeliveryPending --borrowed H1----------------------> Ready
+//! DeliveryPending --local H1--> DeliveryPending(pending H1)
+//! DeliveryPending(pending H1) --delivery--> Ready + return delivered value
+//! ReadyToEstablish --local H1 return-----------------> Ready + return permit
+//! ReadyToEstablish --poll----------------------------> Launching(Submitted)
+//! Launching(Submitted) --first owner-runtime poll----> Launching(Started)
+//! Launching --local H1 or establishment result------> Ready
+//! Ready --poll---------------------------------------> removed; result transferred
+//! ```
+//!
+//! Cancellation has one residence used only while a committed delivery is
+//! crossing the cell lock boundary:
+//!
+//! ```text
+//! Waiting ----------------------> removed; retire or advance demand
+//! DeliveryPending --------------> DeliveryCancelled
+//! DeliveryCancelled --delivery-> removed; return payloads
+//! ReadyToEstablish / Ready -----> removed; return the held event
+//! Launching --------------------> removed; task settles separately
+//! ```
+//!
+//! Admission updates, returned values, and task wakes are detached for the
+//! caller to process after releasing the cell lock.
 
 use super::super::admission::{DemandId, DemandSnapshot, ProtocolRequirement, SnapshotVersion};
 use super::super::partition::EligibilityGroup;
@@ -22,23 +53,24 @@ use std::task::{Context, Poll, Waker};
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(in crate::client::pool) struct WaiterId(pub(in crate::client::pool) u64);
 
-/// Cell-local acquisition attempts, bounded-capacity order, and H1 races.
+/// Complete acquisition state protected by one origin cell lock.
 ///
 /// At every completed transition:
 ///
-/// - `records` owns every retained waiter.
-/// - [`WaitingQueueState::Active`] contains exactly the [`WaiterState::Waiting`]
-///   records.
-/// - The active queue's demand describes its head waiter.
-/// - `h1_candidates` contains each compatible receiving, ready-to-establish,
-///   or launching attempt.
-/// - Receiving, ready-to-establish, launching, cancelled-receiving, and ready
-///   attempts remain in `records` but not in the bounded-capacity FIFO.
+/// - `records` owns every retained acquisition attempt.
+/// - [`WaitingQueueState::Active`] contains exactly the linked
+///   [`WaiterState::Waiting`] records.
+/// - The active demand identifies and describes the FIFO head.
+/// - `h1_candidates` contains exactly each H1-compatible
+///   [`WaiterState::DeliveryPending`] without a pending H1,
+///   [`WaiterState::ReadyToEstablish`], or [`WaiterState::Launching`] attempt.
+/// - Delivery-pending, ready-to-establish, launching, delivery-cancelled, and
+///   ready attempts remain in `records` but never in the bounded FIFO.
 ///
-/// The queue never invokes admission or wakes a task. Transition results carry
-/// that work across the cell lock boundary.
+/// Transitions return admission publications, values requiring fallback, and
+/// wakers to the caller; none runs while this state is locked.
 #[derive(Debug, Default)]
-pub(super) struct WaiterQueue {
+pub(super) struct AcquisitionQueue {
     /// Every attempt still waiting, launching, or holding a terminal result.
     records: HashMap<WaiterId, WaiterRecord>,
     /// FIFO endpoints and demand for the records currently waiting.
@@ -100,16 +132,18 @@ enum WaiterState {
         /// Latest task waiting for an acquisition result.
         waker: Option<Waker>,
     },
-    /// Capacity delivery selected the waiter but has not installed its permit.
-    Receiving {
+    /// A committed capacity or reuse delivery reserved this waiter but has
+    /// not installed its payload.
+    DeliveryPending {
         /// Latest task waiting for the crossing delivery.
         waker: Option<Waker>,
         /// H1 return that won while capacity was crossing.
         pending_h1: Option<AcquisitionResult>,
     },
-    /// Cancellation won while a delivery was crossing without locks held.
-    CancelledReceiving {
-        /// Task detached for wake after the delivery is refunnelled.
+    /// Cancellation won after reservation while the committed delivery was
+    /// outside the lock.
+    DeliveryCancelled {
+        /// Task detached for wake after the crossing payload is returned.
         waker: Option<Waker>,
         /// H1 result returned after the crossing closes, if one arrived first.
         pending_h1: Option<AcquisitionResult>,
@@ -135,7 +169,8 @@ enum WaiterState {
 struct DemandTicket {
     /// Identity of this head-waiter generation.
     id: DemandId,
-    /// Version of the next complete publication.
+    /// Version assigned to the next complete publication for this demand
+    /// identity.
     version: SnapshotVersion,
     /// Protocol capability required by this head waiter.
     requirement: ProtocolRequirement,
@@ -153,7 +188,7 @@ impl DemandTicket {
     }
 }
 
-impl WaiterQueue {
+impl AcquisitionQueue {
     /// Registers one acquisition attempt.
     ///
     /// An unbounded attempt starts ready to establish. A bounded attempt joins
@@ -314,7 +349,7 @@ impl WaiterQueue {
             .get_mut(&waiter)
             .expect("HTTP/1 candidate waiter disappeared");
         let (returned_event, waker) = match &mut record.state {
-            WaiterState::Receiving {
+            WaiterState::DeliveryPending {
                 waker: _,
                 pending_h1,
             } => {
@@ -333,7 +368,7 @@ impl WaiterQueue {
                 }
             }
             WaiterState::Waiting { .. }
-            | WaiterState::CancelledReceiving { .. }
+            | WaiterState::DeliveryCancelled { .. }
             | WaiterState::Ready(_) => {
                 unreachable!("HTTP/1 candidate was not eligible for a returned sender")
             }
@@ -387,15 +422,15 @@ impl WaiterQueue {
                 demand_updates,
                 returned_events: [None, None],
             }
-        } else if matches!(state, WaiterState::Receiving { .. }) {
+        } else if matches!(state, WaiterState::DeliveryPending { .. }) {
             self.h1_candidates.remove(&waiter);
             let record = self.records.get_mut(&waiter)?;
-            let WaiterState::Receiving { waker, pending_h1 } = &mut record.state else {
-                unreachable!("receiving waiter changed state under the cell lock");
+            let WaiterState::DeliveryPending { waker, pending_h1 } = &mut record.state else {
+                unreachable!("delivery-pending waiter changed state under the cell lock");
             };
             let waker = waker.take();
             let pending_h1 = pending_h1.take();
-            record.state = WaiterState::CancelledReceiving { waker, pending_h1 };
+            record.state = WaiterState::DeliveryCancelled { waker, pending_h1 };
             WaiterCancellation {
                 demand_updates: [None, None],
                 returned_events: [None, None],
@@ -427,7 +462,7 @@ impl WaiterQueue {
                 returned_events: [None, None],
             });
         } else {
-            debug_assert!(matches!(state, WaiterState::CancelledReceiving { .. }));
+            debug_assert!(matches!(state, WaiterState::DeliveryCancelled { .. }));
             return None;
         };
 
@@ -485,9 +520,9 @@ impl WaiterQueue {
             .expect("polled a cancelled, consumed, or unknown acquisition waiter");
         let waker = match &mut record.state {
             WaiterState::Waiting { waker, .. }
-            | WaiterState::Receiving { waker, .. }
+            | WaiterState::DeliveryPending { waker, .. }
             | WaiterState::Launching { waker, .. } => waker,
-            WaiterState::CancelledReceiving { .. } => {
+            WaiterState::DeliveryCancelled { .. } => {
                 panic!("polled a cancelled acquisition waiter")
             }
             WaiterState::ReadyToEstablish { .. } | WaiterState::Ready(_) => {
@@ -534,7 +569,7 @@ impl WaiterQueue {
     /// generation.
     ///
     /// The reserved waiter leaves the FIFO and changes in place to
-    /// [`WaiterState::Receiving`]. Any remaining head receives a new demand
+    /// [`WaiterState::DeliveryPending`]. Any remaining head receives a new demand
     /// generation returned for admission acknowledgement.
     pub(super) fn reserve_delivery_waiter(
         &mut self,
@@ -563,7 +598,7 @@ impl WaiterQueue {
         };
         let waker = waker.take();
         let accepts_h1 = record.requirement == ProtocolRequirement::H1Compatible;
-        record.state = WaiterState::Receiving {
+        record.state = WaiterState::DeliveryPending {
             waker,
             pending_h1: None,
         };
@@ -597,7 +632,7 @@ impl WaiterQueue {
         };
 
         match &mut record.state {
-            WaiterState::Receiving { waker, pending_h1 } => {
+            WaiterState::DeliveryPending { waker, pending_h1 } => {
                 let waker = waker.take();
                 if let Some(h1) = pending_h1.take() {
                     record.state = WaiterState::Ready(h1);
@@ -621,7 +656,7 @@ impl WaiterQueue {
                     accepted: true,
                 }
             }
-            WaiterState::CancelledReceiving { waker, pending_h1 } => {
+            WaiterState::DeliveryCancelled { waker, pending_h1 } => {
                 let waker = waker.take();
                 let pending_h1 = pending_h1.take();
                 self.records.remove(&waiter);
@@ -663,7 +698,7 @@ impl WaiterQueue {
         };
 
         match &mut record.state {
-            WaiterState::Receiving { waker, pending_h1 } => {
+            WaiterState::DeliveryPending { waker, pending_h1 } => {
                 let waker = waker.take();
                 if let Some(local_h1) = pending_h1.take() {
                     record.state = WaiterState::Ready(local_h1);
@@ -687,7 +722,7 @@ impl WaiterQueue {
                     accepted: true,
                 }
             }
-            WaiterState::CancelledReceiving { waker, pending_h1 } => {
+            WaiterState::DeliveryCancelled { waker, pending_h1 } => {
                 let waker = waker.take();
                 let pending_h1 = pending_h1.take();
                 self.records.remove(&waiter);
@@ -767,7 +802,7 @@ impl WaiterQueue {
     /// Unlinks the FIFO head and installs any successor demand.
     ///
     /// The head record remains in `records`; the caller either changes it to
-    /// `Receiving` or removes it for cancellation.
+    /// `DeliveryPending` or removes it for cancellation.
     fn pop_head(&mut self, eligibility_group: &EligibilityGroup) -> RemovedHead {
         let waiting = std::mem::take(&mut self.waiting);
         let WaitingQueueState::Active {
@@ -995,7 +1030,7 @@ impl WaiterQueue {
                 (record.requirement == ProtocolRequirement::H1Compatible
                     && matches!(
                         record.state,
-                        WaiterState::Receiving {
+                        WaiterState::DeliveryPending {
                             pending_h1: None,
                             ..
                         } | WaiterState::ReadyToEstablish { .. }
@@ -1134,7 +1169,7 @@ mod tests {
 
     #[test]
     fn head_cancellation_uses_the_successors_protocol_requirement() {
-        let mut queue = WaiterQueue::default();
+        let mut queue = AcquisitionQueue::default();
         let (head, initial) = queue.register_waiter(
             ProtocolRequirement::H2Required,
             &EligibilityGroup::Pool,
@@ -1164,7 +1199,7 @@ mod tests {
 
     #[test]
     fn retired_demand_cannot_reserve_the_successor() {
-        let mut queue = WaiterQueue::default();
+        let mut queue = AcquisitionQueue::default();
         let (head, _initial) = queue.register_waiter(
             ProtocolRequirement::H1Compatible,
             &EligibilityGroup::Pool,

@@ -3,24 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Transport connection and HTTP/1 handshake.
+//! Transport construction below HTTP protocol establishment.
 
-use super::cell::h1::{H1CloseHandle, H1DriverGuard, H1Selection, H1Sender};
-use super::cell::{EstablishmentPermit, OriginCell};
-use super::connection::{
-    CloseReason, ConnectionInfo, ConnectionIo, ConnectionState, NegotiatedProtocol,
-};
-use super::partition::DriverSpawner;
+mod h1;
+
+pub(super) use h1::establish_h1;
+
 use super::registry::PartitionState;
 use super::PoolInner;
 use crate::client::connect::{AsyncConn, BoxConn};
 use crate::client::timeout::{self, TimeoutKind};
-use crate::sync::Arc;
 use aws_smithy_async::rt::sleep::SharedAsyncSleep;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::connection::ConnectionId;
-use aws_smithy_runtime_api::client::result::ConnectorError;
-use aws_smithy_types::body::SdkBody;
 use http_1x::Uri;
 use std::error::Error;
 use std::fmt;
@@ -31,16 +26,20 @@ use std::sync::Arc as StdArc;
 use std::time::Duration;
 use tower::Service;
 
-/// Connect timeout supplied by one Smithy operation.
+/// Timeout policy for one transport connection operation.
+///
+/// Connector readiness completes before this timeout starts. Keeping the
+/// duration and timer together lets request acquisition pass one complete
+/// timeout value into transport construction.
 #[derive(Clone, Debug)]
-pub(super) struct ConnectTimeout {
-    /// Maximum duration of connector readiness and transport connection.
+pub(super) struct TransportTimeout {
+    /// Maximum duration of the connector's connection future.
     duration: Duration,
     /// Runtime timer used to enforce the deadline.
     sleep: SharedAsyncSleep,
 }
 
-impl ConnectTimeout {
+impl TransportTimeout {
     /// Creates a timeout enforced by the supplied runtime timer.
     pub(super) fn new(duration: Duration, sleep: SharedAsyncSleep) -> Self {
         Self { duration, sleep }
@@ -50,14 +49,22 @@ impl ConnectTimeout {
 /// Future returned by a type-erased transport factory.
 type TransportFuture = Pin<Box<dyn Future<Output = Result<BoxConn, BoxError>> + Send + 'static>>;
 
-/// Type-erased construction of one partition-bound transport operation.
+/// Type-erased transport construction below HTTP protocol establishment.
+///
+/// A pool retains one factory that applies partition interface placement,
+/// connector readiness, and the operation's connection timeout. The concrete
+/// connector remains responsible for DNS, proxy, TLS, socket construction,
+/// and transport metadata. Protocol establishment consumes the resulting
+/// [`BoxConn`].
 pub(super) trait TransportFactory: Send + Sync + 'static {
-    /// Polls connector readiness and starts one transport connection.
+    /// Creates one partition-bound transport for `uri`.
+    ///
+    /// Connector readiness completes before `timeout` starts.
     fn connect(
         &self,
         partition: &PartitionState,
         uri: Uri,
-        timeout: Option<ConnectTimeout>,
+        timeout: Option<TransportTimeout>,
     ) -> TransportFuture;
 }
 
@@ -79,11 +86,12 @@ where
         &self,
         partition: &PartitionState,
         uri: Uri,
-        timeout: Option<ConnectTimeout>,
+        timeout: Option<TransportTimeout>,
     ) -> TransportFuture {
         let interface = partition.interface().map(|interface| interface.as_ref());
         let mut connector = (self.connector_for_interface)(interface);
         Box::pin(async move {
+            // Readiness follows the existing connector contract and is not timed.
             poll_fn(|cx| connector.poll_ready(cx))
                 .await
                 .map_err(Into::into)?;
@@ -134,79 +142,7 @@ where
     })
 }
 
-/// Connects, handshakes, installs, and starts the owner-partition driver.
-pub(super) async fn establish_h1(
-    pool: Arc<PoolInner>,
-    partition: Arc<PartitionState>,
-    cell: Arc<OriginCell>,
-    uri: Uri,
-    spawner: StdArc<dyn DriverSpawner>,
-    permit: EstablishmentPermit,
-    connect_timeout: Option<ConnectTimeout>,
-) -> Result<H1Selection, ConnectorError> {
-    tracing::debug!(
-        owner_partition = ?partition.id(),
-        origin = %uri,
-        "starting HTTP/1 connection establishment"
-    );
-    let io = pool
-        .transport
-        .connect(&partition, uri, connect_timeout)
-        .await
-        .map_err(super::super::downcast_error)?;
-    let connected = io.connected();
-    if connected.is_negotiated_h2() {
-        return Err(ConnectorError::user(UnsupportedNegotiatedProtocol.into()));
-    }
-
-    let id =
-        next_connection_id(&pool).map_err(|error| ConnectorError::other(error.into(), None))?;
-    let info = ConnectionInfo::new(
-        id,
-        cell.id().origin().clone(),
-        partition.id(),
-        NegotiatedProtocol::Http1,
-        connected,
-    );
-    let (connection, physical) = match permit.into_lease() {
-        Some(lease) => ConnectionState::bounded(info, lease),
-        None => ConnectionState::unbounded(info),
-    };
-    let io = ConnectionIo::new(io, physical);
-
-    let (sender, driver) = match hyper::client::conn::http1::Builder::new()
-        .handshake::<_, SdkBody>(io)
-        .await
-    {
-        Ok(established) => established,
-        Err(error) => {
-            connection.logical_close(CloseReason::ProtocolClosed);
-            return Err(super::super::downcast_error(Box::new(error)));
-        }
-    };
-
-    let selection =
-        OriginCell::install_selected_h1(&cell, connection.clone(), H1Sender::from_hyper(sender));
-    tracing::debug!(
-        connection_id = %id,
-        owner_partition = ?partition.id(),
-        origin_scheme = %cell.id().origin().scheme(),
-        origin_host = cell.id().origin().host(),
-        origin_port = ?cell.id().origin().port(),
-        "HTTP/1 connection established"
-    );
-    let driver_guard = H1DriverGuard::new(H1CloseHandle::new(&cell, &connection));
-    spawner.spawn(Box::pin(async move {
-        let result = driver.with_upgrades().await;
-        if let Err(error) = result {
-            tracing::debug!(connection_id = %id, error = ?error, "HTTP/1 connection driver stopped");
-        }
-        driver_guard.protocol_closed();
-    }));
-    Ok(selection)
-}
-
-/// Mints one non-wrapping connection identity.
+/// Mints one non-wrapping physical-connection identity.
 fn next_connection_id(pool: &PoolInner) -> Result<ConnectionId, ConnectionIdExhausted> {
     let value = pool
         .next_connection_id
@@ -216,18 +152,6 @@ fn next_connection_id(pool: &PoolInner) -> Result<ConnectionId, ConnectionIdExha
         .map_err(|_| ConnectionIdExhausted)?;
     Ok(ConnectionId::new(value))
 }
-
-/// The cleartext HTTP/1 path rejected a connector-selected HTTP/2 transport.
-#[derive(Debug)]
-struct UnsupportedNegotiatedProtocol;
-
-impl fmt::Display for UnsupportedNegotiatedProtocol {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("the HTTP/1 pool path cannot install an HTTP/2 transport")
-    }
-}
-
-impl Error for UnsupportedNegotiatedProtocol {}
 
 /// The pool exhausted its monotonic physical-connection identity space.
 #[derive(Debug)]

@@ -5,7 +5,7 @@
 
 //! Construction and validation for [`ConnectionPool`].
 
-use super::handshake::{self, TransportFactory};
+use super::establish::{self, TransportFactory};
 use super::maintenance::MaintenanceConfig;
 use super::registry::{PartitionRegistry, PartitionRegistryError};
 use super::{ConnectionPool, ConnectionReuseScope, Partition, PoolConfig, PoolInner};
@@ -244,7 +244,7 @@ impl Builder<TlsUnset> {
         let mut connector = HttpConnector::new_with_resolver(GaiResolver::new());
         connector.set_nodelay(self.tcp_nodelay);
         connector.set_keepalive(self.tcp_keepalive.clone().resolve(None));
-        let transport = handshake::transport_factory_for_interface(move |interface| {
+        let transport = establish::transport_factory_for_interface(move |interface| {
             let mut connector = connector.clone();
             set_default_connector_interface(&mut connector, interface);
             connector
@@ -271,7 +271,7 @@ impl Builder<TlsUnset> {
             + Unpin
             + 'static,
     {
-        self.build_with_transport(handshake::transport_factory(connector))
+        self.build_with_transport(establish::transport_factory(connector))
     }
 
     #[cfg(all(test, feature = "rt-tokio"))]
@@ -291,7 +291,7 @@ impl Builder<TlsUnset> {
             + Unpin
             + 'static,
     {
-        self.build_with_transport(handshake::transport_factory(connector))
+        self.build_with_transport(establish::transport_factory(connector))
     }
 
     /// Validates pool policy and installs the type-erased transport factory.

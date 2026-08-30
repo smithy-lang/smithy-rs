@@ -10,42 +10,15 @@
 //! releasing its lock, and admission returns capacity through the same
 //! unlocked boundary.
 //!
-//! A bounded acquisition attempt enters the capacity FIFO; an unbounded
-//! attempt starts ready to establish. Capacity is intermediate: the same
-//! waiter continues racing establishment against a reusable H1 until one
-//! result is consumed:
+//! [`AcquisitionQueue`] owns every live acquisition attempt, including the
+//! bounded FIFO, delivery crossings, establishment launch, cancellation, and
+//! terminal results. Its module documents the complete transition model.
+//! [`CellState`] couples that model to HTTP/1 sender residence so a local
+//! return either satisfies one acquisition or becomes idle, never both.
 //!
-//! ```text
-//! bounded register --> Waiting
-//! unbounded register -------------------------------> ReadyToEstablish
-//!
-//! Waiting --reserve capacity or borrowed H1---------> Receiving
-//! Waiting --local reusable H1-----------------------> Ready
-//! Receiving --capacity------------------------------> ReadyToEstablish
-//! Receiving --borrowed H1---------------------------> Ready
-//! Receiving --local reusable H1--> Receiving(pending H1)
-//! Receiving(pending H1) --capacity------------------> Ready + return capacity
-//! ReadyToEstablish --local reusable H1--------------> Ready + return capacity
-//! ReadyToEstablish --poll---------------------------> Launching
-//! Launching --local reusable H1 or attempt result---> Ready
-//! Ready --poll--------------------------------------> consumed
-//! ```
-//!
-//! Cancellation has one crossing-only residence:
-//!
-//! ```text
-//! Waiting --------------------------> removed; retire or advance demand
-//! Receiving --> CancelledReceiving -> removed when delivery lands; return payload
-//! ReadyToEstablish / Ready ---------> removed; return the held event
-//! Launching ------------------------> removed; a started pool-owned attempt may finish
-//! ```
-//!
-//! Returned permits and senders leave the lock before their fallback runs.
-//! A result from a started attempt whose waiter was removed follows the same
-//! unlocked return path.
-//! Local H1 selection and return update waiter state under this cell's lock.
-//! Cross-cell reuse reaches the same queue through a reserved delivery, while
-//! admission tracks this cell's published availability outside the lock.
+//! Permits, senders, admission updates, and task wakes are detached from
+//! mutable state before their fallback or callback runs. This keeps drop and
+//! wake paths outside the cell lock.
 
 pub(super) mod h1;
 mod waiters;
@@ -58,7 +31,7 @@ use self::h1::{H1Records, H1ReuseReservation, H1Selection, H1Sender, OwnedH1, Pr
 #[cfg(test)]
 use self::waiters::CellSnapshot;
 pub(in crate::client::pool) use self::waiters::WaiterId;
-use self::waiters::{DeliveryReservation, ResultInstallError, WaiterQueue};
+use self::waiters::{AcquisitionQueue, DeliveryReservation, ResultInstallError};
 use super::admission::reuse::{
     H1Availability, H1AvailabilitySnapshot, PreparedReuseInstall, ReuseCandidate, ReuseId,
     ReuseInstallResult,
@@ -127,7 +100,7 @@ pub(crate) struct OriginCell {
 #[derive(Debug, Default)]
 struct CellState {
     /// Cell-local acquisition order and delivered results.
-    waiters: WaiterQueue,
+    waiters: AcquisitionQueue,
     /// Cell-owned HTTP/1 records and reusable sender order.
     h1: H1Records,
     /// One cross-cell reuse reservation and its local fairness debt.
@@ -500,13 +473,12 @@ impl OriginCell {
         cell: &Arc<Self>,
         reuse_id: ReuseId,
         provisional: ProvisionalH1,
-    ) -> Result<H1AvailabilitySnapshot, ProvisionalH1> {
+    ) -> Result<(H1AvailabilitySnapshot, bool), ProvisionalH1> {
         let (connection_cell, owner) = provisional.into_parts();
         if !cell.state.lock().reuse.names(reuse_id) {
             return Err(ProvisionalH1::from_parts(connection_cell, owner));
         }
 
-        let connection_id = owner.id();
         let close_won = Self::retire_h1_owner(cell, owner, CloseReason::Reclaimed);
         let availability = {
             let mut state = cell.state.lock();
@@ -514,14 +486,7 @@ impl OriginCell {
             state.assert_consistent();
             availability
         };
-        if close_won {
-            tracing::trace!(
-                connection_id = %connection_id,
-                connection_partition = ?cell.id.partition(),
-                "reclaimed HTTP/1 connection capacity"
-            );
-        }
-        Ok(availability)
+        Ok((availability, close_won))
     }
 
     /// Completes local reuse state after a requesting cell accepts the sender.
@@ -617,11 +582,9 @@ impl OriginCell {
         };
 
         if should_retire {
-            tracing::trace!(
-                connection_id = %connection_id,
-                connection_partition = ?cell.id.partition(),
-                "HTTP/1 return was rejected by its connection-owning cell"
-            );
+            if tracing::level_enabled!(tracing::Level::TRACE) {
+                trace_h1_return(cell, connection_id, H1ReturnTrace::Rejected);
+            }
             if let Some((reuse_id, snapshot)) = rejected_reuse {
                 let admission = cell
                     .admission
@@ -643,11 +606,9 @@ impl OriginCell {
         }
 
         if let Some((reuse_id, provisional)) = intercepted {
-            tracing::trace!(
-                connection_id = %connection_id,
-                connection_partition = ?cell.id.partition(),
-                "HTTP/1 return was intercepted by a cross-cell reuse operation"
-            );
+            if tracing::level_enabled!(tracing::Level::TRACE) {
+                trace_h1_return(cell, connection_id, H1ReturnTrace::ReuseIntercepted);
+            }
             let admission = cell
                 .admission
                 .as_ref()
@@ -660,11 +621,9 @@ impl OriginCell {
         }
 
         let Some(installation) = installation else {
-            tracing::trace!(
-                connection_id = %connection_id,
-                connection_partition = ?cell.id.partition(),
-                "HTTP/1 connection returned to idle storage"
-            );
+            if tracing::level_enabled!(tracing::Level::TRACE) {
+                trace_h1_return(cell, connection_id, H1ReturnTrace::Idle);
+            }
             cell.notify_maintenance(idle_deadline);
             if cell.admission.is_some() {
                 let availability = cell.state.lock().take_h1_availability_update();
@@ -672,11 +631,9 @@ impl OriginCell {
             }
             return;
         };
-        tracing::trace!(
-            connection_id = %connection_id,
-            connection_partition = ?cell.id.partition(),
-            "HTTP/1 return satisfied local demand"
-        );
+        if tracing::level_enabled!(tracing::Level::TRACE) {
+            trace_h1_return(cell, connection_id, H1ReturnTrace::LocalDemand);
+        }
         if let Some(admission) = &cell.admission {
             for snapshot in installation.demand_updates.into_iter().flatten() {
                 OriginAdmission::publish_demand(admission, cell.id.clone(), snapshot);
@@ -745,7 +702,16 @@ impl OriginCell {
     pub(super) fn expire_idle(cell: &Arc<Self>, now: SystemTime) {
         let expired = cell.state.lock().h1.expired_idle(now);
         for id in expired {
-            Self::close_h1(cell, id, CloseReason::IdleTimeout);
+            if Self::close_h1(cell, id, CloseReason::IdleTimeout) {
+                tracing::trace!(
+                    connection_id = %id,
+                    connection_partition = ?cell.id.partition(),
+                    origin_scheme = %cell.id.origin().scheme(),
+                    origin_host = cell.id.origin().host(),
+                    origin_port = ?cell.id.origin().port(),
+                    "HTTP/1 idle connection expired"
+                );
+            }
         }
     }
 
@@ -1046,6 +1012,60 @@ impl OriginCell {
     #[cfg(test)]
     fn snapshot(&self) -> CellSnapshot {
         self.state.lock().waiters.snapshot()
+    }
+}
+
+/// Terminal outcome for one reusable HTTP/1 sender return.
+enum H1ReturnTrace {
+    /// The owning cell no longer accepts the sender.
+    Rejected,
+    /// Origin admission reserved the sender for peer demand.
+    ReuseIntercepted,
+    /// No compatible demand exists, so the sender became idle.
+    Idle,
+    /// A waiter in the owning cell accepted the sender.
+    LocalDemand,
+}
+
+/// Emits a committed HTTP/1 return outcome outside the cell lock.
+// Keep field formatting out of a return transition that can synchronously
+// enter admission and sender fallbacks.
+#[inline(never)]
+fn trace_h1_return(cell: &OriginCell, connection_id: ConnectionId, outcome: H1ReturnTrace) {
+    match outcome {
+        H1ReturnTrace::Rejected => tracing::trace!(
+            connection_id = %connection_id,
+            connection_partition = ?cell.id.partition(),
+            origin_scheme = %cell.id.origin().scheme(),
+            origin_host = cell.id.origin().host(),
+            origin_port = ?cell.id.origin().port(),
+            "HTTP/1 return was rejected by its connection-owning cell"
+        ),
+        H1ReturnTrace::ReuseIntercepted => tracing::trace!(
+            connection_id = %connection_id,
+            connection_partition = ?cell.id.partition(),
+            origin_scheme = %cell.id.origin().scheme(),
+            origin_host = cell.id.origin().host(),
+            origin_port = ?cell.id.origin().port(),
+            "HTTP/1 return was intercepted by a cross-cell reuse operation"
+        ),
+        H1ReturnTrace::Idle => tracing::trace!(
+            connection_id = %connection_id,
+            connection_partition = ?cell.id.partition(),
+            origin_scheme = %cell.id.origin().scheme(),
+            origin_host = cell.id.origin().host(),
+            origin_port = ?cell.id.origin().port(),
+            "HTTP/1 connection returned to idle storage"
+        ),
+        H1ReturnTrace::LocalDemand => tracing::trace!(
+            connection_id = %connection_id,
+            request_partition = ?cell.id.partition(),
+            connection_partition = ?cell.id.partition(),
+            origin_scheme = %cell.id.origin().scheme(),
+            origin_host = cell.id.origin().host(),
+            origin_port = ?cell.id.origin().port(),
+            "HTTP/1 return satisfied local demand"
+        ),
     }
 }
 
