@@ -12,6 +12,10 @@
 
 mod common;
 
+use aws_smithy_http_client::pool::{
+    Client as PoolClient, ConnectionPool, ConnectionReuseScope, Partition, PartitionId,
+    TokioDriverSpawner,
+};
 use aws_smithy_http_client::test_util::wire::connection::{ConnectionCloseReason, ManualGate};
 use aws_smithy_http_client::tls;
 use aws_smithy_http_client::Builder;
@@ -56,6 +60,29 @@ impl HttpsClientBackend for HyperUtilLegacyPool {
             .tls_provider(provider)
             .tls_context(tls_context)
             .build_https()
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct PartitionedConnectionPool;
+
+impl HttpsClientBackend for PartitionedConnectionPool {
+    fn build_https(
+        &self,
+        config: BackendConfig,
+        provider: tls::Provider,
+        tls_context: tls::TlsContext,
+    ) -> SharedHttpClient {
+        let mut builder = ConnectionPool::builder().tls_provider(provider);
+        if let Some(pool_idle_timeout) = config.pool_idle_timeout {
+            builder = builder.idle_timeout(pool_idle_timeout);
+        }
+        let pool = builder
+            .tls_context(tls_context)
+            .build_https()
+            .expect("valid connection-pool config");
+        let client = PoolClient::new(&pool).expect("anonymous partition exists");
+        SharedHttpClient::new(client)
     }
 }
 
@@ -157,6 +184,11 @@ mod reuse_and_multiplexing {
         sequential_requests_reuse_connection(&HyperUtilLegacyPool).await;
     }
 
+    #[tokio::test]
+    async fn test_sequential_requests_reuse_connection_with_partitioned_pool() {
+        sequential_requests_reuse_connection(&PartitionedConnectionPool).await;
+    }
+
     /// Concurrent requests multiplex as independent streams on a warmed H2 connection.
     async fn concurrent_requests_multiplex_on_warmed_connection(backend: &dyn HttpsClientBackend) {
         let body_gate = ManualGate::new();
@@ -207,6 +239,11 @@ mod reuse_and_multiplexing {
     #[tokio::test]
     async fn test_concurrent_requests_multiplex_on_warmed_connection_with_hyper_util_legacy_pool() {
         concurrent_requests_multiplex_on_warmed_connection(&HyperUtilLegacyPool).await;
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_requests_multiplex_on_warmed_connection_with_partitioned_pool() {
+        concurrent_requests_multiplex_on_warmed_connection(&PartitionedConnectionPool).await;
     }
 
     /// Concurrent cold-start requests converge on one established H2 connection even when
@@ -278,6 +315,11 @@ mod reuse_and_multiplexing {
     {
         concurrent_cold_start_converges_on_one_h2_connection(&HyperUtilLegacyPool).await;
     }
+
+    #[tokio::test]
+    async fn test_concurrent_cold_start_converges_on_one_h2_connection_with_partitioned_pool() {
+        concurrent_cold_start_converges_on_one_h2_connection(&PartitionedConnectionPool).await;
+    }
 }
 
 mod connection_metadata {
@@ -317,6 +359,11 @@ mod connection_metadata {
     #[tokio::test]
     async fn test_poisoned_connection_is_not_reused_with_hyper_util_legacy_pool() {
         poisoned_connection_is_not_reused(&HyperUtilLegacyPool).await;
+    }
+
+    #[tokio::test]
+    async fn test_poisoned_connection_is_not_reused_with_partitioned_pool() {
+        poisoned_connection_is_not_reused(&PartitionedConnectionPool).await;
     }
 }
 
@@ -398,6 +445,11 @@ mod stream_failures {
         stream_reset_does_not_retire_connection(&HyperUtilLegacyPool).await;
     }
 
+    #[tokio::test]
+    async fn test_stream_reset_does_not_retire_connection_with_partitioned_pool() {
+        stream_reset_does_not_retire_connection(&PartitionedConnectionPool).await;
+    }
+
     /// Dropping an incomplete response body cancels only that stream and permits reuse.
     async fn dropping_response_body_cancels_only_stream(backend: &dyn HttpsClientBackend) {
         let script = H2ConnectionScript::new()
@@ -465,6 +517,11 @@ mod stream_failures {
     #[tokio::test]
     async fn test_dropping_response_body_cancels_only_stream_with_hyper_util_legacy_pool() {
         dropping_response_body_cancels_only_stream(&HyperUtilLegacyPool).await;
+    }
+
+    #[tokio::test]
+    async fn test_dropping_response_body_cancels_only_stream_with_partitioned_pool() {
+        dropping_response_body_cancels_only_stream(&PartitionedConnectionPool).await;
     }
 }
 
@@ -583,6 +640,15 @@ mod goaway_and_replacement {
         graceful_goaway_preserves_in_flight_stream_and_replaces_connection(&HyperUtilLegacyPool)
             .await;
     }
+
+    #[tokio::test]
+    async fn test_graceful_goaway_preserves_in_flight_stream_and_replaces_connection_with_partitioned_pool(
+    ) {
+        graceful_goaway_preserves_in_flight_stream_and_replaces_connection(
+            &PartitionedConnectionPool,
+        )
+        .await;
+    }
 }
 
 #[cfg(feature = "s2n-tls")]
@@ -626,6 +692,11 @@ mod protocol_negotiation {
     #[tokio::test]
     async fn test_s2n_negotiates_h2_and_reuses_connection_with_hyper_util_legacy_pool() {
         s2n_negotiates_h2_and_reuses_connection(&HyperUtilLegacyPool).await;
+    }
+
+    #[tokio::test]
+    async fn test_s2n_negotiates_h2_and_reuses_connection_with_partitioned_pool() {
+        s2n_negotiates_h2_and_reuses_connection(&PartitionedConnectionPool).await;
     }
 }
 
@@ -686,6 +757,11 @@ mod idle_timeout {
     #[tokio::test]
     async fn test_idle_connection_is_evicted_after_timeout_with_hyper_util_legacy_pool() {
         idle_connection_is_evicted_after_timeout(&HyperUtilLegacyPool).await;
+    }
+
+    #[tokio::test]
+    async fn test_idle_connection_is_evicted_after_timeout_with_partitioned_pool() {
+        idle_connection_is_evicted_after_timeout(&PartitionedConnectionPool).await;
     }
 
     /// An active stream survives the idle deadline, but the connection is replaced after the
@@ -757,5 +833,128 @@ mod idle_timeout {
             &HyperUtilLegacyPool,
         )
         .await;
+    }
+
+    #[tokio::test]
+    async fn test_active_stream_survives_idle_timeout_but_later_request_uses_replacement_with_partitioned_pool(
+    ) {
+        active_stream_survives_idle_timeout_but_later_request_uses_replacement(
+            &PartitionedConnectionPool,
+        )
+        .await;
+    }
+}
+
+mod partition_reuse {
+    use super::*;
+    use std::time::Duration;
+
+    fn partitioned_clients(
+        scope: ConnectionReuseScope,
+    ) -> (ConnectionPool, SharedHttpConnector, SharedHttpConnector) {
+        let first = PartitionId::from_index(1);
+        let second = PartitionId::from_index(2);
+        let pool = ConnectionPool::builder()
+            .tls_provider(rustls_aws_lc())
+            .tls_context(test_tls::server_tls_context())
+            .partitions([
+                Partition::new(first, TokioDriverSpawner::current()),
+                Partition::new(second, TokioDriverSpawner::current()),
+            ])
+            .connection_reuse_scope(scope)
+            .max_connections_per_host(1)
+            .build_https()
+            .expect("valid partitioned HTTPS pool");
+        let first_client = SharedHttpClient::new(
+            PoolClient::from_partition(&pool, first).expect("first partition should resolve"),
+        );
+        let second_client = SharedHttpClient::new(
+            PoolClient::from_partition(&pool, second).expect("second partition should resolve"),
+        );
+        (
+            pool,
+            test_client::connector(&first_client),
+            test_client::connector(&second_client),
+        )
+    }
+
+    async fn eligible_partition_reuses_peer_h2(scope: ConnectionReuseScope) {
+        let server = H2TestServer::builder()
+            .connections(H2ConnectionPlan::queue([H2ConnectionScript::new()
+                .fallback(H2StreamScript::respond(H2Response::ok("shared")))]))
+            .start()
+            .await
+            .expect("H2 server should start");
+        let (pool, first, second) = partitioned_clients(scope);
+
+        let first_result = test_client::get_and_collect(&first, &server.url("/first")).await;
+        let second_result = test_client::get_and_collect(&second, &server.url("/second")).await;
+
+        assert_eq!(first_result, (200, b"shared".to_vec()));
+        assert_eq!(second_result, (200, b"shared".to_vec()));
+        assert_eq!(server.connection_count(), 1);
+        assert_eq!(
+            single_stream_connection(&server, "/first"),
+            single_stream_connection(&server, "/second"),
+            "eligible partitions should dispatch through the connection-owning generation"
+        );
+
+        drop(first);
+        drop(second);
+        drop(pool);
+        server.shutdown().await.expect("clean H2 server shutdown");
+    }
+
+    #[tokio::test]
+    async fn pool_scope_reuses_a_peer_h2_generation() {
+        eligible_partition_reuses_peer_h2(ConnectionReuseScope::Pool).await;
+    }
+
+    #[tokio::test]
+    async fn matching_network_interface_scope_reuses_a_peer_h2_generation() {
+        eligible_partition_reuses_peer_h2(ConnectionReuseScope::NetworkInterface).await;
+    }
+
+    #[tokio::test]
+    async fn partition_scope_waits_until_out_of_scope_h2_releases_capacity() {
+        let script = H2ConnectionScript::new()
+            .fallback(H2StreamScript::respond(H2Response::ok("partition")));
+        let server = H2TestServer::builder()
+            .connections(H2ConnectionPlan::queue([script.clone(), script]))
+            .start()
+            .await
+            .expect("H2 server should start");
+        let (pool, first, second) = partitioned_clients(ConnectionReuseScope::Partition);
+
+        let (status, body, metadata) =
+            get_and_collect_with_capture(&first, &server.url("/first")).await;
+        assert_eq!((status, body.as_slice()), (200, b"partition".as_slice()));
+        let first_connection = single_stream_connection(&server, "/first");
+
+        let second_url = server.url("/second");
+        let mut pending =
+            tokio::spawn(async move { test_client::get_and_collect(&second, &second_url).await });
+        assert!(
+            tokio::time::timeout(Duration::from_millis(100), &mut pending)
+                .await
+                .is_err(),
+            "an out-of-scope generation must not satisfy partition-local demand"
+        );
+        assert_eq!(server.connection_count(), 1);
+
+        metadata.poison();
+        let (status, body) = tokio::time::timeout(test_client::WAIT, pending)
+            .await
+            .expect("released capacity should wake partition-local demand")
+            .expect("request task should not panic");
+        assert_eq!((status, body.as_slice()), (200, b"partition".as_slice()));
+        let second_connection = single_stream_connection(&server, "/second");
+        assert_ne!(first_connection, second_connection);
+        assert_eq!(server.connection_count(), 2);
+
+        drop(metadata);
+        drop(first);
+        drop(pool);
+        server.shutdown().await.expect("clean H2 server shutdown");
     }
 }

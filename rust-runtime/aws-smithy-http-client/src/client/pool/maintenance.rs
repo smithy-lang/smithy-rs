@@ -608,6 +608,18 @@ mod tests {
         connection
     }
 
+    fn h2_connection(id: u64) -> Arc<ConnectionState> {
+        let info = ConnectionInfo::new(
+            ConnectionId::new(id),
+            OriginKey::from_parts(Scheme::HTTP, "example.com", None).unwrap(),
+            PartitionId::from_index(1),
+            NegotiatedProtocol::Http2,
+            hyper_util::client::legacy::connect::Connected::new(),
+        );
+        let (connection, _physical) = ConnectionState::unbounded(info);
+        connection
+    }
+
     #[derive(Clone, Debug)]
     struct TrackingSpawner {
         submitted: Arc<AtomicU64>,
@@ -729,6 +741,31 @@ mod tests {
             Some(super::super::CloseReason::IdleTimeout),
             connection.snapshot().close_reason
         );
+    }
+    #[tokio::test]
+    async fn h2_generation_closes_at_its_fake_time_deadline() {
+        let timeout = Duration::from_secs(10);
+        let (maintenance, cell, mut gate) = managed_cell(timeout);
+        let connection = h2_connection(1);
+        OriginCell::install_h2_for_test(&cell, connection.clone(), 1, maintenance.idle_deadline());
+        PartitionMaintenance::start(&maintenance, &TokioDriverSpawner::current());
+
+        let sleep = gate.expect_sleep().await;
+        assert_eq!(timeout, sleep.duration());
+        assert_eq!(None, connection.snapshot().close_reason);
+        sleep.allow_progress();
+
+        for _ in 0..10 {
+            if connection.snapshot().close_reason == Some(super::super::CloseReason::IdleTimeout) {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(
+            Some(super::super::CloseReason::IdleTimeout),
+            connection.snapshot().close_reason
+        );
+        assert_eq!(None, cell.accepting_h2_generation());
     }
 
     #[tokio::test]

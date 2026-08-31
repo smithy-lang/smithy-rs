@@ -72,6 +72,39 @@
 //! a complete reusable message boundary. Failure retires the connection, and
 //! an upgrade closes the pool record before exposing upgraded root I/O.
 //!
+//! # HTTP/2 request lifecycle
+//!
+//! An HTTP/2 connection keeps its authoritative sender and capacity in the
+//! connection-owning cell. A requesting cell may retain only a route naming
+//! that cell and one exact accepting generation. Each use revalidates the
+//! route at the owning cell before cloning a transient sender.
+//!
+//! ```text
+//! Client(partition, request)
+//! `-- OriginCell(partition, origin)
+//!     |-- local accepting generation ----------------> H2Activation
+//!     `-- acquisition queue
+//!         |-- local flight result --------------------> H2Activation
+//!         |-- eligible peer generation route --------> H2Activation
+//!         `-- capacity permit -> connect + ALPN
+//!             |-- HTTP/2 -> join or drive one flight -> H2Activation
+//!             `-- HTTP/1 -> H1Selection or incompatible-version error
+//!
+//! H2Activation -- Hyper accepts request --> accepted request lease
+//! accepted request lease
+//!     |-- request body ends or drops -----> send endpoint complete
+//!     `-- response body ends or drops ----> receive endpoint complete
+//! both endpoints complete ----------------> release generation request count
+//! ```
+//!
+//! An activation is prospective: dropping it before Hyper accepts the request
+//! returns its generation-gate turn and request count. Acceptance creates two
+//! independent endpoints because an upload and response can finish in either
+//! order. Logical close stops new activations and releases bounded capacity;
+//! accepted requests retain the draining generation until both endpoints end.
+//! Peer publication moves only route identity. The socket, protocol driver,
+//! sender, and capacity remain with the connection-owning partition.
+//!
 //! `ConnectionState` separates logical close, accepted-request accounting, and
 //! root-I/O ownership. Logical close rejects new dispatch and releases bounded
 //! capacity. `DispatchGuard` follows an accepted request, while

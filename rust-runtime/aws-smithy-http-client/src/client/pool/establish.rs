@@ -6,9 +6,10 @@
 //! Transport construction below HTTP protocol establishment.
 
 mod h1;
+mod h2;
 
-pub(super) use h1::establish_h1;
-
+use super::cell::{AcquisitionResult, EstablishmentPermit, WaiterId};
+use super::dispatch::AcquisitionContext;
 use super::registry::PartitionState;
 use super::PoolInner;
 use crate::client::connect::{AsyncConn, BoxConn};
@@ -17,6 +18,8 @@ use aws_smithy_async::rt::sleep::SharedAsyncSleep;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::connection::ConnectionId;
 use http_1x::Uri;
+#[cfg(any(feature = "__rustls", feature = "s2n-tls"))]
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::future::{poll_fn, Future};
@@ -140,6 +143,134 @@ where
     StdArc::new(ServiceTransportFactory {
         connector_for_interface,
     })
+}
+
+/// Erases and caches connectors whose construction carries TLS or other setup.
+///
+/// Interface placement is immutable for a partition. Caching by the exact
+/// interface value keeps provider configuration and certificate loading off
+/// the request path while preserving one connector per placement.
+#[cfg(any(feature = "__rustls", feature = "s2n-tls"))]
+pub(super) fn cached_transport_factory_for_interface<F, C, IO>(
+    connector_for_interface: F,
+) -> StdArc<dyn TransportFactory>
+where
+    F: Fn(Option<&str>) -> C + Send + Sync + 'static,
+    C: Service<Uri, Response = IO> + Clone + Send + Sync + 'static,
+    C::Error: Into<BoxError>,
+    C::Future: Send + 'static,
+    IO: AsyncConn,
+{
+    struct Cached<F, C> {
+        factory: F,
+        connectors: crate::sync::Mutex<HashMap<Option<String>, C>>,
+    }
+
+    impl<F, C, IO> TransportFactory for Cached<F, C>
+    where
+        F: Fn(Option<&str>) -> C + Send + Sync + 'static,
+        C: Service<Uri, Response = IO> + Clone + Send + Sync + 'static,
+        C::Error: Into<BoxError>,
+        C::Future: Send + 'static,
+        IO: AsyncConn,
+    {
+        fn connect(
+            &self,
+            partition: &PartitionState,
+            uri: Uri,
+            timeout: Option<TransportTimeout>,
+        ) -> TransportFuture {
+            let interface = partition.interface().map(|value| value.to_string());
+            let mut connector = self
+                .connectors
+                .lock()
+                .entry(interface.clone())
+                .or_insert_with(|| (self.factory)(interface.as_deref()))
+                .clone();
+            Box::pin(async move {
+                poll_fn(|cx| connector.poll_ready(cx))
+                    .await
+                    .map_err(Into::into)?;
+                let connect = connector.call(uri);
+                let io = timeout::maybe_timeout_future(
+                    connect,
+                    timeout.as_ref().map(|timeout| timeout.duration),
+                    timeout.as_ref().map(|timeout| &timeout.sleep),
+                    TimeoutKind::Connect,
+                )
+                .await?;
+                Ok(Box::new(io) as BoxConn)
+            })
+        }
+    }
+
+    StdArc::new(Cached {
+        factory: connector_for_interface,
+        connectors: crate::sync::Mutex::new(HashMap::new()),
+    })
+}
+
+/// Result of one owner-runtime establishment task.
+pub(super) enum EstablishmentOutcome {
+    /// The launching waiter receives this terminal result.
+    Complete(AcquisitionResult),
+    /// Waiter completion transferred to an H2 flight or generation.
+    Transferred,
+}
+
+/// Connects one transport and dispatches protocol establishment after ALPN.
+pub(super) async fn establish(
+    context: AcquisitionContext,
+    waiter: WaiterId,
+    permit: EstablishmentPermit,
+) -> EstablishmentOutcome {
+    let io = match context
+        .pool
+        .transport
+        .connect(
+            &context.partition,
+            context.absolute_uri.clone(),
+            context.connect_timeout.clone(),
+        )
+        .await
+    {
+        Ok(io) => io,
+        Err(error) => {
+            tracing::debug!(
+                request_partition = ?context.partition.id(),
+                connection_partition = ?context.cell.id().partition(),
+                origin_scheme = %context.cell.id().origin().scheme(),
+                origin_host = context.cell.id().origin().host(),
+                origin_port = ?context.cell.id().origin().port(),
+                error = ?error,
+                "transport establishment failed"
+            );
+            return EstablishmentOutcome::Complete(AcquisitionResult::Failed(
+                super::super::downcast_error(error),
+            ));
+        }
+    };
+    let connected = io.connected();
+    let negotiated_h2 = connected.is_negotiated_h2();
+    tracing::debug!(
+        request_partition = ?context.partition.id(),
+        connection_partition = ?context.cell.id().partition(),
+        origin_scheme = %context.cell.id().origin().scheme(),
+        origin_host = context.cell.id().origin().host(),
+        origin_port = ?context.cell.id().origin().port(),
+        negotiated_protocol = if negotiated_h2 { "HTTP/2" } else { "HTTP/1.1" },
+        "transport protocol negotiated"
+    );
+    if negotiated_h2 {
+        h2::establish_h2(context, waiter, permit, io, connected).await
+    } else {
+        EstablishmentOutcome::Complete(
+            h1::establish_h1(context, permit, io, connected)
+                .await
+                .map(AcquisitionResult::H1)
+                .unwrap_or_else(AcquisitionResult::Failed),
+        )
+    }
 }
 
 /// Mints one non-wrapping physical-connection identity.
