@@ -1,6 +1,6 @@
 [package]
 name = "aws-runtime"
-version = "1.9.2"
+version = "1.10.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Runtime support code for the AWS SDK. This crate isn't intended to be used directly."
 edition = "2021"
@@ -10,7 +10,9 @@ rust-version = "1.94.1"
 
 [features]
 event-stream = ["dep:aws-smithy-eventstream", "aws-sigv4/sign-eventstream"]
-http-02x = ["dep:http-02x", "dep:http-body-04x"]
+# `aws-smithy-types/http-body-0-4-x` gives `SdkBody: http_body_04x::Body`, which the
+# `AwsChunkedBody` 0.4 impl needs. Previously inherited transitively from `aws-smithy-runtime`.
+http-02x = ["dep:http-02x", "dep:http-body-04x", "aws-smithy-types/http-body-0-4-x"]
 http-1x = []
 test-util = ["dep:regex-lite"]
 sigv4a = ["aws-sigv4/sigv4a"]
