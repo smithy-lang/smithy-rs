@@ -163,7 +163,7 @@ impl PartitionRegistry {
             .flat_map(|partition| partition.cells())
             .collect::<Vec<_>>();
         for cell in cells {
-            OriginCell::close_all_h1(&cell, reason);
+            OriginCell::close_all(&cell, reason);
         }
     }
 }
@@ -722,7 +722,7 @@ mod tests {
             .all(|cell| Arc::ptr_eq(&cells[0], cell)));
         assert_eq!(1, partition.cell_count());
 
-        let waiter = cells[0].register_waiter(ProtocolRequirement::H1Compatible);
+        let waiter = OriginCell::register_waiter(&cells[0], ProtocolRequirement::H1Compatible);
         let lease = OriginCell::take_ready_lease(&cells[0], waiter)
             .expect("admission targeted a different cell than the registry retained");
         drop(lease);

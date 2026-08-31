@@ -105,7 +105,7 @@ impl fmt::Debug for Partition {
 }
 
 /// Identifies one declared connection partition.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct PartitionId(usize);
 
 impl PartitionId {
@@ -183,7 +183,7 @@ pub enum ConnectionReuseScope {
 }
 
 /// Identifies the exact set of partitions eligible to reuse a connection.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) enum EligibilityGroup {
     /// Only the partition with this identity is eligible.
     Partition(PartitionId),

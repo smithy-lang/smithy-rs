@@ -1231,6 +1231,7 @@ impl OriginAdmission {
                         drop(candidate);
                         return None;
                     };
+                    state.reconcile_h2_demand(&scheduled.requesting_partition);
                     Some(AdmissionAction::Delivery(DeliveryGuard::borrowed_h1(
                         origin.clone(),
                         delivery,

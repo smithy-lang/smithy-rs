@@ -2417,18 +2417,22 @@ aws-smithy-http-client/src/client/
     cell.rs            — OriginCell and cell-level acquisition coordination
     cell/
       h1.rs            — HTTP/1 records, sender ownership, and reuse reservation
+      h2.rs            — HTTP/2 flights, generations, routes, gates, and request leases
       waiters.rs       — local acquisition queue and delivery reservation
     admission.rs       — bounded-origin capacity and unlocked action driving
     admission/
       demand.rs        — versioned demand order and delivery fences
       reuse.rs         — H1 availability order and cross-cell reuse operations
       delivery.rs      — capacity/H1 crossing guards and acknowledgements
+      publication.rs   — HTTP/2 advertisements, peer publication, and fences
     establish.rs       — transport construction below protocol establishment
     establish/
-      h1.rs            — HTTP/1 connect, handshake, installation, and driver
+      h1.rs            — HTTP/1 handshake, installation, and driver
+      h2.rs            — post-ALPN flight convergence, handshake, and driver
     dispatch.rs        — protocol-neutral request routing
     dispatch/
-      h1.rs            — HTTP/1 acquisition, dispatch, retry, and response ownership
+      h1.rs            — HTTP/1 dispatch, reacquisition, and response ownership
+      h2.rs            — HTTP/2 dispatch and two-ended request completion
     maintenance.rs     — idle-deadline scheduling and partition task lifetime
     connection.rs      — records, leases, logical close, physical completion
     events.rs          — listener and lifecycle event types
@@ -2466,9 +2470,10 @@ The evidence levels have distinct jobs:
   identifies its operation alphabet and bound; ordinary transition tests are not described as exhaustive.
 * Focused **Loom kernels** compile the production synchronization-bearing code against Loom and exercise
   concurrent cell publication, permit and H1 delivery, H1 selection and return, borrowed-H1 materialization,
-  reuse cancellation, logical close, and maintenance publication or shutdown. They model these
-  ownership boundaries rather than sockets or the complete network client. HTTP/2 generation publication and
-  request-lease kernels are added with those mechanisms.
+  reuse cancellation, logical close, maintenance publication or shutdown, HTTP/2 activation against close,
+  two-ended request completion, route installation against requesting-cell cancellation, and peer publication
+  against connection-cell close. They model these ownership boundaries rather than sockets or the complete
+  network client.
 * **Controlled-runtime tests** use injected time, sleep, connectors, and executors to force cancellation at
   ownership-distinct cancellation boundaries, submitted-future drop, idle deadlines, independent-runtime
   request movement, explicit placement checks, and connector or handshake failure.

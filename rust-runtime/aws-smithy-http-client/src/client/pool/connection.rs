@@ -57,10 +57,6 @@ pub(super) enum NegotiatedProtocol {
     /// HTTP/1.1 with one exclusive request sender.
     Http1,
     /// HTTP/2 with a multiplexed request sender.
-    #[allow(
-        dead_code,
-        reason = "constructed once HTTP/2 generations are implemented"
-    )]
     Http2,
 }
 
@@ -78,10 +74,6 @@ pub(super) struct ConnectionInfo {
     /// Partition that retains the transport and protocol driver.
     owner_partition: PartitionId,
     /// Protocol selected by configuration or ALPN.
-    #[allow(
-        dead_code,
-        reason = "read when HTTP/2 generation selection is implemented"
-    )]
     protocol: NegotiatedProtocol,
     /// Local socket address reported by the connector, when available.
     local_addr: Option<SocketAddr>,
@@ -133,7 +125,6 @@ impl ConnectionInfo {
     }
 
     /// Returns the established HTTP protocol.
-    #[cfg(test)]
     pub(super) fn protocol(&self) -> NegotiatedProtocol {
         self.protocol
     }
@@ -162,6 +153,20 @@ impl ConnectionInfo {
 
     /// Builds Smithy metadata with close authority for this H1 generation.
     pub(super) fn metadata(&self, close: super::cell::h1::H1CloseHandle) -> ConnectionMetadata {
+        let mut builder = ConnectionMetadata::builder()
+            .proxied(self.proxied)
+            .connection_id(self.id)
+            .poison_fn(move || {
+                close.close(CloseReason::Poisoned);
+            });
+        builder
+            .set_local_addr(self.local_addr)
+            .set_remote_addr(self.remote_addr);
+        builder.build()
+    }
+
+    /// Builds Smithy metadata with close authority for this H2 generation.
+    pub(super) fn h2_metadata(&self, close: super::cell::h2::H2CloseHandle) -> ConnectionMetadata {
         let mut builder = ConnectionMetadata::builder()
             .proxied(self.proxied)
             .connection_id(self.id)
@@ -210,6 +215,8 @@ struct LifecycleState {
 /// Whether a connection may accept dispatch and still owns bounded capacity.
 #[derive(Debug)]
 enum LogicalState {
+    /// Protocol handshake or cell installation has not committed.
+    Establishing,
     /// Dispatch may commit.
     Open {
         /// Bounded-origin slot released by logical close, when configured.
@@ -223,35 +230,16 @@ enum LogicalState {
 }
 
 impl ConnectionState {
-    /// Creates a connection whose origin has no admission bound.
+    /// Creates state before a protocol handshake consumes the root I/O.
     ///
-    /// The returned guard is the unique physical-lifetime owner and must move
-    /// with the root I/O task.
-    pub(super) fn unbounded(info: Arc<ConnectionInfo>) -> (Arc<Self>, PhysicalConnectionGuard) {
-        Self::new(info, None)
-    }
-
-    /// Creates a connection that takes ownership of one bounded-origin slot.
-    ///
-    /// The returned guard is the unique physical-lifetime owner and must move
-    /// with the root I/O task. Logical close returns `lease` independently of
-    /// that guard.
-    pub(super) fn bounded(
-        info: Arc<ConnectionInfo>,
-        lease: CapacityLease,
-    ) -> (Arc<Self>, PhysicalConnectionGuard) {
-        Self::new(info, Some(lease))
-    }
-
-    /// Builds shared connection state and its unique physical-lifetime guard.
-    fn new(
-        info: Arc<ConnectionInfo>,
-        lease: Option<CapacityLease>,
-    ) -> (Arc<Self>, PhysicalConnectionGuard) {
+    /// The returned guard is the unique physical-lifetime owner. Dispatch is
+    /// rejected until [`Self::open`] transfers optional bounded capacity after
+    /// a successful handshake.
+    pub(super) fn establishing(info: Arc<ConnectionInfo>) -> (Arc<Self>, PhysicalConnectionGuard) {
         let connection = Arc::new(Self {
             info,
             lifecycle: Mutex::new(LifecycleState {
-                logical: LogicalState::Open { lease },
+                logical: LogicalState::Establishing,
                 in_flight: 0,
                 physical_complete: false,
             }),
@@ -260,6 +248,48 @@ impl ConnectionState {
             connection: connection.clone(),
             active: true,
         };
+        (connection, physical)
+    }
+
+    /// Commits protocol establishment and transfers optional bounded capacity.
+    ///
+    /// Returns `lease` when logical close won before installation.
+    pub(super) fn open(&self, lease: Option<CapacityLease>) -> Result<(), Option<CapacityLease>> {
+        let mut lifecycle = self.lifecycle.lock();
+        if !matches!(lifecycle.logical, LogicalState::Establishing) {
+            return Err(lease);
+        }
+        lifecycle.logical = LogicalState::Open { lease };
+        Ok(())
+    }
+
+    /// Creates a connection whose origin has no admission bound.
+    ///
+    /// The returned guard is the unique physical-lifetime owner and must move
+    /// with the root I/O task.
+    #[cfg(test)]
+    pub(super) fn unbounded(info: Arc<ConnectionInfo>) -> (Arc<Self>, PhysicalConnectionGuard) {
+        let (connection, physical) = Self::establishing(info);
+        connection
+            .open(None)
+            .expect("new unbounded connection could not open");
+        (connection, physical)
+    }
+
+    /// Creates a connection that takes ownership of one bounded-origin slot.
+    ///
+    /// The returned guard is the unique physical-lifetime owner and must move
+    /// with the root I/O task. Logical close returns `lease` independently of
+    /// that guard.
+    #[cfg(test)]
+    pub(super) fn bounded(
+        info: Arc<ConnectionInfo>,
+        lease: CapacityLease,
+    ) -> (Arc<Self>, PhysicalConnectionGuard) {
+        let (connection, physical) = Self::establishing(info);
+        connection
+            .open(Some(lease))
+            .expect("new bounded connection could not open");
         (connection, physical)
     }
 
@@ -310,17 +340,24 @@ impl ConnectionState {
     pub(super) fn logical_close(&self, reason: CloseReason) -> bool {
         let lease = {
             let mut lifecycle = self.lifecycle.lock();
-            let LogicalState::Open { lease } = &mut lifecycle.logical else {
-                return false;
-            };
-            let lease = lease.take();
-            lifecycle.logical = LogicalState::Closed { reason };
-            lease
+            match &mut lifecycle.logical {
+                LogicalState::Establishing => {
+                    lifecycle.logical = LogicalState::Closed { reason };
+                    None
+                }
+                LogicalState::Open { lease } => {
+                    let lease = lease.take();
+                    lifecycle.logical = LogicalState::Closed { reason };
+                    lease
+                }
+                LogicalState::Closed { .. } => return false,
+            }
         };
         drop(lease);
         tracing::debug!(
             connection_id = %self.id(),
             connection_partition = ?self.owner_partition(),
+            protocol = ?self.info.protocol(),
             origin_scheme = %self.info.origin().scheme(),
             origin_host = self.info.origin().host(),
             origin_port = ?self.info.origin().port(),
@@ -371,6 +408,7 @@ impl ConnectionState {
     pub(super) fn debug_assert_close_reason(&self, expected: CloseReason) {
         let lifecycle = self.lifecycle.lock();
         let actual = match lifecycle.logical {
+            LogicalState::Establishing => None,
             LogicalState::Open { .. } => None,
             LogicalState::Closed { reason } => Some(reason),
         };
@@ -416,6 +454,7 @@ impl ConnectionState {
         let lifecycle = self.lifecycle.lock();
         ConnectionSnapshot {
             close_reason: match lifecycle.logical {
+                LogicalState::Establishing => None,
                 LogicalState::Open { .. } => None,
                 LogicalState::Closed { reason } => Some(reason),
             },

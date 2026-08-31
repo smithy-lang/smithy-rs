@@ -410,6 +410,11 @@ enum DeliveryKind {
 }
 
 impl DeliveryAck {
+    /// Keeps a successor local while an H2 generation or route can serve it.
+    pub(in crate::client::pool) fn suppress_successor(&mut self) {
+        self.successor = None;
+    }
+
     /// Acknowledges that requesting cell state accepted the acquisition event.
     pub(in crate::client::pool) fn accept(mut self) -> Option<AdmissionAction> {
         let kind = self

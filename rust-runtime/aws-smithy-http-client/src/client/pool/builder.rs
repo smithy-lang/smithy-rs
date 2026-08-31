@@ -9,8 +9,9 @@ use super::establish::{self, TransportFactory};
 use super::maintenance::MaintenanceConfig;
 use super::registry::{PartitionRegistry, PartitionRegistryError};
 use super::{ConnectionPool, ConnectionReuseScope, Partition, PoolConfig, PoolInner};
-use crate::client::TlsUnset;
+use crate::client::{TlsProviderSelected, TlsUnset};
 use crate::sync::Arc;
+use crate::tls::{self, TlsContext};
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
 use aws_smithy_async::time::{SharedTimeSource, TimeSource};
 #[cfg(any(
@@ -241,6 +242,92 @@ impl<Tls> Builder<Tls> {
 }
 
 impl Builder<TlsUnset> {
+    /// Selects the TLS provider used by HTTPS pool connections.
+    pub fn tls_provider(self, provider: tls::Provider) -> Builder<TlsProviderSelected> {
+        Builder {
+            idle_timeout: self.idle_timeout,
+            time_source: self.time_source,
+            sleep_impl: self.sleep_impl,
+            tcp_nodelay: self.tcp_nodelay,
+            tcp_keepalive: self.tcp_keepalive,
+            max_connections_per_host: self.max_connections_per_host,
+            reuse_scope: self.reuse_scope,
+            partitions: self.partitions,
+            tls: TlsProviderSelected {
+                provider,
+                context: TlsContext::default(),
+            },
+        }
+    }
+}
+
+crate::cfg::cfg_tls! {
+    impl Builder<TlsProviderSelected> {
+        /// Sets provider-specific TLS configuration for HTTPS connections.
+        pub fn tls_context(mut self, context: TlsContext) -> Self {
+            self.tls.context = context;
+            self
+        }
+
+        /// Mutably sets provider-specific TLS configuration.
+        pub fn set_tls_context(&mut self, context: TlsContext) -> &mut Self {
+            self.tls.context = context;
+            self
+        }
+
+        /// Builds a pool whose connector performs TLS and ALPN negotiation.
+        pub fn build_https(self) -> Result<ConnectionPool, BuildError> {
+            validate_default_connector_interfaces(self.partitions.as_deref())?;
+            let provider = self.tls.provider.clone();
+            let context = self.tls.context.clone();
+            match provider {
+                #[cfg(feature = "__rustls")]
+                tls::Provider::Rustls(crypto_mode) => {
+                    let tcp_nodelay = self.tcp_nodelay;
+                    let tcp_keepalive = self.tcp_keepalive.clone().resolve(None);
+                    let transport = establish::cached_transport_factory_for_interface(
+                        move |interface| {
+                            let mut connector =
+                                HttpConnector::new_with_resolver(GaiResolver::new());
+                            connector.set_nodelay(tcp_nodelay);
+                            connector.set_keepalive(tcp_keepalive);
+                            set_default_connector_interface(&mut connector, interface);
+                            tls::rustls_provider::build_connector::wrap_connector(
+                                connector,
+                                crypto_mode.clone(),
+                                &context,
+                                crate::proxy::ProxyConfig::disabled(),
+                            )
+                        },
+                    );
+                    self.build_with_transport(transport)
+                }
+                #[cfg(feature = "s2n-tls")]
+                tls::Provider::S2nTls => {
+                    let tcp_nodelay = self.tcp_nodelay;
+                    let tcp_keepalive = self.tcp_keepalive.clone().resolve(None);
+                    let transport = establish::cached_transport_factory_for_interface(
+                        move |interface| {
+                            let mut connector =
+                                HttpConnector::new_with_resolver(GaiResolver::new());
+                            connector.set_nodelay(tcp_nodelay);
+                            connector.set_keepalive(tcp_keepalive);
+                            set_default_connector_interface(&mut connector, interface);
+                            tls::s2n_tls_provider::build_connector::wrap_connector(
+                                connector,
+                                &context,
+                                crate::proxy::ProxyConfig::disabled(),
+                            )
+                        },
+                    );
+                    self.build_with_transport(transport)
+                }
+            }
+        }
+    }
+}
+
+impl Builder<TlsUnset> {
     /// Builds a pool for cleartext HTTP connections.
     #[doc(hidden)]
     pub fn build_http(self) -> Result<ConnectionPool, BuildError> {
@@ -297,7 +384,9 @@ impl Builder<TlsUnset> {
     {
         self.build_with_transport(establish::transport_factory(connector))
     }
+}
 
+impl<Tls> Builder<Tls> {
     /// Validates pool policy and installs the type-erased transport factory.
     fn build_with_transport(
         self,
