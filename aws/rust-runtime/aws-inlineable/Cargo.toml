@@ -14,6 +14,8 @@ rust-version = "1.94.1"
 
 [features]
 http-1x = ["aws-smithy-runtime-api/http-1x"]
+# Opt-in support for the deprecated `http` 0.2.x conversions on `PresignedRequest`.
+http-02x = ["aws-smithy-runtime-api/http-02x"]
 
 [dependencies]
 aws-credential-types = { path = "../aws-credential-types" }
@@ -25,7 +27,7 @@ aws-smithy-checksums = { path = "../../../rust-runtime/aws-smithy-checksums" }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-smithy-observability = { path = "../../../rust-runtime/aws-smithy-observability" }
 aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime", features = ["client"] }
-aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client", "http-1x", "http-02x"] }
+aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client", "http-1x"] }
 aws-smithy-schema = { path = "../../../rust-runtime/aws-smithy-schema" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types", features = ["http-body-0-4-x", "http-body-1-x"] }
 bytes = "1.11.1"
