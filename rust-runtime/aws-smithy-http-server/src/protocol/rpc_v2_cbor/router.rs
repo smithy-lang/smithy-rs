@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use std::borrow::Cow;
 use std::convert::Infallible;
 use std::str::FromStr;
 use std::sync::LazyLock;
@@ -51,7 +52,7 @@ pub enum Error {
 /// [Smithy RPC v2 CBOR]: https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html
 #[derive(Debug, Clone)]
 pub struct RpcV2CborRouter<S> {
-    routes: TinyMap<&'static str, S, ROUTE_CUTOFF>,
+    routes: TinyMap<Cow<'static, str>, S, ROUTE_CUTOFF>,
 }
 
 /// Requests for the `rpcv2Cbor` protocol MUST NOT contain an `x-amz-target` or `x-amzn-target`
@@ -240,11 +241,14 @@ impl<S: Clone, B> Router<B> for RpcV2CborRouter<S> {
     }
 }
 
-impl<S> FromIterator<(&'static str, S)> for RpcV2CborRouter<S> {
+impl<K, S> FromIterator<(K, S)> for RpcV2CborRouter<S>
+where
+    K: Into<Cow<'static, str>>,
+{
     #[inline]
-    fn from_iter<T: IntoIterator<Item = (&'static str, S)>>(iter: T) -> Self {
+    fn from_iter<T: IntoIterator<Item = (K, S)>>(iter: T) -> Self {
         Self {
-            routes: iter.into_iter().collect(),
+            routes: iter.into_iter().map(|(key, service)| (key.into(), service)).collect(),
         }
     }
 }

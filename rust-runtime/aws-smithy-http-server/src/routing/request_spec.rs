@@ -5,7 +5,6 @@
 
 use std::borrow::Cow;
 
-use aws_smithy_schema::traits::HttpTrait;
 use http::Request;
 use regex::Regex;
 
@@ -128,47 +127,6 @@ impl RequestSpec {
             uri_spec,
             uri_path_regex,
         }
-    }
-
-    pub fn from_http_trait(http_trait: &HttpTrait<'_>) -> Self {
-        let method = http_trait
-            .method()
-            .parse()
-            .expect("invalid HTTP method in generated operation schema");
-        let (path, query) = http_trait.uri().split_once('?').unwrap_or((http_trait.uri(), ""));
-
-        let path_segments = path
-            .trim_start_matches('/')
-            .split('/')
-            .filter(|segment| !segment.is_empty())
-            .map(|segment| {
-                if segment.starts_with('{') && segment.ends_with("+}") {
-                    PathSegment::Greedy
-                } else if segment.starts_with('{') && segment.ends_with('}') {
-                    PathSegment::Label
-                } else {
-                    PathSegment::Literal(segment.to_owned())
-                }
-            })
-            .collect();
-
-        let query_segments = form_urlencoded::parse(query.as_bytes())
-            .map(|(key, value)| {
-                if value.is_empty() {
-                    QuerySegment::Key(key.into_owned())
-                } else {
-                    QuerySegment::KeyValue(key.into_owned(), value.into_owned())
-                }
-            })
-            .collect();
-
-        Self::new(
-            method,
-            UriSpec::new(PathAndQuerySpec::new(
-                PathSpec::from_vector_unchecked(path_segments),
-                QuerySpec::from_vector_unchecked(query_segments),
-            )),
-        )
     }
 
     /// A measure of how "important" a `RequestSpec` is. The more specific a `RequestSpec` is, the
@@ -545,32 +503,6 @@ mod tests {
         assert_eq!(
             Match::Yes,
             spec.matches(&req(&Method::GET, "/ReDosLiteral/abc/(a+)+", None))
-        );
-    }
-
-    #[test]
-    fn request_spec_from_http_trait() {
-        let spec = RequestSpec::from_http_trait(&aws_smithy_schema::traits::HttpTrait::new(
-            "GET",
-            "/pokemon/{species}?color=blue&tag=hello%20world&verbose",
-            None,
-        ));
-
-        assert_eq!(
-            Match::Yes,
-            spec.matches(&req(
-                &Method::GET,
-                "/pokemon/pikachu?color=blue&tag=hello%20world&verbose=true",
-                None,
-            ))
-        );
-        assert_eq!(
-            Match::No,
-            spec.matches(&req(
-                &Method::GET,
-                "/pokemon/pikachu?color=red&tag=hello%20world&verbose",
-                None,
-            ))
         );
     }
 }

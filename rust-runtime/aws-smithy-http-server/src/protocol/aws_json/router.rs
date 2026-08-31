@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::convert::Infallible;
+use std::{borrow::Cow, convert::Infallible};
 
 use tower::Layer;
 use tower::Service;
@@ -47,7 +47,7 @@ pub(crate) const ROUTE_CUTOFF: usize = 15;
 /// [AWS JSON 1.1]: https://smithy.io/2.0/aws/protocols/aws-json-1_1-protocol.html
 #[derive(Debug, Clone)]
 pub struct AwsJsonRouter<S> {
-    routes: TinyMap<&'static str, S, ROUTE_CUTOFF>,
+    routes: TinyMap<Cow<'static, str>, S, ROUTE_CUTOFF>,
 }
 
 impl<S> AwsJsonRouter<S> {
@@ -106,11 +106,14 @@ where
     }
 }
 
-impl<S> FromIterator<(&'static str, S)> for AwsJsonRouter<S> {
+impl<K, S> FromIterator<(K, S)> for AwsJsonRouter<S>
+where
+    K: Into<Cow<'static, str>>,
+{
     #[inline]
-    fn from_iter<T: IntoIterator<Item = (&'static str, S)>>(iter: T) -> Self {
+    fn from_iter<T: IntoIterator<Item = (K, S)>>(iter: T) -> Self {
         Self {
-            routes: iter.into_iter().collect(),
+            routes: iter.into_iter().map(|(key, service)| (key.into(), service)).collect(),
         }
     }
 }

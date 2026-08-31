@@ -26,8 +26,6 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestJsonProtocol
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestXmlProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRpcV2CborProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Error as ErrorModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Input as InputModule
@@ -79,9 +77,8 @@ class ServerServiceGenerator(
 
     /** The name of the local private module containing the functions that return the request for each operation */
     private val requestSpecsModuleName = "request_specs"
-    private val shouldGenerateRouteRequestSpecsFromOperationSchemas =
-        codegenContext.settings.codegenConfig.schemaSerde &&
-            (protocol is ServerRestJsonProtocol || protocol is ServerRestXmlProtocol)
+    private val shouldGenerateOperationHandlerBindings =
+        codegenContext.settings.codegenConfig.schemaSerde
 
     private val usedRequestSpecFunctionNames = mutableSetOf<String>()
 
@@ -334,17 +331,16 @@ class ServerServiceGenerator(
         specFunctions: List<Pair<String, Writable>>,
         emitHandlerExpr: RustWriter.(isClone: Boolean) -> Unit,
     ) {
-        if (shouldGenerateRouteRequestSpecsFromOperationSchemas) {
+        if (shouldGenerateOperationHandlerBindings) {
             rustTemplate(
                 """
-                #{SmithyHttpServer}::routing::SchemaRoute {
-                    operation: &crate::schema::operations::${operationSchemaConstName(operationShape)},
-                    service:
+                #{SmithyHttpServer}::routing::OperationHandlerBinding::new(
+                    &crate::schema::operations::${operationSchemaConstName(operationShape)},
                 """,
                 *codegenScope,
             )
             emitHandlerExpr(false)
-            rust("},")
+            rust("),")
             return
         }
 
@@ -389,11 +385,11 @@ class ServerServiceGenerator(
                     }
                 }
             val routingServiceConstruction =
-                if (shouldGenerateRouteRequestSpecsFromOperationSchemas) {
+                if (shouldGenerateOperationHandlerBindings) {
                     writable {
                         rustTemplate(
                             """
-                            <#{Protocol} as #{SmithyHttpServer}::routing::BuildRouterFromSchemaRoutes<
+                            <#{Protocol} as #{SmithyHttpServer}::routing::RouterForOperationHandlerBindings<
                                 #{SmithyHttpServer}::routing::Route<Body>
                             >>::build_routing_service(
                                 &crate::schema::${serviceSchemaConstName()},
@@ -518,11 +514,11 @@ class ServerServiceGenerator(
                     }
                 }
             val routingServiceConstruction =
-                if (shouldGenerateRouteRequestSpecsFromOperationSchemas) {
+                if (shouldGenerateOperationHandlerBindings) {
                     writable {
                         rustTemplate(
                             """
-                            <#{Protocol} as #{SmithyHttpServer}::routing::BuildRouterFromSchemaRoutes<
+                            <#{Protocol} as #{SmithyHttpServer}::routing::RouterForOperationHandlerBindings<
                                 #{SmithyHttpServer}::routing::Route<Body>
                             >>::build_routing_service(
                                 &crate::schema::${serviceSchemaConstName()},
@@ -607,7 +603,7 @@ class ServerServiceGenerator(
 
     private fun requestSpecsModule(): Writable =
         writable {
-            if (shouldGenerateRouteRequestSpecsFromOperationSchemas) {
+            if (shouldGenerateOperationHandlerBindings) {
                 return@writable
             }
             val functions =

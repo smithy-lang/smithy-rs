@@ -16,6 +16,7 @@ mod lambda_handler;
 #[doc(hidden)]
 pub mod request_spec;
 
+mod operation_handler_bindings;
 mod route;
 
 pub(crate) mod tiny_map;
@@ -41,9 +42,7 @@ use tower::{util::Oneshot, Service, ServiceExt};
 use crate::{
     body::{boxed, BoxBody},
     error::BoxError,
-    protocol::{rest::router::RestRouter, rest_json_1::RestJson1, rest_xml::RestXml},
     response::IntoResponse,
-    schema::{OperationSchema, ServiceSchema},
 };
 
 #[cfg(feature = "aws-lambda")]
@@ -54,6 +53,7 @@ pub use self::lambda_handler::LambdaHandler;
 pub use self::{
     into_make_service::IntoMakeService,
     into_make_service_with_connect_info::{Connected, IntoMakeServiceWithConnectInfo},
+    operation_handler_bindings::{BuildError, OperationHandlerBinding, RouterForOperationHandlerBindings},
     route::Route,
 };
 
@@ -73,109 +73,6 @@ pub trait Router<B> {
 
     /// Matches a [`http::Request`] to a target [`Service`].
     fn match_route(&self, request: &http::Request<B>) -> Result<Self::Service, Self::Error>;
-}
-
-/// A service paired with the operation schema it handles.
-#[derive(Debug, Clone)]
-pub struct SchemaRoute<S> {
-    pub operation: &'static OperationSchema<'static>,
-    pub service: S,
-}
-
-/// Error returned when building a routing service from Smithy schemas.
-#[derive(Debug, thiserror::Error)]
-pub enum BuildError {
-    /// The service schema does not list the protocol requested by the caller.
-    #[error("service schema does not list expected protocol `{expected}`")]
-    MissingProtocol {
-        /// Expected Smithy protocol shape ID.
-        expected: &'static str,
-    },
-}
-
-/// Builds a protocol router from service and operation schemas.
-///
-/// This lets generated code pass protocol-neutral [`SchemaRoute`] values while
-/// the protocol marker owns conversion into its concrete router type.
-pub trait BuildRouterFromSchemaRoutes<S>: Sized {
-    type Router;
-
-    /// Builds the protocol-specific router from schema routes.
-    fn build_router_from_schema_routes<I>(
-        service_schema: &'static ServiceSchema<'static>,
-        routes: I,
-    ) -> Result<Self::Router, BuildError>
-    where
-        I: IntoIterator<Item = SchemaRoute<S>>;
-
-    /// Builds a [`RoutingService`] from schema routes.
-    fn build_routing_service<I>(
-        service_schema: &'static ServiceSchema<'static>,
-        routes: I,
-    ) -> Result<RoutingService<Self::Router, Self>, BuildError>
-    where
-        I: IntoIterator<Item = SchemaRoute<S>>,
-    {
-        Ok(RoutingService::new(Self::build_router_from_schema_routes(
-            service_schema,
-            routes,
-        )?))
-    }
-}
-
-fn ensure_protocol(service_schema: &'static ServiceSchema<'static>, expected: &'static str) -> Result<(), BuildError> {
-    if service_schema
-        .protocols()
-        .iter()
-        .any(|protocol| protocol.as_str() == expected)
-    {
-        Ok(())
-    } else {
-        Err(BuildError::MissingProtocol { expected })
-    }
-}
-
-fn build_rest_router_from_schema_routes<S, I>(
-    service_schema: &'static ServiceSchema<'static>,
-    routes: I,
-    expected_protocol: &'static str,
-) -> Result<RestRouter<S>, BuildError>
-where
-    I: IntoIterator<Item = SchemaRoute<S>>,
-{
-    ensure_protocol(service_schema, expected_protocol)?;
-    Ok(routes
-        .into_iter()
-        .map(|route| (route.operation.request_spec(), route.service))
-        .collect())
-}
-
-impl<S> BuildRouterFromSchemaRoutes<S> for RestJson1 {
-    type Router = RestRouter<S>;
-
-    fn build_router_from_schema_routes<I>(
-        service_schema: &'static ServiceSchema<'static>,
-        routes: I,
-    ) -> Result<Self::Router, BuildError>
-    where
-        I: IntoIterator<Item = SchemaRoute<S>>,
-    {
-        build_rest_router_from_schema_routes(service_schema, routes, "aws.protocols#restJson1")
-    }
-}
-
-impl<S> BuildRouterFromSchemaRoutes<S> for RestXml {
-    type Router = RestRouter<S>;
-
-    fn build_router_from_schema_routes<I>(
-        service_schema: &'static ServiceSchema<'static>,
-        routes: I,
-    ) -> Result<Self::Router, BuildError>
-    where
-        I: IntoIterator<Item = SchemaRoute<S>>,
-    {
-        build_rest_router_from_schema_routes(service_schema, routes, "aws.protocols#restXml")
-    }
 }
 
 /// A [`Service`] using the [`Router`] `R` to redirect messages to specific routes.
