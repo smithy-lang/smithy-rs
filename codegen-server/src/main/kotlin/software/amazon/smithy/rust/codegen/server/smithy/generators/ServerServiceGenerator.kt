@@ -335,9 +335,16 @@ class ServerServiceGenerator(
         emitHandlerExpr: RustWriter.(isClone: Boolean) -> Unit,
     ) {
         if (shouldGenerateRouteRequestSpecsFromOperationSchemas) {
-            rust("(crate::schema::operations::${operationSchemaConstName(operationShape)}.request_spec(), ")
+            rustTemplate(
+                """
+                #{SmithyHttpServer}::routing::SchemaRoute {
+                    operation: &crate::schema::operations::${operationSchemaConstName(operationShape)},
+                    service:
+                """,
+                *codegenScope,
+            )
             emitHandlerExpr(false)
-            rust("),")
+            rust("},")
             return
         }
 
@@ -381,6 +388,38 @@ class ServerServiceGenerator(
                         }
                     }
                 }
+            val routingServiceConstruction =
+                if (shouldGenerateRouteRequestSpecsFromOperationSchemas) {
+                    writable {
+                        rustTemplate(
+                            """
+                            <#{Protocol} as #{SmithyHttpServer}::routing::BuildRouterFromSchemaRoutes<
+                                #{SmithyHttpServer}::routing::Route<Body>
+                            >>::build_routing_service(
+                                &crate::schema::${serviceSchemaConstName()},
+                                [#{RoutesArrayElements:W}],
+                            )
+                            .expect("generated service schema should build router for the selected protocol")
+                            """,
+                            *codegenScope,
+                            "Protocol" to protocol.markerStruct(),
+                            "RoutesArrayElements" to routesArrayElements,
+                        )
+                    }
+                } else {
+                    writable {
+                        rustTemplate(
+                            """
+                            #{SmithyHttpServer}::routing::RoutingService::new(
+                                #{Router}::from_iter([#{RoutesArrayElements:W}])
+                            )
+                            """,
+                            *codegenScope,
+                            "Router" to protocol.routerType(),
+                            "RoutesArrayElements" to routesArrayElements,
+                        )
+                    }
+                }
 
             rustTemplate(
                 """
@@ -402,7 +441,7 @@ class ServerServiceGenerator(
                 where
                     L: #{Tower}::Layer<#{SmithyHttpServer}::routing::Route<Body>>,
                 {
-                    let router = {
+                    let svc = {
                         use #{SmithyHttpServer}::operation::OperationShape;
                         let mut $missingOperationsVariableName = std::collections::HashMap::new();
                         #{NullabilityChecks:W}
@@ -415,9 +454,8 @@ class ServerServiceGenerator(
 
                         #{PatternInitializations:W}
 
-                        #{Router}::from_iter([#{RoutesArrayElements:W}])
+                        #{RoutingServiceConstruction:W}
                     };
-                    let svc = #{SmithyHttpServer}::routing::RoutingService::new(router);
                     let svc = svc.map(|s| s.layer(self.layer));
                     Ok($serviceName { svc })
                 }
@@ -426,7 +464,7 @@ class ServerServiceGenerator(
                 "Protocol" to protocol.markerStruct(),
                 "Router" to protocol.routerType(),
                 "NullabilityChecks" to nullabilityChecks,
-                "RoutesArrayElements" to routesArrayElements,
+                "RoutingServiceConstruction" to routingServiceConstruction,
                 "PatternInitializations" to patternInitializations(),
                 *RuntimeType.preludeScope,
             )
@@ -479,6 +517,34 @@ class ServerServiceGenerator(
                         }
                     }
                 }
+            val routingServiceConstruction =
+                if (shouldGenerateRouteRequestSpecsFromOperationSchemas) {
+                    writable {
+                        rustTemplate(
+                            """
+                            <#{Protocol} as #{SmithyHttpServer}::routing::BuildRouterFromSchemaRoutes<
+                                #{SmithyHttpServer}::routing::Route<Body>
+                            >>::build_routing_service(
+                                &crate::schema::${serviceSchemaConstName()},
+                                [#{Pairs:W}],
+                            )
+                            .expect("generated service schema should build router for the selected protocol")
+                            """,
+                            *codegenScope,
+                            "Protocol" to protocol.markerStruct(),
+                            "Pairs" to pairs,
+                        )
+                    }
+                } else {
+                    writable {
+                        rustTemplate(
+                            "#{SmithyHttpServer}::routing::RoutingService::new(#{Router}::from_iter([#{Pairs:W}]))",
+                            *codegenScope,
+                            "Router" to protocol.routerType(),
+                            "Pairs" to pairs,
+                        )
+                    }
+                }
             rustTemplate(
                 """
                 /// Constructs a [`$serviceName`] from the arguments provided to the builder.
@@ -493,17 +559,16 @@ class ServerServiceGenerator(
                         #{SmithyHttpServer}::routing::RoutingService<#{Router}<#{SmithyHttpServer}::routing::Route<Body>>, #{Protocol}>
                     >
                 {
-                    let router = #{Router}::from_iter([#{Pairs:W}]);
                     let svc = self
                         .layer
-                        .layer(#{SmithyHttpServer}::routing::RoutingService::new(router));
+                        .layer(#{RoutingServiceConstruction:W});
                     $serviceName { svc }
                 }
                 """,
                 *codegenScope,
                 "Protocol" to protocol.markerStruct(),
                 "Router" to protocol.routerType(),
-                "Pairs" to pairs,
+                "RoutingServiceConstruction" to routingServiceConstruction,
             )
         }
 
@@ -570,6 +635,9 @@ class ServerServiceGenerator(
 
     private fun operationSchemaConstName(operationShape: OperationShape): String =
         symbolProvider.toSymbol(operationShape).name.toSnakeCase().uppercase()
+
+    private fun serviceSchemaConstName(): String =
+        service.id.name.toSnakeCase().uppercase()
 
     /** Returns a `Writable` comma delimited sequence of `builder_field: None`. */
     private fun notSetFields(): Writable =
