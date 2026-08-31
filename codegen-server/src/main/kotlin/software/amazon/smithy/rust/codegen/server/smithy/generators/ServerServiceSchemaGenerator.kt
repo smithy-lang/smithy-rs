@@ -10,6 +10,7 @@ import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -101,6 +102,16 @@ class ServerServiceSchemaGenerator(
         val prefix = operationConstName(operation)
         val input = operation.inputShape(model)
         val output = operation.outputShape(model)
+        val httpTrait = operation.getTrait(HttpTrait::class.java).orElse(null)
+        val httpTraitChain =
+            if (httpTrait == null) {
+                ""
+            } else {
+                val method = httpTrait.method.dq()
+                val uri = httpTrait.uri.toString().dq()
+                val code = if (httpTrait.code == 200) "None" else "Some(${httpTrait.code})"
+                "\n    .with_http(#{HttpTrait}::new($method, $uri, $code))"
+            }
         val errorRefs =
             operation.errorsSet
                 .sorted()
@@ -113,7 +124,7 @@ class ServerServiceSchemaGenerator(
             static ${prefix}_OPERATION_SHAPE: #{Schema}<'static> = #{Schema}::new(
                 ${shapeIdExpr(operation.id)},
                 #{ShapeType}::Operation,
-            );
+            )$httpTraitChain;
 
             static ${prefix}_ERRORS: &[&#{Schema}<'static>] = &[
                 $errorRefs
@@ -129,6 +140,7 @@ class ServerServiceSchemaGenerator(
             "Schema" to smithySchema.resolve("Schema"),
             "ShapeId" to smithySchema.resolve("ShapeId"),
             "ShapeType" to smithySchema.resolve("ShapeType"),
+            "HttpTrait" to smithySchema.resolve("traits::HttpTrait"),
             "OperationSchema" to smithyHttpServer.resolve("schema::OperationSchema"),
         )
     }

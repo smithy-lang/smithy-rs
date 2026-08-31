@@ -7,6 +7,8 @@
 
 use aws_smithy_schema::{Schema, ShapeId};
 
+use crate::routing::request_spec::RequestSpec;
+
 /// Runtime descriptor for a Smithy service.
 #[derive(Debug)]
 pub struct ServiceSchema<'a> {
@@ -101,5 +103,10 @@ impl<'a> OperationSchema<'a> {
     /// Returns schemas for errors modeled on this operation.
     pub fn errors(&self) -> &'a [&'a Schema<'a>] {
         self.errors
+    }
+
+    /// Returns the REST router request spec modeled by this operation's `@http` trait.
+    pub fn request_spec(&self) -> RequestSpec {
+        RequestSpec::from_http_trait(self.schema.http().expect("operation schema missing @http trait"))
     }
 }

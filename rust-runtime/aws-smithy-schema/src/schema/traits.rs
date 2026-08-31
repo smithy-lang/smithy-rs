@@ -339,9 +339,8 @@ annotation_trait!(
 
 /// The `@http` trait — defines the HTTP method, URI pattern, and status code for an operation.
 ///
-/// This is an operation-level trait that is included on the input schema for
-/// convenience, so that the protocol serializer can construct the correct
-/// request without needing a separate operation schema.
+/// This is an operation-level trait. Server operation descriptors use it to
+/// construct REST route specs at runtime.
 ///
 /// The URI pattern may contain `{label}` placeholders that are substituted
 /// at serialization time with percent-encoded values from `@httpLabel` members.

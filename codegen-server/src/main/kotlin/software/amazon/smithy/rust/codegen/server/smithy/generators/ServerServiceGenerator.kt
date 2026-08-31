@@ -26,6 +26,8 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestJsonProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestXmlProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRpcV2CborProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Error as ErrorModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Input as InputModule
@@ -77,6 +79,9 @@ class ServerServiceGenerator(
 
     /** The name of the local private module containing the functions that return the request for each operation */
     private val requestSpecsModuleName = "request_specs"
+    private val shouldGenerateRouteRequestSpecsFromOperationSchemas =
+        codegenContext.settings.codegenConfig.schemaSerde &&
+            (protocol is ServerRestJsonProtocol || protocol is ServerRestXmlProtocol)
 
     private val usedRequestSpecFunctionNames = mutableSetOf<String>()
 
@@ -325,9 +330,17 @@ class ServerServiceGenerator(
      * @param emitHandlerExpr Lambda that emits the handler expression (different for build vs build_unchecked)
      */
     private fun RustWriter.emitRouteEntries(
+        operationShape: OperationShape,
         specFunctions: List<Pair<String, Writable>>,
         emitHandlerExpr: RustWriter.(isClone: Boolean) -> Unit,
     ) {
+        if (shouldGenerateRouteRequestSpecsFromOperationSchemas) {
+            rust("(crate::schema::operations::${operationSchemaConstName(operationShape)}.request_spec(), ")
+            emitHandlerExpr(false)
+            rust("),")
+            return
+        }
+
         // Register all route specs for this operation (may be multiple for RpcV2Cbor dual-route).
         // Use move semantics for the last (or only) spec; clone only when there are earlier specs.
         specFunctions.forEachIndexed { index, (specBuilderFunctionName, _) ->
@@ -362,7 +375,7 @@ class ServerServiceGenerator(
                     for (operationShape in operations) {
                         val fieldName = builderFieldNames[operationShape]!!
                         val specFunctions = requestSpecMap.getValue(operationShape)
-                        emitRouteEntries(specFunctions) { isClone ->
+                        emitRouteEntries(operationShape, specFunctions) { isClone ->
                             val accessor = if (isClone) "self.$fieldName.clone()" else "self.$fieldName"
                             rust("$accessor.expect($expectMessageVariableName)")
                         }
@@ -451,7 +464,7 @@ class ServerServiceGenerator(
                     for (operationShape in operations) {
                         val fieldName = builderFieldNames[operationShape]!!
                         val specFunctions = requestSpecMap.getValue(operationShape)
-                        emitRouteEntries(specFunctions) { isClone ->
+                        emitRouteEntries(operationShape, specFunctions) { isClone ->
                             val accessor = if (isClone) "self.$fieldName.clone()" else "self.$fieldName"
                             rustTemplate(
                                 """
@@ -529,6 +542,9 @@ class ServerServiceGenerator(
 
     private fun requestSpecsModule(): Writable =
         writable {
+            if (shouldGenerateRouteRequestSpecsFromOperationSchemas) {
+                return@writable
+            }
             val functions =
                 writable {
                     for (specFunctions in requestSpecMap.values) {
@@ -551,6 +567,9 @@ class ServerServiceGenerator(
                 "SpecFunctions" to functions,
             )
         }
+
+    private fun operationSchemaConstName(operationShape: OperationShape): String =
+        symbolProvider.toSymbol(operationShape).name.toSnakeCase().uppercase()
 
     /** Returns a `Writable` comma delimited sequence of `builder_field: None`. */
     private fun notSetFields(): Writable =
