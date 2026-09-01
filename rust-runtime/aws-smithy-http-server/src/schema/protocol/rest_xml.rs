@@ -20,7 +20,7 @@ use crate::schema::protocol::response::{
     AsSerializable, ResponseBindingMode,
 };
 
-use super::{EventStreamProtocol, ServerProtocol};
+use super::{ServerEventStreamProtocol, ServerProtocol};
 
 // ============================================================================
 // restXml
@@ -46,7 +46,7 @@ impl ServerProtocol for RestXml {
             &parts.headers,
             output_schema,
             "application/xml",
-            <Self as EventStreamProtocol>::EVENT_STREAM_HTTP_CONTENT_TYPE,
+            <Self as ServerEventStreamProtocol>::EVENT_STREAM_HTTP_CONTENT_TYPE,
         ) {
             return Err(Self::RequestRejection::NotAcceptable);
         }
@@ -102,7 +102,7 @@ impl ServerProtocol for RestXml {
     }
 }
 
-impl EventStreamProtocol for RestXml {
+impl ServerEventStreamProtocol for RestXml {
     const EVENT_PAYLOAD_CONTENT_TYPE: &'static str = "application/xml";
     const EVENT_STREAM_HTTP_CONTENT_TYPE: &'static str = "application/vnd.amazon.eventstream";
     const FRAMES_INITIAL_MESSAGES: bool = false;

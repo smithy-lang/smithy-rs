@@ -37,6 +37,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.shapeModuleName
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
+import software.amazon.smithy.rust.codegen.core.util.findStreamingMember
+import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
@@ -82,8 +84,12 @@ class ServerSchemaDeserializerGenerator(
         shape.canReachConstrainedShape(model, symbolProvider)
 
     /** The type the deser fn for [shape] produces — mirrors the legacy `returnSymbolToParseFn`. */
+    private fun parseAsBuilder(shape: Shape): Boolean =
+        canReachConstrained(shape) ||
+            (shape is StructureShape && shape.findStreamingMember(model)?.isEventStream(model) == true)
+
     private fun parseSymbolFullName(shape: Shape): String =
-        if (canReachConstrained(shape)) {
+        if (parseAsBuilder(shape)) {
             unconstrainedShapeSymbolProvider.toSymbol(shape).rustType().qualifiedName()
         } else {
             symbolProvider.toSymbol(shape).rustType().qualifiedName()
@@ -248,7 +254,7 @@ class ServerSchemaDeserializerGenerator(
     private fun renderStructDeserFn(shape: StructureShape) {
         val symbol = symbolProvider.toSymbol(shape)
         val schemaPrefix = symbol.name.uppercase()
-        val fallible = canReachConstrained(shape)
+        val fallible = parseAsBuilder(shape)
         val builderPath = shape.serverBuilderSymbol(codegenContext).rustType().qualifiedName()
         val parse = parseSymbolFullName(shape)
         val members = shape.allMembers.values.toList()
@@ -421,7 +427,7 @@ class ServerSchemaDeserializerGenerator(
     fun renderDeserializableShapeImpl() {
         check(shape is StructureShape) { "DeserializableShape is implemented for operation input structs only" }
         val symbol = symbolProvider.toSymbol(shape)
-        val fallible = canReachConstrained(shape)
+        val fallible = parseAsBuilder(shape)
         val body =
             if (fallible) {
                 """

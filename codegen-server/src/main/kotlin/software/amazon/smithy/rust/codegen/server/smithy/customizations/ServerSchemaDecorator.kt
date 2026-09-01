@@ -130,10 +130,12 @@ class ServerSchemaDecorator : ServerCodegenDecorator {
                 shape.getTrait<ErrorTrait>()?.also { errorTrait ->
                     renderModeledErrorImpls(codegenContext, this, shape, errorTrait)
                 }
-                if (shapeId in operationInputs && shape is StructureShape) {
+                if (shape is StructureShape || shape is UnionShape) {
                     val deserGenerator = ServerSchemaDeserializerGenerator(codegenContext, this, shape)
                     deserGenerator.render()
-                    deserGenerator.renderDeserializableShapeImpl()
+                    if (shapeId in operationInputs && shape is StructureShape) {
+                        deserGenerator.renderDeserializableShapeImpl()
+                    }
                 }
             }
         }

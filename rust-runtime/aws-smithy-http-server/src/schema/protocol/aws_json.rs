@@ -22,7 +22,7 @@ use crate::schema::protocol::response::{
     AsSerializable, ResponseBindingMode,
 };
 
-use super::{EventStreamProtocol, ServerProtocol};
+use super::{ServerEventStreamProtocol, ServerProtocol};
 
 static AMZ_JSON_10_MIME: LazyLock<mime::Mime> =
     LazyLock::new(|| "application/x-amz-json-1.0".parse().expect("valid mime"));
@@ -136,13 +136,13 @@ aws_json_impl!(
     shape_name_only
 );
 
-impl EventStreamProtocol for AwsJson1_0 {
+impl ServerEventStreamProtocol for AwsJson1_0 {
     const EVENT_PAYLOAD_CONTENT_TYPE: &'static str = "application/json";
     const EVENT_STREAM_HTTP_CONTENT_TYPE: &'static str = "application/x-amz-json-1.0";
     const FRAMES_INITIAL_MESSAGES: bool = true;
 }
 
-impl EventStreamProtocol for AwsJson1_1 {
+impl ServerEventStreamProtocol for AwsJson1_1 {
     const EVENT_PAYLOAD_CONTENT_TYPE: &'static str = "application/json";
     const EVENT_STREAM_HTTP_CONTENT_TYPE: &'static str = "application/x-amz-json-1.1";
     const FRAMES_INITIAL_MESSAGES: bool = true;

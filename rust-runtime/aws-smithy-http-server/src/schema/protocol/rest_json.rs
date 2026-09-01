@@ -20,7 +20,7 @@ use crate::schema::protocol::response::{
     AsSerializable, ResponseBindingMode,
 };
 
-use super::{EventStreamProtocol, ServerProtocol};
+use super::{ServerEventStreamProtocol, ServerProtocol};
 
 // ============================================================================
 // restJson1
@@ -58,7 +58,7 @@ impl ServerProtocol for RestJson1 {
             &parts.headers,
             output_schema,
             "application/json",
-            <Self as EventStreamProtocol>::EVENT_STREAM_HTTP_CONTENT_TYPE,
+            <Self as ServerEventStreamProtocol>::EVENT_STREAM_HTTP_CONTENT_TYPE,
         ) {
             return Err(Self::RequestRejection::NotAcceptable);
         }
@@ -121,7 +121,7 @@ impl ServerProtocol for RestJson1 {
     }
 }
 
-impl EventStreamProtocol for RestJson1 {
+impl ServerEventStreamProtocol for RestJson1 {
     const EVENT_PAYLOAD_CONTENT_TYPE: &'static str = "application/json";
     const EVENT_STREAM_HTTP_CONTENT_TYPE: &'static str = "application/vnd.amazon.eventstream";
     const FRAMES_INITIAL_MESSAGES: bool = false;

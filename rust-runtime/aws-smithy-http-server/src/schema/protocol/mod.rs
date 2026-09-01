@@ -134,10 +134,10 @@ pub trait ServerProtocol: ProtocolShape + 'static {
 /// implemented only by protocols whose Smithy definition declares
 /// `eventStreamHttp`. Wiring an event-stream operation to a non-supporting
 /// protocol is a compile error at assembly, not a runtime failure. Frame glue
-/// and event-stream operation impls bound on `P: EventStreamProtocol`;
+/// and event-stream operation impls bound on `P: ServerEventStreamProtocol`;
 /// ordinary operations stay `P: ServerProtocol`. Bounds never reach
 /// user-facing signatures (concrete-marker instantiation).
-pub trait EventStreamProtocol: ServerProtocol {
+pub trait ServerEventStreamProtocol: ServerProtocol {
     /// Frame-level `:content-type` for event payloads (json:
     /// `application/json`, cbor: `application/cbor`). Fixes the client's
     /// baked-literal leak.

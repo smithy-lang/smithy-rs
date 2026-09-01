@@ -21,7 +21,7 @@ use crate::schema::protocol::response::{
     AsSerializable, ResponseBindingMode,
 };
 
-use super::{EventStreamProtocol, ServerProtocol};
+use super::{ServerEventStreamProtocol, ServerProtocol};
 
 static APPLICATION_CBOR_MIME: LazyLock<mime::Mime> = LazyLock::new(|| "application/cbor".parse().expect("valid mime"));
 
@@ -113,7 +113,7 @@ impl ServerProtocol for RpcV2Cbor {
     }
 }
 
-impl EventStreamProtocol for RpcV2Cbor {
+impl ServerEventStreamProtocol for RpcV2Cbor {
     const EVENT_PAYLOAD_CONTENT_TYPE: &'static str = "application/cbor";
     const EVENT_STREAM_HTTP_CONTENT_TYPE: &'static str = "application/vnd.amazon.eventstream";
     const FRAMES_INITIAL_MESSAGES: bool = true;

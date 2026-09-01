@@ -143,6 +143,37 @@ class ServerHttpBoundProtocolPayloadGenerator(
             protocol,
             HttpMessageType.RESPONSE,
             renderEventStreamBody = { writer, params ->
+                val useSchemaSerde =
+                    codegenContext.settings.codegenConfig.schemaSerde &&
+                        codegenContext.runtimeConfig.httpVersion == HttpVersion.Http1x
+                val unionShape =
+                    codegenContext.model.expectShape(
+                        params.operationShape.outputShape(codegenContext.model)
+                            .findStreamingMember(codegenContext.model)!!.target,
+                        software.amazon.smithy.model.shapes.UnionShape::class.java,
+                    )
+                val marshallerConstructorFn =
+                    if (useSchemaSerde) {
+                        ServerSchemaEventStreamMarshallerGenerator(
+                            codegenContext,
+                            protocol,
+                            unionShape,
+                            protocol.structuredDataSerializer(),
+                            params.payloadContentType,
+                        ).render()
+                    } else {
+                        params.eventStreamMarshallerGenerator.render()
+                    }
+                val errorMarshallerConstructorFn =
+                    if (useSchemaSerde) {
+                        ServerSchemaEventStreamErrorMarshallerGenerator(
+                            codegenContext,
+                            protocol,
+                            unionShape,
+                        ).render()
+                    } else {
+                        params.errorMarshallerConstructorFn
+                    }
                 writer.rustTemplate(
                     """
                     {
@@ -157,9 +188,8 @@ class ServerHttpBoundProtocolPayloadGenerator(
                     "NoOpSigner" to
                         RuntimeType.smithyEventStream(codegenContext.runtimeConfig)
                             .resolve("frame::NoOpSigner"),
-                    "marshallerConstructorFn" to
-                        params.eventStreamMarshallerGenerator.render(),
-                    "errorMarshallerConstructorFn" to params.errorMarshallerConstructorFn,
+                    "marshallerConstructorFn" to marshallerConstructorFn,
+                    "errorMarshallerConstructorFn" to errorMarshallerConstructorFn,
                     "event_stream" to eventStreamWithInitialResponse(codegenContext, protocol, params),
                 )
             },
@@ -1142,12 +1172,36 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                     )
                                 ) {
                                     writable {
-                                        rustTemplate(
-                                            """
-                                            input = #{parser}(_initial_event.payload(), input)?;
-                                            """,
-                                            "parser" to parser,
-                                        )
+                                        if (codegenContext.settings.codegenConfig.schemaSerde &&
+                                            runtimeConfig.httpVersion == HttpVersion.Http1x
+                                        ) {
+                                            rustTemplate(
+                                                """
+                                                input = {
+                                                    let mut deser = <#{Marker} as #{ServerProtocol}>::codec()
+                                                        .create_deserializer(_initial_event.payload());
+                                                    #{deserFn}(&mut deser)
+                                                        .map_err(|err| #{RequestRejection}::from(#{DeserializeError}::from(err)))?
+                                                };
+                                                """,
+                                                "DeserializeError" to
+                                                    ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+                                                        .resolve("deserialize::DeserializeError"),
+                                                "deserFn" to RuntimeType(serverSchemaDeserFnPath(codegenContext, operationShape.inputShape(model))),
+                                                "Marker" to protocol.markerStruct(),
+                                                "ServerProtocol" to
+                                                    ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+                                                        .resolve("schema::protocol::ServerProtocol"),
+                                                *codegenScope,
+                                            )
+                                        } else {
+                                            rustTemplate(
+                                                """
+                                                input = #{parser}(_initial_event.payload(), input)?;
+                                                """,
+                                                "parser" to parser,
+                                            )
+                                        }
                                     }
                                 } else {
                                     writable { }
@@ -1850,13 +1904,45 @@ private fun initialResponsePayload(
     params: EventStreamBodyParams,
 ): Writable {
     return if (protocol.httpBindingResolver.handlesEventStreamInitialResponse(params.operationShape)) {
-        val serializer = protocol.structuredDataSerializer().operationOutputSerializer(params.operationShape)!!
         writable {
-            rustTemplate(
-                "#{Bytes}::from(#{serializer}(&output)?)",
-                "serializer" to serializer,
-                "Bytes" to RuntimeType.Bytes,
-            )
+            if (codegenContext.settings.codegenConfig.schemaSerde &&
+                codegenContext.runtimeConfig.httpVersion == HttpVersion.Http1x
+            ) {
+                rustTemplate(
+                    """
+                    {
+                        use #{FinishSerializer} as _;
+                        let mut ser = <#{Marker} as #{ServerProtocol}>::codec().create_serializer();
+                        #{ShapeSerializer}::write_struct(&mut ser, #{Output}::SCHEMA, &output)
+                            .map_err(|_err| {
+                                #{ResponseRejection}::Serialization(
+                                    #{SerializationError}::unknown_variant("schema event stream initial response")
+                                )
+                            })?;
+                        #{Bytes}::from(ser.finish())
+                    }
+                    """,
+                    "Bytes" to RuntimeType.Bytes,
+                    "FinishSerializer" to RuntimeType.smithySchema(codegenContext.runtimeConfig).resolve("codec::FinishSerializer"),
+                    "Marker" to protocol.markerStruct(),
+                    "Output" to codegenContext.symbolProvider.toSymbol(params.operationShape.outputShape(codegenContext.model)),
+                    "ResponseRejection" to protocol.responseRejection(codegenContext.runtimeConfig),
+                    "SerializationError" to
+                        RuntimeType.smithyTypes(codegenContext.runtimeConfig)
+                            .resolve("error::operation::SerializationError"),
+                    "ServerProtocol" to
+                        ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType()
+                            .resolve("schema::protocol::ServerProtocol"),
+                    "ShapeSerializer" to RuntimeType.smithySchema(codegenContext.runtimeConfig).resolve("serde::ShapeSerializer"),
+                )
+            } else {
+                val serializer = protocol.structuredDataSerializer().operationOutputSerializer(params.operationShape)!!
+                rustTemplate(
+                    "#{Bytes}::from(#{serializer}(&output)?)",
+                    "serializer" to serializer,
+                    "Bytes" to RuntimeType.Bytes,
+                )
+            }
         }
     } else {
         val outputShape = params.operationShape.outputShape(codegenContext.model)
