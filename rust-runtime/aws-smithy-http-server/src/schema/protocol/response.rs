@@ -5,11 +5,15 @@
 
 use std::borrow::Cow;
 
+use aws_smithy_schema::codec::Codec;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
+use aws_smithy_schema::Schema;
 
 use crate::body::BoxBody;
 use crate::extension::ModeledErrorExtension;
-use crate::schema::response_bindings::{BodyKind, ResponseParts};
+use crate::schema::response_bindings::{
+    resolve_status, serialize_response_parts, BodyKind, ResponseParts, ResponseValueKind,
+};
 
 /// Sized adapter so a `&E` with `E: SerializableStruct + ?Sized` (e.g.
 /// `&dyn HttpModeledError`) can be passed where `&dyn SerializableStruct` is
@@ -19,6 +23,18 @@ pub(super) struct AsSerializable<'a, E: ?Sized>(pub(super) &'a E);
 impl<E: SerializableStruct + ?Sized> SerializableStruct for AsSerializable<'_, E> {
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         self.0.serialize_members(serializer)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(super) enum ResponseBindingMode {
+    Rest,
+    BodyOnly,
+}
+
+impl ResponseBindingMode {
+    fn apply_response_bindings(self) -> bool {
+        matches!(self, Self::Rest)
     }
 }
 
@@ -56,6 +72,43 @@ pub(super) fn assemble_response(
     builder
         .body(crate::body::to_boxed(split.body))
         .map_err(|err| SerdeError::custom(format!("failed to build response: {err}")))
+}
+
+pub(super) fn serialize_operation_response<C: Codec>(
+    codec: &'static C,
+    schema: &Schema<'_>,
+    output: &dyn SerializableStruct,
+    response_binding_mode: ResponseBindingMode,
+    codec_content_type: &'static str,
+    empty_content_type: Option<&'static str>,
+) -> Result<http::Response<BoxBody>, SerdeError> {
+    let parts = serialize_response_parts(
+        codec,
+        schema,
+        output,
+        response_binding_mode.apply_response_bindings(),
+        ResponseValueKind::OperationOutput,
+    )?;
+    let status = resolve_status(parts.status, schema);
+    assemble_response(parts, status, codec_content_type, empty_content_type)
+}
+
+pub(super) fn serialize_modeled_error_response<C: Codec>(
+    codec: &'static C,
+    schema: &Schema<'_>,
+    error: &dyn SerializableStruct,
+    status: u16,
+    response_binding_mode: ResponseBindingMode,
+    codec_content_type: &'static str,
+) -> Result<http::Response<BoxBody>, SerdeError> {
+    let parts = serialize_response_parts(
+        codec,
+        schema,
+        error,
+        response_binding_mode.apply_response_bindings(),
+        ResponseValueKind::ModeledError,
+    )?;
+    assemble_response(parts, status, codec_content_type, None)
 }
 
 /// Finishes an error response: inserts the [`ModeledErrorExtension`],

@@ -121,29 +121,29 @@ pub enum ProtocolRoutingOutcome {
     /// This protocol selected an operation.
     OperationMatched(OperationMatch),
     /// This protocol rejected the request and later protocols must not be tried.
-    Rejected(Box<dyn IntoProtocolRoutingResponse>),
+    Rejected(Box<dyn IntoProtocolResponse>),
     /// This protocol produced a candidate rejection, but later protocols may still match.
-    RejectedNonExclusive(Box<dyn IntoProtocolRoutingResponse>),
+    RejectedNonExclusive(Box<dyn IntoProtocolResponse>),
 }
 
-/// Protocol-owned conversion from a routing rejection into an HTTP response.
-pub trait IntoProtocolRoutingResponse: Send {
-    /// Converts this rejection into an HTTP response.
+/// Protocol-owned conversion into an HTTP response.
+pub trait IntoProtocolResponse: Send {
+    /// Converts this value into an HTTP response.
     fn into_response(self: Box<Self>) -> http::Response<BoxBody>;
 }
 
-/// Bridge from a concrete protocol routing error to the erased routing rejection response type.
-pub struct ProtocolRoutingResponse<T, P> {
+/// Bridge from a concrete protocol-owned value to the erased protocol response type.
+pub struct ProtocolResponse<T, P> {
     inner: T,
     _protocol: PhantomData<P>,
 }
 
-impl<T, P> ProtocolRoutingResponse<T, P>
+impl<T, P> ProtocolResponse<T, P>
 where
     T: IntoResponse<P> + Send + 'static,
     P: Send + 'static,
 {
-    /// Creates a bridge value for a concrete protocol routing error.
+    /// Creates a bridge value for a concrete protocol-owned value.
     pub fn new(inner: T) -> Self {
         Self {
             inner,
@@ -151,13 +151,13 @@ where
         }
     }
 
-    /// Creates a boxed bridge value for a concrete protocol routing error.
-    pub fn boxed(inner: T) -> Box<dyn IntoProtocolRoutingResponse> {
+    /// Creates a boxed bridge value for a concrete protocol-owned value.
+    pub fn boxed(inner: T) -> Box<dyn IntoProtocolResponse> {
         Box::new(Self::new(inner))
     }
 }
 
-impl<T, P> IntoProtocolRoutingResponse for ProtocolRoutingResponse<T, P>
+impl<T, P> IntoProtocolResponse for ProtocolResponse<T, P>
 where
     T: IntoResponse<P> + Send + 'static,
     P: Send + 'static,
@@ -226,10 +226,10 @@ impl AwsJsonOperationRoutingTable {
         }
     }
 
-    fn rejection(&self, error: AwsJsonError) -> Box<dyn IntoProtocolRoutingResponse> {
+    fn rejection(&self, error: AwsJsonError) -> Box<dyn IntoProtocolResponse> {
         match self.version {
-            AwsJsonVersion::Json10 => ProtocolRoutingResponse::<_, AwsJson1_0>::boxed(error),
-            AwsJsonVersion::Json11 => ProtocolRoutingResponse::<_, AwsJson1_1>::boxed(error),
+            AwsJsonVersion::Json10 => ProtocolResponse::<_, AwsJson1_0>::boxed(error),
+            AwsJsonVersion::Json11 => ProtocolResponse::<_, AwsJson1_1>::boxed(error),
         }
     }
 }
@@ -302,7 +302,7 @@ impl ProtocolRoutingTable for RpcV2CborOperationRoutingTable {
                 ProtocolRoutingOutcome::OperationMatched(OperationMatch::new(self.protocol.clone(), operation))
             }
             Ok(_) => ProtocolRoutingOutcome::NoClaim,
-            Err(error) => ProtocolRoutingOutcome::Rejected(ProtocolRoutingResponse::<_, RpcV2Cbor>::boxed(error)),
+            Err(error) => ProtocolRoutingOutcome::Rejected(ProtocolResponse::<_, RpcV2Cbor>::boxed(error)),
         }
     }
 }
@@ -362,10 +362,10 @@ impl RestOperationRoutingTable {
         }
     }
 
-    fn rejection(&self, error: RestError) -> Box<dyn IntoProtocolRoutingResponse> {
+    fn rejection(&self, error: RestError) -> Box<dyn IntoProtocolResponse> {
         match self.version {
-            RestVersion::RestJson1 => ProtocolRoutingResponse::<_, RestJson1>::boxed(error),
-            RestVersion::RestXml => ProtocolRoutingResponse::<_, RestXml>::boxed(error),
+            RestVersion::RestJson1 => ProtocolResponse::<_, RestJson1>::boxed(error),
+            RestVersion::RestXml => ProtocolResponse::<_, RestXml>::boxed(error),
         }
     }
 }

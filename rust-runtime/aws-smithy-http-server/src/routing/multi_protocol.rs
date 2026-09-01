@@ -665,7 +665,7 @@ mod tests {
 
     struct FakeRoutingResponse(StatusCode);
 
-    impl crate::routing::IntoProtocolRoutingResponse for FakeRoutingResponse {
+    impl crate::routing::IntoProtocolResponse for FakeRoutingResponse {
         fn into_response(self: Box<Self>) -> Response<BoxBody> {
             Response::builder().status(self.0).body(empty()).unwrap()
         }

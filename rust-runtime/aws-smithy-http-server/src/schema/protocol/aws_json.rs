@@ -18,9 +18,9 @@ use crate::response::IntoResponse;
 use crate::schema::protocol::discriminator::{full_shape_id, shape_name_only, WithTypeLast};
 use crate::schema::protocol::request::deserialize_rpc_request;
 use crate::schema::protocol::response::{
-    assemble_response, log_serialize_failure, stamp_error_extension, AsSerializable,
+    log_serialize_failure, serialize_modeled_error_response, serialize_operation_response, stamp_error_extension,
+    AsSerializable, ResponseBindingMode,
 };
-use crate::schema::response_bindings::{resolve_status, serialize_response_parts, ResponseValueKind};
 
 use super::{EventStreamProtocol, ServerProtocol};
 
@@ -71,17 +71,14 @@ macro_rules! aws_json_impl {
             }
 
             fn serialize_response(schema: &Schema<'_>, output: &dyn SerializableStruct) -> http::Response<BoxBody> {
-                let result = serialize_response_parts(
+                let result = serialize_operation_response(
                     Self::codec(),
                     schema,
                     output,
-                    false,
-                    ResponseValueKind::OperationOutput,
-                )
-                .and_then(|split| {
-                    let status = resolve_status(split.status, schema);
-                    assemble_response(split, status, $content_type, Some($content_type))
-                });
+                    ResponseBindingMode::BodyOnly,
+                    $content_type,
+                    Some($content_type),
+                );
                 match result {
                     Ok(response) => response,
                     Err(err) => {
@@ -102,14 +99,14 @@ macro_rules! aws_json_impl {
                     type_value: $type_value(schema),
                     inner: &AsSerializable(error),
                 };
-                let result = serialize_response_parts(
+                let result = serialize_modeled_error_response(
                     Self::codec(),
                     schema,
                     &wrapper,
-                    false,
-                    ResponseValueKind::ModeledError,
-                )
-                .and_then(|split| assemble_response(split, error.status_code(), $content_type, None));
+                    error.status_code(),
+                    ResponseBindingMode::BodyOnly,
+                    $content_type,
+                );
                 match result {
                     Ok(response) => stamp_error_extension(response, schema.shape_id().shape_name()),
                     Err(err) => {

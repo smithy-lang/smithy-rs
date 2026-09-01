@@ -16,9 +16,9 @@ use crate::protocol::rest_xml::RestXml;
 use crate::response::IntoResponse;
 use crate::schema::protocol::request::{accept_matches_output, deserialize_rest_request};
 use crate::schema::protocol::response::{
-    assemble_response, log_serialize_failure, stamp_error_extension, AsSerializable,
+    log_serialize_failure, serialize_modeled_error_response, serialize_operation_response, stamp_error_extension,
+    AsSerializable, ResponseBindingMode,
 };
-use crate::schema::response_bindings::{resolve_status, serialize_response_parts, ResponseValueKind};
 
 use super::{EventStreamProtocol, ServerProtocol};
 
@@ -54,11 +54,14 @@ impl ServerProtocol for RestXml {
     }
 
     fn serialize_response(schema: &Schema<'_>, output: &dyn SerializableStruct) -> http::Response<BoxBody> {
-        let result = serialize_response_parts(Self::codec(), schema, output, true, ResponseValueKind::OperationOutput)
-            .and_then(|split| {
-                let status = resolve_status(split.status, schema);
-                assemble_response(split, status, "application/xml", None)
-            });
+        let result = serialize_operation_response(
+            Self::codec(),
+            schema,
+            output,
+            ResponseBindingMode::Rest,
+            "application/xml",
+            None,
+        );
         match result {
             Ok(response) => response,
             Err(err) => {
@@ -79,14 +82,14 @@ impl ServerProtocol for RestXml {
         // serializes the error structure through the XML codec as-is. See
         // assumptions register B4/B6; gated by its own pinned goldens.
         let schema = error.schema();
-        let result = serialize_response_parts(
+        let result = serialize_modeled_error_response(
             Self::codec(),
             schema,
             &AsSerializable(error),
-            true,
-            ResponseValueKind::ModeledError,
-        )
-        .and_then(|split| assemble_response(split, error.status_code(), "application/xml", None));
+            error.status_code(),
+            ResponseBindingMode::Rest,
+            "application/xml",
+        );
         match result {
             Ok(response) => stamp_error_extension(response, schema.shape_id().shape_name()),
             Err(err) => {
