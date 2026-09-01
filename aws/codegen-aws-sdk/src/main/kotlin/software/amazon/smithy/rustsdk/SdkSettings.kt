@@ -107,12 +107,12 @@ class SdkSettings private constructor(private val awsSdk: ObjectNode?) {
     /**
      * Whether to offer the legacy hyper 0.14.x HTTP client as an opt-in feature on generated crates.
      *
-     * When `true` (the default), the generated crate gets a non-default `legacy-client` feature that pulls in
+     * When `true` (the default), the generated crate gets a non-default `legacy-https-client` feature that pulls in
      * `aws-smithy-runtime/tls-rustls`, letting BehaviorVersion select the legacy hyper+rustls stack for callers
      * who still need it.
      *
-     * Set to `false` to omit `legacy-client` entirely, so the generated crate can only ever use the hyper 1.x
-     * client. Note this is not how `http` 0.2.x is kept out of the default build: `legacy-client` is opt-in
+     * Set to `false` to omit `legacy-https-client` entirely, so the generated crate can only ever use the hyper 1.x
+     * client. Note this is not how `http` 0.2.x is kept out of the default build: `legacy-https-client` is opt-in
      * either way, so leaving this `true` still yields a default dependency tree free of `http` 0.2.x.
      */
     val includeLegacyClient: Boolean
