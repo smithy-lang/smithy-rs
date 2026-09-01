@@ -99,6 +99,21 @@ pub fn default_http_client_plugin_v2(
         {
             _default = crate::client::http::hyper_014::default_client();
         }
+
+        // Fall back to the latest https stack so that an older behavior version still gets a
+        // working HTTP client rather than none at all. The legacy connector comes back empty both
+        // when it isn't compiled in and when it is compiled in without a TLS implementation
+        // (`hyper_014::default_client` requires `legacy-rustls-ring`), so key off the value rather
+        // than off `connector-hyper-0-14-x`.
+        //
+        // NOTE: this deliberately only runs when the legacy client came back empty, so builds that
+        // do have one keep getting it for these behavior versions, exactly as before.
+        #[cfg(feature = "default-https-client")]
+        if _default.is_none() {
+            let opts = crate::client::http::DefaultClientOptions::default()
+                .with_behavior_version(behavior_version);
+            _default = crate::client::http::default_https_client(opts);
+        }
     }
 
     _default.map(|default| {
