@@ -418,7 +418,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     ) {
         val serverProtocolTrait =
             ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
-                .resolve("protocol::server_protocol::ServerProtocol")
+                .resolve("schema::protocol::ServerProtocol")
         rustTemplate(
             """
             impl<P: #{ServerProtocol}> #{SmithyHttpServer}::response::IntoResponse<P> for #{O} {
@@ -471,7 +471,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     ) {
         val serverProtocolTrait =
             ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
-                .resolve("protocol::server_protocol::ServerProtocol")
+                .resolve("schema::protocol::ServerProtocol")
         val inputFuture = "${inputSymbol.name}Future"
         val requestBodyMaxBytes = codegenContext.settings.codegenConfig.requestBodyMaxBytes
         val collectBody =

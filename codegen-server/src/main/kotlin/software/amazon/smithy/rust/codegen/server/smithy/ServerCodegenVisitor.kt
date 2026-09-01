@@ -679,6 +679,7 @@ open class ServerCodegenVisitor(
             ServerServiceGenerator(
                 codegenContext,
                 serverProtocol,
+                codegenDecorator,
                 isConfigBuilderFallible,
             ).render(this)
 

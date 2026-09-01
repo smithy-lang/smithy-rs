@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CombinedCoreCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CoreCodegenDecorator
@@ -41,6 +42,14 @@ interface ServerCodegenDecorator : CoreCodegenDecorator<ServerCodegenContext, Se
 
     fun validationExceptionConversion(codegenContext: ServerCodegenContext): ValidationExceptionConversionGenerator? =
         null
+
+    /**
+     * Additional protocol routing factories for generated multi-protocol schema-serde services.
+     *
+     * Each writable must render a Rust expression of type
+     * `aws_smithy_http_server::routing::ProtocolRoutingFactory`.
+     */
+    fun additionalProtocolRoutingFactories(codegenContext: ServerCodegenContext): List<Writable> = emptyList()
 
     /**
      * Injection point to allow a decorator to postprocess the error message that arises when an operation is
@@ -113,6 +122,9 @@ class CombinedServerCodegenDecorator(decorators: List<ServerCodegenDecorator>) :
         // We use `firstNotNullOf` instead of `firstNotNullOfOrNull` because the [SmithyValidationExceptionDecorator]
         // is registered.
         orderedDecorators.firstNotNullOf { it.validationExceptionConversion(codegenContext) }
+
+    override fun additionalProtocolRoutingFactories(codegenContext: ServerCodegenContext): List<Writable> =
+        orderedDecorators.flatMap { it.additionalProtocolRoutingFactories(codegenContext) }
 
     override fun postprocessValidationExceptionNotAttachedErrorMessage(
         validationResult: ValidationResult,

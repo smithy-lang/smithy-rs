@@ -145,6 +145,9 @@ internal class ServerServiceGeneratorTest {
             assert(service.readText().contains("MultiProtocolRoutingService::from_operation_handler_bindings")) {
                 service.readText()
             }
+            assert(!service.readText().contains("builtin_protocol_routing_registrations")) {
+                service.readText()
+            }
             assert(service.readText().contains("OperationHandlerBinding::new")) { service.readText() }
         }
     }

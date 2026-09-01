@@ -26,6 +26,7 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRpcV2CborProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Error as ErrorModule
@@ -35,6 +36,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Output
 class ServerServiceGenerator(
     private val codegenContext: ServerCodegenContext,
     private val protocol: ServerProtocol,
+    private val codegenDecorator: ServerCodegenDecorator,
     private val isConfigBuilderFallible: Boolean,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -388,19 +390,7 @@ class ServerServiceGenerator(
                 }
             val routingServiceConstruction =
                 if (shouldGenerateOperationHandlerBindings) {
-                    writable {
-                        rustTemplate(
-                            """
-                            #{SmithyHttpServer}::routing::MultiProtocolRoutingService::from_operation_handler_bindings(
-                                &crate::schema::${serviceSchemaConstName()},
-                                [#{RoutesArrayElements:W}],
-                            )
-                            .expect("generated service schema should build a multi-protocol router")
-                            """,
-                            *codegenScope,
-                            "RoutesArrayElements" to routesArrayElements,
-                        )
-                    }
+                    multiProtocolRoutingServiceConstruction(routesArrayElements)
                 } else {
                     writable {
                         rustTemplate(
@@ -471,6 +461,24 @@ class ServerServiceGenerator(
             }
         }
 
+    private fun multiProtocolRoutingServiceConstruction(bindings: Writable): Writable =
+        writable {
+            val additionalProtocolRoutingFactories = codegenDecorator.additionalProtocolRoutingFactories(codegenContext)
+            rustTemplate(
+                """
+                #{SmithyHttpServer}::routing::MultiProtocolRoutingService::from_operation_handler_bindings(
+                    &crate::schema::${serviceSchemaConstName()},
+                    [#{AdditionalProtocolRoutingFactories:W}],
+                    [#{Bindings:W}],
+                )
+                .expect("generated service schema should build a multi-protocol router")
+                """,
+                *codegenScope,
+                "Bindings" to bindings,
+                "AdditionalProtocolRoutingFactories" to additionalProtocolRoutingFactories.join(",\n"),
+            )
+        }
+
     /**
      * Renders `PatternString::compile_regex()` function calls for every
      * `@pattern`-constrained string shape in the service closure.
@@ -520,19 +528,7 @@ class ServerServiceGenerator(
                 }
             val routingServiceConstruction =
                 if (shouldGenerateOperationHandlerBindings) {
-                    writable {
-                        rustTemplate(
-                            """
-                            #{SmithyHttpServer}::routing::MultiProtocolRoutingService::from_operation_handler_bindings(
-                                &crate::schema::${serviceSchemaConstName()},
-                                [#{Pairs:W}],
-                            )
-                            .expect("generated service schema should build a multi-protocol router")
-                            """,
-                            *codegenScope,
-                            "Pairs" to pairs,
-                        )
-                    }
+                    multiProtocolRoutingServiceConstruction(pairs)
                 } else {
                     writable {
                         rustTemplate(
