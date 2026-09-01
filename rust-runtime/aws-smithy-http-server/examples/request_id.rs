@@ -32,7 +32,7 @@
 use aws_smithy_http_server::{
     body::{boxed, BoxBody},
     routing::IntoMakeService,
-    serve::serve,
+    serve::bind,
 };
 
 #[cfg(feature = "request-id")]
@@ -42,7 +42,6 @@ use http::{header::HeaderName, Request, Response};
 use http_body_util::Full;
 use hyper::body::{Bytes, Incoming};
 use std::convert::Infallible;
-use tokio::net::TcpListener;
 use tower::{service_fn, ServiceBuilder};
 use tracing::info;
 
@@ -81,8 +80,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         info!("Starting server with request ID tracking...");
 
-        let listener = TcpListener::bind("0.0.0.0:3000").await?;
-
         // Add ServerRequestIdProviderLayer to generate IDs and add them to response headers
         let app = ServiceBuilder::new()
             .layer(ServerRequestIdProviderLayer::new_with_response_header(
@@ -97,7 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!("  curl -v http://localhost:3000/");
         info!("  # Check the x-request-id header in the response");
 
-        serve(listener, IntoMakeService::new(app)).await?;
+        bind(("0.0.0.0", 3000), IntoMakeService::new(app)).await?;
     }
 
     Ok(())

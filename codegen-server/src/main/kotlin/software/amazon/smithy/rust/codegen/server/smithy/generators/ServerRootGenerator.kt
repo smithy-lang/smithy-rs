@@ -47,7 +47,7 @@ open class ServerRootGenerator(
 
     /**
      * Returns a Writable containing the appropriate Hyper usage example based on HTTP version.
-     * For HTTP 1.x: Uses tokio::net::TcpListener and serve() function
+     * For HTTP 1.x: Uses the bind() function
      * For HTTP 0.x: Uses hyper::Server::bind() API
      */
     private fun hyperServeExample(
@@ -64,18 +64,15 @@ open class ServerRootGenerator(
                         //! ## use std::net::SocketAddr;
                         //! ## async fn dummy() {
                         //! use $crateName::{$serviceName, ${serviceName}Config};
-                        //! use $crateName::serve;
-                        //! use #{Tokio}::net::TcpListener;
+                        //! use $crateName::bind;
                         //!
                         //! ## let app = $serviceName::builder(
                         //! ##     ${serviceName}Config::builder()
                         //! ##         .build()$unwrapConfigBuilder
                         //! ## ).build_unchecked();
-                        //! let bind: SocketAddr = "127.0.0.1:6969".parse()
+                        //! let addr: SocketAddr = "127.0.0.1:6969".parse()
                         //!     .expect("unable to parse the server bind address and port");
-                        //! let listener = TcpListener::bind(bind).await
-                        //!     .expect("failed to bind TCP listener");
-                        //! serve(listener, app.into_make_service()).await.unwrap();
+                        //! bind(addr, app.into_make_service()).await.unwrap();
                         //! ## }
                         //! ```
                         """,
@@ -95,9 +92,9 @@ open class ServerRootGenerator(
                         //! ##         .build()$unwrapConfigBuilder
                         //! ## ).build_unchecked();
                         //! let server = app.into_make_service();
-                        //! let bind: SocketAddr = "127.0.0.1:6969".parse()
+                        //! let addr: SocketAddr = "127.0.0.1:6969".parse()
                         //!     .expect("unable to parse the server bind address and port");
-                        //! #{Hyper0}::Server::bind(&bind).serve(server).await.unwrap();
+                        //! #{Hyper0}::Server::bind(&addr).serve(server).await.unwrap();
                         //! ## }
                         //! 
                         //! ```
@@ -109,7 +106,7 @@ open class ServerRootGenerator(
 
     /**
      * Returns a Writable containing the appropriate full example code based on HTTP version.
-     * For HTTP 1.x: Uses tokio::net::TcpListener and serve() function
+     * For HTTP 1.x: Uses the bind() function
      * For HTTP 0.x: Uses hyper::Server::bind() API
      */
     private fun fullExample(
@@ -126,8 +123,7 @@ open class ServerRootGenerator(
                         //! ```rust,no_run
                         //! ## use std::net::SocketAddr;
                         //! use $crateName::{$serviceName, ${serviceName}Config};
-                        //! use $crateName::serve;
-                        //! use #{Tokio}::net::TcpListener;
+                        //! use $crateName::bind;
                         //!
                         //! ##[#{Tokio}::main]
                         //! pub async fn main() {
@@ -137,14 +133,12 @@ open class ServerRootGenerator(
                         //!        .build()
                         //!        .expect("failed to build an instance of $serviceName");
                         //!
-                        //!    let bind: SocketAddr = "127.0.0.1:6969".parse()
+                        //!    let addr: SocketAddr = "127.0.0.1:6969".parse()
                         //!        .expect("unable to parse the server bind address and port");
-                        //!    let listener = TcpListener::bind(bind).await
-                        //!        .expect("failed to bind TCP listener");
                         //!    ## let server = async { Ok::<_, ()>(()) };
                         //!
                         //!    // Run your service!
-                        //!    if let Err(err) = serve(listener, app.into_make_service()).await {
+                        //!    if let Err(err) = bind(addr, app.into_make_service()).await {
                         //!        eprintln!("server error: {:?}", err);
                         //!    }
                         //! }
@@ -167,9 +161,9 @@ open class ServerRootGenerator(
                         //!        .build()
                         //!        .expect("failed to build an instance of $serviceName");
                         //!
-                        //!    let bind: SocketAddr = "127.0.0.1:6969".parse()
+                        //!    let addr: SocketAddr = "127.0.0.1:6969".parse()
                         //!        .expect("unable to parse the server bind address and port");
-                        //!    let server = #{Hyper}::Server::bind(&bind).serve(app.into_make_service());
+                        //!    let server = #{Hyper}::Server::bind(&addr).serve(app.into_make_service());
                         //!    ## let server = async { Ok::<_, ()>(()) };
                         //!
                         //!    // Run your service!
@@ -413,11 +407,11 @@ open class ServerRootGenerator(
             """,
         )
 
-        // Re-export serve function for HTTP 1.x
+        // Re-export serve functions for HTTP 1.x
         if (codegenContext.settings.runtimeConfig.httpVersion == HttpVersion.Http1x) {
             rustWriter.rust(
                 """
-                pub use crate::server::serve::serve;
+                pub use crate::server::serve::{bind, serve};
                 """,
             )
         }
