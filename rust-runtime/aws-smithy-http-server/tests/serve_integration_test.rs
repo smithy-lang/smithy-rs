@@ -11,6 +11,7 @@ use aws_smithy_http_server::body::{to_boxed, BoxBody};
 use aws_smithy_http_server::routing::IntoMakeService;
 use aws_smithy_http_server::serve::{Listener, ListenerExt};
 use std::convert::Infallible;
+use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -20,6 +21,87 @@ use tower::service_fn;
 /// Simple test service that returns OK
 async fn ok_service(_request: http::Request<hyper::body::Incoming>) -> Result<http::Response<BoxBody>, Infallible> {
     Ok(http::Response::builder().status(200).body(to_boxed("OK")).unwrap())
+}
+
+async fn assert_ok_response(addr: SocketAddr) {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let mut stream = tokio::net::TcpStream::connect(addr)
+        .await
+        .expect("failed to connect to server");
+    stream
+        .write_all(b"GET /test HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+        .await
+        .expect("failed to write request");
+
+    let mut buffer = vec![0u8; 4096];
+    let n = tokio::time::timeout(Duration::from_secs(2), stream.read(&mut buffer))
+        .await
+        .expect("server did not respond in time")
+        .expect("failed to read response");
+    let response_text = String::from_utf8_lossy(&buffer[..n]);
+    assert!(
+        response_text.contains("HTTP/1.1 200 OK"),
+        "expected successful response, got:\n{response_text}"
+    );
+}
+
+#[tokio::test]
+async fn test_bind_single_await_path() {
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+    shutdown_tx.send(()).unwrap();
+
+    let result = tokio::time::timeout(
+        Duration::from_secs(2),
+        aws_smithy_http_server::serve::bind((Ipv4Addr::LOCALHOST, 0), IntoMakeService::new(service_fn(ok_service)))
+            .socket_listen_backlog(128)
+            .max_connections(1024)
+            .with_graceful_shutdown(async {
+                shutdown_rx.await.ok();
+            }),
+    )
+    .await
+    .expect("server did not shutdown in time");
+    assert!(result.is_ok(), "server should shutdown cleanly");
+}
+
+#[tokio::test]
+async fn test_bind_into_serve_returns_serve_builder() {
+    let serve =
+        aws_smithy_http_server::serve::bind((Ipv4Addr::LOCALHOST, 0), IntoMakeService::new(service_fn(ok_service)))
+            .socket_listen_backlog(128)
+            .into_serve()
+            .await
+            .expect("failed to bind bind builder");
+    let addr = serve.local_addr().expect("failed to get local addr");
+
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+    let server_handle = tokio::spawn(async move {
+        serve
+            .with_graceful_shutdown(async {
+                shutdown_rx.await.ok();
+            })
+            .await
+    });
+
+    assert_ok_response(addr).await;
+
+    shutdown_tx.send(()).unwrap();
+    let result = tokio::time::timeout(Duration::from_secs(2), server_handle)
+        .await
+        .expect("server did not shutdown in time")
+        .expect("server task panicked");
+    assert!(result.is_ok(), "server should shutdown cleanly");
+}
+
+#[tokio::test]
+async fn test_bind_invalid_address_returns_error() {
+    let result =
+        aws_smithy_http_server::serve::bind("127.0.0.1:notaport", IntoMakeService::new(service_fn(ok_service)))
+            .into_serve()
+            .await;
+
+    assert!(result.is_err(), "invalid socket address should fail to bind");
 }
 
 #[tokio::test]

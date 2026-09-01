@@ -5,18 +5,21 @@
 
 //! Serve utilities for running HTTP servers.
 //!
-//! This module provides a convenient [`serve`] function similar to `axum::serve`
-//! for easily serving Tower services with Hyper.
+//! This module provides convenient [`bind`] and [`serve`] functions for easily
+//! serving Tower services with Hyper.
 //!
 //! ## When to Use This Module
 //!
-//! - Use [`serve`] when you need a simple, batteries-included HTTP server
+//! - Use [`bind`] when you want this crate to bind a TCP socket and serve it
+//! - Use [`serve`] when you already have a listener or need custom listener composition
 //! - For more control over the Hyper connection builder, use [`.configure_hyper()`](Serve::configure_hyper)
 //! - For Lambda environments, see the `aws-lambda` feature and `routing::lambda_handler`
 //!
 //! ## How It Works
 //!
-//! The `serve` function creates a connection acceptance loop that:
+//! [`bind`] creates a TCP listener with recommended socket defaults, then
+//! delegates to [`serve`]. The `serve` function creates a connection acceptance
+//! loop that:
 //!
 //! 1. **Accepts connections** via the [`Listener`] trait (e.g., [`TcpListener`](tokio::net::TcpListener))
 //! 2. **Creates per-connection services** by calling the `make_service` with [`IncomingStream`]
@@ -42,15 +45,17 @@
 //! You can customize this behavior with [`.configure_hyper()`](Serve::configure_hyper):
 //!
 //! ```rust,ignore
+//! use aws_smithy_http_server::serve::bind;
+//!
 //! // Force HTTP/2 only (skips upgrade negotiation)
-//! serve(listener, app.into_make_service())
+//! bind(("0.0.0.0", 3000), app.into_make_service())
 //!     .configure_hyper(|builder| {
 //!         builder.http2_only()
 //!     })
 //!     .await?;
 //!
 //! // Force HTTP/1 only with keep-alive
-//! serve(listener, app.into_make_service())
+//! bind(("0.0.0.0", 3000), app.into_make_service())
 //!     .configure_hyper(|builder| {
 //!         builder.http1().keep_alive(true)
 //!     })
@@ -67,7 +72,9 @@
 //! [`.with_graceful_shutdown(signal)`](Serve::with_graceful_shutdown) to enable it:
 //!
 //! ```ignore
-//! serve(listener, service)
+//! use aws_smithy_http_server::serve::bind;
+//!
+//! bind(("0.0.0.0", 3000), service)
 //!     .with_graceful_shutdown(async {
 //!         tokio::signal::ctrl_c().await.expect("failed to listen for Ctrl+C");
 //!     })
@@ -82,14 +89,25 @@
 //!
 //! ### Limiting Concurrent Connections
 //!
-//! `serve` limits accepted connections to 1024 by default to prevent resource
+//! `bind` and `serve` limit accepted connections to 8192 by default to prevent resource
 //! exhaustion. Use [`Serve::max_connections`] to configure this limit:
 //!
 //! ```rust,ignore
-//! let listener = TcpListener::bind("0.0.0.0:3000").await?;
+//! use aws_smithy_http_server::serve::bind;
 //!
-//! serve(listener, app.into_make_service())
+//! bind(("0.0.0.0", 3000), app.into_make_service())
 //!     .max_connections(1000)
+//!     .await?;
+//! ```
+//!
+//! Use [`Serve::disable_connection_limit`] to restore the previous unbounded
+//! behavior:
+//!
+//! ```rust,ignore
+//! use aws_smithy_http_server::serve::bind;
+//!
+//! bind(("0.0.0.0", 3000), app.into_make_service())
+//!     .disable_connection_limit()
 //!     .await?;
 //! ```
 //!
@@ -104,6 +122,7 @@
 //! ```rust,ignore
 //! use std::net::SocketAddr;
 //! use aws_smithy_http_server::request::connect_info::ConnectInfo;
+//! use aws_smithy_http_server::serve::bind;
 //!
 //! // In your handler:
 //! async fn my_handler(ConnectInfo(addr): ConnectInfo<SocketAddr>) -> String {
@@ -111,15 +130,16 @@
 //! }
 //!
 //! // When serving:
-//! serve(
-//!     listener,
+//! bind(
+//!     ("0.0.0.0", 3000),
 //!     app.into_make_service_with_connect_info::<SocketAddr>()
 //! ).await?;
 //! ```
 //!
 //! ### Custom TCP Settings
 //!
-//! Use [`ListenerExt::tap_io`] to configure TCP options:
+//! Use [`ListenerExt::tap_io`] with [`serve`] when you need to configure TCP
+//! options on accepted streams:
 //!
 //! ```rust,ignore
 //! use aws_smithy_http_server::serve::ListenerExt;
@@ -211,20 +231,26 @@
 //!
 //! ### Connection Limit Not Applied
 //!
-//! Remember that `.limit_connections()` applies to the listener **before** passing
-//! it to `serve()`:
+//! Use [`Serve::max_connections`] to configure the accepted-connection limit on
+//! the server future:
 //!
 //! ```rust,ignore
-//! // ✓ Correct
+//! use aws_smithy_http_server::serve::bind;
+//!
+//! // Configure the built-in accepted-connection limit
+//! bind(("0.0.0.0", 3000), app.into_make_service())
+//!     .max_connections(100)
+//!     .await?;
+//! ```
+//!
+//! [`ListenerExt::limit_connections`] is also available, but it applies to the
+//! listener **before** passing it to `serve()`:
+//!
+//! ```rust,ignore
 //! let listener = TcpListener::bind("0.0.0.0:3000")
 //!     .await?
 //!     .limit_connections(100);
 //! serve(listener, app.into_make_service()).await?;
-//!
-//! // ✗ Wrong - limit_connections must be called on listener
-//! serve(TcpListener::bind("0.0.0.0:3000").await?, app.into_make_service())
-//!     .limit_connections(100)  // This method doesn't exist on Serve
-//!     .await?;
 //! ```
 //!
 //! ## Advanced: Custom Connection Handling
@@ -298,11 +324,13 @@ use tokio::sync::OwnedSemaphorePermit;
 use tower::{Service, ServiceExt as _};
 
 mod listener;
+mod tcp;
 
 use self::listener::ConnectionLimit;
 pub use self::listener::{ConnLimiter, ConnLimiterIo, Listener, ListenerExt, TapIo};
+pub use self::tcp::{bind, Bind, BindWithGracefulShutdown, DEFAULT_SOCKET_LISTEN_BACKLOG};
 
-const DEFAULT_MAX_CONNECTIONS: usize = 1024;
+const DEFAULT_MAX_CONNECTIONS: usize = 8192;
 
 struct AcceptedConnection<L: Listener> {
     io: L::Io,
@@ -466,9 +494,13 @@ where
 
 /// Serve the service with the supplied listener.
 ///
-/// By default, this limits accepted connections to 1024. The default connection
+/// By default, this limits accepted connections to 8192. The default connection
 /// builder also applies a 30-second HTTP/1 header-read timeout and a 20-second
 /// HTTP/2 keep-alive ping interval.
+///
+/// If you want this crate to bind a TCP socket for you, prefer [`bind`].
+/// Use `serve` when you already have a listener or need to compose listener
+/// behavior before serving.
 ///
 /// This implementation provides zero-cost abstraction for shutdown coordination.
 /// When graceful shutdown is not used, there is no runtime overhead - no watch channels
@@ -495,7 +527,15 @@ where
 ///
 /// # Examples
 ///
-/// Serving a Smithy service with a TCP listener:
+/// Recommended TCP serving path:
+///
+/// ```rust,ignore
+/// aws_smithy_http_server::serve::bind(("0.0.0.0", 3000), app.into_make_service())
+///     .await
+///     .unwrap();
+/// ```
+///
+/// Serving a Smithy service with an existing TCP listener:
 ///
 /// ```rust,ignore
 /// use tokio::net::TcpListener;
@@ -504,10 +544,18 @@ where
 /// aws_smithy_http_server::serve(listener, app.into_make_service()).await.unwrap();
 /// ```
 ///
+/// Serving with a custom accepted-connection limit:
+///
+/// ```rust,ignore
+/// aws_smithy_http_server::serve::bind(("0.0.0.0", 3000), app.into_make_service())
+///     .max_connections(100)
+///     .await
+///     .unwrap();
+/// ```
+///
 /// Serving with middleware applied:
 ///
 /// ```rust,ignore
-/// use tokio::net::TcpListener;
 /// use tower::Layer;
 /// use tower_http::timeout::TimeoutLayer;
 /// use http::StatusCode;
@@ -517,18 +565,17 @@ where
 /// let app = /* ... build service ... */;
 /// let app = TimeoutLayer::new(Duration::from_secs(30)).layer(app);
 ///
-/// let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
-/// aws_smithy_http_server::serve(listener, IntoMakeService::new(app)).await.unwrap();
+/// aws_smithy_http_server::serve::bind(("0.0.0.0", 3000), IntoMakeService::new(app))
+///     .await
+///     .unwrap();
 /// ```
 ///
 /// For graceful shutdown:
 ///
 /// ```rust,ignore
-/// use tokio::net::TcpListener;
 /// use tokio::signal;
 ///
-/// let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
-/// aws_smithy_http_server::serve(listener, app.into_make_service())
+/// aws_smithy_http_server::serve::bind(("0.0.0.0", 3000), app.into_make_service())
 ///     .with_graceful_shutdown(async {
 ///         signal::ctrl_c().await.expect("failed to listen for Ctrl+C");
 ///     })
@@ -539,12 +586,10 @@ where
 /// With connection info:
 ///
 /// ```rust,ignore
-/// use tokio::net::TcpListener;
 /// use std::net::SocketAddr;
 ///
-/// let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
-/// aws_smithy_http_server::serve(
-///     listener,
+/// aws_smithy_http_server::serve::bind(
+///     ("0.0.0.0", 3000),
 ///     app.into_make_service_with_connect_info::<SocketAddr>()
 /// )
 /// .await
@@ -663,7 +708,7 @@ where
 
     /// Set the maximum number of concurrent accepted connections.
     ///
-    /// The default limit is 1024 connections. Once the limit is reached, `serve`
+    /// The default limit is 8192 connections. Once the limit is reached, `serve`
     /// stops accepting new connections until an existing connection closes.
     /// Listener implementations will typically continue to queue incoming
     /// connections, up to an OS and implementation-specific listener backlog
@@ -889,7 +934,7 @@ impl<L: Listener, M, S, F, B> ServeWithGracefulShutdown<L, M, S, F, B> {
 
     /// Set the maximum number of concurrent accepted connections.
     ///
-    /// The default limit is 1024 connections. Once the limit is reached, `serve`
+    /// The default limit is 8192 connections. Once the limit is reached, `serve`
     /// stops accepting new connections until an existing connection closes.
     /// Listener implementations will typically continue to queue incoming
     /// connections, up to an OS and implementation-specific listener backlog

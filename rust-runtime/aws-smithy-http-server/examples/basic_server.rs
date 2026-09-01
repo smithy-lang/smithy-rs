@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Basic HTTP server example using `aws_smithy_http_server::serve()`.
+//! Basic HTTP server example using `aws_smithy_http_server::serve::bind()`.
 //!
 //! **This is the recommended way to run an HTTP server** for most use cases.
 //! It provides a batteries-included experience with sensible defaults.
 //!
 //! This example demonstrates:
-//! - Using the `serve()` function for connection handling
+//! - Using the `serve::bind()` function for TCP binding and connection handling
 //! - Configuring the Hyper builder with `.configure_hyper()`
 //! - Graceful shutdown with `.with_graceful_shutdown()`
 //!
@@ -27,12 +27,11 @@
 //! curl -X POST -d "Hello!" http://localhost:3000/echo
 //! ```
 
-use aws_smithy_http_server::{routing::IntoMakeService, serve::serve};
+use aws_smithy_http_server::{routing::IntoMakeService, serve::bind};
 use http::{Request, Response};
 use http_body_util::{BodyExt, Full};
 use hyper::body::{Bytes, Incoming};
 use std::{convert::Infallible, time::Duration};
-use tokio::net::TcpListener;
 use tower::service_fn;
 use tracing::{info, warn};
 
@@ -76,21 +75,18 @@ async fn router(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infalli
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
-    info!("Starting server with aws_smithy_http_server::serve()...");
-
-    let listener = TcpListener::bind("0.0.0.0:3000").await?;
-    let local_addr = listener.local_addr()?;
-
-    info!("Server listening on http://{}", local_addr);
+    info!("Starting server with aws_smithy_http_server::serve::bind()...");
+    info!("Server listening on http://0.0.0.0:3000");
     info!("Press Ctrl+C to shutdown gracefully");
 
     // Build the service
     let app = service_fn(router);
 
-    // Use aws_smithy_http_server::serve with:
+    // Use aws_smithy_http_server::serve::bind with:
+    // - TCP binding with the recommended socket defaults
     // - Hyper configuration (HTTP/2 keep-alive settings)
     // - Graceful shutdown (wait for in-flight requests)
-    serve(listener, IntoMakeService::new(app))
+    bind(("0.0.0.0", 3000), IntoMakeService::new(app))
         .configure_hyper(|mut builder| {
             // Configure HTTP/2 keep-alive to detect stale connections
             builder
