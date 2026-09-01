@@ -12,7 +12,7 @@ use crate::{
         aws_json::router::{AwsJsonRouter, Error as AwsJsonError},
         aws_json_10::AwsJson1_0,
         aws_json_11::AwsJson1_1,
-        rest::router::{Error as RestError, RestRouter},
+        rest::router::Error as RestError,
         rest_json_1::RestJson1,
         rest_xml::RestXml,
         rpc_v2_cbor::{router::RpcV2CborRouter, RpcV2Cbor},
@@ -20,6 +20,7 @@ use crate::{
     response::IntoResponse,
     routing::{
         operation_handler_bindings::{rest_request_spec, service_operation_key},
+        request_spec::{Match, RequestSpec},
         Router,
     },
     schema::{OperationSchema, ServiceSchema},
@@ -44,9 +45,20 @@ impl<'a> RequestRouteMetadata<'a> {
     }
 
     fn to_bodyless_request(self) -> Request<()> {
+        self.to_bodyless_request_with_path(self.uri.path())
+    }
+
+    fn to_bodyless_request_with_path(self, path: &str) -> Request<()> {
+        let path_and_query = if let Some(query) = self.uri.query() {
+            format!("{path}?{query}")
+        } else {
+            path.to_owned()
+        };
         let mut request = Request::new(());
         *request.method_mut() = self.method.clone();
-        *request.uri_mut() = self.uri.clone();
+        *request.uri_mut() = path_and_query
+            .parse()
+            .expect("prefix-adjusted path and query should be a valid URI");
         *request.headers_mut() = self.headers.clone();
         request
     }
@@ -190,10 +202,22 @@ impl ProtocolRoutingTable for AwsJsonOperationRoutingTable {
             return ProtocolRoutingOutcome::NoClaim;
         }
 
-        match self.router.match_route(&request.to_bodyless_request()) {
-            Ok(operation) => {
+        let route_request = if request.uri.path() == "/" {
+            request.to_bodyless_request()
+        } else {
+            request.to_bodyless_request_with_path("/")
+        };
+
+        match self.router.match_route(&route_request) {
+            Ok(operation)
+                if operation
+                    .prefix_policy()
+                    .candidates(request.uri.path())
+                    .any(|path| path == "/") =>
+            {
                 ProtocolRoutingOutcome::OperationMatched(OperationMatch::new(self.protocol.clone(), operation))
             }
+            Ok(_) => ProtocolRoutingOutcome::NoClaim,
             Err(error) => ProtocolRoutingOutcome::Rejected(self.rejection(error)),
         }
     }
@@ -232,19 +256,28 @@ impl ProtocolRoutingTable for RpcV2CborOperationRoutingTable {
         }
 
         match self.router.match_route(&request.to_bodyless_request()) {
-            Ok(operation) => {
+            Ok(operation) if rpc_path_matches_prefix_policy(request.uri.path(), operation) => {
                 ProtocolRoutingOutcome::OperationMatched(OperationMatch::new(self.protocol.clone(), operation))
             }
+            Ok(_) => ProtocolRoutingOutcome::NoClaim,
             Err(error) => ProtocolRoutingOutcome::Rejected(IntoResponse::<RpcV2Cbor>::into_response(error)),
         }
     }
+}
+
+fn rpc_path_matches_prefix_policy(request_path: &str, operation: &'static OperationSchema<'static>) -> bool {
+    let canonical_suffix = format!("/operation/{}", operation.shape_id().shape_name());
+    operation
+        .prefix_policy()
+        .candidates(request_path)
+        .any(|path| path.starts_with("/service/") && path.ends_with(canonical_suffix.as_str()))
 }
 
 /// REST operation routing table.
 #[derive(Debug, Clone)]
 pub struct RestOperationRoutingTable {
     protocol: ShapeId<'static>,
-    router: RestRouter<&'static OperationSchema<'static>>,
+    routes: Vec<(RequestSpec, &'static OperationSchema<'static>)>,
     version: RestVersion,
 }
 
@@ -274,14 +307,15 @@ impl RestOperationRoutingTable {
     }
 
     fn new(protocol: ShapeId<'static>, version: RestVersion, service_schema: &'static ServiceSchema<'static>) -> Self {
-        let router = service_schema
+        let mut routes: Vec<_> = service_schema
             .operations()
             .iter()
             .map(|operation| (rest_request_spec(service_schema, operation), *operation))
             .collect();
+        routes.sort_by_key(|(request_spec, _operation)| std::cmp::Reverse(request_spec.rank()));
         Self {
             protocol,
-            router,
+            routes,
             version,
         }
     }
@@ -300,14 +334,28 @@ impl ProtocolRoutingTable for RestOperationRoutingTable {
     }
 
     fn route(&self, request: RequestRouteMetadata<'_>) -> ProtocolRoutingOutcome {
-        match self.router.match_route(&request.to_bodyless_request()) {
-            Ok(operation) => {
-                ProtocolRoutingOutcome::OperationMatched(OperationMatch::new(self.protocol.clone(), operation))
+        let mut method_allowed = true;
+
+        for (request_spec, operation) in &self.routes {
+            for path in operation.prefix_policy().candidates(request.uri.path()) {
+                let candidate = request.to_bodyless_request_with_path(path);
+                match request_spec.matches(&candidate) {
+                    Match::Yes => {
+                        return ProtocolRoutingOutcome::OperationMatched(OperationMatch::new(
+                            self.protocol.clone(),
+                            operation,
+                        ));
+                    }
+                    Match::MethodNotAllowed => method_allowed = false,
+                    Match::No => {}
+                }
             }
-            Err(RestError::MethodNotAllowed) => {
-                ProtocolRoutingOutcome::RejectedNonExclusive(self.rejection(RestError::MethodNotAllowed))
-            }
-            Err(RestError::NotFound) => ProtocolRoutingOutcome::NoClaim,
+        }
+
+        if method_allowed {
+            ProtocolRoutingOutcome::NoClaim
+        } else {
+            ProtocolRoutingOutcome::RejectedNonExclusive(self.rejection(RestError::MethodNotAllowed))
         }
     }
 }

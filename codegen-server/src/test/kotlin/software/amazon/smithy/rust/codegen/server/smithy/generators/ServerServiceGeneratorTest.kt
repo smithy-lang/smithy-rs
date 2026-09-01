@@ -61,6 +61,9 @@ internal class ServerServiceGeneratorTest {
 
             use aws.protocols#restJson1
 
+            @trait(selector: "operation")
+            string OnlyIfPrefix
+
             @restJson1
             service SchemaService {
                 version: "2024-08-29"
@@ -68,6 +71,7 @@ internal class ServerServiceGeneratorTest {
             }
 
             @http(uri: "/echo/{name}", method: "POST")
+            @OnlyIfPrefix("/v1")
             operation Echo {
                 input := {
                     @required
@@ -135,6 +139,9 @@ internal class ServerServiceGeneratorTest {
             }
             assert(serviceSchema.readText().contains("ServiceSchema::new")) { serviceSchema.readText() }
             assert(serviceSchema.readText().contains("&crate::schema::operations::ECHO")) { serviceSchema.readText() }
+            assert(operationsSchema.readText().contains("PrefixPolicy::new(")) { operationsSchema.readText() }
+            assert(operationsSchema.readText().contains("false")) { operationsSchema.readText() }
+            assert(operationsSchema.readText().contains("\"/v1\"")) { operationsSchema.readText() }
             assert(service.readText().contains("MultiProtocolRoutingService::from_operation_handler_bindings")) {
                 service.readText()
             }

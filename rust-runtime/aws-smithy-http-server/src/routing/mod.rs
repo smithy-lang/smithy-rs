@@ -19,6 +19,7 @@ pub mod request_spec;
 mod multi_protocol;
 mod operation_handler_bindings;
 mod operation_handler_map;
+mod prefix;
 mod protocol_routing_table;
 mod route;
 
@@ -58,6 +59,7 @@ pub use self::{
     into_make_service_with_connect_info::{Connected, IntoMakeServiceWithConnectInfo},
     multi_protocol::{MultiProtocolRoutingFuture, MultiProtocolRoutingService},
     operation_handler_bindings::{BuildError, OperationHandlerBinding, RouterForOperationHandlerBindings},
+    prefix::PrefixPolicy,
     protocol_routing_table::{OperationMatch, ProtocolRoutingOutcome, ProtocolRoutingTable, SelectedProtocolContext},
     route::Route,
 };

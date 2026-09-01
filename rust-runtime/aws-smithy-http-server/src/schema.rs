@@ -7,6 +7,8 @@
 
 use aws_smithy_schema::{Schema, ShapeId};
 
+use crate::routing::PrefixPolicy;
+
 /// Runtime descriptor for a Smithy service.
 #[derive(Debug)]
 pub struct ServiceSchema<'a> {
@@ -60,6 +62,7 @@ pub struct OperationSchema<'a> {
     input: &'a Schema<'a>,
     output: &'a Schema<'a>,
     errors: &'a [&'a Schema<'a>],
+    prefix_policy: PrefixPolicy,
 }
 
 impl<'a> OperationSchema<'a> {
@@ -75,7 +78,14 @@ impl<'a> OperationSchema<'a> {
             input,
             output,
             errors,
+            prefix_policy: PrefixPolicy::DEFAULT,
         }
+    }
+
+    /// Sets route prefix policy metadata for this operation descriptor.
+    pub const fn with_prefix_policy(mut self, prefix_policy: PrefixPolicy) -> Self {
+        self.prefix_policy = prefix_policy;
+        self
     }
 
     /// Returns the operation shape schema.
@@ -101,5 +111,10 @@ impl<'a> OperationSchema<'a> {
     /// Returns schemas for errors modeled on this operation.
     pub fn errors(&self) -> &'a [&'a Schema<'a>] {
         self.errors
+    }
+
+    /// Returns route prefix policy metadata for this operation.
+    pub fn prefix_policy(&self) -> PrefixPolicy {
+        self.prefix_policy
     }
 }

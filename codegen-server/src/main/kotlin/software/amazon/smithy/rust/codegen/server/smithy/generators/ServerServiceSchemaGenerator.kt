@@ -10,6 +10,7 @@ import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -112,6 +113,25 @@ class ServerServiceSchemaGenerator(
                 val code = if (httpTrait.code == 200) "None" else "Some(${httpTrait.code})"
                 "\n    .with_http(#{HttpTrait}::new($method, $uri, $code))"
             }
+        val prefixPolicy = prefixPolicy(operation)
+        val prefixPolicyStatics: String
+        val prefixPolicyChain: String
+            if (prefixPolicy == null) {
+                prefixPolicyStatics = ""
+                prefixPolicyChain = ""
+            } else {
+                val prefixesConst = "${prefix}_PREFIXES"
+                val prefixes =
+                    prefixPolicy.prefixes.joinToString(",\n") { normalizePrefix(it).dq() }
+                val canonicalAllowed = prefixPolicy.canonicalAllowed.toString()
+                prefixPolicyStatics =
+                    """
+                    static $prefixesConst: &[&str] = &[
+                        $prefixes
+                    ];
+                    """.trimIndent()
+                prefixPolicyChain = "\n    .with_prefix_policy(#{PrefixPolicy}::new($canonicalAllowed, $prefixesConst))"
+            }
         val errorRefs =
             operation.errorsSet
                 .sorted()
@@ -121,6 +141,8 @@ class ServerServiceSchemaGenerator(
                 }
         writer.rustTemplate(
             """
+            $prefixPolicyStatics
+
             static ${prefix}_OPERATION_SHAPE: #{Schema}<'static> = #{Schema}::new(
                 ${shapeIdExpr(operation.id)},
                 #{ShapeType}::Operation,
@@ -135,14 +157,57 @@ class ServerServiceSchemaGenerator(
                 ${schemaConstRef(input)},
                 ${schemaConstRef(output)},
                 ${prefix}_ERRORS,
-            );
+            )$prefixPolicyChain;
             """,
             "Schema" to smithySchema.resolve("Schema"),
             "ShapeId" to smithySchema.resolve("ShapeId"),
             "ShapeType" to smithySchema.resolve("ShapeType"),
             "HttpTrait" to smithySchema.resolve("traits::HttpTrait"),
+            "PrefixPolicy" to smithyHttpServer.resolve("routing::PrefixPolicy"),
             "OperationSchema" to smithyHttpServer.resolve("schema::OperationSchema"),
         )
+    }
+
+    private data class GeneratedPrefixPolicy(
+        val canonicalAllowed: Boolean,
+        val prefixes: List<String>,
+    )
+
+    private fun prefixPolicy(operation: OperationShape): GeneratedPrefixPolicy? {
+        val onlyPrefixes = mutableListOf<String>()
+        val alsoPrefixes = mutableListOf<String>()
+        for (trait in operation.allTraits.values) {
+            when (trait.toShapeId().name) {
+                "OnlyIfPrefix", "onlyIfPrefix" -> onlyPrefixes += prefixTraitValues(trait)
+                "AlsoWithPrefix", "alsoWithPrefix" -> alsoPrefixes += prefixTraitValues(trait)
+            }
+        }
+
+        if (onlyPrefixes.isEmpty() && alsoPrefixes.isEmpty()) {
+            return null
+        }
+
+        val canonicalAllowed = onlyPrefixes.isEmpty()
+        val prefixes = (onlyPrefixes + alsoPrefixes).map(::normalizePrefix).distinct()
+        return GeneratedPrefixPolicy(canonicalAllowed, prefixes)
+    }
+
+    private fun prefixTraitValues(trait: Trait): List<String> {
+        val node = trait.toNode()
+        return when {
+            node.isStringNode -> listOf(node.expectStringNode().value)
+            node.isArrayNode -> node.expectArrayNode().elements.map { it.expectStringNode().value }
+            else -> emptyList()
+        }
+    }
+
+    private fun normalizePrefix(prefix: String): String {
+        val trimmed = prefix.trim().trimEnd('/')
+        return when {
+            trimmed.isEmpty() -> "/"
+            trimmed.startsWith("/") -> trimmed
+            else -> "/$trimmed"
+        }
     }
 
     private fun renderUnitSchema(writer: RustWriter) {

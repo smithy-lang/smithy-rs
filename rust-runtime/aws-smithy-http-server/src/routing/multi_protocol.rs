@@ -246,6 +246,7 @@ mod tests {
         routing::protocol_routing_table::{
             OperationMatch, ProtocolRoutingOutcome, ProtocolRoutingTable, RequestRouteMetadata,
         },
+        routing::PrefixPolicy,
         schema::OperationSchema,
     };
 
@@ -266,6 +267,14 @@ mod tests {
     static GET_VALUE: OperationSchema<'static> = OperationSchema::new(&GET_VALUE_SHAPE, &UNIT, &UNIT, &[]);
     static GET_VALUE_LATEST: OperationSchema<'static> =
         OperationSchema::new(&GET_VALUE_LATEST_SHAPE, &UNIT, &UNIT, &[]);
+    static PREFIXED_SHAPE: Schema<'static> = Schema::new(
+        ShapeId::from_parts("test#Prefixed", "test", "Prefixed"),
+        ShapeType::Operation,
+    )
+    .with_http(HttpTrait::new("GET", "/prefixed", None));
+    static PREFIXED_PREFIXES: &[&str] = &["/v1"];
+    static PREFIXED: OperationSchema<'static> = OperationSchema::new(&PREFIXED_SHAPE, &UNIT, &UNIT, &[])
+        .with_prefix_policy(PrefixPolicy::new(false, PREFIXED_PREFIXES));
     static SERVICE_SHAPE: Schema<'static> = Schema::new(
         ShapeId::from_parts("test#MultiProtocolService", "test", "MultiProtocolService"),
         ShapeType::Service,
@@ -277,6 +286,9 @@ mod tests {
     ];
     static OPERATIONS: &[&OperationSchema<'static>] = &[&GET_VALUE, &GET_VALUE_LATEST];
     static SERVICE: ServiceSchema<'static> = ServiceSchema::new(&SERVICE_SHAPE, None, PROTOCOLS, OPERATIONS);
+    static PREFIXED_OPERATIONS: &[&OperationSchema<'static>] = &[&PREFIXED];
+    static PREFIXED_SERVICE: ServiceSchema<'static> =
+        ServiceSchema::new(&SERVICE_SHAPE, None, PROTOCOLS, PREFIXED_OPERATIONS);
 
     #[derive(Clone)]
     struct EchoSelectedProtocol;
@@ -370,6 +382,82 @@ mod tests {
             }
             _ => panic!("expected REST operation match"),
         }
+    }
+
+    #[test]
+    fn rest_table_applies_operation_prefix_policy() {
+        let table = RestOperationRoutingTable::new_rest_json_1(&PREFIXED_SERVICE);
+        let prefixed = Request::builder()
+            .method(Method::GET)
+            .uri("/v1/prefixed")
+            .body(())
+            .unwrap();
+        let canonical = Request::builder()
+            .method(Method::GET)
+            .uri("/prefixed")
+            .body(())
+            .unwrap();
+
+        assert!(matches!(
+            table.route(RequestRouteMetadata::from_request(&prefixed)),
+            ProtocolRoutingOutcome::OperationMatched(_)
+        ));
+        assert!(matches!(
+            table.route(RequestRouteMetadata::from_request(&canonical)),
+            ProtocolRoutingOutcome::NoClaim
+        ));
+    }
+
+    #[test]
+    fn aws_json_table_applies_operation_prefix_policy() {
+        let table = AwsJsonOperationRoutingTable::new_aws_json_11(&PREFIXED_SERVICE);
+        let prefixed = Request::builder()
+            .method(Method::POST)
+            .uri("/v1")
+            .header("x-amz-target", "MultiProtocolService.Prefixed")
+            .body(())
+            .unwrap();
+        let canonical = Request::builder()
+            .method(Method::POST)
+            .uri("/")
+            .header("x-amz-target", "MultiProtocolService.Prefixed")
+            .body(())
+            .unwrap();
+
+        assert!(matches!(
+            table.route(RequestRouteMetadata::from_request(&prefixed)),
+            ProtocolRoutingOutcome::OperationMatched(_)
+        ));
+        assert!(matches!(
+            table.route(RequestRouteMetadata::from_request(&canonical)),
+            ProtocolRoutingOutcome::NoClaim
+        ));
+    }
+
+    #[test]
+    fn rpc_v2_cbor_table_applies_operation_prefix_policy() {
+        let table = RpcV2CborOperationRoutingTable::new(&PREFIXED_SERVICE);
+        let prefixed = Request::builder()
+            .method(Method::POST)
+            .uri("/v1/service/MultiProtocolService/operation/Prefixed")
+            .header("smithy-protocol", "rpc-v2-cbor")
+            .body(())
+            .unwrap();
+        let canonical = Request::builder()
+            .method(Method::POST)
+            .uri("/service/MultiProtocolService/operation/Prefixed")
+            .header("smithy-protocol", "rpc-v2-cbor")
+            .body(())
+            .unwrap();
+
+        assert!(matches!(
+            table.route(RequestRouteMetadata::from_request(&prefixed)),
+            ProtocolRoutingOutcome::OperationMatched(_)
+        ));
+        assert!(matches!(
+            table.route(RequestRouteMetadata::from_request(&canonical)),
+            ProtocolRoutingOutcome::NoClaim
+        ));
     }
 
     struct FakeTable {
