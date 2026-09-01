@@ -25,6 +25,9 @@
 //! ReadyToEstablish --poll----------------------------> Launching(Submitted)
 //! Launching(Submitted) --first owner-runtime poll----> Launching(Started)
 //! Launching --local H1 or establishment result------> Ready
+//! Waiting --local or peer H2 activation--------------> Ready
+//! DeliveryPending --H2 activation--------------------> DeliveryPending(pending H2)
+//! ReadyToEstablish / Launching --H2 activation-------> Ready
 //! Ready --poll---------------------------------------> removed; result transferred
 //! ```
 //!
@@ -64,6 +67,9 @@ pub(in crate::client::pool) struct WaiterId(pub(in crate::client::pool) u64);
 /// - `h1_candidates` contains exactly each H1-compatible
 ///   [`WaiterState::DeliveryPending`] without a pending H1,
 ///   [`WaiterState::ReadyToEstablish`], or [`WaiterState::Launching`] attempt.
+/// - `h2_activation_candidates` contains every delivery-pending, ready-to-establish, or
+///   launching attempt that has not received another result. The waiting FIFO
+///   head is compared with this set without duplicating its queue residence.
 /// - Delivery-pending, ready-to-establish, launching, delivery-cancelled, and
 ///   ready attempts remain in `records` but never in the bounded FIFO.
 ///
@@ -77,6 +83,8 @@ pub(super) struct AcquisitionQueue {
     waiting: WaitingQueueState,
     /// H1-compatible attempts still competing with a returned sender.
     h1_candidates: BTreeSet<WaiterId>,
+    /// Attempts outside the FIFO that may accept an H2 activation.
+    h2_activation_candidates: BTreeSet<WaiterId>,
     /// Next cell-local waiter identity.
     next_waiter: u64,
     /// Next identity for a head-waiter demand generation.
@@ -137,16 +145,16 @@ enum WaiterState {
     DeliveryPending {
         /// Latest task waiting for the crossing delivery.
         waker: Option<Waker>,
-        /// H1 return that won while capacity was crossing.
-        pending_h1: Option<AcquisitionResult>,
+        /// Local protocol result that won while delivery was crossing.
+        pending_result: Option<AcquisitionResult>,
     },
     /// Cancellation won after reservation while the committed delivery was
     /// outside the lock.
     DeliveryCancelled {
         /// Task detached for wake after the crossing payload is returned.
         waker: Option<Waker>,
-        /// H1 result returned after the crossing closes, if one arrived first.
-        pending_h1: Option<AcquisitionResult>,
+        /// Protocol result returned after the crossing closes, if one arrived first.
+        pending_result: Option<AcquisitionResult>,
     },
     /// Capacity is ready to start an establishment attempt.
     ReadyToEstablish {
@@ -210,9 +218,7 @@ impl AcquisitionQueue {
                     },
                 },
             );
-            if requirement == ProtocolRequirement::H1Compatible {
-                self.h1_candidates.insert(waiter);
-            }
+            self.add_protocol_candidates(waiter, requirement);
             self.assert_consistent();
             return (waiter, None);
         }
@@ -279,7 +285,7 @@ impl AcquisitionQueue {
     fn oldest_h1_candidate(&self) -> Option<WaiterId> {
         let waiting = match &self.waiting {
             WaitingQueueState::Active { head, .. }
-                if self.records[head].requirement == ProtocolRequirement::H1Compatible =>
+                if self.records[head].requirement.accepts_h1() =>
             {
                 Some(*head)
             }
@@ -305,6 +311,110 @@ impl AcquisitionQueue {
         !self.h1_candidates.is_empty()
     }
 
+    /// Returns the oldest attempt that may accept an HTTP/2 activation.
+    pub(super) fn oldest_h2_candidate(&self) -> Option<WaiterId> {
+        let waiting = match &self.waiting {
+            WaitingQueueState::Active { head, .. }
+                if self.records[head].requirement.accepts_h2() =>
+            {
+                Some(*head)
+            }
+            WaitingQueueState::Active { .. } => None,
+            WaitingQueueState::Empty => None,
+        };
+        match (waiting, self.h2_activation_candidates.first().copied()) {
+            (Some(waiting), Some(active)) => Some(waiting.min(active)),
+            (Some(waiting), None) => Some(waiting),
+            (None, active) => active,
+        }
+    }
+
+    /// Advances the active demand beyond an accepted route publication.
+    ///
+    /// Admission retires the published version when it acknowledges route
+    /// visibility. The waiter remains queued locally while the route gate
+    /// offers activations. Reserving the following version here ensures that
+    /// route invalidation can republish the same demand generation without an
+    /// older inactive snapshot winning.
+    pub(super) fn suppress_published_demand(&mut self, demand: DemandId) -> bool {
+        let WaitingQueueState::Active {
+            demand: current, ..
+        } = &mut self.waiting
+        else {
+            return false;
+        };
+        if current.id != demand {
+            return false;
+        }
+        let acknowledged = current.version.next();
+        current.version = acknowledged.next();
+        self.assert_consistent();
+        true
+    }
+
+    /// Returns the current head demand for publication after route loss.
+    pub(super) fn current_demand_snapshot(
+        &self,
+        eligibility_group: &EligibilityGroup,
+    ) -> Option<DemandSnapshot> {
+        match &self.waiting {
+            WaitingQueueState::Empty => None,
+            WaitingQueueState::Active { demand, .. } => Some(demand.snapshot(eligibility_group)),
+        }
+    }
+
+    /// Returns whether `waiter` is still the oldest H2 activation candidate.
+    pub(super) fn is_oldest_h2_candidate(&self, waiter: WaiterId) -> bool {
+        self.oldest_h2_candidate() == Some(waiter)
+    }
+
+    /// Returns the newest waiter identity committed before a publication.
+    pub(super) fn publication_cutoff(&self) -> Option<WaiterId> {
+        (!self.records.is_empty()).then(|| {
+            WaiterId(
+                self.next_waiter
+                    .checked_sub(1)
+                    .expect("nonempty waiter set had no allocated identity"),
+            )
+        })
+    }
+
+    /// Returns whether an acquisition at or before `cutoff` still needs H2.
+    pub(super) fn has_h2_candidate_through(&self, cutoff: WaiterId) -> bool {
+        self.oldest_h2_candidate()
+            .is_some_and(|waiter| waiter <= cutoff)
+    }
+
+    /// Returns whether any acquisition must precede a new direct H2 arrival.
+    pub(super) fn has_h2_candidate(&self) -> bool {
+        self.oldest_h2_candidate().is_some()
+    }
+
+    /// Returns whether one transferred generation waiter remains launchable.
+    pub(super) fn is_launching_h2_candidate(&self, waiter: WaiterId) -> bool {
+        self.h2_activation_candidates.contains(&waiter)
+            && self.records.get(&waiter).is_some_and(|record| {
+                record.requirement.accepts_h2()
+                    && matches!(record.state, WaiterState::Launching { .. })
+            })
+    }
+
+    /// Adds one waiter to each protocol index its requirement accepts.
+    fn add_protocol_candidates(&mut self, waiter: WaiterId, requirement: ProtocolRequirement) {
+        if requirement.accepts_h1() {
+            self.h1_candidates.insert(waiter);
+        }
+        if requirement.accepts_h2() {
+            self.h2_activation_candidates.insert(waiter);
+        }
+    }
+
+    /// Removes one waiter from both protocol candidate indexes.
+    fn remove_protocol_candidates(&mut self, waiter: WaiterId) {
+        self.h1_candidates.remove(&waiter);
+        self.h2_activation_candidates.remove(&waiter);
+    }
+
     /// Commits a returned HTTP/1 sender to the oldest compatible attempt.
     ///
     /// Payload construction is delayed until all panic-capable requesting-cell checks
@@ -314,11 +424,20 @@ impl AcquisitionQueue {
         &mut self,
         result: impl FnOnce() -> AcquisitionResult,
         eligibility_group: &EligibilityGroup,
-    ) -> H1Install {
+    ) -> WaiterInstall {
         let Some(waiter) = self.oldest_h1_candidate() else {
-            return H1Install::rejected(result());
+            return WaiterInstall::rejected(result());
         };
+        self.install_protocol_result(waiter, result, eligibility_group)
+    }
 
+    /// Installs a selected protocol result through the shared waiter transition.
+    fn install_protocol_result(
+        &mut self,
+        waiter: WaiterId,
+        result: impl FnOnce() -> AcquisitionResult,
+        eligibility_group: &EligibilityGroup,
+    ) -> WaiterInstall {
         if matches!(
             self.records.get(&waiter).map(|record| &record.state),
             Some(WaiterState::Waiting { .. })
@@ -328,16 +447,17 @@ impl AcquisitionQueue {
             let record = self
                 .records
                 .get_mut(&waiter)
-                .expect("HTTP/1 requesting waiter disappeared");
+                .expect("selected requesting waiter disappeared");
             let WaiterState::Waiting { waker, .. } = &mut record.state else {
-                unreachable!("HTTP/1 requesting waiter left the waiting state");
+                unreachable!("selected requesting waiter left the waiting state");
             };
             let waker = waker.take();
             record.state = WaiterState::Ready(result());
             let retired =
                 DemandSnapshot::inactive(removed.demand.id, removed.demand.version.next());
             self.assert_consistent();
-            return H1Install {
+            return WaiterInstall {
+                waiter: Some(waiter),
                 demand_updates: [Some(retired), removed.successor],
                 returned_event: None,
                 waker,
@@ -347,14 +467,14 @@ impl AcquisitionQueue {
         let record = self
             .records
             .get_mut(&waiter)
-            .expect("HTTP/1 candidate waiter disappeared");
+            .expect("selected candidate waiter disappeared");
         let (returned_event, waker) = match &mut record.state {
             WaiterState::DeliveryPending {
                 waker: _,
-                pending_h1,
+                pending_result,
             } => {
-                debug_assert!(pending_h1.is_none());
-                *pending_h1 = Some(result());
+                debug_assert!(pending_result.is_none());
+                *pending_result = Some(result());
                 (None, None)
             }
             WaiterState::ReadyToEstablish { .. } | WaiterState::Launching { .. } => {
@@ -364,22 +484,23 @@ impl AcquisitionQueue {
                         (Some(AcquisitionEvent::Establish(permit)), None)
                     }
                     WaiterState::Launching { waker, .. } => (None, waker),
-                    _ => unreachable!("HTTP/1 candidate changed state under the cell lock"),
+                    _ => unreachable!("selected candidate changed state under the cell lock"),
                 }
             }
             WaiterState::Waiting { .. }
             | WaiterState::DeliveryCancelled { .. }
             | WaiterState::Ready(_) => {
-                unreachable!("HTTP/1 candidate was not eligible for a returned sender")
+                unreachable!("selected waiter was not eligible for a protocol result")
             }
         };
-        self.h1_candidates.remove(&waiter);
+        self.remove_protocol_candidates(waiter);
         if returned_event.is_none() {
-            // The incoming H1 is state-owned and no permit is detached, so an
+            // The result is state-owned and no permit is detached, so an
             // invariant failure cannot drop a pool value under this lock.
             self.assert_consistent();
         }
-        H1Install {
+        WaiterInstall {
+            waiter: Some(waiter),
             demand_updates: [None, None],
             returned_event,
             waker,
@@ -423,14 +544,21 @@ impl AcquisitionQueue {
                 returned_events: [None, None],
             }
         } else if matches!(state, WaiterState::DeliveryPending { .. }) {
-            self.h1_candidates.remove(&waiter);
+            self.remove_protocol_candidates(waiter);
             let record = self.records.get_mut(&waiter)?;
-            let WaiterState::DeliveryPending { waker, pending_h1 } = &mut record.state else {
+            let WaiterState::DeliveryPending {
+                waker,
+                pending_result,
+            } = &mut record.state
+            else {
                 unreachable!("delivery-pending waiter changed state under the cell lock");
             };
             let waker = waker.take();
-            let pending_h1 = pending_h1.take();
-            record.state = WaiterState::DeliveryCancelled { waker, pending_h1 };
+            let pending_result = pending_result.take();
+            record.state = WaiterState::DeliveryCancelled {
+                waker,
+                pending_result,
+            };
             WaiterCancellation {
                 demand_updates: [None, None],
                 returned_events: [None, None],
@@ -443,7 +571,7 @@ impl AcquisitionQueue {
             // this method must return without another panic-capable check.
             self.assert_consistent();
             let record = self.records.remove(&waiter)?;
-            self.h1_candidates.remove(&waiter);
+            self.remove_protocol_candidates(waiter);
             let event = match record.state {
                 WaiterState::ReadyToEstablish { permit } => AcquisitionEvent::Establish(permit),
                 WaiterState::Ready(result) => AcquisitionEvent::Complete(result),
@@ -455,7 +583,7 @@ impl AcquisitionQueue {
             });
         } else if matches!(state, WaiterState::Launching { .. }) {
             self.assert_consistent();
-            self.h1_candidates.remove(&waiter);
+            self.remove_protocol_candidates(waiter);
             self.records.remove(&waiter)?;
             return Some(WaiterCancellation {
                 demand_updates: [None, None],
@@ -552,7 +680,7 @@ impl AcquisitionQueue {
                 self.assert_consistent();
                 true
             }
-            WaiterState::Ready(AcquisitionResult::H1(_)) => false,
+            WaiterState::Ready(_) => false,
             WaiterState::Launching {
                 phase: EstablishmentPhase::Started,
                 ..
@@ -597,14 +725,12 @@ impl AcquisitionQueue {
             unreachable!("reserved queue head left the waiting state");
         };
         let waker = waker.take();
-        let accepts_h1 = record.requirement == ProtocolRequirement::H1Compatible;
+        let requirement = record.requirement;
         record.state = WaiterState::DeliveryPending {
             waker,
-            pending_h1: None,
+            pending_result: None,
         };
-        if accepts_h1 {
-            self.h1_candidates.insert(removed.waiter);
-        }
+        self.add_protocol_candidates(removed.waiter, requirement);
 
         self.assert_consistent();
         DeliveryReservation::Reserved {
@@ -632,11 +758,14 @@ impl AcquisitionQueue {
         };
 
         match &mut record.state {
-            WaiterState::DeliveryPending { waker, pending_h1 } => {
+            WaiterState::DeliveryPending {
+                waker,
+                pending_result,
+            } => {
                 let waker = waker.take();
-                if let Some(h1) = pending_h1.take() {
-                    record.state = WaiterState::Ready(h1);
-                    self.h1_candidates.remove(&waiter);
+                if let Some(result) = pending_result.take() {
+                    record.state = WaiterState::Ready(result);
+                    self.remove_protocol_candidates(waiter);
                     // The rejected permit must cross the lock boundary even
                     // if other state is already inconsistent.
                     return ResultInstall {
@@ -656,13 +785,16 @@ impl AcquisitionQueue {
                     accepted: true,
                 }
             }
-            WaiterState::DeliveryCancelled { waker, pending_h1 } => {
+            WaiterState::DeliveryCancelled {
+                waker,
+                pending_result,
+            } => {
                 let waker = waker.take();
-                let pending_h1 = pending_h1.take();
+                let pending_result = pending_result.take();
                 self.records.remove(&waiter);
                 ResultInstall {
                     returned_events: [
-                        pending_h1.map(AcquisitionEvent::Complete),
+                        pending_result.map(AcquisitionEvent::Complete),
                         Some(AcquisitionEvent::Establish(permit)),
                     ],
                     waker,
@@ -698,11 +830,14 @@ impl AcquisitionQueue {
         };
 
         match &mut record.state {
-            WaiterState::DeliveryPending { waker, pending_h1 } => {
+            WaiterState::DeliveryPending {
+                waker,
+                pending_result,
+            } => {
                 let waker = waker.take();
-                if let Some(local_h1) = pending_h1.take() {
-                    record.state = WaiterState::Ready(local_h1);
-                    self.h1_candidates.remove(&waiter);
+                if let Some(local_result) = pending_result.take() {
+                    record.state = WaiterState::Ready(local_result);
+                    self.remove_protocol_candidates(waiter);
                     // The rejected borrowed sender must cross the lock
                     // boundary before any panic-capable consistency check.
                     return ResultInstall {
@@ -713,7 +848,7 @@ impl AcquisitionQueue {
                     };
                 }
                 record.state = WaiterState::Ready(result);
-                self.h1_candidates.remove(&waiter);
+                self.remove_protocol_candidates(waiter);
                 self.assert_consistent();
                 ResultInstall {
                     returned_events: [None, None],
@@ -722,13 +857,16 @@ impl AcquisitionQueue {
                     accepted: true,
                 }
             }
-            WaiterState::DeliveryCancelled { waker, pending_h1 } => {
+            WaiterState::DeliveryCancelled {
+                waker,
+                pending_result,
+            } => {
                 let waker = waker.take();
-                let pending_h1 = pending_h1.take();
+                let pending_result = pending_result.take();
                 self.records.remove(&waiter);
                 ResultInstall {
                     returned_events: [
-                        pending_h1.map(AcquisitionEvent::Complete),
+                        pending_result.map(AcquisitionEvent::Complete),
                         Some(AcquisitionEvent::Complete(result)),
                     ],
                     waker,
@@ -759,18 +897,21 @@ impl AcquisitionQueue {
         let Some(record) = self.records.get_mut(&waiter) else {
             return ResultInstall::rejected(AcquisitionEvent::Complete(result));
         };
-        if matches!(record.state, WaiterState::Ready(AcquisitionResult::H1(_))) {
+        if matches!(record.state, WaiterState::Ready(_)) {
             return ResultInstall::rejected(AcquisitionEvent::Complete(result));
         }
-        let WaiterState::Launching { waker, .. } = &mut record.state else {
+        if !matches!(record.state, WaiterState::Launching { .. }) {
             return ResultInstall::invalid(
                 AcquisitionEvent::Complete(result),
                 ResultInstallError::UnexpectedState,
             );
+        }
+        let WaiterState::Launching { waker, .. } = &mut record.state else {
+            unreachable!("validated launching waiter changed state")
         };
         let waker = waker.take();
         record.state = WaiterState::Ready(result);
-        self.h1_candidates.remove(&waiter);
+        self.remove_protocol_candidates(waiter);
         self.assert_consistent();
         ResultInstall {
             returned_events: [None, None],
@@ -797,6 +938,27 @@ impl AcquisitionQueue {
             unreachable!("ready waiter changed state under the cell lock");
         };
         Some(result)
+    }
+
+    /// Offers an H2 activation to the oldest compatible acquisition.
+    ///
+    /// `cutoff` retains publication priority. A later waiter is left pending
+    /// until every live acquisition at or before the cutoff has received an
+    /// activation opportunity.
+    pub(super) fn install_h2(
+        &mut self,
+        cutoff: Option<WaiterId>,
+        result: impl FnOnce(WaiterId) -> AcquisitionResult,
+        eligibility_group: &EligibilityGroup,
+    ) -> WaiterInstall {
+        let Some(waiter) = self.oldest_h2_candidate() else {
+            return WaiterInstall::empty();
+        };
+        if cutoff.is_some_and(|cutoff| waiter > cutoff) {
+            return WaiterInstall::empty();
+        }
+
+        self.install_protocol_result(waiter, || result(waiter), eligibility_group)
     }
 
     /// Unlinks the FIFO head and installs any successor demand.
@@ -955,7 +1117,12 @@ impl AcquisitionQueue {
     /// Checks map, FIFO, and demand relationships in debug and test builds.
     pub(super) fn assert_consistent(&self) {
         #[cfg(debug_assertions)]
-        self.assert_consistent_debug();
+        {
+            if std::thread::panicking() {
+                return;
+            }
+            self.assert_consistent_debug();
+        }
     }
 
     #[cfg(debug_assertions)]
@@ -1027,11 +1194,11 @@ impl AcquisitionQueue {
             .records
             .iter()
             .filter_map(|(waiter, record)| {
-                (record.requirement == ProtocolRequirement::H1Compatible
+                (record.requirement.accepts_h1()
                     && matches!(
                         record.state,
                         WaiterState::DeliveryPending {
-                            pending_h1: None,
+                            pending_result: None,
                             ..
                         } | WaiterState::ReadyToEstablish { .. }
                             | WaiterState::Launching { .. }
@@ -1042,6 +1209,27 @@ impl AcquisitionQueue {
         assert_eq!(
             expected_h1_candidates, self.h1_candidates,
             "HTTP/1 acquisition candidates did not match waiter state"
+        );
+
+        let expected_h2_activation_candidates = self
+            .records
+            .iter()
+            .filter_map(|(waiter, record)| {
+                (record.requirement.accepts_h2()
+                    && matches!(
+                        record.state,
+                        WaiterState::DeliveryPending {
+                            pending_result: None,
+                            ..
+                        } | WaiterState::ReadyToEstablish { .. }
+                            | WaiterState::Launching { .. }
+                    ))
+                .then_some(*waiter)
+            })
+            .collect::<BTreeSet<_>>();
+        assert_eq!(
+            expected_h2_activation_candidates, self.h2_activation_candidates,
+            "HTTP/2 acquisition candidates did not match waiter state"
         );
     }
 
@@ -1078,22 +1266,35 @@ pub(super) struct WaiterCancellation {
     pub(super) returned_events: [Option<AcquisitionEvent>; 2],
 }
 
-/// Values detached after attempting cell-local HTTP/1 service.
-pub(super) struct H1Install {
+/// Values detached after installing a selected protocol result.
+pub(super) struct WaiterInstall {
+    /// Waiter that accepted the result, when one remained eligible.
+    pub(super) waiter: Option<WaiterId>,
     /// Demand retirement and optional successor published after unlocking.
     pub(super) demand_updates: [Option<DemandSnapshot>; 2],
-    /// Establishment permit or rejected H1 returned after unlocking.
+    /// Establishment permit or rejected result returned after unlocking.
     pub(super) returned_event: Option<AcquisitionEvent>,
     /// Waiting task woken after demand publication.
     pub(super) waker: Option<Waker>,
 }
 
-impl H1Install {
+impl WaiterInstall {
     /// Preserves a result when no live attempt can accept HTTP/1.
     fn rejected(result: AcquisitionResult) -> Self {
         Self {
+            waiter: None,
             demand_updates: [None, None],
             returned_event: Some(AcquisitionEvent::Complete(result)),
+            waker: None,
+        }
+    }
+
+    /// Reports that no live attempt can accept an HTTP/2 activation.
+    fn empty() -> Self {
+        Self {
+            waiter: None,
+            demand_updates: [None, None],
+            returned_event: None,
             waker: None,
         }
     }
@@ -1166,6 +1367,20 @@ pub(super) struct CellSnapshot {
 #[cfg(all(test, not(smithy_http_client_loom)))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn h1_required_waiter_is_not_an_h2_candidate() {
+        let mut queue = AcquisitionQueue::default();
+        let (waiter, snapshot) = queue.register_waiter(
+            ProtocolRequirement::H1Required,
+            &EligibilityGroup::Pool,
+            false,
+        );
+
+        assert!(snapshot.is_none());
+        assert_eq!(Some(waiter), queue.oldest_h1_candidate());
+        assert_eq!(None, queue.oldest_h2_candidate());
+    }
 
     #[test]
     fn head_cancellation_uses_the_successors_protocol_requirement() {

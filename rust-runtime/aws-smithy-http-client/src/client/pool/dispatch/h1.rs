@@ -3,24 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! HTTP/1 acquisition, exclusive dispatch, and response completion.
+//! HTTP/1 wire preparation, exclusive dispatch, and response completion.
 //!
 //! The parent dispatcher has already validated the request, resolved its
-//! origin cell, and selected the partition runtime. This module prepares the
-//! HTTP/1 wire form, acquires Hyper's exclusive request sender, and owns that
+//! origin cell, acquired an HTTP/1 selection, and selected the partition
+//! runtime. This module prepares the HTTP/1 wire form and owns the exclusive
 //! sender until the response reaches a reusable message boundary. Every
-//! cancellation path either returns the sender to its connection-owning cell
-//! or retires the connection.
+//! cancellation path returns the sender to its connection cell or retires the
+//! connection.
 
-use super::super::admission::ProtocolRequirement;
 use super::super::cell::h1::{H1Exchange, H1Selection};
-use super::super::cell::{AcquisitionEvent, AcquisitionResult, OriginCell, WaiterId};
 use super::super::connection::{CloseReason, ConnectionState, DispatchGuard};
-use super::super::establish;
 use super::super::partition::DriverSpawner;
 use super::super::ConnectionPool;
-use super::{AcquisitionContext, RequestDispatchError};
-use crate::sync::Arc;
+use super::{AcquisitionContext, H1HostHeaderInserted, RequestDispatchError};
 use aws_smithy_runtime_api::client::connection::CaptureSmithyConnection;
 use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_types::body::SdkBody;
@@ -31,117 +27,106 @@ use std::pin::Pin;
 use std::sync::Arc as StdArc;
 use std::task::{Context, Poll};
 
+/// Result of one HTTP/1 dispatch attempt while the pool owns the request.
+pub(super) enum H1DispatchResult {
+    /// Hyper accepted the request and produced a guarded response.
+    Response(Response<SdkBody>),
+    /// The selection became stale or Hyper returned the request unsent.
+    Reacquire(Request<SdkBody>),
+}
+
 impl ConnectionPool {
-    /// Acquires an HTTP/1 connection and sends one request.
+    /// Attempts one dispatch through an acquired HTTP/1 selection.
     ///
-    /// The reacquisition loop runs only while the pool still owns the request. A
-    /// selection that closes before dispatch can be replaced immediately.
-    /// Hyper may also return an unconsumed request when a reused connection
-    /// rejects it before writing. Once Hyper accepts a request on a fresh
-    /// connection, or begins an exchange on any connection, this function does
-    /// not reacquire.
-    pub(super) async fn send_h1_request(
+    /// The parent may reacquire only when this function returns the original
+    /// request. A fresh connection's send error is terminal even if Hyper
+    /// returns the request.
+    pub(super) async fn dispatch_h1(
         &self,
-        context: AcquisitionContext,
+        context: &AcquisitionContext,
         mut request: Request<SdkBody>,
-    ) -> Result<Response<SdkBody>, ConnectorError> {
+        mut selection: H1Selection,
+    ) -> Result<H1DispatchResult, ConnectorError> {
         let request_method = request.method().clone();
-        // Add the HTTP/1 header that depends on the absolute request URI.
+        let reused = selection.is_reused();
+        let connection = selection.connection().clone();
+        let close_handle = selection.close_handle();
+        let captured_metadata = request
+            .extensions()
+            .get::<CaptureSmithyConnection>()
+            .cloned()
+            .map(|capture| {
+                let metadata = connection.info().metadata(close_handle.clone());
+                let captured = metadata.clone();
+                capture.set_connection_retriever(move || Some(captured.clone()));
+                metadata
+            });
+
+        if request.version() == Version::HTTP_2 {
+            let metadata =
+                captured_metadata.unwrap_or_else(|| connection.info().metadata(close_handle));
+            return Err(ConnectorError::user(
+                "an HTTP/2 request cannot use an HTTP/1 connection".into(),
+            )
+            .with_connection(metadata));
+        }
+
         add_host_header(&mut request, &context.absolute_uri)
             .map_err(|error| ConnectorError::user(error.into()))?;
+        rewrite_h1_request_target(&mut request, connection.info().is_proxied());
 
-        // Redispatch is valid only when the original request is recovered intact.
-        loop {
-            let mut selection = Self::acquire_h1(&context).await?;
-            let reused = selection.is_reused();
-            let connection = selection.connection().clone();
-            let close_handle = selection.close_handle();
-            let captured_metadata = request
-                .extensions()
-                .get::<CaptureSmithyConnection>()
-                .cloned()
-                .map(|capture| {
-                    let metadata = connection.info().metadata(close_handle.clone());
-                    let captured = metadata.clone();
-                    capture.set_connection_retriever(move || Some(captured.clone()));
-                    metadata
-                });
+        // Commit against logical close before transferring the request to
+        // Hyper. A close that wins this race leaves the request untouched.
+        let Some(dispatch) = ConnectionState::try_commit_dispatch(&connection) else {
+            tracing::trace!(
+                connection_id = %connection.id(),
+                request_partition = ?context.partition.id(),
+                connection_partition = ?connection.owner_partition(),
+                origin_scheme = %connection.info().origin().scheme(),
+                origin_host = connection.info().origin().host(),
+                origin_port = ?connection.info().origin().port(),
+                "HTTP/1 selection became stale before dispatch"
+            );
+            *request.uri_mut() = context.absolute_uri.clone();
+            selection.retire_connection(CloseReason::ProtocolClosed);
+            return Ok(H1DispatchResult::Reacquire(request));
+        };
+        let send = selection.sender_mut().hyper_mut().try_send_request(request);
 
-            if request.version() == Version::HTTP_2 {
-                let metadata =
-                    captured_metadata.unwrap_or_else(|| connection.info().metadata(close_handle));
-                return Err(ConnectorError::user(
-                    "an HTTP/2 request cannot use an HTTP/1 connection".into(),
-                )
-                .with_connection(metadata));
+        let exchange = selection.into_exchange();
+        match send.await {
+            Ok(mut response) => {
+                // Response-body ownership keeps both the accepted dispatch
+                // and exclusive request handle out of the pool until Hyper
+                // proves a complete message boundary.
+                connection
+                    .info()
+                    .apply_connector_extras(response.extensions_mut());
+                Ok(H1DispatchResult::Response(guard_response(
+                    response,
+                    request_method,
+                    exchange,
+                    dispatch,
+                    context.owner_spawner.clone(),
+                )))
             }
-
-            rewrite_h1_request_target(&mut request, connection.info().is_proxied());
-
-            // Commit against logical close before transferring the request to
-            // Hyper. A close that wins this race leaves the request untouched.
-            let Some(dispatch) = ConnectionState::try_commit_dispatch(&connection) else {
-                tracing::trace!(
-                    connection_id = %connection.id(),
-                    request_partition = ?context.partition.id(),
-                    connection_partition = ?connection.owner_partition(),
-                    origin_scheme = %connection.info().origin().scheme(),
-                    origin_host = connection.info().origin().host(),
-                    origin_port = ?connection.info().origin().port(),
-                    "HTTP/1 selection became stale before dispatch; reacquiring"
-                );
-                *request.uri_mut() = context.absolute_uri.clone();
-                selection.retire_connection(CloseReason::ProtocolClosed);
-                continue;
-            };
-            let send = selection.sender_mut().hyper_mut().try_send_request(request);
-
-            let exchange = selection.into_exchange();
-            match send.await {
-                Ok(mut response) => {
-                    // Response-body ownership keeps both the accepted dispatch
-                    // and exclusive request handle out of the pool until Hyper
-                    // proves a complete message boundary.
-                    connection
-                        .info()
-                        .apply_connector_extras(response.extensions_mut());
-                    return Ok(guard_response(
-                        response,
-                        request_method,
-                        exchange,
-                        dispatch,
-                        context.owner_spawner.clone(),
-                    ));
-                }
-                Err(mut error) => {
-                    if let Some(mut returned) = error.take_message() {
-                        exchange.retire_connection(CloseReason::ProtocolClosed);
-                        drop(dispatch);
-                        if reused {
-                            tracing::trace!(
-                                connection_id = %connection.id(),
-                                request_partition = ?context.partition.id(),
-                                connection_partition = ?connection.owner_partition(),
-                                origin_scheme = %connection.info().origin().scheme(),
-                                origin_host = connection.info().origin().host(),
-                                origin_port = ?connection.info().origin().port(),
-                                "reused HTTP/1 connection rejected request; reacquiring"
-                            );
-                            *returned.uri_mut() = context.absolute_uri.clone();
-                            // Hyper returned the original request without
-                            // consuming its body, so reacquisition is authoritative.
-                            request = returned;
-                            continue;
-                        }
-                        let metadata = captured_metadata
-                            .unwrap_or_else(|| connection.info().metadata(close_handle));
-                        return Err(super::super::super::downcast_error(Box::new(
-                            error.into_error(),
-                        ))
-                        .with_connection(metadata));
-                    }
-                    exchange.retire_connection(CloseReason::IncompleteH1Exchange);
+            Err(mut error) => {
+                if let Some(mut returned) = error.take_message() {
+                    exchange.retire_connection(CloseReason::ProtocolClosed);
                     drop(dispatch);
+                    if reused {
+                        tracing::trace!(
+                            connection_id = %connection.id(),
+                            request_partition = ?context.partition.id(),
+                            connection_partition = ?connection.owner_partition(),
+                            origin_scheme = %connection.info().origin().scheme(),
+                            origin_host = connection.info().origin().host(),
+                            origin_port = ?connection.info().origin().port(),
+                            "reused HTTP/1 connection returned request unsent"
+                        );
+                        *returned.uri_mut() = context.absolute_uri.clone();
+                        return Ok(H1DispatchResult::Reacquire(returned));
+                    }
                     let metadata = captured_metadata
                         .unwrap_or_else(|| connection.info().metadata(close_handle));
                     return Err(
@@ -149,197 +134,15 @@ impl ConnectionPool {
                             .with_connection(metadata),
                     );
                 }
+                exchange.retire_connection(CloseReason::IncompleteH1Exchange);
+                drop(dispatch);
+                let metadata =
+                    captured_metadata.unwrap_or_else(|| connection.info().metadata(close_handle));
+                Err(
+                    super::super::super::downcast_error(Box::new(error.into_error()))
+                        .with_connection(metadata),
+                )
             }
-        }
-    }
-
-    /// Returns one exclusive HTTP/1 request handle for this request.
-    ///
-    /// A local idle handle completes immediately. Otherwise one cell-local
-    /// waiter remains registered while it receives either a reusable handle,
-    /// an establishment failure, or capacity to start establishment. Starting
-    /// establishment does not complete the waiter: a returning connection may
-    /// still satisfy it first.
-    async fn acquire_h1(context: &AcquisitionContext) -> Result<H1Selection, ConnectorError> {
-        if let Some(selection) = OriginCell::select_h1(&context.cell) {
-            tracing::trace!(
-                connection_id = %selection.connection_id(),
-                request_partition = ?context.partition.id(),
-                connection_partition = ?selection.connection().owner_partition(),
-                origin_scheme = %selection.connection().info().origin().scheme(),
-                origin_host = selection.connection().info().origin().host(),
-                origin_port = ?selection.connection().info().origin().port(),
-                "HTTP/1 pool hit; reusing idle connection"
-            );
-            return Ok(selection);
-        }
-
-        let waiter = context
-            .cell
-            .register_waiter(ProtocolRequirement::H1Compatible);
-        tracing::trace!(
-            request_partition = ?context.partition.id(),
-            origin_scheme = %context.cell.id().origin().scheme(),
-            origin_host = context.cell.id().origin().host(),
-            origin_port = ?context.cell.id().origin().port(),
-            "HTTP/1 pool miss; acquisition queued"
-        );
-        let mut waiter_guard = WaiterGuard::new(context.cell.clone(), waiter);
-        loop {
-            match poll_fn(|cx| context.cell.poll_waiter(waiter, cx)).await {
-                AcquisitionEvent::Complete(AcquisitionResult::H1(selection)) => {
-                    tracing::trace!(
-                        connection_id = %selection.connection_id(),
-                        request_partition = ?context.partition.id(),
-                        connection_partition = ?selection.connection().owner_partition(),
-                        origin_scheme = %selection.connection().info().origin().scheme(),
-                        origin_host = selection.connection().info().origin().host(),
-                        origin_port = ?selection.connection().info().origin().port(),
-                        "HTTP/1 waiter acquired a reusable connection"
-                    );
-                    waiter_guard.disarm();
-                    return Ok(selection);
-                }
-                AcquisitionEvent::Complete(AcquisitionResult::Failed(error)) => {
-                    waiter_guard.disarm();
-                    return Err(error);
-                }
-                AcquisitionEvent::Establish(permit) => {
-                    tracing::trace!(
-                        request_partition = ?context.partition.id(),
-                        origin_scheme = %context.cell.id().origin().scheme(),
-                        origin_host = context.cell.id().origin().host(),
-                        origin_port = ?context.cell.id().origin().port(),
-                        "HTTP/1 waiter starting connection establishment"
-                    );
-                    let attempt = establish::establish_h1(context.clone(), permit);
-                    let completion = EstablishmentCompletion::new(context.cell.clone(), waiter);
-                    context.owner_spawner.spawn(Box::pin(async move {
-                        let mut completion = completion;
-                        if !completion.start() {
-                            drop(attempt);
-                            completion.disarm();
-                            return;
-                        }
-                        let result = attempt
-                            .await
-                            .map(AcquisitionResult::H1)
-                            .unwrap_or_else(AcquisitionResult::Failed);
-                        completion.complete(result);
-                    }));
-                }
-            }
-        }
-    }
-}
-
-/// Guarantees a terminal result for one submitted establishment attempt.
-///
-/// This guard moves into the owner-runtime future before it is submitted. If
-/// the runtime discards that future, [`Drop`] reports a failure to the waiter.
-/// If another connection satisfies the waiter before the submitted future
-/// starts, [`Self::start`] rejects the attempt and the guard is disarmed.
-struct EstablishmentCompletion {
-    /// Cell retaining the waiter and establishment state.
-    cell: Arc<OriginCell>,
-    /// Waiter that receives the attempt's terminal result.
-    waiter: WaiterId,
-    /// Whether task drop still owes a failure result.
-    active: bool,
-}
-
-impl EstablishmentCompletion {
-    /// Arms task-drop completion before the future is submitted.
-    fn new(cell: Arc<OriginCell>, waiter: WaiterId) -> Self {
-        Self {
-            cell,
-            waiter,
-            active: true,
-        }
-    }
-
-    /// Marks the waiter started immediately before the connector is first polled.
-    fn start(&self) -> bool {
-        self.cell.start_establishment(self.waiter)
-    }
-
-    /// Delivers the attempt result and disarms task-drop completion.
-    fn complete(mut self, result: AcquisitionResult) {
-        self.active = false;
-        self.cell.complete_establishment(self.waiter, result);
-    }
-
-    /// Disarms after another connection has already completed the waiter.
-    fn disarm(&mut self) {
-        self.active = false;
-    }
-}
-
-impl Drop for EstablishmentCompletion {
-    fn drop(&mut self) {
-        if self.active {
-            let error = ConnectorError::other(EstablishmentTaskDropped.into(), None);
-            self.cell
-                .complete_establishment(self.waiter, AcquisitionResult::Failed(error));
-            tracing::debug!(
-                request_partition = ?self.cell.id().partition(),
-                connection_partition = ?self.cell.id().partition(),
-                origin_scheme = %self.cell.id().origin().scheme(),
-                origin_host = self.cell.id().origin().host(),
-                origin_port = ?self.cell.id().origin().port(),
-                "HTTP/1 connection establishment task dropped"
-            );
-        }
-    }
-}
-
-/// The owner runtime discarded an establishment future before completion.
-#[derive(Debug)]
-struct EstablishmentTaskDropped;
-
-impl std::fmt::Display for EstablishmentTaskDropped {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("the owner-runtime connection establishment task was dropped")
-    }
-}
-
-impl std::error::Error for EstablishmentTaskDropped {}
-
-/// Cancels a request's retained waiter if acquisition does not complete.
-///
-/// The request future owns this guard from waiter registration until it
-/// consumes a terminal result. Dropping the future cancels the waiter; cell
-/// cancellation returns any crossing capacity or HTTP/1 handle after releasing
-/// the cell lock.
-struct WaiterGuard {
-    /// Cell retaining the waiter.
-    cell: Arc<OriginCell>,
-    /// Waiter cancelled if the request future does not consume a result.
-    waiter: WaiterId,
-    /// Whether request cancellation is still armed.
-    active: bool,
-}
-
-impl WaiterGuard {
-    /// Arms cancellation for a newly registered waiter.
-    fn new(cell: Arc<OriginCell>, waiter: WaiterId) -> Self {
-        Self {
-            cell,
-            waiter,
-            active: true,
-        }
-    }
-
-    /// Disarms after the request consumes its terminal result.
-    fn disarm(&mut self) {
-        self.active = false;
-    }
-}
-
-impl Drop for WaiterGuard {
-    fn drop(&mut self) {
-        if self.active {
-            OriginCell::cancel_waiter(&self.cell, self.waiter);
         }
     }
 }
@@ -602,6 +405,7 @@ fn add_host_header(
     let value =
         http_1x::HeaderValue::from_str(&host).map_err(RequestDispatchError::InvalidHostHeader)?;
     request.headers_mut().insert(http_1x::header::HOST, value);
+    request.extensions_mut().insert(H1HostHeaderInserted);
     Ok(())
 }
 
@@ -629,6 +433,7 @@ fn rewrite_h1_request_target(request: &mut Request<SdkBody>, is_proxied: bool) {
 mod tests {
     use super::*;
     use crate::client::pool::cell::h1::H1Sender;
+    use crate::client::pool::cell::OriginCell;
     use crate::client::pool::connection::ConnectionInfo;
     use crate::client::pool::registry::PartitionState;
     use crate::client::pool::{
@@ -636,6 +441,7 @@ mod tests {
         TokioDriverSpawner,
     };
     use crate::client::timeout::test::{NeverConnects, NeverReplies};
+    use crate::sync::Arc;
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_runtime_api::client::connection::CaptureSmithyConnection;
     use aws_smithy_runtime_api::client::http::{HttpClient, HttpConnector, HttpConnectorSettings};
@@ -856,7 +662,7 @@ mod tests {
             .send_request(partition, request, None)
             .await
             .expect_err("dropped establishment task did not fail the request");
-        assert!(error.is_other());
+        assert!(error.is_io());
         assert_eq!(
             "the owner-runtime connection establishment task was dropped",
             std::error::Error::source(&error).unwrap().to_string()
@@ -1349,30 +1155,46 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn incompatible_h1_selection_reports_connection_identity() {
+    async fn incompatible_h1_result_remains_reusable_for_compatible_demand() {
         let server = TestServer::start().await;
-        let pool = ConnectionPool::builder().build_http().unwrap();
+        let pool = ConnectionPool::builder()
+            .max_connections_per_host(1)
+            .build_http()
+            .unwrap();
         let partition = anonymous_partition(&pool);
         let capture = CaptureSmithyConnection::new();
-        let mut request = Request::get(server.uri("/h2"))
+        let mut h2_request = Request::get(server.uri("/h2"))
             .version(Version::HTTP_2)
             .body(SdkBody::empty())
             .unwrap();
-        request.extensions_mut().insert(capture.clone());
+        h2_request.extensions_mut().insert(capture.clone());
 
         let error = pool
-            .send_request(partition, request, None)
+            .send_request(partition.clone(), h2_request, None)
             .await
             .expect_err("an HTTP/2 request unexpectedly used HTTP/1");
         assert!(error.is_user());
-        assert!(error
+        let error_connection = error
             .connection_metadata()
-            .and_then(|metadata| metadata.connection_id())
-            .is_some());
-        assert!(capture
+            .expect("the mismatch error omitted connection metadata");
+        let captured_connection = capture
             .get()
-            .and_then(|metadata| metadata.connection_id())
-            .is_some());
+            .expect("the mismatch request did not capture its connection");
+        assert_eq!(
+            error_connection.connection_id(),
+            captured_connection.connection_id()
+        );
+
+        let response = request(&pool, partition, server.uri("/h1")).await;
+        assert_eq!(
+            hyper::body::Bytes::from_static(b"ok"),
+            consume(response).await
+        );
+        assert_eq!(
+            1,
+            server.accepted(),
+            "the rejected HTTP/2 request discarded a reusable HTTP/1 connection"
+        );
     }
 
     #[tokio::test]
