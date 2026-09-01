@@ -739,9 +739,60 @@ mod protocol_negotiation {
 
 mod idle_timeout {
     use super::*;
+    use aws_smithy_types::body::SdkBody;
+    use http_body_1x::{Body, Frame, SizeHint};
+    use std::convert::Infallible;
+    use std::future::Future;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
     use std::time::Duration;
+    use tokio::sync::oneshot;
 
     const IDLE_TIMEOUT: Duration = Duration::from_millis(100);
+
+    /// Streaming request body that remains open until the test releases it.
+    struct HeldUpload {
+        finish: oneshot::Receiver<()>,
+        complete: bool,
+    }
+
+    impl Body for HeldUpload {
+        type Data = Bytes;
+        type Error = Infallible;
+
+        fn poll_frame(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+            if self.complete {
+                return Poll::Ready(None);
+            }
+            match Pin::new(&mut self.finish).poll(cx) {
+                Poll::Ready(_) => {
+                    self.complete = true;
+                    Poll::Ready(None)
+                }
+                Poll::Pending => Poll::Pending,
+            }
+        }
+
+        fn is_end_stream(&self) -> bool {
+            self.complete
+        }
+
+        fn size_hint(&self) -> SizeHint {
+            SizeHint::default()
+        }
+    }
+
+    fn held_upload() -> (oneshot::Sender<()>, SdkBody) {
+        let (finish, finished) = oneshot::channel();
+        let body = HeldUpload {
+            finish: finished,
+            complete: false,
+        };
+        (finish, SdkBody::from_body_1_x(body))
+    }
 
     fn client_with_idle_timeout(backend: &dyn HttpsClientBackend) -> SharedHttpClient {
         backend.build_https(
@@ -879,6 +930,87 @@ mod idle_timeout {
             &PartitionedConnectionPool,
         )
         .await;
+    }
+
+    /// Idle expiration retains a physical connection while its upload remains active.
+    #[tokio::test]
+    async fn response_completion_does_not_close_active_upload_at_idle_timeout() {
+        let held_request_gate = ManualGate::new();
+        let script = H2ConnectionScript::new()
+            .route(
+                "/upload",
+                H2StreamScript::respond_before_receiving_request_body(
+                    H2Response::ok("early response"),
+                    held_request_gate.waiter(),
+                ),
+            )
+            .route("/reuse", H2StreamScript::respond(H2Response::ok("reused")));
+        let server = H2TestServer::builder()
+            .connections(H2ConnectionPlan::queue([script.clone(), script]))
+            .start()
+            .await
+            .expect("H2 server should start");
+        let client = client_with_idle_timeout(&PartitionedConnectionPool);
+        let connector = test_client::connector(&client);
+
+        let (finish_upload, upload) = held_upload();
+        let mut request = HttpRequest::new(upload);
+        request.set_method("POST").expect("valid HTTP method");
+        request
+            .set_uri(server.url("/upload"))
+            .expect("valid HTTP URI");
+        let response = test_client::send_request(&connector, request)
+            .await
+            .expect("response should arrive before upload completion");
+        let (status, body) = test_client::collect_response(response).await;
+        assert_eq!(
+            (status, body.as_slice()),
+            (200, b"early response".as_slice())
+        );
+
+        held_request_gate
+            .wait_until_reached(test_client::WAIT)
+            .await
+            .expect("server should retain the active request body");
+        let upload_connection = single_stream_connection(&server, "/upload");
+        tokio::time::sleep(IDLE_TIMEOUT * 2).await;
+        assert!(
+            !server.events().iter().any(|event| {
+                matches!(
+                    event,
+                    H2Event::ConnectionClosed { connection_id, .. }
+                        if *connection_id == upload_connection
+                )
+            }),
+            "idle expiration closed a connection with an active upload"
+        );
+
+        let (status, body) = test_client::get_and_collect(&connector, &server.url("/reuse")).await;
+        assert_eq!((status, body.as_slice()), (200, b"reused".as_slice()));
+        assert_ne!(
+            upload_connection,
+            single_stream_connection(&server, "/reuse"),
+            "an expired HTTP/2 generation accepted a new request"
+        );
+        assert_eq!(server.connection_count(), 2);
+
+        finish_upload
+            .send(())
+            .expect("request body disappeared before upload completion");
+        held_request_gate.release();
+        server
+            .wait_for_event(test_client::WAIT, |event| {
+                matches!(
+                    event,
+                    H2Event::ConnectionClosed { connection_id, .. }
+                        if *connection_id == upload_connection
+                )
+            })
+            .await
+            .expect("draining connection should close after upload completion");
+        drop(connector);
+        drop(client);
+        server.shutdown().await.expect("clean H2 server shutdown");
     }
 }
 

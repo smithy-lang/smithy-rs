@@ -615,11 +615,15 @@ produces run on the same runtime.
 Connection establishment and installed connection lifetime are separate
 ownership phases. The establishment authority exists before DNS and owns the
 connector future and any bounded-origin permit. After DNS, socket connection,
-proxy negotiation, TLS, and ALPN produce a negotiated transport, the pool
-creates `ConnectionState` in `PendingOpen`. The Hyper protocol handshake and
-cell installation move it to `Open`. Lifecycle observation treats failed DNS,
-transport, and TLS attempts independently from installed-connection events;
-failed attempts have no synthetic `ConnectionState`.
+proxy negotiation, TLS, and ALPN produce connected I/O with a selected HTTP
+protocol, the pool creates `ConnectionState` in `PendingOpen`. At that point
+transport establishment and protocol selection are complete, but Hyper has not
+produced the request handle required for dispatch. Successful Hyper protocol
+setup moves the state to `Open` and attaches the bounded-origin permit before
+cell installation makes the connection discoverable. Lifecycle observation
+treats failed DNS, transport, and TLS attempts independently from
+installed-connection events; failed attempts have no synthetic
+`ConnectionState`.
 
 An **explicit partition** names its owner runtime through `DriverSpawner`. The
 **anonymous partition** captures the current Tokio runtime on first use. A

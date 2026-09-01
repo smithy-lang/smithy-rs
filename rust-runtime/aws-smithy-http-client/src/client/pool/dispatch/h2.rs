@@ -470,6 +470,21 @@ mod tests {
     use http_1x::uri::Scheme;
     use http_body_util::BodyExt;
 
+    /// Request body that fails on its first frame.
+    struct FailingBody;
+
+    impl Body for FailingBody {
+        type Data = hyper::body::Bytes;
+        type Error = std::io::Error;
+
+        fn poll_frame(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+        ) -> Poll<Option<Result<hyper::body::Frame<Self::Data>, Self::Error>>> {
+            Poll::Ready(Some(Err(std::io::Error::other("request body failed"))))
+        }
+    }
+
     fn cell() -> Arc<OriginCell> {
         Arc::new(OriginCell::new(
             PartitionId::from_index(1),
@@ -526,6 +541,35 @@ mod tests {
 
         H2RequestBodyHandle::arm(&mut request, endpoint);
 
+        assert!(probe.send_complete());
+    }
+    #[test]
+    fn dropping_request_body_completes_its_send_endpoint() {
+        let cell = cell();
+        let mut request = Request::new(SdkBody::from("payload"));
+        let (endpoint, probe) = H2LeaseEndpoint::send_for_test(&cell);
+
+        H2RequestBodyHandle::arm(&mut request, endpoint);
+        let body = std::mem::replace(request.body_mut(), SdkBody::empty());
+        drop(body);
+
+        assert!(probe.send_complete());
+    }
+
+    #[tokio::test]
+    async fn request_body_error_completes_its_send_endpoint() {
+        let cell = cell();
+        let mut request = Request::new(SdkBody::from_body_1_x(FailingBody));
+        let (endpoint, probe) = H2LeaseEndpoint::send_for_test(&cell);
+
+        H2RequestBodyHandle::arm(&mut request, endpoint);
+        let frame = request
+            .body_mut()
+            .frame()
+            .await
+            .expect("failing body omitted its error frame");
+
+        assert!(frame.is_err());
         assert!(probe.send_complete());
     }
 
