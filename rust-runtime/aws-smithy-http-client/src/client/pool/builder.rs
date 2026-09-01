@@ -420,12 +420,12 @@ impl<Tls> Builder<Tls> {
             time_source: time_source.clone(),
             sleep: sleep_impl.clone(),
         };
-        let guarantees_http1 = transport.guarantees_http1();
+        let allow_h2_reclaim_for_h1 = transport.guarantees_http1();
         let registry = PartitionRegistry::new(
             self.partitions,
             self.reuse_scope,
             max_connections_per_host,
-            guarantees_http1,
+            allow_h2_reclaim_for_h1,
             maintenance,
         )
         .map_err(BuildError::from)?;

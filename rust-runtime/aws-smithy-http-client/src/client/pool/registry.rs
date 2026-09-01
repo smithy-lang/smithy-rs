@@ -37,8 +37,8 @@ pub(crate) struct PartitionRegistry {
     reuse_scope: ConnectionReuseScope,
     /// Optional origin-wide bound used when admission is first created.
     max_connections_per_host: Option<NonZeroUsize>,
-    /// Whether H1-required demand may reclaim idle H2 capacity.
-    guarantees_http1: bool,
+    /// Whether admission may close idle H2 capacity for H1-required demand.
+    allow_h2_reclaim_for_h1: bool,
     /// Admission authorities retained by canonical origin.
     bounded_origins: Mutex<HashMap<OriginKey, Arc<OriginAdmission>>>,
 }
@@ -49,7 +49,7 @@ impl PartitionRegistry {
         partitions: Option<Vec<Partition>>,
         reuse_scope: ConnectionReuseScope,
         max_connections_per_host: Option<NonZeroUsize>,
-        guarantees_http1: bool,
+        allow_h2_reclaim_for_h1: bool,
         maintenance: MaintenanceConfig,
     ) -> Result<Self, PartitionRegistryError> {
         let Some(partitions) = partitions else {
@@ -60,7 +60,7 @@ impl PartitionRegistry {
                 partitions,
                 reuse_scope,
                 max_connections_per_host,
-                guarantees_http1,
+                allow_h2_reclaim_for_h1,
                 bounded_origins: Mutex::new(HashMap::new()),
             });
         };
@@ -90,7 +90,7 @@ impl PartitionRegistry {
             partitions: by_id,
             reuse_scope,
             max_connections_per_host,
-            guarantees_http1,
+            allow_h2_reclaim_for_h1,
             bounded_origins: Mutex::new(HashMap::new()),
         })
     }
@@ -141,7 +141,7 @@ impl PartitionRegistry {
             origins
                 .entry(origin.clone())
                 .or_insert_with(|| {
-                    OriginAdmission::new(origin.clone(), limit, self.guarantees_http1)
+                    OriginAdmission::new(origin.clone(), limit, self.allow_h2_reclaim_for_h1)
                 })
                 .clone()
         };

@@ -612,6 +612,15 @@ on another, every readiness event would cross runtimes, and the socket's reactor
 the driver that holds it. So establishment — connector, transport, TLS, ALPN, handshake — and the driver it
 produces run on the same runtime.
 
+Connection establishment and installed connection lifetime are separate
+ownership phases. The establishment authority exists before DNS and owns the
+connector future and any bounded-origin permit. After DNS, socket connection,
+proxy negotiation, TLS, and ALPN produce a negotiated transport, the pool
+creates `ConnectionState` in `PendingOpen`. The Hyper protocol handshake and
+cell installation move it to `Open`. Lifecycle observation treats failed DNS,
+transport, and TLS attempts independently from installed-connection events;
+failed attempts have no synthetic `ConnectionState`.
+
 An **explicit partition** names its owner runtime through `DriverSpawner`. The
 **anonymous partition** captures the current Tokio runtime on first use. A
 request may be polled on another runtime, so every new connection submits the
@@ -682,15 +691,24 @@ not share machinery with the connector's Tower readiness. The two are related on
 
 #### HTTP/1 attempts and HTTP/2 flights
 
+One HTTP/2 connection carries many concurrent request streams. The pool calls
+one installed incarnation of that connection a *generation*. Replacements
+receive new generation identities so delayed routes, GOAWAY handling, close
+work, and request completion cannot affect a newer connection. An
+`H2Activation` is a reservation for a prospective stream on one exact
+generation; it becomes an accepted request lease only after Hyper accepts the
+request.
+
 The pool supports HTTP/1.1 and HTTP/2 and lets connector ALPN select the protocol. Each request has one of
 three requirements. `H1Required` covers accepted request forms that require HTTP/1 wire semantics, including
 HTTP/1.0, ordinary `CONNECT`, and Upgrade. `H1Compatible` may use either protocol. `H2Required` cannot dispatch
 on HTTP/1. Request protocol is not part of the origin key.
 
 The default rustls connector offers only `http/1.1` for `H1Required` and offers `h2, http/1.1` otherwise.
-The s2n connector has a fixed HTTP ALPN offer, and custom connectors remain responsible for their own protocol
-configuration. Those connectors may therefore negotiate H2 for `H1Required`; the pool rejects that result as
-a protocol mismatch before Hyper establishment. `H2Required` does not make an H2-only offer. If the server
+The s2n connector has a fixed HTTP ALPN offer. Connectors injected through the unstable test utility own
+their protocol configuration and do not receive the pool's offer. Those paths may therefore negotiate H2
+for `H1Required`; the pool rejects that result as a protocol mismatch before Hyper establishment.
+`H2Required` does not make an H2-only offer. If the server
 selects HTTP/1, the pool retains the useful H1 connection for compatible demand and returns an
 unsupported-version error with that connection's metadata to the launching request.
 
@@ -953,6 +971,10 @@ pub enum ConnectionReuseScope {
 interface, with all unbound partitions in one group. `Pool` permits reuse across every partition. Scope
 controls only dispatch eligibility: it does not constrain reclaim, which closes a connection and transfers
 capacity rather than moving I/O authority.
+
+An **eligibility group** is the exact set of partitions whose reuse policies
+allow them to share a connection. Each partition belongs to one such group for
+an origin, derived from the configured scope above.
 
 Dispatching through a connection that already exists consumes no capacity; that connection already holds one
 of the admitted permits. So an eligible reusable connection serves the waiter whether or not a permit is
@@ -1397,10 +1419,14 @@ closing it. Logical close returns its capacity to origin admission, which can th
 H1-required head. A generation with request work is not reclaimed. Its transition to idle publishes a new
 advertisement and makes reclaim eligible.
 
-Admission attempts this reclaim only when the transport factory guarantees that an H1-required establishment
-uses HTTP/1. The default rustls and cleartext connectors provide that guarantee. The fixed-ALPN s2n connector
-and custom connectors do not, so H1-required demand remains queued behind their healthy H2 capacity until an
-ordinary close releases a permit.
+Admission attempts this reclaim only when the transport factory guarantees that
+an H1-required establishment uses HTTP/1. Without that guarantee, admission
+could close a healthy H2 connection, negotiate H2 again, reject the result, and
+repeat without satisfying the waiting request. The default rustls and cleartext
+connectors provide the guarantee. The fixed-ALPN s2n connector and connectors
+injected through the unstable test utility do not, so H1-required demand
+remains queued behind their healthy H2 capacity until an ordinary close
+releases a permit.
 
 For bounded origins, a generation publishes only its zero-to-one and one-to-zero request-work transitions.
 Intermediate multiplexed request counts remain cell-local. Unbounded origins have no admission publication.
@@ -2207,7 +2233,11 @@ while already accepted streams finish. A draining connection has logically close
 still has physically live root I/O, and is counted by `h1_draining` or `h2_draining`. An H2 record may be both
 while its accepted streams and transport finish.
 
-**Generation** — an HTTP/2 connection's dispatch epoch, a first-class object with a lifecycle.
+**Generation** — one uniquely identified incarnation of an installed HTTP/2
+connection. It owns the authoritative request handle, accepting or draining
+state, request counts, and connection capacity. A replacement connection has a
+new generation identity so delayed work for the previous incarnation is
+rejected.
 
 **Demand generation** — one cell queue head's `DemandId`. A **snapshot version** orders complete publications
 for that generation. Readers retain the newest publication and reject work for a retired generation.
@@ -2469,12 +2499,18 @@ use the default `h2, http/1.1` offer. An HTTP/2-marked request does not force an
 protocol-policy API requires a concrete Smithy caller and a definition of how that policy composes when
 multiple clients share one pool.
 
-The default rustls connector applies the per-attempt offer. The s2n connector's fixed HTTP ALPN list cannot be
-narrowed by the pool, and a custom connector owns its own ALPN configuration. The pool validates the
-negotiated result but does not replace either connector's TLS implementation. Making the s2n offer
-configurable is an upstream connector follow-up. Because neither path can guarantee HTTP/1 for an H1-required
-attempt, bounded admission does not reclaim a healthy idle H2 generation solely to serve that demand. The
-request remains queued until ordinary close releases capacity.
+The default rustls connector applies the per-attempt offer. The s2n connector's
+fixed HTTP ALPN list cannot be narrowed by the pool. A connector injected
+through the unstable test utility also owns its own protocol configuration and
+does not receive the pool's offer. The pool validates the negotiated result but
+does not replace either connector's TLS implementation. Making the s2n offer
+configurable is an upstream connector follow-up.
+
+Because those paths cannot force HTTP/1, bounded admission does not reclaim a
+healthy idle H2 generation solely to serve H1-required demand. Closing that
+generation could negotiate H2 again and discard useful capacity without
+satisfying the request. The request remains queued until ordinary close
+releases capacity.
 
 An unset `idle_timeout` uses a 90-second default. Passing `None` to the fluent setter disables idle
 timeout. The mutable setter preserves all three configuration states: outer `None` restores the default,

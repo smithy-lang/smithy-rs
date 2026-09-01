@@ -14,6 +14,26 @@
 //! maintenance. [`ConnectionReuseScope`] controls whether another partition may
 //! dispatch through those connections. Reuse transfers protocol dispatch
 //! authority; it never moves the socket, driver, or capacity accounting.
+//! Partitions in the same eligibility group are exactly those whose configured
+//! reuse scope permits them to share a connection.
+//!
+//! Connection establishment and installed connection lifetime are separate
+//! ownership phases:
+//!
+//! ```text
+//! establishment task
+//!     |-- DNS, socket, proxy, TLS, and ALPN
+//!     `-- negotiated transport
+//!             |-- Hyper protocol handshake
+//!             `-- pool installation
+//!                     `-- open connection -> draining -> closed
+//! ```
+//!
+//! The establishment task and its permit represent work that may fail before a
+//! physical connection exists. `ConnectionState` begins only after the
+//! connector returns a negotiated transport. Establishment and connection
+//! events can therefore be observed independently without representing failed
+//! attempts as installed connections.
 //!
 //! # State ownership
 //!
@@ -79,10 +99,15 @@
 //!
 //! # HTTP/2 request lifecycle
 //!
-//! An HTTP/2 connection keeps its authoritative sender and capacity in the
-//! connection-owning cell. A requesting cell may retain only a route naming
-//! that cell and one exact accepting generation. Each use revalidates the
-//! route at the owning cell before cloning a transient sender.
+//! One HTTP/2 connection carries many concurrent request streams. The pool
+//! calls one installed incarnation of that connection a generation. A
+//! replacement connection receives a new generation identity so delayed
+//! close, route, and completion work cannot affect it.
+//!
+//! The connection-owning cell retains the generation's authoritative Hyper
+//! request handle and capacity. A requesting cell may retain only a route that
+//! names the owning cell and one exact accepting generation. Each use
+//! revalidates that route before cloning a transient request handle.
 //!
 //! ```text
 //! Client(partition, request)
@@ -102,13 +127,17 @@
 //! both endpoints complete ----------------> release generation request count
 //! ```
 //!
-//! An activation is prospective: dropping it before Hyper accepts the request
-//! returns its generation-gate turn and request count. Acceptance creates two
-//! independent endpoints because an upload and response can finish in either
-//! order. Logical close stops new activations and releases bounded capacity;
-//! accepted requests retain the draining generation until both endpoints end.
+//! `H2Activation` reserves pool accounting for a prospective stream on one
+//! exact generation. It is not yet an HTTP/2 stream. Dropping it before Hyper
+//! accepts the request returns its generation-gate turn and request count.
+//! Acceptance creates two independent endpoints because an upload and response
+//! can finish in either order. Logical close stops new activations and releases
+//! bounded capacity; accepted streams retain the draining generation until
+//! both endpoints end. Hyper remains responsible for stream identifiers,
+//! stream credit, and flow control.
+//!
 //! Peer publication moves only route identity. The socket, protocol driver,
-//! sender, and capacity remain with the connection-owning partition.
+//! request handle, and capacity remain with the connection-owning partition.
 //!
 //! `ConnectionState` separates logical close, accepted-request accounting, and
 //! root-I/O ownership. Logical close rejects new dispatch and releases bounded

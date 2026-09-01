@@ -176,7 +176,7 @@ async fn drive_flight(
         NegotiatedProtocol::Http2,
         connected,
     );
-    let (connection, physical) = ConnectionState::establishing(info);
+    let (connection, physical) = ConnectionState::pending_open(info);
     let io = ConnectionIo::new(io, physical);
     let executor = PartitionExecutor {
         spawner: context.owner_spawner.clone(),

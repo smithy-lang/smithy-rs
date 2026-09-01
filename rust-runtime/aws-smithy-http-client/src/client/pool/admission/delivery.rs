@@ -410,7 +410,12 @@ enum DeliveryKind {
 }
 
 impl DeliveryAck {
-    /// Keeps an H2-compatible successor local while a visible H2 can serve it.
+    /// Avoids republishing a successor already covered by visible HTTP/2 state.
+    ///
+    /// Capacity or HTTP/1 delivery may reveal another waiter after the
+    /// requesting cell already gained a local generation or peer route. That
+    /// visible HTTP/2 state can serve an H2-compatible successor directly. If
+    /// it later closes, its close path publishes the cell's current demand.
     pub(in crate::client::pool) fn suppress_h2_successor(&mut self) {
         if self
             .successor
