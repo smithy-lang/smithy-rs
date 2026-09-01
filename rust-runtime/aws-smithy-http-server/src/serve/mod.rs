@@ -294,27 +294,25 @@ use hyper::body::Incoming;
 use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
 use hyper_util::server::conn::auto::Builder;
 use hyper_util::service::TowerToHyperService;
-use tokio::sync::{OwnedSemaphorePermit, Semaphore};
+use tokio::sync::OwnedSemaphorePermit;
 use tower::{Service, ServiceExt as _};
 
 mod listener;
 
+use self::listener::ConnectionLimit;
 pub use self::listener::{ConnLimiter, ConnLimiterIo, Listener, ListenerExt, TapIo};
 
 const DEFAULT_MAX_CONNECTIONS: usize = 1024;
 
-struct ConnectionLimiter {
-    semaphore: Arc<Semaphore>,
-    max_connections: usize,
+struct AcceptedConnection<L: Listener> {
+    io: L::Io,
+    remote_addr: L::Addr,
+    permit: Option<OwnedSemaphorePermit>,
 }
 
-impl ConnectionLimiter {
-    fn new(max_connections: usize) -> Self {
-        Self {
-            semaphore: Arc::new(Semaphore::new(max_connections)),
-            max_connections,
-        }
-    }
+struct ConnectionConfig<'a> {
+    hyper_builder: &'a Arc<Builder<TokioExecutor>>,
+    graceful: Option<&'a hyper_util::server::graceful::GracefulShutdown>,
 }
 
 // ============================================================================
@@ -715,12 +713,15 @@ macro_rules! accept_loop {
             let (io, remote_addr) = $listener.accept().await;
             handle_connection::<L, M, S, B>(
                 &mut $make_service,
-                io,
-                remote_addr,
-                $hyper_builder.as_ref(),
-                true,
-                None,
-                connection_permit,
+                AcceptedConnection {
+                    io,
+                    remote_addr,
+                    permit: connection_permit,
+                },
+                ConnectionConfig {
+                    hyper_builder: &$hyper_builder,
+                    graceful: None,
+                },
             )
             .await;
         }
@@ -748,12 +749,15 @@ macro_rules! accept_loop_with_shutdown {
                     let (io, remote_addr) = result;
                     handle_connection::<L, M, S, B>(
                         &mut $make_service,
-                        io,
-                        remote_addr,
-                        $hyper_builder.as_ref(),
-                        true,
-                        Some(&$graceful),
-                        connection_permit,
+                        AcceptedConnection {
+                            io,
+                            remote_addr,
+                            permit: connection_permit,
+                        },
+                        ConnectionConfig {
+                            hyper_builder: &$hyper_builder,
+                            graceful: Some(&$graceful),
+                        },
                     )
                     .await;
                 }
@@ -794,6 +798,7 @@ where
                 max_connections,
                 _marker,
             } = self;
+            let hyper_builder = hyper_builder.unwrap_or_else(default_hyper_builder);
             let connection_limiter = connection_limiter(max_connections);
 
             accept_loop!(listener, make_service, hyper_builder, connection_limiter)
@@ -942,6 +947,7 @@ where
                 max_connections,
                 _marker,
             } = self;
+            let hyper_builder = hyper_builder.unwrap_or_else(default_hyper_builder);
             let connection_limiter = connection_limiter(max_connections);
 
             // Initialize graceful shutdown
@@ -987,16 +993,11 @@ where
 
 /// Connection handling function.
 ///
-/// Handles connections by using runtime branching on `use_upgrades` and optional
-/// `graceful` shutdown.
+/// Handles connections with optional graceful shutdown.
 async fn handle_connection<L, M, S, B>(
     make_service: &mut M,
-    conn_io: <L as Listener>::Io,
-    remote_addr: <L as Listener>::Addr,
-    hyper_builder: Option<&Arc<Builder<TokioExecutor>>>,
-    use_upgrades: bool,
-    graceful: Option<&hyper_util::server::graceful::GracefulShutdown>,
-    connection_permit: Option<OwnedSemaphorePermit>,
+    accepted: AcceptedConnection<L>,
+    config: ConnectionConfig<'_>,
 ) where
     L: Listener,
     L::Addr: Debug,
@@ -1011,8 +1012,14 @@ async fn handle_connection<L, M, S, B>(
     M: for<'a> Service<IncomingStream<'a, L>, Error = Infallible, Response = S> + Send + 'static,
     for<'a> <M as Service<IncomingStream<'a, L>>>::Future: Send,
 {
-    let watcher = graceful.map(|g| g.watcher());
-    let tokio_io = TokioIo::new(conn_io);
+    let watcher = config.graceful.map(|g| g.watcher());
+    let builder = Arc::clone(config.hyper_builder);
+    let AcceptedConnection {
+        io,
+        remote_addr,
+        permit,
+    } = accepted;
+    let tokio_io = TokioIo::new(io);
 
     tracing::trace!(?remote_addr, "connection accepted");
 
@@ -1031,40 +1038,15 @@ async fn handle_connection<L, M, S, B>(
 
     let hyper_service = TowerToHyperService::new(tower_service);
 
-    // Clone the Arc (cheap - just increments refcount) or create a default builder.
-    // A TokioTimer is required to activate hyper's header_read_timeout (default 30 s).
-    // HTTP/2 keep_alive_interval (20 s) detects idle connections; timeout defaults to 20 s.
-    let builder = hyper_builder.map(Arc::clone).unwrap_or_else(|| {
-        let mut b = Builder::new(TokioExecutor::new());
-        b.http1()
-            .timer(TokioTimer::new())
-            .header_read_timeout(Duration::from_secs(30));
-        b.http2()
-            .timer(TokioTimer::new())
-            .keep_alive_interval(Some(Duration::from_secs(20)))
-            .keep_alive_timeout(Duration::from_secs(20));
-        Arc::new(b)
-    });
-
     tokio::spawn(async move {
-        let _connection_permit = connection_permit;
+        let _connection_permit = permit;
 
-        let result = if use_upgrades {
-            // Auto-detect mode - use with_upgrades for HTTP/1 upgrade support
-            let conn = builder.serve_connection_with_upgrades(tokio_io, hyper_service);
-            if let Some(watcher) = watcher {
-                watcher.watch(conn).await
-            } else {
-                conn.await
-            }
+        // Auto-detect mode uses with_upgrades for HTTP/1 upgrade support.
+        let conn = builder.serve_connection_with_upgrades(tokio_io, hyper_service);
+        let result = if let Some(watcher) = watcher {
+            watcher.watch(conn).await
         } else {
-            // Protocol is already decided (http1_only or http2_only) - skip preface reading
-            let conn = builder.serve_connection(tokio_io, hyper_service);
-            if let Some(watcher) = watcher {
-                watcher.watch(conn).await
-            } else {
-                conn.await
-            }
+            conn.await
         };
 
         if let Err(err) = result {
@@ -1073,11 +1055,25 @@ async fn handle_connection<L, M, S, B>(
     });
 }
 
-fn connection_limiter(max_connections: Option<usize>) -> Option<Arc<ConnectionLimiter>> {
+fn default_hyper_builder() -> Arc<Builder<TokioExecutor>> {
+    let mut builder = Builder::new(TokioExecutor::new());
+    builder
+        .http1()
+        .timer(TokioTimer::new())
+        .header_read_timeout(Duration::from_secs(30));
+    builder
+        .http2()
+        .timer(TokioTimer::new())
+        .keep_alive_interval(Some(Duration::from_secs(20)))
+        .keep_alive_timeout(Duration::from_secs(20));
+    Arc::new(builder)
+}
+
+fn connection_limiter(max_connections: Option<usize>) -> Option<Arc<ConnectionLimit>> {
     match max_connections {
         Some(max_connections) => {
             tracing::debug!(max_connections, "connection limit enabled");
-            Some(Arc::new(ConnectionLimiter::new(max_connections)))
+            Some(Arc::new(ConnectionLimit::new(max_connections)))
         }
         None => {
             tracing::debug!("connection limit disabled");
@@ -1086,26 +1082,17 @@ fn connection_limiter(max_connections: Option<usize>) -> Option<Arc<ConnectionLi
     }
 }
 
-async fn acquire_connection_permit(
-    connection_limiter: Option<&Arc<ConnectionLimiter>>,
-) -> Option<OwnedSemaphorePermit> {
+async fn acquire_connection_permit(connection_limiter: Option<&Arc<ConnectionLimit>>) -> Option<OwnedSemaphorePermit> {
     match connection_limiter {
-        Some(limiter) => {
-            if limiter.semaphore.available_permits() == 0 {
+        Some(limit) => {
+            if limit.available_permits() == 0 {
                 tracing::warn!(
-                    max_connections = limiter.max_connections,
+                    max_connections = limit.max(),
                     "connection limit reached, waiting before accepting a new connection"
                 );
             }
 
-            Some(
-                limiter
-                    .semaphore
-                    .clone()
-                    .acquire_owned()
-                    .await
-                    .expect("connection semaphore should never be closed"),
-            )
+            Some(limit.acquire().await)
         }
         None => None,
     }
