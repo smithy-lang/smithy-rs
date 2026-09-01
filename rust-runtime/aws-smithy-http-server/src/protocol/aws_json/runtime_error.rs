@@ -3,9 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::modeled_error::HttpModeledError;
 use crate::protocol::aws_json_11::AwsJson1_1;
 use crate::response::IntoResponse;
 use crate::runtime_error::{InternalFailureException, INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE};
+use crate::schema::protocol::ServerProtocol;
 use crate::{extension::RuntimeErrorExtension, protocol::aws_json_10::AwsJson1_0};
 use http::StatusCode;
 
@@ -28,6 +30,9 @@ pub enum RuntimeError {
     /// See: [`crate::protocol::rest_json_1::runtime_error::RuntimeError::Validation`]
     #[error("validation failure: operation input contains data that does not adhere to the modeled constraints: {0}")]
     Validation(String),
+    /// See: [`crate::protocol::rest_json_1::runtime_error::RuntimeError::ModeledValidation`]
+    #[error("validation failure: operation input contains data that does not adhere to the modeled constraints: {0}")]
+    ModeledValidation(Box<dyn HttpModeledError + Send>),
 }
 
 impl RuntimeError {
@@ -38,6 +43,7 @@ impl RuntimeError {
             Self::NotAcceptable => "NotAcceptableException",
             Self::UnsupportedMediaType => "UnsupportedMediaTypeException",
             Self::Validation(_) => "ValidationException",
+            Self::ModeledValidation(_) => "ValidationException",
         }
     }
 
@@ -48,6 +54,7 @@ impl RuntimeError {
             Self::NotAcceptable => StatusCode::NOT_ACCEPTABLE,
             Self::UnsupportedMediaType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::Validation(_) => StatusCode::BAD_REQUEST,
+            Self::ModeledValidation(err) => StatusCode::from_u16(err.status_code()).unwrap_or(StatusCode::BAD_REQUEST),
         }
     }
 }
@@ -64,18 +71,23 @@ impl IntoResponse<AwsJson1_1> for InternalFailureException {
     }
 }
 
-// Only `Validation` is schema-driven: it carries a modeled shape. The other
-// variants are framework conventions with no Smithy shape behind them; their
-// frozen wire forms (bare `{}` / empty body, no `__type`) are not the
-// serialization of any shape, so they stay hand-assembled this phase. Full
+// Only `ModeledValidation` is schema-driven: it carries a modeled shape. The
+// legacy `Validation` variant and the other framework variants have frozen
+// hand-assembled wire forms (bare `{}` / empty body, no `__type`) that are not
+// the serialization of any shape, so they stay hand-assembled this phase. Full
 // rationale on the `IntoResponse<RestJson1> for RuntimeError` impl in
 // `crate::protocol::rest_json_1::runtime_error`.
 impl IntoResponse<AwsJson1_0> for RuntimeError {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
-                let res = http::Response::builder()
-            .status(self.status_code())
+        let runtime_error = match self {
+            Self::ModeledValidation(err) => return AwsJson1_0::serialize_error(&*err),
+            runtime_error => runtime_error,
+        };
+
+        let res = http::Response::builder()
+            .status(runtime_error.status_code())
             .header("Content-Type", "application/x-amz-json-1.0")
-            .extension(RuntimeErrorExtension::new(self.name().to_string()));
+            .extension(RuntimeErrorExtension::new(runtime_error.name().to_string()));
 
         // See https://awslabs.github.io/smithy/2.0/aws/protocols/aws-json-1_0-protocol.html#empty-body-serialization
         let body = crate::body::to_boxed("{}");
@@ -87,10 +99,15 @@ impl IntoResponse<AwsJson1_0> for RuntimeError {
 
 impl IntoResponse<AwsJson1_1> for RuntimeError {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
+        let runtime_error = match self {
+            Self::ModeledValidation(err) => return AwsJson1_1::serialize_error(&*err),
+            runtime_error => runtime_error,
+        };
+
         let res = http::Response::builder()
-            .status(self.status_code())
+            .status(runtime_error.status_code())
             .header("Content-Type", "application/x-amz-json-1.1")
-            .extension(RuntimeErrorExtension::new(self.name().to_string()));
+            .extension(RuntimeErrorExtension::new(runtime_error.name().to_string()));
 
         let body = crate::body::to_boxed("");
 
@@ -109,6 +126,7 @@ impl From<RequestRejection> for RuntimeError {
     fn from(err: RequestRejection) -> Self {
         match err {
             RequestRejection::ConstraintViolation(reason) => Self::Validation(reason),
+            RequestRejection::SchemaConstraintViolation(reason) => Self::ModeledValidation(reason),
             _ => Self::Serialization(crate::Error::new(err)),
         }
     }

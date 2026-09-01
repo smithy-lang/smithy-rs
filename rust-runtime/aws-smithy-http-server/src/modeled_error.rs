@@ -16,7 +16,7 @@
 //!   `aws-smithy-schema`'s [`SerializableStruct`]).
 //! - [`HttpModeledError`]: HTTP extension adding [`status_code`](HttpModeledError::status_code).
 //!   This is the bound accepted by
-//!   [`ServerProtocol::serialize_error`](crate::protocol::server_protocol::ServerProtocol::serialize_error).
+//!   [`ServerProtocol::serialize_error`](crate::schema::protocol::ServerProtocol::serialize_error).
 //!
 //! Generated code implements both for every `@error` structure (service,
 //! framework, and middleware models alike), returning the shape's
@@ -56,9 +56,7 @@ pub trait ModeledError: SerializableStruct {
 /// `crate::Error` (`Send + Sync`). `Display` is free for generated `@error`
 /// shapes — they implement `std::error::Error` — and generated error shapes
 /// are plain data, so `Send + Sync` hold structurally.
-pub trait HttpModeledError:
-    ModeledError + std::fmt::Debug + std::fmt::Display + Send + Sync
-{
+pub trait HttpModeledError: ModeledError + std::fmt::Debug + std::fmt::Display + Send + Sync {
     /// The HTTP status code for this error.
     ///
     /// Generated implementations bake a literal resolved at codegen time:

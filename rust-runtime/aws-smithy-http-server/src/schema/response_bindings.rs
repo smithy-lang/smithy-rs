@@ -42,14 +42,25 @@ pub(crate) enum BodyKind {
     Empty,
 }
 
-/// The pieces of a serialized REST response body, before assembly.
+/// The pieces of a serialized response body, before assembly.
 #[derive(Debug)]
-pub(crate) struct SplitResponse {
+pub(crate) struct ResponseParts {
     pub(crate) body: Vec<u8>,
     pub(crate) kind: BodyKind,
     pub(crate) headers: Vec<(http::HeaderName, http::HeaderValue)>,
     /// Captured `@httpResponseCode` member value, if bound and set.
     pub(crate) status: Option<u16>,
+}
+
+/// The kind of value being serialized into a response.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum ResponseValueKind {
+    /// Successful operation output. If the shape has no body members, the HTTP
+    /// body is empty.
+    OperationOutput,
+    /// Modeled error. Even an empty error structure is serialized through the
+    /// protocol codec, for example `{}` on restJson1.
+    ModeledError,
 }
 
 /// Returns `true` if any top-level member of `schema` carries a response
@@ -63,21 +74,50 @@ fn has_response_bound_members(schema: &Schema<'_>) -> bool {
     })
 }
 
-/// Serializes `value` against `schema` through `codec`, interpreting response
-/// bindings off the member schemas (REST protocols).
+/// Serializes `value` against `schema` through `codec` into HTTP response
+/// parts.
 ///
-/// `split_bindings = false` short-circuits to a plain codec body (RPC
-/// protocols and the common no-bindings case share this path).
-pub(crate) fn serialize_split<C: Codec>(
+/// When `apply_response_bindings` is true, REST response bindings such as
+/// `@httpHeader`, `@httpPayload`, and `@httpResponseCode` are interpreted.
+/// When false, the value is serialized as a plain codec body; RPC protocols use
+/// this path.
+pub(crate) fn serialize_response_parts<C: Codec>(
     codec: &C,
     schema: &Schema<'_>,
     value: &dyn SerializableStruct,
-    split_bindings: bool,
-) -> Result<SplitResponse, SerdeError> {
-    if !split_bindings || !has_response_bound_members(schema) {
+    apply_response_bindings: bool,
+    value_kind: ResponseValueKind,
+) -> Result<ResponseParts, SerdeError> {
+    if matches!(value_kind, ResponseValueKind::OperationOutput)
+        && !has_output_body_members(schema, apply_response_bindings)
+    {
+        let headers = CapturedHeaders::default();
+        let status = Cell::new(None);
+        if apply_response_bindings {
+            let payload = RefCell::new(None);
+            let mut sink = NoBodySerializer;
+            let mut splitter = ResponseBindingSplitter {
+                body: &mut sink,
+                codec,
+                headers: &headers,
+                status: &status,
+                payload: &payload,
+                payload_mode: false,
+            };
+            value.serialize_members(&mut splitter)?;
+        }
+        return Ok(ResponseParts {
+            body: Vec::new(),
+            kind: BodyKind::Empty,
+            headers: headers.into_inner(),
+            status: status.get(),
+        });
+    }
+
+    if !apply_response_bindings || !has_response_bound_members(schema) {
         let mut serializer = codec.create_serializer();
         serializer.write_struct(schema, value)?;
-        return Ok(SplitResponse {
+        return Ok(ResponseParts {
             body: serializer.finish(),
             kind: BodyKind::Codec,
             headers: Vec::new(),
@@ -138,12 +178,22 @@ pub(crate) fn serialize_split<C: Codec>(
         (body, BodyKind::Codec)
     };
 
-    Ok(SplitResponse {
+    Ok(ResponseParts {
         body,
         kind,
         headers: headers.into_inner(),
         status: status.get(),
     })
+}
+
+fn has_output_body_members(schema: &Schema<'_>, apply_response_bindings: bool) -> bool {
+    if !apply_response_bindings {
+        return !schema.members().is_empty();
+    }
+    schema
+        .members()
+        .iter()
+        .any(|m| m.http_header().is_none() && m.http_prefix_headers().is_none() && m.http_response_code().is_none())
 }
 
 /// A captured `@httpPayload` member value.
@@ -217,11 +267,7 @@ impl ShapeSerializer for NoBodySerializer {
     }
 }
 
-pub(crate) fn capture_header(
-    sink: &CapturedHeaders,
-    schema: &Schema<'_>,
-    formatted: &str,
-) -> Result<(), SerdeError> {
+pub(crate) fn capture_header(sink: &CapturedHeaders, schema: &Schema<'_>, formatted: &str) -> Result<(), SerdeError> {
     // Mirror the legacy generated `ser_*_headers` functions: empty string
     // values are skipped rather than sent as empty headers.
     if formatted.is_empty() {
@@ -230,16 +276,10 @@ pub(crate) fn capture_header(
     let header = schema
         .http_header()
         .expect("checked by caller: schema carries @httpHeader");
-    let name = http::HeaderName::try_from(header.value()).map_err(|err| {
-        SerdeError::custom(format!(
-            "`{}` cannot be used as a header name: {}",
-            header.value(),
-            err
-        ))
-    })?;
-    let value = http::HeaderValue::try_from(formatted).map_err(|err| {
-        SerdeError::custom(format!("`{formatted}` cannot be used as a header value: {err}"))
-    })?;
+    let name = http::HeaderName::try_from(header.value())
+        .map_err(|err| SerdeError::custom(format!("`{}` cannot be used as a header name: {}", header.value(), err)))?;
+    let value = http::HeaderValue::try_from(formatted)
+        .map_err(|err| SerdeError::custom(format!("`{formatted}` cannot be used as a header value: {err}")))?;
     sink.borrow_mut().push((name, value));
     Ok(())
 }
@@ -247,10 +287,7 @@ pub(crate) fn capture_header(
 /// Formats a timestamp for an HTTP header: `@timestampFormat` if present on
 /// the member schema, else `http-date` (the Smithy default for header-bound
 /// timestamps).
-pub(crate) fn format_header_timestamp(
-    schema: &Schema<'_>,
-    value: &DateTime,
-) -> Result<String, SerdeError> {
+pub(crate) fn format_header_timestamp(schema: &Schema<'_>, value: &DateTime) -> Result<String, SerdeError> {
     use aws_smithy_schema::traits::TimestampFormat as SchemaFormat;
     use aws_smithy_types::date_time::Format;
     let format = match schema.timestamp_format().map(|t| t.format()) {
@@ -331,11 +368,7 @@ macro_rules! split_scalar {
 }
 
 impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
-    fn write_struct(
-        &mut self,
-        schema: &Schema<'_>,
-        value: &dyn SerializableStruct,
-    ) -> Result<(), SerdeError> {
+    fn write_struct(&mut self, schema: &Schema<'_>, value: &dyn SerializableStruct) -> Result<(), SerdeError> {
         if self.payload_mode || schema.http_payload().is_some() {
             // Structure/union payload: the payload member's own framing IS
             // the body — serialize it standalone through the codec.
@@ -392,11 +425,7 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
     split_scalar!(write_float, f32);
     split_scalar!(write_double, f64);
 
-    fn write_big_integer(
-        &mut self,
-        schema: &Schema<'_>,
-        value: &BigInteger,
-    ) -> Result<(), SerdeError> {
+    fn write_big_integer(&mut self, schema: &Schema<'_>, value: &BigInteger) -> Result<(), SerdeError> {
         if self.is_header(schema) {
             capture_header(self.headers, schema, value.as_ref())
         } else {
@@ -404,11 +433,7 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
         }
     }
 
-    fn write_big_decimal(
-        &mut self,
-        schema: &Schema<'_>,
-        value: &BigDecimal,
-    ) -> Result<(), SerdeError> {
+    fn write_big_decimal(&mut self, schema: &Schema<'_>, value: &BigDecimal) -> Result<(), SerdeError> {
         if self.is_header(schema) {
             capture_header(self.headers, schema, value.as_ref())
         } else {
@@ -505,11 +530,7 @@ macro_rules! collect_scalar {
 }
 
 impl ShapeSerializer for HeaderListCollector<'_> {
-    fn write_struct(
-        &mut self,
-        _schema: &Schema<'_>,
-        _value: &dyn SerializableStruct,
-    ) -> Result<(), SerdeError> {
+    fn write_struct(&mut self, _schema: &Schema<'_>, _value: &dyn SerializableStruct) -> Result<(), SerdeError> {
         Err(SerdeError::custom(
             "structures cannot appear in an @httpHeader-bound list",
         ))
@@ -530,9 +551,7 @@ impl ShapeSerializer for HeaderListCollector<'_> {
         _schema: &Schema<'_>,
         _write_entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
-        Err(SerdeError::custom(
-            "maps cannot appear in an @httpHeader-bound list",
-        ))
+        Err(SerdeError::custom("maps cannot appear in an @httpHeader-bound list"))
     }
 
     collect_scalar!(write_boolean, bool);
@@ -543,19 +562,11 @@ impl ShapeSerializer for HeaderListCollector<'_> {
     collect_scalar!(write_float, f32);
     collect_scalar!(write_double, f64);
 
-    fn write_big_integer(
-        &mut self,
-        _schema: &Schema<'_>,
-        value: &BigInteger,
-    ) -> Result<(), SerdeError> {
+    fn write_big_integer(&mut self, _schema: &Schema<'_>, value: &BigInteger) -> Result<(), SerdeError> {
         capture_header(self.sink, self.outer, value.as_ref())
     }
 
-    fn write_big_decimal(
-        &mut self,
-        _schema: &Schema<'_>,
-        value: &BigDecimal,
-    ) -> Result<(), SerdeError> {
+    fn write_big_decimal(&mut self, _schema: &Schema<'_>, value: &BigDecimal) -> Result<(), SerdeError> {
         capture_header(self.sink, self.outer, value.as_ref())
     }
 
@@ -621,18 +632,14 @@ impl ShapeSerializer for PrefixHeaderCollector<'_> {
                 if value.is_empty() {
                     return Ok(());
                 }
-                let name = http::HeaderName::try_from(format!("{}{}", self.prefix, key))
-                    .map_err(|err| {
-                        SerdeError::custom(format!(
-                            "`{}{}` cannot be used as a header name: {err}",
-                            self.prefix, key
-                        ))
-                    })?;
-                let header_value = http::HeaderValue::try_from(value).map_err(|err| {
+                let name = http::HeaderName::try_from(format!("{}{}", self.prefix, key)).map_err(|err| {
                     SerdeError::custom(format!(
-                        "`{value}` cannot be used as a header value: {err}"
+                        "`{}{}` cannot be used as a header name: {err}",
+                        self.prefix, key
                     ))
                 })?;
+                let header_value = http::HeaderValue::try_from(value)
+                    .map_err(|err| SerdeError::custom(format!("`{value}` cannot be used as a header value: {err}")))?;
                 self.sink.borrow_mut().push((name, header_value));
                 Ok(())
             }
@@ -667,9 +674,7 @@ impl ShapeSerializer for PrefixHeaderCollector<'_> {
 /// Resolves the response status per the 2a rule: captured `@httpResponseCode`
 /// member if bound and set, else the `@http` trait's `code`, else `200`.
 pub(crate) fn resolve_status(captured: Option<u16>, schema: &Schema<'_>) -> u16 {
-    captured
-        .or_else(|| schema.http().map(|h| h.code()))
-        .unwrap_or(200)
+    captured.or_else(|| schema.http().map(|h| h.code())).unwrap_or(200)
 }
 
 /// `true` if `schema` describes a shape whose `@httpPayload`-bound member
@@ -688,10 +693,10 @@ pub(crate) fn payload_member<'s>(schema: &'s Schema<'s>) -> Option<&'s Schema<'s
 /// `Union` payload member (body framing comes from the payload).
 #[allow(dead_code)]
 pub(crate) fn has_struct_payload(schema: &Schema<'_>) -> bool {
-    schema.members().iter().any(|m| {
-        m.http_payload().is_some()
-            && matches!(m.shape_type(), ShapeType::Structure | ShapeType::Union)
-    })
+    schema
+        .members()
+        .iter()
+        .any(|m| m.http_payload().is_some() && matches!(m.shape_type(), ShapeType::Structure | ShapeType::Union))
 }
 
 #[cfg(test)]
@@ -737,8 +742,7 @@ mod tests {
         "msg",
         3,
     );
-    static OUT_MEMBERS: [&Schema<'static>; 4] =
-        [&CODE_MEMBER, &HDR_MEMBER, &META_MEMBER, &BODY_MEMBER];
+    static OUT_MEMBERS: [&Schema<'static>; 4] = [&CODE_MEMBER, &HDR_MEMBER, &META_MEMBER, &BODY_MEMBER];
     static OUT_SCHEMA: Schema<'static> = Schema::new_struct(
         ShapeId::from_parts("test#Out", "test", "Out"),
         ShapeType::Structure,
@@ -762,18 +766,15 @@ mod tests {
     }
 
     #[test]
-    fn split_bindings_and_status() {
+    fn response_bindings_and_status() {
         // REST path: @httpHeader and @httpPrefixHeaders divert to headers,
         // @httpResponseCode is captured (never in the body), the rest is the
         // codec body.
         let codec = json_codec();
-        let split = serialize_split(&codec, &OUT_SCHEMA, &Out, true).unwrap();
+        let split = serialize_response_parts(&codec, &OUT_SCHEMA, &Out, true, ResponseValueKind::ModeledError).unwrap();
         assert_eq!(split.status, Some(202));
         assert!(matches!(split.kind, BodyKind::Codec));
-        assert_eq!(
-            String::from_utf8(split.body.clone()).unwrap(),
-            r#"{"msg":"hello"}"#
-        );
+        assert_eq!(String::from_utf8(split.body.clone()).unwrap(), r#"{"msg":"hello"}"#);
         let headers: Vec<(String, String)> = split
             .headers
             .iter()
@@ -786,21 +787,74 @@ mod tests {
         // else 200.
         assert_eq!(resolve_status(split.status, &OUT_SCHEMA), 202);
         assert_eq!(resolve_status(None, &OUT_SCHEMA), 201);
-        static PLAIN: Schema<'static> = Schema::new(
-            ShapeId::from_parts("test#Plain", "test", "Plain"),
-            ShapeType::Structure,
-        );
+        static PLAIN: Schema<'static> =
+            Schema::new(ShapeId::from_parts("test#Plain", "test", "Plain"), ShapeType::Structure);
         assert_eq!(resolve_status(None, &PLAIN), 200);
 
-        // RPC path (split_bindings = false): everything, bound or not, goes
-        // to the body.
-        let split = serialize_split(&codec, &OUT_SCHEMA, &Out, false).unwrap();
+        // RPC path (apply_response_bindings = false): everything, bound or
+        // not, goes to the body.
+        let split =
+            serialize_response_parts(&codec, &OUT_SCHEMA, &Out, false, ResponseValueKind::ModeledError).unwrap();
         assert_eq!(split.status, None);
         assert!(split.headers.is_empty());
         let body = String::from_utf8(split.body).unwrap();
         assert!(body.contains("\"code\":202"));
         assert!(body.contains("\"hdr\":\"hval\""));
         assert!(body.contains("\"msg\":\"hello\""));
+    }
+
+    static EMPTY_OUT_SCHEMA: Schema<'static> = Schema::new_struct(
+        ShapeId::from_parts("test#EmptyOut", "test", "EmptyOut"),
+        ShapeType::Structure,
+        &[],
+    )
+    .with_http(HttpTrait::new("POST", "/empty", Some(204)));
+
+    struct EmptyOut;
+    impl SerializableStruct for EmptyOut {
+        fn serialize_members(&self, _s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn empty_success_outputs_are_not_codec_serialized() {
+        let codec = json_codec();
+
+        let split = serialize_response_parts(
+            &codec,
+            &EMPTY_OUT_SCHEMA,
+            &EmptyOut,
+            true,
+            ResponseValueKind::OperationOutput,
+        )
+        .unwrap();
+        assert!(split.body.is_empty());
+        assert!(matches!(split.kind, BodyKind::Empty));
+        assert_eq!(resolve_status(split.status, &EMPTY_OUT_SCHEMA), 204);
+
+        let split = serialize_response_parts(
+            &codec,
+            &EMPTY_OUT_SCHEMA,
+            &EmptyOut,
+            false,
+            ResponseValueKind::OperationOutput,
+        )
+        .unwrap();
+        assert!(split.body.is_empty());
+        assert!(matches!(split.kind, BodyKind::Empty));
+
+        // Empty modeled errors still go through the normal codec path.
+        let split = serialize_response_parts(
+            &codec,
+            &EMPTY_OUT_SCHEMA,
+            &EmptyOut,
+            true,
+            ResponseValueKind::ModeledError,
+        )
+        .unwrap();
+        assert!(matches!(split.kind, BodyKind::Codec));
+        assert_eq!(String::from_utf8(split.body).unwrap(), "{}");
     }
 
     // ------------------------------------------------------------------
@@ -836,9 +890,14 @@ mod tests {
     fn payload_bodies() {
         // Blob payload: raw bytes, content type from @mediaType.
         let codec = json_codec();
-        let split =
-            serialize_split(&codec, &BLOB_OUT_SCHEMA, &BlobOut(Some(vec![1, 2, 3])), true)
-                .unwrap();
+        let split = serialize_response_parts(
+            &codec,
+            &BLOB_OUT_SCHEMA,
+            &BlobOut(Some(vec![1, 2, 3])),
+            true,
+            ResponseValueKind::ModeledError,
+        )
+        .unwrap();
         assert_eq!(split.body, vec![1, 2, 3]);
         match split.kind {
             BodyKind::Raw { content_type } => assert_eq!(content_type, "image/png"),
@@ -846,13 +905,27 @@ mod tests {
         }
 
         // Unset payload member: empty body, no content type.
-        let split = serialize_split(&codec, &BLOB_OUT_SCHEMA, &BlobOut(None), true).unwrap();
+        let split = serialize_response_parts(
+            &codec,
+            &BLOB_OUT_SCHEMA,
+            &BlobOut(None),
+            true,
+            ResponseValueKind::ModeledError,
+        )
+        .unwrap();
         assert!(split.body.is_empty());
         assert!(matches!(split.kind, BodyKind::Empty));
 
         // Structure payload (written against its TARGET schema, the codegen
         // convention): the body is the codec document of that member alone.
-        let split = serialize_split(&codec, &STRUCT_OUT_SCHEMA, &StructOut, true).unwrap();
+        let split = serialize_response_parts(
+            &codec,
+            &STRUCT_OUT_SCHEMA,
+            &StructOut,
+            true,
+            ResponseValueKind::ModeledError,
+        )
+        .unwrap();
         assert!(matches!(split.kind, BodyKind::Codec));
         assert_eq!(String::from_utf8(split.body).unwrap(), r#"{"f":"v"}"#);
     }
@@ -880,10 +953,7 @@ mod tests {
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             struct Nested;
             impl SerializableStruct for Nested {
-                fn serialize_members(
-                    &self,
-                    s: &mut dyn ShapeSerializer,
-                ) -> Result<(), SerdeError> {
+                fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                     static F: Schema<'static> = Schema::new_member(
                         ShapeId::from_parts("test#Nested$f", "test", "Nested"),
                         ShapeType::String,
@@ -898,5 +968,4 @@ mod tests {
             s.write_struct(&STRUCT_PAYLOAD_TARGET, &Nested)
         }
     }
-
 }

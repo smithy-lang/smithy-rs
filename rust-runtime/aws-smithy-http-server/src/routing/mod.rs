@@ -57,10 +57,16 @@ pub use self::lambda_handler::LambdaHandler;
 pub use self::{
     into_make_service::IntoMakeService,
     into_make_service_with_connect_info::{Connected, IntoMakeServiceWithConnectInfo},
-    multi_protocol::{MultiProtocolRoutingFuture, MultiProtocolRoutingService},
+    multi_protocol::{
+        MultiProtocolRoutingFuture, MultiProtocolRoutingService, ProtocolRoutingFactory,
+        ProtocolRoutingOrderConstraint, ProtocolRoutingRegistration,
+    },
     operation_handler_bindings::{BuildError, OperationHandlerBinding, RouterForOperationHandlerBindings},
     prefix::PrefixPolicy,
-    protocol_routing_table::{OperationMatch, ProtocolRoutingOutcome, ProtocolRoutingTable, SelectedProtocolContext},
+    protocol_routing_table::{
+        IntoProtocolRoutingResponse, OperationMatch, ProtocolRoutingOutcome, ProtocolRoutingResponse,
+        ProtocolRoutingTable, SelectedProtocolContext,
+    },
     route::Route,
 };
 

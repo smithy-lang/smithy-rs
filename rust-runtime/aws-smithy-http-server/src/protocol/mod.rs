@@ -6,15 +6,10 @@
 pub mod aws_json;
 pub mod aws_json_10;
 pub mod aws_json_11;
-pub(crate) mod request_bindings;
-pub(crate) mod response_bindings;
 pub mod rest;
-pub mod server_protocol;
 pub mod rest_json_1;
 pub mod rest_xml;
 pub mod rpc_v2_cbor;
-
-pub use server_protocol::{EventStreamProtocol, ServerProtocol};
 
 use crate::rejection::MissingContentTypeReason;
 use crate::shape_id::ShapeId;

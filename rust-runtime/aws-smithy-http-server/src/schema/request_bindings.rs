@@ -65,9 +65,8 @@ pub(crate) fn percent_decode(input: &str) -> Result<String, SerdeError> {
         out.push(bytes[i]);
         i += 1;
     }
-    String::from_utf8(out).map_err(|_| {
-        SerdeError::invalid_input("request URI cannot be percent decoded into valid UTF-8")
-    })
+    String::from_utf8(out)
+        .map_err(|_| SerdeError::invalid_input("request URI cannot be percent decoded into valid UTF-8"))
 }
 
 /// Parses a raw query string into decoded `(key, value)` pairs, preserving
@@ -100,10 +99,7 @@ pub(crate) fn parse_query_pairs(query: Option<&str>) -> Result<Vec<(String, Stri
 ///
 /// This is a re-match: the router has already accepted the request, so a
 /// mismatch here indicates a schema/routing inconsistency and is an error.
-pub(crate) fn extract_labels<'t>(
-    template: &'t str,
-    path: &str,
-) -> Result<Vec<(&'t str, String)>, SerdeError> {
+pub(crate) fn extract_labels<'t>(template: &'t str, path: &str) -> Result<Vec<(&'t str, String)>, SerdeError> {
     enum Seg<'t> {
         Literal(&'t str),
         Label(&'t str),
@@ -128,8 +124,7 @@ pub(crate) fn extract_labels<'t>(
     let path_segs: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
 
     let mut labels = Vec::new();
-    let mismatch =
-        || SerdeError::invalid_input("request URI does not match `@http` URI pattern");
+    let mismatch = || SerdeError::invalid_input("request URI does not match `@http` URI pattern");
 
     let greedy_pos = template_segs.iter().position(|s| matches!(s, Seg::Greedy(_)));
     match greedy_pos {
@@ -206,11 +201,7 @@ pub(crate) enum BindingLocation {
     Label,
 }
 
-fn resolve_timestamp_format(
-    read_schema: &Schema<'_>,
-    member: &Schema<'_>,
-    location: BindingLocation,
-) -> Format {
+fn resolve_timestamp_format(read_schema: &Schema<'_>, member: &Schema<'_>, location: BindingLocation) -> Format {
     use aws_smithy_schema::traits::TimestampFormat as SchemaFormat;
     let explicit = read_schema
         .timestamp_format()
@@ -227,12 +218,8 @@ fn resolve_timestamp_format(
     }
 }
 
-fn parse_primitive<T: aws_smithy_types::primitive::Parse>(
-    value: &str,
-    what: &str,
-) -> Result<T, SerdeError> {
-    T::parse_smithy_primitive(value.trim())
-        .map_err(|err| SerdeError::invalid_input(format!("invalid {what}: {err}")))
+fn parse_primitive<T: aws_smithy_types::primitive::Parse>(value: &str, what: &str) -> Result<T, SerdeError> {
+    T::parse_smithy_primitive(value.trim()).map_err(|err| SerdeError::invalid_input(format!("invalid {what}: {err}")))
 }
 
 macro_rules! unsupported_reads {
@@ -262,11 +249,7 @@ pub(crate) struct DecodedValuesDeserializer<'a> {
 }
 
 impl<'a> DecodedValuesDeserializer<'a> {
-    pub(crate) fn new(
-        values: Vec<Cow<'a, str>>,
-        member: &'a Schema<'a>,
-        location: BindingLocation,
-    ) -> Self {
+    pub(crate) fn new(values: Vec<Cow<'a, str>>, member: &'a Schema<'a>, location: BindingLocation) -> Self {
         debug_assert!(!values.is_empty());
         Self {
             values,
@@ -288,10 +271,7 @@ impl<'a> DecodedValuesDeserializer<'a> {
             }
             // Scalar: last occurrence wins, matching the legacy generated
             // query-pair loop where each match overwrites the builder field.
-            None => Ok(self
-                .values
-                .last()
-                .expect("constructed non-empty")),
+            None => Ok(self.values.last().expect("constructed non-empty")),
         }
     }
 }
@@ -300,10 +280,7 @@ impl ShapeDeserializer for DecodedValuesDeserializer<'_> {
     fn read_struct(
         &mut self,
         _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(
-            &Schema<'_>,
-            &mut dyn ShapeDeserializer,
-        ) -> Result<(), SerdeError>,
+        _consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         Err(SerdeError::unsupported(
             "structures cannot be bound to labels or query strings",
@@ -371,15 +348,13 @@ impl ShapeDeserializer for DecodedValuesDeserializer<'_> {
     fn read_big_integer(&mut self, _schema: &Schema<'_>) -> Result<BigInteger, SerdeError> {
         use std::str::FromStr;
         let v = self.current()?;
-        BigInteger::from_str(v.trim())
-            .map_err(|_| SerdeError::invalid_input(format!("invalid big integer: {v}")))
+        BigInteger::from_str(v.trim()).map_err(|_| SerdeError::invalid_input(format!("invalid big integer: {v}")))
     }
 
     fn read_big_decimal(&mut self, _schema: &Schema<'_>) -> Result<BigDecimal, SerdeError> {
         use std::str::FromStr;
         let v = self.current()?;
-        BigDecimal::from_str(v.trim())
-            .map_err(|_| SerdeError::invalid_input(format!("invalid big decimal: {v}")))
+        BigDecimal::from_str(v.trim()).map_err(|_| SerdeError::invalid_input(format!("invalid big decimal: {v}")))
     }
 
     fn read_string(&mut self, _schema: &Schema<'_>) -> Result<String, SerdeError> {
@@ -396,8 +371,7 @@ impl ShapeDeserializer for DecodedValuesDeserializer<'_> {
     fn read_timestamp(&mut self, schema: &Schema<'_>) -> Result<DateTime, SerdeError> {
         let format = resolve_timestamp_format(schema, self.member, self.location);
         let v = self.current()?.to_string();
-        DateTime::from_str(&v, format)
-            .map_err(|err| SerdeError::invalid_input(format!("invalid timestamp: {err}")))
+        DateTime::from_str(&v, format).map_err(|err| SerdeError::invalid_input(format!("invalid timestamp: {err}")))
     }
 
     fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document, SerdeError> {
@@ -484,14 +458,9 @@ impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
     fn read_struct(
         &mut self,
         _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(
-            &Schema<'_>,
-            &mut dyn ShapeDeserializer,
-        ) -> Result<(), SerdeError>,
+        _consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported(
-            "structures cannot be bound to headers",
-        ))
+        Err(SerdeError::unsupported("structures cannot be bound to headers"))
     }
 
     fn read_list(
@@ -503,15 +472,10 @@ impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
         // timestamps use `many_dates` (comma-aware `http-date` parsing);
         // everything else uses the RFC-7230 quote-aware splitter.
         let element = schema.member();
-        let element_is_timestamp = element
-            .map(|e| e.shape_type() == ShapeType::Timestamp)
-            .unwrap_or(false);
+        let element_is_timestamp = element.map(|e| e.shape_type() == ShapeType::Timestamp).unwrap_or(false);
         self.tokens = if element_is_timestamp {
-            let format = resolve_timestamp_format(
-                element.expect("checked above"),
-                self.member,
-                BindingLocation::Header,
-            );
+            let format =
+                resolve_timestamp_format(element.expect("checked above"), self.member, BindingLocation::Header);
             aws_smithy_http::header::many_dates(self.values.iter().copied(), format)
                 .map_err(|err| SerdeError::invalid_input(format!("{err}")))?
                 .into_iter()
@@ -597,8 +561,7 @@ impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
             Some(_) => self.next_text()?,
             None => self.single_value()?.trim().to_string(),
         };
-        BigInteger::from_str(&v)
-            .map_err(|_| SerdeError::invalid_input(format!("invalid big integer: {v}")))
+        BigInteger::from_str(&v).map_err(|_| SerdeError::invalid_input(format!("invalid big integer: {v}")))
     }
 
     fn read_big_decimal(&mut self, _schema: &Schema<'_>) -> Result<BigDecimal, SerdeError> {
@@ -607,8 +570,7 @@ impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
             Some(_) => self.next_text()?,
             None => self.single_value()?.trim().to_string(),
         };
-        BigDecimal::from_str(&v)
-            .map_err(|_| SerdeError::invalid_input(format!("invalid big decimal: {v}")))
+        BigDecimal::from_str(&v).map_err(|_| SerdeError::invalid_input(format!("invalid big decimal: {v}")))
     }
 
     fn read_string(&mut self, schema: &Schema<'_>) -> Result<String, SerdeError> {
@@ -619,14 +581,12 @@ impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
             None => self.single_value()?.trim().to_string(),
         };
         // `@mediaType` on a header-bound string travels base64-encoded.
-        let media_typed =
-            schema.media_type().is_some() || self.member.media_type().is_some();
+        let media_typed = schema.media_type().is_some() || self.member.media_type().is_some();
         if media_typed {
             let decoded = aws_smithy_types::base64::decode(&raw)
                 .map_err(|err| SerdeError::invalid_input(format!("invalid base64: {err}")))?;
-            String::from_utf8(decoded).map_err(|_| {
-                SerdeError::invalid_input("base64-decoded header was not valid UTF-8")
-            })
+            String::from_utf8(decoded)
+                .map_err(|_| SerdeError::invalid_input("base64-decoded header was not valid UTF-8"))
         } else {
             Ok(raw)
         }
@@ -648,19 +608,15 @@ impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
                 HeaderToken::Date(dt) => Ok(*dt),
                 HeaderToken::Text(s) => {
                     let s = s.clone();
-                    let format =
-                        resolve_timestamp_format(schema, self.member, BindingLocation::Header);
-                    DateTime::from_str(&s, format).map_err(|err| {
-                        SerdeError::invalid_input(format!("invalid timestamp: {err}"))
-                    })
+                    let format = resolve_timestamp_format(schema, self.member, BindingLocation::Header);
+                    DateTime::from_str(&s, format)
+                        .map_err(|err| SerdeError::invalid_input(format!("invalid timestamp: {err}")))
                 }
             },
             None => {
-                let format =
-                    resolve_timestamp_format(schema, self.member, BindingLocation::Header);
-                let dates =
-                    aws_smithy_http::header::many_dates(self.values.iter().copied(), format)
-                        .map_err(|err| SerdeError::invalid_input(format!("{err}")))?;
+                let format = resolve_timestamp_format(schema, self.member, BindingLocation::Header);
+                let dates = aws_smithy_http::header::many_dates(self.values.iter().copied(), format)
+                    .map_err(|err| SerdeError::invalid_input(format!("{err}")))?;
                 match dates.len() {
                     1 => Ok(dates[0]),
                     0 => Err(SerdeError::invalid_input("expected a timestamp header value")),
@@ -673,9 +629,7 @@ impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
     }
 
     fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document, SerdeError> {
-        Err(SerdeError::unsupported(
-            "documents cannot be bound to headers",
-        ))
+        Err(SerdeError::unsupported("documents cannot be bound to headers"))
     }
 
     fn is_null(&self) -> bool {
@@ -720,10 +674,7 @@ impl ShapeDeserializer for StringMapDeserializer {
     fn read_struct(
         &mut self,
         _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(
-            &Schema<'_>,
-            &mut dyn ShapeDeserializer,
-        ) -> Result<(), SerdeError>,
+        _consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         Err(SerdeError::unsupported(
             "structures cannot appear in header/query-bound maps",
@@ -827,10 +778,7 @@ impl ShapeDeserializer for PayloadBytesDeserializer<'_> {
     fn read_struct(
         &mut self,
         _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(
-            &Schema<'_>,
-            &mut dyn ShapeDeserializer,
-        ) -> Result<(), SerdeError>,
+        _consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         Err(SerdeError::unsupported(
             "structure payloads read through the protocol codec, not raw bytes",
@@ -900,10 +848,7 @@ impl ShapeDeserializer for EmptyStructDeserializer {
     fn read_struct(
         &mut self,
         _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(
-            &Schema<'_>,
-            &mut dyn ShapeDeserializer,
-        ) -> Result<(), SerdeError>,
+        _consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         Ok(())
     }
@@ -974,9 +919,11 @@ impl<'a, C: Codec> RestRequestDeserializer<'a, C> {
     fn header_values(&self, name: &str) -> Result<Vec<&'a str>, SerdeError> {
         let mut values = Vec::new();
         for value in self.parts.headers.get_all(name) {
-            values.push(value.to_str().map_err(|_| {
-                SerdeError::invalid_input(format!("header `{name}` was not valid UTF-8"))
-            })?);
+            values.push(
+                value
+                    .to_str()
+                    .map_err(|_| SerdeError::invalid_input(format!("header `{name}` was not valid UTF-8")))?,
+            );
         }
         Ok(values)
     }
@@ -986,10 +933,7 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
     fn read_struct(
         &mut self,
         schema: &Schema<'_>,
-        consumer: &mut dyn FnMut(
-            &Schema<'_>,
-            &mut dyn ShapeDeserializer,
-        ) -> Result<(), SerdeError>,
+        consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         // Labels and query pairs are parsed once, up front.
         let has_labels = schema.members().iter().any(|m| m.http_label().is_some());
@@ -997,11 +941,7 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
             let template = schema
                 .http()
                 .map(|h| h.uri())
-                .ok_or_else(|| {
-                    SerdeError::invalid_input(
-                        "input schema has @httpLabel members but no @http trait",
-                    )
-                })?;
+                .ok_or_else(|| SerdeError::invalid_input("input schema has @httpLabel members but no @http trait"))?;
             extract_labels(template, self.parts.uri.path())?
         } else {
             Vec::new()
@@ -1025,15 +965,9 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
                     .find(|(name, _)| *name == member_name)
                     .map(|(_, v)| v.clone())
                     .ok_or_else(|| {
-                        SerdeError::invalid_input(format!(
-                            "no `{{{member_name}}}` label in the `@http` URI pattern"
-                        ))
+                        SerdeError::invalid_input(format!("no `{{{member_name}}}` label in the `@http` URI pattern"))
                     })?;
-                let mut deser = DecodedValuesDeserializer::new(
-                    vec![Cow::Owned(value)],
-                    member,
-                    BindingLocation::Label,
-                );
+                let mut deser = DecodedValuesDeserializer::new(vec![Cow::Owned(value)], member, BindingLocation::Label);
                 consumer(member, &mut deser)?;
             } else if let Some(query) = member.http_query() {
                 let values: Vec<Cow<'_, str>> = query_pairs
@@ -1042,8 +976,7 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
                     .map(|(_, v)| Cow::Borrowed(v.as_str()))
                     .collect();
                 if !values.is_empty() {
-                    let mut deser =
-                        DecodedValuesDeserializer::new(values, member, BindingLocation::Query);
+                    let mut deser = DecodedValuesDeserializer::new(values, member, BindingLocation::Query);
                     consumer(member, &mut deser)?;
                 }
             } else if member.http_query_params().is_some() {
@@ -1068,9 +1001,7 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
                 let prefix = prefix.value();
                 let names: Vec<&str> = self.parts.headers.keys().map(|n| n.as_str()).collect();
                 let mut entries: Vec<(String, Vec<String>)> = Vec::new();
-                for (suffix, full_name) in
-                    aws_smithy_http::header::headers_for_prefix(names.into_iter(), prefix)
-                {
+                for (suffix, full_name) in aws_smithy_http::header::headers_for_prefix(names.into_iter(), prefix) {
                     let values: Vec<String> = self
                         .header_values(full_name)?
                         .into_iter()
@@ -1334,11 +1265,7 @@ mod tests {
         // prefix headers, body member via the codec.
         let parts = request_parts(
             "/pets/rex?age=7&tag=a&tag=b",
-            &[
-                ("x-token", "secret"),
-                ("x-meta-color", "red"),
-                ("x-meta-size", "xl"),
-            ],
+            &[("x-token", "secret"), ("x-meta-color", "red"), ("x-meta-size", "xl")],
         );
         let out = collect(&parts, br#"{"note":"hello"}"#).unwrap();
         assert_eq!(out.name.as_deref(), Some("rex"));

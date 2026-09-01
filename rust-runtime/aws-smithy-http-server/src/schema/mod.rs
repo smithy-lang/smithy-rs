@@ -9,6 +9,10 @@ use aws_smithy_schema::{Schema, ShapeId};
 
 use crate::routing::PrefixPolicy;
 
+pub mod protocol;
+pub(crate) mod request_bindings;
+pub(crate) mod response_bindings;
+
 /// Runtime descriptor for a Smithy service.
 #[derive(Debug)]
 pub struct ServiceSchema<'a> {

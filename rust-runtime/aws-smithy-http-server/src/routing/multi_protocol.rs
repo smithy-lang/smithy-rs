@@ -33,6 +33,66 @@ use crate::{
     schema::ServiceSchema,
 };
 
+/// Ordering constraint for a protocol routing registration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProtocolRoutingOrderConstraint {
+    /// This protocol should be routed before the referenced protocol, if the referenced protocol is registered.
+    Before(&'static str),
+    /// This protocol should be routed after the referenced protocol, if the referenced protocol is registered.
+    After(&'static str),
+}
+
+/// A protocol routing table plus ordering constraints relative to other registered protocols.
+pub struct ProtocolRoutingRegistration {
+    table: Box<dyn ProtocolRoutingTable>,
+    constraints: Vec<ProtocolRoutingOrderConstraint>,
+}
+
+impl ProtocolRoutingRegistration {
+    /// Creates a protocol routing registration.
+    pub fn new(
+        table: Box<dyn ProtocolRoutingTable>,
+        constraints: impl Into<Vec<ProtocolRoutingOrderConstraint>>,
+    ) -> Self {
+        Self {
+            table,
+            constraints: constraints.into(),
+        }
+    }
+}
+
+impl fmt::Debug for ProtocolRoutingRegistration {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ProtocolRoutingRegistration")
+            .field("protocol_id", &self.table.protocol_id())
+            .field("constraints", &self.constraints)
+            .finish()
+    }
+}
+
+/// Factory for a protocol routing registration derived from a service schema.
+#[derive(Clone, Copy)]
+pub struct ProtocolRoutingFactory {
+    build: fn(&'static ServiceSchema<'static>) -> Option<ProtocolRoutingRegistration>,
+}
+
+impl ProtocolRoutingFactory {
+    /// Creates a protocol routing factory.
+    pub const fn new(build: fn(&'static ServiceSchema<'static>) -> Option<ProtocolRoutingRegistration>) -> Self {
+        Self { build }
+    }
+
+    fn registration(self, service_schema: &'static ServiceSchema<'static>) -> Option<ProtocolRoutingRegistration> {
+        (self.build)(service_schema)
+    }
+}
+
+impl fmt::Debug for ProtocolRoutingFactory {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ProtocolRoutingFactory").finish_non_exhaustive()
+    }
+}
+
 /// A routing service that selects a protocol table first, then dispatches through one shared operation handler map.
 pub struct MultiProtocolRoutingService<S> {
     tables: Vec<Box<dyn ProtocolRoutingTable>>,
@@ -63,21 +123,36 @@ impl<S> MultiProtocolRoutingService<S> {
         }
     }
 
-    /// Creates a multi-protocol routing service for all built-in protocols present on the service schema.
-    pub fn from_operation_handler_bindings<I>(
-        service_schema: &'static ServiceSchema<'static>,
+    /// Creates a multi-protocol routing service from protocol routing registrations and operation handlers.
+    pub fn from_protocol_routing_registrations<I>(
+        registrations: Vec<ProtocolRoutingRegistration>,
         bindings: I,
     ) -> Result<Self, BuildError>
     where
         I: IntoIterator<Item = OperationHandlerBinding<S>>,
     {
-        let tables = builtin_protocol_tables(service_schema);
-        if tables.is_empty() {
+        let tables = sort_protocol_routing_registrations(registrations)?;
+        Ok(Self::new(tables, bindings))
+    }
+
+    /// Creates a multi-protocol routing service from built-in protocols, additional protocol routing
+    /// factories, and operation handlers.
+    pub fn from_operation_handler_bindings<F, I>(
+        service_schema: &'static ServiceSchema<'static>,
+        additional_protocol_routing_factories: F,
+        bindings: I,
+    ) -> Result<Self, BuildError>
+    where
+        F: IntoIterator<Item = ProtocolRoutingFactory>,
+        I: IntoIterator<Item = OperationHandlerBinding<S>>,
+    {
+        let registrations = protocol_routing_registrations(service_schema, additional_protocol_routing_factories);
+        if registrations.is_empty() {
             return Err(BuildError::MissingProtocol {
                 expected: "known server protocol",
             });
         }
-        Ok(Self::new(tables, bindings))
+        Self::from_protocol_routing_registrations(registrations, bindings)
     }
 
     /// Maps every operation handler through a closure.
@@ -92,32 +167,150 @@ impl<S> MultiProtocolRoutingService<S> {
     }
 }
 
-fn builtin_protocol_tables(service_schema: &'static ServiceSchema<'static>) -> Vec<Box<dyn ProtocolRoutingTable>> {
-    let has_protocol = |id: &str| {
-        service_schema
-            .protocols()
-            .iter()
-            .any(|protocol| protocol.as_str() == id)
-    };
+fn protocol_routing_registrations<F>(
+    service_schema: &'static ServiceSchema<'static>,
+    additional_protocol_routing_factories: F,
+) -> Vec<ProtocolRoutingRegistration>
+where
+    F: IntoIterator<Item = ProtocolRoutingFactory>,
+{
+    let mut registrations: Vec<_> = builtin_protocol_routing_factories()
+        .into_iter()
+        .filter_map(|factory| factory.registration(service_schema))
+        .collect();
+    registrations.extend(
+        additional_protocol_routing_factories
+            .into_iter()
+            .filter_map(|factory| factory.registration(service_schema)),
+    );
 
-    let mut tables: Vec<Box<dyn ProtocolRoutingTable>> = Vec::new();
-    if has_protocol("smithy.protocols#rpcv2Cbor") {
-        tables.push(Box::new(RpcV2CborOperationRoutingTable::new(service_schema)));
-    }
-    if has_protocol("aws.protocols#awsJson1_1") {
-        tables.push(Box::new(AwsJsonOperationRoutingTable::new_aws_json_11(service_schema)));
-    }
-    if has_protocol("aws.protocols#awsJson1_0") {
-        tables.push(Box::new(AwsJsonOperationRoutingTable::new_aws_json_10(service_schema)));
-    }
-    if has_protocol("aws.protocols#restJson1") {
-        tables.push(Box::new(RestOperationRoutingTable::new_rest_json_1(service_schema)));
-    }
-    if has_protocol("aws.protocols#restXml") {
-        tables.push(Box::new(RestOperationRoutingTable::new_rest_xml(service_schema)));
+    registrations
+}
+
+fn builtin_protocol_routing_factories() -> [ProtocolRoutingFactory; 5] {
+    [
+        ProtocolRoutingFactory::new(rpc_v2_cbor_routing_registration),
+        ProtocolRoutingFactory::new(aws_json_11_routing_registration),
+        ProtocolRoutingFactory::new(aws_json_10_routing_registration),
+        ProtocolRoutingFactory::new(rest_json_1_routing_registration),
+        ProtocolRoutingFactory::new(rest_xml_routing_registration),
+    ]
+}
+
+fn has_protocol(service_schema: &'static ServiceSchema<'static>, id: &str) -> bool {
+    service_schema
+        .protocols()
+        .iter()
+        .any(|protocol| protocol.as_str() == id)
+}
+
+fn rpc_v2_cbor_routing_registration(
+    service_schema: &'static ServiceSchema<'static>,
+) -> Option<ProtocolRoutingRegistration> {
+    has_protocol(service_schema, "smithy.protocols#rpcv2Cbor").then(|| {
+        ProtocolRoutingRegistration::new(
+            Box::new(RpcV2CborOperationRoutingTable::new(service_schema)),
+            [ProtocolRoutingOrderConstraint::Before("aws.protocols#awsJson1_1")],
+        )
+    })
+}
+
+fn aws_json_11_routing_registration(
+    service_schema: &'static ServiceSchema<'static>,
+) -> Option<ProtocolRoutingRegistration> {
+    has_protocol(service_schema, "aws.protocols#awsJson1_1").then(|| {
+        ProtocolRoutingRegistration::new(
+            Box::new(AwsJsonOperationRoutingTable::new_aws_json_11(service_schema)),
+            [ProtocolRoutingOrderConstraint::Before("aws.protocols#awsJson1_0")],
+        )
+    })
+}
+
+fn aws_json_10_routing_registration(
+    service_schema: &'static ServiceSchema<'static>,
+) -> Option<ProtocolRoutingRegistration> {
+    has_protocol(service_schema, "aws.protocols#awsJson1_0").then(|| {
+        ProtocolRoutingRegistration::new(
+            Box::new(AwsJsonOperationRoutingTable::new_aws_json_10(service_schema)),
+            [ProtocolRoutingOrderConstraint::Before("aws.protocols#restJson1")],
+        )
+    })
+}
+
+fn rest_json_1_routing_registration(
+    service_schema: &'static ServiceSchema<'static>,
+) -> Option<ProtocolRoutingRegistration> {
+    has_protocol(service_schema, "aws.protocols#restJson1").then(|| {
+        ProtocolRoutingRegistration::new(
+            Box::new(RestOperationRoutingTable::new_rest_json_1(service_schema)),
+            [ProtocolRoutingOrderConstraint::Before("aws.protocols#restXml")],
+        )
+    })
+}
+
+fn rest_xml_routing_registration(
+    service_schema: &'static ServiceSchema<'static>,
+) -> Option<ProtocolRoutingRegistration> {
+    has_protocol(service_schema, "aws.protocols#restXml").then(|| {
+        ProtocolRoutingRegistration::new(Box::new(RestOperationRoutingTable::new_rest_xml(service_schema)), [])
+    })
+}
+
+fn sort_protocol_routing_registrations(
+    registrations: Vec<ProtocolRoutingRegistration>,
+) -> Result<Vec<Box<dyn ProtocolRoutingTable>>, BuildError> {
+    let len = registrations.len();
+    let mut protocol_ids = Vec::with_capacity(len);
+    for registration in &registrations {
+        let protocol_id = registration.table.protocol_id().as_str().to_owned();
+        if protocol_ids.iter().any(|existing| existing == &protocol_id) {
+            return Err(BuildError::DuplicateProtocolRoutingTable { protocol: protocol_id });
+        }
+        protocol_ids.push(protocol_id);
     }
 
-    tables
+    let mut edges = vec![Vec::<usize>::new(); len];
+    let mut indegrees = vec![0usize; len];
+    for (source, registration) in registrations.iter().enumerate() {
+        for constraint in &registration.constraints {
+            let edge = match constraint {
+                ProtocolRoutingOrderConstraint::Before(target) => protocol_ids
+                    .iter()
+                    .position(|id| id == target)
+                    .map(|target| (source, target)),
+                ProtocolRoutingOrderConstraint::After(target) => protocol_ids
+                    .iter()
+                    .position(|id| id == target)
+                    .map(|target| (target, source)),
+            };
+            let Some((from, to)) = edge else {
+                continue;
+            };
+            if !edges[from].contains(&to) {
+                edges[from].push(to);
+                indegrees[to] += 1;
+            }
+        }
+    }
+
+    let mut ordered_indices = Vec::with_capacity(len);
+    let mut emitted = vec![false; len];
+    while ordered_indices.len() < len {
+        let Some(next) = (0..len).find(|&index| !emitted[index] && indegrees[index] == 0) else {
+            return Err(BuildError::ProtocolRoutingOrderCycle);
+        };
+        emitted[next] = true;
+        ordered_indices.push(next);
+        for &to in &edges[next] {
+            indegrees[to] -= 1;
+        }
+    }
+
+    let mut registrations: Vec<_> = registrations.into_iter().map(Some).collect();
+    Ok(ordered_indices
+        .into_iter()
+        .map(|index| registrations[index].take().expect("ordered index should exist").table)
+        .collect())
 }
 
 type EitherOneshotReady<S, B> = Either<
@@ -207,7 +400,7 @@ where
                 }
                 ProtocolRoutingOutcome::Rejected(response) => {
                     tracing::debug!(protocol = %table.protocol_id(), "terminal multi-protocol routing rejection");
-                    return MultiProtocolRoutingFuture::from_response(response);
+                    return MultiProtocolRoutingFuture::from_response(response.into_response());
                 }
                 ProtocolRoutingOutcome::RejectedNonExclusive(response) => {
                     tracing::debug!(protocol = %table.protocol_id(), "candidate multi-protocol routing rejection");
@@ -216,12 +409,14 @@ where
             }
         }
 
-        MultiProtocolRoutingFuture::from_response(fallback.unwrap_or_else(|| {
-            http::Response::builder()
-                .status(http::StatusCode::NOT_FOUND)
-                .body(crate::body::empty())
-                .expect("valid multi-protocol not found response")
-        }))
+        MultiProtocolRoutingFuture::from_response(fallback.map(|response| response.into_response()).unwrap_or_else(
+            || {
+                http::Response::builder()
+                    .status(http::StatusCode::NOT_FOUND)
+                    .body(crate::body::empty())
+                    .expect("valid multi-protocol not found response")
+            },
+        ))
     }
 }
 
@@ -323,6 +518,7 @@ mod tests {
     async fn aws_json_request_selects_operation_and_context() {
         let mut service = MultiProtocolRoutingService::from_operation_handler_bindings(
             &SERVICE,
+            [],
             [binding(&GET_VALUE), binding(&GET_VALUE_LATEST)],
         )
         .unwrap();
@@ -347,6 +543,7 @@ mod tests {
     async fn rpc_v2_cbor_request_selects_operation_and_context() {
         let mut service = MultiProtocolRoutingService::from_operation_handler_bindings(
             &SERVICE,
+            [],
             [binding(&GET_VALUE), binding(&GET_VALUE_LATEST)],
         )
         .unwrap();
@@ -466,6 +663,14 @@ mod tests {
         called: Arc<AtomicBool>,
     }
 
+    struct FakeRoutingResponse(StatusCode);
+
+    impl crate::routing::IntoProtocolRoutingResponse for FakeRoutingResponse {
+        fn into_response(self: Box<Self>) -> Response<BoxBody> {
+            Response::builder().status(self.0).body(empty()).unwrap()
+        }
+    }
+
     enum FakeOutcome {
         NoClaim,
         Match(&'static OperationSchema<'static>),
@@ -496,13 +701,160 @@ mod tests {
                     ProtocolRoutingOutcome::OperationMatched(OperationMatch::new(self.protocol.clone(), operation))
                 }
                 FakeOutcome::Rejected(status) => {
-                    ProtocolRoutingOutcome::Rejected(Response::builder().status(status).body(empty()).unwrap())
+                    ProtocolRoutingOutcome::Rejected(Box::new(FakeRoutingResponse(status)))
                 }
-                FakeOutcome::RejectedNonExclusive(status) => ProtocolRoutingOutcome::RejectedNonExclusive(
-                    Response::builder().status(status).body(empty()).unwrap(),
-                ),
+                FakeOutcome::RejectedNonExclusive(status) => {
+                    ProtocolRoutingOutcome::RejectedNonExclusive(Box::new(FakeRoutingResponse(status)))
+                }
             }
         }
+    }
+
+    fn protocol_id(name: &'static str) -> ShapeId<'static> {
+        ShapeId::from_parts(name, "test", name.strip_prefix("test#").unwrap_or(name))
+    }
+
+    fn registration(
+        protocol: ShapeId<'static>,
+        constraints: impl Into<Vec<ProtocolRoutingOrderConstraint>>,
+    ) -> ProtocolRoutingRegistration {
+        ProtocolRoutingRegistration::new(
+            Box::new(FakeTable::new(
+                protocol,
+                FakeOutcome::Match(&GET_VALUE),
+                Arc::new(AtomicBool::new(false)),
+            )),
+            constraints,
+        )
+    }
+
+    fn sorted_protocol_ids(registrations: Vec<ProtocolRoutingRegistration>) -> Vec<String> {
+        sort_protocol_routing_registrations(registrations)
+            .unwrap()
+            .into_iter()
+            .map(|table| table.protocol_id().as_str().to_owned())
+            .collect()
+    }
+
+    #[test]
+    fn protocol_routing_order_constraints_reorder_tables() {
+        let sorted = sorted_protocol_ids(vec![
+            registration(
+                protocol_id("test#second"),
+                [ProtocolRoutingOrderConstraint::After("test#first")],
+            ),
+            registration(protocol_id("test#first"), []),
+            registration(
+                protocol_id("test#third"),
+                [ProtocolRoutingOrderConstraint::Before("test#fourth")],
+            ),
+            registration(protocol_id("test#fourth"), []),
+        ]);
+
+        assert_eq!(sorted, ["test#first", "test#second", "test#third", "test#fourth"]);
+    }
+
+    #[test]
+    fn protocol_routing_order_constraints_ignore_missing_targets() {
+        let sorted = sorted_protocol_ids(vec![
+            registration(
+                protocol_id("test#first"),
+                [ProtocolRoutingOrderConstraint::After("test#missing")],
+            ),
+            registration(protocol_id("test#second"), []),
+        ]);
+
+        assert_eq!(sorted, ["test#first", "test#second"]);
+    }
+
+    #[test]
+    fn protocol_routing_order_rejects_duplicate_protocol_ids() {
+        let error = match sort_protocol_routing_registrations(vec![
+            registration(protocol_id("test#first"), []),
+            registration(protocol_id("test#first"), []),
+        ]) {
+            Ok(_) => panic!("expected duplicate protocol ID error"),
+            Err(error) => error,
+        };
+
+        assert!(matches!(
+            error,
+            BuildError::DuplicateProtocolRoutingTable { protocol } if protocol == "test#first"
+        ));
+    }
+
+    #[test]
+    fn protocol_routing_order_rejects_cycles() {
+        let error = match sort_protocol_routing_registrations(vec![
+            registration(
+                protocol_id("test#first"),
+                [ProtocolRoutingOrderConstraint::Before("test#second")],
+            ),
+            registration(
+                protocol_id("test#second"),
+                [ProtocolRoutingOrderConstraint::Before("test#first")],
+            ),
+        ]) {
+            Ok(_) => panic!("expected protocol routing order cycle error"),
+            Err(error) => error,
+        };
+
+        assert!(matches!(error, BuildError::ProtocolRoutingOrderCycle));
+    }
+
+    #[test]
+    fn unconstrained_protocol_routing_order_preserves_input_order() {
+        let sorted = sorted_protocol_ids(vec![
+            registration(protocol_id("test#third"), []),
+            registration(protocol_id("test#first"), []),
+            registration(protocol_id("test#second"), []),
+        ]);
+
+        assert_eq!(sorted, ["test#third", "test#first", "test#second"]);
+    }
+
+    #[test]
+    fn builtin_protocol_routing_factories_keep_canonical_order() {
+        let sorted = sorted_protocol_ids(protocol_routing_registrations(&SERVICE, []));
+
+        assert_eq!(
+            sorted,
+            [
+                "smithy.protocols#rpcv2Cbor",
+                "aws.protocols#awsJson1_1",
+                "aws.protocols#restJson1"
+            ]
+        );
+    }
+
+    fn additional_protocol_routing_factory(
+        _service_schema: &'static ServiceSchema<'static>,
+    ) -> Option<ProtocolRoutingRegistration> {
+        Some(registration(
+            protocol_id("internal.example#customProtocol"),
+            [
+                ProtocolRoutingOrderConstraint::Before("aws.protocols#awsJson1_1"),
+                ProtocolRoutingOrderConstraint::Before("aws.protocols#restJson1"),
+            ],
+        ))
+    }
+
+    #[test]
+    fn additional_protocol_routing_factories_are_added_to_builtins() {
+        let sorted = sorted_protocol_ids(protocol_routing_registrations(
+            &SERVICE,
+            [ProtocolRoutingFactory::new(additional_protocol_routing_factory)],
+        ));
+
+        assert_eq!(
+            sorted,
+            [
+                "smithy.protocols#rpcv2Cbor",
+                "internal.example#customProtocol",
+                "aws.protocols#awsJson1_1",
+                "aws.protocols#restJson1"
+            ]
+        );
     }
 
     #[tokio::test]
@@ -598,6 +950,10 @@ mod tests {
         let response = service.call(request).await.unwrap();
 
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(
+            response.headers().get(http::header::CONTENT_TYPE).unwrap(),
+            "application/x-amz-json-1.1"
+        );
         assert!(!later_called.load(Ordering::SeqCst));
     }
 

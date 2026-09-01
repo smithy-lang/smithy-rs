@@ -33,9 +33,11 @@ use super::rejection::RequestRejection;
 use super::rejection::ResponseRejection;
 use super::RestJson1;
 use crate::extension::RuntimeErrorExtension;
+use crate::modeled_error::HttpModeledError;
 use crate::response::IntoResponse;
 use crate::runtime_error::InternalFailureException;
 use crate::runtime_error::INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE;
+use crate::schema::protocol::ServerProtocol;
 use http::StatusCode;
 
 #[derive(Debug, thiserror::Error)]
@@ -63,6 +65,10 @@ pub enum RuntimeError {
     /// [constraint traits]: <https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html>
     #[error("validation failure: operation input contains data that does not adhere to the modeled constraints: {0}")]
     Validation(String),
+    /// Schema-driven validation failure carrying the actual modeled validation
+    /// error. Serialized once by the protocol codec.
+    #[error("validation failure: operation input contains data that does not adhere to the modeled constraints: {0}")]
+    ModeledValidation(Box<dyn HttpModeledError + Send>),
 }
 
 impl RuntimeError {
@@ -76,6 +82,7 @@ impl RuntimeError {
             Self::NotAcceptable => "NotAcceptableException",
             Self::UnsupportedMediaType => "UnsupportedMediaTypeException",
             Self::Validation(_) => "ValidationException",
+            Self::ModeledValidation(_) => "ValidationException",
         }
     }
 
@@ -86,6 +93,7 @@ impl RuntimeError {
             Self::NotAcceptable => StatusCode::NOT_ACCEPTABLE,
             Self::UnsupportedMediaType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::Validation(_) => StatusCode::BAD_REQUEST,
+            Self::ModeledValidation(err) => StatusCode::from_u16(err.status_code()).unwrap_or(StatusCode::BAD_REQUEST),
         }
     }
 }
@@ -96,13 +104,16 @@ impl IntoResponse<RestJson1> for InternalFailureException {
     }
 }
 
-// Why is only `Validation` schema-driven, while the other variants keep
+// Why is only `ModeledValidation` schema-driven, while the other variants keep
 // hand-assembled responses?
 //
-// `Validation` carries an actual modeled shape (`smithy.framework#ValidationException`
-// or a decorator-customized shape) — it has a schema, so `serialize_error`
-// applies. The remaining variants are framework conventions with NO Smithy
-// shape behind them, and they deliberately stay hand-assembled this phase:
+// `ModeledValidation` carries an actual modeled shape
+// (`smithy.framework#ValidationException` or a decorator-customized shape) —
+// it has a schema, so `serialize_error` applies. The legacy `Validation`
+// variant still carries protocol-specific pre-schema artifacts and remains on
+// the old hand-assembled response path. The remaining variants are framework
+// conventions with NO Smithy shape behind them, and they deliberately stay
+// hand-assembled this phase:
 //
 // - Their frozen legacy wire forms are not the serialization of *any* shape:
 //   restJson1 sends a literal `{}`, awsJson1.1 an empty body, rpcv2Cbor an
@@ -118,11 +129,16 @@ impl IntoResponse<RestJson1> for InternalFailureException {
 //   deliberate divergence. See `specs/plan.md`, Step 6 ("leaves for later").
 impl IntoResponse<RestJson1> for RuntimeError {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
-                let res = http::Response::builder()
-            .status(self.status_code())
+        let runtime_error = match self {
+            Self::ModeledValidation(err) => return RestJson1::serialize_error(&*err),
+            runtime_error => runtime_error,
+        };
+
+        let res = http::Response::builder()
+            .status(runtime_error.status_code())
             .header("Content-Type", "application/json")
-            .header("X-Amzn-Errortype", self.name())
-            .extension(RuntimeErrorExtension::new(self.name().to_string()));
+            .header("X-Amzn-Errortype", runtime_error.name())
+            .extension(RuntimeErrorExtension::new(runtime_error.name().to_string()));
 
         let body = crate::body::to_boxed("{}");
 
@@ -142,6 +158,7 @@ impl From<RequestRejection> for RuntimeError {
         match err {
             RequestRejection::MissingContentType(_reason) => Self::UnsupportedMediaType,
             RequestRejection::ConstraintViolation(reason) => Self::Validation(reason),
+            RequestRejection::SchemaConstraintViolation(reason) => Self::ModeledValidation(reason),
             RequestRejection::NotAcceptable => Self::NotAcceptable,
             _ => Self::Serialization(crate::Error::new(err)),
         }

@@ -5,6 +5,7 @@
 
 use aws_smithy_schema::ShapeId;
 use http::{HeaderMap, Method, Request, Uri};
+use std::marker::PhantomData;
 
 use crate::{
     body::BoxBody,
@@ -120,9 +121,50 @@ pub enum ProtocolRoutingOutcome {
     /// This protocol selected an operation.
     OperationMatched(OperationMatch),
     /// This protocol rejected the request and later protocols must not be tried.
-    Rejected(http::Response<BoxBody>),
+    Rejected(Box<dyn IntoProtocolRoutingResponse>),
     /// This protocol produced a candidate rejection, but later protocols may still match.
-    RejectedNonExclusive(http::Response<BoxBody>),
+    RejectedNonExclusive(Box<dyn IntoProtocolRoutingResponse>),
+}
+
+/// Protocol-owned conversion from a routing rejection into an HTTP response.
+pub trait IntoProtocolRoutingResponse: Send {
+    /// Converts this rejection into an HTTP response.
+    fn into_response(self: Box<Self>) -> http::Response<BoxBody>;
+}
+
+/// Bridge from a concrete protocol routing error to the erased routing rejection response type.
+pub struct ProtocolRoutingResponse<T, P> {
+    inner: T,
+    _protocol: PhantomData<P>,
+}
+
+impl<T, P> ProtocolRoutingResponse<T, P>
+where
+    T: IntoResponse<P> + Send + 'static,
+    P: Send + 'static,
+{
+    /// Creates a bridge value for a concrete protocol routing error.
+    pub fn new(inner: T) -> Self {
+        Self {
+            inner,
+            _protocol: PhantomData,
+        }
+    }
+
+    /// Creates a boxed bridge value for a concrete protocol routing error.
+    pub fn boxed(inner: T) -> Box<dyn IntoProtocolRoutingResponse> {
+        Box::new(Self::new(inner))
+    }
+}
+
+impl<T, P> IntoProtocolRoutingResponse for ProtocolRoutingResponse<T, P>
+where
+    T: IntoResponse<P> + Send + 'static,
+    P: Send + 'static,
+{
+    fn into_response(self: Box<Self>) -> http::Response<BoxBody> {
+        IntoResponse::<P>::into_response(self.inner)
+    }
 }
 
 /// Erased protocol routing table.
@@ -184,10 +226,10 @@ impl AwsJsonOperationRoutingTable {
         }
     }
 
-    fn rejection(&self, error: AwsJsonError) -> http::Response<BoxBody> {
+    fn rejection(&self, error: AwsJsonError) -> Box<dyn IntoProtocolRoutingResponse> {
         match self.version {
-            AwsJsonVersion::Json10 => IntoResponse::<AwsJson1_0>::into_response(error),
-            AwsJsonVersion::Json11 => IntoResponse::<AwsJson1_1>::into_response(error),
+            AwsJsonVersion::Json10 => ProtocolRoutingResponse::<_, AwsJson1_0>::boxed(error),
+            AwsJsonVersion::Json11 => ProtocolRoutingResponse::<_, AwsJson1_1>::boxed(error),
         }
     }
 }
@@ -260,7 +302,7 @@ impl ProtocolRoutingTable for RpcV2CborOperationRoutingTable {
                 ProtocolRoutingOutcome::OperationMatched(OperationMatch::new(self.protocol.clone(), operation))
             }
             Ok(_) => ProtocolRoutingOutcome::NoClaim,
-            Err(error) => ProtocolRoutingOutcome::Rejected(IntoResponse::<RpcV2Cbor>::into_response(error)),
+            Err(error) => ProtocolRoutingOutcome::Rejected(ProtocolRoutingResponse::<_, RpcV2Cbor>::boxed(error)),
         }
     }
 }
@@ -320,10 +362,10 @@ impl RestOperationRoutingTable {
         }
     }
 
-    fn rejection(&self, error: RestError) -> http::Response<BoxBody> {
+    fn rejection(&self, error: RestError) -> Box<dyn IntoProtocolRoutingResponse> {
         match self.version {
-            RestVersion::RestJson1 => IntoResponse::<RestJson1>::into_response(error),
-            RestVersion::RestXml => IntoResponse::<RestXml>::into_response(error),
+            RestVersion::RestJson1 => ProtocolRoutingResponse::<_, RestJson1>::boxed(error),
+            RestVersion::RestXml => ProtocolRoutingResponse::<_, RestXml>::boxed(error),
         }
     }
 }

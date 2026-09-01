@@ -39,6 +39,15 @@ pub enum BuildError {
         /// Expected Smithy protocol shape ID.
         expected: &'static str,
     },
+    /// Multiple protocol routing tables were registered for the same protocol.
+    #[error("multiple protocol routing tables registered for `{protocol}`")]
+    DuplicateProtocolRoutingTable {
+        /// Duplicated Smithy protocol shape ID.
+        protocol: String,
+    },
+    /// Protocol routing order constraints contain a cycle.
+    #[error("protocol routing order constraints contain a cycle")]
+    ProtocolRoutingOrderCycle,
 }
 
 /// Provides a protocol router for operation handler bindings.
