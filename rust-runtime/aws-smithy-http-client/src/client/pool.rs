@@ -24,16 +24,21 @@
 //! establishment task
 //!     |-- DNS, socket, proxy, TLS, and ALPN
 //!     `-- negotiated transport
-//!             |-- Hyper protocol handshake
-//!             `-- pool installation
-//!                     `-- open connection -> draining -> closed
+//!             `-- PendingOpen
+//!                     |-- Hyper protocol setup
+//!                     `-- Open
+//!                             `-- pool installation
+//!                                     `-- discoverable -> draining -> closed
 //! ```
 //!
 //! The establishment task and its permit represent work that may fail before a
 //! physical connection exists. `ConnectionState` begins only after the
-//! connector returns a negotiated transport. Establishment and connection
-//! events can therefore be observed independently without representing failed
-//! attempts as installed connections.
+//! connector returns connected I/O and selects HTTP/1 or HTTP/2. For TLS, that
+//! boundary follows TLS and ALPN. Hyper protocol setup moves the state from
+//! `PendingOpen` to `Open`; cell installation then makes the connection
+//! discoverable. Establishment and connection events can therefore be observed
+//! independently without representing failed attempts as installed
+//! connections.
 //!
 //! # State ownership
 //!

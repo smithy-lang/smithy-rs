@@ -215,8 +215,8 @@ struct LifecycleState {
 /// Whether a connection may accept dispatch and still owns bounded capacity.
 #[derive(Debug)]
 enum LogicalState {
-    /// The transport exists, but protocol handshake and installation have not
-    /// committed.
+    /// The connector returned connected I/O and selected the HTTP protocol,
+    /// but Hyper has not produced the request handle required for dispatch.
     PendingOpen,
     /// Dispatch may commit.
     Open {
@@ -231,11 +231,14 @@ enum LogicalState {
 }
 
 impl ConnectionState {
-    /// Creates state after transport establishment and before protocol setup.
+    /// Creates state after transport establishment and protocol selection.
     ///
-    /// The returned guard is the unique physical-lifetime owner. Dispatch is
-    /// rejected until [`Self::open`] transfers optional bounded capacity after
-    /// a successful Hyper handshake and pool installation.
+    /// For TLS transports, the connector has completed TLS and ALPN before this
+    /// call. Hyper protocol setup and cell installation have not occurred.
+    ///
+    /// The returned guard is the unique physical-lifetime owner. After Hyper
+    /// returns a request handle, [`Self::open`] attaches optional bounded
+    /// capacity before cell installation makes the connection discoverable.
     pub(super) fn pending_open(info: Arc<ConnectionInfo>) -> (Arc<Self>, PhysicalConnectionGuard) {
         let connection = Arc::new(Self {
             info,
@@ -252,9 +255,13 @@ impl ConnectionState {
         (connection, physical)
     }
 
-    /// Commits protocol establishment and transfers optional bounded capacity.
+    /// Opens dispatch commitment and transfers optional bounded capacity.
     ///
-    /// Returns `lease` when logical close won before installation.
+    /// The caller performs this transition after Hyper protocol setup and
+    /// before publishing the connection through its cell. Opening first
+    /// ensures that a newly visible request handle can commit dispatch.
+    ///
+    /// Returns `lease` when logical close won before opening.
     pub(super) fn open(&self, lease: Option<CapacityLease>) -> Result<(), Option<CapacityLease>> {
         let mut lifecycle = self.lifecycle.lock();
         if !matches!(lifecycle.logical, LogicalState::PendingOpen) {
