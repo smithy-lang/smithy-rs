@@ -5,9 +5,12 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.core.smithy.CODEGEN_SETTINGS
 import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenConfig
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
@@ -42,6 +45,7 @@ data class ServerRustSettings(
     override val examplesUri: String?,
     override val minimumSupportedRustVersion: String? = null,
     override val customizationConfig: ObjectNode?,
+    val requestBodyReadTimeouts: RequestBodyReadTimeouts,
 ) : CoreRustSettings(
         service,
         moduleName,
@@ -87,7 +91,77 @@ data class ServerRustSettings(
                 examplesUri = coreRustSettings.examplesUri,
                 minimumSupportedRustVersion = coreRustSettings.minimumSupportedRustVersion,
                 customizationConfig = coreRustSettings.customizationConfig,
+                requestBodyReadTimeouts =
+                    RequestBodyReadTimeouts.fromCustomizationConfig(
+                        model,
+                        coreRustSettings.service,
+                        coreRustSettings.customizationConfig,
+                    ),
             )
+        }
+    }
+}
+
+data class RequestBodyReadTimeouts(
+    val defaultMillis: Long,
+    val operationMillis: Map<ShapeId, Long>,
+) {
+    fun timeoutMillisFor(operationId: ShapeId): Long? =
+        (operationMillis[operationId] ?: defaultMillis)
+            .takeIf { it > 0 }
+
+    companion object {
+        private const val CONFIG_KEY = "readTimeouts"
+        private const val DEFAULT_MILLIS_KEY = "defaultMillis"
+        private const val OPERATION_MILLIS_KEY = "operationMillis"
+        const val DEFAULT_REQUEST_BODY_READ_TIMEOUT_MILLIS = 60_000L
+
+        fun fromCustomizationConfig(
+            model: Model,
+            serviceId: ShapeId,
+            customizationConfig: ObjectNode?,
+        ): RequestBodyReadTimeouts {
+            val config = customizationConfig?.getObjectMember(CONFIG_KEY)?.orElse(null)
+            val defaultMillis =
+                config
+                    ?.getNumberMember(DEFAULT_MILLIS_KEY)
+                    ?.orElse(null)
+                    ?.value
+                    ?.toLong()
+                    ?: DEFAULT_REQUEST_BODY_READ_TIMEOUT_MILLIS
+            if (defaultMillis < 0) {
+                throw CodegenException("`customizationConfig.$CONFIG_KEY.$DEFAULT_MILLIS_KEY` must be non-negative")
+            }
+
+            val service = model.expectShape(serviceId, ServiceShape::class.java)
+            val containedOperationIds =
+                TopDownIndex.of(model).getContainedOperations(service)
+                    .map { it.id }
+                    .toSet()
+            val operationMillis =
+                config
+                    ?.getObjectMember(OPERATION_MILLIS_KEY)
+                    ?.orElse(null)
+                    ?.members
+                    ?.map { (key, value) ->
+                        val operationId = ShapeId.from(key.value)
+                        if (operationId !in containedOperationIds) {
+                            throw CodegenException(
+                                "`customizationConfig.$CONFIG_KEY.$OPERATION_MILLIS_KEY` contains `$operationId`, " +
+                                    "which is not an operation attached to service `$serviceId`",
+                            )
+                        }
+                        val timeoutMillis = value.expectNumberNode().value.toLong()
+                        if (timeoutMillis < 0) {
+                            throw CodegenException(
+                                "`customizationConfig.$CONFIG_KEY.$OPERATION_MILLIS_KEY.$operationId` must be non-negative",
+                            )
+                        }
+                        operationId to timeoutMillis
+                    }?.toMap()
+                    ?: emptyMap()
+
+            return RequestBodyReadTimeouts(defaultMillis, operationMillis)
         }
     }
 }
