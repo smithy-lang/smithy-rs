@@ -3114,7 +3114,7 @@ mod tests {
             )),
         );
         let info = ConnectionInfo::for_test(ConnectionId::new(1), PartitionId::from_index(1));
-        let (bounded_connection, physical) = ConnectionState::establishing(info);
+        let (bounded_connection, physical) = ConnectionState::pending_open(info);
         bounded_connection
             .open(Some(OriginAdmission::lease_for_test(&admission)))
             .expect("bounded test connection did not open");
@@ -3209,7 +3209,7 @@ mod tests {
         let connection_cell = bounded_cell(&admission, 1);
         let requesting_cell = bounded_cell(&admission, 2);
         let info = ConnectionInfo::for_test(ConnectionId::new(1), connection_cell.id().partition());
-        let (connection, _physical) = ConnectionState::establishing(info);
+        let (connection, _physical) = ConnectionState::pending_open(info);
         connection
             .open(Some(OriginAdmission::lease_for_test(&admission)))
             .expect("bounded HTTP/2 connection did not open");
@@ -3245,11 +3245,11 @@ mod tests {
         use crate::client::pool::admission::OriginAdmission;
         use std::num::NonZeroUsize;
 
-        let admission = OriginAdmission::for_test_with_http1_guarantee(NonZeroUsize::MIN, false);
+        let admission = OriginAdmission::for_test_with_h2_reclaim(NonZeroUsize::MIN, false);
         let connection_cell = bounded_cell(&admission, 1);
         let requesting_cell = bounded_cell(&admission, 2);
         let info = ConnectionInfo::for_test(ConnectionId::new(1), connection_cell.id().partition());
-        let (connection, _physical) = ConnectionState::establishing(info);
+        let (connection, _physical) = ConnectionState::pending_open(info);
         connection
             .open(Some(OriginAdmission::lease_for_test(&admission)))
             .expect("bounded HTTP/2 connection did not open");
@@ -3288,7 +3288,7 @@ mod tests {
         let connection_cell = bounded_cell(&admission, 1);
         let requesting_cell = bounded_cell(&admission, 2);
         let info = ConnectionInfo::for_test(ConnectionId::new(1), connection_cell.id().partition());
-        let (connection, _physical) = ConnectionState::establishing(info);
+        let (connection, _physical) = ConnectionState::pending_open(info);
         connection
             .open(Some(OriginAdmission::lease_for_test(&admission)))
             .expect("bounded HTTP/2 connection did not open");
@@ -3320,7 +3320,7 @@ mod tests {
         let connection_cell = bounded_cell(&admission, 1);
         let requesting_cell = bounded_cell(&admission, 2);
         let info = ConnectionInfo::for_test(ConnectionId::new(1), connection_cell.id().partition());
-        let (connection, _physical) = ConnectionState::establishing(info);
+        let (connection, _physical) = ConnectionState::pending_open(info);
         connection
             .open(Some(OriginAdmission::lease_for_test(&admission)))
             .expect("bounded HTTP/2 connection did not open");

@@ -10,7 +10,7 @@
 //! sole authority for available capacity, origin-wide demand order, and reuse
 //! operations. Cell locks are never held with the admission lock.
 //!
-//! A bounded acquisition crosses the layer in this order:
+//! A bounded acquisition moves through the layer in this order:
 //!
 //! 1. A cell publishes a complete [`DemandSnapshot`] after releasing its lock.
 //! 2. [`DemandSchedule`] replaces that partition snapshot and links active
@@ -18,20 +18,20 @@
 //! 3. Capacity delivery and HTTP/1 reuse select from the origin head. HTTP/2
 //!    publication pairs a group head with an advertised peer generation.
 //! 4. A [`DeliveryGuard`] materializes its one capacity or HTTP/1 payload before
-//!    reserving the requesting waiter. Payload materialization failure therefore leaves the waiter in its existing
-//!    residence.
-//! 5. An [`H2PublicationGuard`] crosses the same lock domains with identities
-//!    only. It revalidates the connection-owning generation, then installs a
-//!    route and activation opportunity in the requesting cell.
+//!    reserving the requesting waiter. Payload materialization failure
+//!    therefore leaves the waiter in its existing residence.
+//! 5. An [`H2PublicationGuard`] carries identities through the same unlocked
+//!    handoff. It revalidates the connection-owning generation, then installs
+//!    a route and activation opportunity in the requesting cell.
 //! 6. The requesting cell becomes authoritative before either guard submits its
 //!    admission acknowledgement. Rejection and drop execute the same terminal
 //!    acknowledgement paths.
 //!
-//! Capacity and HTTP/1 crossings own the payload they must return on failure.
+//! Capacity and HTTP/1 handoffs own the payload they must return on failure.
 //! HTTP/2 publication moves no payload: the connection-owning cell retains its
-//! sender, driver, socket, and capacity. No cell lock is held with the
-//! admission lock, and connection-owning and requesting cell locks are never
-//! held together.
+//! request handle, driver, socket, and capacity. No cell lock is held with
+//! the admission lock, and connection-owning and requesting cell locks are
+//! never held together.
 
 use super::cell::OriginCell;
 use super::origin::OriginKey;
@@ -228,37 +228,41 @@ pub(super) struct DeliveryId(u64);
 pub(crate) struct OriginAdmission {
     /// Canonical origin shared by every partition represented in `state`.
     origin: OriginKey,
-    /// Whether establishment can guarantee HTTP/1 before reclaim spends H2 capacity.
-    guarantees_http1: bool,
+    /// Whether admission may close idle H2 capacity for H1-required demand.
+    allow_h2_reclaim_for_h1: bool,
     /// Capacity, demand, and delivery-fence state for this origin.
     state: Mutex<AdmissionState>,
 }
 
 impl OriginAdmission {
     /// Creates admission for at most `limit` logically open connections.
-    pub(crate) fn new(origin: OriginKey, limit: NonZeroUsize, guarantees_http1: bool) -> Arc<Self> {
+    pub(crate) fn new(
+        origin: OriginKey,
+        limit: NonZeroUsize,
+        allow_h2_reclaim_for_h1: bool,
+    ) -> Arc<Self> {
         Arc::new(Self {
             origin,
-            guarantees_http1,
+            allow_h2_reclaim_for_h1,
             state: Mutex::new(AdmissionState::new(limit)),
         })
     }
 
     #[cfg(test)]
     pub(super) fn for_test(limit: NonZeroUsize) -> Arc<Self> {
-        Self::for_test_with_http1_guarantee(limit, true)
+        Self::for_test_with_h2_reclaim(limit, true)
     }
 
     #[cfg(test)]
-    pub(super) fn for_test_with_http1_guarantee(
+    pub(super) fn for_test_with_h2_reclaim(
         limit: NonZeroUsize,
-        guarantees_http1: bool,
+        allow_h2_reclaim_for_h1: bool,
     ) -> Arc<Self> {
         Self::new(
             OriginKey::from_parts(http_1x::uri::Scheme::HTTPS, "example.com", None)
                 .expect("test origin is valid"),
             limit,
-            guarantees_http1,
+            allow_h2_reclaim_for_h1,
         )
     }
 
@@ -297,7 +301,13 @@ impl OriginAdmission {
         Self::drive(action);
     }
 
-    /// Extracts the next bounded-origin action while admission is locked.
+    /// Selects at most one action while admission is locked.
+    ///
+    /// Cancellation cleanup runs first, followed by available capacity,
+    /// compatible HTTP/2 publication, HTTP/1 reuse, and idle-H2 reclaim. The
+    /// returned action owns everything needed to run after releasing the
+    /// admission lock. Its completion prepares the next action, forming an
+    /// iterative pump without nesting admission and cell locks.
     fn prepare_action(origin: &Arc<Self>, state: &mut AdmissionState) -> Option<AdmissionAction> {
         if let Some(cancellation) = state.h1.prepare_cancellation() {
             return Some(AdmissionAction::H1(reuse::H1ReuseAction::cancel(
@@ -326,7 +336,7 @@ impl OriginAdmission {
                 reuse,
             )));
         }
-        if !origin.guarantees_http1 {
+        if !origin.allow_h2_reclaim_for_h1 {
             return None;
         }
         state
@@ -524,20 +534,20 @@ impl OriginAdmission {
     }
 }
 
-/// One unlocked step prepared while holding the bounded-origin lock.
+/// One detached step prepared while holding the bounded-origin lock.
 pub(super) enum AdmissionAction {
-    /// One capacity or borrowed-H1 payload crossing to a requesting cell.
+    /// One capacity or borrowed-H1 payload handed to a requesting cell.
     Delivery(DeliveryGuard),
     /// HTTP/1 availability, reservation, or borrowed-sender work.
     H1(reuse::H1ReuseAction),
-    /// HTTP/2 generation visibility crossing to one requesting cell.
+    /// HTTP/2 generation visibility handed to one requesting cell.
     H2(H2PublicationGuard),
-    /// Exact idle HTTP/2 generation crossing to its connection cell.
+    /// Exact idle HTTP/2 generation reserved at its connection cell.
     H2Reclaim(H2ReclaimAction),
 }
 
 impl AdmissionAction {
-    /// Executes one lock-domain crossing and returns the next prepared step.
+    /// Executes one detached action and returns the next prepared step.
     fn drive_once(self) -> Option<Self> {
         match self {
             Self::Delivery(delivery) => delivery.deliver_once(),
@@ -690,7 +700,12 @@ impl AdmissionState {
         self.reconcile_demand_indexes(&requesting_partition, old_group);
     }
 
-    /// Repairs every protocol index affected by one demand transition.
+    /// Refreshes protocol indexes derived from the canonical demand schedule.
+    ///
+    /// HTTP/1 indexes depend on the requesting partition's origin position.
+    /// HTTP/2 publication depends on both the previous and current eligibility
+    /// groups, so a group change must repair each view. The derived indexes do
+    /// not own demand or ordering.
     fn reconcile_demand_indexes(
         &mut self,
         requesting_partition: &PartitionId,

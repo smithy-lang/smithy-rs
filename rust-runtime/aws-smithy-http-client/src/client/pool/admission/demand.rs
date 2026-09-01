@@ -5,10 +5,22 @@
 
 //! Versioned cross-cell demand scheduling for one bounded origin.
 //!
-//! Each retained cell publishes a complete demand snapshot. An active snapshot
-//! occupies one origin-wide FIFO and one FIFO for its eligibility group.
-//! Deliveries retain both positions until the requesting cell acknowledges
-//! ownership or rejection.
+//! Each cell publishes at most one active demand: its acquisition queue's
+//! current head. That demand may be satisfied either by origin-wide connection
+//! capacity or by an existing HTTP/2 connection in its eligibility group.
+//! These resources require different orderings.
+//!
+//! For example, the origin order may contain `A(group X), B(group Y)` while
+//! only group Y has a reusable HTTP/2 connection. A remains first for the next
+//! available connection permit, while the group-Y connection can serve B
+//! without consuming that permit or delaying A. The group order finds B
+//! directly instead of scanning every partition.
+//!
+//! The same demand occupies both orders because capacity and HTTP/2 publication
+//! can race to satisfy it. Reserving either position retains a fence in both
+//! orders until the requesting cell accepts or rejects the handoff. The other
+//! resource therefore cannot serve the same demand while the first handoff is
+//! running outside the admission lock.
 
 use super::{
     DeliveryAckResult, DeliveryId, DemandId, DemandSnapshot, DemandState, IntrusiveLinks,
@@ -34,9 +46,9 @@ use std::collections::HashMap;
 pub(super) struct DemandSchedule {
     /// Latest demand and scheduling residence for each retained cell.
     records: HashMap<PartitionId, DemandRecord>,
-    /// Origin-wide order used by capacity and HTTP/1 reuse.
+    /// Origin-wide order used by one-to-one capacity and HTTP/1 reuse.
     origin_order: IntrusiveOrder<PartitionId>,
-    /// All-protocol demand order for each connection-reuse group.
+    /// Reusable-HTTP/2 demand order for each connection-reuse group.
     group_orders: HashMap<EligibilityGroup, IntrusiveOrder<PartitionId>>,
 }
 

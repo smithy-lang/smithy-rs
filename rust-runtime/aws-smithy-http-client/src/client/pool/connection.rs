@@ -62,7 +62,7 @@ pub(super) enum NegotiatedProtocol {
 
 /// Immutable identity and transport facts shared by a connection's owners.
 ///
-/// The protocol record, request metadata, tracing, and future lifecycle events
+/// The protocol record, request metadata, tracing, and lifecycle events
 /// all retain this one allocation rather than reconstructing origin or address
 /// data at each transition.
 #[derive(Debug)]
@@ -86,7 +86,7 @@ pub(super) struct ConnectionInfo {
 }
 
 impl ConnectionInfo {
-    /// Captures immutable facts when protocol establishment succeeds.
+    /// Captures immutable facts after transport negotiation selects a protocol.
     pub(super) fn new(
         id: ConnectionId,
         origin: OriginKey,
@@ -193,7 +193,7 @@ impl ConnectionInfo {
     }
 }
 
-/// Shared protocol-independent ownership for one installed connection.
+/// Shared connection ownership from negotiated transport through close.
 pub(super) struct ConnectionState {
     /// Identity and transport facts shared with metadata and lifecycle events.
     info: Arc<ConnectionInfo>,
@@ -215,8 +215,9 @@ struct LifecycleState {
 /// Whether a connection may accept dispatch and still owns bounded capacity.
 #[derive(Debug)]
 enum LogicalState {
-    /// Protocol handshake or cell installation has not committed.
-    Establishing,
+    /// The transport exists, but protocol handshake and installation have not
+    /// committed.
+    PendingOpen,
     /// Dispatch may commit.
     Open {
         /// Bounded-origin slot released by logical close, when configured.
@@ -230,16 +231,16 @@ enum LogicalState {
 }
 
 impl ConnectionState {
-    /// Creates state before a protocol handshake consumes the root I/O.
+    /// Creates state after transport establishment and before protocol setup.
     ///
     /// The returned guard is the unique physical-lifetime owner. Dispatch is
     /// rejected until [`Self::open`] transfers optional bounded capacity after
-    /// a successful handshake.
-    pub(super) fn establishing(info: Arc<ConnectionInfo>) -> (Arc<Self>, PhysicalConnectionGuard) {
+    /// a successful Hyper handshake and pool installation.
+    pub(super) fn pending_open(info: Arc<ConnectionInfo>) -> (Arc<Self>, PhysicalConnectionGuard) {
         let connection = Arc::new(Self {
             info,
             lifecycle: Mutex::new(LifecycleState {
-                logical: LogicalState::Establishing,
+                logical: LogicalState::PendingOpen,
                 in_flight: 0,
                 physical_complete: false,
             }),
@@ -256,7 +257,7 @@ impl ConnectionState {
     /// Returns `lease` when logical close won before installation.
     pub(super) fn open(&self, lease: Option<CapacityLease>) -> Result<(), Option<CapacityLease>> {
         let mut lifecycle = self.lifecycle.lock();
-        if !matches!(lifecycle.logical, LogicalState::Establishing) {
+        if !matches!(lifecycle.logical, LogicalState::PendingOpen) {
             return Err(lease);
         }
         lifecycle.logical = LogicalState::Open { lease };
@@ -269,7 +270,7 @@ impl ConnectionState {
     /// with the root I/O task.
     #[cfg(test)]
     pub(super) fn unbounded(info: Arc<ConnectionInfo>) -> (Arc<Self>, PhysicalConnectionGuard) {
-        let (connection, physical) = Self::establishing(info);
+        let (connection, physical) = Self::pending_open(info);
         connection
             .open(None)
             .expect("new unbounded connection could not open");
@@ -286,7 +287,7 @@ impl ConnectionState {
         info: Arc<ConnectionInfo>,
         lease: CapacityLease,
     ) -> (Arc<Self>, PhysicalConnectionGuard) {
-        let (connection, physical) = Self::establishing(info);
+        let (connection, physical) = Self::pending_open(info);
         connection
             .open(Some(lease))
             .expect("new bounded connection could not open");
@@ -341,7 +342,7 @@ impl ConnectionState {
         let lease = {
             let mut lifecycle = self.lifecycle.lock();
             match &mut lifecycle.logical {
-                LogicalState::Establishing => {
+                LogicalState::PendingOpen => {
                     lifecycle.logical = LogicalState::Closed { reason };
                     None
                 }
@@ -408,7 +409,7 @@ impl ConnectionState {
     pub(super) fn debug_assert_close_reason(&self, expected: CloseReason) {
         let lifecycle = self.lifecycle.lock();
         let actual = match lifecycle.logical {
-            LogicalState::Establishing => None,
+            LogicalState::PendingOpen => None,
             LogicalState::Open { .. } => None,
             LogicalState::Closed { reason } => Some(reason),
         };
@@ -454,7 +455,7 @@ impl ConnectionState {
         let lifecycle = self.lifecycle.lock();
         ConnectionSnapshot {
             close_reason: match lifecycle.logical {
-                LogicalState::Establishing => None,
+                LogicalState::PendingOpen => None,
                 LogicalState::Open { .. } => None,
                 LogicalState::Closed { reason } => Some(reason),
             },

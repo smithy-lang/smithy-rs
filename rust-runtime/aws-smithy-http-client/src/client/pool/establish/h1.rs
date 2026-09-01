@@ -97,7 +97,7 @@ async fn handshake_and_install_h1(
         NegotiatedProtocol::Http1,
         connected,
     );
-    let (connection, physical) = ConnectionState::establishing(info);
+    let (connection, physical) = ConnectionState::pending_open(info);
     let io = ConnectionIo::new(io, physical);
 
     let (sender, driver) = match hyper::client::conn::http1::Builder::new()
