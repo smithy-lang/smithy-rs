@@ -276,6 +276,9 @@ crate::cfg::cfg_tls! {
         }
 
         /// Builds a pool whose connector performs TLS and ALPN negotiation.
+        ///
+        /// This builder currently creates direct connections. Proxy routing
+        /// remains available through the existing `Connector` API.
         pub fn build_https(self) -> Result<ConnectionPool, BuildError> {
             validate_default_connector_interfaces(self.partitions.as_deref())?;
             let provider = self.tls.provider.clone();
@@ -286,19 +289,21 @@ crate::cfg::cfg_tls! {
                     let tcp_nodelay = self.tcp_nodelay;
                     let tcp_keepalive = self.tcp_keepalive.clone().resolve(None);
                     let transport = establish::cached_transport_factory_for_interface(
-                        move |interface| {
+                        move |interface, alpn_protocols| {
                             let mut connector =
                                 HttpConnector::new_with_resolver(GaiResolver::new());
                             connector.set_nodelay(tcp_nodelay);
                             connector.set_keepalive(tcp_keepalive);
                             set_default_connector_interface(&mut connector, interface);
-                            tls::rustls_provider::build_connector::wrap_connector(
+                            tls::rustls_provider::build_connector::wrap_connector_with_alpn(
                                 connector,
                                 crypto_mode.clone(),
                                 &context,
                                 crate::proxy::ProxyConfig::disabled(),
+                                alpn_protocols,
                             )
                         },
+                        true,
                     );
                     self.build_with_transport(transport)
                 }
@@ -307,7 +312,7 @@ crate::cfg::cfg_tls! {
                     let tcp_nodelay = self.tcp_nodelay;
                     let tcp_keepalive = self.tcp_keepalive.clone().resolve(None);
                     let transport = establish::cached_transport_factory_for_interface(
-                        move |interface| {
+                        move |interface, _alpn_protocols| {
                             let mut connector =
                                 HttpConnector::new_with_resolver(GaiResolver::new());
                             connector.set_nodelay(tcp_nodelay);
@@ -319,6 +324,7 @@ crate::cfg::cfg_tls! {
                                 crate::proxy::ProxyConfig::disabled(),
                             )
                         },
+                        false,
                     );
                     self.build_with_transport(transport)
                 }
@@ -414,10 +420,12 @@ impl<Tls> Builder<Tls> {
             time_source: time_source.clone(),
             sleep: sleep_impl.clone(),
         };
+        let guarantees_http1 = transport.guarantees_http1();
         let registry = PartitionRegistry::new(
             self.partitions,
             self.reuse_scope,
             max_connections_per_host,
+            guarantees_http1,
             maintenance,
         )
         .map_err(BuildError::from)?;

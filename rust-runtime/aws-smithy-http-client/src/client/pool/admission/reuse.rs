@@ -39,7 +39,7 @@
 
 use super::{
     AdmissionAction, DeliveryAckResult, DeliveryGuard, DeliveryId, DemandId, DemandSchedule,
-    IntrusiveLinks, IntrusiveOrder, OriginAdmission, ProtocolRequirement,
+    IntrusiveLinks, IntrusiveOrder, OriginAdmission,
 };
 use crate::client::pool::cell::h1::{H1Selection, ProvisionalH1};
 use crate::client::pool::cell::OriginCell;
@@ -366,9 +366,9 @@ impl H1Reuse {
     /// Selects another cell's connection for the oldest origin-wide demand.
     ///
     /// An eligible cell lends its sender. Otherwise, a connection is reclaimed
-    /// so its capacity can satisfy the same demand. A cell is never selected for
-    /// its own demand; local idle and returning senders are handled under the
-    /// cell lock.
+    /// so its capacity can satisfy the same demand. HTTP/1-compatible demand
+    /// does not select its own cell because local senders are handled under the
+    /// cell lock. HTTP/2-only demand may reclaim same-cell idle HTTP/1 capacity.
     pub(super) fn prepare_reuse(
         &mut self,
         schedule: &DemandSchedule,
@@ -381,24 +381,20 @@ impl H1Reuse {
             return None;
         }
 
-        let (connection_partition, mode) =
-            if requesting_partition.requirement == ProtocolRequirement::H1Compatible {
-                match self.take_group_peer(
-                    &requesting_partition.eligibility_group,
-                    &requesting_partition.requesting_partition,
-                ) {
-                    Some(connection_partition) => (connection_partition, ReuseMode::Borrow),
-                    None => (
-                        self.take_origin_peer(&requesting_partition.requesting_partition)?,
-                        ReuseMode::Reclaim,
-                    ),
-                }
-            } else {
-                (
+        let (connection_partition, mode) = if requesting_partition.requirement.accepts_h1() {
+            match self.take_group_peer(
+                &requesting_partition.eligibility_group,
+                &requesting_partition.requesting_partition,
+            ) {
+                Some(connection_partition) => (connection_partition, ReuseMode::Borrow),
+                None => (
                     self.take_origin_peer(&requesting_partition.requesting_partition)?,
                     ReuseMode::Reclaim,
-                )
-            };
+                ),
+            }
+        } else {
+            (self.take_origin_head()?, ReuseMode::Reclaim)
+        };
 
         let id = self.take_reuse_id();
         let availability_record = self
@@ -567,6 +563,13 @@ impl H1Reuse {
         Some(connection_partition)
     }
 
+    /// Removes and returns the oldest origin-wide connection, including local.
+    fn take_origin_head(&mut self) -> Option<PartitionId> {
+        let connection_partition = self.origin_order.head()?;
+        self.unlink_cell(&connection_partition);
+        Some(connection_partition)
+    }
+
     /// Returns the head, or its successor when the head is the requesting cell itself.
     fn first_peer(
         &self,
@@ -697,7 +700,12 @@ impl H1Reuse {
     /// Checks reuse-operation indexes and both availability orders after every mutation.
     fn assert_consistent(&self) {
         #[cfg(debug_assertions)]
-        self.assert_consistent_debug();
+        {
+            if std::thread::panicking() {
+                return;
+            }
+            self.assert_consistent_debug();
+        }
     }
 
     #[cfg(debug_assertions)]
@@ -1222,6 +1230,9 @@ impl OriginAdmission {
             match record.mode {
                 ReuseMode::Borrow => {
                     let delivery = state.take_delivery_id();
+                    let old_group = state
+                        .demand_schedule
+                        .group_for(&record.requesting_partition);
                     let Some(scheduled) = state.demand_schedule.reserve_reuse_demand(
                         &record.requesting_partition,
                         record.demand,
@@ -1231,7 +1242,7 @@ impl OriginAdmission {
                         drop(candidate);
                         return None;
                     };
-                    state.reconcile_h2_demand(&scheduled.requesting_partition);
+                    state.reconcile_demand_indexes(&scheduled.requesting_partition, old_group);
                     Some(AdmissionAction::Delivery(DeliveryGuard::borrowed_h1(
                         origin.clone(),
                         delivery,
@@ -1300,7 +1311,7 @@ impl OriginAdmission {
 #[cfg(all(test, not(smithy_http_client_loom)))]
 mod tests {
     use super::*;
-    use crate::client::pool::admission::{DemandSnapshot, SnapshotVersion};
+    use crate::client::pool::admission::{DemandSnapshot, ProtocolRequirement, SnapshotVersion};
     use crate::client::pool::partition::PartitionId;
 
     fn cell(index: usize) -> PartitionId {
@@ -1373,6 +1384,38 @@ mod tests {
                 .get(&group)
                 .expect("connection cell group disappeared")
                 .len()
+        );
+    }
+
+    #[test]
+    fn h2_required_demand_reclaims_local_h1_capacity() {
+        let requesting_partition = cell(1);
+        let group = EligibilityGroup::Pool;
+        let mut schedule = DemandSchedule::default();
+        schedule.publish(
+            requesting_partition,
+            DemandSnapshot::active(
+                DemandId::from_u64(1),
+                SnapshotVersion::INITIAL,
+                ProtocolRequirement::H2Required,
+                group.clone(),
+            ),
+        );
+        let mut coordination = H1Reuse::default();
+        coordination.update_availability(
+            requesting_partition,
+            group,
+            availability_snapshot(1, true, false),
+        );
+
+        let prepared = coordination
+            .prepare_reuse(&schedule)
+            .expect("local HTTP/1 capacity was not selected for reclaim");
+
+        assert_eq!(requesting_partition, prepared.connection_partition);
+        assert_eq!(
+            ReuseMode::Reclaim,
+            coordination.operations[&prepared.id].mode
         );
     }
 

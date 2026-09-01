@@ -16,7 +16,7 @@ use super::super::cell::h1::{H1Exchange, H1Selection};
 use super::super::connection::{CloseReason, ConnectionState, DispatchGuard};
 use super::super::partition::DriverSpawner;
 use super::super::ConnectionPool;
-use super::{AcquisitionContext, RequestDispatchError};
+use super::{AcquisitionContext, H1HostHeaderInserted, RequestDispatchError};
 use aws_smithy_runtime_api::client::connection::CaptureSmithyConnection;
 use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_types::body::SdkBody;
@@ -405,6 +405,7 @@ fn add_host_header(
     let value =
         http_1x::HeaderValue::from_str(&host).map_err(RequestDispatchError::InvalidHostHeader)?;
     request.headers_mut().insert(http_1x::header::HOST, value);
+    request.extensions_mut().insert(H1HostHeaderInserted);
     Ok(())
 }
 
@@ -661,7 +662,7 @@ mod tests {
             .send_request(partition, request, None)
             .await
             .expect_err("dropped establishment task did not fail the request");
-        assert!(error.is_other());
+        assert!(error.is_io());
         assert_eq!(
             "the owner-runtime connection establishment task was dropped",
             std::error::Error::source(&error).unwrap().to_string()
@@ -1154,30 +1155,46 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn incompatible_h1_selection_reports_connection_identity() {
+    async fn incompatible_h1_result_remains_reusable_for_compatible_demand() {
         let server = TestServer::start().await;
-        let pool = ConnectionPool::builder().build_http().unwrap();
+        let pool = ConnectionPool::builder()
+            .max_connections_per_host(1)
+            .build_http()
+            .unwrap();
         let partition = anonymous_partition(&pool);
         let capture = CaptureSmithyConnection::new();
-        let mut request = Request::get(server.uri("/h2"))
+        let mut h2_request = Request::get(server.uri("/h2"))
             .version(Version::HTTP_2)
             .body(SdkBody::empty())
             .unwrap();
-        request.extensions_mut().insert(capture.clone());
+        h2_request.extensions_mut().insert(capture.clone());
 
         let error = pool
-            .send_request(partition, request, None)
+            .send_request(partition.clone(), h2_request, None)
             .await
             .expect_err("an HTTP/2 request unexpectedly used HTTP/1");
         assert!(error.is_user());
-        assert!(error
+        let error_connection = error
             .connection_metadata()
-            .and_then(|metadata| metadata.connection_id())
-            .is_some());
-        assert!(capture
+            .expect("the mismatch error omitted connection metadata");
+        let captured_connection = capture
             .get()
-            .and_then(|metadata| metadata.connection_id())
-            .is_some());
+            .expect("the mismatch request did not capture its connection");
+        assert_eq!(
+            error_connection.connection_id(),
+            captured_connection.connection_id()
+        );
+
+        let response = request(&pool, partition, server.uri("/h1")).await;
+        assert_eq!(
+            hyper::body::Bytes::from_static(b"ok"),
+            consume(response).await
+        );
+        assert_eq!(
+            1,
+            server.accepted(),
+            "the rejected HTTP/2 request discarded a reusable HTTP/1 connection"
+        );
     }
 
     #[tokio::test]

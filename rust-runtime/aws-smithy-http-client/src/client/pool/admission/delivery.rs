@@ -410,9 +410,15 @@ enum DeliveryKind {
 }
 
 impl DeliveryAck {
-    /// Keeps a successor local while an H2 generation or route can serve it.
-    pub(in crate::client::pool) fn suppress_successor(&mut self) {
-        self.successor = None;
+    /// Keeps an H2-compatible successor local while a visible H2 can serve it.
+    pub(in crate::client::pool) fn suppress_h2_successor(&mut self) {
+        if self
+            .successor
+            .as_ref()
+            .is_some_and(DemandSnapshot::accepts_h2)
+        {
+            self.successor = None;
+        }
     }
 
     /// Acknowledges that requesting cell state accepted the acquisition event.

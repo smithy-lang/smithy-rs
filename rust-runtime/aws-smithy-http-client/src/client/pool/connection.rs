@@ -151,7 +151,7 @@ impl ConnectionInfo {
         self.connected.get_extras(extensions);
     }
 
-    /// Builds Smithy metadata with close authority for this H1 generation.
+    /// Builds Smithy metadata with close authority for this H1 record.
     pub(super) fn metadata(&self, close: super::cell::h1::H1CloseHandle) -> ConnectionMetadata {
         let mut builder = ConnectionMetadata::builder()
             .proxied(self.proxied)

@@ -116,6 +116,8 @@ enum DemandResidence {
     Delivering {
         /// Demand generation fenced at one scheduling head.
         demand: DemandId,
+        /// Snapshot version current when admission created the fence.
+        version: super::SnapshotVersion,
         /// Delivery allowed to complete this fence.
         delivery: DeliveryId,
         /// Scheduling view whose head owns this crossing.
@@ -499,6 +501,7 @@ impl DemandSchedule {
                 debug_assert!(record.latest.is_active());
                 record.residence = DemandResidence::Delivering {
                     demand,
+                    version: record.latest.version,
                     delivery,
                     view,
                     links,
@@ -565,11 +568,13 @@ impl DemandSchedule {
         let delivered_demand = match &record.residence {
             DemandResidence::Delivering {
                 demand,
+                version,
                 delivery: current,
                 ..
-            } if *current == delivery => *demand,
+            } if *current == delivery => (*demand, *version),
             _ => return,
         };
+        let (delivered_demand, delivered_version) = delivered_demand;
 
         match result {
             DeliveryAckResult::RetrySameResidence => {
@@ -585,6 +590,7 @@ impl DemandSchedule {
                     let residence = std::mem::replace(&mut record.residence, DemandResidence::Idle);
                     let DemandResidence::Delivering {
                         demand,
+                        version: _,
                         delivery: current,
                         view: _,
                         links,
@@ -628,20 +634,16 @@ impl DemandSchedule {
                         .get_mut(requesting_partition)
                         .expect("delivery demand record disappeared")
                         .latest = successor.expect("validated successor disappeared");
-                } else if self
-                    .records
-                    .get(requesting_partition)
-                    .expect("delivery demand record disappeared")
-                    .latest
-                    .id
-                    == delivered_demand
-                {
+                } else {
+                    let retirement =
+                        DemandSnapshot::inactive(delivered_demand, delivered_version.next());
                     let record = self
                         .records
                         .get_mut(requesting_partition)
                         .expect("delivery demand record disappeared");
-                    record.latest =
-                        DemandSnapshot::inactive(delivered_demand, record.latest.version.next());
+                    if retirement.is_newer_than(&record.latest) {
+                        record.latest = retirement;
+                    }
                 }
 
                 if self
@@ -693,7 +695,12 @@ impl DemandSchedule {
     /// Checks residence, link, length, group, and fence relationships.
     fn assert_consistent(&self) {
         #[cfg(any(debug_assertions, test))]
-        self.assert_consistent_debug();
+        {
+            if std::thread::panicking() {
+                return;
+            }
+            self.assert_consistent_debug();
+        }
     }
 
     #[cfg(any(debug_assertions, test))]
@@ -703,6 +710,23 @@ impl DemandSchedule {
             .values()
             .filter(|record| record.residence.links(DemandOrderView::Origin).is_some())
             .count();
+        let origin_deliveries = self
+            .records
+            .values()
+            .filter(|record| {
+                matches!(
+                    record.residence,
+                    DemandResidence::Delivering {
+                        view: DeliveryView::Origin,
+                        ..
+                    }
+                )
+            })
+            .count();
+        assert!(
+            origin_deliveries <= 1,
+            "more than one origin delivery fence was active"
+        );
         self.origin_order.assert_consistent(
             ordered_records,
             self.records.len(),
@@ -773,6 +797,24 @@ impl DemandSchedule {
         );
 
         for (group, order) in &self.group_orders {
+            let group_deliveries = self
+                .records
+                .values()
+                .filter(|record| {
+                    record.group.as_ref() == Some(group)
+                        && matches!(
+                            record.residence,
+                            DemandResidence::Delivering {
+                                view: DeliveryView::Group,
+                                ..
+                            }
+                        )
+                })
+                .count();
+            assert!(
+                group_deliveries <= 1,
+                "more than one group delivery fence was active"
+            );
             let expected = self
                 .records
                 .values()
@@ -944,6 +986,97 @@ mod tests {
         );
         assert_eq!(0, schedule.len());
         assert!(schedule.queued_group_head(&group).is_none());
+    }
+
+    #[test]
+    fn accepted_fence_does_not_retire_a_newer_active_publication() {
+        let group = EligibilityGroup::Pool;
+        let partition = partition(1);
+        let demand = DemandId::from_u64(1);
+        let initial = super::super::SnapshotVersion::INITIAL;
+        let mut schedule = DemandSchedule::default();
+        schedule.publish(
+            partition,
+            DemandSnapshot::active(
+                demand,
+                initial,
+                ProtocolRequirement::H2Required,
+                group.clone(),
+            ),
+        );
+        let delivery = DeliveryId(12);
+        schedule
+            .reserve_group_head(&group, &partition, demand, delivery)
+            .expect("group head should reserve");
+        let republished = DemandSnapshot::active(
+            demand,
+            initial.next().next(),
+            ProtocolRequirement::H2Required,
+            group.clone(),
+        );
+        schedule.publish(partition, republished.clone());
+
+        schedule.finish_delivery(
+            delivery,
+            &partition,
+            DeliveryAckResult::Accepted { successor: None },
+        );
+
+        assert_eq!(Some(&republished), schedule.latest_for_test(&partition));
+        assert_eq!(
+            Some(partition),
+            schedule.queued_head().map(|head| head.requesting_partition)
+        );
+        assert_eq!(
+            Some(partition),
+            schedule
+                .queued_group_head(&group)
+                .map(|head| head.requesting_partition)
+        );
+    }
+
+    #[test]
+    fn group_reservation_rejects_a_stale_demand_identity() {
+        let group = EligibilityGroup::Pool;
+        let partition = partition(1);
+        let mut schedule = DemandSchedule::default();
+        schedule.publish(partition, active(1, group.clone()));
+        schedule.publish(partition, active(2, group.clone()));
+
+        assert!(schedule
+            .reserve_group_head(&group, &partition, DemandId::from_u64(1), DeliveryId(13),)
+            .is_none());
+        assert_eq!(
+            Some(DemandId::from_u64(2)),
+            schedule
+                .queued_group_head(&group)
+                .map(|queued| queued.demand)
+        );
+    }
+
+    #[test]
+    fn stale_acknowledgement_does_not_close_a_newer_delivery_fence() {
+        let group = EligibilityGroup::Pool;
+        let partition = partition(1);
+        let demand = DemandId::from_u64(1);
+        let mut schedule = DemandSchedule::default();
+        schedule.publish(partition, active(1, group.clone()));
+        schedule
+            .reserve_group_head(&group, &partition, demand, DeliveryId(14))
+            .expect("group head should reserve");
+
+        schedule.finish_delivery(
+            DeliveryId(15),
+            &partition,
+            DeliveryAckResult::Accepted { successor: None },
+        );
+
+        assert!(schedule.delivery_is_current(DeliveryId(14), &partition, demand));
+        assert!(!schedule.delivery_is_current(DeliveryId(15), &partition, demand));
+        assert_eq!(
+            Some(&active(1, group)),
+            schedule.latest_for_test(&partition)
+        );
     }
 
     #[test]
