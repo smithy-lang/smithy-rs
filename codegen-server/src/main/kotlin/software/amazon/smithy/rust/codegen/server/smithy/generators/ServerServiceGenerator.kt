@@ -158,6 +158,66 @@ class ServerServiceGenerator(
                     } else {
                         ""
                     }
+
+                fun requestTimeoutServiceTy(
+                    inner: Writable,
+                    requestTimeoutMillis: Long?,
+                ): Writable =
+                    if (requestTimeoutMillis != null) {
+                        writable {
+                            rustTemplate(
+                                "#{SmithyHttpServer}::operation::RequestTimeout<#{Inner:W}>",
+                                "Inner" to inner,
+                                *codegenScope,
+                            )
+                        }
+                    } else {
+                        inner
+                    }
+
+                fun upgradeOutputTy(inputTy: Writable): Writable =
+                    writable {
+                        rustTemplate(
+                            """
+                            <
+                                #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>
+                                as #{SmithyHttpServer}::plugin::Plugin<
+                                    $serviceName<L>,
+                                    crate::operation_shape::$structName,
+                                    #{InputTy:W}
+                                >
+                            >::Output
+                            """,
+                            "InputTy" to inputTy,
+                            *codegenScope,
+                        )
+                    }
+
+                val requestTimeoutMillis =
+                    codegenContext.settings.requestBodyReadTimeouts.timeoutMillisFor(operationShape.id)
+                val operationId = operationShape.id.toString().replace("#", "##")
+                val httpPluginInputTy =
+                    requestTimeoutServiceTy(upgradeOutputTy(writable { rust("ModelPl::Output") }), requestTimeoutMillis)
+                val requestTimeoutLayer =
+                    if (requestTimeoutMillis != null) {
+                        writable {
+                            rustTemplate(
+                                """
+                                let svc = #{Tower}::Layer::layer(
+                                    &#{SmithyHttpServer}::operation::RequestTimeoutLayer::new(
+                                        std::time::Duration::from_millis(${requestTimeoutMillis}u64),
+                                        "$operationId",
+                                    ),
+                                    svc,
+                                );
+                                """,
+                                *codegenScope,
+                            )
+                        }
+                    } else {
+                        writable { }
+                    }
+
                 rustTemplate(
                     """
                     /// Sets the [`$structName`](crate::operation_shape::$structName) operation.
@@ -200,14 +260,7 @@ class ServerServiceGenerator(
                         HttpPl: #{SmithyHttpServer}::plugin::Plugin<
                             $serviceName<L>,
                             crate::operation_shape::$structName,
-                            <
-                                #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>
-                                as #{SmithyHttpServer}::plugin::Plugin<
-                                    $serviceName<L>,
-                                    crate::operation_shape::$structName,
-                                    ModelPl::Output
-                                >
-                            >::Output
+                            #{HttpPluginInputTy:W}
                         >,
 
                         HttpPl::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
@@ -219,6 +272,7 @@ class ServerServiceGenerator(
                         let svc = crate::operation_shape::$structName::from_handler(handler);
                         let svc = self.model_plugin.apply(svc);
                         let svc = #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new().apply(svc);
+                        #{RequestTimeoutLayer:W}
                         let svc = self.http_plugin.apply(svc);
                         self.${fieldName}_custom(svc)
                     }
@@ -264,14 +318,7 @@ class ServerServiceGenerator(
                         HttpPl: #{SmithyHttpServer}::plugin::Plugin<
                             $serviceName<L>,
                             crate::operation_shape::$structName,
-                            <
-                                #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>
-                                as #{SmithyHttpServer}::plugin::Plugin<
-                                    $serviceName<L>,
-                                    crate::operation_shape::$structName,
-                                    ModelPl::Output
-                                >
-                            >::Output
+                            #{HttpPluginInputTy:W}
                         >,
 
                         HttpPl::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
@@ -283,6 +330,7 @@ class ServerServiceGenerator(
                         let svc = crate::operation_shape::$structName::from_service(service);
                         let svc = self.model_plugin.apply(svc);
                         let svc = #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new().apply(svc);
+                        #{RequestTimeoutLayer:W}
                         let svc = self.http_plugin.apply(svc);
                         self.${fieldName}_custom(svc)
                     }
@@ -298,6 +346,8 @@ class ServerServiceGenerator(
                         self
                     }
                     """,
+                    "HttpPluginInputTy" to httpPluginInputTy,
+                    "RequestTimeoutLayer" to requestTimeoutLayer,
                     "Router" to protocol.routerType(),
                     "Protocol" to protocol.markerStruct(),
                     "Handler" to handler,

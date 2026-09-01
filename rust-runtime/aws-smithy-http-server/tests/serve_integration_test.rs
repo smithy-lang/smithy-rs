@@ -55,6 +55,8 @@ async fn test_bind_single_await_path() {
         Duration::from_secs(2),
         aws_smithy_http_server::serve::bind((Ipv4Addr::LOCALHOST, 0), IntoMakeService::new(service_fn(ok_service)))
             .socket_listen_backlog(128)
+            .tcp_nodelay(true)
+            .tcp_keepalive(true)
             .max_connections(1024)
             .with_graceful_shutdown(async {
                 shutdown_rx.await.ok();
@@ -70,6 +72,8 @@ async fn test_bind_into_serve_returns_serve_builder() {
     let serve =
         aws_smithy_http_server::serve::bind((Ipv4Addr::LOCALHOST, 0), IntoMakeService::new(service_fn(ok_service)))
             .socket_listen_backlog(128)
+            .tcp_nodelay(true)
+            .tcp_keepalive(true)
             .into_serve()
             .await
             .expect("failed to bind bind builder");

@@ -28,6 +28,10 @@ use super::{serve, IncomingStream, Serve};
 /// `net.core.somaxconn`.
 pub const DEFAULT_SOCKET_LISTEN_BACKLOG: u32 = 1024;
 
+const DEFAULT_TCP_NODELAY: bool = true;
+
+const DEFAULT_TCP_KEEPALIVE: bool = true;
+
 /// Create a TCP-binding serve builder.
 ///
 /// This binds a TCP listener when awaited, then delegates to [`serve`] so the
@@ -41,6 +45,8 @@ pub const DEFAULT_SOCKET_LISTEN_BACKLOG: u32 = 1024;
 /// ```rust,ignore
 /// aws_smithy_http_server::serve::bind(("127.0.0.1", 3000), app.into_make_service())
 ///     .socket_listen_backlog(2048)
+///     .tcp_nodelay(true)
+///     .tcp_keepalive(true)
 ///     .max_connections(1024)
 ///     .with_graceful_shutdown(shutdown_signal())
 ///     .await?;
@@ -70,6 +76,8 @@ where
         f.debug_struct("Bind")
             .field("addr", &self.addr)
             .field("socket_listen_backlog", &self.config.socket_listen_backlog)
+            .field("tcp_nodelay", &self.config.tcp_nodelay)
+            .field("tcp_keepalive", &self.config.tcp_keepalive)
             .field("has_hyper_config", &self.config.hyper_builder.is_some())
             .field("max_connections", &self.config.max_connections)
             .finish_non_exhaustive()
@@ -97,6 +105,24 @@ impl<A, M, S, B> Bind<A, M, S, B> {
     /// `net.core.somaxconn`.
     pub fn socket_listen_backlog(mut self, backlog: u32) -> Self {
         self.config.socket_listen_backlog = backlog;
+        self
+    }
+
+    /// Set `TCP_NODELAY` on the TCP listener socket.
+    ///
+    /// This is enabled by default for listeners created by [`bind`].
+    pub fn tcp_nodelay(mut self, enabled: bool) -> Self {
+        self.config.tcp_nodelay = enabled;
+        self
+    }
+
+    /// Set `SO_KEEPALIVE` on the TCP listener socket.
+    ///
+    /// This is enabled by default for listeners created by [`bind`]. The
+    /// platform controls keep-alive probe timing unless the socket is created
+    /// manually and passed to [`serve`].
+    pub fn tcp_keepalive(mut self, enabled: bool) -> Self {
+        self.config.tcp_keepalive = enabled;
         self
     }
 
@@ -152,9 +178,15 @@ where
     /// Use this when you need to inspect [`Serve::local_addr`] before running
     /// the server, such as when binding to port `0` in tests.
     pub async fn into_serve(self) -> io::Result<Serve<TcpListener, M, S, B>> {
-        let listener = bind_tcp_listener(self.addr, self.config.socket_listen_backlog).await?;
-        let mut serve = serve(listener, self.make_service);
-        self.config.apply_to_serve(&mut serve);
+        let Self {
+            addr,
+            make_service,
+            config,
+            _marker,
+        } = self;
+        let listener = bind_tcp_listener(addr, &config).await?;
+        let mut serve = serve(listener, make_service);
+        config.apply_to_serve(&mut serve);
         Ok(serve)
     }
 }
@@ -202,6 +234,18 @@ impl<A, M, S, F, B> BindWithGracefulShutdown<A, M, S, F, B> {
     /// Set the kernel socket listen backlog passed to [`TcpSocket::listen`].
     pub fn socket_listen_backlog(mut self, backlog: u32) -> Self {
         self.tcp_serve.config.socket_listen_backlog = backlog;
+        self
+    }
+
+    /// Set `TCP_NODELAY` on the TCP listener socket.
+    pub fn tcp_nodelay(mut self, enabled: bool) -> Self {
+        self.tcp_serve.config.tcp_nodelay = enabled;
+        self
+    }
+
+    /// Set `SO_KEEPALIVE` on the TCP listener socket.
+    pub fn tcp_keepalive(mut self, enabled: bool) -> Self {
+        self.tcp_serve.config.tcp_keepalive = enabled;
         self
     }
 
@@ -267,6 +311,8 @@ where
 #[derive(Debug)]
 struct BindConfig {
     socket_listen_backlog: u32,
+    tcp_nodelay: bool,
+    tcp_keepalive: bool,
     hyper_builder: Option<Arc<Builder<TokioExecutor>>>,
     max_connections: Option<Option<usize>>,
 }
@@ -275,6 +321,8 @@ impl Default for BindConfig {
     fn default() -> Self {
         Self {
             socket_listen_backlog: DEFAULT_SOCKET_LISTEN_BACKLOG,
+            tcp_nodelay: DEFAULT_TCP_NODELAY,
+            tcp_keepalive: DEFAULT_TCP_KEEPALIVE,
             hyper_builder: None,
             max_connections: None,
         }
@@ -292,7 +340,7 @@ impl BindConfig {
     }
 }
 
-async fn bind_tcp_listener<A>(addr: A, backlog: u32) -> io::Result<TcpListener>
+async fn bind_tcp_listener<A>(addr: A, config: &BindConfig) -> io::Result<TcpListener>
 where
     A: ToSocketAddrs,
 {
@@ -312,12 +360,22 @@ where
             }
         };
 
+        if let Err(err) = socket.set_nodelay(config.tcp_nodelay) {
+            last_err = Some(err);
+            continue;
+        }
+
+        if let Err(err) = socket.set_keepalive(config.tcp_keepalive) {
+            last_err = Some(err);
+            continue;
+        }
+
         if let Err(err) = socket.bind(addr) {
             last_err = Some(err);
             continue;
         }
 
-        match socket.listen(backlog) {
+        match socket.listen(config.socket_listen_backlog) {
             Ok(listener) => return Ok(listener),
             Err(err) => last_err = Some(err),
         }

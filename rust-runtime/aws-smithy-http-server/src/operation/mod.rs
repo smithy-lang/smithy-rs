@@ -163,9 +163,11 @@
 mod handler;
 mod operation_service;
 mod shape;
+mod timeout;
 mod upgrade;
 
 pub use handler::*;
 pub use operation_service::*;
 pub use shape::*;
+pub use timeout::*;
 pub use upgrade::*;
