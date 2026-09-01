@@ -380,6 +380,5 @@ internal class RequestBodyReadTimeoutTest {
             """,
         )
 
-    private fun objectNode(json: String): ObjectNode =
-        Node.parse(json).expectObjectNode()
+    private fun objectNode(json: String): ObjectNode = Node.parse(json).expectObjectNode()
 }

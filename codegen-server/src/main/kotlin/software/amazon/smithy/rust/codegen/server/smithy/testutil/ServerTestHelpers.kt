@@ -101,10 +101,11 @@ fun serverTestRustSettings(
     examplesUri: String? = null,
     minimumSupportedRustVersion: String? = null,
     customizationConfig: ObjectNode? = null,
-    requestBodyReadTimeouts: RequestBodyReadTimeouts = RequestBodyReadTimeouts(
-        RequestBodyReadTimeouts.DEFAULT_REQUEST_BODY_READ_TIMEOUT_MILLIS,
-        emptyMap(),
-    ),
+    requestBodyReadTimeouts: RequestBodyReadTimeouts =
+        RequestBodyReadTimeouts(
+            RequestBodyReadTimeouts.DEFAULT_REQUEST_BODY_READ_TIMEOUT_MILLIS,
+            emptyMap(),
+        ),
 ) = ServerRustSettings(
     service,
     moduleName,
