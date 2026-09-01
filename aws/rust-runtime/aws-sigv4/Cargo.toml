@@ -54,10 +54,6 @@ serde = "1.0.180"
 serde_derive = "1.0.180"
 serde_json = "1.0.104"
 time = { version = "0.3.5", features = ["parsing"] }
-# Tests exercise the `http` 0.2.x code paths regardless of whether `http0-compat` is enabled
-# (see the `test` arm of the cfg on `SigningInstructions::apply_to_request_http0x`). Declaring
-# this in dev scope keeps `http` 0.2.x out of the normal dependency tree.
-http0 = { package = "http", version = "0.2.12" }
 
 criterion = "0.5"
 
