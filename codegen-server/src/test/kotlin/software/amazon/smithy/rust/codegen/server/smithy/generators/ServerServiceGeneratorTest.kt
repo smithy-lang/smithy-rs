@@ -12,6 +12,8 @@ import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenConfig
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersion
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.io.File
 import kotlin.io.path.readText
@@ -106,6 +108,7 @@ internal class ServerServiceGeneratorTest {
                             )
                             .build(),
                 ),
+                testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
             ) { _, _ -> }
 
         generatedServers.forEach { generatedServer ->
@@ -116,6 +119,7 @@ internal class ServerServiceGeneratorTest {
             val modelSchema = src.resolve("schema/model/shape_nested.rs")
             val operationsSchema = src.resolve("schema/operations.rs")
             val serviceSchema = src.resolve("schema/service.rs")
+            val service = src.resolve("service.rs")
 
             assert(inputSchema.toFile().exists()) { "missing $inputSchema" }
             assert(outputSchema.toFile().exists()) { "missing $outputSchema" }
@@ -123,6 +127,7 @@ internal class ServerServiceGeneratorTest {
             assert(modelSchema.toFile().exists()) { "missing $modelSchema" }
             assert(operationsSchema.toFile().exists()) { "missing $operationsSchema" }
             assert(serviceSchema.toFile().exists()) { "missing $serviceSchema" }
+            assert(service.toFile().exists()) { "missing $service" }
             assert(inputSchema.readText().contains("ECHO_INPUT_SCHEMA")) { inputSchema.readText() }
             assert(operationsSchema.readText().contains("OperationSchema::new")) { operationsSchema.readText() }
             assert(operationsSchema.readText().contains("crate::schema::input::shape_echo_input::ECHO_INPUT")) {
@@ -130,6 +135,10 @@ internal class ServerServiceGeneratorTest {
             }
             assert(serviceSchema.readText().contains("ServiceSchema::new")) { serviceSchema.readText() }
             assert(serviceSchema.readText().contains("&crate::schema::operations::ECHO")) { serviceSchema.readText() }
+            assert(service.readText().contains("MultiProtocolRoutingService::from_operation_handler_bindings")) {
+                service.readText()
+            }
+            assert(service.readText().contains("OperationHandlerBinding::new")) { service.readText() }
         }
     }
 }

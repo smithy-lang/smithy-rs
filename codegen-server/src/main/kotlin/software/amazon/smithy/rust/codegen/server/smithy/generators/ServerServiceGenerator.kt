@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
@@ -78,7 +79,8 @@ class ServerServiceGenerator(
     /** The name of the local private module containing the functions that return the request for each operation */
     private val requestSpecsModuleName = "request_specs"
     private val shouldGenerateOperationHandlerBindings =
-        codegenContext.settings.codegenConfig.schemaSerde
+        codegenContext.settings.codegenConfig.schemaSerde &&
+            codegenContext.runtimeConfig.httpVersion == HttpVersion.Http1x
 
     private val usedRequestSpecFunctionNames = mutableSetOf<String>()
 
@@ -182,7 +184,7 @@ class ServerServiceGenerator(
                     ///     /* Set other handlers */
                     ///     .build()
                     ///     .unwrap();
-                    /// ## let app: $serviceName<#{SmithyHttpServer}::routing::RoutingService<#{Router}<#{SmithyHttpServer}::routing::Route>, #{Protocol}>> = app;
+                    /// ## let _ = app;
                     /// ```
                     ///
                     pub fn $fieldName<HandlerType, HandlerExtractors, UpgradeExtractors>(self, handler: HandlerType) -> Self
@@ -246,7 +248,7 @@ class ServerServiceGenerator(
                     ///     /* Set other handlers */
                     ///     .build()
                     ///     .unwrap();
-                    /// ## let app: $serviceName<#{SmithyHttpServer}::routing::RoutingService<#{Router}<#{SmithyHttpServer}::routing::Route>, #{Protocol}>> = app;
+                    /// ## let _ = app;
                     /// ```
                     ///
                     pub fn ${fieldName}_service<S, ServiceExtractors, UpgradeExtractors>(self, service: S) -> Self
@@ -389,16 +391,13 @@ class ServerServiceGenerator(
                     writable {
                         rustTemplate(
                             """
-                            <#{Protocol} as #{SmithyHttpServer}::routing::RouterForOperationHandlerBindings<
-                                #{SmithyHttpServer}::routing::Route<Body>
-                            >>::build_routing_service(
+                            #{SmithyHttpServer}::routing::MultiProtocolRoutingService::from_operation_handler_bindings(
                                 &crate::schema::${serviceSchemaConstName()},
                                 [#{RoutesArrayElements:W}],
                             )
-                            .expect("generated service schema should build router for the selected protocol")
+                            .expect("generated service schema should build a multi-protocol router")
                             """,
                             *codegenScope,
-                            "Protocol" to protocol.markerStruct(),
                             "RoutesArrayElements" to routesArrayElements,
                         )
                     }
@@ -426,12 +425,7 @@ class ServerServiceGenerator(
                 /// Check out [`$builderName::build_unchecked`] if you'd prefer the service to return status code 500 when an
                 /// unspecified route is requested.
                 pub fn build(self) -> #{Result}<
-                    $serviceName<
-                        #{SmithyHttpServer}::routing::RoutingService<
-                            #{Router}<L::Service>,
-                            #{Protocol},
-                        >,
-                    >,
+                    $serviceName<#{RoutingServiceType:W}>,
                     MissingOperationsError,
                 >
                 where
@@ -452,18 +446,29 @@ class ServerServiceGenerator(
 
                         #{RoutingServiceConstruction:W}
                     };
-                    let svc = svc.map(|s| s.layer(self.layer));
+                    let svc = svc.map(|s| #{ApplyLayer:W});
                     Ok($serviceName { svc })
                 }
                 """,
                 *codegenScope,
                 "Protocol" to protocol.markerStruct(),
                 "Router" to protocol.routerType(),
+                "RoutingServiceType" to routedServiceType("L::Service"),
+                "ApplyLayer" to applyConfiguredLayerToRoute(),
                 "NullabilityChecks" to nullabilityChecks,
                 "RoutingServiceConstruction" to routingServiceConstruction,
                 "PatternInitializations" to patternInitializations(),
                 *RuntimeType.preludeScope,
             )
+        }
+
+    private fun applyConfiguredLayerToRoute(): Writable =
+        writable {
+            if (shouldGenerateOperationHandlerBindings) {
+                rust("self.layer.layer(s)")
+            } else {
+                rust("s.layer(self.layer)")
+            }
         }
 
     /**
@@ -518,16 +523,13 @@ class ServerServiceGenerator(
                     writable {
                         rustTemplate(
                             """
-                            <#{Protocol} as #{SmithyHttpServer}::routing::RouterForOperationHandlerBindings<
-                                #{SmithyHttpServer}::routing::Route<Body>
-                            >>::build_routing_service(
+                            #{SmithyHttpServer}::routing::MultiProtocolRoutingService::from_operation_handler_bindings(
                                 &crate::schema::${serviceSchemaConstName()},
                                 [#{Pairs:W}],
                             )
-                            .expect("generated service schema should build router for the selected protocol")
+                            .expect("generated service schema should build a multi-protocol router")
                             """,
                             *codegenScope,
-                            "Protocol" to protocol.markerStruct(),
                             "Pairs" to pairs,
                         )
                     }
@@ -551,9 +553,7 @@ class ServerServiceGenerator(
                 pub fn build_unchecked(self) -> $serviceName<L::Service>
                 where
                     Body: Send + 'static,
-                    L: #{Tower}::Layer<
-                        #{SmithyHttpServer}::routing::RoutingService<#{Router}<#{SmithyHttpServer}::routing::Route<Body>>, #{Protocol}>
-                    >
+                    L: #{Tower}::Layer<#{UncheckedLayerInput:W}>
                 {
                     let svc = self
                         .layer
@@ -564,6 +564,7 @@ class ServerServiceGenerator(
                 *codegenScope,
                 "Protocol" to protocol.markerStruct(),
                 "Router" to protocol.routerType(),
+                "UncheckedLayerInput" to routedServiceType("#{SmithyHttpServer}::routing::Route<Body>"),
                 "RoutingServiceConstruction" to routingServiceConstruction,
             )
         }
@@ -657,14 +658,7 @@ class ServerServiceGenerator(
                 /// See the [root](crate) documentation for more information.
                 ##[derive(Clone)]
                 pub struct $serviceName<
-                    S = #{SmithyHttpServer}::routing::RoutingService<
-                        #{Router}<
-                            #{SmithyHttpServer}::routing::Route<
-                                #{SmithyHttpServer}::body::BoxBody
-                            >,
-                        >,
-                        #{Protocol},
-                    >
+                    S = #{DefaultRoutingService:W}
                 > {
                     // This is the router wrapped by layers.
                     svc: S,
@@ -748,63 +742,7 @@ class ServerServiceGenerator(
                     }
                 }
 
-                impl<S>
-                    $serviceName<
-                        #{SmithyHttpServer}::routing::RoutingService<
-                            #{Router}<S>,
-                            #{Protocol},
-                        >,
-                    >
-                {
-                    /// Applies a [`Layer`](#{Tower}::Layer) uniformly to all routes.
-                    ##[deprecated(
-                        since = "0.57.0",
-                        note = "please add layers to the `${serviceName}Config` object instead; see https://github.com/smithy-lang/smithy-rs/discussions/3096"
-                    )]
-                    pub fn layer<L>(
-                        self,
-                        layer: &L,
-                    ) -> $serviceName<
-                        #{SmithyHttpServer}::routing::RoutingService<
-                            #{Router}<L::Service>,
-                            #{Protocol},
-                        >,
-                    >
-                    where
-                        L: #{Tower}::Layer<S>,
-                    {
-                        $serviceName {
-                            svc: self.svc.map(|s| s.layer(layer)),
-                        }
-                    }
-
-                    /// Applies [`Route::new`](#{SmithyHttpServer}::routing::Route::new) to all routes.
-                    ///
-                    /// This has the effect of erasing all types accumulated via layers.
-                    pub fn boxed<B>(
-                        self,
-                    ) -> $serviceName<
-                        #{SmithyHttpServer}::routing::RoutingService<
-                            #{Router}<
-                                #{SmithyHttpServer}::routing::Route<B>,
-                            >,
-                            #{Protocol},
-                        >,
-                    >
-                    where
-                        S: #{Tower}::Service<
-                            #{Http}::Request<B>,
-                            Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>,
-                            Error = std::convert::Infallible,
-                        >,
-                        S: Clone + Send + 'static,
-                        S::Future: Send + 'static,
-                    {
-                        self.layer(&::tower::layer::layer_fn(
-                            #{SmithyHttpServer}::routing::Route::new,
-                        ))
-                    }
-                }
+                #{RouteConvenienceImpl:W}
 
                 impl<S, R> #{Tower}::Service<R> for $serviceName<S>
                 where
@@ -825,10 +763,154 @@ class ServerServiceGenerator(
                 """,
                 "NotSetFields1" to notSetFields(),
                 "NotSetFields2" to notSetFields(),
+                "DefaultRoutingService" to routedServiceType(
+                    "#{SmithyHttpServer}::routing::Route<#{SmithyHttpServer}::body::BoxBody>",
+                ),
+                "RouteConvenienceImpl" to routeConvenienceImpl(),
                 "Router" to protocol.routerType(),
                 "Protocol" to protocol.markerStruct(),
                 *codegenScope,
             )
+        }
+
+    private fun routeConvenienceImpl(): Writable =
+        writable {
+            if (shouldGenerateOperationHandlerBindings) {
+                rustTemplate(
+                    """
+                    impl<S> $serviceName<#{SmithyHttpServer}::routing::MultiProtocolRoutingService<S>> {
+                        /// Applies a [`Layer`](#{Tower}::Layer) uniformly to all routes.
+                        ##[deprecated(
+                            since = "0.57.0",
+                            note = "please add layers to the `${serviceName}Config` object instead; see https://github.com/smithy-lang/smithy-rs/discussions/3096"
+                        )]
+                        pub fn layer<L>(
+                            self,
+                            layer: &L,
+                        ) -> $serviceName<#{SmithyHttpServer}::routing::MultiProtocolRoutingService<L::Service>>
+                        where
+                            L: #{Tower}::Layer<S>,
+                        {
+                            $serviceName {
+                                svc: self.svc.map(|s| layer.layer(s)),
+                            }
+                        }
+
+                        /// Applies [`Route::new`](#{SmithyHttpServer}::routing::Route::new) to all routes.
+                        ///
+                        /// This has the effect of erasing all types accumulated via layers.
+                        pub fn boxed<B>(
+                            self,
+                        ) -> $serviceName<
+                            #{SmithyHttpServer}::routing::MultiProtocolRoutingService<
+                                #{SmithyHttpServer}::routing::Route<B>,
+                            >,
+                        >
+                        where
+                            S: #{Tower}::Service<
+                                #{Http}::Request<B>,
+                                Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>,
+                                Error = std::convert::Infallible,
+                            >,
+                            S: Clone + Send + 'static,
+                            S::Future: Send + 'static,
+                        {
+                            self.layer(&::tower::layer::layer_fn(
+                                #{SmithyHttpServer}::routing::Route::new,
+                            ))
+                        }
+                    }
+                    """,
+                    *codegenScope,
+                )
+            } else {
+                rustTemplate(
+                    """
+                    impl<S>
+                        $serviceName<
+                            #{SmithyHttpServer}::routing::RoutingService<
+                                #{Router}<S>,
+                                #{Protocol},
+                            >,
+                        >
+                    {
+                        /// Applies a [`Layer`](#{Tower}::Layer) uniformly to all routes.
+                        ##[deprecated(
+                            since = "0.57.0",
+                            note = "please add layers to the `${serviceName}Config` object instead; see https://github.com/smithy-lang/smithy-rs/discussions/3096"
+                        )]
+                        pub fn layer<L>(
+                            self,
+                            layer: &L,
+                        ) -> $serviceName<
+                            #{SmithyHttpServer}::routing::RoutingService<
+                                #{Router}<L::Service>,
+                                #{Protocol},
+                            >,
+                        >
+                        where
+                            L: #{Tower}::Layer<S>,
+                        {
+                            $serviceName {
+                                svc: self.svc.map(|s| s.layer(layer)),
+                            }
+                        }
+
+                        /// Applies [`Route::new`](#{SmithyHttpServer}::routing::Route::new) to all routes.
+                        ///
+                        /// This has the effect of erasing all types accumulated via layers.
+                        pub fn boxed<B>(
+                            self,
+                        ) -> $serviceName<
+                            #{SmithyHttpServer}::routing::RoutingService<
+                                #{Router}<
+                                    #{SmithyHttpServer}::routing::Route<B>,
+                                >,
+                                #{Protocol},
+                            >,
+                        >
+                        where
+                            S: #{Tower}::Service<
+                                #{Http}::Request<B>,
+                                Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>,
+                                Error = std::convert::Infallible,
+                            >,
+                            S: Clone + Send + 'static,
+                            S::Future: Send + 'static,
+                        {
+                            self.layer(&::tower::layer::layer_fn(
+                                #{SmithyHttpServer}::routing::Route::new,
+                            ))
+                        }
+                    }
+                    """,
+                    *codegenScope,
+                    "Router" to protocol.routerType(),
+                    "Protocol" to protocol.markerStruct(),
+                )
+            }
+        }
+
+    private fun routedServiceType(routeType: String): Writable =
+        writable {
+            if (shouldGenerateOperationHandlerBindings) {
+                rustTemplate(
+                    "#{SmithyHttpServer}::routing::MultiProtocolRoutingService<$routeType>",
+                    *codegenScope,
+                )
+            } else {
+                rustTemplate(
+                    """
+                    #{SmithyHttpServer}::routing::RoutingService<
+                        #{Router}<$routeType>,
+                        #{Protocol},
+                    >
+                    """,
+                    *codegenScope,
+                    "Router" to protocol.routerType(),
+                    "Protocol" to protocol.markerStruct(),
+                )
+            }
         }
 
     private fun missingOperationsError(): Writable =

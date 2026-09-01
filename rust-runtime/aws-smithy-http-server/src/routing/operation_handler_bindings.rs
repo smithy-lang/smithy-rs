@@ -103,7 +103,7 @@ where
     Ok(router)
 }
 
-fn rest_request_spec(
+pub(crate) fn rest_request_spec(
     _service_schema: &'static ServiceSchema<'static>,
     operation: &'static OperationSchema<'static>,
 ) -> request_spec::RequestSpec {
@@ -151,7 +151,7 @@ fn rest_request_spec(
     )
 }
 
-fn service_operation_key(
+pub(crate) fn service_operation_key(
     service_schema: &'static ServiceSchema<'static>,
     operation: &'static OperationSchema<'static>,
 ) -> String {
