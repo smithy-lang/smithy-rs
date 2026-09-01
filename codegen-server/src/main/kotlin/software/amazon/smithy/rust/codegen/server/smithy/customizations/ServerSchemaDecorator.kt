@@ -114,21 +114,7 @@ class ServerSchemaDecorator : ServerCodegenDecorator {
                 }
                 .toList()
         val operationInputs = supportedOperations.map { it.inputShape(codegenContext.model).id }.toSet()
-        val schemaSerdeClosure = mutableSetOf<ShapeId>()
-        supportedOperations.forEach { operation ->
-            val roots =
-                listOf(operation.inputShape(codegenContext.model), operation.outputShape(codegenContext.model)) +
-                    operation.errorsSet.map { codegenContext.model.expectShape(it) }
-            roots.forEach { root ->
-                walker.walkShapes(root).forEach { reachable: Shape ->
-                    if (reachable.id != ShapeId.from("smithy.api#Unit") &&
-                        (reachable is StructureShape || reachable is UnionShape)
-                    ) {
-                        schemaSerdeClosure.add(reachable.id)
-                    }
-                }
-            }
-        }
+        val schemaSerdeClosure = schemaClosure(codegenContext)
 
         val schemaSerdeModule = RustModule.pubCrate("schema_serde")
         for (shapeId in schemaSerdeClosure.sorted()) {

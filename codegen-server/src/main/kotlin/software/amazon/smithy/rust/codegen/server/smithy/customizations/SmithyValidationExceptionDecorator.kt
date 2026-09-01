@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.util.getTrait
@@ -71,6 +72,23 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
 
     override fun renderImplFromConstraintViolationForRequestRejection(protocol: ServerProtocol): Writable =
         writable {
+            val validationRejection =
+                if (codegenContext.runtimeConfig.httpVersion == HttpVersion.Http1x &&
+                    codegenContext.settings.codegenConfig.schemaSerde
+                ) {
+                    writable { rustTemplate("Self::SchemaConstraintViolation(#{Box}::new(validation_exception))", "Box" to RuntimeType.Box) }
+                } else {
+                    writable {
+                        rust(
+                            """
+                            Self::ConstraintViolation(
+                                crate::protocol_serde::shape_validation_exception::ser_validation_exception_error(&validation_exception)
+                                    .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
+                            )
+                            """,
+                        )
+                    }
+                }
             rustTemplate(
                 """
                 impl #{From}<ConstraintViolation> for #{RequestRejection} {
@@ -80,15 +98,13 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
                             message: format!("1 validation error detected. {}", &first_validation_exception_field.message),
                             field_list: Some(vec![first_validation_exception_field]),
                         };
-                        Self::ConstraintViolation(
-                            crate::protocol_serde::shape_validation_exception::ser_validation_exception_error(&validation_exception)
-                                .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
-                        )
+                        #{ValidationRejection:W}
                     }
                 }
                 """,
                 "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
                 "From" to RuntimeType.From,
+                "ValidationRejection" to validationRejection,
             )
         }
 

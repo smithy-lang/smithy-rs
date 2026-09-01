@@ -30,6 +30,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.shapeModuleName
@@ -226,11 +228,26 @@ class UserProvidedValidationExceptionConversionGenerator(
     override fun renderImplFromConstraintViolationForRequestRejection(protocol: ServerProtocol): Writable =
         writable {
             val validationMessageName = codegenContext.symbolProvider.toMemberName(validationMessageMember)
-            // Generate the correct shape module name for the user provided validation exception
-            val shapeModuleName =
-                codegenContext.symbolProvider.shapeModuleName(codegenContext.serviceShape, validationExceptionStructure)
-            val shapeFunctionName = validationExceptionStructure.id.name.toSnakeCase()
-
+            val validationRejection =
+                if (codegenContext.runtimeConfig.httpVersion == HttpVersion.Http1x &&
+                    codegenContext.settings.codegenConfig.schemaSerde
+                ) {
+                    writable { rustTemplate("Self::SchemaConstraintViolation(#{Box}::new(validation_exception))", "Box" to RuntimeType.Box) }
+                } else {
+                    val shapeModuleName =
+                        codegenContext.symbolProvider.shapeModuleName(codegenContext.serviceShape, validationExceptionStructure)
+                    val shapeFunctionName = validationExceptionStructure.id.name.toSnakeCase()
+                    writable {
+                        rust(
+                            """
+                            Self::ConstraintViolation(
+                                crate::protocol_serde::$shapeModuleName::ser_${shapeFunctionName}_error(&validation_exception)
+                                    .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
+                            )
+                            """,
+                        )
+                    }
+                }
             rustTemplate(
                 """
                 impl #{From}<ConstraintViolation> for #{RequestRejection} {
@@ -241,16 +258,14 @@ class UserProvidedValidationExceptionConversionGenerator(
                             #{FieldListAssignment}
                             #{AdditionalFieldAssignments}
                         };
-                        Self::ConstraintViolation(
-                            crate::protocol_serde::$shapeModuleName::ser_${shapeFunctionName}_error(&validation_exception)
-                                .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
-                        )
+                        #{ValidationRejection:W}
                     }
                 }
                 """,
                 *preludeScope,
                 "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
                 "ValidationException" to codegenContext.symbolProvider.toSymbol(validationExceptionStructure),
+                "ValidationRejection" to validationRejection,
                 "FieldCreation" to
                     writable {
                         if (maybeValidationFieldList != null) {
