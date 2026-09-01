@@ -58,9 +58,15 @@ impl IntoResponse<RestXml> for InternalFailureException {
     }
 }
 
+// Only `Validation` is schema-driven: it carries a modeled shape. The other
+// variants are framework conventions with no Smithy shape behind them; the
+// frozen `{}` body below (a JSON literal on an XML protocol) is not the
+// serialization of any shape, so they stay hand-assembled this phase. Full
+// rationale on the `IntoResponse<RestJson1> for RuntimeError` impl in
+// `crate::protocol::rest_json_1::runtime_error`.
 impl IntoResponse<RestXml> for RuntimeError {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
-        let res = http::Response::builder()
+                let res = http::Response::builder()
             .status(self.status_code())
             .header("Content-Type", "application/xml")
             .extension(RuntimeErrorExtension::new(self.name().to_string()));

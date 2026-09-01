@@ -5,6 +5,8 @@
 
 use std::num::TryFromIntError;
 
+use crate::deserialize::DeserializeError;
+use crate::modeled_error::HttpModeledError;
 use crate::rejection::MissingContentTypeReason;
 use aws_smithy_runtime_api::http::HttpError;
 use thiserror::Error;
@@ -13,6 +15,8 @@ use thiserror::Error;
 pub enum ResponseRejection {
     #[error("invalid bound HTTP status code; status codes must be inside the 100-999 range: {0}")]
     InvalidHttpStatusCode(TryFromIntError),
+    #[error("error building HTTP response: {0}")]
+    Build(#[from] aws_smithy_types::error::operation::BuildError),
     #[error("error serializing CBOR-encoded body: {0}")]
     Serialization(#[from] aws_smithy_types::error::operation::SerializationError),
     #[error("error building HTTP response: {0}")]
@@ -29,10 +33,18 @@ pub enum RequestRejection {
     MissingContentType(#[from] MissingContentTypeReason),
     #[error("error deserializing request HTTP body as CBOR: {0}")]
     CborDeserialize(#[from] aws_smithy_cbor::decode::DeserializeError),
-    // Unlike the other protocols, RPC v2 uses CBOR, a binary serialization format, so we take in a
-    // `Vec<u8>` here instead of `String`.
+    /// Used when the schema-driven request deserializer fails at the wire level.
+    #[error("error deserializing request: {0}")]
+    SchemaDeserialize(#[from] aws_smithy_schema::serde::SerdeError),
+
+    /// Carries the modeled validation error; serialized once at the protocol
+    /// boundary via `ServerProtocol::serialize_error`. (This replaces the
+    /// legacy pre-serialized `Vec<u8>` CBOR bytes — the root of every
+    /// per-protocol validation artifact.)
     #[error("request does not adhere to modeled constraints")]
     ConstraintViolation(Vec<u8>),
+    #[error("request does not adhere to modeled constraints: {0}")]
+    SchemaConstraintViolation(Box<dyn HttpModeledError + Send>),
 
     /// Typically happens when the request has headers that are not valid UTF-8.
     #[error("failed to convert request: {0}")]
@@ -42,6 +54,15 @@ pub enum RequestRejection {
 impl From<std::convert::Infallible> for RequestRejection {
     fn from(_err: std::convert::Infallible) -> Self {
         match _err {}
+    }
+}
+
+impl From<DeserializeError> for RequestRejection {
+    fn from(err: DeserializeError) -> Self {
+        match err {
+            DeserializeError::Serde(err) => Self::SchemaDeserialize(err),
+            DeserializeError::ConstraintViolation(err) => Self::SchemaConstraintViolation(err),
+        }
     }
 }
 

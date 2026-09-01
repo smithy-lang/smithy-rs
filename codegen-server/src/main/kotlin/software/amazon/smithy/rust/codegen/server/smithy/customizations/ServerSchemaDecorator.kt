@@ -11,15 +11,26 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.model.traits.HttpErrorTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.SchemaGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.shapeModuleName
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.outputShape
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerSchemaDeserializerGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerSchemaGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceSchemaGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverSchemaShapeConstName
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverSchemaShapeModule
@@ -78,6 +89,99 @@ class ServerSchemaDecorator : ServerCodegenDecorator {
             }
         }
         renderServiceSchemaMetadata(codegenContext, rustCrate)
+        renderSchemaSerde(codegenContext, rustCrate)
+    }
+
+    private fun renderSchemaSerde(
+        codegenContext: ServerCodegenContext,
+        rustCrate: RustCrate,
+    ) {
+        if (!codegenContext.settings.codegenConfig.schemaSerde ||
+            codegenContext.runtimeConfig.httpVersion != HttpVersion.Http1x
+        ) {
+            return
+        }
+
+        val walker = Walker(codegenContext.model)
+        val supportedOperations =
+            walker.walkShapes(codegenContext.serviceShape)
+                .filterIsInstance<OperationShape>()
+                .filter { operation ->
+                    val roots =
+                        listOf(operation.inputShape(codegenContext.model), operation.outputShape(codegenContext.model)) +
+                            operation.errorsSet.map { codegenContext.model.expectShape(it) }
+                    roots.none { it.canReachConstrainedShape(codegenContext.model, codegenContext.symbolProvider) }
+                }
+                .toList()
+        val operationInputs = supportedOperations.map { it.inputShape(codegenContext.model).id }.toSet()
+        val schemaSerdeClosure = mutableSetOf<ShapeId>()
+        supportedOperations.forEach { operation ->
+            val roots =
+                listOf(operation.inputShape(codegenContext.model), operation.outputShape(codegenContext.model)) +
+                    operation.errorsSet.map { codegenContext.model.expectShape(it) }
+            roots.forEach { root ->
+                walker.walkShapes(root).forEach { reachable: Shape ->
+                    if (reachable.id != ShapeId.from("smithy.api#Unit") &&
+                        (reachable is StructureShape || reachable is UnionShape)
+                    ) {
+                        schemaSerdeClosure.add(reachable.id)
+                    }
+                }
+            }
+        }
+
+        val schemaSerdeModule = RustModule.pubCrate("schema_serde")
+        for (shapeId in schemaSerdeClosure.sorted()) {
+            val shape = codegenContext.model.expectShape(shapeId)
+            val shapeModule =
+                RustModule.pubCrate(
+                    codegenContext.symbolProvider.shapeModuleName(codegenContext.serviceShape, shape),
+                    parent = schemaSerdeModule,
+                )
+            rustCrate.withModule(shapeModule) {
+                rust("##![allow(dead_code)]")
+                ServerSchemaGenerator(codegenContext, this, shape).renderSerializeOnly()
+                shape.getTrait<ErrorTrait>()?.also { errorTrait ->
+                    renderModeledErrorImpls(codegenContext, this, shape, errorTrait)
+                }
+                if (shapeId in operationInputs && shape is StructureShape) {
+                    val deserGenerator = ServerSchemaDeserializerGenerator(codegenContext, this, shape)
+                    deserGenerator.render()
+                    deserGenerator.renderDeserializableShapeImpl()
+                }
+            }
+        }
+    }
+
+    private fun renderModeledErrorImpls(
+        codegenContext: ServerCodegenContext,
+        writer: RustWriter,
+        shape: Shape,
+        errorTrait: ErrorTrait,
+    ) {
+        val smithyHttpServer = ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType()
+        val smithySchema = RuntimeType.smithySchema(codegenContext.runtimeConfig)
+        val fullName = codegenContext.symbolProvider.toSymbol(shape).fullName
+        val status =
+            shape.getTrait<HttpErrorTrait>()?.code
+                ?: if (errorTrait.isClientError) 400 else 500
+        writer.rustTemplate(
+            """
+            impl #{ModeledError} for $fullName {
+                fn schema(&self) -> &#{Schema}<'_> {
+                    Self::SCHEMA
+                }
+            }
+            impl #{HttpModeledError} for $fullName {
+                fn status_code(&self) -> u16 {
+                    $status
+                }
+            }
+            """,
+            "ModeledError" to smithyHttpServer.resolve("modeled_error::ModeledError"),
+            "HttpModeledError" to smithyHttpServer.resolve("modeled_error::HttpModeledError"),
+            "Schema" to smithySchema.resolve("Schema"),
+        )
     }
 
     private fun renderServiceSchemaMetadata(

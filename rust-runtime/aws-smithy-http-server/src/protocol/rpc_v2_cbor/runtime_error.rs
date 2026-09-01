@@ -60,6 +60,12 @@ impl IntoResponse<RpcV2Cbor> for InternalFailureException {
     }
 }
 
+// Only `Validation` is schema-driven: it carries a modeled shape. The other
+// variants are framework conventions with no Smithy shape behind them; the
+// frozen empty-map-without-`__type` body below (#3716) is not the
+// serialization of any shape, so they stay hand-assembled this phase. Full
+// rationale on the `IntoResponse<RestJson1> for RuntimeError` impl in
+// `crate::protocol::rest_json_1::runtime_error`.
 impl IntoResponse<RpcV2Cbor> for RuntimeError {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
         let res = http::Response::builder()
@@ -72,10 +78,7 @@ impl IntoResponse<RpcV2Cbor> for RuntimeError {
 
         // TODO(https://github.com/smithy-lang/smithy-rs/issues/3716): we're not serializing
         // `__type`.
-        let body = match self {
-            RuntimeError::Validation(reason) => crate::body::to_boxed(reason),
-            _ => crate::body::to_boxed(EMPTY_CBOR_MAP),
-        };
+        let body = crate::body::to_boxed(EMPTY_CBOR_MAP);
 
         res.body(body)
             .expect(INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE)

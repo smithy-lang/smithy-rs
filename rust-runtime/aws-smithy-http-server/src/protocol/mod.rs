@@ -6,15 +6,73 @@
 pub mod aws_json;
 pub mod aws_json_10;
 pub mod aws_json_11;
+pub(crate) mod request_bindings;
+pub(crate) mod response_bindings;
 pub mod rest;
+pub mod server_protocol;
 pub mod rest_json_1;
 pub mod rest_xml;
 pub mod rpc_v2_cbor;
 
+pub use server_protocol::{EventStreamProtocol, ServerProtocol};
+
 use crate::rejection::MissingContentTypeReason;
+use crate::shape_id::ShapeId;
 use aws_smithy_runtime_api::http::Headers as SmithyHeaders;
 use http::header::CONTENT_TYPE;
 use http::HeaderMap;
+
+/// Models a Smithy protocol shape.
+pub trait ProtocolShape {
+    /// The Shape ID of the protocol.
+    const ID: ShapeId;
+}
+
+impl ProtocolShape for rest_json_1::RestJson1 {
+    const ID: ShapeId = ShapeId::new("aws.protocols#restJson1", "aws.protocols", "restJson1");
+}
+
+impl ProtocolShape for rest_xml::RestXml {
+    const ID: ShapeId = ShapeId::new("aws.protocols#restXml", "aws.protocols", "restXml");
+}
+
+impl ProtocolShape for aws_json_10::AwsJson1_0 {
+    const ID: ShapeId = ShapeId::new("aws.protocols#awsJson1_0", "aws.protocols", "awsJson1_0");
+}
+
+impl ProtocolShape for aws_json_11::AwsJson1_1 {
+    const ID: ShapeId = ShapeId::new("aws.protocols#awsJson1_1", "aws.protocols", "awsJson1_1");
+}
+
+impl ProtocolShape for rpc_v2_cbor::RpcV2Cbor {
+    const ID: ShapeId = ShapeId::new("smithy.protocols#rpcv2Cbor", "smithy.protocols", "rpcv2Cbor");
+}
+
+/// Associates a runtime error type with a protocol marker.
+pub trait OperationError {
+    /// The runtime error type for this protocol.
+    type RuntimeError: std::error::Error + Send + Sync + 'static;
+}
+
+impl OperationError for rest_json_1::RestJson1 {
+    type RuntimeError = rest_json_1::runtime_error::RuntimeError;
+}
+
+impl OperationError for rpc_v2_cbor::RpcV2Cbor {
+    type RuntimeError = rpc_v2_cbor::runtime_error::RuntimeError;
+}
+
+impl OperationError for aws_json_10::AwsJson1_0 {
+    type RuntimeError = aws_json::runtime_error::RuntimeError;
+}
+
+impl OperationError for aws_json_11::AwsJson1_1 {
+    type RuntimeError = aws_json::runtime_error::RuntimeError;
+}
+
+impl OperationError for rest_xml::RestXml {
+    type RuntimeError = rest_xml::runtime_error::RuntimeError;
+}
 
 #[cfg(test)]
 pub mod test_helpers {

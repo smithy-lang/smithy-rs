@@ -64,18 +64,21 @@ impl IntoResponse<AwsJson1_1> for InternalFailureException {
     }
 }
 
+// Only `Validation` is schema-driven: it carries a modeled shape. The other
+// variants are framework conventions with no Smithy shape behind them; their
+// frozen wire forms (bare `{}` / empty body, no `__type`) are not the
+// serialization of any shape, so they stay hand-assembled this phase. Full
+// rationale on the `IntoResponse<RestJson1> for RuntimeError` impl in
+// `crate::protocol::rest_json_1::runtime_error`.
 impl IntoResponse<AwsJson1_0> for RuntimeError {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
-        let res = http::Response::builder()
+                let res = http::Response::builder()
             .status(self.status_code())
             .header("Content-Type", "application/x-amz-json-1.0")
             .extension(RuntimeErrorExtension::new(self.name().to_string()));
 
-        let body = match self {
-            RuntimeError::Validation(reason) => crate::body::to_boxed(reason),
-            // See https://awslabs.github.io/smithy/2.0/aws/protocols/aws-json-1_0-protocol.html#empty-body-serialization
-            _ => crate::body::to_boxed("{}"),
-        };
+        // See https://awslabs.github.io/smithy/2.0/aws/protocols/aws-json-1_0-protocol.html#empty-body-serialization
+        let body = crate::body::to_boxed("{}");
 
         res.body(body)
             .expect(INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE)
@@ -89,10 +92,7 @@ impl IntoResponse<AwsJson1_1> for RuntimeError {
             .header("Content-Type", "application/x-amz-json-1.1")
             .extension(RuntimeErrorExtension::new(self.name().to_string()));
 
-        let body = match self {
-            RuntimeError::Validation(reason) => crate::body::to_boxed(reason),
-            _ => crate::body::to_boxed(""),
-        };
+        let body = crate::body::to_boxed("");
 
         res.body(body)
             .expect(INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE)

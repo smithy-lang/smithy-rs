@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
+import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.node.ExpectationNotMetException
 import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.BooleanShape
@@ -181,6 +182,30 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val httpBindingResolver = protocol.httpBindingResolver
     private val protocolFunctions = ProtocolFunctions(codegenContext)
+    private val schemaServedOperations =
+        if (runtimeConfig.httpVersion == HttpVersion.Http1x &&
+            codegenContext.settings.codegenConfig.schemaSerde
+        ) {
+            Walker(codegenContext.model).walkShapes(codegenContext.serviceShape)
+                .filterIsInstance<OperationShape>()
+                .filter {
+                    it.inputShape(model).findStreamingMember(model) == null &&
+                        it.outputShape(model).findStreamingMember(model) == null
+                }
+                .filter { operation ->
+                    val roots =
+                        listOf(operation.inputShape(model), operation.outputShape(model)) +
+                            operation.errorsSet.map { model.expectShape(it) }
+                    roots.none { it.canReachConstrainedShape(model, symbolProvider) }
+                }
+                .map { it.id }
+                .toSet()
+        } else {
+            emptySet()
+        }
+
+    private fun operationServedBySchema(operationShape: OperationShape): Boolean =
+        operationShape.id in schemaServedOperations
 
     fun withHttpBindingCustomizations(
         customizations: List<HttpBindingCustomization>,
@@ -226,6 +251,11 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         val inputSymbol = symbolProvider.toSymbol(operationShape.inputShape(model))
         val outputSymbol = symbolProvider.toSymbol(operationShape.outputShape(model))
 
+        if (operationServedBySchema(operationShape)) {
+            operationWriter.renderSchemaServedFromRequest(inputSymbol, outputSymbol, operationShape)
+            operationWriter.renderSchemaGenericIntoResponse(outputSymbol, operationShape)
+            return
+        }
         operationWriter.renderTraits(inputSymbol, outputSymbol, operationShape)
     }
 
@@ -380,6 +410,151 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 "serialize_error" to serverSerializeError(operationShape),
             )
         }
+    }
+
+    private fun RustWriter.renderSchemaGenericIntoResponse(
+        outputSymbol: Symbol,
+        operationShape: OperationShape,
+    ) {
+        val serverProtocolTrait =
+            ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+                .resolve("protocol::server_protocol::ServerProtocol")
+        rustTemplate(
+            """
+            impl<P: #{ServerProtocol}> #{SmithyHttpServer}::response::IntoResponse<P> for #{O} {
+                fn into_response(self) -> #{SmithyHttpServer}::response::Response {
+                    P::serialize_response(Self::SCHEMA, &self)
+                }
+            }
+            """,
+            *codegenScope,
+            "O" to outputSymbol,
+            "ServerProtocol" to serverProtocolTrait,
+        )
+
+        if (operationShape.operationErrors(model).isNotEmpty()) {
+            val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
+            rustTemplate(
+                """
+                impl<P: #{ServerProtocol}> #{SmithyHttpServer}::response::IntoResponse<P> for #{E} {
+                    fn into_response(self) -> #{SmithyHttpServer}::response::Response {
+                        let mut response = match &self {
+                            #{match_arms:W}
+                        };
+                        response.extensions_mut().insert(#{SmithyHttpServer}::extension::ModeledErrorExtension::new(self.name()));
+                        response
+                    }
+                }
+                """,
+                *codegenScope,
+                "E" to errorSymbol,
+                "ServerProtocol" to serverProtocolTrait,
+                "match_arms" to
+                    writable {
+                        operationShape.operationErrors(model).forEach {
+                            val variantShape = model.expectShape(it.id, StructureShape::class.java)
+                            val variantSymbol = symbolProvider.toSymbol(variantShape)
+                            rustTemplate(
+                                "#{E}::${variantSymbol.name}(e) => P::serialize_error(e),",
+                                "E" to errorSymbol,
+                            )
+                        }
+                    },
+            )
+        }
+    }
+
+    private fun RustWriter.renderSchemaServedFromRequest(
+        inputSymbol: Symbol,
+        outputSymbol: Symbol,
+        operationShape: OperationShape,
+    ) {
+        val serverProtocolTrait =
+            ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+                .resolve("protocol::server_protocol::ServerProtocol")
+        val inputFuture = "${inputSymbol.name}Future"
+        val requestBodyMaxBytes = codegenContext.settings.codegenConfig.requestBodyMaxBytes
+        val collectBody =
+            writable {
+                if (requestBodyMaxBytes > 0L) {
+                    rustTemplate(
+                        """
+                        let bytes = match #{SmithyHttpServer}::body::collect_body_limited(body, ${requestBodyMaxBytes}usize).await {
+                            #{Ok}(bytes) => bytes,
+                            #{Err}(#{SmithyHttpServer}::body::CollectBodyError::Body(err)) => return #{Err}(#{RequestRejection}::from(err)),
+                            #{Err}(#{SmithyHttpServer}::body::CollectBodyError::TooLarge(err)) => {
+                                return #{Err}(#{RequestRejection}::BufferHttpBodyBytes(#{SmithyHttpServer}::error::Error::new(err)));
+                            }
+                        };
+                        """,
+                        *codegenScope,
+                    )
+                } else {
+                    rustTemplate(
+                        """
+                        let bytes = {
+                            use #{HttpBodyUtil}::BodyExt;
+                            body.collect().await?.to_bytes()
+                        };
+                        """,
+                        *codegenScope,
+                        "HttpBodyUtil" to CargoDependency.HttpBodyUtil01x.toType(),
+                    )
+                }
+            }
+        rustTemplate(
+            """
+            #{PinProjectLite}::pin_project! {
+                /// A [`Future`](std::future::Future) aggregating the body bytes of a [`Request`] and constructing the
+                /// [`${inputSymbol.name}`](#{I}) using schema-driven bindings.
+                pub struct $inputFuture {
+                    inner: std::pin::Pin<Box<dyn std::future::Future<Output = Result<#{I}, #{RuntimeError}>> + Send>>
+                }
+            }
+
+            impl std::future::Future for $inputFuture {
+                type Output = Result<#{I}, #{RuntimeError}>;
+
+                fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+                    let this = self.project();
+                    this.inner.as_mut().poll(cx)
+                }
+            }
+
+            impl<B> #{SmithyHttpServer}::request::FromRequest<#{Marker}, B> for #{I}
+            where
+                B: #{SmithyHttpServer}::body::HttpBody + Send,
+                B: 'static,
+                B::Data: Send,
+                #{RequestRejection} : From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
+            {
+                type Rejection = #{RuntimeError};
+                type Future = $inputFuture;
+
+                fn from_request(request: #{http}::Request<B>) -> Self::Future {
+                    let fut = async move {
+                        let (parts, body) = request.into_parts();
+                        #{collectBody:W}
+                        <#{Marker} as #{ServerProtocol}>::deserialize_request::<#{I}>(#{I}::SCHEMA, #{O}::SCHEMA, &parts, bytes.as_ref())
+                    };
+                    use #{FuturesUtil}::future::TryFutureExt;
+                    let fut = fut.map_err(|e: #{RequestRejection}| {
+                        #{Tracing}::debug!(error = %e, "failed to deserialize request");
+                        #{RuntimeError}::from(e)
+                    });
+                    $inputFuture {
+                        inner: Box::pin(fut)
+                    }
+                }
+            }
+            """,
+            *codegenScope,
+            "I" to inputSymbol,
+            "O" to outputSymbol,
+            "Marker" to protocol.markerStruct(),
+            "ServerProtocol" to serverProtocolTrait,
+            "collectBody" to collectBody,
+        )
     }
 
     /**

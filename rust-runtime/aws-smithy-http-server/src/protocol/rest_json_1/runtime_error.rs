@@ -58,6 +58,8 @@ pub enum RuntimeError {
     #[error("unsupported media type: request does not contain the expected `Content-Type` header value")]
     UnsupportedMediaType,
     /// Operation input contains data that does not adhere to the modeled [constraint traits].
+    /// Carries the modeled validation error, serialized once at the protocol
+    /// boundary via `ServerProtocol::serialize_error`.
     /// [constraint traits]: <https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html>
     #[error("validation failure: operation input contains data that does not adhere to the modeled constraints: {0}")]
     Validation(String),
@@ -94,18 +96,35 @@ impl IntoResponse<RestJson1> for InternalFailureException {
     }
 }
 
+// Why is only `Validation` schema-driven, while the other variants keep
+// hand-assembled responses?
+//
+// `Validation` carries an actual modeled shape (`smithy.framework#ValidationException`
+// or a decorator-customized shape) — it has a schema, so `serialize_error`
+// applies. The remaining variants are framework conventions with NO Smithy
+// shape behind them, and they deliberately stay hand-assembled this phase:
+//
+// - Their frozen legacy wire forms are not the serialization of *any* shape:
+//   restJson1 sends a literal `{}`, awsJson1.1 an empty body, rpcv2Cbor an
+//   empty map with no `__type` (#3716), restXml the string `{}` on an XML
+//   protocol. No model — not even per-protocol model files — can express
+//   "suppress the discriminator", "zero-byte body", or "JSON literal on XML";
+//   those are serializer behaviors outside model vocabulary, so a schema
+//   path here would necessarily CHANGE wire bytes.
+// - Modeling them as `smithy.framework` `@error`/`@httpError` shapes and
+//   routing them through `serialize_error` is the intended end-state, but it
+//   is wire-changing on four of five protocols and therefore deferred until
+//   the legacy-compare gates exist, so each byte diff lands as a pinned,
+//   deliberate divergence. See `specs/plan.md`, Step 6 ("leaves for later").
 impl IntoResponse<RestJson1> for RuntimeError {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
-        let res = http::Response::builder()
+                let res = http::Response::builder()
             .status(self.status_code())
             .header("Content-Type", "application/json")
             .header("X-Amzn-Errortype", self.name())
             .extension(RuntimeErrorExtension::new(self.name().to_string()));
 
-        let body = match self {
-            RuntimeError::Validation(reason) => crate::body::to_boxed(reason),
-            _ => crate::body::to_boxed("{}"),
-        };
+        let body = crate::body::to_boxed("{}");
 
         res.body(body)
             .expect(INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE)
