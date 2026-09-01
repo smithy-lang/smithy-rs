@@ -4,8 +4,20 @@
  */
 
 //! HTTP/2 flight convergence, handshake, and driver installation.
+//!
+//! ALPN-selected attempts first enter one cell-local transition: use an
+//! accepting generation, join the current flight, or become the flight's
+//! owner task. Only the owner performs Hyper's HTTP/2 handshake. It opens the
+//! connection, installs the generation, submits the driver on the partition
+//! spawner, and then disarms flight cleanup. Participants own only their
+//! waiter entries; losing attempts close their unused transport and return
+//! their capacity before this function reports transfer. The connector timeout
+//! ends before this phase; no separate pool timeout covers the HTTP/2
+//! handshake or driver submission.
 
-use super::super::cell::h2::{H2CloseHandle, H2DriverGuard, H2FlightId, H2FlightInstall, H2Sender};
+use super::super::cell::h2::{
+    H2CloseHandle, H2DriverGuard, H2FlightId, H2FlightInstall, H2GenerationJoin, H2Sender,
+};
 use super::super::cell::{AcquisitionResult, EstablishmentPermit, OriginCell, WaiterId};
 use super::super::connection::{
     CloseReason, ConnectionInfo, ConnectionIo, ConnectionState, NegotiatedProtocol,
@@ -17,6 +29,7 @@ use crate::client::connect::BoxConn;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_types::body::SdkBody;
+use aws_smithy_types::retry::ErrorKind;
 use hyper::rt::Executor;
 use hyper_util::client::legacy::connect::Connected;
 use std::future::Future;
@@ -25,6 +38,7 @@ use std::sync::Arc as StdArc;
 /// Hyper executor that keeps spawned HTTP/2 work on the connection partition.
 #[derive(Clone, Debug)]
 struct PartitionExecutor {
+    /// Runtime placement inherited from the connection-owning partition.
     spawner: StdArc<dyn DriverSpawner>,
 }
 
@@ -39,8 +53,11 @@ where
 
 /// Settles a flight if its owner-runtime task is discarded.
 struct FlightCompletionGuard {
+    /// Cell that owns the exact flight.
     cell: crate::sync::Arc<OriginCell>,
+    /// Flight identity protected from stale task completion.
     flight: H2FlightId,
+    /// Whether drop must fail remaining participants.
     active: bool,
 }
 
@@ -57,9 +74,9 @@ impl FlightCompletionGuard {
         self.active = false;
     }
 
-    fn fail(&mut self, error: BoxError) {
+    fn fail(&mut self, error: ConnectorError) {
         self.active = false;
-        fail_participants(&self.cell, self.flight, StdArc::new(error));
+        fail_participants(&self.cell, self.flight, error);
     }
 }
 
@@ -69,7 +86,7 @@ impl Drop for FlightCompletionGuard {
             fail_participants(
                 &self.cell,
                 self.flight,
-                StdArc::new(Box::new(std::io::Error::other(
+                ConnectorError::io(Box::new(std::io::Error::other(
                     "HTTP/2 establishment task was dropped",
                 ))),
             );
@@ -97,11 +114,14 @@ pub(super) async fn establish_h2(
                     h2_generation = ?generation,
                     "HTTP/2 establishment found an accepting generation"
                 );
-                if !OriginCell::join_h2_generation(&context.cell, waiter, generation) {
-                    continue;
+                match OriginCell::join_h2_generation(&context.cell, waiter, generation) {
+                    H2GenerationJoin::GenerationChanged => continue,
+                    H2GenerationJoin::Joined | H2GenerationJoin::WaiterCompleted => {
+                        drop(io);
+                        drop(permit);
+                        return EstablishmentOutcome::Transferred;
+                    }
                 }
-                drop((io, permit));
-                return EstablishmentOutcome::Transferred;
             }
             H2FlightInstall::Joined => {
                 tracing::trace!(
@@ -112,7 +132,8 @@ pub(super) async fn establish_h2(
                     origin_port = ?context.cell.id().origin().port(),
                     "HTTP/2 establishment joined the active flight"
                 );
-                drop((io, permit));
+                drop(io);
+                drop(permit);
                 return EstablishmentOutcome::Transferred;
             }
             H2FlightInstall::Driver(flight) => {
@@ -144,7 +165,7 @@ async fn drive_flight(
     let id = match next_connection_id(&context.pool) {
         Ok(id) => id,
         Err(error) => {
-            completion.fail(Box::new(error));
+            completion.fail(ConnectorError::other(Box::new(error), None));
             return;
         }
     };
@@ -167,7 +188,7 @@ async fn drive_flight(
         Ok(established) => established,
         Err(error) => {
             connection.logical_close(CloseReason::ProtocolClosed);
-            completion.fail(Box::new(error));
+            completion.fail(super::super::super::downcast_error(Box::new(error)));
             return;
         }
     };
@@ -175,9 +196,9 @@ async fn drive_flight(
     if let Err(lease) = connection.open(permit.into_lease()) {
         drop(lease);
         connection.logical_close(CloseReason::ProtocolClosed);
-        completion.fail(Box::new(std::io::Error::other(
+        completion.fail(ConnectorError::io(Box::new(std::io::Error::other(
             "HTTP/2 connection closed before installation",
-        )));
+        ))));
         return;
     }
 
@@ -192,9 +213,9 @@ async fn drive_flight(
         Ok(installed) => installed,
         Err((_connection, _sender)) => {
             connection.logical_close(CloseReason::ProtocolClosed);
-            completion.fail(Box::new(std::io::Error::other(
+            completion.fail(ConnectorError::io(Box::new(std::io::Error::other(
                 "HTTP/2 flight became stale before installation",
-            )));
+            ))));
             return;
         }
     };
@@ -230,34 +251,79 @@ async fn drive_flight(
     );
 }
 
+/// Connector classification copied to each participant in one failed flight.
+#[derive(Clone, Copy, Debug)]
+enum SharedFailureKind {
+    /// Connector timeout classification.
+    Timeout,
+    /// Caller or configuration error classification.
+    User,
+    /// Retryable transport I/O classification.
+    Io,
+    /// Other connector classification and optional retry kind.
+    Other(Option<ErrorKind>),
+}
+
 /// Cloneable wrapper that preserves one flight failure for every participant.
 #[derive(Clone, Debug)]
-struct SharedFlightFailure(StdArc<BoxError>);
+struct SharedFlightFailure {
+    /// Original source retained for every participant result.
+    source: StdArc<BoxError>,
+    /// Connector classification copied without consuming the source.
+    kind: SharedFailureKind,
+}
+
+impl SharedFlightFailure {
+    fn new(error: ConnectorError) -> Self {
+        let kind = if error.is_timeout() {
+            SharedFailureKind::Timeout
+        } else if error.is_user() {
+            SharedFailureKind::User
+        } else if error.is_io() {
+            SharedFailureKind::Io
+        } else {
+            debug_assert!(error.is_other());
+            SharedFailureKind::Other(error.as_other())
+        };
+        Self {
+            source: StdArc::new(error.into_source()),
+            kind,
+        }
+    }
+
+    fn connector_error(&self) -> ConnectorError {
+        let source: BoxError = Box::new(self.clone());
+        match self.kind {
+            SharedFailureKind::Timeout => ConnectorError::timeout(source),
+            SharedFailureKind::User => ConnectorError::user(source),
+            SharedFailureKind::Io => ConnectorError::io(source),
+            SharedFailureKind::Other(kind) => ConnectorError::other(source, kind),
+        }
+    }
+}
 
 impl std::fmt::Display for SharedFlightFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(&self.0, f)
+        std::fmt::Display::fmt(&self.source, f)
     }
 }
 
 impl std::error::Error for SharedFlightFailure {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(self.0.as_ref().as_ref())
+        Some(self.source.as_ref().as_ref())
     }
 }
 
 /// Fails every participant still retained by one exact flight.
-fn fail_participants(cell: &OriginCell, flight: H2FlightId, error: StdArc<BoxError>) {
+fn fail_participants(cell: &OriginCell, flight: H2FlightId, error: ConnectorError) {
     let Some(participants) = cell.fail_h2_flight(flight) else {
         return;
     };
+    let error = SharedFlightFailure::new(error);
     for participant in participants {
         cell.complete_establishment(
             participant,
-            AcquisitionResult::Failed(ConnectorError::other(
-                Box::new(SharedFlightFailure(error.clone())),
-                None,
-            )),
+            AcquisitionResult::Failed(error.connector_error()),
         );
     }
 }
@@ -318,13 +384,13 @@ mod tests {
         ));
 
         let mut completion = FlightCompletionGuard::new(cell.clone(), flight);
-        completion.fail(Box::new(std::io::Error::other(
+        completion.fail(ConnectorError::io(Box::new(std::io::Error::other(
             "synthetic HTTP/2 handshake failure",
-        )));
+        ))));
 
         for waiter in [first, second] {
             let error = failed_event(&cell, waiter);
-            assert!(error.is_other());
+            assert!(error.is_io());
             let source = error.source().expect("flight failure lost its source");
             assert_eq!("synthetic HTTP/2 handshake failure", source.to_string());
             assert!(
@@ -355,7 +421,7 @@ mod tests {
         drop(FlightCompletionGuard::new(cell.clone(), flight));
 
         let error = failed_event(&cell, live);
-        assert!(error.is_other());
+        assert!(error.is_io());
         assert_eq!(
             "HTTP/2 establishment task was dropped",
             error

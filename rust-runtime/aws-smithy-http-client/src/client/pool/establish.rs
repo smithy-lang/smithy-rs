@@ -8,6 +8,7 @@
 mod h1;
 mod h2;
 
+use super::admission::ProtocolRequirement;
 use super::cell::{AcquisitionResult, EstablishmentPermit, WaiterId};
 use super::dispatch::AcquisitionContext;
 use super::registry::PartitionState;
@@ -17,6 +18,7 @@ use crate::client::timeout::{self, TimeoutKind};
 use aws_smithy_async::rt::sleep::SharedAsyncSleep;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::connection::ConnectionId;
+use aws_smithy_runtime_api::client::result::ConnectorError;
 use http_1x::Uri;
 #[cfg(any(feature = "__rustls", feature = "s2n-tls"))]
 use std::collections::HashMap;
@@ -60,6 +62,9 @@ type TransportFuture = Pin<Box<dyn Future<Output = Result<BoxConn, BoxError>> + 
 /// and transport metadata. Protocol establishment consumes the resulting
 /// [`BoxConn`].
 pub(super) trait TransportFactory: Send + Sync + 'static {
+    /// Returns whether this factory can guarantee HTTP/1 for a required attempt.
+    fn guarantees_http1(&self) -> bool;
+
     /// Creates one partition-bound transport for `uri`.
     ///
     /// Connector readiness completes before `timeout` starts.
@@ -68,6 +73,7 @@ pub(super) trait TransportFactory: Send + Sync + 'static {
         partition: &PartitionState,
         uri: Uri,
         timeout: Option<TransportTimeout>,
+        alpn_protocols: AlpnProtocols,
     ) -> TransportFuture;
 }
 
@@ -75,6 +81,8 @@ pub(super) trait TransportFactory: Send + Sync + 'static {
 struct ServiceTransportFactory<F> {
     /// Builds a connector with the selected network-interface binding.
     connector_for_interface: F,
+    /// Whether every H1-required connection is guaranteed to negotiate H1.
+    guarantees_http1: bool,
 }
 
 impl<F, C, IO> TransportFactory for ServiceTransportFactory<F>
@@ -85,11 +93,16 @@ where
     C::Future: Send + 'static,
     IO: AsyncConn,
 {
+    fn guarantees_http1(&self) -> bool {
+        self.guarantees_http1
+    }
+
     fn connect(
         &self,
         partition: &PartitionState,
         uri: Uri,
         timeout: Option<TransportTimeout>,
+        _alpn_protocols: AlpnProtocols,
     ) -> TransportFuture {
         let interface = partition.interface().map(|interface| interface.as_ref());
         let mut connector = (self.connector_for_interface)(interface);
@@ -123,7 +136,7 @@ where
     C::Future: Send + 'static,
     IO: AsyncConn,
 {
-    transport_factory_for_interface(move |_| connector.clone())
+    service_transport_factory_for_interface(move |_| connector.clone(), false)
 }
 
 /// Erases a connector constructor that applies an optional interface binding.
@@ -140,22 +153,41 @@ where
     C::Future: Send + 'static,
     IO: AsyncConn,
 {
+    service_transport_factory_for_interface(connector_for_interface, true)
+}
+
+/// Erases a service connector and its HTTP/1 negotiation guarantee.
+fn service_transport_factory_for_interface<F, C, IO>(
+    connector_for_interface: F,
+    guarantees_http1: bool,
+) -> StdArc<dyn TransportFactory>
+where
+    F: Fn(Option<&str>) -> C + Send + Sync + 'static,
+    C: Service<Uri, Response = IO> + Send + 'static,
+    C::Error: Into<BoxError>,
+    C::Future: Send + 'static,
+    IO: AsyncConn,
+{
     StdArc::new(ServiceTransportFactory {
         connector_for_interface,
+        guarantees_http1,
     })
 }
 
 /// Erases and caches connectors whose construction carries TLS or other setup.
 ///
-/// Interface placement is immutable for a partition. Caching by the exact
-/// interface value keeps provider configuration and certificate loading off
-/// the request path while preserving one connector per placement.
+/// Interface placement is immutable for a partition. The first request for
+/// each `(interface, ALPN offer)` constructs its connector while holding the
+/// cache lock; later requests clone that retained connector. Provider
+/// configuration and certificate loading therefore occur at most once for
+/// each placement and offer rather than once per connection.
 #[cfg(any(feature = "__rustls", feature = "s2n-tls"))]
 pub(super) fn cached_transport_factory_for_interface<F, C, IO>(
     connector_for_interface: F,
+    guarantees_http1: bool,
 ) -> StdArc<dyn TransportFactory>
 where
-    F: Fn(Option<&str>) -> C + Send + Sync + 'static,
+    F: Fn(Option<&str>, AlpnProtocols) -> C + Send + Sync + 'static,
     C: Service<Uri, Response = IO> + Clone + Send + Sync + 'static,
     C::Error: Into<BoxError>,
     C::Future: Send + 'static,
@@ -163,29 +195,35 @@ where
 {
     struct Cached<F, C> {
         factory: F,
-        connectors: crate::sync::Mutex<HashMap<Option<String>, C>>,
+        guarantees_http1: bool,
+        connectors: crate::sync::Mutex<HashMap<(Option<String>, AlpnProtocols), C>>,
     }
 
     impl<F, C, IO> TransportFactory for Cached<F, C>
     where
-        F: Fn(Option<&str>) -> C + Send + Sync + 'static,
+        F: Fn(Option<&str>, AlpnProtocols) -> C + Send + Sync + 'static,
         C: Service<Uri, Response = IO> + Clone + Send + Sync + 'static,
         C::Error: Into<BoxError>,
         C::Future: Send + 'static,
         IO: AsyncConn,
     {
+        fn guarantees_http1(&self) -> bool {
+            self.guarantees_http1
+        }
+
         fn connect(
             &self,
             partition: &PartitionState,
             uri: Uri,
             timeout: Option<TransportTimeout>,
+            alpn_protocols: AlpnProtocols,
         ) -> TransportFuture {
             let interface = partition.interface().map(|value| value.to_string());
             let mut connector = self
                 .connectors
                 .lock()
-                .entry(interface.clone())
-                .or_insert_with(|| (self.factory)(interface.as_deref()))
+                .entry((interface.clone(), alpn_protocols))
+                .or_insert_with(|| (self.factory)(interface.as_deref(), alpn_protocols))
                 .clone();
             Box::pin(async move {
                 poll_fn(|cx| connector.poll_ready(cx))
@@ -206,6 +244,7 @@ where
 
     StdArc::new(Cached {
         factory: connector_for_interface,
+        guarantees_http1,
         connectors: crate::sync::Mutex::new(HashMap::new()),
     })
 }
@@ -223,6 +262,7 @@ pub(super) async fn establish(
     context: AcquisitionContext,
     waiter: WaiterId,
     permit: EstablishmentPermit,
+    requirement: ProtocolRequirement,
 ) -> EstablishmentOutcome {
     let io = match context
         .pool
@@ -231,6 +271,7 @@ pub(super) async fn establish(
             &context.partition,
             context.absolute_uri.clone(),
             context.connect_timeout.clone(),
+            alpn_protocols(requirement),
         )
         .await
     {
@@ -261,6 +302,14 @@ pub(super) async fn establish(
         negotiated_protocol = if negotiated_h2 { "HTTP/2" } else { "HTTP/1.1" },
         "transport protocol negotiated"
     );
+    if negotiated_h2 && !requirement.accepts_h2() {
+        drop(io);
+        drop(permit);
+        return EstablishmentOutcome::Complete(AcquisitionResult::Failed(ConnectorError::user(
+            NegotiatedProtocolMismatch { requirement }.into(),
+        )));
+    }
+
     if negotiated_h2 {
         h2::establish_h2(context, waiter, permit, io, connected).await
     } else {
@@ -272,6 +321,24 @@ pub(super) async fn establish(
         )
     }
 }
+
+/// An established transport selected a protocol incompatible with the request.
+#[derive(Debug)]
+struct NegotiatedProtocolMismatch {
+    requirement: ProtocolRequirement,
+}
+
+impl fmt::Display for NegotiatedProtocolMismatch {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "transport negotiated HTTP/2, which does not satisfy {:?} request semantics",
+            self.requirement
+        )
+    }
+}
+
+impl Error for NegotiatedProtocolMismatch {}
 
 /// Mints one non-wrapping physical-connection identity.
 fn next_connection_id(pool: &PoolInner) -> Result<ConnectionId, ConnectionIdExhausted> {
@@ -295,3 +362,19 @@ impl fmt::Display for ConnectionIdExhausted {
 }
 
 impl Error for ConnectionIdExhausted {}
+
+/// Static ALPN protocol offer used for one transport connection.
+pub(super) type AlpnProtocols = &'static [&'static [u8]];
+
+/// Default offer for requests that may use HTTP/2.
+pub(super) const HTTP_ALPN_PROTOCOLS: AlpnProtocols = &[b"h2", b"http/1.1"];
+
+/// Narrowed offer for requests that require HTTP/1 wire semantics.
+pub(super) const HTTP1_ALPN_PROTOCOLS: AlpnProtocols = &[b"http/1.1"];
+
+fn alpn_protocols(requirement: ProtocolRequirement) -> AlpnProtocols {
+    match requirement {
+        ProtocolRequirement::H1Required => HTTP1_ALPN_PROTOCOLS,
+        ProtocolRequirement::H1Compatible | ProtocolRequirement::H2Required => HTTP_ALPN_PROTOCOLS,
+    }
+}

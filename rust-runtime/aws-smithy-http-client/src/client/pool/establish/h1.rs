@@ -83,12 +83,10 @@ async fn handshake_and_install_h1(
         pool,
         partition,
         cell,
-        absolute_uri,
+        absolute_uri: _,
         owner_spawner,
-        connect_timeout,
+        connect_timeout: _,
     } = context;
-
-    drop((absolute_uri, connect_timeout));
 
     let id =
         next_connection_id(&pool).map_err(|error| ConnectorError::other(error.into(), None))?;
@@ -116,9 +114,8 @@ async fn handshake_and_install_h1(
     if let Err(lease) = connection.open(permit.into_lease()) {
         drop(lease);
         connection.logical_close(CloseReason::ProtocolClosed);
-        return Err(ConnectorError::other(
+        return Err(ConnectorError::io(
             "HTTP/1 connection closed before installation".into(),
-            None,
         ));
     }
 

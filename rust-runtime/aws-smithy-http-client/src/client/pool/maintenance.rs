@@ -768,6 +768,34 @@ mod tests {
         assert_eq!(None, cell.accepting_h2_generation());
     }
 
+    #[test]
+    fn accepted_h2_dispatch_resets_the_idle_deadline() {
+        let timeout = Duration::from_secs(10);
+        let time = RewindableTimeSource::new(0);
+        let (_unused_time, sleep, _gate) = controlled_time_and_sleep(UNIX_EPOCH);
+        let (maintenance, cell) = cell_with_maintenance(
+            timeout,
+            SharedTimeSource::new(time.clone()),
+            SharedAsyncSleep::new(sleep),
+        );
+        let connection = h2_connection(1);
+        OriginCell::install_h2_for_test(&cell, connection.clone(), 1, maintenance.idle_deadline());
+        assert_eq!(Some(UNIX_EPOCH + timeout), cell.nearest_idle_deadline());
+
+        time.set(20);
+        let mut activation =
+            OriginCell::select_h2(&cell).expect("HTTP/2 generation was not selectable");
+        let _dispatch_parts = activation.take_dispatch_parts();
+        let dispatch = ConnectionState::try_commit_dispatch(&connection)
+            .expect("HTTP/2 connection rejected dispatch");
+        activation.accept(dispatch);
+
+        assert_eq!(
+            Some(UNIX_EPOCH + Duration::from_secs(20) + timeout),
+            cell.nearest_idle_deadline()
+        );
+    }
+
     #[tokio::test]
     async fn selected_record_has_no_idle_deadline() {
         let timeout = Duration::from_secs(10);

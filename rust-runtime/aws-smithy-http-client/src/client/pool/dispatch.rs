@@ -25,9 +25,12 @@ use super::{ConnectionPool, PoolInner};
 use crate::sync::Arc;
 use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_types::body::SdkBody;
-use http_1x::{Method, Request, Response, Uri, Version};
+use http_1x::{header, Method, Request, Response, Uri, Version};
 use std::future::poll_fn;
 use std::sync::Arc as StdArc;
+
+/// Replacement selections allowed after the initial HTTP/2 dispatch attempt.
+const MAX_H2_REACQUISITIONS: usize = 2;
 
 /// Stable state shared by acquisition and protocol dispatch for one request.
 ///
@@ -101,11 +104,8 @@ impl ConnectionPool {
         context: AcquisitionContext,
         mut request: Request<SdkBody>,
     ) -> Result<Response<SdkBody>, ConnectorError> {
-        let requirement = if request.version() == Version::HTTP_2 {
-            ProtocolRequirement::H2Required
-        } else {
-            ProtocolRequirement::H1Compatible
-        };
+        let requirement = protocol_requirement(&request);
+        let mut h2_reacquisitions = H2ReacquisitionBudget::default();
 
         loop {
             match Self::acquire(&context, requirement).await? {
@@ -116,13 +116,22 @@ impl ConnectionPool {
                     }
                 }
                 AcquisitionResult::H2(activation) => {
-                    match self.dispatch_h2(request, activation).await? {
+                    match self.dispatch_h2(&context, request, activation).await? {
                         H2DispatchResult::Response(response) => return Ok(response),
-                        H2DispatchResult::Reacquire(returned) => request = returned,
+                        H2DispatchResult::Reacquire(reacquisition) => {
+                            let (returned, error) = reacquisition.into_parts();
+                            if !h2_reacquisitions.admit_replacement() {
+                                return Err(error);
+                            }
+                            request = returned;
+                        }
                     }
                 }
                 AcquisitionResult::Failed(_) => {
                     unreachable!("failed acquisition returned as a successful result")
+                }
+                AcquisitionResult::Reacquire => {
+                    unreachable!("internal reacquisition escaped the acquisition loop")
                 }
             }
         }
@@ -137,51 +146,9 @@ impl ConnectionPool {
         context: &AcquisitionContext,
         requirement: ProtocolRequirement,
     ) -> Result<AcquisitionResult, ConnectorError> {
-        if let Some(activation) = OriginCell::select_h2(&context.cell) {
-            tracing::trace!(
-                connection_id = %activation.connection().id(),
-                request_partition = ?context.partition.id(),
-                connection_partition = ?activation.connection().owner_partition(),
-                origin_scheme = %context.cell.id().origin().scheme(),
-                origin_host = context.cell.id().origin().host(),
-                origin_port = ?context.cell.id().origin().port(),
-                "HTTP/2 pool hit; activating local generation"
-            );
-            return Ok(AcquisitionResult::H2(activation));
-        }
-        if requirement == ProtocolRequirement::H1Compatible {
-            if let Some(selection) = OriginCell::select_h1(&context.cell) {
-                tracing::trace!(
-                    connection_id = %selection.connection_id(),
-                    request_partition = ?context.partition.id(),
-                    connection_partition = ?selection.connection().owner_partition(),
-                    origin_scheme = %selection.connection().info().origin().scheme(),
-                    origin_host = selection.connection().info().origin().host(),
-                    origin_port = ?selection.connection().info().origin().port(),
-                    "HTTP/1 pool hit; reusing idle connection"
-                );
-                return Ok(AcquisitionResult::H1(selection));
-            }
-        }
-
-        let waiter = OriginCell::register_waiter(&context.cell, requirement);
-        tracing::trace!(
-            request_partition = ?context.partition.id(),
-            origin_scheme = %context.cell.id().origin().scheme(),
-            origin_host = context.cell.id().origin().host(),
-            origin_port = ?context.cell.id().origin().port(),
-            protocol_requirement = ?requirement,
-            "connection acquisition queued"
-        );
-        let mut waiter_guard = WaiterGuard::new(context.cell.clone(), waiter);
-        loop {
-            match poll_fn(|cx| context.cell.poll_waiter(waiter, cx)).await {
-                AcquisitionEvent::Complete(AcquisitionResult::H1(selection)) => {
-                    waiter_guard.disarm();
-                    return Ok(AcquisitionResult::H1(selection));
-                }
-                AcquisitionEvent::Complete(AcquisitionResult::H2(activation)) => {
-                    waiter_guard.disarm();
+        'acquire: loop {
+            if requirement.accepts_h2() {
+                if let Some(activation) = OriginCell::select_h2(&context.cell) {
                     tracing::trace!(
                         connection_id = %activation.connection().id(),
                         request_partition = ?context.partition.id(),
@@ -189,42 +156,113 @@ impl ConnectionPool {
                         origin_scheme = %context.cell.id().origin().scheme(),
                         origin_host = context.cell.id().origin().host(),
                         origin_port = ?context.cell.id().origin().port(),
-                        "HTTP/2 acquisition completed"
+                        "HTTP/2 pool hit; activating local generation"
                     );
                     return Ok(AcquisitionResult::H2(activation));
                 }
-                AcquisitionEvent::Complete(AcquisitionResult::Failed(error)) => {
-                    waiter_guard.disarm();
-                    return Err(error);
-                }
-                AcquisitionEvent::Establish(permit) => {
+            }
+            if requirement.accepts_h1() {
+                if let Some(selection) = OriginCell::select_h1(&context.cell) {
                     tracing::trace!(
+                        connection_id = %selection.connection_id(),
                         request_partition = ?context.partition.id(),
-                        origin_scheme = %context.cell.id().origin().scheme(),
-                        origin_host = context.cell.id().origin().host(),
-                        origin_port = ?context.cell.id().origin().port(),
-                        "connection establishment starting"
+                        connection_partition = ?selection.connection().owner_partition(),
+                        origin_scheme = %selection.connection().info().origin().scheme(),
+                        origin_host = selection.connection().info().origin().host(),
+                        origin_port = ?selection.connection().info().origin().port(),
+                        "HTTP/1 pool hit; reusing idle connection"
                     );
-                    let attempt = establish::establish(context.clone(), waiter, permit);
-                    let completion =
-                        EstablishmentCompletionGuard::new(context.cell.clone(), waiter);
-                    context.owner_spawner.spawn(Box::pin(async move {
-                        let mut completion = completion;
-                        if !completion.start() {
-                            drop(attempt);
-                            completion.disarm();
-                            return;
-                        }
-                        match attempt.await {
-                            establish::EstablishmentOutcome::Complete(result) => {
-                                completion.complete(result);
+                    return Ok(AcquisitionResult::H1(selection));
+                }
+            }
+
+            let waiter = OriginCell::register_waiter(&context.cell, requirement);
+            tracing::trace!(
+                request_partition = ?context.partition.id(),
+                origin_scheme = %context.cell.id().origin().scheme(),
+                origin_host = context.cell.id().origin().host(),
+                origin_port = ?context.cell.id().origin().port(),
+                protocol_requirement = ?requirement,
+                "connection acquisition queued"
+            );
+            let mut waiter_guard = WaiterGuard::new(context.cell.clone(), waiter);
+            loop {
+                match poll_fn(|cx| context.cell.poll_waiter(waiter, cx)).await {
+                    AcquisitionEvent::Complete(AcquisitionResult::H1(selection)) => {
+                        waiter_guard.disarm();
+                        return Ok(AcquisitionResult::H1(selection));
+                    }
+                    AcquisitionEvent::Complete(AcquisitionResult::H2(activation)) => {
+                        waiter_guard.disarm();
+                        OriginCell::service_h2_waiters(&context.cell);
+                        OriginCell::service_peer_h2_waiters(&context.cell);
+                        tracing::trace!(
+                            connection_id = %activation.connection().id(),
+                            request_partition = ?context.partition.id(),
+                            connection_partition = ?activation.connection().owner_partition(),
+                            origin_scheme = %context.cell.id().origin().scheme(),
+                            origin_host = context.cell.id().origin().host(),
+                            origin_port = ?context.cell.id().origin().port(),
+                            "HTTP/2 acquisition completed"
+                        );
+                        return Ok(AcquisitionResult::H2(activation));
+                    }
+                    AcquisitionEvent::Complete(AcquisitionResult::Failed(error)) => {
+                        waiter_guard.disarm();
+                        return Err(error);
+                    }
+                    AcquisitionEvent::Complete(AcquisitionResult::Reacquire) => {
+                        waiter_guard.disarm();
+                        continue 'acquire;
+                    }
+                    AcquisitionEvent::Establish(permit) => {
+                        tracing::trace!(
+                            request_partition = ?context.partition.id(),
+                            origin_scheme = %context.cell.id().origin().scheme(),
+                            origin_host = context.cell.id().origin().host(),
+                            origin_port = ?context.cell.id().origin().port(),
+                            "connection establishment starting"
+                        );
+                        let attempt =
+                            establish::establish(context.clone(), waiter, permit, requirement);
+                        let completion =
+                            EstablishmentCompletionGuard::new(context.cell.clone(), waiter);
+                        context.owner_spawner.spawn(Box::pin(async move {
+                            let mut completion = completion;
+                            if !completion.start() {
+                                drop(attempt);
+                                completion.disarm();
+                                return;
                             }
-                            establish::EstablishmentOutcome::Transferred => completion.disarm(),
-                        }
-                    }));
+                            match attempt.await {
+                                establish::EstablishmentOutcome::Complete(result) => {
+                                    completion.complete(result);
+                                }
+                                establish::EstablishmentOutcome::Transferred => completion.disarm(),
+                            }
+                        }));
+                    }
                 }
             }
         }
+    }
+}
+
+/// Per-request bound on replacement HTTP/2 selections.
+#[derive(Default)]
+struct H2ReacquisitionBudget {
+    /// Replacement selections admitted after the initial selection.
+    completed: usize,
+}
+
+impl H2ReacquisitionBudget {
+    /// Returns whether one more replacement selection may proceed.
+    fn admit_replacement(&mut self) -> bool {
+        if self.completed >= MAX_H2_REACQUISITIONS {
+            return false;
+        }
+        self.completed += 1;
+        true
     }
 }
 
@@ -265,7 +303,7 @@ impl EstablishmentCompletionGuard {
 impl Drop for EstablishmentCompletionGuard {
     fn drop(&mut self) {
         if self.active {
-            let error = ConnectorError::other(EstablishmentTaskDropped.into(), None);
+            let error = ConnectorError::io(EstablishmentTaskDropped.into());
             self.cell
                 .complete_establishment(self.waiter, AcquisitionResult::Failed(error));
             tracing::debug!(
@@ -325,6 +363,12 @@ impl Drop for WaiterGuard {
 fn validate_request_before_acquisition(
     request: &Request<SdkBody>,
 ) -> Result<(), RequestDispatchError> {
+    if request.version() == Version::HTTP_2 && request.method() == Method::CONNECT {
+        return Err(RequestDispatchError::ExtendedConnectUnsupported);
+    }
+    if request.version() == Version::HTTP_2 && has_upgrade_semantics(request) {
+        return Err(RequestDispatchError::UpgradeOverHttp2);
+    }
     match request.version() {
         Version::HTTP_11 | Version::HTTP_2 => Ok(()),
         Version::HTTP_10 if request.method() == Method::CONNECT => {
@@ -334,6 +378,40 @@ fn validate_request_before_acquisition(
         version => Err(RequestDispatchError::UnsupportedVersion(version)),
     }
 }
+
+/// Returns the protocol capability needed to preserve the request's wire semantics.
+fn protocol_requirement(request: &Request<SdkBody>) -> ProtocolRequirement {
+    if request.version() == Version::HTTP_2 {
+        ProtocolRequirement::H2Required
+    } else if request.version() == Version::HTTP_10
+        || request.method() == Method::CONNECT
+        || has_upgrade_semantics(request)
+    {
+        ProtocolRequirement::H1Required
+    } else {
+        ProtocolRequirement::H1Compatible
+    }
+}
+
+/// Returns whether the request asks HTTP/1 to switch protocols.
+fn has_upgrade_semantics(request: &Request<SdkBody>) -> bool {
+    request.headers().contains_key(header::UPGRADE)
+        || request
+            .headers()
+            .get_all(header::CONNECTION)
+            .iter()
+            .any(|value| {
+                value.to_str().is_ok_and(|value| {
+                    value
+                        .split(',')
+                        .any(|token| token.trim().eq_ignore_ascii_case("upgrade"))
+                })
+            })
+}
+
+/// Marker for a `Host` header synthesized during an HTTP/1 dispatch attempt.
+#[derive(Clone, Copy, Debug)]
+struct H1HostHeaderInserted;
 
 /// A request rejected before Hyper accepts it for dispatch.
 #[derive(Debug)]
@@ -346,6 +424,10 @@ enum RequestDispatchError {
     ConnectOverHttp10,
     /// The request selected an HTTP version this client cannot dispatch.
     UnsupportedVersion(Version),
+    /// Extended CONNECT requires HTTP/2 stream-lifecycle support.
+    ExtendedConnectUnsupported,
+    /// HTTP/1 upgrade semantics cannot be represented by this HTTP/2 path.
+    UpgradeOverHttp2,
 }
 
 impl std::fmt::Display for RequestDispatchError {
@@ -359,6 +441,12 @@ impl std::fmt::Display for RequestDispatchError {
             Self::UnsupportedVersion(version) => {
                 write!(f, "unsupported HTTP version: {version:?}")
             }
+            Self::ExtendedConnectUnsupported => {
+                f.write_str("extended CONNECT over HTTP/2 is not supported")
+            }
+            Self::UpgradeOverHttp2 => {
+                f.write_str("HTTP/1 protocol upgrade semantics cannot use HTTP/2")
+            }
         }
     }
 }
@@ -369,5 +457,74 @@ impl std::error::Error for RequestDispatchError {
             Self::InvalidHostHeader(error) => Some(error),
             _ => None,
         }
+    }
+}
+
+#[cfg(all(test, not(smithy_http_client_loom)))]
+mod tests {
+    use super::*;
+
+    fn request(method: Method, version: Version) -> Request<SdkBody> {
+        Request::builder()
+            .method(method)
+            .uri("https://example.com/resource")
+            .version(version)
+            .body(SdkBody::empty())
+            .unwrap()
+    }
+
+    #[test]
+    fn request_semantics_select_protocol_capability() {
+        assert_eq!(
+            ProtocolRequirement::H1Compatible,
+            protocol_requirement(&request(Method::GET, Version::HTTP_11))
+        );
+        assert_eq!(
+            ProtocolRequirement::H2Required,
+            protocol_requirement(&request(Method::GET, Version::HTTP_2))
+        );
+        assert_eq!(
+            ProtocolRequirement::H1Required,
+            protocol_requirement(&request(Method::GET, Version::HTTP_10))
+        );
+        assert_eq!(
+            ProtocolRequirement::H1Required,
+            protocol_requirement(&request(Method::CONNECT, Version::HTTP_11))
+        );
+
+        let mut upgrade = request(Method::GET, Version::HTTP_11);
+        upgrade
+            .headers_mut()
+            .insert(header::CONNECTION, "keep-alive, Upgrade".parse().unwrap());
+        assert_eq!(
+            ProtocolRequirement::H1Required,
+            protocol_requirement(&upgrade)
+        );
+    }
+
+    #[test]
+    fn unsupported_h2_tunnel_and_upgrade_forms_are_rejected() {
+        assert!(matches!(
+            validate_request_before_acquisition(&request(Method::CONNECT, Version::HTTP_2)),
+            Err(RequestDispatchError::ExtendedConnectUnsupported)
+        ));
+
+        let mut upgrade = request(Method::GET, Version::HTTP_2);
+        upgrade
+            .headers_mut()
+            .insert(header::UPGRADE, "websocket".parse().unwrap());
+        assert!(matches!(
+            validate_request_before_acquisition(&upgrade),
+            Err(RequestDispatchError::UpgradeOverHttp2)
+        ));
+    }
+
+    #[test]
+    fn h2_reacquisition_is_bounded_after_two_replacements() {
+        let mut budget = H2ReacquisitionBudget::default();
+        for _ in 0..MAX_H2_REACQUISITIONS {
+            assert!(budget.admit_replacement());
+        }
+        assert!(!budget.admit_replacement());
     }
 }

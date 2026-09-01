@@ -49,17 +49,33 @@ pub(in crate::client::pool) mod reuse;
 
 use self::demand::{DemandSchedule, PreparedCapacityDelivery};
 use self::order::{IntrusiveLinks, IntrusiveOrder};
-use self::publication::{H2Publication, H2PublicationGuard, PreparedH2Publication};
+use self::publication::{
+    H2Publication, H2PublicationGuard, H2ReclaimAction, PreparedH2Publication, PreparedH2Reclaim,
+};
 pub(in crate::client::pool) use delivery::DeliveryGuard;
 pub(in crate::client::pool) use publication::H2AdvertisementSnapshot;
 
 /// Protocol capability required by the head waiter in a cell.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ProtocolRequirement {
+    /// The waiter requires HTTP/1 wire semantics.
+    H1Required,
     /// The waiter may dispatch over HTTP/1 or HTTP/2.
     H1Compatible,
     /// The waiter requires HTTP/2.
     H2Required,
+}
+
+impl ProtocolRequirement {
+    /// Returns whether an HTTP/1 sender can satisfy this requirement.
+    pub(crate) fn accepts_h1(self) -> bool {
+        self != Self::H2Required
+    }
+
+    /// Returns whether an HTTP/2 activation can satisfy this requirement.
+    pub(crate) fn accepts_h2(self) -> bool {
+        self != Self::H1Required
+    }
 }
 
 /// Identity of one cell-local demand generation.
@@ -150,6 +166,14 @@ impl DemandSnapshot {
         }
     }
 
+    /// Returns whether this active demand can use an HTTP/2 generation.
+    pub(crate) fn accepts_h2(&self) -> bool {
+        matches!(
+            self.state,
+            DemandState::Active { head, .. } if head.accepts_h2()
+        )
+    }
+
     /// Retires a demand generation at the supplied publication version.
     pub(crate) fn inactive(id: DemandId, version: SnapshotVersion) -> Self {
         Self {
@@ -160,7 +184,7 @@ impl DemandSnapshot {
     }
 
     /// Returns the demand identity for cross-module transition tests.
-    #[cfg(all(test, smithy_http_client_loom))]
+    #[cfg(test)]
     pub(in crate::client::pool) fn id_for_test(&self) -> DemandId {
         self.id
     }
@@ -204,25 +228,37 @@ pub(super) struct DeliveryId(u64);
 pub(crate) struct OriginAdmission {
     /// Canonical origin shared by every partition represented in `state`.
     origin: OriginKey,
+    /// Whether establishment can guarantee HTTP/1 before reclaim spends H2 capacity.
+    guarantees_http1: bool,
     /// Capacity, demand, and delivery-fence state for this origin.
     state: Mutex<AdmissionState>,
 }
 
 impl OriginAdmission {
     /// Creates admission for at most `limit` logically open connections.
-    pub(crate) fn new(origin: OriginKey, limit: NonZeroUsize) -> Arc<Self> {
+    pub(crate) fn new(origin: OriginKey, limit: NonZeroUsize, guarantees_http1: bool) -> Arc<Self> {
         Arc::new(Self {
             origin,
+            guarantees_http1,
             state: Mutex::new(AdmissionState::new(limit)),
         })
     }
 
     #[cfg(test)]
     pub(super) fn for_test(limit: NonZeroUsize) -> Arc<Self> {
+        Self::for_test_with_http1_guarantee(limit, true)
+    }
+
+    #[cfg(test)]
+    pub(super) fn for_test_with_http1_guarantee(
+        limit: NonZeroUsize,
+        guarantees_http1: bool,
+    ) -> Arc<Self> {
         Self::new(
             OriginKey::from_parts(http_1x::uri::Scheme::HTTPS, "example.com", None)
                 .expect("test origin is valid"),
             limit,
+            guarantees_http1,
         )
     }
 
@@ -284,10 +320,21 @@ impl OriginAdmission {
                 publication,
             )));
         }
+        if let Some(reuse) = state.h1.prepare_reuse(&state.demand_schedule) {
+            return Some(AdmissionAction::H1(reuse::H1ReuseAction::install(
+                origin.clone(),
+                reuse,
+            )));
+        }
+        if !origin.guarantees_http1 {
+            return None;
+        }
         state
-            .h1
-            .prepare_reuse(&state.demand_schedule)
-            .map(|reuse| AdmissionAction::H1(reuse::H1ReuseAction::install(origin.clone(), reuse)))
+            .h2
+            .prepare_reclaim(&state.demand_schedule)
+            .map(|reclaim| {
+                AdmissionAction::H2Reclaim(H2ReclaimAction::new(origin.clone(), reclaim))
+            })
     }
 
     /// Upgrades a registered requesting cell without holding the admission lock.
@@ -389,6 +436,21 @@ impl OriginAdmission {
         Self::prepare_action(origin, &mut state)
     }
 
+    /// Completes one exact idle-H2 reclaim crossing.
+    fn finish_h2_reclaim(
+        origin: &Arc<Self>,
+        prepared: &PreparedH2Reclaim,
+        snapshot: Option<H2AdvertisementSnapshot>,
+    ) -> Option<AdmissionAction> {
+        let mut state = origin.state.lock();
+        let AdmissionState {
+            h2,
+            demand_schedule,
+            ..
+        } = &mut *state;
+        h2.finish_reclaim(prepared, snapshot, demand_schedule);
+        Self::prepare_action(origin, &mut state)
+    }
     #[cfg(test)]
     pub(super) fn publish_action_without_driving(
         origin: &Arc<Self>,
@@ -413,6 +475,9 @@ impl OriginAdmission {
             }
             Some(AdmissionAction::H2(_)) => {
                 panic!("capacity-only test unexpectedly prepared an HTTP/2 action")
+            }
+            Some(AdmissionAction::H2Reclaim(_)) => {
+                panic!("capacity-only test unexpectedly prepared an HTTP/2 reclaim action")
             }
             None => None,
         }
@@ -467,6 +532,8 @@ pub(super) enum AdmissionAction {
     H1(reuse::H1ReuseAction),
     /// HTTP/2 generation visibility crossing to one requesting cell.
     H2(H2PublicationGuard),
+    /// Exact idle HTTP/2 generation crossing to its connection cell.
+    H2Reclaim(H2ReclaimAction),
 }
 
 impl AdmissionAction {
@@ -476,6 +543,7 @@ impl AdmissionAction {
             Self::Delivery(delivery) => delivery.deliver_once(),
             Self::H1(action) => action.drive_once(),
             Self::H2(publication) => publication.publish_once(),
+            Self::H2Reclaim(reclaim) => reclaim.drive_once(),
         }
     }
 
@@ -619,16 +687,20 @@ impl AdmissionState {
     fn publish_demand(&mut self, requesting_partition: PartitionId, snapshot: DemandSnapshot) {
         let old_group = self.demand_schedule.group_for(&requesting_partition);
         self.demand_schedule.publish(requesting_partition, snapshot);
+        self.reconcile_demand_indexes(&requesting_partition, old_group);
+    }
+
+    /// Repairs every protocol index affected by one demand transition.
+    fn reconcile_demand_indexes(
+        &mut self,
+        requesting_partition: &PartitionId,
+        old_group: Option<EligibilityGroup>,
+    ) {
         self.h1
-            .reconcile_requesting_cell(&requesting_partition, &self.demand_schedule);
+            .reconcile_requesting_cell(requesting_partition, &self.demand_schedule);
         if let Some(old_group) = old_group {
             self.h2.reconcile_group(&old_group, &self.demand_schedule);
         }
-        self.reconcile_h2_demand(&requesting_partition);
-    }
-
-    /// Recomputes publication readiness for one cell's latest demand group.
-    fn reconcile_h2_demand(&mut self, requesting_partition: &PartitionId) {
         if let Some(group) = self.demand_schedule.group_for(requesting_partition) {
             self.h2.reconcile_group(&group, &self.demand_schedule);
         }
@@ -642,13 +714,15 @@ impl AdmissionState {
 
         let permit = self.take_permit()?;
         let delivery = self.take_delivery_id();
+        let old_group = self
+            .demand_schedule
+            .queued_head()
+            .and_then(|head| self.demand_schedule.group_for(&head.requesting_partition));
         let scheduled = self
             .demand_schedule
             .reserve_origin_head(delivery)
             .expect("queued demand head disappeared");
-        self.h1
-            .reconcile_requesting_cell(&scheduled.requesting_partition, &self.demand_schedule);
-        self.reconcile_h2_demand(&scheduled.requesting_partition);
+        self.reconcile_demand_indexes(&scheduled.requesting_partition, old_group);
         Some(PreparedCapacityDelivery {
             permit,
             delivery,
@@ -679,10 +753,7 @@ impl AdmissionState {
         let old_group = self.demand_schedule.group_for(requesting_partition);
         self.demand_schedule
             .finish_delivery(delivery, requesting_partition, result);
-        if let Some(old_group) = old_group {
-            self.h2.reconcile_group(&old_group, &self.demand_schedule);
-        }
-        self.reconcile_h2_demand(requesting_partition);
+        self.reconcile_demand_indexes(requesting_partition, old_group);
     }
 
     /// Reserves one eligibility-group head for identity-only H2 publication.

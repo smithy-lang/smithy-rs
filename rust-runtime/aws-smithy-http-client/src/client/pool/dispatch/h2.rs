@@ -19,6 +19,7 @@
 use super::super::cell::h2::{H2Activation, H2CloseHandle, H2DispatchParts, H2LeaseEndpoint};
 use super::super::connection::ConnectionState;
 use super::super::ConnectionPool;
+use super::{AcquisitionContext, H1HostHeaderInserted};
 use crate::sync::{Arc, Mutex};
 use aws_smithy_runtime_api::client::connection::CaptureSmithyConnection;
 use aws_smithy_runtime_api::client::result::ConnectorError;
@@ -30,32 +31,59 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 /// Result of one checked HTTP/2 dispatch attempt.
+#[allow(
+    clippy::large_enum_variant,
+    reason = "boxing the successful response would allocate on every HTTP/2 request"
+)]
 pub(super) enum H2DispatchResult {
     /// Hyper accepted the request and produced a guarded response.
     Response(Response<SdkBody>),
-    /// Hyper returned the request envelope before accepting it.
-    Reacquire(Request<SdkBody>),
+    /// Hyper did not accept the request, so it may re-enter acquisition.
+    Reacquire(Box<H2Reacquisition>),
+}
+
+/// Request and terminal fallback retained for one replacement selection.
+pub(super) struct H2Reacquisition {
+    /// Original request Hyper did not accept.
+    request: Request<SdkBody>,
+    /// Error returned if the request exhausts its replacement budget.
+    error: ConnectorError,
+}
+
+impl H2Reacquisition {
+    /// Returns the original request and its terminal fallback.
+    pub(super) fn into_parts(self: Box<Self>) -> (Request<SdkBody>, ConnectorError) {
+        let Self { request, error } = *self;
+        (request, error)
+    }
 }
 
 /// State retained after Hyper accepts one request.
 struct H2AcceptedDispatch {
+    /// Connection retained through response creation.
     connection: Arc<ConnectionState>,
+    /// Generation close authority used for connection-wide failures.
     close: H2CloseHandle,
+    /// Metadata captured before the request moved into Hyper.
     captured_metadata: Option<aws_smithy_runtime_api::client::connection::ConnectionMetadata>,
+    /// Receive endpoint transferred to the guarded response body.
     receive_endpoint: H2LeaseEndpoint,
+    /// Whether the generation accepted an earlier request.
     reused: bool,
 }
 
 impl ConnectionPool {
     /// Dispatches one request through a prospective H2 generation lease.
     ///
-    /// A request returned by a reused generation may reacquire. Failure on a
-    /// fresh generation is terminal for this pool attempt.
+    /// Pool-side staleness reacquires before Hyper sees the request. Once
+    /// Hyper returns an envelope, only a reused generation may reacquire.
     pub(super) async fn dispatch_h2(
         &self,
+        context: &AcquisitionContext,
         mut request: Request<SdkBody>,
         mut activation: H2Activation,
     ) -> Result<H2DispatchResult, ConnectorError> {
+        prepare_h2_request(&mut request, &context.absolute_uri);
         let connection = activation.connection().clone();
         let reused = activation.is_reused();
         let close = activation.close_handle();
@@ -82,6 +110,7 @@ impl ConnectionPool {
             return finish_unaccepted_request(
                 request,
                 reused,
+                UnacceptedStage::BeforeHyper,
                 ConnectorError::other(H2ConnectionClosedBeforeDispatch.into(), None)
                     .with_connection(metadata),
             );
@@ -92,6 +121,7 @@ impl ConnectionPool {
             return finish_unaccepted_request(
                 request,
                 reused,
+                UnacceptedStage::BeforeHyper,
                 ConnectorError::other(H2ConnectionClosedBeforeDispatch.into(), None)
                     .with_connection(metadata),
             );
@@ -100,16 +130,10 @@ impl ConnectionPool {
         let body = H2RequestBodyHandle::arm(&mut request, send_endpoint);
 
         let mut send = Box::pin(sender.hyper_mut().try_send_request(request));
-        let first = poll_fn(|cx| {
-            Poll::Ready(match send.as_mut().poll(cx) {
-                Poll::Ready(result) => FirstPoll::Ready(result),
-                Poll::Pending => FirstPoll::Pending,
-            })
-        })
-        .await;
+        let first = poll_fn(|cx| Poll::Ready(send.as_mut().poll(cx))).await;
 
         match first {
-            FirstPoll::Ready(Err(mut error)) if error.message().is_some() => {
+            Poll::Ready(Err(mut error)) if error.message().is_some() => {
                 let returned = error
                     .take_message()
                     .expect("checked returned request disappeared");
@@ -123,11 +147,12 @@ impl ConnectionPool {
                 finish_unaccepted_request(
                     returned,
                     reused,
+                    UnacceptedStage::ReturnedByHyper,
                     super::super::super::downcast_error(Box::new(error.into_error()))
                         .with_connection(metadata),
                 )
             }
-            FirstPoll::Ready(result) => {
+            Poll::Ready(result) => {
                 activation.accept(dispatch);
                 let sender_closed = sender.is_closed();
                 self.finish_h2_send(
@@ -142,7 +167,7 @@ impl ConnectionPool {
                     },
                 )
             }
-            FirstPoll::Pending => {
+            Poll::Pending => {
                 activation.accept(dispatch);
                 let result = send.await;
                 let sender_closed = sender.is_closed();
@@ -194,6 +219,9 @@ impl ConnectionPool {
                 )))
             }
             Err(mut error) => {
+                // Hyper may return a queued envelope when its connection task
+                // drops after the first poll. The returned request is the
+                // authority for reacquisition; an error without it is terminal.
                 if let Some(request) = error.take_message() {
                     if let Some(body) = request.extensions().get::<H2RequestBodyHandle>() {
                         body.clear();
@@ -205,6 +233,7 @@ impl ConnectionPool {
                     return finish_unaccepted_request(
                         request,
                         reused,
+                        UnacceptedStage::ReturnedByHyper,
                         super::super::super::downcast_error(Box::new(error.into_error()))
                             .with_connection(metadata),
                     );
@@ -224,7 +253,32 @@ impl ConnectionPool {
     }
 }
 
-/// Reacquires only when a pooled generation returned the request unaccepted.
+/// Restores the absolute URI and removes only a pool-synthesized H1 `Host`.
+fn prepare_h2_request(request: &mut Request<SdkBody>, absolute_uri: &http_1x::Uri) {
+    *request.uri_mut() = absolute_uri.clone();
+    if request
+        .extensions_mut()
+        .remove::<H1HostHeaderInserted>()
+        .is_some()
+    {
+        request.headers_mut().remove(http_1x::header::HOST);
+    }
+}
+
+/// Point at which the pool learned that Hyper had not accepted the request.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum UnacceptedStage {
+    /// The pool rejected a stale generation before calling Hyper.
+    BeforeHyper,
+    /// Hyper returned the original request envelope.
+    ReturnedByHyper,
+}
+
+/// Applies retry authority to a request that Hyper did not accept.
+///
+/// Pool-side checks always reacquire because no protocol code observed the
+/// request. A returned Hyper envelope reacquires only after prior successful
+/// use proves that replacing a stale pooled generation is appropriate.
 #[allow(
     clippy::result_large_err,
     reason = "ConnectorError preserves SDK classification and connection metadata"
@@ -232,10 +286,14 @@ impl ConnectionPool {
 fn finish_unaccepted_request(
     request: Request<SdkBody>,
     reused: bool,
+    stage: UnacceptedStage,
     error: ConnectorError,
 ) -> Result<H2DispatchResult, ConnectorError> {
-    if reused {
-        Ok(H2DispatchResult::Reacquire(request))
+    if stage == UnacceptedStage::BeforeHyper || reused {
+        Ok(H2DispatchResult::Reacquire(Box::new(H2Reacquisition {
+            request,
+            error,
+        })))
     } else {
         Err(error)
     }
@@ -256,6 +314,7 @@ impl std::error::Error for H2ConnectionClosedBeforeDispatch {}
 /// Handle retained in a request extension after its body is wrapped once.
 #[derive(Clone)]
 struct H2RequestBodyHandle {
+    /// Re-armable send endpoint shared with the wrapped request body.
     slot: Arc<Mutex<Option<H2LeaseEndpoint>>>,
 }
 
@@ -281,25 +340,22 @@ impl H2RequestBodyHandle {
             });
         arm_send_endpoint(&handle.slot, endpoint);
         if is_end_stream {
-            complete_send_endpoint(&handle.slot);
+            finish_send_endpoint(&handle.slot);
         }
         handle
     }
 
     /// Disarms an endpoint after Hyper returns the request unaccepted.
     fn clear(&self) {
-        clear_send_endpoint(&self.slot);
+        finish_send_endpoint(&self.slot);
     }
-}
-
-enum FirstPoll<T> {
-    Ready(T),
-    Pending,
 }
 
 /// Request body whose endpoint can be re-armed after certified non-acceptance.
 struct H2RequestBody {
+    /// Original SDK body wrapped exactly once.
     inner: SdkBody,
+    /// Endpoint replaced when Hyper returns an unaccepted request.
     slot: Arc<Mutex<Option<H2LeaseEndpoint>>>,
 }
 
@@ -313,7 +369,7 @@ impl Body for H2RequestBody {
     ) -> Poll<Option<Result<hyper::body::Frame<Self::Data>, Self::Error>>> {
         let result = Pin::new(&mut self.inner).poll_frame(cx);
         if matches!(result, Poll::Ready(None) | Poll::Ready(Some(Err(_)))) {
-            complete_send_endpoint(&self.slot);
+            finish_send_endpoint(&self.slot);
         }
         result
     }
@@ -329,13 +385,15 @@ impl Body for H2RequestBody {
 
 impl Drop for H2RequestBody {
     fn drop(&mut self) {
-        complete_send_endpoint(&self.slot);
+        finish_send_endpoint(&self.slot);
     }
 }
 
 /// Response body that owns the receive endpoint through stream completion.
 struct H2ResponseBody {
+    /// Hyper response stream.
     inner: hyper::body::Incoming,
+    /// Receive endpoint completed on terminal frame, error, or drop.
     receive: Option<H2LeaseEndpoint>,
 }
 
@@ -394,12 +452,8 @@ fn arm_send_endpoint(slot: &Arc<Mutex<Option<H2LeaseEndpoint>>>, endpoint: H2Lea
     drop(previous);
 }
 
-fn clear_send_endpoint(slot: &Arc<Mutex<Option<H2LeaseEndpoint>>>) {
-    let endpoint = slot.lock().take();
-    drop(endpoint);
-}
-
-fn complete_send_endpoint(slot: &Arc<Mutex<Option<H2LeaseEndpoint>>>) {
+/// Terminates the send endpoint after upload completion, error, or rejection.
+fn finish_send_endpoint(slot: &Arc<Mutex<Option<H2LeaseEndpoint>>>) {
     let endpoint = slot.lock().take();
     if let Some(endpoint) = endpoint {
         endpoint.complete();
@@ -487,19 +541,58 @@ mod tests {
     }
 
     #[test]
-    fn only_reused_generation_reacquires_an_unaccepted_request() {
-        let fresh = finish_unaccepted_request(
+    fn h2_preparation_restores_uri_and_removes_only_synthesized_host() {
+        let absolute: http_1x::Uri = "https://example.com/resource".parse().unwrap();
+        let mut request = Request::get("/resource").body(SdkBody::empty()).unwrap();
+        request
+            .headers_mut()
+            .insert(http_1x::header::HOST, "example.com".parse().unwrap());
+        request.extensions_mut().insert(H1HostHeaderInserted);
+
+        prepare_h2_request(&mut request, &absolute);
+
+        assert_eq!(&absolute, request.uri());
+        assert!(!request.headers().contains_key(http_1x::header::HOST));
+        assert!(request.extensions().get::<H1HostHeaderInserted>().is_none());
+
+        let mut user_host = Request::get("/resource").body(SdkBody::empty()).unwrap();
+        user_host
+            .headers_mut()
+            .insert(http_1x::header::HOST, "signed.example".parse().unwrap());
+        prepare_h2_request(&mut user_host, &absolute);
+        assert_eq!("signed.example", user_host.headers()[http_1x::header::HOST]);
+    }
+
+    #[test]
+    fn retry_authority_distinguishes_pool_checks_from_hyper_returns() {
+        let checked_before_hyper = finish_unaccepted_request(
             Request::new(SdkBody::empty()),
             false,
-            ConnectorError::user("fresh failure".into()),
+            UnacceptedStage::BeforeHyper,
+            ConnectorError::user("pre-Hyper failure".into()),
         );
-        assert!(fresh.is_err());
+        assert!(matches!(
+            checked_before_hyper,
+            Ok(H2DispatchResult::Reacquire(_))
+        ));
 
-        let reused = finish_unaccepted_request(
+        let fresh_hyper_return = finish_unaccepted_request(
+            Request::new(SdkBody::empty()),
+            false,
+            UnacceptedStage::ReturnedByHyper,
+            ConnectorError::user("fresh Hyper failure".into()),
+        );
+        assert!(fresh_hyper_return.is_err());
+
+        let reused_hyper_return = finish_unaccepted_request(
             Request::new(SdkBody::empty()),
             true,
+            UnacceptedStage::ReturnedByHyper,
             ConnectorError::user("reused failure".into()),
         );
-        assert!(matches!(reused, Ok(H2DispatchResult::Reacquire(_))));
+        assert!(matches!(
+            reused_hyper_return,
+            Ok(H2DispatchResult::Reacquire(_))
+        ));
     }
 }

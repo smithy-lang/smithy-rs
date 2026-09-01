@@ -214,6 +214,7 @@ pub(crate) struct H2ConnectionScript {
     routes: HashMap<String, H2StreamScript>,
     fallback: Option<H2StreamScript>,
     allow_handshake_abandonment: bool,
+    goaway_on_ready: bool,
 }
 
 impl H2ConnectionScript {
@@ -237,6 +238,11 @@ impl H2ConnectionScript {
 
     pub(crate) fn allow_handshake_abandonment(mut self) -> Self {
         self.allow_handshake_abandonment = true;
+        self
+    }
+
+    pub(crate) fn goaway_on_ready(mut self) -> Self {
+        self.goaway_on_ready = true;
         self
     }
 
@@ -710,10 +716,13 @@ async fn drive_connection(
             Ok(Err(err)) => return Err(H2HarnessError::new(format!("H2 handshake failed: {err}"))),
         };
     state.record_event(H2Event::H2Ready { connection_id });
+    if script.goaway_on_ready {
+        connection.abrupt_shutdown(Reason::NO_ERROR);
+    }
 
     let mut stream_tasks = JoinSet::new();
     let mut shutting_down = false;
-    let mut graceful_shutdown = false;
+    let mut graceful_shutdown = script.goaway_on_ready;
     let mut control_open = true;
     // Tracks whether the connection ended because the client closed it (accept returned None)
     // vs. a scripted GOAWAY completing.

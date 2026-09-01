@@ -649,6 +649,43 @@ mod goaway_and_replacement {
         )
         .await;
     }
+
+    #[tokio::test]
+    async fn goaway_before_first_stream_has_bounded_reacquisition() {
+        let script = H2ConnectionScript::new()
+            .goaway_on_ready()
+            .fallback(H2StreamScript::respond(H2Response::ok("unexpected")));
+        let server = H2TestServer::builder()
+            .connections(H2ConnectionPlan::unbounded(script))
+            .start()
+            .await
+            .expect("H2 server should start");
+        let client = h2_client(&PartitionedConnectionPool);
+        let connector = test_client::connector(&client);
+
+        let outcome = tokio::time::timeout(
+            test_client::WAIT,
+            test_client::send_request(
+                &connector,
+                HttpRequest::get(server.url("/before-first-stream")).expect("valid HTTP request"),
+            ),
+        )
+        .await
+        .expect("GOAWAY before dispatch did not terminate");
+        assert!(
+            outcome.is_err(),
+            "a request succeeded after GOAWAY excluded its stream"
+        );
+        assert!(
+            server.connection_count() <= 3,
+            "GOAWAY before dispatch created {} connections",
+            server.connection_count()
+        );
+
+        drop(connector);
+        drop(client);
+        server.shutdown().await.expect("clean H2 server shutdown");
+    }
 }
 
 #[cfg(feature = "s2n-tls")]

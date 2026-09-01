@@ -184,6 +184,42 @@ async fn partitioned_pool_falls_back_to_h1_after_alpn() {
     assert_eq!(1, server.conn_count());
 }
 
+#[cfg(all(feature = "rustls-aws-lc", feature = "rt-tokio"))]
+#[tokio::test]
+async fn partitioned_pool_narrows_alpn_for_h1_required_request() {
+    let server = server_with_alpn(&[b"h2", b"http/1.1"]).await.unwrap();
+    let pool = ConnectionPool::builder()
+        .tls_provider(tls::Provider::Rustls(
+            tls::rustls_provider::CryptoMode::AwsLc,
+        ))
+        .tls_context(test_tls::server_tls_context())
+        .build_https()
+        .expect("valid HTTPS pool");
+    let client = PoolClient::new(&pool).expect("anonymous partition exists");
+    let connector_settings = HttpConnectorSettings::builder().build();
+    let runtime_components = RuntimeComponentsBuilder::for_tests()
+        .with_time_source(Some(SystemTimeSource::new()))
+        .build()
+        .unwrap();
+    let connector = client.http_connector(&connector_settings, &runtime_components);
+    let endpoint = format!("https://localhost:{}/", server.listen_addr.port());
+    let mut request = HttpRequest::new(ByteStream::default().into_inner());
+    request
+        .set_method("CONNECT")
+        .expect("CONNECT is a valid HTTP method");
+    request
+        .set_uri(endpoint.as_str())
+        .expect("valid server URI");
+
+    let response = connector
+        .call(request)
+        .await
+        .expect("HTTP/1-required request should narrow the ALPN offer");
+
+    assert_eq!(StatusCode::NOT_FOUND.as_u16(), response.status().as_u16());
+    assert_eq!(1, server.conn_count());
+}
+
 #[cfg(feature = "rustls-aws-lc")]
 #[tokio::test(start_paused = false)]
 // can't have paused clock due to <https://github.com/hyperium/hyper/issues/3950>

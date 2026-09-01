@@ -35,9 +35,14 @@
 //!
 //! One `OriginCell` lock owns local acquisition order and protocol residence.
 //! For a bounded origin, `OriginAdmission` separately owns the origin-wide
-//! connection limit and cross-cell scheduling. Delivery values carry their own
-//! payload and cancellation fallback between those lock domains; cell and
-//! admission locks are never held together.
+//! connection limit and cross-cell scheduling. An H2 request-lease lock owns
+//! its two endpoint bits. `ConnectionState` owns logical connection lifetime,
+//! and partition maintenance owns its scheduler state.
+//!
+//! No two pool locks are held together. Delivery and publication guards carry
+//! payload or identity between cell and admission scopes. H2 lease completion
+//! detaches its dispatch guard before entering connection or cell state.
+//! Maintenance detaches cells and wakers before expiration or wake callbacks.
 //!
 //! # HTTP/1 request lifecycle
 //!
