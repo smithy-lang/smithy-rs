@@ -34,6 +34,89 @@ smithy {
 }
 
 val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
+    val pokemonProtocolModels = "../examples/pokemon-service-protocols/model"
+    fun CodegenTest.http1Version(): CodegenTest =
+        this.copy(
+            extraCodegenConfig =
+                if (this.extraCodegenConfig?.isNotEmpty() == true) {
+                    """"http-1x": true, ${this.extraCodegenConfig}"""
+                } else {
+                    """"http-1x": true"""
+                },
+        )
+
+    val pokemonProtocolStandardCodegenTests =
+        listOf(
+            CodegenTest(
+                "com.aws.example#PokemonService",
+                "pokemon-service-protocols-rest-json1-standard-server-sdk",
+                imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy"),
+                extraCodegenConfig = """"schemaSerde": false""",
+            ),
+            CodegenTest(
+                "com.aws.example#PokemonService",
+                "pokemon-service-protocols-rest-xml-standard-server-sdk",
+                imports = listOf("$pokemonProtocolModels/pokemon-rest-xml.smithy", "$commonModels/pokemon-common.smithy"),
+                extraCodegenConfig = """"schemaSerde": false""",
+            ),
+            CodegenTest(
+                "com.aws.example#PokemonService",
+                "pokemon-service-protocols-aws-json-10-standard-server-sdk",
+                imports = listOf("$commonModels/pokemon-awsjson.smithy", "$commonModels/pokemon-common.smithy"),
+                extraCodegenConfig = """"schemaSerde": false""",
+            ),
+            CodegenTest(
+                "com.aws.example#PokemonService",
+                "pokemon-service-protocols-aws-json-11-standard-server-sdk",
+                imports = listOf("$pokemonProtocolModels/pokemon-awsjson11.smithy", "$commonModels/pokemon-common.smithy"),
+                extraCodegenConfig = """"schemaSerde": false""",
+            ),
+            CodegenTest(
+                "com.aws.example#PokemonService",
+                "pokemon-service-protocols-rpcv2-cbor-standard-server-sdk",
+                imports = listOf("$pokemonProtocolModels/pokemon-rpcv2-cbor.smithy", "$commonModels/pokemon-common.smithy"),
+                extraCodegenConfig = """"schemaSerde": false""",
+            ),
+        )
+    val pokemonSchemaSerdeCodegenTests =
+        listOf(
+            CodegenTest(
+                "com.aws.example#PokemonService",
+                "pokemon-service-server-sdk",
+                imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy"),
+                extraCodegenConfig = """"schemaSerde": true""",
+            ),
+            CodegenTest(
+                "com.aws.example#PokemonService",
+                "pokemon-service-protocols-rest-json1-server-sdk",
+                imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy"),
+                extraCodegenConfig = """"schemaSerde": true""",
+            ),
+            CodegenTest(
+                "com.aws.example#PokemonService",
+                "pokemon-service-protocols-rest-xml-server-sdk",
+                imports = listOf("$pokemonProtocolModels/pokemon-rest-xml.smithy", "$commonModels/pokemon-common.smithy"),
+                extraCodegenConfig = """"schemaSerde": true""",
+            ),
+            CodegenTest(
+                "com.aws.example#PokemonService",
+                "pokemon-service-protocols-aws-json-10-server-sdk",
+                imports = listOf("$commonModels/pokemon-awsjson.smithy", "$commonModels/pokemon-common.smithy"),
+                extraCodegenConfig = """"schemaSerde": true""",
+            ),
+            CodegenTest(
+                "com.aws.example#PokemonService",
+                "pokemon-service-protocols-aws-json-11-server-sdk",
+                imports = listOf("$pokemonProtocolModels/pokemon-awsjson11.smithy", "$commonModels/pokemon-common.smithy"),
+                extraCodegenConfig = """"schemaSerde": true""",
+            ),
+            CodegenTest(
+                "com.aws.example#PokemonService",
+                "pokemon-service-protocols-rpcv2-cbor-server-sdk",
+                imports = listOf("$pokemonProtocolModels/pokemon-rpcv2-cbor.smithy", "$commonModels/pokemon-common.smithy"),
+                extraCodegenConfig = """"schemaSerde": true""",
+            ),
+        )
     listOf(
         CodegenTest(
             "crate#Config",
@@ -128,16 +211,11 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
         ),
         CodegenTest(
             "com.aws.example#PokemonService",
-            "pokemon-service-server-sdk",
-            imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy"),
-            extraCodegenConfig = """"schemaSerde": true""",
-        ),
-        CodegenTest(
-            "com.aws.example#PokemonService",
             "pokemon-service-awsjson-server-sdk",
             imports = listOf("$commonModels/pokemon-awsjson.smithy", "$commonModels/pokemon-common.smithy"),
         ),
-    ).flatMap { it.bothHttpVersions() }
+    ).plus(pokemonProtocolStandardCodegenTests).flatMap { it.bothHttpVersions() } +
+        pokemonSchemaSerdeCodegenTests.map { it.http1Version() }
 }
 // When iterating on protocol tests use this to speed up codegen:
 //    .filter { it.module == "rpcv2Cbor_extras" || it.module == "rpcv2Cbor_extras_no_initial_response" }
