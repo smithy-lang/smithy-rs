@@ -105,14 +105,15 @@ class SdkSettings private constructor(private val awsSdk: ObjectNode?) {
                 ?.getBooleanMember("enabled")?.orNull()?.value ?: false
 
     /**
-     * Whether to enable the legacy `rustls` default feature on generated crates.
+     * Whether to offer the legacy hyper 0.14.x HTTP client as an opt-in feature on generated crates.
      *
-     * When `true` (the default for now), the generated crate will have `rustls` as a default feature that pulls in
-     * `aws-smithy-runtime/tls-rustls`. This keeps the legacy hyper+rustls stack working as-is and lets
-     * BehaviorVersion control which HTTP client you get.
+     * When `true` (the default), the generated crate gets a non-default `legacy-client` feature that pulls in
+     * `aws-smithy-runtime/tls-rustls`, letting BehaviorVersion select the legacy hyper+rustls stack for callers
+     * who still need it.
      *
-     * Set to `false` to disable the `rustls` default feature, which is the desired end state where the
-     * default HTTPS client is selected purely via BehaviorVersion without the legacy rustls dependency.
+     * Set to `false` to omit `legacy-client` entirely, so the generated crate can only ever use the hyper 1.x
+     * client. Note this is not how `http` 0.2.x is kept out of the default build: `legacy-client` is opt-in
+     * either way, so leaving this `true` still yields a default dependency tree free of `http` 0.2.x.
      */
     val includeLegacyClient: Boolean
         get() = awsSdk?.getBooleanMember("includeLegacyClient")?.orNull()?.value ?: true
