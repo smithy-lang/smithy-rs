@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.serde
 
-import software.amazon.smithy.build.SmithyBuildException
 import software.amazon.smithy.model.SourceLocation
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.ShapeId
@@ -14,8 +13,8 @@ import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
 class SerdeTrait constructor(
-    private val serialize: Boolean,
-    private val deserialize: Boolean,
+    val serialize: Boolean,
+    val deserialize: Boolean,
     private val tag: String?,
     private val content: String?,
     sourceLocation: SourceLocation,
@@ -42,9 +41,6 @@ class SerdeTrait constructor(
                     val deserialize = getBooleanMemberOrDefault("deserialize", false)
                     val tag = getStringMember("tag").orNull()?.value
                     val content = getStringMember("content").orNull()?.value
-                    if (deserialize) {
-                        throw SmithyBuildException("deserialize is not currently supported.")
-                    }
                     val result =
                         SerdeTrait(
                             serialize,
