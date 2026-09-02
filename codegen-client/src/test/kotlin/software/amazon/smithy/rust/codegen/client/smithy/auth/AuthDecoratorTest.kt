@@ -20,13 +20,11 @@ class AuthDecoratorTest {
     private fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> =
         arrayOf(
             "ReplayEvent" to
-                CargoDependency.smithyRuntime(runtimeConfig)
-                    .toDevDependency().withFeature("test-util").toType()
-                    .resolve("client::http::test_util::ReplayEvent"),
+                CargoDependency.smithyHttpClientTestUtil(runtimeConfig)
+                    .toType().resolve("test_util::ReplayEvent"),
             "StaticReplayClient" to
-                CargoDependency.smithyRuntime(runtimeConfig)
-                    .toDevDependency().withFeature("test-util").toType()
-                    .resolve("client::http::test_util::StaticReplayClient"),
+                CargoDependency.smithyHttpClientTestUtil(runtimeConfig)
+                    .toType().resolve("test_util::StaticReplayClient"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
         )
 
