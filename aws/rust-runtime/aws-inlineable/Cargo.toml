@@ -51,6 +51,9 @@ url = "2.5.4"
 aws-credential-types = { path = "../aws-credential-types", features = ["test-util"] }
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["test-util"] }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http", features = ["rt-tokio"] }
+# The `s3_express` tests use the http 1.x `infallible_client_fn`; the `aws-smithy-runtime`
+# re-export of that helper is the http 0.2.x one.
+aws-smithy-http-client = { path = "../../../rust-runtime/aws-smithy-http-client", features = ["test-util"] }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["test-util"] }
 tempfile = "3.16.0"
 tokio = { version = "1.49.0", features = ["macros", "rt", "io-util"] }

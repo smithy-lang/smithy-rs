@@ -23,7 +23,7 @@ class TimeoutConfigMergingTest {
                     """
 
                     use $name::Client;
-                    use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
+                    use #{capture_test_logs};
                     use aws_smithy_runtime_api::box_error::BoxError;
                     use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextRef;
                     use aws_smithy_runtime_api::client::interceptors::Intercept;
@@ -170,6 +170,11 @@ class TimeoutConfigMergingTest {
                     "infallible_client_fn" to
                         CargoDependency.smithyHttpClientTestUtil(ctx.runtimeConfig)
                             .toType().resolve("test_util::infallible_client_fn"),
+                    // Only lives in `aws-smithy-runtime`, so declare that as a dev-dependency
+                    // rather than relying on the generated `test-util` feature to pass it through.
+                    "capture_test_logs" to
+                        CargoDependency.smithyRuntimeTestUtil(ctx.runtimeConfig)
+                            .toType().resolve("test_util::capture_test_logs::capture_test_logs"),
                 )
             }
         }

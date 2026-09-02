@@ -275,10 +275,10 @@ private fun s3ExpressDependencies(runtimeConfig: RuntimeConfig) =
         CargoDependency.FastRand,
         CargoDependency.Hex,
         CargoDependency.Hmac,
-        // The unit tests in `s3_express.rs` build responses with the legacy `infallible_client_fn`
-        // test helper, which uses http 0.2.x. Declared as a dev-dependency so that http 0.2.x stays
-        // out of the crate's non-test dependencies.
-        CargoDependency.Http0x.toDevDependency(),
+        // The unit tests in `s3_express.rs` build responses with the http 1.x `infallible_client_fn`
+        // test helper. Both are dev-only, so neither reaches the crate's non-test dependencies.
+        CargoDependency.Http1x.toDevDependency(),
+        CargoDependency.smithyHttpClientTestUtil(runtimeConfig),
         CargoDependency.Lru,
         CargoDependency.Sha2,
         CargoDependency.smithyAsync(runtimeConfig),

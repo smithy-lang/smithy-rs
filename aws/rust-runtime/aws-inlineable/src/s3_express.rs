@@ -642,7 +642,7 @@ pub(crate) mod identity_provider {
             base_credentials: Credentials,
         ) -> aws_smithy_runtime_api::client::runtime_components::RuntimeComponents {
             use aws_credential_types::provider::SharedCredentialsProvider;
-            use aws_smithy_runtime::client::http::test_util::infallible_client_fn;
+            use aws_smithy_http_client::test_util::infallible_client_fn;
             use aws_smithy_runtime::client::orchestrator::endpoints::StaticUriEndpointResolver;
             use aws_smithy_runtime::client::retries::strategy::NeverRetryStrategy;
             use aws_smithy_runtime_api::client::auth::static_resolver::StaticAuthSchemeOptionResolver;
@@ -658,7 +658,7 @@ pub(crate) mod identity_provider {
                 StaticAuthSchemeOptionResolver::new(vec![aws_runtime::auth::sigv4::SCHEME_ID]);
 
             let http_client = infallible_client_fn(|_req| {
-                http::Response::builder()
+                http_1x::Response::builder()
                     .status(200)
                     .body(SdkBody::from(
                         r#"<?xml version="1.0" encoding="UTF-8"?>

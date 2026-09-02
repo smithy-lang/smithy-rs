@@ -88,7 +88,8 @@ class IsTruncatedPaginatorTest {
                     use $moduleName::Config;
                     use $moduleName::Client;
                     use #{Region};
-                    use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
+                    use #{ReplayEvent};
+                    use #{StaticReplayClient};
                     use aws_smithy_types::body::SdkBody;
 
                     fn mk_response(part_marker: u8) -> http_1x::Response<SdkBody> {
@@ -152,6 +153,14 @@ class IsTruncatedPaginatorTest {
                     *preludeScope,
                     "tokio" to CargoDependency.Tokio.toType(),
                     "Region" to AwsRuntimeType.awsTypes(rc).resolve("region::Region"),
+                    // http 1.x replay utilities; the `aws-smithy-runtime` re-exports of these live
+                    // behind a feature that would drag http 0.2.x back into the tree.
+                    "ReplayEvent" to
+                        CargoDependency.smithyHttpClientTestUtil(rc)
+                            .toType().resolve("test_util::ReplayEvent"),
+                    "StaticReplayClient" to
+                        CargoDependency.smithyHttpClientTestUtil(rc)
+                            .toType().resolve("test_util::StaticReplayClient"),
                 )
             }
         }
