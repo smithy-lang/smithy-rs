@@ -7,8 +7,40 @@ use aws_smithy_schema::codec::FinishSerializer;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::Schema;
 use aws_smithy_types::{BigDecimal, BigInteger, DateTime, Document};
+use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use std::fmt::Write;
-use urlencoding::encode;
+
+/// Everything except "A-Z a-z 0-9 - . _ ~"
+pub(crate) const PERCENT_ENCODE_SET: &AsciiSet = &CONTROLS
+    .add(b' ')
+    .add(b'!')
+    .add(b'"')
+    .add(b'#')
+    .add(b'$')
+    .add(b'%')
+    .add(b'&')
+    .add(b'\'')
+    .add(b'(')
+    .add(b')')
+    .add(b'*')
+    .add(b'+')
+    .add(b',')
+    .add(b'/')
+    .add(b':')
+    .add(b';')
+    .add(b'<')
+    .add(b'=')
+    .add(b'>')
+    .add(b'?')
+    .add(b'@')
+    .add(b'[')
+    .add(b'\\')
+    .add(b']')
+    .add(b'^')
+    .add(b'`')
+    .add(b'{')
+    .add(b'|')
+    .add(b'}');
 
 /// A collection path segment, kept `Copy` so it can be formatted directly into
 /// the output/prefix without an intermediate `String` allocation.
@@ -69,8 +101,8 @@ impl QueryShapeSerializer {
         let _ = write!(
             output,
             "Action={}&Version={}",
-            encode(action),
-            encode(version)
+            utf8_percent_encode(action, PERCENT_ENCODE_SET),
+            utf8_percent_encode(version, PERCENT_ENCODE_SET)
         );
         Self {
             output,
@@ -220,7 +252,8 @@ impl QueryShapeSerializer {
             }
         }
         self.output.push('=');
-        self.output.push_str(&encode(value));
+        self.output
+            .push_str(&utf8_percent_encode(value, PERCENT_ENCODE_SET).to_string());
         Ok(())
     }
 }
