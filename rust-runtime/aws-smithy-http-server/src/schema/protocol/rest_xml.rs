@@ -31,8 +31,7 @@ impl StaticProtocol for RestXml {
     type RequestRejection = crate::protocol::rest_xml::rejection::RequestRejection;
 
     fn codec() -> &'static Self::Codec {
-        static CODEC: LazyLock<XmlCodec> = LazyLock::new(|| XmlCodec::new(XmlCodecSettings::default()));
-        &CODEC
+        rest_xml_codec()
     }
 
     fn with_request_deserializer<R>(
@@ -48,7 +47,7 @@ impl StaticProtocol for RestXml {
         schema: &Schema<'_>,
         request: &'a http::Request<bytes::Bytes>,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, Self::RequestRejection> {
-        rest_request_deserializer(Self::codec(), "application/xml", true, schema, request)
+        rest_xml_request_deserializer(schema, request)
     }
 
     fn request_rejection_into_response(rejection: Self::RequestRejection) -> http::Response<BoxBody> {
@@ -56,50 +55,73 @@ impl StaticProtocol for RestXml {
     }
 
     fn serialize_response(schema: &Schema<'_>, output: &dyn SerializableStruct) -> http::Response<BoxBody> {
-        let result = serialize_operation_response(
-            Self::codec(),
-            schema,
-            output,
-            ResponseBindingMode::Rest,
-            "application/xml",
-            None,
-        );
-        match result {
-            Ok(response) => response,
-            Err(err) => {
-                log_serialize_failure(&err);
-                IntoResponse::<RestXml>::into_response(
-                    crate::protocol::rest_xml::runtime_error::RuntimeError::Serialization(crate::Error::new(err)),
-                )
-            }
-        }
+        rest_xml_serialize_response(schema, output)
     }
 
     fn serialize_error(error: &dyn HttpModeledError) -> http::Response<BoxBody> {
-        // Known divergence, deliberate (2f, fix-forward): today's generated
-        // restXml server error bodies are broken (bare `<Error>` envelope no
-        // client parses, and the runtime discards pre-rendered
-        // validation/framework bodies in favor of a literal `"{}"`).
-        // Freezing that behavior would freeze a bug, so the schema path
-        // serializes the error structure through the XML codec as-is. See
-        // assumptions register B4/B6; gated by its own pinned goldens.
-        let schema = error.schema();
-        let result = serialize_modeled_error_response(
-            Self::codec(),
-            schema,
-            &AsSerializable(error),
-            HttpModeledError::status_code(error),
-            ResponseBindingMode::Rest,
-            "application/xml",
-        );
-        match result {
-            Ok(response) => stamp_error_extension(response, schema.shape_id().shape_name()),
-            Err(err) => {
-                log_serialize_failure(&err);
-                IntoResponse::<RestXml>::into_response(
-                    crate::protocol::rest_xml::runtime_error::RuntimeError::Serialization(crate::Error::new(err)),
-                )
-            }
+        rest_xml_serialize_error(error)
+    }
+}
+
+pub(crate) fn rest_xml_codec() -> &'static XmlCodec {
+    static CODEC: LazyLock<XmlCodec> = LazyLock::new(|| XmlCodec::new(XmlCodecSettings::default()));
+    &CODEC
+}
+
+pub(crate) fn rest_xml_request_deserializer<'a>(
+    schema: &Schema<'_>,
+    request: &'a http::Request<bytes::Bytes>,
+) -> Result<Box<dyn ShapeDeserializer + 'a>, crate::protocol::rest_xml::rejection::RequestRejection> {
+    rest_request_deserializer(rest_xml_codec(), "application/xml", true, schema, request)
+}
+
+pub(crate) fn rest_xml_serialize_response(
+    schema: &Schema<'_>,
+    output: &dyn SerializableStruct,
+) -> http::Response<BoxBody> {
+    let result = serialize_operation_response(
+        rest_xml_codec(),
+        schema,
+        output,
+        ResponseBindingMode::Rest,
+        "application/xml",
+        None,
+    );
+    match result {
+        Ok(response) => response,
+        Err(err) => {
+            log_serialize_failure(&err);
+            IntoResponse::<RestXml>::into_response(
+                crate::protocol::rest_xml::runtime_error::RuntimeError::Serialization(crate::Error::new(err)),
+            )
+        }
+    }
+}
+
+pub(crate) fn rest_xml_serialize_error(error: &dyn HttpModeledError) -> http::Response<BoxBody> {
+    // Known divergence, deliberate (2f, fix-forward): today's generated
+    // restXml server error bodies are broken (bare `<Error>` envelope no
+    // client parses, and the runtime discards pre-rendered
+    // validation/framework bodies in favor of a literal `"{}"`).
+    // Freezing that behavior would freeze a bug, so the schema path
+    // serializes the error structure through the XML codec as-is. See
+    // assumptions register B4/B6; gated by its own pinned goldens.
+    let schema = error.schema();
+    let result = serialize_modeled_error_response(
+        rest_xml_codec(),
+        schema,
+        &AsSerializable(error),
+        HttpModeledError::status_code(error),
+        ResponseBindingMode::Rest,
+        "application/xml",
+    );
+    match result {
+        Ok(response) => stamp_error_extension(response, schema.shape_id().shape_name()),
+        Err(err) => {
+            log_serialize_failure(&err);
+            IntoResponse::<RestXml>::into_response(
+                crate::protocol::rest_xml::runtime_error::RuntimeError::Serialization(crate::Error::new(err)),
+            )
         }
     }
 }

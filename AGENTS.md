@@ -218,6 +218,11 @@ gh workflow run "Invoke Canary as Maintainer" --repo smithy-lang/smithy-rs \
 5. **Look for patterns** - Client vs server codegen often mirrors each other
 6. **Identify minimal change** - Understand current behavior before modifying codegen
 
+**Internal Protocol Extensibility:**
+- Internal server protocols can be contributed dynamically through Kotlin codegen decorators.
+- Do **not** introduce fixed Rust enums that only list built-in/public protocols, routing errors, or server protocol variants when designing multi-protocol server paths.
+- Prefer trait/object-safe extension points or protocol-owned associated error types so decorator-provided protocols can plug in without editing `aws-smithy-http-server`.
+
 **Single Protocol Development:**
 
 - When working on a single protocol, uncomment the filter line in `codegen-server-test/build.gradle.kts:111`

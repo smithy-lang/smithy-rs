@@ -22,12 +22,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.SchemaGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.shapeModuleName
+import software.amazon.smithy.rust.codegen.core.util.findStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerSchemaDeserializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerSchemaGenerator
@@ -107,10 +107,8 @@ class ServerSchemaDecorator : ServerCodegenDecorator {
             walker.walkShapes(codegenContext.serviceShape)
                 .filterIsInstance<OperationShape>()
                 .filter { operation ->
-                    val roots =
-                        listOf(operation.inputShape(codegenContext.model), operation.outputShape(codegenContext.model)) +
-                            operation.errorsSet.map { codegenContext.model.expectShape(it) }
-                    roots.none { it.canReachConstrainedShape(codegenContext.model, codegenContext.symbolProvider) }
+                    operation.inputShape(codegenContext.model).findStreamingMember(codegenContext.model) == null &&
+                        operation.outputShape(codegenContext.model).findStreamingMember(codegenContext.model) == null
                 }
                 .toList()
         val operationInputs = supportedOperations.map { it.inputShape(codegenContext.model).id }.toSet()

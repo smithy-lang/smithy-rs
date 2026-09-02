@@ -31,17 +31,7 @@ impl StaticProtocol for RestJson1 {
     type RequestRejection = crate::protocol::rest_json_1::rejection::RequestRejection;
 
     fn codec() -> &'static Self::Codec {
-        static CODEC: LazyLock<JsonCodec> = LazyLock::new(|| {
-            JsonCodec::new(
-                JsonCodecSettings::builder()
-                    .use_json_name(true)
-                    .default_timestamp_format(aws_smithy_types::date_time::Format::EpochSeconds)
-                    // Server semantics: `@timestampFormat` is enforced, not
-                    // coerced (Smithy malformed-timestamp protocol tests).
-                    .build(),
-            )
-        });
-        &CODEC
+        rest_json_1_codec()
     }
 
     fn with_request_deserializer<R>(
@@ -57,7 +47,7 @@ impl StaticProtocol for RestJson1 {
         schema: &Schema<'_>,
         request: &'a http::Request<bytes::Bytes>,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, Self::RequestRejection> {
-        rest_request_deserializer(Self::codec(), "application/json", true, schema, request)
+        rest_json_1_request_deserializer(schema, request)
     }
 
     fn request_rejection_into_response(rejection: Self::RequestRejection) -> http::Response<BoxBody> {
@@ -67,57 +57,89 @@ impl StaticProtocol for RestJson1 {
     }
 
     fn serialize_response(schema: &Schema<'_>, output: &dyn SerializableStruct) -> http::Response<BoxBody> {
-        let result = serialize_operation_response(
-            Self::codec(),
-            schema,
-            output,
-            ResponseBindingMode::Rest,
-            "application/json",
-            None,
-        );
-        match result {
-            Ok(response) => response,
-            Err(err) => {
-                log_serialize_failure(&err);
-                IntoResponse::<RestJson1>::into_response(
-                    crate::protocol::rest_json_1::runtime_error::RuntimeError::Serialization(crate::Error::new(err)),
-                )
-            }
-        }
+        rest_json_1_serialize_response(schema, output)
     }
 
     fn serialize_error(error: &dyn HttpModeledError) -> http::Response<BoxBody> {
-        let schema = error.schema();
-        let name = schema.shape_id().shape_name();
-        // restJson1 carries no body discriminator; the error name travels in
-        // the `x-amzn-errortype` header.
-        let result = serialize_modeled_error_response(
-            Self::codec(),
-            schema,
-            &AsSerializable(error),
-            HttpModeledError::status_code(error),
-            ResponseBindingMode::Rest,
-            "application/json",
-        );
-        match result {
-            Ok(mut response) => {
-                // Shape name only — the settled post-#1982 behavior. The
-                // legacy hard-coded `ValidationException` header for custom
-                // validation shapes was a confirmed bug (2f); the schema path
-                // emits the actual shape name.
-                if let Ok(value) = http::HeaderValue::try_from(name) {
-                    response
-                        .headers_mut()
-                        .insert(http::HeaderName::from_static("x-amzn-errortype"), value);
-                }
-                stamp_error_extension(response, name)
+        rest_json_1_serialize_error(error)
+    }
+}
+
+pub(crate) fn rest_json_1_codec() -> &'static JsonCodec {
+    static CODEC: LazyLock<JsonCodec> = LazyLock::new(|| {
+        JsonCodec::new(
+            JsonCodecSettings::builder()
+                .use_json_name(true)
+                .default_timestamp_format(aws_smithy_types::date_time::Format::EpochSeconds)
+                // Server semantics: `@timestampFormat` is enforced, not
+                // coerced (Smithy malformed-timestamp protocol tests).
+                .build(),
+        )
+    });
+    &CODEC
+}
+
+pub(crate) fn rest_json_1_request_deserializer<'a>(
+    schema: &Schema<'_>,
+    request: &'a http::Request<bytes::Bytes>,
+) -> Result<Box<dyn ShapeDeserializer + 'a>, crate::protocol::rest_json_1::rejection::RequestRejection> {
+    rest_request_deserializer(rest_json_1_codec(), "application/json", true, schema, request)
+}
+
+pub(crate) fn rest_json_1_serialize_response(
+    schema: &Schema<'_>,
+    output: &dyn SerializableStruct,
+) -> http::Response<BoxBody> {
+    let result = serialize_operation_response(
+        rest_json_1_codec(),
+        schema,
+        output,
+        ResponseBindingMode::Rest,
+        "application/json",
+        None,
+    );
+    match result {
+        Ok(response) => response,
+        Err(err) => {
+            log_serialize_failure(&err);
+            IntoResponse::<RestJson1>::into_response(
+                crate::protocol::rest_json_1::runtime_error::RuntimeError::Serialization(crate::Error::new(err)),
+            )
+        }
+    }
+}
+
+pub(crate) fn rest_json_1_serialize_error(error: &dyn HttpModeledError) -> http::Response<BoxBody> {
+    let schema = error.schema();
+    let name = schema.shape_id().shape_name();
+    // restJson1 carries no body discriminator; the error name travels in
+    // the `x-amzn-errortype` header.
+    let result = serialize_modeled_error_response(
+        rest_json_1_codec(),
+        schema,
+        &AsSerializable(error),
+        HttpModeledError::status_code(error),
+        ResponseBindingMode::Rest,
+        "application/json",
+    );
+    match result {
+        Ok(mut response) => {
+            // Shape name only — the settled post-#1982 behavior. The
+            // legacy hard-coded `ValidationException` header for custom
+            // validation shapes was a confirmed bug (2f); the schema path
+            // emits the actual shape name.
+            if let Ok(value) = http::HeaderValue::try_from(name) {
+                response
+                    .headers_mut()
+                    .insert(http::HeaderName::from_static("x-amzn-errortype"), value);
             }
-            Err(err) => {
-                log_serialize_failure(&err);
-                IntoResponse::<RestJson1>::into_response(
-                    crate::protocol::rest_json_1::runtime_error::RuntimeError::Serialization(crate::Error::new(err)),
-                )
-            }
+            stamp_error_extension(response, name)
+        }
+        Err(err) => {
+            log_serialize_failure(&err);
+            IntoResponse::<RestJson1>::into_response(
+                crate::protocol::rest_json_1::runtime_error::RuntimeError::Serialization(crate::Error::new(err)),
+            )
         }
     }
 }

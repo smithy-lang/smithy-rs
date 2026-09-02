@@ -32,8 +32,7 @@ impl StaticProtocol for RpcV2Cbor {
     type RequestRejection = crate::protocol::rpc_v2_cbor::rejection::RequestRejection;
 
     fn codec() -> &'static Self::Codec {
-        static CODEC: LazyLock<CborCodec> = LazyLock::new(|| CborCodec::new(CborCodecSettings::default()));
-        &CODEC
+        rpc_v2_cbor_codec()
     }
 
     fn with_request_deserializer<R>(
@@ -53,7 +52,7 @@ impl StaticProtocol for RpcV2Cbor {
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, Self::RequestRejection> {
         // The `smithy-protocol: rpc-v2-cbor` header and `Accept` header are
         // validated by the router; the body content type is validated here.
-        rpc_request_deserializer(Self::codec(), "application/cbor", schema, request)
+        rpc_v2_cbor_request_deserializer(schema, request)
     }
 
     fn request_rejection_into_response(rejection: Self::RequestRejection) -> http::Response<BoxBody> {
@@ -63,61 +62,84 @@ impl StaticProtocol for RpcV2Cbor {
     }
 
     fn serialize_response(schema: &Schema<'_>, output: &dyn SerializableStruct) -> http::Response<BoxBody> {
-        let result = serialize_operation_response(
-            Self::codec(),
-            schema,
-            output,
-            ResponseBindingMode::BodyOnly,
-            "application/cbor",
-            None,
-        );
-        match result {
-            Ok(mut response) => {
-                response.headers_mut().insert(
-                    http::HeaderName::from_static("smithy-protocol"),
-                    http::HeaderValue::from_static("rpc-v2-cbor"),
-                );
-                response
-            }
-            Err(err) => {
-                log_serialize_failure(&err);
-                IntoResponse::<RpcV2Cbor>::into_response(
-                    crate::protocol::rpc_v2_cbor::runtime_error::RuntimeError::Serialization(crate::Error::new(err)),
-                )
-            }
-        }
+        rpc_v2_cbor_serialize_response(schema, output)
     }
 
     fn serialize_error(error: &dyn HttpModeledError) -> http::Response<BoxBody> {
-        let schema = error.schema();
-        // Full shape ID as the FIRST map entry (legacy
-        // `AddTypeFieldToServerErrorsCborCustomization` order).
-        let wrapper = WithTypeFirst {
-            type_value: schema.shape_id().as_str(),
-            inner: &AsSerializable(error),
-        };
-        let result = serialize_modeled_error_response(
-            Self::codec(),
-            schema,
-            &wrapper,
-            HttpModeledError::status_code(error),
-            ResponseBindingMode::BodyOnly,
-            "application/cbor",
-        );
-        match result {
-            Ok(mut response) => {
-                response.headers_mut().insert(
-                    http::HeaderName::from_static("smithy-protocol"),
-                    http::HeaderValue::from_static("rpc-v2-cbor"),
-                );
-                stamp_error_extension(response, schema.shape_id().shape_name())
-            }
-            Err(err) => {
-                log_serialize_failure(&err);
-                IntoResponse::<RpcV2Cbor>::into_response(
-                    crate::protocol::rpc_v2_cbor::runtime_error::RuntimeError::Serialization(crate::Error::new(err)),
-                )
-            }
+        rpc_v2_cbor_serialize_error(error)
+    }
+}
+
+pub(crate) fn rpc_v2_cbor_codec() -> &'static CborCodec {
+    static CODEC: LazyLock<CborCodec> = LazyLock::new(|| CborCodec::new(CborCodecSettings::default()));
+    &CODEC
+}
+
+pub(crate) fn rpc_v2_cbor_request_deserializer<'a>(
+    schema: &Schema<'_>,
+    request: &'a http::Request<bytes::Bytes>,
+) -> Result<Box<dyn ShapeDeserializer + 'a>, crate::protocol::rpc_v2_cbor::rejection::RequestRejection> {
+    rpc_request_deserializer(rpc_v2_cbor_codec(), "application/cbor", schema, request)
+}
+
+pub(crate) fn rpc_v2_cbor_serialize_response(
+    schema: &Schema<'_>,
+    output: &dyn SerializableStruct,
+) -> http::Response<BoxBody> {
+    let result = serialize_operation_response(
+        rpc_v2_cbor_codec(),
+        schema,
+        output,
+        ResponseBindingMode::BodyOnly,
+        "application/cbor",
+        None,
+    );
+    match result {
+        Ok(mut response) => {
+            response.headers_mut().insert(
+                http::HeaderName::from_static("smithy-protocol"),
+                http::HeaderValue::from_static("rpc-v2-cbor"),
+            );
+            response
+        }
+        Err(err) => {
+            log_serialize_failure(&err);
+            IntoResponse::<RpcV2Cbor>::into_response(
+                crate::protocol::rpc_v2_cbor::runtime_error::RuntimeError::Serialization(crate::Error::new(err)),
+            )
+        }
+    }
+}
+
+pub(crate) fn rpc_v2_cbor_serialize_error(error: &dyn HttpModeledError) -> http::Response<BoxBody> {
+    let schema = error.schema();
+    // Full shape ID as the FIRST map entry (legacy
+    // `AddTypeFieldToServerErrorsCborCustomization` order).
+    let wrapper = WithTypeFirst {
+        type_value: schema.shape_id().as_str(),
+        inner: &AsSerializable(error),
+    };
+    let result = serialize_modeled_error_response(
+        rpc_v2_cbor_codec(),
+        schema,
+        &wrapper,
+        HttpModeledError::status_code(error),
+        ResponseBindingMode::BodyOnly,
+        "application/cbor",
+    );
+    match result {
+        Ok(mut response) => {
+            response.headers_mut().insert(
+                http::HeaderName::from_static("smithy-protocol"),
+                http::HeaderValue::from_static("rpc-v2-cbor"),
+            );
+            stamp_error_extension(response, schema.shape_id().shape_name())
+        }
+        Err(err) => {
+            log_serialize_failure(&err);
+            IntoResponse::<RpcV2Cbor>::into_response(
+                crate::protocol::rpc_v2_cbor::runtime_error::RuntimeError::Serialization(crate::Error::new(err)),
+            )
         }
     }
 }

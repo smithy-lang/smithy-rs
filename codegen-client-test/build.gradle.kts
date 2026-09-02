@@ -41,8 +41,10 @@ data class ClientTest(
     val serviceShapeName: String,
     val moduleName: String,
     val dependsOn: List<String> = emptyList(),
+    val imports: List<String> = emptyList(),
     val addMessageToErrors: Boolean = true,
     val renameErrors: Boolean = true,
+    val extraCodegenConfig: List<String> = emptyList(),
 ) {
     fun toCodegenTest(): CodegenTest = CodegenTest(
         serviceShapeName,
@@ -51,14 +53,20 @@ data class ClientTest(
         imports = imports(),
     )
 
-    private fun extraCodegenConfig(): String = StringBuilder().apply {
-        append("\"addMessageToErrors\": $addMessageToErrors,\n")
-        append("\"renameErrors\": $renameErrors\n,")
-        append("\"enableNewSmithyRuntime\": \"${getSmithyRuntimeMode()}\"")
-    }.toString()
+    private fun extraCodegenConfig(): String = (
+        listOf(
+            "\"addMessageToErrors\": $addMessageToErrors",
+            "\"renameErrors\": $renameErrors",
+            "\"enableNewSmithyRuntime\": \"${getSmithyRuntimeMode()}\"",
+        ) + extraCodegenConfig
+        ).joinToString(",\n")
 
-    private fun imports(): List<String> = dependsOn.map { "../codegen-core/common-test-models/$it" }
+    private fun imports(): List<String> =
+        imports + dependsOn.map { "../codegen-core/common-test-models/$it" }
 }
+
+val commonModels = "../codegen-core/common-test-models"
+val pokemonProtocolModels = "../examples/pokemon-service-protocols/model"
 
 val allCodegenTests = listOf(
     ClientTest("com.amazonaws.simple#SimpleService", "simple", dependsOn = listOf("simple.smithy")),
@@ -118,6 +126,37 @@ val allCodegenTests = listOf(
         "com.aws.example#PokemonService",
         "pokemon-service-client",
         dependsOn = listOf("pokemon.smithy", "pokemon-common.smithy"),
+        extraCodegenConfig = listOf("\"disableSchemaSerde\": false"),
+    ),
+    ClientTest(
+        "com.aws.example#PokemonService",
+        "pokemon-service-protocols-rest-json1-client-sdk",
+        dependsOn = listOf("pokemon.smithy", "pokemon-common.smithy"),
+        extraCodegenConfig = listOf("\"disableSchemaSerde\": false"),
+    ),
+    ClientTest(
+        "com.aws.example#PokemonService",
+        "pokemon-service-protocols-rest-xml-client-sdk",
+        imports = listOf("$pokemonProtocolModels/pokemon-rest-xml.smithy", "$commonModels/pokemon-common.smithy"),
+        extraCodegenConfig = listOf("\"disableSchemaSerde\": false"),
+    ),
+    ClientTest(
+        "com.aws.example#PokemonService",
+        "pokemon-service-protocols-aws-json-10-client-sdk",
+        dependsOn = listOf("pokemon-awsjson.smithy", "pokemon-common.smithy"),
+        extraCodegenConfig = listOf("\"disableSchemaSerde\": false"),
+    ),
+    ClientTest(
+        "com.aws.example#PokemonService",
+        "pokemon-service-protocols-aws-json-11-client-sdk",
+        imports = listOf("$pokemonProtocolModels/pokemon-awsjson11.smithy", "$commonModels/pokemon-common.smithy"),
+        extraCodegenConfig = listOf("\"disableSchemaSerde\": false"),
+    ),
+    ClientTest(
+        "com.aws.example#PokemonService",
+        "pokemon-service-protocols-rpcv2-cbor-client-sdk",
+        imports = listOf("$pokemonProtocolModels/pokemon-rpcv2-cbor.smithy", "$commonModels/pokemon-common.smithy"),
+        extraCodegenConfig = listOf("\"disableSchemaSerde\": false"),
     ),
     ClientTest(
         "com.aws.example#PokemonService",

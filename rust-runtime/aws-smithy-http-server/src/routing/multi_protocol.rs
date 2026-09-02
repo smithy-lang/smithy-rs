@@ -806,7 +806,7 @@ mod tests {
         }
     }
 
-    impl crate::schema::protocol::ServerProtocol for FakeProtocol {
+    impl crate::schema::protocol::ServerProtocolInner for FakeProtocol {
         fn protocol_id(&self) -> &ShapeId<'static> {
             &self.protocol
         }
@@ -819,10 +819,8 @@ mod tests {
             &self,
             _request: &'a http::Request<bytes::Bytes>,
             _input_schema: &Schema<'_>,
-        ) -> Result<
-            Box<dyn aws_smithy_schema::serde::ShapeDeserializer + 'a>,
-            crate::schema::protocol::DynRequestRejection,
-        > {
+        ) -> Result<Box<dyn aws_smithy_schema::serde::ShapeDeserializer + 'a>, crate::modeled_error::ServerError>
+        {
             panic!("fake protocol does not deserialize requests")
         }
 
@@ -1117,6 +1115,33 @@ mod tests {
 
         assert_eq!(context.protocol().as_str(), "aws.protocols#restJson1");
         assert_eq!(context.operation().shape_id().as_str(), "test#GetValue");
+    }
+
+    #[test]
+    fn selected_shared_protocol_uses_dynamic_deserialization_rejection() {
+        let context =
+            SelectedProtocolContext::new(SharedServerProtocol::new(RestServerProtocol::rest_json_1()), &GET_VALUE);
+        let request = Request::builder()
+            .method(Method::POST)
+            .uri("/value/abc")
+            .body(bytes::Bytes::from_static(b"{}"))
+            .unwrap();
+
+        let error = match context.server_protocol().deserialize_request(&request, &OUTPUT) {
+            Ok(_) => panic!("expected restJson1 content-type rejection"),
+            Err(error) => error,
+        };
+        let response = context.server_protocol().serialize_error(&*error);
+
+        assert_eq!(response.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
+        assert_eq!(
+            response.headers().get(http::header::CONTENT_TYPE).unwrap(),
+            "application/json"
+        );
+        assert_eq!(
+            response.headers().get("x-amzn-errortype").unwrap(),
+            "UnsupportedMediaTypeException"
+        );
     }
 
     #[test]

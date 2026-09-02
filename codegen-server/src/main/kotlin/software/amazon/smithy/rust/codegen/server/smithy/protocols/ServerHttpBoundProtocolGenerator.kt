@@ -222,12 +222,6 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                     it.inputShape(model).findStreamingMember(model) == null &&
                         it.outputShape(model).findStreamingMember(model) == null
                 }
-                .filter { operation ->
-                    val roots =
-                        listOf(operation.inputShape(model), operation.outputShape(model)) +
-                            operation.errorsSet.map { model.expectShape(it) }
-                    roots.none { it.canReachConstrainedShape(model, symbolProvider) }
-                }
                 .map { it.id }
                 .toSet()
         } else {

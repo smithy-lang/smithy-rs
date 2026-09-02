@@ -38,13 +38,13 @@
 //! Serializers never detect errors; call sites declare them by calling
 //! [`ServerProtocol::serialize_error`].
 
-mod aws_json;
+pub(crate) mod aws_json;
 mod discriminator;
 mod request;
 mod response;
-mod rest_json;
-mod rest_xml;
-mod rpc_v2_cbor;
+pub(crate) mod rest_json;
+pub(crate) mod rest_xml;
+pub(crate) mod rpc_v2_cbor;
 #[cfg(test)]
 mod tests;
 
@@ -56,26 +56,8 @@ use std::{fmt, sync::Arc};
 
 use crate::body::BoxBody;
 use crate::deserialize::{DeserializableShape, DeserializeError};
-use crate::modeled_error::{HttpModeledError, HttpServerError};
+use crate::modeled_error::{HttpModeledError, HttpServerError, ServerError};
 use crate::protocol::ProtocolShape;
-use crate::routing::IntoProtocolResponse;
-
-/// Request-framing failure produced by an erased server protocol.
-pub struct DynRequestRejection {
-    response: Box<dyn IntoProtocolResponse>,
-}
-
-impl DynRequestRejection {
-    /// Creates a request rejection from a protocol-owned response conversion.
-    pub fn new(response: Box<dyn IntoProtocolResponse>) -> Self {
-        Self { response }
-    }
-
-    /// Converts the rejection into an HTTP response.
-    pub fn into_response(self) -> http::Response<BoxBody> {
-        self.response.into_response()
-    }
-}
 
 pub trait StaticProtocol: ProtocolShape + 'static {
     /// Body codec. Also the event-stream frame-payload codec — the client
@@ -182,14 +164,13 @@ pub trait StaticEventStreamProtocol: StaticProtocol {
     const FRAMES_INITIAL_MESSAGES: bool;
 }
 
-/// Object-safe server protocol view used by schema-driven dynamic dispatch.
+/// Static authoring trait for server protocols.
 ///
-/// This mirrors the client-side `ClientProtocol` split: concrete protocols may
-/// keep their static [`ServerProtocol`] implementations, while dynamic routing
-/// and upgrade code hold a shared erased protocol object. The erased view does
-/// not expose an associated codec type; callers use [`DynCodec`] and the
-/// object-safe boxed serializer finish path.
-pub trait ServerProtocol<Req = http::Request<Bytes>>: Send + Sync + fmt::Debug {
+/// This is the server-side analogue of the client's
+/// `ClientProtocolInner`, except the request type is a trait parameter so
+/// service stacks can choose their body type. Implementors write this trait;
+/// the object-safe [`ServerProtocol`] view is provided by a blanket impl.
+pub trait ServerProtocolInner<Req = http::Request<Bytes>>: Send + Sync + fmt::Debug {
     /// Returns the Smithy protocol shape ID.
     fn protocol_id(&self) -> &ShapeId<'static>;
 
@@ -201,7 +182,7 @@ pub trait ServerProtocol<Req = http::Request<Bytes>>: Send + Sync + fmt::Debug {
         &self,
         request: &'a Req,
         input_schema: &Schema<'_>,
-    ) -> Result<Box<dyn ShapeDeserializer + 'a>, DynRequestRejection>;
+    ) -> Result<Box<dyn ShapeDeserializer + 'a>, ServerError>;
 
     /// Serializes a successful operation output.
     fn serialize_response(&self, schema: &Schema<'_>, output: &dyn SerializableStruct) -> http::Response<BoxBody>;
@@ -222,6 +203,88 @@ pub trait ServerProtocol<Req = http::Request<Bytes>>: Send + Sync + fmt::Debug {
     /// Whether this protocol frames RPC initial event-stream messages.
     fn frames_initial_messages(&self) -> bool {
         false
+    }
+}
+
+/// Object-safe server protocol view used by schema-driven dynamic dispatch.
+///
+/// This mirrors the client-side `ClientProtocol` split: concrete protocols may
+/// keep static [`ServerProtocolInner`] implementations, while dynamic routing
+/// and upgrade code hold a shared erased protocol object.
+pub trait ServerProtocol<Req = http::Request<Bytes>>: Send + Sync + fmt::Debug {
+    /// Returns the Smithy protocol shape ID.
+    fn protocol_id(&self) -> &ShapeId<'static>;
+
+    /// Returns this protocol's payload/body codec.
+    fn codec(&self) -> &dyn DynCodec;
+
+    /// Creates a request deserializer for the selected protocol.
+    fn deserialize_request<'a>(
+        &self,
+        request: &'a Req,
+        input_schema: &Schema<'_>,
+    ) -> Result<Box<dyn ShapeDeserializer + 'a>, ServerError>;
+
+    /// Serializes a successful operation output.
+    fn serialize_response(&self, schema: &Schema<'_>, output: &dyn SerializableStruct) -> http::Response<BoxBody>;
+
+    /// Serializes an operation or framework server error.
+    fn serialize_error(&self, error: &dyn HttpServerError) -> http::Response<BoxBody>;
+
+    /// Frame-level `:content-type` for event payloads, when supported.
+    fn event_payload_content_type(&self) -> Option<&'static str> {
+        None
+    }
+
+    /// HTTP-level `Content-Type` for event streams, when supported.
+    fn event_stream_http_content_type(&self) -> Option<&'static str> {
+        None
+    }
+
+    /// Whether this protocol frames RPC initial event-stream messages.
+    fn frames_initial_messages(&self) -> bool {
+        false
+    }
+}
+
+impl<P, Req> ServerProtocol<Req> for P
+where
+    P: ServerProtocolInner<Req>,
+{
+    fn protocol_id(&self) -> &ShapeId<'static> {
+        <Self as ServerProtocolInner<Req>>::protocol_id(self)
+    }
+
+    fn codec(&self) -> &dyn DynCodec {
+        <Self as ServerProtocolInner<Req>>::codec(self)
+    }
+
+    fn deserialize_request<'a>(
+        &self,
+        request: &'a Req,
+        input_schema: &Schema<'_>,
+    ) -> Result<Box<dyn ShapeDeserializer + 'a>, ServerError> {
+        <Self as ServerProtocolInner<Req>>::deserialize_request(self, request, input_schema)
+    }
+
+    fn serialize_response(&self, schema: &Schema<'_>, output: &dyn SerializableStruct) -> http::Response<BoxBody> {
+        <Self as ServerProtocolInner<Req>>::serialize_response(self, schema, output)
+    }
+
+    fn serialize_error(&self, error: &dyn HttpServerError) -> http::Response<BoxBody> {
+        <Self as ServerProtocolInner<Req>>::serialize_error(self, error)
+    }
+
+    fn event_payload_content_type(&self) -> Option<&'static str> {
+        <Self as ServerProtocolInner<Req>>::event_payload_content_type(self)
+    }
+
+    fn event_stream_http_content_type(&self) -> Option<&'static str> {
+        <Self as ServerProtocolInner<Req>>::event_stream_http_content_type(self)
+    }
+
+    fn frames_initial_messages(&self) -> bool {
+        <Self as ServerProtocolInner<Req>>::frames_initial_messages(self)
     }
 }
 

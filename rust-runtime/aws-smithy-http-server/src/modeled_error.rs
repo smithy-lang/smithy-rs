@@ -87,6 +87,12 @@ pub trait HttpServerError: std::error::Error + Send + Sync + 'static {
     fn as_any(&self) -> &dyn Any;
 }
 
+/// Type-erased server protocol error.
+///
+/// Protocol implementations convert their private request rejection types into
+/// this before crossing the static-to-dynamic protocol boundary.
+pub type ServerError = Box<dyn HttpServerError>;
+
 impl<T> HttpServerError for T
 where
     T: HttpModeledError,

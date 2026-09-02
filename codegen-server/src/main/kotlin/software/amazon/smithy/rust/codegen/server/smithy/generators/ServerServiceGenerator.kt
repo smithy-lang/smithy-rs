@@ -29,7 +29,6 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRpcV2CborProtocol
@@ -91,11 +90,7 @@ class ServerServiceGenerator(
     private fun operationUsesDynUpgrade(operation: OperationShape): Boolean =
         shouldGenerateOperationHandlerBindings &&
             operation.inputShape(model).findStreamingMember(model) == null &&
-            operation.outputShape(model).findStreamingMember(model) == null &&
-            (
-                listOf(operation.inputShape(model), operation.outputShape(model)) +
-                    operation.errorsSet.map { model.expectShape(it) }
-                ).none { it.canReachConstrainedShape(model, symbolProvider) }
+            operation.outputShape(model).findStreamingMember(model) == null
 
     private val usedRequestSpecFunctionNames = mutableSetOf<String>()
 

@@ -10,16 +10,23 @@ use std::{borrow::Cow, marker::PhantomData};
 use crate::{
     body::BoxBody,
     deserialize::{DeserializeError, RequestDeserializationError},
-    modeled_error::HttpServerError,
+    modeled_error::{HttpModeledError, HttpServerError, ServerError},
     protocol::{
         accept_header_classifier,
-        aws_json::router::{AwsJsonRouter, Error as AwsJsonError},
+        aws_json::{
+            rejection as aws_json_rejection,
+            router::{AwsJsonRouter, Error as AwsJsonError},
+            runtime_error as aws_json_runtime_error,
+        },
         aws_json_10::AwsJson1_0,
         aws_json_11::AwsJson1_1,
         rest::router::Error as RestError,
-        rest_json_1::RestJson1,
-        rest_xml::RestXml,
-        rpc_v2_cbor::{router::RpcV2CborRouter, RpcV2Cbor},
+        rest_json_1::{rejection as rest_json_rejection, runtime_error as rest_json_runtime_error, RestJson1},
+        rest_xml::{rejection as rest_xml_rejection, runtime_error as rest_xml_runtime_error, RestXml},
+        rpc_v2_cbor::{
+            rejection as rpc_v2_cbor_rejection, router::RpcV2CborRouter, runtime_error as rpc_v2_cbor_runtime_error,
+            RpcV2Cbor,
+        },
     },
     response::IntoResponse,
     routing::{
@@ -28,7 +35,10 @@ use crate::{
         Router,
     },
     schema::{
-        protocol::{DynRequestRejection, ServerProtocol, SharedServerProtocol, StaticProtocol},
+        protocol::{
+            aws_json as schema_aws_json, rest_json as schema_rest_json, rest_xml as schema_rest_xml,
+            rpc_v2_cbor as schema_rpc_v2_cbor, ServerProtocolInner, SharedServerProtocol,
+        },
         OperationSchema, ServiceSchema,
     },
 };
@@ -189,24 +199,20 @@ where
     }
 }
 
-fn legacy_request_deserialization_response<P>(err: &RequestDeserializationError) -> http::Response<BoxBody>
-where
-    P: StaticProtocol,
-{
-    P::request_rejection_into_response(P::RequestRejection::from(DeserializeError::Serde(
-        aws_smithy_schema::serde::SerdeError::custom(err.source().to_string()),
-    )))
+fn request_deserialization_error(err: &RequestDeserializationError) -> DeserializeError {
+    DeserializeError::Serde(aws_smithy_schema::serde::SerdeError::custom(err.source().to_string()))
 }
 
-fn modeled_or_bad_request_response<P>(error: &dyn HttpServerError) -> http::Response<BoxBody>
-where
-    P: StaticProtocol,
-{
+fn modeled_or_bad_request_response(
+    error: &dyn HttpServerError,
+    modeled_response: impl FnOnce(&dyn HttpModeledError) -> http::Response<BoxBody>,
+    request_deserialization_response: impl FnOnce(&RequestDeserializationError) -> http::Response<BoxBody>,
+) -> http::Response<BoxBody> {
     if let Some(modeled) = error.as_modeled_error() {
-        return P::serialize_error(modeled);
+        return modeled_response(modeled);
     }
     if let Some(err) = error.as_any().downcast_ref::<RequestDeserializationError>() {
-        return legacy_request_deserialization_response::<P>(err);
+        return request_deserialization_response(err);
     }
 
     let mut response = http::Response::new(crate::body::to_boxed(error.to_string()));
@@ -214,6 +220,118 @@ where
         http::StatusCode::from_u16(error.status_code()).unwrap_or(http::StatusCode::INTERNAL_SERVER_ERROR);
     response
 }
+
+fn aws_json_request_deserialization_response<P>(err: &RequestDeserializationError) -> http::Response<BoxBody>
+where
+    aws_json_runtime_error::RuntimeError: IntoResponse<P>,
+{
+    let rejection = aws_json_rejection::RequestRejection::from(request_deserialization_error(err));
+    IntoResponse::<P>::into_response(aws_json_runtime_error::RuntimeError::from(rejection))
+}
+
+fn rpc_v2_cbor_request_deserialization_response(err: &RequestDeserializationError) -> http::Response<BoxBody> {
+    let rejection = rpc_v2_cbor_rejection::RequestRejection::from(request_deserialization_error(err));
+    IntoResponse::<RpcV2Cbor>::into_response(rpc_v2_cbor_runtime_error::RuntimeError::from(rejection))
+}
+
+fn rest_json_request_deserialization_response(err: &RequestDeserializationError) -> http::Response<BoxBody> {
+    let rejection = rest_json_rejection::RequestRejection::from(request_deserialization_error(err));
+    IntoResponse::<RestJson1>::into_response(rest_json_runtime_error::RuntimeError::from(rejection))
+}
+
+fn rest_xml_request_deserialization_response(err: &RequestDeserializationError) -> http::Response<BoxBody> {
+    let rejection = rest_xml_rejection::RequestRejection::from(request_deserialization_error(err));
+    IntoResponse::<RestXml>::into_response(rest_xml_runtime_error::RuntimeError::from(rejection))
+}
+
+fn aws_json_request_rejection_response<P>(err: &AwsJsonRequestRejection) -> http::Response<BoxBody>
+where
+    aws_json_runtime_error::RuntimeError: IntoResponse<P>,
+{
+    let runtime_error = match &err.0 {
+        aws_json_rejection::RequestRejection::ConstraintViolation(reason) => {
+            aws_json_runtime_error::RuntimeError::Validation(reason.clone())
+        }
+        _ => aws_json_runtime_error::RuntimeError::Serialization(crate::Error::new(err.to_string())),
+    };
+    IntoResponse::<P>::into_response(runtime_error)
+}
+
+fn rpc_v2_cbor_request_rejection_response(err: &RpcV2CborRequestRejection) -> http::Response<BoxBody> {
+    let runtime_error = match &err.0 {
+        rpc_v2_cbor_rejection::RequestRejection::ConstraintViolation(reason) => {
+            rpc_v2_cbor_runtime_error::RuntimeError::Validation(reason.clone())
+        }
+        _ => rpc_v2_cbor_runtime_error::RuntimeError::Serialization(crate::Error::new(err.to_string())),
+    };
+    IntoResponse::<RpcV2Cbor>::into_response(runtime_error)
+}
+
+fn rest_json_request_rejection_response(err: &RestJsonRequestRejection) -> http::Response<BoxBody> {
+    let runtime_error = match &err.0 {
+        rest_json_rejection::RequestRejection::MissingContentType(_) => {
+            rest_json_runtime_error::RuntimeError::UnsupportedMediaType
+        }
+        rest_json_rejection::RequestRejection::NotAcceptable => rest_json_runtime_error::RuntimeError::NotAcceptable,
+        rest_json_rejection::RequestRejection::ConstraintViolation(reason) => {
+            rest_json_runtime_error::RuntimeError::Validation(reason.clone())
+        }
+        _ => rest_json_runtime_error::RuntimeError::Serialization(crate::Error::new(err.to_string())),
+    };
+    IntoResponse::<RestJson1>::into_response(runtime_error)
+}
+
+fn rest_xml_request_rejection_response(err: &RestXmlRequestRejection) -> http::Response<BoxBody> {
+    let runtime_error = match &err.0 {
+        rest_xml_rejection::RequestRejection::MissingContentType(_) => {
+            rest_xml_runtime_error::RuntimeError::UnsupportedMediaType
+        }
+        rest_xml_rejection::RequestRejection::ConstraintViolation(reason) => {
+            rest_xml_runtime_error::RuntimeError::Validation(reason.clone())
+        }
+        _ => rest_xml_runtime_error::RuntimeError::Serialization(crate::Error::new(err.to_string())),
+    };
+    IntoResponse::<RestXml>::into_response(runtime_error)
+}
+
+#[derive(Debug)]
+struct AwsJsonRequestRejection(aws_json_rejection::RequestRejection);
+
+#[derive(Debug)]
+struct RpcV2CborRequestRejection(rpc_v2_cbor_rejection::RequestRejection);
+
+#[derive(Debug)]
+struct RestJsonRequestRejection(rest_json_rejection::RequestRejection);
+
+#[derive(Debug)]
+struct RestXmlRequestRejection(rest_xml_rejection::RequestRejection);
+
+macro_rules! request_rejection_error {
+    ($name:ident) => {
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                self.0.fmt(f)
+            }
+        }
+
+        impl std::error::Error for $name {}
+
+        impl HttpServerError for $name {
+            fn status_code(&self) -> u16 {
+                http::StatusCode::BAD_REQUEST.as_u16()
+            }
+
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
+            }
+        }
+    };
+}
+
+request_rejection_error!(AwsJsonRequestRejection);
+request_rejection_error!(RpcV2CborRequestRejection);
+request_rejection_error!(RestJsonRequestRejection);
+request_rejection_error!(RestXmlRequestRejection);
 
 /// AWS JSON operation routing table.
 #[derive(Debug, Clone)]
@@ -327,36 +445,29 @@ impl AwsJsonServerProtocol {
     }
 }
 
-impl ServerProtocol<http::Request<bytes::Bytes>> for AwsJsonServerProtocol {
+impl ServerProtocolInner<http::Request<bytes::Bytes>> for AwsJsonServerProtocol {
     fn protocol_id(&self) -> &ShapeId<'static> {
         &self.protocol
     }
 
     fn codec(&self) -> &dyn aws_smithy_schema::codec::DynCodec {
-        match self.version {
-            AwsJsonVersion::Json10 => <AwsJson1_0 as StaticProtocol>::codec(),
-            AwsJsonVersion::Json11 => <AwsJson1_1 as StaticProtocol>::codec(),
-        }
+        schema_aws_json::aws_json_codec()
     }
 
     fn deserialize_request<'a>(
         &self,
         request: &'a http::Request<bytes::Bytes>,
         input_schema: &Schema<'_>,
-    ) -> Result<Box<dyn aws_smithy_schema::serde::ShapeDeserializer + 'a>, DynRequestRejection> {
+    ) -> Result<Box<dyn aws_smithy_schema::serde::ShapeDeserializer + 'a>, ServerError> {
         match self.version {
-            AwsJsonVersion::Json10 => <AwsJson1_0 as StaticProtocol>::request_deserializer(input_schema, request)
-                .map_err(|rejection| {
-                    DynRequestRejection::new(Box::new(
-                        <AwsJson1_0 as StaticProtocol>::request_rejection_into_response(rejection),
-                    ))
-                }),
-            AwsJsonVersion::Json11 => <AwsJson1_1 as StaticProtocol>::request_deserializer(input_schema, request)
-                .map_err(|rejection| {
-                    DynRequestRejection::new(Box::new(
-                        <AwsJson1_1 as StaticProtocol>::request_rejection_into_response(rejection),
-                    ))
-                }),
+            AwsJsonVersion::Json10 => {
+                schema_aws_json::aws_json_request_deserializer("application/x-amz-json-1.0", input_schema, request)
+                    .map_err(|rejection| Box::new(AwsJsonRequestRejection(rejection)) as ServerError)
+            }
+            AwsJsonVersion::Json11 => {
+                schema_aws_json::aws_json_request_deserializer("application/x-amz-json-1.1", input_schema, request)
+                    .map_err(|rejection| Box::new(AwsJsonRequestRejection(rejection)) as ServerError)
+            }
         }
     }
 
@@ -366,15 +477,33 @@ impl ServerProtocol<http::Request<bytes::Bytes>> for AwsJsonServerProtocol {
         output: &dyn aws_smithy_schema::serde::SerializableStruct,
     ) -> http::Response<BoxBody> {
         match self.version {
-            AwsJsonVersion::Json10 => <AwsJson1_0 as StaticProtocol>::serialize_response(schema, output),
-            AwsJsonVersion::Json11 => <AwsJson1_1 as StaticProtocol>::serialize_response(schema, output),
+            AwsJsonVersion::Json10 => schema_aws_json::aws_json_10_serialize_response(schema, output),
+            AwsJsonVersion::Json11 => schema_aws_json::aws_json_11_serialize_response(schema, output),
         }
     }
 
     fn serialize_error(&self, error: &dyn HttpServerError) -> http::Response<BoxBody> {
         match self.version {
-            AwsJsonVersion::Json10 => modeled_or_bad_request_response::<AwsJson1_0>(error),
-            AwsJsonVersion::Json11 => modeled_or_bad_request_response::<AwsJson1_1>(error),
+            AwsJsonVersion::Json10 => {
+                if let Some(err) = error.as_any().downcast_ref::<AwsJsonRequestRejection>() {
+                    return aws_json_request_rejection_response::<AwsJson1_0>(err);
+                }
+                modeled_or_bad_request_response(
+                    error,
+                    schema_aws_json::aws_json_10_serialize_error,
+                    aws_json_request_deserialization_response::<AwsJson1_0>,
+                )
+            }
+            AwsJsonVersion::Json11 => {
+                if let Some(err) = error.as_any().downcast_ref::<AwsJsonRequestRejection>() {
+                    return aws_json_request_rejection_response::<AwsJson1_1>(err);
+                }
+                modeled_or_bad_request_response(
+                    error,
+                    schema_aws_json::aws_json_11_serialize_error,
+                    aws_json_request_deserialization_response::<AwsJson1_1>,
+                )
+            }
         }
     }
 
@@ -404,12 +533,12 @@ impl AwsJsonOperationRoutingTable {
 
     fn not_acceptable(&self) -> Box<dyn IntoProtocolResponse> {
         match self.version {
-            AwsJsonVersion::Json10 => Box::new(<AwsJson1_0 as StaticProtocol>::request_rejection_into_response(
-                crate::protocol::aws_json::rejection::RequestRejection::NotAcceptable,
-            )),
-            AwsJsonVersion::Json11 => Box::new(<AwsJson1_1 as StaticProtocol>::request_rejection_into_response(
-                crate::protocol::aws_json::rejection::RequestRejection::NotAcceptable,
-            )),
+            AwsJsonVersion::Json10 => ProtocolResponse::<_, AwsJson1_0>::boxed(
+                aws_json_runtime_error::RuntimeError::from(aws_json_rejection::RequestRejection::NotAcceptable),
+            ),
+            AwsJsonVersion::Json11 => ProtocolResponse::<_, AwsJson1_1>::boxed(
+                aws_json_runtime_error::RuntimeError::from(aws_json_rejection::RequestRejection::NotAcceptable),
+            ),
         }
     }
 }
@@ -449,9 +578,9 @@ impl ProtocolRouter for RpcV2CborOperationRoutingTable {
                 if accept_matches_content_type(request.headers, "application/cbor") {
                     ProtocolRoutingOutcome::OperationMatched(OperationMatch::new(operation))
                 } else {
-                    ProtocolRoutingOutcome::RejectedNonExclusive(Box::new(
-                        <RpcV2Cbor as StaticProtocol>::request_rejection_into_response(
-                            crate::protocol::rpc_v2_cbor::rejection::RequestRejection::NotAcceptable,
+                    ProtocolRoutingOutcome::RejectedNonExclusive(ProtocolResponse::<_, RpcV2Cbor>::boxed(
+                        rpc_v2_cbor_runtime_error::RuntimeError::from(
+                            rpc_v2_cbor_rejection::RequestRejection::NotAcceptable,
                         ),
                     ))
                 }
@@ -483,25 +612,22 @@ impl Default for RpcV2CborServerProtocol {
     }
 }
 
-impl ServerProtocol<http::Request<bytes::Bytes>> for RpcV2CborServerProtocol {
+impl ServerProtocolInner<http::Request<bytes::Bytes>> for RpcV2CborServerProtocol {
     fn protocol_id(&self) -> &ShapeId<'static> {
         &self.protocol
     }
 
     fn codec(&self) -> &dyn aws_smithy_schema::codec::DynCodec {
-        <RpcV2Cbor as StaticProtocol>::codec()
+        schema_rpc_v2_cbor::rpc_v2_cbor_codec()
     }
 
     fn deserialize_request<'a>(
         &self,
         request: &'a http::Request<bytes::Bytes>,
         input_schema: &Schema<'_>,
-    ) -> Result<Box<dyn aws_smithy_schema::serde::ShapeDeserializer + 'a>, DynRequestRejection> {
-        <RpcV2Cbor as StaticProtocol>::request_deserializer(input_schema, request).map_err(|rejection| {
-            DynRequestRejection::new(Box::new(
-                <RpcV2Cbor as StaticProtocol>::request_rejection_into_response(rejection),
-            ))
-        })
+    ) -> Result<Box<dyn aws_smithy_schema::serde::ShapeDeserializer + 'a>, ServerError> {
+        schema_rpc_v2_cbor::rpc_v2_cbor_request_deserializer(input_schema, request)
+            .map_err(|rejection| Box::new(RpcV2CborRequestRejection(rejection)) as ServerError)
     }
 
     fn serialize_response(
@@ -509,11 +635,18 @@ impl ServerProtocol<http::Request<bytes::Bytes>> for RpcV2CborServerProtocol {
         schema: &Schema<'_>,
         output: &dyn aws_smithy_schema::serde::SerializableStruct,
     ) -> http::Response<BoxBody> {
-        <RpcV2Cbor as StaticProtocol>::serialize_response(schema, output)
+        schema_rpc_v2_cbor::rpc_v2_cbor_serialize_response(schema, output)
     }
 
     fn serialize_error(&self, error: &dyn HttpServerError) -> http::Response<BoxBody> {
-        modeled_or_bad_request_response::<RpcV2Cbor>(error)
+        if let Some(err) = error.as_any().downcast_ref::<RpcV2CborRequestRejection>() {
+            return rpc_v2_cbor_request_rejection_response(err);
+        }
+        modeled_or_bad_request_response(
+            error,
+            schema_rpc_v2_cbor::rpc_v2_cbor_serialize_error,
+            rpc_v2_cbor_request_deserialization_response,
+        )
     }
 
     fn event_payload_content_type(&self) -> Option<&'static str> {
@@ -644,15 +777,15 @@ impl RestServerProtocol {
     }
 }
 
-impl ServerProtocol<http::Request<bytes::Bytes>> for RestServerProtocol {
+impl ServerProtocolInner<http::Request<bytes::Bytes>> for RestServerProtocol {
     fn protocol_id(&self) -> &ShapeId<'static> {
         &self.protocol
     }
 
     fn codec(&self) -> &dyn aws_smithy_schema::codec::DynCodec {
         match self.version {
-            RestVersion::RestJson1 => <RestJson1 as StaticProtocol>::codec(),
-            RestVersion::RestXml => <RestXml as StaticProtocol>::codec(),
+            RestVersion::RestJson1 => schema_rest_json::rest_json_1_codec(),
+            RestVersion::RestXml => schema_rest_xml::rest_xml_codec(),
         }
     }
 
@@ -660,21 +793,12 @@ impl ServerProtocol<http::Request<bytes::Bytes>> for RestServerProtocol {
         &self,
         request: &'a http::Request<bytes::Bytes>,
         input_schema: &Schema<'_>,
-    ) -> Result<Box<dyn aws_smithy_schema::serde::ShapeDeserializer + 'a>, DynRequestRejection> {
+    ) -> Result<Box<dyn aws_smithy_schema::serde::ShapeDeserializer + 'a>, ServerError> {
         match self.version {
-            RestVersion::RestJson1 => <RestJson1 as StaticProtocol>::request_deserializer(input_schema, request)
-                .map_err(|rejection| {
-                    DynRequestRejection::new(Box::new(
-                        <RestJson1 as StaticProtocol>::request_rejection_into_response(rejection),
-                    ))
-                }),
-            RestVersion::RestXml => {
-                <RestXml as StaticProtocol>::request_deserializer(input_schema, request).map_err(|rejection| {
-                    DynRequestRejection::new(Box::new(<RestXml as StaticProtocol>::request_rejection_into_response(
-                        rejection,
-                    )))
-                })
-            }
+            RestVersion::RestJson1 => schema_rest_json::rest_json_1_request_deserializer(input_schema, request)
+                .map_err(|rejection| Box::new(RestJsonRequestRejection(rejection)) as ServerError),
+            RestVersion::RestXml => schema_rest_xml::rest_xml_request_deserializer(input_schema, request)
+                .map_err(|rejection| Box::new(RestXmlRequestRejection(rejection)) as ServerError),
         }
     }
 
@@ -684,15 +808,33 @@ impl ServerProtocol<http::Request<bytes::Bytes>> for RestServerProtocol {
         output: &dyn aws_smithy_schema::serde::SerializableStruct,
     ) -> http::Response<BoxBody> {
         match self.version {
-            RestVersion::RestJson1 => <RestJson1 as StaticProtocol>::serialize_response(schema, output),
-            RestVersion::RestXml => <RestXml as StaticProtocol>::serialize_response(schema, output),
+            RestVersion::RestJson1 => schema_rest_json::rest_json_1_serialize_response(schema, output),
+            RestVersion::RestXml => schema_rest_xml::rest_xml_serialize_response(schema, output),
         }
     }
 
     fn serialize_error(&self, error: &dyn HttpServerError) -> http::Response<BoxBody> {
         match self.version {
-            RestVersion::RestJson1 => modeled_or_bad_request_response::<RestJson1>(error),
-            RestVersion::RestXml => modeled_or_bad_request_response::<RestXml>(error),
+            RestVersion::RestJson1 => {
+                if let Some(err) = error.as_any().downcast_ref::<RestJsonRequestRejection>() {
+                    return rest_json_request_rejection_response(err);
+                }
+                modeled_or_bad_request_response(
+                    error,
+                    schema_rest_json::rest_json_1_serialize_error,
+                    rest_json_request_deserialization_response,
+                )
+            }
+            RestVersion::RestXml => {
+                if let Some(err) = error.as_any().downcast_ref::<RestXmlRequestRejection>() {
+                    return rest_xml_request_rejection_response(err);
+                }
+                modeled_or_bad_request_response(
+                    error,
+                    schema_rest_xml::rest_xml_serialize_error,
+                    rest_xml_request_deserialization_response,
+                )
+            }
         }
     }
 
@@ -726,11 +868,11 @@ impl RestOperationRoutingTable {
 
     fn not_acceptable(&self) -> Box<dyn IntoProtocolResponse> {
         match self.version {
-            RestVersion::RestJson1 => Box::new(<RestJson1 as StaticProtocol>::request_rejection_into_response(
-                crate::protocol::rest_json_1::rejection::RequestRejection::NotAcceptable,
-            )),
-            RestVersion::RestXml => Box::new(<RestXml as StaticProtocol>::request_rejection_into_response(
-                crate::protocol::rest_xml::rejection::RequestRejection::NotAcceptable,
+            RestVersion::RestJson1 => ProtocolResponse::<_, RestJson1>::boxed(
+                rest_json_runtime_error::RuntimeError::from(rest_json_rejection::RequestRejection::NotAcceptable),
+            ),
+            RestVersion::RestXml => ProtocolResponse::<_, RestXml>::boxed(rest_xml_runtime_error::RuntimeError::from(
+                rest_xml_rejection::RequestRejection::NotAcceptable,
             )),
         }
     }

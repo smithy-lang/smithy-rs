@@ -153,7 +153,7 @@ where
             let input = {
                 let mut deserializer = match protocol.deserialize_request(&request, Op::SCHEMA.input()) {
                     Ok(deserializer) => deserializer,
-                    Err(err) => return Ok(err.into_response()),
+                    Err(err) => return Ok(protocol.serialize_error(&*err)),
                 };
                 match Op::Input::deserialize(&mut *deserializer) {
                     Ok(input) => input,

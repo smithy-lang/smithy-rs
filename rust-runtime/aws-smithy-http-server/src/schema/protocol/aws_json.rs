@@ -28,7 +28,7 @@ use super::{StaticEventStreamProtocol, StaticProtocol};
 // awsJson 1.0 / 1.1
 // ============================================================================
 
-fn aws_json_codec() -> &'static JsonCodec {
+pub(crate) fn aws_json_codec() -> &'static JsonCodec {
     static CODEC: LazyLock<JsonCodec> = LazyLock::new(|| {
         JsonCodec::new(
             JsonCodecSettings::builder()
@@ -40,6 +40,95 @@ fn aws_json_codec() -> &'static JsonCodec {
         )
     });
     &CODEC
+}
+
+pub(crate) fn aws_json_request_deserializer<'a>(
+    content_type: &'static str,
+    schema: &Schema<'_>,
+    request: &'a http::Request<bytes::Bytes>,
+) -> Result<Box<dyn ShapeDeserializer + 'a>, crate::protocol::aws_json::rejection::RequestRejection> {
+    rpc_request_deserializer(aws_json_codec(), content_type, schema, request)
+}
+
+pub(crate) fn aws_json_10_serialize_response(
+    schema: &Schema<'_>,
+    output: &dyn SerializableStruct,
+) -> http::Response<BoxBody> {
+    aws_json_serialize_response::<AwsJson1_0>(schema, output, "application/x-amz-json-1.0")
+}
+
+pub(crate) fn aws_json_11_serialize_response(
+    schema: &Schema<'_>,
+    output: &dyn SerializableStruct,
+) -> http::Response<BoxBody> {
+    aws_json_serialize_response::<AwsJson1_1>(schema, output, "application/x-amz-json-1.1")
+}
+
+fn aws_json_serialize_response<P>(
+    schema: &Schema<'_>,
+    output: &dyn SerializableStruct,
+    content_type: &'static str,
+) -> http::Response<BoxBody>
+where
+    crate::protocol::aws_json::runtime_error::RuntimeError: IntoResponse<P>,
+{
+    let result = serialize_operation_response(
+        aws_json_codec(),
+        schema,
+        output,
+        ResponseBindingMode::BodyOnly,
+        content_type,
+        Some(content_type),
+    );
+    match result {
+        Ok(response) => response,
+        Err(err) => {
+            log_serialize_failure(&err);
+            IntoResponse::<P>::into_response(crate::protocol::aws_json::runtime_error::RuntimeError::Serialization(
+                crate::Error::new(err),
+            ))
+        }
+    }
+}
+
+pub(crate) fn aws_json_10_serialize_error(error: &dyn HttpModeledError) -> http::Response<BoxBody> {
+    aws_json_serialize_error::<AwsJson1_0>(error, "application/x-amz-json-1.0", full_shape_id)
+}
+
+pub(crate) fn aws_json_11_serialize_error(error: &dyn HttpModeledError) -> http::Response<BoxBody> {
+    aws_json_serialize_error::<AwsJson1_1>(error, "application/x-amz-json-1.1", shape_name_only)
+}
+
+fn aws_json_serialize_error<P>(
+    error: &dyn HttpModeledError,
+    content_type: &'static str,
+    type_value: for<'s> fn(&'s Schema<'s>) -> &'s str,
+) -> http::Response<BoxBody>
+where
+    crate::protocol::aws_json::runtime_error::RuntimeError: IntoResponse<P>,
+{
+    let schema = error.schema();
+    let wrapper = WithTypeLast {
+        type_value: type_value(schema),
+        inner: &AsSerializable(error),
+    };
+    let result = serialize_modeled_error_response(
+        aws_json_codec(),
+        schema,
+        &wrapper,
+        HttpModeledError::status_code(error),
+        ResponseBindingMode::BodyOnly,
+        content_type,
+    );
+    match result {
+        Ok(response) => stamp_error_extension(response, schema.shape_id().shape_name()),
+        Err(err) => {
+            log_serialize_failure(&err);
+            IntoResponse::<P>::into_response(crate::protocol::aws_json::runtime_error::RuntimeError::Serialization(
+                crate::Error::new(err),
+            ))
+        }
+    }
 }
 
 macro_rules! aws_json_impl {
@@ -65,7 +154,7 @@ macro_rules! aws_json_impl {
                 schema: &Schema<'_>,
                 request: &'a http::Request<bytes::Bytes>,
             ) -> Result<Box<dyn ShapeDeserializer + 'a>, Self::RequestRejection> {
-                rpc_request_deserializer(Self::codec(), $content_type, schema, request)
+                aws_json_request_deserializer($content_type, schema, request)
             }
 
             fn request_rejection_into_response(rejection: Self::RequestRejection) -> http::Response<BoxBody> {
@@ -75,53 +164,11 @@ macro_rules! aws_json_impl {
             }
 
             fn serialize_response(schema: &Schema<'_>, output: &dyn SerializableStruct) -> http::Response<BoxBody> {
-                let result = serialize_operation_response(
-                    Self::codec(),
-                    schema,
-                    output,
-                    ResponseBindingMode::BodyOnly,
-                    $content_type,
-                    Some($content_type),
-                );
-                match result {
-                    Ok(response) => response,
-                    Err(err) => {
-                        log_serialize_failure(&err);
-                        IntoResponse::<$marker>::into_response(
-                            crate::protocol::aws_json::runtime_error::RuntimeError::Serialization(crate::Error::new(
-                                err,
-                            )),
-                        )
-                    }
-                }
+                aws_json_serialize_response::<$marker>(schema, output, $content_type)
             }
 
             fn serialize_error(error: &dyn HttpModeledError) -> http::Response<BoxBody> {
-                let schema = error.schema();
-                // `__type` written after the modeled members (legacy order).
-                let wrapper = WithTypeLast {
-                    type_value: $type_value(schema),
-                    inner: &AsSerializable(error),
-                };
-                let result = serialize_modeled_error_response(
-                    Self::codec(),
-                    schema,
-                    &wrapper,
-                    HttpModeledError::status_code(error),
-                    ResponseBindingMode::BodyOnly,
-                    $content_type,
-                );
-                match result {
-                    Ok(response) => stamp_error_extension(response, schema.shape_id().shape_name()),
-                    Err(err) => {
-                        log_serialize_failure(&err);
-                        IntoResponse::<$marker>::into_response(
-                            crate::protocol::aws_json::runtime_error::RuntimeError::Serialization(crate::Error::new(
-                                err,
-                            )),
-                        )
-                    }
-                }
+                aws_json_serialize_error::<$marker>(error, $content_type, $type_value)
             }
         }
     };
