@@ -576,7 +576,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-server"
-version = "0.67.1"
+version = "0.68.0"
 dependencies = [
  "aws-smithy-cbor 0.62.0",
  "aws-smithy-http 0.64.0",
@@ -585,6 +585,7 @@ dependencies = [
  "aws-smithy-types 1.6.3",
  "aws-smithy-xml 0.62.0",
  "bytes",
+ "criterion",
  "futures-util",
  "http 1.5.0",
  "http-body 1.1.0",
@@ -612,7 +613,7 @@ name = "aws-smithy-http-server-metrics"
 version = "0.2.2"
 dependencies = [
  "aws-smithy-http-server 0.65.10",
- "aws-smithy-http-server 0.67.1",
+ "aws-smithy-http-server 0.68.0",
  "aws-smithy-http-server-metrics-macro",
  "aws-smithy-legacy-http-server",
  "futures",
@@ -728,7 +729,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-legacy-http-server"
-version = "0.66.1"
+version = "0.66.2"
 dependencies = [
  "aws-smithy-cbor 0.62.0",
  "aws-smithy-json 0.63.0",

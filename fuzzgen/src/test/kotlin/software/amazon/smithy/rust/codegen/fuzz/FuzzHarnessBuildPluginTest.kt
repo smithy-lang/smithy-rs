@@ -8,6 +8,7 @@ import io.kotest.matchers.collections.shouldContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.build.FileManifest
 import software.amazon.smithy.build.PluginContext
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ArrayNode
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
@@ -21,36 +22,98 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersion
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
-class FuzzHarnessBuildPluginTest() {
-    private val minimalModel =
-        """
-        namespace com.example
-        use aws.protocols#awsJson1_0
-        @awsJson1_0
-        service HelloService {
-            operations: [SayHello],
-            version: "1"
+class FuzzHarnessBuildPluginTest {
+    private data class ProtocolCase(
+        val id: String,
+        val crateName: String,
+        val service: String,
+        val model: Model,
+    )
+
+    private val protocolCases =
+        listOf(
+            ProtocolCase(
+                id = "rpcv2Cbor",
+                crateName = "rpcv2_cbor",
+                service = "com.example#RpcV2CborService",
+                model =
+                    """
+                    namespace com.example
+                    use smithy.protocols#rpcv2Cbor
+                    @rpcv2Cbor
+                    service RpcV2CborService {
+                        operations: [SayHello],
+                        version: "1"
+                    }
+                    operation SayHello { input: TestInput }
+                    structure TestInput {
+                       foo: String,
+                    }
+                    """.asSmithyModel(),
+            ),
+            ProtocolCase(
+                id = "restJson1",
+                crateName = "rest_json_1",
+                service = "com.example#RestJsonService",
+                model =
+                    """
+                    namespace com.example
+                    use aws.protocols#restJson1
+                    use smithy.api#http
+                    @restJson1
+                    service RestJsonService {
+                        operations: [SayHello],
+                        version: "1"
+                    }
+                    @http(method: "POST", uri: "/hello", code: 200)
+                    operation SayHello { input: TestInput, output: TestOutput }
+                    structure TestInput {
+                       foo: String,
+                    }
+                    structure TestOutput {
+                       message: String,
+                    }
+                    """.asSmithyModel(),
+            ),
+        )
+
+    private fun selectedProtocolCases(): List<ProtocolCase> {
+        val selectedProtocol = System.getProperty("smithy.fuzz.protocol", "all")
+        return when (selectedProtocol) {
+            "all" -> protocolCases
+            else -> {
+                val protocolCase = protocolCases.find { it.id == selectedProtocol }
+                requireNotNull(protocolCase) {
+                    "Unknown smithy.fuzz.protocol=$selectedProtocol. Expected one of: all, ${
+                        protocolCases.joinToString { it.id }
+                    }"
+                }
+                listOf(protocolCase)
+            }
         }
-        operation SayHello { input: TestInput }
-        structure TestInput {
-           foo: String,
-        }
-        """.asSmithyModel()
+    }
 
     /**
-     * Smoke test that generates a lexicon and target crate for the trivial service above
+     * Smoke test that generates a lexicon and target crate for the trivial services above.
+     *
+     * Use `-Dsmithy.fuzz.protocol=rpcv2Cbor` or `-Dsmithy.fuzz.protocol=restJson1` for a focused run.
      */
     @Test
     fun smokeTest() {
+        selectedProtocolCases().forEach { protocolCase ->
+            smokeTest(protocolCase)
+        }
+    }
+
+    private fun smokeTest(protocolCase: ProtocolCase) {
         val testDir = TestWorkspace.subproject()
         val testPath = testDir.toPath()
         val manifest = FileManifest.create(testPath)
-        val service = "com.example#HelloService"
         // Only generate server for http@1 as `aws-smithy-fuzz` only supports http@1.
         val generatedServers =
             serverIntegrationTest(
-                minimalModel,
-                IntegrationTestParams(service = service, command = { dir -> println("generated $dir") }),
+                protocolCase.model,
+                IntegrationTestParams(service = protocolCase.service, command = { dir -> println("generated $dir") }),
                 testCoverage =
                     HttpTestType.Only(
                         HttpTestVersion.HTTP_1_X,
@@ -63,16 +126,16 @@ class FuzzHarnessBuildPluginTest() {
             generatedServers.map { server ->
                 ObjectNode.objectNode()
                     .withMember("relativePath", server.path.toString())
-                    .withMember("name", "a")
+                    .withMember("name", protocolCase.crateName)
             }
 
         val context =
             PluginContext.builder()
-                .model(minimalModel)
+                .model(protocolCase.model)
                 .fileManifest(manifest)
                 .settings(
                     ObjectNode.objectNode()
-                        .withMember("service", "com.example#HelloService")
+                        .withMember("service", protocolCase.service)
                         .withMember(
                             "targetCrates",
                             ArrayNode.fromNodes(targetCrates),
@@ -88,6 +151,6 @@ class FuzzHarnessBuildPluginTest() {
         FuzzHarnessBuildPlugin().execute(context)
         context.fileManifest.printGeneratedFiles()
         context.fileManifest.files.map { it.fileName.toString() } shouldContain "lexicon.json"
-        "cargo check".runCommand(context.fileManifest.baseDir.resolve("a"))
+        "cargo check".runCommand(context.fileManifest.baseDir.resolve(protocolCase.crateName))
     }
 }
