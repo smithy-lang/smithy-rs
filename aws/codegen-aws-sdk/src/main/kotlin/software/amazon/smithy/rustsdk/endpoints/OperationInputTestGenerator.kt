@@ -89,7 +89,7 @@ fun usesDeprecatedBuiltIns(testOperationInput: EndpointTestOperationInput): Bool
  *         "AWS::S3::UseArnRegion": false
  *     } */
  *     /* clientParams: {} */
- *     let (http_client, rcvr) = aws_smithy_runtime::client::http::test_util::capture_request(None);
+ *     let (http_client, rcvr) = aws_smithy_http_client::test_util::capture_request(None);
  *     let conf = {
  *         #[allow(unused_mut)]
  *         let mut builder = aws_sdk_s3::Config::builder()

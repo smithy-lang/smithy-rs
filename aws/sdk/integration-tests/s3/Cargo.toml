@@ -26,7 +26,9 @@ aws-smithy-protocol-test = { path = "../../build/aws-sdk/sdk/aws-smithy-protocol
 aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["test-util"] }
 aws-smithy-runtime-api = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["test-util", "http-1x"] }
 aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
-aws-smithy-http-client = { path = "../../build/aws-sdk/sdk/aws-smithy-http-client", features = ["default-client", "rustls-ring", "test-util", "wire-mock"] }
+# `legacy-test-util` is needed by `express.rs`, which calls `ReplayingClient::take_requests`.
+# That method returns `http_02x::Request` and so is gated behind the pre-1.x test utilities.
+aws-smithy-http-client = { path = "../../build/aws-sdk/sdk/aws-smithy-http-client", features = ["default-client", "rustls-ring", "test-util", "wire-mock", "legacy-test-util"] }
 aws-smithy-mocks = { path = "../../build/aws-sdk/sdk/aws-smithy-mocks" }
 aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 bytes = "1"

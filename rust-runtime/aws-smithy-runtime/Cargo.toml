@@ -32,8 +32,6 @@ test-util = [
     "aws-smithy-runtime-api/test-util",
     "dep:tracing-subscriber",
     "aws-smithy-http-client/test-util",
-    # TODO(hyper1): Feature remains in place for backwards compat but in a future release we will break this flag and disable legacy HTTP test utils
-    "legacy-test-util",
 ]
 
 legacy-test-util = [
