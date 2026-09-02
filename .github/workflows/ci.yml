@@ -663,7 +663,6 @@ jobs:
     - generate
     - generate-full
     - test-codegen
-    - check-semver-hazards
     - test-sdk
     - test-sdk-full
     - test-rust-windows

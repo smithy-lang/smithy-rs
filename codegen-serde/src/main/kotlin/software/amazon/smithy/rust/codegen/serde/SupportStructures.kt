@@ -27,11 +27,14 @@ object SupportStructures {
             "SerializeConfigured" to serializeConfigured(),
             "ConfigurableSerdeRef" to configurableSerdeRef(),
             "SerializationSettings" to serializationSettings(),
+            "DeserializationSettings" to deserializationSettings(),
             "Sensitive" to sensitive(),
             "serde" to serde,
             "serialize_redacted" to serializeRedacted(),
             "serialize_unredacted" to serializeUnredacted(),
         )
+
+    fun serdeDependency(): RuntimeType = serde
 
     fun serializeRedacted(): RuntimeType =
         RuntimeType.forInlineFun("serialize_redacted", supportModule) {
@@ -241,6 +244,64 @@ object SupportStructures {
                     pub const fn leak_sensitive_fields() -> Self { Self { redact_sensitive_fields: false, out_of_range_floats_as_strings: false } }
                 }
                 """,
+            )
+        }
+
+    private fun deserializationSettings() =
+        RuntimeType.forInlineFun("DeserializationSettings", supportModule) {
+            rustTemplate(
+                """
+                /// Settings for use when deserializing structures.
+                ##[non_exhaustive]
+                ##[derive(Clone, Debug, Default)]
+                pub struct DeserializationSettings {
+                    /// Accept `NaN`, `Infinity`, and `-Infinity` strings as floating-point values.
+                    pub allow_non_finite_float_strings: bool,
+                }
+
+                #{thread_local}! {
+                    static DESERIALIZATION_SETTINGS: #{RefCell}<#{Vec}<DeserializationSettings>> =
+                        const { #{RefCell}::new(#{Vec}::new()) };
+                }
+
+                struct DeserializationSettingsScopeGuard;
+
+                impl #{Drop} for DeserializationSettingsScopeGuard {
+                    fn drop(&mut self) {
+                        DESERIALIZATION_SETTINGS.with(|settings| {
+                            let _ = settings.borrow_mut().pop();
+                        });
+                    }
+                }
+
+                impl DeserializationSettings {
+                    /// Run `f` with these settings active for generated `Deserialize` implementations.
+                    ///
+                    /// Scopes may be nested. The previous settings are restored even if `f` panics.
+                    /// Outside a scope, generated implementations use `DeserializationSettings::default()`.
+                    ///
+                    /// This scope is synchronous. If `f` returns a future, these settings will not remain
+                    /// active while that future is polled.
+                    pub fn scope<R>(&self, f: impl #{FnOnce}() -> R) -> R {
+                        DESERIALIZATION_SETTINGS.with(|settings| {
+                            settings.borrow_mut().push(self.clone());
+                        });
+                        let _guard = DeserializationSettingsScopeGuard;
+                        f()
+                    }
+
+                    /// Return an owned snapshot of the settings active on this thread.
+                    pub(crate) fn current() -> Self {
+                        DESERIALIZATION_SETTINGS.with(|settings| {
+                            let settings = settings.borrow();
+                            settings.last().cloned().unwrap_or_default()
+                        })
+                    }
+                }
+                """,
+                "thread_local" to RuntimeType.std.resolve("thread_local"),
+                "RefCell" to RuntimeType.std.resolve("cell::RefCell"),
+                *RuntimeType.preludeScope,
             )
         }
 }
