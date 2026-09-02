@@ -14,19 +14,19 @@ use crate::deserialize::DeserializeError;
 use crate::modeled_error::HttpModeledError;
 use crate::protocol::rest_xml::RestXml;
 use crate::response::IntoResponse;
-use crate::schema::protocol::request::{accept_matches_output, deserialize_rest_request};
+use crate::schema::protocol::request::{deserialize_rest_request, rest_request_deserializer};
 use crate::schema::protocol::response::{
     log_serialize_failure, serialize_modeled_error_response, serialize_operation_response, stamp_error_extension,
     AsSerializable, ResponseBindingMode,
 };
 
-use super::{ServerEventStreamProtocol, ServerProtocol};
+use super::{StaticEventStreamProtocol, StaticProtocol};
 
 // ============================================================================
 // restXml
 // ============================================================================
 
-impl ServerProtocol for RestXml {
+impl StaticProtocol for RestXml {
     type Codec = XmlCodec;
     type RequestRejection = crate::protocol::rest_xml::rejection::RequestRejection;
 
@@ -37,20 +37,22 @@ impl ServerProtocol for RestXml {
 
     fn with_request_deserializer<R>(
         schema: &Schema<'_>,
-        output_schema: &Schema<'_>,
         parts: &http::request::Parts,
         body: &[u8],
         f: impl FnOnce(&mut dyn ShapeDeserializer) -> Result<R, DeserializeError>,
     ) -> Result<R, Self::RequestRejection> {
-        if !accept_matches_output(
-            &parts.headers,
-            output_schema,
-            "application/xml",
-            <Self as ServerEventStreamProtocol>::EVENT_STREAM_HTTP_CONTENT_TYPE,
-        ) {
-            return Err(Self::RequestRejection::NotAcceptable);
-        }
         deserialize_rest_request(Self::codec(), "application/xml", true, schema, parts, body, f)
+    }
+
+    fn request_deserializer<'a>(
+        schema: &Schema<'_>,
+        request: &'a http::Request<bytes::Bytes>,
+    ) -> Result<Box<dyn ShapeDeserializer + 'a>, Self::RequestRejection> {
+        rest_request_deserializer(Self::codec(), "application/xml", true, schema, request)
+    }
+
+    fn request_rejection_into_response(rejection: Self::RequestRejection) -> http::Response<BoxBody> {
+        IntoResponse::<RestXml>::into_response(crate::protocol::rest_xml::runtime_error::RuntimeError::from(rejection))
     }
 
     fn serialize_response(schema: &Schema<'_>, output: &dyn SerializableStruct) -> http::Response<BoxBody> {
@@ -86,7 +88,7 @@ impl ServerProtocol for RestXml {
             Self::codec(),
             schema,
             &AsSerializable(error),
-            error.status_code(),
+            HttpModeledError::status_code(error),
             ResponseBindingMode::Rest,
             "application/xml",
         );
@@ -102,7 +104,7 @@ impl ServerProtocol for RestXml {
     }
 }
 
-impl ServerEventStreamProtocol for RestXml {
+impl StaticEventStreamProtocol for RestXml {
     const EVENT_PAYLOAD_CONTENT_TYPE: &'static str = "application/xml";
     const EVENT_STREAM_HTTP_CONTENT_TYPE: &'static str = "application/vnd.amazon.eventstream";
     const FRAMES_INITIAL_MESSAGES: bool = false;

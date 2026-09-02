@@ -15,8 +15,9 @@
 //!   structure. It supplies the shape's [`Schema`] (absent from
 //!   `aws-smithy-schema`'s [`SerializableStruct`]).
 //! - [`HttpModeledError`]: HTTP extension adding [`status_code`](HttpModeledError::status_code).
-//!   This is the bound accepted by
-//!   [`ServerProtocol::serialize_error`](crate::schema::protocol::ServerProtocol::serialize_error).
+//! - [`HttpServerError`]: the erased server-protocol error seam. Modeled
+//!   errors automatically implement it; non-modeled framework errors implement
+//!   it directly.
 //!
 //! Generated code implements both for every `@error` structure (service,
 //! framework, and middleware models alike), returning the shape's
@@ -30,6 +31,8 @@
 //! under current codegen every event-stream error is *also* hoisted into the
 //! operation error enum, so in practice the `ModeledError`-only bucket is
 //! empty today.)
+
+use std::any::Any;
 
 use aws_smithy_schema::serde::SerializableStruct;
 use aws_smithy_schema::Schema;
@@ -45,8 +48,7 @@ pub trait ModeledError: SerializableStruct {
     fn schema(&self) -> &Schema<'_>;
 }
 
-/// HTTP extension of [`ModeledError`]; the bound accepted by
-/// `aws-smithy-http-server`'s error serialization seam.
+/// HTTP extension of [`ModeledError`].
 ///
 /// The `Debug + Display + Send + Sync` supertraits exist because boxed
 /// values of this trait travel through
@@ -56,7 +58,7 @@ pub trait ModeledError: SerializableStruct {
 /// `crate::Error` (`Send + Sync`). `Display` is free for generated `@error`
 /// shapes — they implement `std::error::Error` — and generated error shapes
 /// are plain data, so `Send + Sync` hold structurally.
-pub trait HttpModeledError: ModeledError + std::fmt::Debug + std::fmt::Display + Send + Sync {
+pub trait HttpModeledError: ModeledError + HttpServerError {
     /// The HTTP status code for this error.
     ///
     /// Generated implementations bake a literal resolved at codegen time:
@@ -65,14 +67,51 @@ pub trait HttpModeledError: ModeledError + std::fmt::Debug + std::fmt::Display +
     fn status_code(&self) -> u16;
 }
 
+/// Something an HTTP server protocol knows how to put on the wire.
+///
+/// Modeled Smithy errors are exposed through [`as_modeled_error`]. Framework
+/// errors that are not Smithy shapes implement this trait directly and may be
+/// downcast by protocols for backward-compatible wire behavior.
+///
+/// [`as_modeled_error`]: HttpServerError::as_modeled_error
+pub trait HttpServerError: std::error::Error + Send + Sync + 'static {
+    /// HTTP status code for this server error.
+    fn status_code(&self) -> u16;
+
+    /// Returns this value as a Smithy modeled error when applicable.
+    fn as_modeled_error(&self) -> Option<&dyn HttpModeledError> {
+        None
+    }
+
+    /// Type-erased access for protocol-specific framework errors.
+    fn as_any(&self) -> &dyn Any;
+}
+
+impl<T> HttpServerError for T
+where
+    T: HttpModeledError,
+{
+    fn status_code(&self) -> u16 {
+        HttpModeledError::status_code(self)
+    }
+
+    fn as_modeled_error(&self) -> Option<&dyn HttpModeledError> {
+        Some(self)
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 impl<T: ModeledError + ?Sized> ModeledError for Box<T> {
     fn schema(&self) -> &Schema<'_> {
         (**self).schema()
     }
 }
 
-impl<T: HttpModeledError + ?Sized> HttpModeledError for Box<T> {
+impl<T: HttpModeledError> HttpModeledError for Box<T> {
     fn status_code(&self) -> u16 {
-        (**self).status_code()
+        HttpModeledError::status_code(&**self)
     }
 }

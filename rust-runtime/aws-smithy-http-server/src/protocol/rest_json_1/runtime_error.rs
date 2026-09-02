@@ -37,7 +37,7 @@ use crate::modeled_error::HttpModeledError;
 use crate::response::IntoResponse;
 use crate::runtime_error::InternalFailureException;
 use crate::runtime_error::INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE;
-use crate::schema::protocol::ServerProtocol;
+use crate::schema::protocol::StaticProtocol;
 use http::StatusCode;
 
 #[derive(Debug, thiserror::Error)]
@@ -61,7 +61,7 @@ pub enum RuntimeError {
     UnsupportedMediaType,
     /// Operation input contains data that does not adhere to the modeled [constraint traits].
     /// Carries the modeled validation error, serialized once at the protocol
-    /// boundary via `ServerProtocol::serialize_error`.
+    /// boundary via `StaticProtocol::serialize_error`.
     /// [constraint traits]: <https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html>
     #[error("validation failure: operation input contains data that does not adhere to the modeled constraints: {0}")]
     Validation(String),
@@ -93,7 +93,9 @@ impl RuntimeError {
             Self::NotAcceptable => StatusCode::NOT_ACCEPTABLE,
             Self::UnsupportedMediaType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::Validation(_) => StatusCode::BAD_REQUEST,
-            Self::ModeledValidation(err) => StatusCode::from_u16(err.status_code()).unwrap_or(StatusCode::BAD_REQUEST),
+            Self::ModeledValidation(err) => {
+                StatusCode::from_u16(HttpModeledError::status_code(&**err)).unwrap_or(StatusCode::BAD_REQUEST)
+            }
         }
     }
 }

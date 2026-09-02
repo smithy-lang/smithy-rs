@@ -8,9 +8,9 @@ use std::borrow::Cow;
 use aws_smithy_schema::codec::Codec;
 use aws_smithy_schema::serde::ShapeDeserializer;
 use aws_smithy_schema::{Schema, ShapeType};
+use bytes::Bytes;
 
 use crate::deserialize::DeserializeError;
-use crate::protocol::accept_header_classifier;
 use crate::rejection::MissingContentTypeReason;
 use crate::schema::request_bindings::{EmptyStructDeserializer, RestRequestDeserializer};
 
@@ -146,59 +146,21 @@ fn enforce_content_type(
     }
 }
 
-/// The `Content-Type` the operation's response will carry, resolved from the
-/// OUTPUT schema — the value the request's `Accept` header is validated
-/// against (mirroring the legacy `verifyAcceptHeader`, which used the binding
-/// resolver's `responseContentType`):
-///
-/// - `@httpPayload` member: its `@mediaType`, else `application/octet-stream`
-///   for blobs and `text/plain` for strings; codec content type for
-///   struct/union/document payloads.
-/// - otherwise: the codec content type when any member serializes to the
-///   response body; `None` (no Accept check) when none does.
-fn expected_response_content_type<'s>(
-    output_schema: &'s Schema<'s>,
-    codec_content_type: &'static str,
-    event_stream_content_type: &'static str,
-) -> Option<Cow<'s, str>> {
-    // An event-stream output: the response is the frame stream, and the legacy
-    // Accept check validated against the event-stream HTTP content type.
-    let _ = event_stream_content_type;
-    if let Some(payload) = output_schema.members().iter().find(|m| m.http_payload().is_some()) {
-        let media_type = payload.media_type().map(|m| m.value());
-        return match (payload.shape_type(), media_type) {
-            (ShapeType::Blob, Some(media)) => Some(Cow::Borrowed(media)),
-            // A blob payload without `@mediaType` may produce any bytes — every
-            // `Accept` is satisfiable (RestJsonHttpPayloadTraitsWithBlobAcceptsAllAccepts).
-            (ShapeType::Blob, None) => None,
-            (ShapeType::String, Some(media)) => Some(Cow::Borrowed(media)),
-            (ShapeType::String, None) => Some(Cow::Borrowed("text/plain")),
-            _ => Some(Cow::Borrowed(codec_content_type)),
-        };
-    }
-    let has_body_members = output_schema
-        .members()
-        .iter()
-        .any(|m| m.http_header().is_none() && m.http_prefix_headers().is_none() && m.http_response_code().is_none());
-    has_body_members.then_some(Cow::Borrowed(codec_content_type))
-}
-
-/// Validates the request `Accept` header against the response content type
-/// resolved from the OUTPUT schema. Returns `false` when the request's
-/// `Accept` cannot be satisfied (→ `NotAcceptable`).
-pub(super) fn accept_matches_output(
-    headers: &http::HeaderMap,
-    output_schema: &Schema<'_>,
-    codec_content_type: &'static str,
-    event_stream_content_type: &'static str,
-) -> bool {
-    match expected_response_content_type(output_schema, codec_content_type, event_stream_content_type) {
-        Some(expected) => match expected.parse::<mime::Mime>() {
-            Ok(mime) => accept_header_classifier(headers, &mime),
-            // An unparseable modeled @mediaType cannot be validated; accept.
-            Err(_) => true,
-        },
-        None => true,
+#[allow(clippy::result_large_err)]
+fn enforce_request_content_type(
+    expected: ExpectedContentType<'_>,
+    request: &http::Request<Bytes>,
+) -> Result<(), MissingContentTypeReason> {
+    match expected {
+        ExpectedContentType::Skip => Ok(()),
+        ExpectedContentType::Absent => check_content_type(request.headers(), None),
+        ExpectedContentType::Expect(content_type) => {
+            if request.body().is_empty() {
+                Ok(())
+            } else {
+                check_content_type(request.headers(), Some(content_type.as_ref()))
+            }
+        }
     }
 }
 
@@ -222,6 +184,24 @@ where
     enforce_content_type(expected, parts, body).map_err(R::from)?;
     let mut deserializer = RestRequestDeserializer::new(codec, parts, body);
     f(&mut deserializer).map_err(R::from)
+}
+
+/// The shared REST request path for dynamic dispatch: content-type validation,
+/// then a boxed composite binding deserializer.
+pub(super) fn rest_request_deserializer<'a, C, R>(
+    codec: &'static C,
+    codec_content_type: &'static str,
+    check_absent_when_no_input: bool,
+    schema: &Schema<'_>,
+    request: &'a http::Request<Bytes>,
+) -> Result<Box<dyn ShapeDeserializer + 'a>, R>
+where
+    C: Codec,
+    R: From<MissingContentTypeReason>,
+{
+    let expected = expected_request_content_type(schema, codec_content_type, check_absent_when_no_input);
+    enforce_request_content_type(expected, request).map_err(R::from)?;
+    Ok(Box::new(RestRequestDeserializer::from_request(codec, request)))
 }
 
 /// The shared RPC request path: content-type validation (non-empty bodies
@@ -256,5 +236,25 @@ where
         f(&mut deserializer).map_err(R::from)
     } else {
         f(&mut EmptyStructDeserializer).map_err(R::from)
+    }
+}
+
+/// The shared RPC request path for dynamic dispatch: content-type validation,
+/// then a boxed body deserializer.
+pub(super) fn rpc_request_deserializer<'a, C, R>(
+    codec: &'static C,
+    codec_content_type: &'static str,
+    schema: &Schema<'_>,
+    request: &'a http::Request<Bytes>,
+) -> Result<Box<dyn ShapeDeserializer + 'a>, R>
+where
+    C: Codec,
+    R: From<MissingContentTypeReason>,
+{
+    if !request.body().is_empty() && !schema.members().is_empty() {
+        check_content_type(request.headers(), Some(codec_content_type)).map_err(R::from)?;
+        Ok(Box::new(codec.create_deserializer(request.body().as_ref())))
+    } else {
+        Ok(Box::new(EmptyStructDeserializer))
     }
 }

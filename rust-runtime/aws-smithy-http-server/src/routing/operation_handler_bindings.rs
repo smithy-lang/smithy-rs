@@ -40,8 +40,8 @@ pub enum BuildError {
         expected: &'static str,
     },
     /// Multiple protocol routing tables were registered for the same protocol.
-    #[error("multiple protocol routing tables registered for `{protocol}`")]
-    DuplicateProtocolRoutingTable {
+    #[error("multiple server protocols registered for `{protocol}`")]
+    DuplicateServerProtocol {
         /// Duplicated Smithy protocol shape ID.
         protocol: String,
     },

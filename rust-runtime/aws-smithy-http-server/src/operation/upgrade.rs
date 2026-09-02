@@ -17,11 +17,18 @@ use tower::{util::Oneshot, Service, ServiceExt};
 use tracing::error;
 
 use crate::{
-    body::BoxBody, plugin::Plugin, request::FromRequest, response::IntoResponse,
-    runtime_error::InternalFailureException, service::ServiceShape,
+    body::BoxBody,
+    deserialize::{DeserializableShape, DeserializeError, RequestDeserializationError},
+    error::BoxError,
+    plugin::Plugin,
+    request::{FromParts, FromRequest},
+    response::IntoResponse,
+    routing::SelectedProtocolContext,
+    runtime_error::InternalFailureException,
+    service::ServiceShape,
 };
 
-use super::OperationShape;
+use super::{DynOutput, IntoDynProtocolResponse, OperationShape, SchemaOperationShape};
 
 /// A [`Plugin`] responsible for taking an operation [`Service`], accepting and returning Smithy
 /// types and converting it into a [`Service`] taking and returning [`http`] types.
@@ -30,6 +37,147 @@ use super::OperationShape;
 #[derive(Debug, Clone)]
 pub struct UpgradePlugin<Extractors> {
     _extractors: PhantomData<Extractors>,
+}
+
+/// Marker used for protocol-agnostic [`FromParts`] extraction in
+/// [`DynUpgrade`].
+pub struct DynProtocol;
+
+/// Dynamic schema upgrade plugin.
+#[derive(Debug, Clone)]
+pub struct DynUpgradePlugin<Extractors> {
+    request_body_max_bytes: usize,
+    _extractors: PhantomData<Extractors>,
+}
+
+impl<Extractors> DynUpgradePlugin<Extractors> {
+    /// Creates a dynamic upgrade plugin with the given non-streaming request
+    /// body byte limit. `0` disables the limit.
+    pub fn new(request_body_max_bytes: usize) -> Self {
+        Self {
+            request_body_max_bytes,
+            _extractors: PhantomData,
+        }
+    }
+}
+
+impl<Ser, Op, T, Extractors> Plugin<Ser, Op, T> for DynUpgradePlugin<Extractors>
+where
+    Ser: ServiceShape,
+    Op: SchemaOperationShape,
+{
+    type Output = DynUpgrade<Op, Extractors, T>;
+
+    fn apply(&self, inner: T) -> Self::Output {
+        DynUpgrade {
+            request_body_max_bytes: self.request_body_max_bytes,
+            _operation: PhantomData,
+            _extractors: PhantomData,
+            inner,
+        }
+    }
+}
+
+/// Dynamic schema upgrade service.
+pub struct DynUpgrade<Op, Extractors, S> {
+    request_body_max_bytes: usize,
+    _operation: PhantomData<Op>,
+    _extractors: PhantomData<Extractors>,
+    inner: S,
+}
+
+impl<Op, Extractors, S> Clone for DynUpgrade<Op, Extractors, S>
+where
+    S: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            request_body_max_bytes: self.request_body_max_bytes,
+            _operation: PhantomData,
+            _extractors: PhantomData,
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+impl<Op, Extractors, B, S> Service<http::Request<B>> for DynUpgrade<Op, Extractors, S>
+where
+    Op: SchemaOperationShape,
+    Op::Input: DeserializableShape + Send + 'static,
+    Op::Output: DynOutput + Send + 'static,
+    Op::Error: IntoDynProtocolResponse + Send + 'static,
+    Extractors: FromParts<DynProtocol> + Send + 'static,
+    <Extractors as FromParts<DynProtocol>>::Rejection: std::fmt::Display,
+    S: Service<(Op::Input, Extractors), Response = Op::Output, Error = Op::Error> + Clone + Send + 'static,
+    S::Future: Send + 'static,
+    B: crate::body::HttpBody<Data = bytes::Bytes> + Send + 'static,
+    B::Error: Into<BoxError> + std::fmt::Display + Send + 'static,
+{
+    type Response = http::Response<BoxBody>;
+    type Error = Infallible;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: http::Request<B>) -> Self::Future {
+        let clone = self.inner.clone();
+        let service = std::mem::replace(&mut self.inner, clone);
+        let request_body_max_bytes = self.request_body_max_bytes;
+
+        Box::pin(async move {
+            let (mut parts, body) = req.into_parts();
+            let Some(selected) = parts.extensions.get::<SelectedProtocolContext>().cloned() else {
+                tracing::error!("selected protocol context missing from request extensions");
+                return Ok(internal_server_error());
+            };
+            let protocol = selected.server_protocol().clone();
+            let extractors = match Extractors::from_parts(&mut parts) {
+                Ok(extractors) => extractors,
+                Err(err) => {
+                    tracing::error!(error = %err, "additional parameter for the handler function could not be constructed");
+                    return Ok(err.into_response());
+                }
+            };
+            let bytes = match crate::body::collect_body_limited(body, request_body_max_bytes).await {
+                Ok(bytes) => bytes,
+                Err(err) => {
+                    tracing::debug!(error = %err, "failed to collect request body");
+                    let mut response = http::Response::new(crate::body::to_boxed(err.to_string()));
+                    *response.status_mut() = http::StatusCode::BAD_REQUEST;
+                    return Ok(response);
+                }
+            };
+            let request = http::Request::from_parts(parts, bytes);
+            let input = {
+                let mut deserializer = match protocol.deserialize_request(&request, Op::SCHEMA.input()) {
+                    Ok(deserializer) => deserializer,
+                    Err(err) => return Ok(err.into_response()),
+                };
+                match Op::Input::deserialize(&mut *deserializer) {
+                    Ok(input) => input,
+                    Err(DeserializeError::Serde(err)) => {
+                        return Ok(protocol.serialize_error(&RequestDeserializationError::new(err)));
+                    }
+                    Err(DeserializeError::ConstraintViolation(err)) => return Ok(protocol.serialize_error(&*err)),
+                }
+            };
+            let result = service.oneshot((input, extractors)).await;
+            let response = match result {
+                Ok(output) => protocol.serialize_response(output.schema(), &output),
+                Err(error) => error.into_dyn_response(&*protocol),
+            };
+            Ok(response)
+        })
+    }
+}
+
+fn internal_server_error() -> http::Response<BoxBody> {
+    http::Response::builder()
+        .status(http::StatusCode::INTERNAL_SERVER_ERROR)
+        .body(crate::body::empty())
+        .expect("valid internal server error response")
 }
 
 impl<Extractors> Default for UpgradePlugin<Extractors> {

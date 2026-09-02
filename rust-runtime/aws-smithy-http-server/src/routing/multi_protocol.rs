@@ -26,11 +26,12 @@ use crate::{
         operation_handler_bindings::{BuildError, OperationHandlerBinding},
         operation_handler_map::OperationHandlerMap,
         protocol_routing_table::{
-            AwsJsonOperationRoutingTable, ProtocolRoutingOutcome, ProtocolRoutingTable, RequestRouteMetadata,
-            RestOperationRoutingTable, RpcV2CborOperationRoutingTable, SelectedProtocolContext,
+            AwsJsonOperationRoutingTable, AwsJsonServerProtocol, ProtocolRouter, ProtocolRoutingOutcome,
+            RequestRouteMetadata, RestOperationRoutingTable, RestServerProtocol, RpcV2CborOperationRoutingTable,
+            RpcV2CborServerProtocol, SelectedProtocolContext,
         },
     },
-    schema::ServiceSchema,
+    schema::{protocol::SharedServerProtocol, ServiceSchema},
 };
 
 /// Ordering constraint for a protocol routing registration.
@@ -44,18 +45,22 @@ pub enum ProtocolRoutingOrderConstraint {
 
 /// A protocol routing table plus ordering constraints relative to other registered protocols.
 pub struct ProtocolRoutingRegistration {
-    table: Box<dyn ProtocolRoutingTable>,
+    protocol: SharedServerProtocol,
+    router: Box<dyn ProtocolRouter>,
     constraints: Vec<ProtocolRoutingOrderConstraint>,
 }
 
 impl ProtocolRoutingRegistration {
     /// Creates a protocol routing registration.
     pub fn new(
-        table: Box<dyn ProtocolRoutingTable>,
+        protocol: SharedServerProtocol,
+        router: impl ProtocolRouter + 'static,
         constraints: impl Into<Vec<ProtocolRoutingOrderConstraint>>,
     ) -> Self {
+        debug_assert_eq!(protocol.protocol_id(), router.protocol_id());
         Self {
-            table,
+            protocol,
+            router: Box::new(router),
             constraints: constraints.into(),
         }
     }
@@ -64,10 +69,15 @@ impl ProtocolRoutingRegistration {
 impl fmt::Debug for ProtocolRoutingRegistration {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ProtocolRoutingRegistration")
-            .field("protocol_id", &self.table.protocol_id())
+            .field("protocol_id", &self.protocol.protocol_id())
             .field("constraints", &self.constraints)
             .finish()
     }
+}
+
+struct RegisteredProtocolRoute {
+    protocol: SharedServerProtocol,
+    router: Box<dyn ProtocolRouter>,
 }
 
 /// Factory for a protocol routing registration derived from a service schema.
@@ -95,7 +105,7 @@ impl fmt::Debug for ProtocolRoutingFactory {
 
 /// A routing service that selects a protocol table first, then dispatches through one shared operation handler map.
 pub struct MultiProtocolRoutingService<S> {
-    tables: Vec<Box<dyn ProtocolRoutingTable>>,
+    protocols: Vec<RegisteredProtocolRoute>,
     handlers: OperationHandlerMap<S>,
 }
 
@@ -105,20 +115,26 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("MultiProtocolRoutingService")
-            .field("tables_len", &self.tables.len())
+            .field("protocols_len", &self.protocols.len())
             .field("handlers", &self.handlers)
             .finish()
     }
 }
 
 impl<S> MultiProtocolRoutingService<S> {
-    /// Creates a multi-protocol routing service from protocol routing tables and operation handlers.
-    pub fn new<I>(tables: Vec<Box<dyn ProtocolRoutingTable>>, bindings: I) -> Self
+    /// Creates a multi-protocol routing service from protocol objects and operation handlers.
+    pub fn new<I>(protocols: Vec<ProtocolRoutingRegistration>, bindings: I) -> Self
     where
         I: IntoIterator<Item = OperationHandlerBinding<S>>,
     {
         Self {
-            tables,
+            protocols: protocols
+                .into_iter()
+                .map(|registration| RegisteredProtocolRoute {
+                    protocol: registration.protocol,
+                    router: registration.router,
+                })
+                .collect(),
             handlers: OperationHandlerMap::new(bindings),
         }
     }
@@ -131,8 +147,8 @@ impl<S> MultiProtocolRoutingService<S> {
     where
         I: IntoIterator<Item = OperationHandlerBinding<S>>,
     {
-        let tables = sort_protocol_routing_registrations(registrations)?;
-        Ok(Self::new(tables, bindings))
+        let protocols = sort_protocol_routing_registrations(registrations)?;
+        Ok(Self::new(protocols, bindings))
     }
 
     /// Creates a multi-protocol routing service from built-in protocols, additional protocol routing
@@ -161,7 +177,7 @@ impl<S> MultiProtocolRoutingService<S> {
         F: FnMut(S) -> SNew,
     {
         MultiProtocolRoutingService {
-            tables: self.tables,
+            protocols: self.protocols,
             handlers: self.handlers.map(f),
         }
     }
@@ -209,7 +225,8 @@ fn rpc_v2_cbor_routing_registration(
 ) -> Option<ProtocolRoutingRegistration> {
     has_protocol(service_schema, "smithy.protocols#rpcv2Cbor").then(|| {
         ProtocolRoutingRegistration::new(
-            Box::new(RpcV2CborOperationRoutingTable::new(service_schema)),
+            SharedServerProtocol::new(RpcV2CborServerProtocol::new()),
+            RpcV2CborOperationRoutingTable::new(service_schema),
             [ProtocolRoutingOrderConstraint::Before("aws.protocols#awsJson1_1")],
         )
     })
@@ -220,7 +237,8 @@ fn aws_json_11_routing_registration(
 ) -> Option<ProtocolRoutingRegistration> {
     has_protocol(service_schema, "aws.protocols#awsJson1_1").then(|| {
         ProtocolRoutingRegistration::new(
-            Box::new(AwsJsonOperationRoutingTable::new_aws_json_11(service_schema)),
+            SharedServerProtocol::new(AwsJsonServerProtocol::aws_json_11()),
+            AwsJsonOperationRoutingTable::new_aws_json_11(service_schema),
             [ProtocolRoutingOrderConstraint::Before("aws.protocols#awsJson1_0")],
         )
     })
@@ -231,7 +249,8 @@ fn aws_json_10_routing_registration(
 ) -> Option<ProtocolRoutingRegistration> {
     has_protocol(service_schema, "aws.protocols#awsJson1_0").then(|| {
         ProtocolRoutingRegistration::new(
-            Box::new(AwsJsonOperationRoutingTable::new_aws_json_10(service_schema)),
+            SharedServerProtocol::new(AwsJsonServerProtocol::aws_json_10()),
+            AwsJsonOperationRoutingTable::new_aws_json_10(service_schema),
             [ProtocolRoutingOrderConstraint::Before("aws.protocols#restJson1")],
         )
     })
@@ -242,7 +261,8 @@ fn rest_json_1_routing_registration(
 ) -> Option<ProtocolRoutingRegistration> {
     has_protocol(service_schema, "aws.protocols#restJson1").then(|| {
         ProtocolRoutingRegistration::new(
-            Box::new(RestOperationRoutingTable::new_rest_json_1(service_schema)),
+            SharedServerProtocol::new(RestServerProtocol::rest_json_1()),
+            RestOperationRoutingTable::new_rest_json_1(service_schema),
             [ProtocolRoutingOrderConstraint::Before("aws.protocols#restXml")],
         )
     })
@@ -252,19 +272,23 @@ fn rest_xml_routing_registration(
     service_schema: &'static ServiceSchema<'static>,
 ) -> Option<ProtocolRoutingRegistration> {
     has_protocol(service_schema, "aws.protocols#restXml").then(|| {
-        ProtocolRoutingRegistration::new(Box::new(RestOperationRoutingTable::new_rest_xml(service_schema)), [])
+        ProtocolRoutingRegistration::new(
+            SharedServerProtocol::new(RestServerProtocol::rest_xml()),
+            RestOperationRoutingTable::new_rest_xml(service_schema),
+            [],
+        )
     })
 }
 
 fn sort_protocol_routing_registrations(
     registrations: Vec<ProtocolRoutingRegistration>,
-) -> Result<Vec<Box<dyn ProtocolRoutingTable>>, BuildError> {
+) -> Result<Vec<ProtocolRoutingRegistration>, BuildError> {
     let len = registrations.len();
     let mut protocol_ids = Vec::with_capacity(len);
     for registration in &registrations {
-        let protocol_id = registration.table.protocol_id().as_str().to_owned();
+        let protocol_id = registration.protocol.protocol_id().as_str().to_owned();
         if protocol_ids.iter().any(|existing| existing == &protocol_id) {
-            return Err(BuildError::DuplicateProtocolRoutingTable { protocol: protocol_id });
+            return Err(BuildError::DuplicateServerProtocol { protocol: protocol_id });
         }
         protocol_ids.push(protocol_id);
     }
@@ -309,7 +333,7 @@ fn sort_protocol_routing_registrations(
     let mut registrations: Vec<_> = registrations.into_iter().map(Some).collect();
     Ok(ordered_indices
         .into_iter()
-        .map(|index| registrations[index].take().expect("ordered index should exist").table)
+        .map(|index| registrations[index].take().expect("ordered index should exist"))
         .collect())
 }
 
@@ -377,12 +401,12 @@ where
         let metadata = RequestRouteMetadata::from_request(&req);
         let mut fallback = None;
 
-        for table in &self.tables {
-            match table.route(metadata) {
+        for registered in &self.protocols {
+            match registered.router.route(metadata) {
                 ProtocolRoutingOutcome::NoClaim => {}
                 ProtocolRoutingOutcome::OperationMatched(operation_match) => {
                     tracing::debug!(
-                        protocol = %operation_match.context().protocol(),
+                        protocol = %registered.protocol.protocol_id(),
                         operation = %operation_match.operation().shape_id(),
                         "matched multi-protocol route",
                     );
@@ -395,15 +419,18 @@ where
                         );
                     };
                     req.extensions_mut()
-                        .insert::<SelectedProtocolContext>(operation_match.context().clone());
+                        .insert::<SelectedProtocolContext>(SelectedProtocolContext::new(
+                            registered.protocol.clone(),
+                            operation_match.operation(),
+                        ));
                     return MultiProtocolRoutingFuture::from_oneshot(handler.oneshot(req));
                 }
                 ProtocolRoutingOutcome::Rejected(response) => {
-                    tracing::debug!(protocol = %table.protocol_id(), "terminal multi-protocol routing rejection");
+                    tracing::debug!(protocol = %registered.protocol.protocol_id(), "terminal multi-protocol routing rejection");
                     return MultiProtocolRoutingFuture::from_response(response.into_response());
                 }
                 ProtocolRoutingOutcome::RejectedNonExclusive(response) => {
-                    tracing::debug!(protocol = %table.protocol_id(), "candidate multi-protocol routing rejection");
+                    tracing::debug!(protocol = %registered.protocol.protocol_id(), "candidate multi-protocol routing rejection");
                     fallback.get_or_insert(response);
                 }
             }
@@ -439,15 +466,27 @@ mod tests {
     use crate::{
         body::{empty, to_boxed, BoxBody},
         routing::protocol_routing_table::{
-            OperationMatch, ProtocolRoutingOutcome, ProtocolRoutingTable, RequestRouteMetadata,
+            OperationMatch, ProtocolRouter, ProtocolRoutingOutcome, RequestRouteMetadata,
         },
         routing::PrefixPolicy,
-        schema::OperationSchema,
+        schema::{protocol::SharedServerProtocol, OperationSchema},
     };
 
     static UNIT: Schema<'static> = Schema::new(
         ShapeId::from_parts("smithy.api#Unit", "smithy.api", "Unit"),
         ShapeType::Structure,
+    );
+    static OUTPUT_VALUE_MEMBER: Schema<'static> = Schema::new_member(
+        ShapeId::from_parts("test#Output$value", "test", "Output$value"),
+        ShapeType::String,
+        "value",
+        0,
+    );
+    static OUTPUT_MEMBERS: &[&Schema<'static>] = &[&OUTPUT_VALUE_MEMBER];
+    static OUTPUT: Schema<'static> = Schema::new_struct(
+        ShapeId::from_parts("test#Output", "test", "Output"),
+        ShapeType::Structure,
+        OUTPUT_MEMBERS,
     );
     static GET_VALUE_SHAPE: Schema<'static> = Schema::new(
         ShapeId::from_parts("test#GetValue", "test", "GetValue"),
@@ -459,9 +498,9 @@ mod tests {
         ShapeType::Operation,
     )
     .with_http(HttpTrait::new("GET", "/value/{id}?mode=latest", None));
-    static GET_VALUE: OperationSchema<'static> = OperationSchema::new(&GET_VALUE_SHAPE, &UNIT, &UNIT, &[]);
+    static GET_VALUE: OperationSchema<'static> = OperationSchema::new(&GET_VALUE_SHAPE, &UNIT, &OUTPUT, &[]);
     static GET_VALUE_LATEST: OperationSchema<'static> =
-        OperationSchema::new(&GET_VALUE_LATEST_SHAPE, &UNIT, &UNIT, &[]);
+        OperationSchema::new(&GET_VALUE_LATEST_SHAPE, &UNIT, &OUTPUT, &[]);
     static PREFIXED_SHAPE: Schema<'static> = Schema::new(
         ShapeId::from_parts("test#Prefixed", "test", "Prefixed"),
         ShapeType::Operation,
@@ -606,6 +645,56 @@ mod tests {
     }
 
     #[test]
+    fn rest_table_rejects_unacceptable_accept_before_match() {
+        let table = RestOperationRoutingTable::new_rest_json_1(&SERVICE);
+        let request = Request::builder()
+            .method(Method::GET)
+            .uri("/value/abc")
+            .header("accept", "application/xml")
+            .body(())
+            .unwrap();
+
+        match table.route(RequestRouteMetadata::from_request(&request)) {
+            ProtocolRoutingOutcome::RejectedNonExclusive(response) => {
+                assert_eq!(response.into_response().status(), StatusCode::NOT_ACCEPTABLE);
+            }
+            _ => panic!("expected non-exclusive not acceptable rejection"),
+        }
+    }
+
+    #[tokio::test]
+    async fn rest_accept_rejection_allows_later_protocol_to_match() {
+        let protocols = vec![
+            ProtocolRoutingRegistration::new(
+                SharedServerProtocol::new(RestServerProtocol::rest_xml()),
+                RestOperationRoutingTable::new_rest_xml(&SERVICE),
+                [],
+            ),
+            ProtocolRoutingRegistration::new(
+                SharedServerProtocol::new(RestServerProtocol::rest_json_1()),
+                RestOperationRoutingTable::new_rest_json_1(&SERVICE),
+                [],
+            ),
+        ];
+        let mut service = MultiProtocolRoutingService::new(protocols, [binding(&GET_VALUE)]);
+        let request = Request::builder()
+            .method(Method::GET)
+            .uri("/value/abc")
+            .header("accept", "application/json")
+            .body(())
+            .unwrap();
+
+        let response = service.call(request).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = http_body_util::BodyExt::collect(response.into_body())
+            .await
+            .unwrap()
+            .to_bytes();
+        assert_eq!(body, "aws.protocols#restJson1:GetValue".as_bytes());
+    }
+
+    #[test]
     fn aws_json_table_applies_operation_prefix_policy() {
         let table = AwsJsonOperationRoutingTable::new_aws_json_11(&PREFIXED_SERVICE);
         let prefixed = Request::builder()
@@ -657,10 +746,16 @@ mod tests {
         ));
     }
 
+    #[derive(Debug)]
     struct FakeTable {
         protocol: ShapeId<'static>,
         outcome: FakeOutcome,
         called: Arc<AtomicBool>,
+    }
+
+    #[derive(Debug)]
+    struct FakeProtocol {
+        protocol: ShapeId<'static>,
     }
 
     struct FakeRoutingResponse(StatusCode);
@@ -671,6 +766,7 @@ mod tests {
         }
     }
 
+    #[derive(Debug)]
     enum FakeOutcome {
         NoClaim,
         Match(&'static OperationSchema<'static>),
@@ -688,7 +784,7 @@ mod tests {
         }
     }
 
-    impl ProtocolRoutingTable for FakeTable {
+    impl ProtocolRouter for FakeTable {
         fn protocol_id(&self) -> &ShapeId<'static> {
             &self.protocol
         }
@@ -698,7 +794,7 @@ mod tests {
             match self.outcome {
                 FakeOutcome::NoClaim => ProtocolRoutingOutcome::NoClaim,
                 FakeOutcome::Match(operation) => {
-                    ProtocolRoutingOutcome::OperationMatched(OperationMatch::new(self.protocol.clone(), operation))
+                    ProtocolRoutingOutcome::OperationMatched(OperationMatch::new(operation))
                 }
                 FakeOutcome::Rejected(status) => {
                     ProtocolRoutingOutcome::Rejected(Box::new(FakeRoutingResponse(status)))
@@ -710,6 +806,39 @@ mod tests {
         }
     }
 
+    impl crate::schema::protocol::ServerProtocol for FakeProtocol {
+        fn protocol_id(&self) -> &ShapeId<'static> {
+            &self.protocol
+        }
+
+        fn codec(&self) -> &dyn aws_smithy_schema::codec::DynCodec {
+            panic!("fake protocol does not deserialize requests")
+        }
+
+        fn deserialize_request<'a>(
+            &self,
+            _request: &'a http::Request<bytes::Bytes>,
+            _input_schema: &Schema<'_>,
+        ) -> Result<
+            Box<dyn aws_smithy_schema::serde::ShapeDeserializer + 'a>,
+            crate::schema::protocol::DynRequestRejection,
+        > {
+            panic!("fake protocol does not deserialize requests")
+        }
+
+        fn serialize_response(
+            &self,
+            _schema: &Schema<'_>,
+            _output: &dyn aws_smithy_schema::serde::SerializableStruct,
+        ) -> http::Response<BoxBody> {
+            panic!("fake protocol does not serialize responses")
+        }
+
+        fn serialize_error(&self, _error: &dyn crate::modeled_error::HttpServerError) -> http::Response<BoxBody> {
+            panic!("fake protocol does not serialize errors")
+        }
+    }
+
     fn protocol_id(name: &'static str) -> ShapeId<'static> {
         ShapeId::from_parts(name, "test", name.strip_prefix("test#").unwrap_or(name))
     }
@@ -718,12 +847,25 @@ mod tests {
         protocol: ShapeId<'static>,
         constraints: impl Into<Vec<ProtocolRoutingOrderConstraint>>,
     ) -> ProtocolRoutingRegistration {
+        registration_with_outcome(
+            protocol,
+            FakeOutcome::Match(&GET_VALUE),
+            Arc::new(AtomicBool::new(false)),
+            constraints,
+        )
+    }
+
+    fn registration_with_outcome(
+        protocol: ShapeId<'static>,
+        outcome: FakeOutcome,
+        called: Arc<AtomicBool>,
+        constraints: impl Into<Vec<ProtocolRoutingOrderConstraint>>,
+    ) -> ProtocolRoutingRegistration {
         ProtocolRoutingRegistration::new(
-            Box::new(FakeTable::new(
-                protocol,
-                FakeOutcome::Match(&GET_VALUE),
-                Arc::new(AtomicBool::new(false)),
-            )),
+            SharedServerProtocol::new(FakeProtocol {
+                protocol: protocol.clone(),
+            }),
+            FakeTable::new(protocol, outcome, called),
             constraints,
         )
     }
@@ -732,7 +874,7 @@ mod tests {
         sort_protocol_routing_registrations(registrations)
             .unwrap()
             .into_iter()
-            .map(|table| table.protocol_id().as_str().to_owned())
+            .map(|registration| registration.protocol.protocol_id().as_str().to_owned())
             .collect()
     }
 
@@ -779,7 +921,7 @@ mod tests {
 
         assert!(matches!(
             error,
-            BuildError::DuplicateProtocolRoutingTable { protocol } if protocol == "test#first"
+            BuildError::DuplicateServerProtocol { protocol } if protocol == "test#first"
         ));
     }
 
@@ -861,19 +1003,21 @@ mod tests {
     async fn terminal_rejection_stops_later_protocols() {
         let first_called = Arc::new(AtomicBool::new(false));
         let second_called = Arc::new(AtomicBool::new(false));
-        let tables: Vec<Box<dyn ProtocolRoutingTable>> = vec![
-            Box::new(FakeTable::new(
+        let protocols = vec![
+            registration_with_outcome(
                 ShapeId::from_parts("test#first", "test", "first"),
                 FakeOutcome::Rejected(StatusCode::BAD_REQUEST),
                 first_called.clone(),
-            )),
-            Box::new(FakeTable::new(
+                [],
+            ),
+            registration_with_outcome(
                 ShapeId::from_parts("test#second", "test", "second"),
                 FakeOutcome::Match(&GET_VALUE),
                 second_called.clone(),
-            )),
+                [],
+            ),
         ];
-        let mut service = MultiProtocolRoutingService::new(tables, [binding(&GET_VALUE)]);
+        let mut service = MultiProtocolRoutingService::new(protocols, [binding(&GET_VALUE)]);
 
         let response = service.call(Request::new(())).await.unwrap();
 
@@ -884,19 +1028,21 @@ mod tests {
 
     #[tokio::test]
     async fn non_exclusive_rejection_allows_later_protocol_match() {
-        let tables: Vec<Box<dyn ProtocolRoutingTable>> = vec![
-            Box::new(FakeTable::new(
+        let protocols = vec![
+            registration_with_outcome(
                 ShapeId::from_parts("test#first", "test", "first"),
                 FakeOutcome::RejectedNonExclusive(StatusCode::METHOD_NOT_ALLOWED),
                 Arc::new(AtomicBool::new(false)),
-            )),
-            Box::new(FakeTable::new(
+                [],
+            ),
+            registration_with_outcome(
                 ShapeId::from_parts("internal.example#customProtocol", "internal.example", "customProtocol"),
                 FakeOutcome::Match(&GET_VALUE),
                 Arc::new(AtomicBool::new(false)),
-            )),
+                [],
+            ),
         ];
-        let mut service = MultiProtocolRoutingService::new(tables, [binding(&GET_VALUE)]);
+        let mut service = MultiProtocolRoutingService::new(protocols, [binding(&GET_VALUE)]);
 
         let response = service.call(Request::new(())).await.unwrap();
         let body = http_body_util::BodyExt::collect(response.into_body())
@@ -909,19 +1055,21 @@ mod tests {
 
     #[tokio::test]
     async fn non_exclusive_rejection_is_used_when_no_later_protocol_matches() {
-        let tables: Vec<Box<dyn ProtocolRoutingTable>> = vec![
-            Box::new(FakeTable::new(
+        let protocols = vec![
+            registration_with_outcome(
                 ShapeId::from_parts("test#first", "test", "first"),
                 FakeOutcome::RejectedNonExclusive(StatusCode::METHOD_NOT_ALLOWED),
                 Arc::new(AtomicBool::new(false)),
-            )),
-            Box::new(FakeTable::new(
+                [],
+            ),
+            registration_with_outcome(
                 ShapeId::from_parts("test#second", "test", "second"),
                 FakeOutcome::NoClaim,
                 Arc::new(AtomicBool::new(false)),
-            )),
+                [],
+            ),
         ];
-        let mut service = MultiProtocolRoutingService::new(tables, [binding(&GET_VALUE)]);
+        let mut service = MultiProtocolRoutingService::new(protocols, [binding(&GET_VALUE)]);
 
         let response = service.call(Request::new(())).await.unwrap();
 
@@ -931,15 +1079,20 @@ mod tests {
     #[tokio::test]
     async fn aws_json_unknown_operation_is_terminal() {
         let later_called = Arc::new(AtomicBool::new(false));
-        let tables: Vec<Box<dyn ProtocolRoutingTable>> = vec![
-            Box::new(AwsJsonOperationRoutingTable::new_aws_json_11(&SERVICE)),
-            Box::new(FakeTable::new(
+        let protocols = vec![
+            ProtocolRoutingRegistration::new(
+                SharedServerProtocol::new(AwsJsonServerProtocol::aws_json_11()),
+                AwsJsonOperationRoutingTable::new_aws_json_11(&SERVICE),
+                [],
+            ),
+            registration_with_outcome(
                 ShapeId::from_parts("test#later", "test", "later"),
                 FakeOutcome::Match(&GET_VALUE),
                 later_called.clone(),
-            )),
+                [],
+            ),
         ];
-        let mut service = MultiProtocolRoutingService::new(tables, [binding(&GET_VALUE)]);
+        let mut service = MultiProtocolRoutingService::new(protocols, [binding(&GET_VALUE)]);
         let request = Request::builder()
             .method(Method::POST)
             .uri("/")
@@ -959,10 +1112,8 @@ mod tests {
 
     #[test]
     fn selected_protocol_context_is_shape_id_based() {
-        let context = SelectedProtocolContext::new(
-            ShapeId::from_parts("aws.protocols#restJson1", "aws.protocols", "restJson1"),
-            &GET_VALUE,
-        );
+        let context =
+            SelectedProtocolContext::new(SharedServerProtocol::new(RestServerProtocol::rest_json_1()), &GET_VALUE);
 
         assert_eq!(context.protocol().as_str(), "aws.protocols#restJson1");
         assert_eq!(context.operation().shape_id().as_str(), "test#GetValue");
@@ -983,10 +1134,6 @@ mod tests {
 
         match table.route(RequestRouteMetadata::from_request(&request)) {
             ProtocolRoutingOutcome::OperationMatched(operation_match) => {
-                assert_eq!(
-                    operation_match.context().protocol().as_str(),
-                    "aws.protocols#awsJson1_1"
-                );
                 assert_eq!(operation_match.operation().shape_id().as_str(), "test#GetValue");
             }
             _ => panic!("expected AWS JSON operation match"),

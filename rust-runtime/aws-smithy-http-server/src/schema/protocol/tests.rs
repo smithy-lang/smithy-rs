@@ -136,7 +136,7 @@ fn request_paths() {
 
     // REST: label + query + body member route through the composite.
     let p = parts("/pets/rex?age=7", &[("content-type", "application/json")]);
-    let input: TestInput = RestJson1::deserialize_request(&IN_SCHEMA, &IN_SCHEMA, &p, br#"{"note":"hi"}"#).unwrap();
+    let input: TestInput = RestJson1::deserialize_request(&IN_SCHEMA, &p, br#"{"note":"hi"}"#).unwrap();
     assert_eq!(
         input,
         TestInput {
@@ -146,25 +146,17 @@ fn request_paths() {
         }
     );
 
-    // Wrong content type (non-empty body) and bad Accept are rejected.
+    // Wrong content type (non-empty body) is rejected.
     let p = parts("/pets/rex", &[("content-type", "text/xml")]);
     assert!(matches!(
-        RestJson1::deserialize_request::<TestInput>(&IN_SCHEMA, &IN_SCHEMA, &p, b"{}").unwrap_err(),
+        RestJson1::deserialize_request::<TestInput>(&IN_SCHEMA, &p, b"{}").unwrap_err(),
         RequestRejection::MissingContentType(_)
-    ));
-    let p = parts(
-        "/pets/rex",
-        &[("content-type", "application/json"), ("accept", "text/xml")],
-    );
-    assert!(matches!(
-        RestJson1::deserialize_request::<TestInput>(&IN_SCHEMA, &IN_SCHEMA, &p, b"{}").unwrap_err(),
-        RequestRejection::NotAcceptable
     ));
 
     // The legacy `if !bytes.is_empty()` gate: no content type required
     // when no body was sent, even though body members are modeled.
     let p = parts("/pets/rex", &[]);
-    let input: TestInput = RestJson1::deserialize_request(&IN_SCHEMA, &IN_SCHEMA, &p, b"").unwrap();
+    let input: TestInput = RestJson1::deserialize_request(&IN_SCHEMA, &p, b"").unwrap();
     assert_eq!(input.name.as_deref(), Some("rex"));
     assert_eq!(input.note, None);
 
@@ -172,11 +164,11 @@ fn request_paths() {
     // present when the operation has no modeled input.
     let p = parts("/empty", &[("content-type", "application/json")]);
     assert!(matches!(
-        RestJson1::deserialize_request::<EmptyInput>(&EMPTY_IN_SCHEMA, &EMPTY_IN_SCHEMA, &p, b"").unwrap_err(),
+        RestJson1::deserialize_request::<EmptyInput>(&EMPTY_IN_SCHEMA, &p, b"").unwrap_err(),
         RequestRejection::MissingContentType(_)
     ));
     let p = parts("/empty", &[]);
-    RestJson1::deserialize_request::<EmptyInput>(&EMPTY_IN_SCHEMA, &EMPTY_IN_SCHEMA, &p, b"").unwrap();
+    RestJson1::deserialize_request::<EmptyInput>(&EMPTY_IN_SCHEMA, &p, b"").unwrap();
 
     // RPC: body round-trips through the protocol's own codec.
     use aws_smithy_schema::codec::FinishSerializer;
@@ -186,16 +178,16 @@ fn request_paths() {
             s.write_string(&RPC_NOTE_MEMBER, "hi")
         }
     }
-    let mut serializer = <RpcV2Cbor as ServerProtocol>::codec().create_serializer();
+    let mut serializer = aws_smithy_schema::codec::Codec::create_serializer(<RpcV2Cbor as StaticProtocol>::codec());
     serializer.write_struct(&RPC_IN_SCHEMA, &Body).unwrap();
     let body = serializer.finish();
     let p = parts("/service/Op", &[("content-type", "application/cbor")]);
-    let input: RpcTestInput = RpcV2Cbor::deserialize_request(&RPC_IN_SCHEMA, &RPC_IN_SCHEMA, &p, &body).unwrap();
+    let input: RpcTestInput = RpcV2Cbor::deserialize_request(&RPC_IN_SCHEMA, &p, &body).unwrap();
     assert_eq!(input.0.note.as_deref(), Some("hi"));
 
     // RPC empty body: members stay unset (`build()` owns @required).
     let p = parts("/service/Op", &[("content-type", "application/x-amz-json-1.0")]);
-    let input: RpcTestInput = AwsJson1_0::deserialize_request(&RPC_IN_SCHEMA, &RPC_IN_SCHEMA, &p, b"").unwrap();
+    let input: RpcTestInput = AwsJson1_0::deserialize_request(&RPC_IN_SCHEMA, &p, b"").unwrap();
     assert_eq!(input.0, TestInput::default());
 }
 
@@ -273,6 +265,8 @@ impl std::fmt::Display for Boom {
         f.write_str("boom happened")
     }
 }
+
+impl std::error::Error for Boom {}
 
 impl SerializableStruct for Boom {
     fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {

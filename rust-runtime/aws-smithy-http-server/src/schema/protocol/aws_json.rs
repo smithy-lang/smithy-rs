@@ -16,18 +16,13 @@ use crate::protocol::aws_json_10::AwsJson1_0;
 use crate::protocol::aws_json_11::AwsJson1_1;
 use crate::response::IntoResponse;
 use crate::schema::protocol::discriminator::{full_shape_id, shape_name_only, WithTypeLast};
-use crate::schema::protocol::request::deserialize_rpc_request;
+use crate::schema::protocol::request::{deserialize_rpc_request, rpc_request_deserializer};
 use crate::schema::protocol::response::{
     log_serialize_failure, serialize_modeled_error_response, serialize_operation_response, stamp_error_extension,
     AsSerializable, ResponseBindingMode,
 };
 
-use super::{ServerEventStreamProtocol, ServerProtocol};
-
-static AMZ_JSON_10_MIME: LazyLock<mime::Mime> =
-    LazyLock::new(|| "application/x-amz-json-1.0".parse().expect("valid mime"));
-static AMZ_JSON_11_MIME: LazyLock<mime::Mime> =
-    LazyLock::new(|| "application/x-amz-json-1.1".parse().expect("valid mime"));
+use super::{StaticEventStreamProtocol, StaticProtocol};
 
 // ============================================================================
 // awsJson 1.0 / 1.1
@@ -48,8 +43,8 @@ fn aws_json_codec() -> &'static JsonCodec {
 }
 
 macro_rules! aws_json_impl {
-    ($marker:ty, $content_type:literal, $mime:ident, $type_value:ident) => {
-        impl ServerProtocol for $marker {
+    ($marker:ty, $content_type:literal, $type_value:ident) => {
+        impl StaticProtocol for $marker {
             type Codec = JsonCodec;
             type RequestRejection = crate::protocol::aws_json::rejection::RequestRejection;
 
@@ -59,15 +54,24 @@ macro_rules! aws_json_impl {
 
             fn with_request_deserializer<R>(
                 schema: &Schema<'_>,
-                _output_schema: &Schema<'_>,
                 parts: &http::request::Parts,
                 body: &[u8],
                 f: impl FnOnce(&mut dyn ShapeDeserializer) -> Result<R, DeserializeError>,
             ) -> Result<R, Self::RequestRejection> {
-                if !crate::protocol::accept_header_classifier(&parts.headers, &$mime) {
-                    return Err(Self::RequestRejection::NotAcceptable);
-                }
                 deserialize_rpc_request(Self::codec(), $content_type, schema, parts, body, f)
+            }
+
+            fn request_deserializer<'a>(
+                schema: &Schema<'_>,
+                request: &'a http::Request<bytes::Bytes>,
+            ) -> Result<Box<dyn ShapeDeserializer + 'a>, Self::RequestRejection> {
+                rpc_request_deserializer(Self::codec(), $content_type, schema, request)
+            }
+
+            fn request_rejection_into_response(rejection: Self::RequestRejection) -> http::Response<BoxBody> {
+                IntoResponse::<$marker>::into_response(crate::protocol::aws_json::runtime_error::RuntimeError::from(
+                    rejection,
+                ))
             }
 
             fn serialize_response(schema: &Schema<'_>, output: &dyn SerializableStruct) -> http::Response<BoxBody> {
@@ -103,7 +107,7 @@ macro_rules! aws_json_impl {
                     Self::codec(),
                     schema,
                     &wrapper,
-                    error.status_code(),
+                    HttpModeledError::status_code(error),
                     ResponseBindingMode::BodyOnly,
                     $content_type,
                 );
@@ -123,26 +127,16 @@ macro_rules! aws_json_impl {
     };
 }
 
-aws_json_impl!(
-    AwsJson1_0,
-    "application/x-amz-json-1.0",
-    AMZ_JSON_10_MIME,
-    full_shape_id
-);
-aws_json_impl!(
-    AwsJson1_1,
-    "application/x-amz-json-1.1",
-    AMZ_JSON_11_MIME,
-    shape_name_only
-);
+aws_json_impl!(AwsJson1_0, "application/x-amz-json-1.0", full_shape_id);
+aws_json_impl!(AwsJson1_1, "application/x-amz-json-1.1", shape_name_only);
 
-impl ServerEventStreamProtocol for AwsJson1_0 {
+impl StaticEventStreamProtocol for AwsJson1_0 {
     const EVENT_PAYLOAD_CONTENT_TYPE: &'static str = "application/json";
     const EVENT_STREAM_HTTP_CONTENT_TYPE: &'static str = "application/x-amz-json-1.0";
     const FRAMES_INITIAL_MESSAGES: bool = true;
 }
 
-impl ServerEventStreamProtocol for AwsJson1_1 {
+impl StaticEventStreamProtocol for AwsJson1_1 {
     const EVENT_PAYLOAD_CONTENT_TYPE: &'static str = "application/json";
     const EVENT_STREAM_HTTP_CONTENT_TYPE: &'static str = "application/x-amz-json-1.1";
     const FRAMES_INITIAL_MESSAGES: bool = true;

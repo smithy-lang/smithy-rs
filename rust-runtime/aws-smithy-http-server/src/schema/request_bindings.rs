@@ -907,18 +907,33 @@ impl ShapeDeserializer for EmptyStructDeserializer {
 /// unbound members to the codec body deserializer.
 pub(crate) struct RestRequestDeserializer<'a, C> {
     codec: &'a C,
-    parts: &'a http::request::Parts,
+    headers: &'a http::HeaderMap,
+    uri: &'a http::Uri,
     body: &'a [u8],
 }
 
 impl<'a, C: Codec> RestRequestDeserializer<'a, C> {
     pub(crate) fn new(codec: &'a C, parts: &'a http::request::Parts, body: &'a [u8]) -> Self {
-        Self { codec, parts, body }
+        Self {
+            codec,
+            headers: &parts.headers,
+            uri: &parts.uri,
+            body,
+        }
+    }
+
+    pub(crate) fn from_request(codec: &'a C, request: &'a http::Request<bytes::Bytes>) -> Self {
+        Self {
+            codec,
+            headers: request.headers(),
+            uri: request.uri(),
+            body: request.body().as_ref(),
+        }
     }
 
     fn header_values(&self, name: &str) -> Result<Vec<&'a str>, SerdeError> {
         let mut values = Vec::new();
-        for value in self.parts.headers.get_all(name) {
+        for value in self.headers.get_all(name) {
             values.push(
                 value
                     .to_str()
@@ -942,7 +957,7 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
                 .http()
                 .map(|h| h.uri())
                 .ok_or_else(|| SerdeError::invalid_input("input schema has @httpLabel members but no @http trait"))?;
-            extract_labels(template, self.parts.uri.path())?
+            extract_labels(template, self.uri.path())?
         } else {
             Vec::new()
         };
@@ -951,7 +966,7 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
             .iter()
             .any(|m| m.http_query().is_some() || m.http_query_params().is_some());
         let query_pairs: Vec<(String, String)> = if needs_query {
-            parse_query_pairs(self.parts.uri.query())?
+            parse_query_pairs(self.uri.query())?
         } else {
             Vec::new()
         };
@@ -999,7 +1014,7 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
                 }
             } else if let Some(prefix) = member.http_prefix_headers() {
                 let prefix = prefix.value();
-                let names: Vec<&str> = self.parts.headers.keys().map(|n| n.as_str()).collect();
+                let names: Vec<&str> = self.headers.keys().map(|n| n.as_str()).collect();
                 let mut entries: Vec<(String, Vec<String>)> = Vec::new();
                 for (suffix, full_name) in aws_smithy_http::header::headers_for_prefix(names.into_iter(), prefix) {
                     let values: Vec<String> = self

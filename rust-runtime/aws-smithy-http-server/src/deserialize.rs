@@ -26,9 +26,11 @@
 //!   serialized ONCE, at the protocol boundary, via
 //!   `ServerProtocol::serialize_error`.
 
+use std::any::Any;
+
 use aws_smithy_schema::serde::{SerdeError, ShapeDeserializer};
 
-use crate::modeled_error::HttpModeledError;
+use crate::modeled_error::{HttpModeledError, HttpServerError};
 
 /// Error type returned by [`DeserializableShape::deserialize`].
 #[derive(Debug)]
@@ -42,7 +44,7 @@ pub enum DeserializeError {
     /// modeled validation error, built by the generated
     /// `From<ConstraintViolation>` conversion. Serialized once at the
     /// protocol boundary via `ServerProtocol::serialize_error`.
-    ConstraintViolation(Box<dyn HttpModeledError + Send>),
+    ConstraintViolation(Box<dyn HttpModeledError>),
 }
 
 impl std::fmt::Display for DeserializeError {
@@ -68,6 +70,49 @@ impl std::error::Error for DeserializeError {
 impl From<SerdeError> for DeserializeError {
     fn from(err: SerdeError) -> Self {
         Self::Serde(err)
+    }
+}
+
+/// A wire-level request deserialization failure.
+///
+/// This is not a Smithy modeled error. Protocols may downcast this value from
+/// [`HttpServerError`] to preserve legacy request-rejection wire shapes.
+#[derive(Debug)]
+pub struct RequestDeserializationError {
+    source: SerdeError,
+}
+
+impl RequestDeserializationError {
+    /// Creates a request deserialization error from a schema-serde failure.
+    pub fn new(source: SerdeError) -> Self {
+        Self { source }
+    }
+
+    /// Returns the schema-serde failure that caused this error.
+    pub fn source(&self) -> &SerdeError {
+        &self.source
+    }
+}
+
+impl std::fmt::Display for RequestDeserializationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "error deserializing request: {}", self.source)
+    }
+}
+
+impl std::error::Error for RequestDeserializationError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.source)
+    }
+}
+
+impl HttpServerError for RequestDeserializationError {
+    fn status_code(&self) -> u16 {
+        http::StatusCode::BAD_REQUEST.as_u16()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

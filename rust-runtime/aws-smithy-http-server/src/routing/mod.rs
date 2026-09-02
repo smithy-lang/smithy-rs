@@ -64,8 +64,8 @@ pub use self::{
     operation_handler_bindings::{BuildError, OperationHandlerBinding, RouterForOperationHandlerBindings},
     prefix::PrefixPolicy,
     protocol_routing_table::{
-        IntoProtocolResponse, OperationMatch, ProtocolResponse, ProtocolRoutingOutcome,
-        ProtocolRoutingTable, SelectedProtocolContext,
+        IntoProtocolResponse, OperationMatch, ProtocolResponse, ProtocolRouter, ProtocolRoutingOutcome,
+        RequestRouteMetadata, SelectedProtocolContext,
     },
     route::Route,
 };

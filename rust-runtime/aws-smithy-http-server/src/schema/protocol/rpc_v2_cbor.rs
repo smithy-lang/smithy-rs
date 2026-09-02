@@ -15,21 +15,19 @@ use crate::modeled_error::HttpModeledError;
 use crate::protocol::rpc_v2_cbor::RpcV2Cbor;
 use crate::response::IntoResponse;
 use crate::schema::protocol::discriminator::WithTypeFirst;
-use crate::schema::protocol::request::deserialize_rpc_request;
+use crate::schema::protocol::request::{deserialize_rpc_request, rpc_request_deserializer};
 use crate::schema::protocol::response::{
     log_serialize_failure, serialize_modeled_error_response, serialize_operation_response, stamp_error_extension,
     AsSerializable, ResponseBindingMode,
 };
 
-use super::{ServerEventStreamProtocol, ServerProtocol};
-
-static APPLICATION_CBOR_MIME: LazyLock<mime::Mime> = LazyLock::new(|| "application/cbor".parse().expect("valid mime"));
+use super::{StaticEventStreamProtocol, StaticProtocol};
 
 // ============================================================================
 // rpcv2Cbor
 // ============================================================================
 
-impl ServerProtocol for RpcV2Cbor {
+impl StaticProtocol for RpcV2Cbor {
     type Codec = CborCodec;
     type RequestRejection = crate::protocol::rpc_v2_cbor::rejection::RequestRejection;
 
@@ -40,17 +38,28 @@ impl ServerProtocol for RpcV2Cbor {
 
     fn with_request_deserializer<R>(
         schema: &Schema<'_>,
-        _output_schema: &Schema<'_>,
         parts: &http::request::Parts,
         body: &[u8],
         f: impl FnOnce(&mut dyn ShapeDeserializer) -> Result<R, DeserializeError>,
     ) -> Result<R, Self::RequestRejection> {
-        // The `smithy-protocol: rpc-v2-cbor` header is validated by the
-        // router; the body content type is validated here.
-        if !crate::protocol::accept_header_classifier(&parts.headers, &APPLICATION_CBOR_MIME) {
-            return Err(Self::RequestRejection::NotAcceptable);
-        }
+        // The `smithy-protocol: rpc-v2-cbor` header and `Accept` header are
+        // validated by the router; the body content type is validated here.
         deserialize_rpc_request(Self::codec(), "application/cbor", schema, parts, body, f)
+    }
+
+    fn request_deserializer<'a>(
+        schema: &Schema<'_>,
+        request: &'a http::Request<bytes::Bytes>,
+    ) -> Result<Box<dyn ShapeDeserializer + 'a>, Self::RequestRejection> {
+        // The `smithy-protocol: rpc-v2-cbor` header and `Accept` header are
+        // validated by the router; the body content type is validated here.
+        rpc_request_deserializer(Self::codec(), "application/cbor", schema, request)
+    }
+
+    fn request_rejection_into_response(rejection: Self::RequestRejection) -> http::Response<BoxBody> {
+        IntoResponse::<RpcV2Cbor>::into_response(crate::protocol::rpc_v2_cbor::runtime_error::RuntimeError::from(
+            rejection,
+        ))
     }
 
     fn serialize_response(schema: &Schema<'_>, output: &dyn SerializableStruct) -> http::Response<BoxBody> {
@@ -91,7 +100,7 @@ impl ServerProtocol for RpcV2Cbor {
             Self::codec(),
             schema,
             &wrapper,
-            error.status_code(),
+            HttpModeledError::status_code(error),
             ResponseBindingMode::BodyOnly,
             "application/cbor",
         );
@@ -113,7 +122,7 @@ impl ServerProtocol for RpcV2Cbor {
     }
 }
 
-impl ServerEventStreamProtocol for RpcV2Cbor {
+impl StaticEventStreamProtocol for RpcV2Cbor {
     const EVENT_PAYLOAD_CONTENT_TYPE: &'static str = "application/cbor";
     const EVENT_STREAM_HTTP_CONTENT_TYPE: &'static str = "application/vnd.amazon.eventstream";
     const FRAMES_INITIAL_MESSAGES: bool = true;

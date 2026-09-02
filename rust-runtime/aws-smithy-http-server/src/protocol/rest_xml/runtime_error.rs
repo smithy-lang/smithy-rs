@@ -8,7 +8,7 @@ use crate::response::IntoResponse;
 use crate::runtime_error::InternalFailureException;
 use crate::{
     extension::RuntimeErrorExtension, modeled_error::HttpModeledError,
-    runtime_error::INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE, schema::protocol::ServerProtocol,
+    runtime_error::INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE, schema::protocol::StaticProtocol,
 };
 use http::StatusCode;
 
@@ -55,7 +55,9 @@ impl RuntimeError {
             Self::NotAcceptable => StatusCode::NOT_ACCEPTABLE,
             Self::UnsupportedMediaType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::Validation(_) => StatusCode::BAD_REQUEST,
-            Self::ModeledValidation(err) => StatusCode::from_u16(err.status_code()).unwrap_or(StatusCode::BAD_REQUEST),
+            Self::ModeledValidation(err) => {
+                StatusCode::from_u16(HttpModeledError::status_code(&**err)).unwrap_or(StatusCode::BAD_REQUEST)
+            }
         }
     }
 }
