@@ -67,6 +67,16 @@ fn wire_format_name(header: &str) -> Option<&str> {
 }
 
 impl<S> RpcV2CborRouter<S> {
+    // The following function is kept only for backward compatibility, to avoid bumping the crate
+    // version. It is incorrect because it returns the subfamily (`cbor`, `sparrowhawk`), whereas the
+    // type `RpcV2CborRouter` is named specifically after `Cbor`.
+    pub fn wire_format_regex() -> &'static regex::Regex {
+        static SMITHY_PROTOCOL_REGEX: std::sync::LazyLock<regex::Regex> =
+            std::sync::LazyLock::new(|| regex::Regex::new(r#"^rpc-v2-(?P<format>\w+)$"#).unwrap());
+
+        &SMITHY_PROTOCOL_REGEX
+    }
+
     pub fn boxed<B>(self) -> RpcV2CborRouter<Route<B>>
     where
         S: Service<http::Request<B>, Response = http::Response<BoxBody>, Error = Infallible>,
