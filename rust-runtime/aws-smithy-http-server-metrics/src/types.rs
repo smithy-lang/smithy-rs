@@ -7,7 +7,7 @@
     feature = "aws-smithy-http-server-065",
     feature = "aws-smithy-legacy-http-server"
 )))]
-pub(crate) type RequestBody = hyper::body::Incoming;
+pub(crate) type RequestBody = aws_smithy_http_server::body::Body;
 #[cfg(not(any(
     feature = "aws-smithy-http-server-065",
     feature = "aws-smithy-legacy-http-server"

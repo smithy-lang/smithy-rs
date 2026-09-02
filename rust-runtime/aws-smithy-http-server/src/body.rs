@@ -10,7 +10,10 @@
 
 use crate::error::{BoxError, Error};
 use bytes::Bytes;
+use http_body::Frame;
 use std::fmt;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 
 // Used in the codegen in trait bounds.
 #[doc(hidden)]
@@ -31,6 +34,79 @@ pub type BoxBody = http_body_util::combinators::UnsyncBoxBody<Bytes, Error>;
 /// This is used specifically for event streaming operations and lambda handlers
 /// that need thread safety guarantees.
 pub type BoxBodySync = http_body_util::combinators::BoxBody<Bytes, Error>;
+
+/// The request body type used by `aws-smithy-http-server`.
+///
+/// This is a type-erased wrapper around incoming HTTP bodies. It lets the
+/// server normalize transport-specific body types, such as Hyper's
+/// `Incoming`, at the `serve` boundary without reading the body.
+#[derive(Debug)]
+pub struct Body(BoxBodySync);
+
+impl Body {
+    /// Create a new [`Body`] that wraps another [`http_body::Body`].
+    pub fn new<B>(body: B) -> Self
+    where
+        B: http_body::Body<Data = Bytes> + Send + Sync + 'static,
+        B::Error: Into<BoxError>,
+    {
+        try_downcast(body).unwrap_or_else(|body| Self(boxed_sync(body)))
+    }
+
+    /// Create an empty body.
+    pub fn empty() -> Self {
+        Self::new(http_body_util::Empty::<Bytes>::new())
+    }
+
+    /// Create a body from bytes.
+    pub fn from_bytes(bytes: Bytes) -> Self {
+        Self::new(http_body_util::Full::new(bytes))
+    }
+}
+
+impl Default for Body {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
+impl From<Bytes> for Body {
+    fn from(bytes: Bytes) -> Self {
+        Self::from_bytes(bytes)
+    }
+}
+
+impl From<Vec<u8>> for Body {
+    fn from(bytes: Vec<u8>) -> Self {
+        Self::from_bytes(Bytes::from(bytes))
+    }
+}
+
+impl From<&'static [u8]> for Body {
+    fn from(bytes: &'static [u8]) -> Self {
+        Self::from_bytes(Bytes::from_static(bytes))
+    }
+}
+
+impl http_body::Body for Body {
+    type Data = Bytes;
+    type Error = Error;
+
+    fn poll_frame(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+        Pin::new(&mut self.0).poll_frame(cx)
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.0.is_end_stream()
+    }
+
+    fn size_hint(&self) -> http_body::SizeHint {
+        self.0.size_hint()
+    }
+}
 
 // ============================================================================
 // Body Construction Functions

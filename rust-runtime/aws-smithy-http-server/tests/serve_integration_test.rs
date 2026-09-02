@@ -7,7 +7,7 @@
 //!
 //! These tests verify functionality that isn't explicitly tested elsewhere
 
-use aws_smithy_http_server::body::{to_boxed, BoxBody};
+use aws_smithy_http_server::body::{to_boxed, Body, BoxBody};
 use aws_smithy_http_server::routing::IntoMakeService;
 use aws_smithy_http_server::serve::{Listener, ListenerExt};
 use std::convert::Infallible;
@@ -18,14 +18,12 @@ use tokio::sync::oneshot;
 use tower::service_fn;
 
 /// Simple test service that returns OK
-async fn ok_service(_request: http::Request<hyper::body::Incoming>) -> Result<http::Response<BoxBody>, Infallible> {
+async fn ok_service(_request: http::Request<Body>) -> Result<http::Response<BoxBody>, Infallible> {
     Ok(http::Response::builder().status(200).body(to_boxed("OK")).unwrap())
 }
 
 /// Test service that returns custom headers for verification
-async fn service_with_custom_headers(
-    _request: http::Request<hyper::body::Incoming>,
-) -> Result<http::Response<BoxBody>, Infallible> {
+async fn service_with_custom_headers(_request: http::Request<Body>) -> Result<http::Response<BoxBody>, Infallible> {
     Ok(http::Response::builder()
         .status(200)
         .header("content-type", "text/plain")
@@ -472,7 +470,7 @@ async fn test_mixed_protocol_concurrent_connections() {
     let barrier = Arc::new(Barrier::new(4));
     let barrier_clone = barrier.clone();
 
-    let barrier_service = move |_request: http::Request<hyper::body::Incoming>| {
+    let barrier_service = move |_request: http::Request<Body>| {
         let barrier = barrier_clone.clone();
         async move {
             // Wait for all 4 requests to arrive
@@ -596,7 +594,7 @@ async fn test_limit_connections_blocks_excess() {
     let sem = Arc::new(Semaphore::new(0));
     let sem_clone = sem.clone();
 
-    let semaphore_service = move |_request: http::Request<hyper::body::Incoming>| {
+    let semaphore_service = move |_request: http::Request<Body>| {
         let sem = sem_clone.clone();
         async move {
             // Wait for a permit (blocks until we release permits in the test)
@@ -719,7 +717,7 @@ async fn test_multiple_concurrent_http2_streams() {
     let barrier = Arc::new(Barrier::new(5));
     let barrier_clone = barrier.clone();
 
-    let barrier_service = move |_request: http::Request<hyper::body::Incoming>| {
+    let barrier_service = move |_request: http::Request<Body>| {
         let barrier = barrier_clone.clone();
         async move {
             // Wait for all 5 requests to arrive

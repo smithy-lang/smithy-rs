@@ -30,7 +30,7 @@
 //! Look for the `x-request-id` header in the response.
 
 use aws_smithy_http_server::{
-    body::{boxed, BoxBody},
+    body::{boxed, Body, BoxBody},
     routing::IntoMakeService,
     serve::serve,
 };
@@ -40,14 +40,14 @@ use aws_smithy_http_server::request::request_id::{ServerRequestId, ServerRequest
 
 use http::{header::HeaderName, Request, Response};
 use http_body_util::Full;
-use hyper::body::{Bytes, Incoming};
+use hyper::body::Bytes;
 use std::convert::Infallible;
 use tokio::net::TcpListener;
 use tower::{service_fn, ServiceBuilder};
 use tracing::info;
 
 #[cfg(feature = "request-id")]
-async fn handler(req: Request<Incoming>) -> Result<Response<BoxBody>, Infallible> {
+async fn handler(req: Request<Body>) -> Result<Response<BoxBody>, Infallible> {
     // Extract the request ID from extensions (added by the layer)
     let request_id = req
         .extensions()

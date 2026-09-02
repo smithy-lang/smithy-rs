@@ -7,7 +7,7 @@
 //!
 //! These tests verify that the serve function and graceful shutdown work correctly
 
-use aws_smithy_http_server::body::{to_boxed, BoxBody};
+use aws_smithy_http_server::body::{to_boxed, Body, BoxBody};
 use aws_smithy_http_server::routing::IntoMakeService;
 use std::convert::Infallible;
 use std::time::Duration;
@@ -15,7 +15,7 @@ use tokio::sync::oneshot;
 use tower::service_fn;
 
 /// Test service that delays before responding
-async fn slow_service(_request: http::Request<hyper::body::Incoming>) -> Result<http::Response<BoxBody>, Infallible> {
+async fn slow_service(_request: http::Request<Body>) -> Result<http::Response<BoxBody>, Infallible> {
     // Simulate slow processing
     tokio::time::sleep(Duration::from_millis(100)).await;
     Ok(http::Response::builder()
@@ -92,7 +92,7 @@ async fn test_graceful_shutdown_with_timeout() {
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
     // Create a very slow service that takes longer than timeout
-    let very_slow_service = |_request: http::Request<hyper::body::Incoming>| async {
+    let very_slow_service = |_request: http::Request<Body>| async {
         tokio::time::sleep(Duration::from_secs(10)).await;
         Ok::<_, Infallible>(
             http::Response::builder()
@@ -156,7 +156,7 @@ async fn test_with_connect_info() {
     let addr = listener.local_addr().unwrap();
 
     // Service that extracts ConnectInfo
-    let service_with_connect_info = |request: http::Request<hyper::body::Incoming>| async move {
+    let service_with_connect_info = |request: http::Request<Body>| async move {
         // Check if ConnectInfo is in extensions
         let connect_info = request.extensions().get::<ConnectInfo<SocketAddr>>();
         let body = if connect_info.is_some() {

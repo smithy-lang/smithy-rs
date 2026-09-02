@@ -32,7 +32,7 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-use crate::body::BoxBody;
+use crate::body::{Body, BoxBody};
 use http::{Request, Response};
 use std::{
     convert::Infallible,
@@ -49,7 +49,7 @@ use tower::{
 /// A HTTP [`Service`] representing a single route.
 ///
 /// The construction of [`Route`] from a named HTTP [`Service`] `S`, erases the type of `S`.
-pub struct Route<B = hyper::body::Incoming> {
+pub struct Route<B = Body> {
     service: BoxCloneService<Request<B>, Response<BoxBody>, Infallible>,
 }
 

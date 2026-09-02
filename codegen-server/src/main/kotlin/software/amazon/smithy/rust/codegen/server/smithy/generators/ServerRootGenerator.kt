@@ -354,7 +354,7 @@ open class ServerRootGenerator(
                     HttpVersion.Http0x ->
                         ServerCargoDependency.hyperDev(codegenContext.runtimeConfig).toType().resolve("Body")
                     HttpVersion.Http1x ->
-                        ServerCargoDependency.hyperDev(codegenContext.runtimeConfig).toType().resolve("body::Incoming")
+                        ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType().resolve("body::Body")
                 },
             "ServeLink" to serveLink(codegenContext.runtimeConfig, crateName),
         )

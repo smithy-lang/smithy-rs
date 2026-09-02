@@ -27,22 +27,22 @@
 //! curl -X POST -d "Hello!" http://localhost:3000/echo
 //! ```
 
-use aws_smithy_http_server::{routing::IntoMakeService, serve::serve};
+use aws_smithy_http_server::{body::Body, routing::IntoMakeService, serve::serve};
 use http::{Request, Response};
 use http_body_util::{BodyExt, Full};
-use hyper::body::{Bytes, Incoming};
+use hyper::body::Bytes;
 use std::{convert::Infallible, time::Duration};
 use tokio::net::TcpListener;
 use tower::service_fn;
 use tracing::{info, warn};
 
 /// Simple handler that responds immediately
-async fn hello_handler(_req: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
+async fn hello_handler(_req: Request<Body>) -> Result<Response<Full<Bytes>>, Infallible> {
     Ok(Response::new(Full::new(Bytes::from("Hello, World!\n"))))
 }
 
 /// Handler that echoes the request body
-async fn echo_handler(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
+async fn echo_handler(req: Request<Body>) -> Result<Response<Full<Bytes>>, Infallible> {
     let body = req.into_body();
 
     // Collect all body frames into bytes
@@ -65,7 +65,7 @@ async fn echo_handler(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, I
 }
 
 /// Router that dispatches to handlers based on path
-async fn router(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
+async fn router(req: Request<Body>) -> Result<Response<Full<Bytes>>, Infallible> {
     match req.uri().path() {
         "/echo" => echo_handler(req).await,
         _ => hello_handler(req).await,

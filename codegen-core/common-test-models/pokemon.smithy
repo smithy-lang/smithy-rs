@@ -1,4 +1,4 @@
-$version: "2"
+$version: "1.0"
 
 namespace com.aws.example
 
@@ -14,49 +14,32 @@ use com.aws.example#ResourceNotFoundException
 @title("Pokémon Service")
 @restJson1
 service PokemonService {
-    version: "2024-03-18"
-    resources: [
-        PokemonSpecies
-        Storage
-    ]
+    version: "2021-12-01",
+    resources: [PokemonSpecies, Storage],
     operations: [
-        GetServerStatistics
-        DoNothing
-        CapturePokemon
-        CheckHealth
+        GetServerStatistics,
+        DoNothing,
+        CapturePokemon,
+        CheckHealth,
         StreamPokemonRadio
-    ]
+    ],
 }
 
 /// A users current Pokémon storage.
 resource Storage {
     identifiers: {
         user: String
-    }
-    read: GetStorage
+    },
+    read: GetStorage,
 }
 
 /// Retrieve information about your Pokédex.
 @readonly
 @http(uri: "/pokedex/{user}", method: "GET")
 operation GetStorage {
-    input := @sensitive @documentation("A request to access Pokémon storage.") {
-        @required
-        @httpLabel
-        user: String
-        @required
-        @httpHeader("passcode")
-        passcode: String
-    }
-    output := @documentation("Contents of the Pokémon storage.") {
-        @required
-        collection: SpeciesCollection
-    }
-    errors: [
-        ResourceNotFoundException
-        StorageAccessNotAuthorized
-        ValidationException
-    ]
+    input: GetStorageInput,
+    output: GetStorageOutput,
+    errors: [ResourceNotFoundException, StorageAccessNotAuthorized, ValidationException],
 }
 
 /// Not authorized to access Pokémon storage.
@@ -64,81 +47,102 @@ operation GetStorage {
 @httpError(401)
 structure StorageAccessNotAuthorized {}
 
+/// A request to access Pokémon storage.
+@input
+@sensitive
+structure GetStorageInput {
+    @required
+    @httpLabel
+    user: String,
+    @required
+    @httpHeader("passcode")
+    passcode: String,
+}
+
 /// A list of Pokémon species.
 list SpeciesCollection {
     member: String
 }
 
+/// Contents of the Pokémon storage.
+@output
+structure GetStorageOutput {
+    @required
+    collection: SpeciesCollection
+}
+
 /// Capture Pokémons via event streams.
 @http(uri: "/capture-pokemon-event/{region}", method: "POST")
 operation CapturePokemon {
-    input := {
-        @httpPayload
-        events: AttemptCapturingPokemonEvent
+    input: CapturePokemonEventsInput,
+    output: CapturePokemonEventsOutput,
+    errors: [UnsupportedRegionError, ThrottlingError, ValidationException]
+}
 
-        @httpLabel
-        @required
-        region: String
-    }
-    output := {
-        @httpPayload
-        events: CapturePokemonEvents
-    }
-    errors: [
-        UnsupportedRegionError
-        ThrottlingError
-        ValidationException
-    ]
+@input
+structure CapturePokemonEventsInput {
+    @httpPayload
+    events: AttemptCapturingPokemonEvent,
+
+    @httpLabel
+    @required
+    region: String,
+}
+
+@output
+structure CapturePokemonEventsOutput {
+    @httpPayload
+    events: CapturePokemonEvents,
 }
 
 @streaming
 union AttemptCapturingPokemonEvent {
-    event: CapturingEvent
-    masterball_unsuccessful: MasterBallUnsuccessful
+    event: CapturingEvent,
+    masterball_unsuccessful: MasterBallUnsuccessful,
 }
 
 structure CapturingEvent {
     @eventPayload
-    payload: CapturingPayload
+    payload: CapturingPayload,
 }
 
-structure CapturingPayload for PokemonSpecies {
-    $name
-    pokeball: String
+structure CapturingPayload {
+    name: String,
+    pokeball: String,
 }
 
 @streaming
 union CapturePokemonEvents {
-    event: CaptureEvent
-    invalid_pokeball: InvalidPokeballError
-    throttlingError: ThrottlingError
+    event: CaptureEvent,
+    invalid_pokeball: InvalidPokeballError,
+    throttlingError: ThrottlingError,
 }
 
 structure CaptureEvent {
     @eventHeader
-    name: String
+    name: String,
     @eventHeader
-    captured: Boolean
+    captured: Boolean,
     @eventHeader
-    shiny: Boolean
+    shiny: Boolean,
     @eventPayload
-    pokedex_update: Blob
+    pokedex_update: Blob,
 }
 
 @error("server")
 structure UnsupportedRegionError {
     @required
-    region: String
+    region: String,
 }
 
 @error("client")
 structure InvalidPokeballError {
     @required
-    pokeball: String
+    pokeball: String,
 }
 @error("server")
 structure MasterBallUnsuccessful {
-    message: String
+    message: String,
 }
 
 @error("client")
@@ -148,10 +152,13 @@ structure ThrottlingError {}
 @readonly
 @http(uri: "/radio", method: "GET")
 operation StreamPokemonRadio {
-    output := {
-        @httpPayload
-        data: StreamingBlob = ""
-    }
+    output: StreamPokemonRadioOutput
+}
+
+@output
+structure StreamPokemonRadioOutput {
+    @httpPayload
+    data: StreamingBlob
 }
 
 @streaming

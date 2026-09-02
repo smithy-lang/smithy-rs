@@ -231,7 +231,7 @@
 //! blocks provided by this module:
 //!
 //! ```rust,ignore
-//! use aws_smithy_http_server::routing::IntoMakeService;
+//! use aws_smithy_http_server::{body::Body, routing::IntoMakeService};
 //! use aws_smithy_http_server::serve::Listener;
 //! use hyper_util::rt::{TokioExecutor, TokioIo};
 //! use hyper_util::server::conn::auto::Builder;
@@ -259,6 +259,8 @@
 //!         .call(IncomingStream { io: &io, remote_addr })
 //!         .await?;
 //!
+//!     let tower_service = tower_service
+//!         .map_request(|request: http::Request<hyper::body::Incoming>| request.map(Body::new));
 //!     let hyper_service = TowerToHyperService::new(tower_service);
 //!
 //!     tokio::spawn(async move {
@@ -286,6 +288,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::body::Body;
 use http_body::Body as HttpBody;
 use hyper::body::Incoming;
 use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
@@ -313,10 +316,10 @@ pub use self::listener::{ConnLimiter, ConnLimiterIo, Listener, ListenerExt, TapI
 // that handles individual HTTP requests and returns HTTP responses.
 //
 // Required bounds:
-// - `S: Service<http::Request<Incoming>, Response = http::Response<B>, Error = Infallible>`
+// - `S: Service<http::Request<Body>, Response = http::Response<B>, Error = Infallible>`
 //
 //   This is the core Tower Service trait. It means:
-//   * **Input**: Takes an HTTP request with a streaming body (`Incoming` from Hyper)
+//   * **Input**: Takes an HTTP request with the Smithy server body type
 //   * **Output**: Returns an HTTP response with body type `B`
 //   * **Error**: Must be `Infallible`, meaning the service never returns errors at the
 //     Tower level. Any application errors must be converted into HTTP responses
@@ -539,7 +542,7 @@ where
     B::Data: Send,
     B::Error: Into<Box<dyn StdError + Send + Sync>>,
     // Service bounds: see module documentation for details
-    S: Service<http::Request<Incoming>, Response = http::Response<B>, Error = Infallible> + Clone + Send + 'static,
+    S: Service<http::Request<Body>, Response = http::Response<B>, Error = Infallible> + Clone + Send + 'static,
     S::Future: Send,
     // MakeService bounds: see module documentation for details
     M: for<'a> Service<IncomingStream<'a, L>, Error = Infallible, Response = S>,
@@ -705,7 +708,7 @@ where
     B::Data: Send,
     B::Error: Into<Box<dyn StdError + Send + Sync>>,
     // Service bounds
-    S: Service<http::Request<Incoming>, Response = http::Response<B>, Error = Infallible> + Clone + Send + 'static,
+    S: Service<http::Request<Body>, Response = http::Response<B>, Error = Infallible> + Clone + Send + 'static,
     S::Future: Send,
     // MakeService bounds
     M: for<'a> Service<IncomingStream<'a, L>, Error = Infallible, Response = S> + Send + 'static,
@@ -816,7 +819,7 @@ where
     B::Data: Send,
     B::Error: Into<Box<dyn StdError + Send + Sync>>,
     // Service bounds
-    S: Service<http::Request<Incoming>, Response = http::Response<B>, Error = Infallible> + Clone + Send + 'static,
+    S: Service<http::Request<Body>, Response = http::Response<B>, Error = Infallible> + Clone + Send + 'static,
     S::Future: Send,
     // MakeService bounds
     M: for<'a> Service<IncomingStream<'a, L>, Error = Infallible, Response = S> + Send + 'static,
@@ -891,7 +894,7 @@ async fn handle_connection<L, M, S, B>(
     B::Data: Send,
     B::Error: Into<Box<dyn StdError + Send + Sync>>,
     // Service bounds
-    S: Service<http::Request<Incoming>, Response = http::Response<B>, Error = Infallible> + Clone + Send + 'static,
+    S: Service<http::Request<Body>, Response = http::Response<B>, Error = Infallible> + Clone + Send + 'static,
     S::Future: Send,
     // MakeService bounds
     M: for<'a> Service<IncomingStream<'a, L>, Error = Infallible, Response = S> + Send + 'static,
@@ -915,6 +918,7 @@ async fn handle_connection<L, M, S, B>(
         .await
         .expect("make_service error type is Infallible and cannot fail");
 
+    let tower_service = tower_service.map_request(|request: http::Request<Incoming>| request.map(Body::new));
     let hyper_service = TowerToHyperService::new(tower_service);
 
     // Clone the Arc (cheap - just increments refcount) or create a default builder.

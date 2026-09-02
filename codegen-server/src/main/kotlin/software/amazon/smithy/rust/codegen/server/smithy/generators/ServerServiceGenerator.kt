@@ -782,7 +782,7 @@ class ServerServiceGenerator(
                 "NotSetFields1" to notSetFields(),
                 "NotSetFields2" to notSetFields(),
                 "DefaultRoutingService" to routedServiceType(
-                    "#{SmithyHttpServer}::routing::Route<#{SmithyHttpServer}::body::BoxBody>",
+                    "#{SmithyHttpServer}::routing::Route<#{SmithyHttpServer}::body::Body>",
                 ),
                 "RouteConvenienceImpl" to routeConvenienceImpl(),
                 "Router" to protocol.routerType(),

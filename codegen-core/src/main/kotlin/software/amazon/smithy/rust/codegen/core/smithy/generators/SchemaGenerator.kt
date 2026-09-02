@@ -1631,7 +1631,12 @@ class SchemaGenerator(
                     helperExpr
                 } else {
                     val elementRead = listElementReadExpr(target, memberConstRef, elementTarget)
-                    val pushExpr = "container.push(${sparseAwareRead(target, elementRead)})"
+                    val pushExpr =
+                        if (isSparse) {
+                            "container.push(if deser.is_null() { deser.read_null()?; None } else { Some($elementRead) })"
+                        } else {
+                            "container.push($elementRead)"
+                        }
                     "{ let mut container = Vec::new(); deser.read_list($memberRef, &mut |deser| { $pushExpr; Ok(()) })?; container }"
                 }
             }
@@ -1652,7 +1657,12 @@ class SchemaGenerator(
                             "key"
                         }
                     val valueRead = mapValueReadExpr(target, memberConstRef, valueTarget)
-                    val insertExpr = "container.insert($keyInsert, ${sparseAwareRead(target, valueRead)})"
+                    val insertExpr =
+                        if (isSparse) {
+                            "container.insert($keyInsert, if deser.is_null() { deser.read_null()?; None } else { Some($valueRead) })"
+                        } else {
+                            "container.insert($keyInsert, $valueRead)"
+                        }
                     "{ let mut container = std::collections::HashMap::new(); deser.read_map($memberRef, &mut |key, deser| { $insertExpr; Ok(()) })?; container }"
                 }
             }
@@ -1672,27 +1682,6 @@ class SchemaGenerator(
             }
 
             else -> "{ let _ = $memberRef; todo!(\"deserialize aggregate\") }"
-        }
-
-    /**
-     * Wraps [readExpr] in the `Option` handling that `@sparse` requires when [collection] (the list
-     * or map whose element/value is being read) is sparse: a `null` on the wire becomes `None`,
-     * anything else `Some(_)`. Non-sparse collections read the value directly.
-     *
-     * This must be applied at *every* level of a nested collection, not just the outermost one,
-     * because `@sparse` is a property of the individual collection that carries it. A
-     * `list<@sparse list<String>>` generates as `Vec<Vec<Option<String>>>`, so the inner list's
-     * elements need the wrapping even though the outer list is dense. It is the deserialize-side
-     * mirror of the `Some(item) => … / None => write_null(…)` match that the write path emits.
-     */
-    private fun sparseAwareRead(
-        collection: Shape,
-        readExpr: String,
-    ): String =
-        if (collection.hasTrait(SparseTrait::class.java)) {
-            "if deser.is_null() { deser.read_null()?; None } else { Some($readExpr) }"
-        } else {
-            readExpr
         }
 
     /**
@@ -1781,7 +1770,7 @@ class SchemaGenerator(
                 {
                     let mut map = ::std::collections::HashMap::new();
                     deser.read_map($schemaExpr, &mut |key, deser| {
-                        let value = ${sparseAwareRead(target, innerValueRead)};
+                        let value = $innerValueRead;
                         map.insert($keyInsert, value);
                         Ok(())
                     })?;
@@ -1804,7 +1793,7 @@ class SchemaGenerator(
                 {
                     let mut list = Vec::new();
                     deser.read_list($schemaExpr, &mut |deser| {
-                        list.push(${sparseAwareRead(target, elementRead)});
+                        list.push($elementRead);
                         Ok(())
                     })?;
                     list
@@ -1854,7 +1843,7 @@ class SchemaGenerator(
                 {
                     let mut map = ::std::collections::HashMap::new();
                     deser.read_map($schemaExpr, &mut |key, deser| {
-                        let value = ${sparseAwareRead(target, valueRead)};
+                        let value = $valueRead;
                         map.insert($keyInsert, value);
                         Ok(())
                     })?;
@@ -1877,7 +1866,7 @@ class SchemaGenerator(
                 {
                     let mut list = Vec::new();
                     deser.read_list($schemaExpr, &mut |deser| {
-                        list.push(${sparseAwareRead(target, elementRead)});
+                        list.push($elementRead);
                         Ok(())
                     })?;
                     list
