@@ -153,6 +153,10 @@ internal class CredentialProviderConfigTest {
                     "ProvideCredentialsFuture" to
                         AwsRuntimeType.awsCredentialTypes(rc)
                             .resolve("provider::future::ProvideCredentials"),
+                    // The http 1.x helper; the `aws-smithy-runtime` re-export is the http 0.2.x one.
+                    "infallible_client_fn" to
+                        CargoDependency.smithyHttpClientTestUtil(rc)
+                            .toType().resolve("test_util::infallible_client_fn"),
                     "RetryConfig" to
                         RuntimeType.smithyTypes(rc).resolve("retry::RetryConfig"),
                     "SharedAsyncSleep" to
@@ -172,11 +176,10 @@ internal class CredentialProviderConfigTest {
                     ##[tracing_test::traced_test]
                     ##[::tokio::test]
                     async fn config_override_credentials_should_not_grow_client_cache_partitions() {
-                        use aws_smithy_runtime::client::http::test_util::infallible_client_fn;
                         use aws_smithy_types::body::SdkBody;
 
-                        let http_client = infallible_client_fn(|_req| {
-                            http::Response::builder().body(SdkBody::empty()).unwrap()
+                        let http_client = #{infallible_client_fn}(|_req| {
+                            http_1x::Response::builder().body(SdkBody::empty()).unwrap()
                         });
                         let client_config = $moduleName::Config::builder()
                             .http_client(http_client)
@@ -233,13 +236,13 @@ internal class CredentialProviderConfigTest {
                         let http_client = StaticReplayClient::new(vec![
                             // First attempt: 500 triggers retry
                             ReplayEvent::new(
-                                http::Request::builder().body(SdkBody::from("")).unwrap(),
-                                http::Response::builder().status(500).body(SdkBody::from("{}")).unwrap(),
+                                http_1x::Request::builder().body(SdkBody::from("")).unwrap(),
+                                http_1x::Response::builder().status(500).body(SdkBody::from("{}")).unwrap(),
                             ),
                             // Second attempt: 200 succeeds
                             ReplayEvent::new(
-                                http::Request::builder().body(SdkBody::from("")).unwrap(),
-                                http::Response::builder().status(200).body(SdkBody::from("{}")).unwrap(),
+                                http_1x::Request::builder().body(SdkBody::from("")).unwrap(),
+                                http_1x::Response::builder().status(200).body(SdkBody::from("{}")).unwrap(),
                             ),
                         ]);
 

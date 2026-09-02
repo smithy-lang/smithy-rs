@@ -91,7 +91,7 @@ class IsTruncatedPaginatorTest {
                     use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
                     use aws_smithy_types::body::SdkBody;
 
-                    fn mk_response(part_marker: u8) -> http::Response<SdkBody> {
+                    fn mk_response(part_marker: u8) -> http_1x::Response<SdkBody> {
                         let (part_num_marker, next_num_marker, is_truncated) = if part_marker < 3 {
                             (part_marker, part_marker + 1, true)
                         } else {
@@ -106,11 +106,11 @@ class IsTruncatedPaginatorTest {
                             <isTruncated>{is_truncated}</isTruncated>
                         </GetFoosOutput>"
                         );
-                        http::Response::builder().body(SdkBody::from(body)).unwrap()
+                        http_1x::Response::builder().body(SdkBody::from(body)).unwrap()
                     }
 
-                    fn mk_request() -> http::Request<SdkBody> {
-                        http::Request::builder()
+                    fn mk_request() -> http_1x::Request<SdkBody> {
+                        http_1x::Request::builder()
                             .uri("https://some-test-bucket.s3.us-east-1.amazonaws.com/test.txt?part-number-marker=PartNumberMarker&uploadId=UploadId")
                             .body(SdkBody::empty())
                             .unwrap()

@@ -38,11 +38,11 @@ fun clientIntegrationTest(
                     codegenContext: ClientCodegenContext,
                     rustCrate: RustCrate,
                 ) {
-                    // A number of test fixtures build requests/responses with the legacy http 0.2.x
-                    // test helpers. Generated crates don't take http 0.2.x as a non-optional
-                    // dependency, so declare it in dev scope for the generated test crate instead of
-                    // relying on it incidentally being present.
-                    rustCrate.lib { addDependency(CargoDependency.Http0x.toDevDependency()) }
+                    // A number of test fixtures build requests/responses directly, as `http_1x::…`.
+                    // Generated crates don't take `http` as a non-optional dependency, so declare it
+                    // in dev scope for the generated test crate instead of relying on it incidentally
+                    // being present.
+                    rustCrate.lib { addDependency(CargoDependency.Http1x.toDevDependency()) }
                     test(codegenContext, rustCrate)
                 }
             }

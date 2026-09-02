@@ -8,6 +8,7 @@ package software.amazon.smithy.rustsdk
 import SdkCodegenIntegrationTest
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
@@ -27,7 +28,7 @@ class TimeoutConfigMergingTest {
                     use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextRef;
                     use aws_smithy_runtime_api::client::interceptors::Intercept;
                     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
-                    use aws_smithy_runtime::client::http::test_util::infallible_client_fn;
+                    use #{infallible_client_fn};
                     use aws_smithy_types::config_bag::ConfigBag;
                     use aws_smithy_types::timeout::TimeoutConfig;
                     use aws_smithy_types::body::SdkBody;
@@ -64,7 +65,7 @@ class TimeoutConfigMergingTest {
                         let read_timeout = Duration::from_secs(2);
                         let operation_attempt = Duration::from_secs(3);
                         let operation = Duration::from_secs(4);
-                        let http_client = infallible_client_fn(|_req| http::Response::builder().body(SdkBody::empty()).unwrap());
+                        let http_client = infallible_client_fn(|_req| http_1x::Response::builder().body(SdkBody::empty()).unwrap());
                         let sdk_config = SdkConfig::builder()
                             .behavior_version(aws_smithy_runtime_api::client::behavior_version::BehaviorVersion::v2026_01_12())
                             .timeout_config(
@@ -165,6 +166,10 @@ class TimeoutConfigMergingTest {
                     }
                     """,
                     "tokio_test" to writable { Attribute.TokioTest.render(this) },
+                    // The http 1.x helper; the `aws-smithy-runtime` re-export is the http 0.2.x one.
+                    "infallible_client_fn" to
+                        CargoDependency.smithyHttpClientTestUtil(ctx.runtimeConfig)
+                            .toType().resolve("test_util::infallible_client_fn"),
                 )
             }
         }

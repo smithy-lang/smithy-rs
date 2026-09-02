@@ -133,7 +133,7 @@ class DisableStalledStreamProtectionTest {
                         }
 
                         let http_client =
-                            #{infallible_client_fn}(|_req| http::Response::builder().body(SdkBody::empty()).unwrap());
+                            #{infallible_client_fn}(|_req| http_1x::Response::builder().body(SdkBody::empty()).unwrap());
                         let test_interceptor = TestInterceptor::default();
                         let client_config = Config::builder()
                             .interceptor(test_interceptor.clone())
@@ -150,8 +150,8 @@ class DisableStalledStreamProtectionTest {
                         );
                         """,
                         "infallible_client_fn" to
-                            CargoDependency.smithyRuntimeTestUtil(ctx.runtimeConfig)
-                                .toType().resolve("client::http::test_util::infallible_client_fn"),
+                            CargoDependency.smithyHttpClientTestUtil(ctx.runtimeConfig)
+                                .toType().resolve("test_util::infallible_client_fn"),
                     )
                 }
             }
