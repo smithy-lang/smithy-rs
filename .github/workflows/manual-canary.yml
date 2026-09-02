@@ -12,7 +12,31 @@ on:
         description: The the full SHA for the HEAD commit of the PR
         required: true
         type: string
+  # Second entry point: `fork-canary.yml` gates on the `safe-to-run-canary` label rather than a
+  # manual dispatch, then calls this workflow. Deliberately one pipeline behind two doors -- the
+  # canary steps and the build image transport live here only, so a change to either cannot be
+  # applied to one entry point and missed on the other. The `commit_sha` mismatch check in
+  # `get-pr-info` below is what pins both doors to the revision that was actually reviewed.
+  workflow_call:
+    inputs:
+      pull_request_number:
+        description: The PR number to invoke the canary for.
+        required: true
+        type: string
+      commit_sha:
+        description: The full SHA for the HEAD commit of the PR
+        required: true
+        type: string
 run-name: ${{ github.workflow }} for Pull Request ${{ inputs.pull_request_number }}
+
+# Every checkout below sets `allow-unsafe-pr-checkout: true`. `actions/checkout` refuses to fetch a
+# fork's ref when the run was triggered by `pull_request_target` -- the fork-canary door -- because
+# doing so executes untrusted code with the base repo's secrets. That is exactly what this workflow
+# does, knowingly: running the contributor's code against the canary credentials is the whole point,
+# and the gate is the `safe-to-run-canary` label, not the checkout action. `fork-canary.yml` holds
+# the reasoning and the guards (write-access labeler, fork-only, SHA pinned and re-asserted below,
+# label revoked on every push). The flag is inert on the `workflow_dispatch` door, where a
+# maintainer's dispatch is already the attestation.
 
 # Allow one instance of this workflow per pull request, and cancel older runs when new changes are pushed
 concurrency:
@@ -53,7 +77,11 @@ jobs:
       contents: read
     needs:
     - get-pr-info
-    runs-on: ubuntu-latest
+    # The other three workflows that build this image all use the 8-core runner. On `ubuntu-latest`
+    # the build is killed part-way -- a dispatch against a fork PR on 2026-08-20 ran 64 minutes and
+    # died with the step still in progress. That path had been broken for any fork PR whose image
+    # tag wasn't already in ECR, and `fork-canary.yml` now calls this workflow.
+    runs-on: smithy_ubuntu-latest_8-core
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
@@ -63,6 +91,7 @@ jobs:
             # the `docker-build` action won't find the built Docker image.
         ref: ${{ inputs.commit_sha }}
         fetch-depth: 0
+        allow-unsafe-pr-checkout: true
     - uses: ./smithy-rs/.github/actions/free-disk-space
     - name: Acquire base image
       id: acquire
@@ -82,6 +111,7 @@ jobs:
       with:
         path: smithy-rs
         ref: ${{ inputs.commit_sha }}
+        allow-unsafe-pr-checkout: true
     - name: Generate a subset of SDKs for the canary
       uses: ./smithy-rs/.github/actions/docker-build
       with:
@@ -102,6 +132,7 @@ jobs:
       with:
         path: smithy-rs
         ref: ${{ inputs.commit_sha }}
+        allow-unsafe-pr-checkout: true
     - name: Configure credentials
       id: creds
       uses: aws-actions/configure-aws-credentials@v4
@@ -130,6 +161,7 @@ jobs:
       with:
         path: smithy-rs
         ref: ${{ inputs.commit_sha }}
+        allow-unsafe-pr-checkout: true
     - name: Download artifacts
       uses: actions/download-artifact@v4
       with:

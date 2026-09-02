@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 
@@ -155,16 +156,26 @@ class TelemetryInputCaptureInterceptorGenerator(
                 val memberName = symbolProvider.toMemberName(member)
                 // The Smithy member name is what the customer names in their list.
                 val smithyName = member.memberName
-                rustTemplate(
-                    """
-                    if requested.should_capture(${smithyName.dq()}) {
-                        if let #{Some}(value) = input.$memberName.as_deref() {
-                            captured.insert(${smithyName.dq()}, value);
+                if (symbolProvider.toSymbol(member).isOptional()) {
+                    rustTemplate(
+                        """
+                        if requested.should_capture(${smithyName.dq()}) {
+                            if let #{Some}(value) = input.$memberName.as_deref() {
+                                captured.insert(${smithyName.dq()}, value);
+                            }
                         }
-                    }
-                    """,
-                    *preludeScope,
-                )
+                        """,
+                        *preludeScope,
+                    )
+                } else {
+                    rustTemplate(
+                        """
+                        if requested.should_capture(${smithyName.dq()}) {
+                            captured.insert(${smithyName.dq()}, input.$memberName.as_str());
+                        }
+                        """,
+                    )
+                }
             }
         }
 }

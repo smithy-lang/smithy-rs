@@ -91,6 +91,9 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
             return writable {
                 serializerFn(model.expectShape(shape.inputShape), null)(this)
                 serializerFn(model.expectShape(shape.outputShape), null)(this)
+                shape.errors.forEach {
+                    serializerFn(model.expectShape(it), null)(this)
+                }
             }
         }
         val name = codegenContext.symbolProvider.shapeFunctionName(codegenContext.serviceShape, shape) + "_serde"
