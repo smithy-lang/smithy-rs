@@ -58,6 +58,7 @@ service RestJsonExtras {
         StringPayload,
         PrimitiveIntHeader,
         EnumQuery,
+        SparseEnumQuery,
         StatusResponse,
         MapWithEnumKeyOp,
         PrimitiveIntOp,
@@ -187,6 +188,34 @@ structure EnumQueryInput {
     @httpLabel
     @required
     enum: StringEnum
+}
+
+@sparse
+list SparseStringEnumList {
+    member: StringEnum
+}
+
+@http(uri: "/sparse-enum-query", method: "GET")
+@httpRequestTests([
+    {
+        id: "SparseEnumQueryRequest",
+        documentation: "Sparse list query parameters serialize present values and skip null entries",
+        uri: "/sparse-enum-query",
+        params: { enums: ["enumvalue", null, "enumvalue"] },
+        queryParams: ["enums=enumvalue", "enums=enumvalue"],
+        method: "GET",
+        protocol: "aws.protocols#restJson1",
+        appliesTo: "client",
+    }
+])
+operation SparseEnumQuery {
+    input: SparseEnumQueryInput,
+    errors: [ValidationException],
+}
+
+structure SparseEnumQueryInput {
+    @httpQuery("enums")
+    enums: SparseStringEnumList
 }
 
 @http(uri: "/", method: "POST")
