@@ -4,9 +4,8 @@
  */
 
 use std::convert::Infallible;
-use std::str::FromStr;
 
-use http::header::{HeaderName, ToStrError};
+use http::header::{HeaderName, HeaderValue, ToStrError};
 use http::HeaderMap;
 use thiserror::Error;
 use tower::Layer;
@@ -56,27 +55,13 @@ pub struct RpcV2CborRouter<S> {
 /// header. An `rpcv2Cbor` request is malformed if it contains either of these headers. Server-side
 /// implementations MUST reject such requests for security reasons.
 const SMITHY_PROTOCOL_HEADER: HeaderName = HeaderName::from_static("smithy-protocol");
+const RPC_V2_CBOR_HEADER_VALUE: HeaderValue = HeaderValue::from_static("rpc-v2-cbor");
 const X_AMZ_TARGET_HEADER: HeaderName = HeaderName::from_static("x-amz-target");
 const X_AMZN_TARGET_HEADER: HeaderName = HeaderName::from_static("x-amzn-target");
 
-use super::route_identity::{is_word, parse_route_identity, RouteIdentity};
-
-fn wire_format_name(header: &str) -> Option<&str> {
-    let format = header.strip_prefix("rpc-v2-")?;
-    (!format.is_empty() && format.bytes().all(is_word)).then_some(format)
-}
+use super::route_identity::{parse_route_identity, RouteIdentity};
 
 impl<S> RpcV2CborRouter<S> {
-    // The following function is kept only for backward compatibility, to avoid bumping the crate
-    // version. It is incorrect because it returns the subfamily (`cbor`, `sparrowhawk`), whereas the
-    // type `RpcV2CborRouter` is named specifically after `Cbor`.
-    pub fn wire_format_regex() -> &'static regex::Regex {
-        static SMITHY_PROTOCOL_REGEX: std::sync::LazyLock<regex::Regex> =
-            std::sync::LazyLock::new(|| regex::Regex::new(r#"^rpc-v2-(?P<format>\w+)$"#).unwrap());
-
-        &SMITHY_PROTOCOL_REGEX
-    }
-
     pub fn boxed<B>(self) -> RpcV2CborRouter<Route<B>>
     where
         S: Service<http::Request<B>, Response = http::Response<BoxBody>, Error = Infallible>,
@@ -130,47 +115,36 @@ pub enum WireFormatError {
     /// Header value is not visible ASCII.
     #[error("`smithy-protocol` header not visible ASCII")]
     HeaderValueNotVisibleAscii(ToStrError),
-    /// Header value does not match the `rpc-v2-{format}` pattern. The actual parsed header value
-    /// is stored in the tuple struct.
+    /// Header value does not match the `rpc-v2-{format}` pattern.
+    ///
+    /// Retained for backward compatibility; current parsing reports any visible non-CBOR value as
+    /// [`WireFormatError::WireFormatNotSupported`].
     // https://doc.rust-lang.org/std/fmt/index.html#escaping
     #[error("`smithy-protocol` header does not match the `rpc-v2-{{format}}` pattern: `{0}`")]
     HeaderValueNotValid(String),
-    /// Header value matches the `rpc-v2-{format}` pattern, but the `format` is not supported. The
-    /// actual parsed header value is stored in the tuple struct.
+    /// Visible header value is not `rpc-v2-cbor`. The actual header value is stored in the tuple
+    /// struct.
     #[error("found unsupported `smithy-protocol` wire format: `{0}`")]
     WireFormatNotSupported(String),
 }
 
-/// Smithy RPC V2 requests have a `smithy-protocol` header with the value
-/// `"rpc-v2-{format}"`, where `format` is one of the supported wire formats
-/// by the protocol (see [`WireFormat`]).
+/// Smithy RPC v2 CBOR requests must set `smithy-protocol` to `rpc-v2-cbor`.
 fn parse_wire_format_from_header(headers: &HeaderMap) -> Result<WireFormat, WireFormatError> {
     let header = headers
         .get(&SMITHY_PROTOCOL_HEADER)
         .ok_or(WireFormatError::HeaderNotFound)?;
-    let header = header.to_str().map_err(WireFormatError::HeaderValueNotVisibleAscii)?;
-    let format = wire_format_name(header).ok_or_else(|| WireFormatError::HeaderValueNotValid(header.to_owned()))?;
 
-    let wire_format_parse_res: Result<WireFormat, WireFormatFromStrError> = format.parse();
-    wire_format_parse_res.map_err(|_| WireFormatError::WireFormatNotSupported(header.to_owned()))
+    if header == RPC_V2_CBOR_HEADER_VALUE {
+        Ok(WireFormat::Cbor)
+    } else {
+        let header = header.to_str().map_err(WireFormatError::HeaderValueNotVisibleAscii)?;
+        Err(WireFormatError::WireFormatNotSupported(header.to_owned()))
+    }
 }
 
 /// Supported wire formats by RPC V2.
 enum WireFormat {
     Cbor,
-}
-
-struct WireFormatFromStrError;
-
-impl FromStr for WireFormat {
-    type Err = WireFormatFromStrError;
-
-    fn from_str(format: &str) -> Result<Self, Self::Err> {
-        match format {
-            "cbor" => Ok(Self::Cbor),
-            _ => Err(WireFormatFromStrError),
-        }
-    }
 }
 
 fn request_route_identity<B>(request: &http::Request<B>) -> Result<RouteIdentity<'_>, Error> {
@@ -227,7 +201,10 @@ mod tests {
         identifier.as_bytes().iter().copied().all(is_word) && has_valid_identifier_start(identifier.as_bytes())
     }
 
-    use super::{parse_route_identity, wire_format_name, Error, RouteIdentity, Router, RpcV2CborRouter};
+    use super::{
+        parse_route_identity, parse_wire_format_from_header, Error, RouteIdentity, Router, RpcV2CborRouter,
+        WireFormatError,
+    };
 
     #[test]
     fn valid_identifiers() {
@@ -346,14 +323,30 @@ mod tests {
     }
 
     #[test]
-    fn wire_format_parser_works() {
-        assert_eq!(Some("something"), wire_format_name("rpc-v2-something"));
-        assert_eq!(Some("SomethingElse"), wire_format_name("rpc-v2-SomethingElse"));
-        assert_eq!(Some("cbor"), wire_format_name("rpc-v2-cbor"));
-        assert_eq!(Some("sparrowhawk"), wire_format_name("rpc-v2-sparrowhawk"));
-        assert_eq!(None, wire_format_name("rpc-v1-something"));
-        assert_eq!(None, wire_format_name("rpc-v2-"));
-        assert_eq!(None, wire_format_name("rpc-v2-cbor-suffix"));
+    fn non_cbor_wire_formats_are_rejected() {
+        for value in [
+            HeaderValue::from_static("rpc-v2-sparrowhawk"),
+            HeaderValue::from_static("rpc-v2-"),
+            HeaderValue::from_static("rpc-v2-cbor-suffix"),
+            HeaderValue::from_static("not-rpc-v2"),
+        ] {
+            let mut headers = HeaderMap::new();
+            headers.insert("smithy-protocol", value);
+            assert!(matches!(
+                parse_wire_format_from_header(&headers),
+                Err(WireFormatError::WireFormatNotSupported(_))
+            ));
+        }
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "smithy-protocol",
+            HeaderValue::from_bytes(b"rpc-v2-\xff").expect("valid header bytes"),
+        );
+        assert!(matches!(
+            parse_wire_format_from_header(&headers),
+            Err(WireFormatError::HeaderValueNotVisibleAscii(_))
+        ));
     }
 
     /// Helper function returning the only strictly required header.
