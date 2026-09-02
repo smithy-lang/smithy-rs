@@ -24,4 +24,4 @@ pokemon-service-client = { path = "../pokemon-service-client/", package = "pokem
 pokemon-service-server-sdk-http0x = { path = "../pokemon-service-server-sdk-http0x" }
 
 [dev-dependencies]
-aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime", features = ["test-util"] }
+aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime", features = ["test-util", "legacy-test-util"] }

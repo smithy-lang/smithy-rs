@@ -49,12 +49,12 @@ class ServiceGenerator(
                 )
             serviceConfigGenerator.render(this)
 
-            // NOTE: `test-util` deliberately does not enable `aws-smithy-runtime/test-util`. That
-            // feature implies `aws-smithy-runtime/legacy-test-util`, which pulls the whole http
-            // 0.2.x ecosystem into the dependency tree of anything built with `--features
-            // test-util`. The http test utilities generated code and tests use come from
-            // `aws-smithy-http-client`, declared as a dev-dependency with its http 1.x `test-util`
-            // feature. Callers who still need the pre-1.x helpers can opt in to `legacy-test-util`.
+            // NOTE: `test-util` deliberately does not enable `aws-smithy-runtime/test-util`, even
+            // though that feature no longer implies `legacy-test-util`. It still reaches
+            // `aws-smithy-http-client/test-util` -> `aws-smithy-protocol-test`, which puts http
+            // 0.2.x back in the normal dependency tree. The http test utilities generated code and
+            // tests use are declared as dev-dependencies instead, where they cannot leak into a
+            // consumer's build. Callers needing the pre-1.x helpers opt in to `legacy-test-util`.
             rustCrate.mergeFeature(TestUtilFeature.copy(deps = listOf()))
             if (codegenContext.settings.codegenConfig.includeLegacyClient) {
                 rustCrate.mergeFeature(
