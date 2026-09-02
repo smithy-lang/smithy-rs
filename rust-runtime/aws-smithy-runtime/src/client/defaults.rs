@@ -676,4 +676,63 @@ mod tests {
             "AWS SDK with v2026_01_12 (the cutoff version) should have retries enabled (3 attempts)"
         );
     }
+
+    /// A behavior version older than `v2026_01_12` must still end up with an HTTP client whenever
+    /// the hyper 1.x stack is compiled in, rather than with none at all.
+    ///
+    /// The configuration that actually exercises the fallback is `connector-hyper-0-14-x` plus
+    /// `default-https-client` with no legacy TLS implementation: `hyper_014::default_client()`
+    /// returns `None` there, so the fallback is the only thing that can supply a client. Note that
+    /// `--all-features` does *not* exercise it, because `tls-rustls` gives the legacy connector a
+    /// TLS implementation and it returns `Some`, which would satisfy the assertion below no matter
+    /// what the fallback did. `tools/ci-scripts/check-rust-runtimes` runs that combination
+    /// explicitly so this test has teeth.
+    #[test]
+    #[expect(deprecated)]
+    fn old_behavior_version_still_gets_an_http_client() {
+        let old = default_http_client_plugin_v2(BehaviorVersion::v2024_03_28());
+        let latest = default_http_client_plugin_v2(BehaviorVersion::latest());
+
+        // The hyper 1.x stack is available, so both behavior versions get a client: the latest
+        // directly, and the older one either from a working legacy connector or from the fallback.
+        #[cfg(feature = "default-https-client")]
+        {
+            assert!(
+                old.is_some(),
+                "a pre-v2026_01_12 behavior version must fall back to the hyper 1.x client \
+                 instead of getting no HTTP client"
+            );
+            assert!(
+                latest.is_some(),
+                "the latest behavior version must get the hyper 1.x client"
+            );
+        }
+
+        // No hyper 1.x stack, so there is nothing to fall back to and the legacy connector is the
+        // only possible source. It yields a client only when it also has a TLS implementation.
+        #[cfg(all(not(feature = "default-https-client"), feature = "tls-rustls"))]
+        assert!(
+            old.is_some(),
+            "a pre-v2026_01_12 behavior version must still get the legacy client when that is \
+             the only stack compiled in"
+        );
+
+        // Neither stack is compiled in, so no default client is possible for either version.
+        #[cfg(all(
+            not(feature = "default-https-client"),
+            not(feature = "connector-hyper-0-14-x")
+        ))]
+        {
+            assert!(
+                old.is_none(),
+                "no HTTP client stack is compiled in, so there is nothing to install"
+            );
+            assert!(
+                latest.is_none(),
+                "no HTTP client stack is compiled in, so there is nothing to install"
+            );
+        }
+
+        let _ = (old, latest);
+    }
 }
