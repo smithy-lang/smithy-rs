@@ -101,11 +101,11 @@ class AuthDecoratorTest {
                     async fn override_auth_scheme_with_no_op_signer_on_service_config() {
                         let http_client = #{StaticReplayClient}::new(
                             vec![#{ReplayEvent}::new(
-                                http::Request::builder()
+                                http_1x::Request::builder()
                                     .uri("http://localhost:1234/SomeOperation")
                                     .body(#{SdkBody}::empty())
                                     .unwrap(),
-                                http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
+                                http_1x::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
                             )],
                         );
                         let config = $moduleName::Config::builder()
@@ -131,11 +131,11 @@ class AuthDecoratorTest {
                     async fn override_auth_scheme_with_no_op_signer_at_operation_level() {
                         let http_client = #{StaticReplayClient}::new(
                             vec![#{ReplayEvent}::new(
-                                http::Request::builder()
+                                http_1x::Request::builder()
                                     .uri("http://localhost:1234/SomeOperation")
                                     .body(#{SdkBody}::empty())
                                     .unwrap(),
-                                http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
+                                http_1x::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
                             )],
                         );
                         let config = $moduleName::Config::builder()
@@ -276,11 +276,11 @@ class AuthDecoratorTest {
                     async fn register_custom_auth_scheme_on_service_config() {
                         let http_client = #{StaticReplayClient}::new(
                             vec![#{ReplayEvent}::new(
-                                http::Request::builder()
+                                http_1x::Request::builder()
                                     .uri("http://localhost:1234/SomeOperation/customidentitydata")
                                     .body(#{SdkBody}::empty())
                                     .unwrap(),
-                                http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
+                                http_1x::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
                             )],
                         );
                         let config = $moduleName::Config::builder()
@@ -306,11 +306,11 @@ class AuthDecoratorTest {
                     async fn register_custom_auth_scheme_at_operation_level() {
                         let http_client = #{StaticReplayClient}::new(
                             vec![#{ReplayEvent}::new(
-                                http::Request::builder()
+                                http_1x::Request::builder()
                                     .uri("http://localhost:1234/SomeOperation/customidentitydata")
                                     .body(#{SdkBody}::empty())
                                     .unwrap(),
-                                http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
+                                http_1x::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
                             )],
                         );
                         let config = $moduleName::Config::builder()
@@ -340,11 +340,11 @@ class AuthDecoratorTest {
                     async fn no_auth_aware_auth_scheme_option_resolver_via_plugin() {
                         let http_client = #{StaticReplayClient}::new(
                                 vec![#{ReplayEvent}::new(
-                                    http::Request::builder()
+                                    http_1x::Request::builder()
                                     .uri("http://localhost:1234/SomeOperation") // there shouldn't be `customidentitydata` in URI
                                     .body(#{SdkBody}::empty())
                                     .unwrap(),
-                                http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
+                                http_1x::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
                             )],
                         );
 
