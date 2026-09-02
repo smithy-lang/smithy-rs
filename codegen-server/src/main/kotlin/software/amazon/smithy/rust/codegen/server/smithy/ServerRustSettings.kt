@@ -123,8 +123,8 @@ data class RequestBodyReadTimeouts(
         private const val DEFAULT_NON_PAYLOAD_MILLIS_KEY = "defaultNonPayloadMillis"
         private const val DEFAULT_PAYLOAD_MILLIS_KEY = "defaultPayloadMillis"
         private const val OPERATION_MILLIS_KEY = "operationMillis"
-        const val DEFAULT_NON_PAYLOAD_REQUEST_BODY_READ_TIMEOUT_MILLIS = 10_000L
-        const val DEFAULT_REQUEST_BODY_READ_TIMEOUT_MILLIS = 3_600_000L
+        const val DEFAULT_NON_PAYLOAD_REQUEST_BODY_READ_TIMEOUT_MILLIS = 60_000L
+        const val DEFAULT_REQUEST_BODY_READ_TIMEOUT_MILLIS = 36_000_000L
 
 
         private fun parseTimeoutMillis(
@@ -137,7 +137,7 @@ data class RequestBodyReadTimeouts(
                     node.isStringNode -> parseTimeoutMillisString(node.expectStringNode().value, configPath)
                     else ->
                         throw CodegenException(
-                            "`$configPath` must be a non-negative millisecond number or a string like `3000`, `3s`, `3 s`, `3000ms`, or `3000 ms`",
+                            "`$configPath` must be a non-negative millisecond number or a string like `3000`, `3s`, `3 s`, `5min`, `5 min`, `3000ms`, or `3000 ms`",
                         )
                 }
             if (timeoutMillis < 0) {
@@ -153,17 +153,18 @@ data class RequestBodyReadTimeouts(
             val trimmed = value.trim()
             val match = TIMEOUT_VALUE_REGEX.matchEntire(trimmed)
                 ?: throw CodegenException(
-                    "`$configPath` must be a non-negative millisecond number or a string like `3000`, `3s`, `3 s`, `3000ms`, or `3000 ms`",
+                    "`$configPath` must be a non-negative millisecond number or a string like `3000`, `3s`, `3 s`, `5min`, `5 min`, `3000ms`, or `3000 ms`",
                 )
             val amount = match.groupValues[1].toLong()
             return when (match.groupValues[2]) {
                 "", "ms" -> amount
                 "s" -> Math.multiplyExact(amount, 1000L)
+                "min" -> Math.multiplyExact(amount, 60_000L)
                 else -> throw CodegenException("`$configPath` has an unsupported timeout unit")
             }
         }
 
-        private val TIMEOUT_VALUE_REGEX = Regex("^([0-9]+)\\s*(ms|s)?$")
+        private val TIMEOUT_VALUE_REGEX = Regex("^([0-9]+)\\s*(ms|s|min)?$")
 
         fun fromCustomizationConfig(
             model: Model,

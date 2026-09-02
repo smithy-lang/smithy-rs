@@ -200,9 +200,9 @@ internal class RequestBodyReadTimeoutTest {
                 null,
             )
 
-        check(config.timeoutMillisFor(ShapeId.from("test#Echo")) == 10_000L)
-        check(config.timeoutMillisFor(ShapeId.from("test#Health")) == 10_000L)
-        check(config.timeoutMillisFor(ShapeId.from("test#Upload")) == 3_600_000L)
+        check(config.timeoutMillisFor(ShapeId.from("test#Echo")) == 60_000L)
+        check(config.timeoutMillisFor(ShapeId.from("test#Health")) == 60_000L)
+        check(config.timeoutMillisFor(ShapeId.from("test#Upload")) == 36_000_000L)
     }
 
     @Test
@@ -239,10 +239,10 @@ internal class RequestBodyReadTimeoutTest {
                 {
                     "readTimeouts": {
                         "defaultNonPayloadMillis": "10 s",
-                        "defaultPayloadMillis": "3600000 ms",
+                        "defaultPayloadMillis": "60 min",
                         "operationMillis": {
                             "test#Echo": "300000",
-                            "test#Health": "3 s",
+                            "test#Health": "5 min",
                             "test#Upload": "120s"
                         }
                     }
@@ -258,7 +258,7 @@ internal class RequestBodyReadTimeoutTest {
             )
 
         check(config.timeoutMillisFor(ShapeId.from("test#Echo")) == 300_000L)
-        check(config.timeoutMillisFor(ShapeId.from("test#Health")) == 3_000L)
+        check(config.timeoutMillisFor(ShapeId.from("test#Health")) == 300_000L)
         check(config.timeoutMillisFor(ShapeId.from("test#Upload")) == 120_000L)
     }
 
@@ -369,8 +369,8 @@ internal class RequestBodyReadTimeoutTest {
             )
 
         check(config.timeoutMillisFor(ShapeId.from("test#Echo")) == 300_000L)
-        check(config.timeoutMillisFor(ShapeId.from("test#Health")) == 10_000L)
-        check(config.timeoutMillisFor(ShapeId.from("test#Upload")) == 3_600_000L)
+        check(config.timeoutMillisFor(ShapeId.from("test#Health")) == 60_000L)
+        check(config.timeoutMillisFor(ShapeId.from("test#Upload")) == 36_000_000L)
     }
 
     @Test
