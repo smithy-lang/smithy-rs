@@ -282,7 +282,6 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         val outputSymbol = symbolProvider.toSymbol(operationShape.outputShape(model))
 
         if (operationServedBySchema(operationShape)) {
-            operationWriter.renderSchemaServedFromRequest(inputSymbol, outputSymbol, operationShape)
             operationWriter.renderSchemaGenericIntoResponse(outputSymbol, operationShape)
             return
         }
@@ -448,7 +447,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     ) {
         val serverProtocolTrait =
             ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
-                .resolve("schema::protocol::ServerProtocol")
+                .resolve("schema::protocol::StaticProtocol")
         rustTemplate(
             """
             impl<P: #{ServerProtocol}> #{SmithyHttpServer}::response::IntoResponse<P> for #{O} {
@@ -456,9 +455,16 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                     P::serialize_response(Self::SCHEMA, &self)
                 }
             }
+
+            impl #{SmithyHttpServer}::operation::DynOutput for #{O} {
+                fn schema(&self) -> &#{Schema}<'_> {
+                    Self::SCHEMA
+                }
+            }
             """,
             *codegenScope,
             "O" to outputSymbol,
+            "Schema" to RuntimeType.smithySchema(runtimeConfig).resolve("Schema"),
             "ServerProtocol" to serverProtocolTrait,
         )
 
@@ -475,9 +481,22 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                         response
                     }
                 }
+
+                impl #{SmithyHttpServer}::operation::IntoDynProtocolResponse for #{E} {
+                    fn into_dyn_response(self, protocol: &dyn #{RuntimeServerProtocol}) -> #{SmithyHttpServer}::response::Response {
+                        let mut response = match &self {
+                            #{dyn_match_arms:W}
+                        };
+                        response.extensions_mut().insert(#{SmithyHttpServer}::extension::ModeledErrorExtension::new(self.name()));
+                        response
+                    }
+                }
                 """,
                 *codegenScope,
                 "E" to errorSymbol,
+                "RuntimeServerProtocol" to
+                    ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+                        .resolve("schema::protocol::ServerProtocol"),
                 "ServerProtocol" to serverProtocolTrait,
                 "match_arms" to
                     writable {
@@ -486,6 +505,17 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             val variantSymbol = symbolProvider.toSymbol(variantShape)
                             rustTemplate(
                                 "#{E}::${variantSymbol.name}(e) => P::serialize_error(e),",
+                                "E" to errorSymbol,
+                            )
+                        }
+                    },
+                "dyn_match_arms" to
+                    writable {
+                        operationShape.operationErrors(model).forEach {
+                            val variantShape = model.expectShape(it.id, StructureShape::class.java)
+                            val variantSymbol = symbolProvider.toSymbol(variantShape)
+                            rustTemplate(
+                                "#{E}::${variantSymbol.name}(e) => protocol.serialize_error(e),",
                                 "E" to errorSymbol,
                             )
                         }
@@ -501,7 +531,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     ) {
         val serverProtocolTrait =
             ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
-                .resolve("schema::protocol::ServerProtocol")
+                .resolve("schema::protocol::StaticProtocol")
         val inputFuture = "${inputSymbol.name}Future"
         val requestBodyMaxBytes = codegenContext.settings.codegenConfig.requestBodyMaxBytes
         val collectBody =
@@ -565,7 +595,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                     let fut = async move {
                         let (parts, body) = request.into_parts();
                         #{collectBody:W}
-                        <#{Marker} as #{ServerProtocol}>::deserialize_request::<#{I}>(#{I}::SCHEMA, #{O}::SCHEMA, &parts, bytes.as_ref())
+                        <#{Marker} as #{ServerProtocol}>::deserialize_request::<#{I}>(#{I}::SCHEMA, &parts, bytes.as_ref())
                     };
                     use #{FuturesUtil}::future::TryFutureExt;
                     let fut = fut.map_err(|e: #{RequestRejection}| {
@@ -580,7 +610,6 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             """,
             *codegenScope,
             "I" to inputSymbol,
-            "O" to outputSymbol,
             "Marker" to protocol.markerStruct(),
             "ServerProtocol" to serverProtocolTrait,
             "collectBody" to collectBody,
@@ -1191,7 +1220,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                                 "Marker" to protocol.markerStruct(),
                                                 "ServerProtocol" to
                                                     ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
-                                                        .resolve("schema::protocol::ServerProtocol"),
+                                                        .resolve("schema::protocol::StaticProtocol"),
                                                 *codegenScope,
                                             )
                                         } else {
@@ -1932,7 +1961,7 @@ private fun initialResponsePayload(
                             .resolve("error::operation::SerializationError"),
                     "ServerProtocol" to
                         ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType()
-                            .resolve("schema::protocol::ServerProtocol"),
+                            .resolve("schema::protocol::StaticProtocol"),
                     "ShapeSerializer" to RuntimeType.smithySchema(codegenContext.runtimeConfig).resolve("serde::ShapeSerializer"),
                 )
             } else {

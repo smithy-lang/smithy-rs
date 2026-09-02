@@ -125,9 +125,9 @@ class ServerSchemaEventStreamMarshallerGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val marker = protocol.markerStruct()
     private val serverProtocol = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
-        .resolve("schema::protocol::ServerProtocol")
+        .resolve("schema::protocol::StaticProtocol")
     private val serverEventStreamProtocol = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
-        .resolve("schema::protocol::ServerEventStreamProtocol")
+        .resolve("schema::protocol::StaticEventStreamProtocol")
     private val union = unionShape
     private val typeName = schemaEventStreamTypeName(symbolProvider, union, marker, "SchemaMarshaller")
     private val codegenScope =
@@ -356,9 +356,9 @@ class ServerSchemaEventStreamErrorMarshallerGenerator(
             "ShapeSerializer" to RuntimeType.smithySchema(runtimeConfig).resolve("serde::ShapeSerializer"),
             "FinishSerializer" to RuntimeType.smithySchema(runtimeConfig).resolve("codec::FinishSerializer"),
             "ServerProtocol" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
-                .resolve("schema::protocol::ServerProtocol"),
+                .resolve("schema::protocol::StaticProtocol"),
             "ServerEventStreamProtocol" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
-                .resolve("schema::protocol::ServerEventStreamProtocol"),
+                .resolve("schema::protocol::StaticEventStreamProtocol"),
             "Marker" to marker,
         )
 
@@ -484,7 +484,7 @@ class ServerSchemaEventStreamUnmarshallerGenerator(
             "UnmarshalledMessage" to RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::UnmarshalledMessage"),
             "UnmarshallMessage" to RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::UnmarshallMessage"),
             "ServerProtocol" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
-                .resolve("schema::protocol::ServerProtocol"),
+                .resolve("schema::protocol::StaticProtocol"),
             "Marker" to marker,
         )
 

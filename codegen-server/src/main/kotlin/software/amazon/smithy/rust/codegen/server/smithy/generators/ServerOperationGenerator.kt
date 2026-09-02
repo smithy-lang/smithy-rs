@@ -12,14 +12,15 @@ import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 
 class ServerOperationGenerator(
     private val operation: OperationShape,
-    codegenContext: CodegenContext,
+    codegenContext: ServerCodegenContext,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope =
@@ -29,6 +30,7 @@ class ServerOperationGenerator(
         )
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
+    private val schemaSerde = codegenContext.settings.codegenConfig.schemaSerde
 
     private val operationName = symbolProvider.toSymbol(operation).name.toPascalCase()
     private val operationId = operation.id
@@ -52,6 +54,21 @@ class ServerOperationGenerator(
         val responseFmt = generator.responseFmt()
 
         val operationIdAbsolute = operationId.toString().replace("#", "##")
+        val schemaOperationShapeImpl =
+            writable {
+                if (schemaSerde) {
+                    rustTemplate(
+                        """
+                        impl #{SmithyHttpServer}::operation::SchemaOperationShape for $operationName {
+                            const SCHEMA: &'static #{SmithyHttpServer}::schema::OperationSchema<'static> =
+                                &crate::schema::operations::${operationName.toSnakeCase().uppercase()};
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
+            }
+
         writer.rustTemplate(
             """
             pub struct $operationName;
@@ -63,6 +80,8 @@ class ServerOperationGenerator(
                 type Output = crate::output::${operationName}Output;
                 type Error = #{Error:W};
             }
+
+            #{SchemaOperationShapeImpl:W}
 
             impl #{SmithyHttpServer}::instrumentation::sensitivity::Sensitivity for $operationName {
                 type RequestFmt = #{RequestType:W};
@@ -78,6 +97,7 @@ class ServerOperationGenerator(
             }
             """,
             "Error" to operationError(),
+            "SchemaOperationShapeImpl" to schemaOperationShapeImpl,
             "RequestValue" to requestFmt.value,
             "RequestType" to requestFmt.type,
             "ResponseValue" to responseFmt.value,

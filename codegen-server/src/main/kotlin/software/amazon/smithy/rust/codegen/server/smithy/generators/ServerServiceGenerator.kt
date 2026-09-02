@@ -20,12 +20,16 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.util.findStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRpcV2CborProtocol
@@ -83,6 +87,15 @@ class ServerServiceGenerator(
     private val shouldGenerateOperationHandlerBindings =
         codegenContext.settings.codegenConfig.schemaSerde &&
             codegenContext.runtimeConfig.httpVersion == HttpVersion.Http1x
+
+    private fun operationUsesDynUpgrade(operation: OperationShape): Boolean =
+        shouldGenerateOperationHandlerBindings &&
+            operation.inputShape(model).findStreamingMember(model) == null &&
+            operation.outputShape(model).findStreamingMember(model) == null &&
+            (
+                listOf(operation.inputShape(model), operation.outputShape(model)) +
+                    operation.errorsSet.map { model.expectShape(it) }
+                ).none { it.canReachConstrainedShape(model, symbolProvider) }
 
     private val usedRequestSpecFunctionNames = mutableSetOf<String>()
 
@@ -155,6 +168,19 @@ class ServerServiceGenerator(
         writable {
             for ((operationShape, structName) in operationStructNames) {
                 val fieldName = builderFieldNames[operationShape]
+                val usesDynUpgrade = operationUsesDynUpgrade(operationShape)
+                val upgradePlugin =
+                    if (usesDynUpgrade) {
+                        smithyHttpServer.resolve("operation::DynUpgradePlugin")
+                    } else {
+                        smithyHttpServer.resolve("operation::UpgradePlugin")
+                    }
+                val upgradePluginConstructor =
+                    if (usesDynUpgrade) {
+                        "#{UpgradePlugin}::<UpgradeExtractors>::new(${codegenContext.settings.codegenConfig.requestBodyMaxBytes}usize)"
+                    } else {
+                        "#{UpgradePlugin}::<UpgradeExtractors>::new()"
+                    }
                 val docHandler = DocHandlerGenerator(codegenContext, operationShape, "handler", "///")
                 val handler = docHandler.docSignature()
                 val handlerFixed = docHandler.docFixedSignature()
@@ -198,7 +224,7 @@ class ServerServiceGenerator(
                             crate::operation_shape::$structName,
                             #{SmithyHttpServer}::operation::IntoService<crate::operation_shape::$structName, HandlerType>
                         >,
-                        #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
+                        #{UpgradePlugin}::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
                             $serviceName<L>,
                             crate::operation_shape::$structName,
                             ModelPl::Output
@@ -207,7 +233,7 @@ class ServerServiceGenerator(
                             $serviceName<L>,
                             crate::operation_shape::$structName,
                             <
-                                #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>
+                                #{UpgradePlugin}::<UpgradeExtractors>
                                 as #{SmithyHttpServer}::plugin::Plugin<
                                     $serviceName<L>,
                                     crate::operation_shape::$structName,
@@ -224,7 +250,7 @@ class ServerServiceGenerator(
                         use #{SmithyHttpServer}::plugin::Plugin;
                         let svc = crate::operation_shape::$structName::from_handler(handler);
                         let svc = self.model_plugin.apply(svc);
-                        let svc = #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new().apply(svc);
+                        let svc = $upgradePluginConstructor.apply(svc);
                         let svc = self.http_plugin.apply(svc);
                         self.${fieldName}_custom(svc)
                     }
@@ -262,7 +288,7 @@ class ServerServiceGenerator(
                             crate::operation_shape::$structName,
                             #{SmithyHttpServer}::operation::Normalize<crate::operation_shape::$structName, S>
                         >,
-                        #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
+                        #{UpgradePlugin}::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
                             $serviceName<L>,
                             crate::operation_shape::$structName,
                             ModelPl::Output
@@ -271,7 +297,7 @@ class ServerServiceGenerator(
                             $serviceName<L>,
                             crate::operation_shape::$structName,
                             <
-                                #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>
+                                #{UpgradePlugin}::<UpgradeExtractors>
                                 as #{SmithyHttpServer}::plugin::Plugin<
                                     $serviceName<L>,
                                     crate::operation_shape::$structName,
@@ -288,7 +314,7 @@ class ServerServiceGenerator(
                         use #{SmithyHttpServer}::plugin::Plugin;
                         let svc = crate::operation_shape::$structName::from_service(service);
                         let svc = self.model_plugin.apply(svc);
-                        let svc = #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new().apply(svc);
+                        let svc = $upgradePluginConstructor.apply(svc);
                         let svc = self.http_plugin.apply(svc);
                         self.${fieldName}_custom(svc)
                     }
@@ -309,6 +335,7 @@ class ServerServiceGenerator(
                     "Handler" to handler,
                     "HandlerFixed" to handlerFixed,
                     "HandlerImports" to handlerImports(crateName, operations),
+                    "UpgradePlugin" to upgradePlugin,
                     *codegenScope,
                 )
 
