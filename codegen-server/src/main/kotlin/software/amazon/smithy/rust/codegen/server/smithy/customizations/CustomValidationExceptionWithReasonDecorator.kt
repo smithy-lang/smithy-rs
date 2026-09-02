@@ -116,7 +116,7 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
                                 rust(
                                     """
                                     Self::Length(length) => crate::model::ValidationExceptionField {
-                                        message: format!("${it.lengthTrait.validationErrorMessage()}", length, &path),
+                                        message: format!("${it.lengthTrait.validationErrorMessage()}"),
                                         name: path,
                                         reason: crate::model::ValidationExceptionFieldReason::LengthNotValid,
                                     },
@@ -143,12 +143,12 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
     override fun enumShapeConstraintViolationImplBlock(enumTrait: EnumTrait) =
         writable {
             val enumValueSet = enumTrait.enumDefinitionValues.joinToString(", ")
-            val message = "Value at '{}' failed to satisfy constraint: Member must satisfy enum value set: [$enumValueSet]"
+            val message = "Value at '{path}' failed to satisfy constraint: Member must satisfy enum value set: [$enumValueSet]"
             rustTemplate(
                 """
                 pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
                     crate::model::ValidationExceptionField {
-                        message: format!(r##"$message"##, &path),
+                        message: format!(r##"$message"##),
                         name: path,
                         reason: crate::model::ValidationExceptionFieldReason::ValueNotValid,
                     }
@@ -165,7 +165,7 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
                 pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
                     match self {
                         Self::Range(_) => crate::model::ValidationExceptionField {
-                            message: format!("${rangeInfo.rangeTrait.validationErrorMessage()}", &path),
+                            message: format!("${rangeInfo.rangeTrait.validationErrorMessage()}"),
                             name: path,
                             reason: crate::model::ValidationExceptionFieldReason::ValueNotValid,
                         }
@@ -184,7 +184,7 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
                         rust(
                             """
                             Self::Length(length) => crate::model::ValidationExceptionField {
-                                message: format!("${it.lengthTrait.validationErrorMessage()}", length, &path),
+                                message: format!("${it.lengthTrait.validationErrorMessage()}"),
                                 name: path,
                                 reason: crate::model::ValidationExceptionFieldReason::LengthNotValid,
                             },
@@ -222,7 +222,7 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
                     rust(
                         """
                         Self::Length(length) => crate::model::ValidationExceptionField {
-                            message: format!("${it.validationErrorMessage()}", length, &path),
+                            message: format!("${it.validationErrorMessage()}"),
                             name: path,
                             reason: crate::model::ValidationExceptionFieldReason::LengthNotValid,
                         },
@@ -253,7 +253,7 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
                             rust(
                                 """
                                 ConstraintViolation::${it.name()} => crate::model::ValidationExceptionField {
-                                    message: format!("Value at '{}/${it.forMember.memberName}' failed to satisfy constraint: Member must not be null", path),
+                                    message: format!("Value at '{path}/${it.forMember.memberName}' failed to satisfy constraint: Member must not be null"),
                                     name: path + "/${it.forMember.memberName}",
                                     reason: crate::model::ValidationExceptionFieldReason::Other,
                                 },
@@ -277,7 +277,7 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
                             rust(
                                 """
                                 Self::Length(length) => crate::model::ValidationExceptionField {
-                                    message: format!("${it.lengthTrait.validationErrorMessage()}", length, &path),
+                                    message: format!("${it.lengthTrait.validationErrorMessage()}"),
                                     name: path,
                                     reason: crate::model::ValidationExceptionFieldReason::LengthNotValid,
                                 },
@@ -289,7 +289,7 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
                                 """
                                 Self::UniqueItems { duplicate_indices, .. } =>
                                     crate::model::ValidationExceptionField {
-                                        message: format!("${it.uniqueItemsTrait.validationErrorMessage()}", &duplicate_indices, &path),
+                                        message: format!("${it.uniqueItemsTrait.validationErrorMessage()}"),
                                         name: path,
                                         reason: crate::model::ValidationExceptionFieldReason::ValueNotValid,
                                     },

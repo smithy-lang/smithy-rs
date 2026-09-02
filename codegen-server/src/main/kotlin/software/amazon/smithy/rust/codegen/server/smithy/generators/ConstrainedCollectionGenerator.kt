@@ -260,7 +260,7 @@ sealed class CollectionTraitInfo {
                         """
                         Self::UniqueItems { duplicate_indices, .. } =>
                             crate::model::ValidationExceptionField {
-                                message: format!("${uniqueItemsTrait.validationErrorMessage()}", &duplicate_indices, &path),
+                                message: format!("${uniqueItemsTrait.validationErrorMessage()}"),
                                 path,
                             },
                         """,
@@ -328,7 +328,7 @@ sealed class CollectionTraitInfo {
                 rustTemplate(
                     """
                     Self::UniqueItems { duplicate_indices, .. } =>
-                        format!("${uniqueItemsTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}", &duplicate_indices),
+                        format!("${uniqueItemsTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}"),
                     """,
                 )
             }
@@ -348,7 +348,7 @@ sealed class CollectionTraitInfo {
                     rust(
                         """
                         Self::Length(length) => crate::model::ValidationExceptionField {
-                            message: format!("${lengthTrait.validationErrorMessage()}", length, &path),
+                            message: format!("${lengthTrait.validationErrorMessage()}"),
                             path,
                         },
                         """,
@@ -378,7 +378,7 @@ sealed class CollectionTraitInfo {
                 rustTemplate(
                     """
                     Self::Length(length) => {
-                        format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}", length)
+                        format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}")
                     },
                     """,
                 )
