@@ -153,10 +153,17 @@ internal class CredentialProviderConfigTest {
                     "ProvideCredentialsFuture" to
                         AwsRuntimeType.awsCredentialTypes(rc)
                             .resolve("provider::future::ProvideCredentials"),
-                    // The http 1.x helper; the `aws-smithy-runtime` re-export is the http 0.2.x one.
+                    // http 1.x helpers; the `aws-smithy-runtime` re-exports live behind a feature
+                    // that would drag http 0.2.x back into the tree.
                     "infallible_client_fn" to
                         CargoDependency.smithyHttpClientTestUtil(rc)
                             .toType().resolve("test_util::infallible_client_fn"),
+                    "ReplayEvent" to
+                        CargoDependency.smithyHttpClientTestUtil(rc)
+                            .toType().resolve("test_util::ReplayEvent"),
+                    "StaticReplayClient" to
+                        CargoDependency.smithyHttpClientTestUtil(rc)
+                            .toType().resolve("test_util::StaticReplayClient"),
                     "RetryConfig" to
                         RuntimeType.smithyTypes(rc).resolve("retry::RetryConfig"),
                     "SharedAsyncSleep" to
@@ -216,7 +223,8 @@ internal class CredentialProviderConfigTest {
                     ##[::tokio::test]
                     async fn config_override_credentials_are_cached_across_retries() {
                         use std::sync::{Arc, Mutex};
-                        use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
+                        use #{ReplayEvent};
+                        use #{StaticReplayClient};
                         use aws_smithy_types::body::SdkBody;
 
                         // A credentials provider backed by a list. Each call to provide_credentials
