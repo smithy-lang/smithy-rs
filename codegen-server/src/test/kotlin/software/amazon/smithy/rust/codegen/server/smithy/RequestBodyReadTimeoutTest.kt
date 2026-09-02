@@ -31,7 +31,7 @@ internal class RequestBodyReadTimeoutTest {
 
         @restJson1
         service TestService {
-            operations: [Echo, Health]
+            operations: [Echo, Health, Upload]
         }
 
         @http(uri: "/echo", method: "POST")
@@ -48,6 +48,14 @@ internal class RequestBodyReadTimeoutTest {
 
         @http(uri: "/health", method: "GET")
         operation Health {}
+
+        @http(uri: "/upload", method: "POST")
+        operation Upload {
+            input := {
+                @httpPayload
+                data: Blob
+            }
+        }
         """.asSmithyModel()
 
     @Test
@@ -184,7 +192,7 @@ internal class RequestBodyReadTimeoutTest {
     }
 
     @Test
-    fun `default request read timeout is one minute`() {
+    fun `default request read timeout uses payload aware defaults`() {
         val config =
             RequestBodyReadTimeouts.fromCustomizationConfig(
                 model,
@@ -192,18 +200,77 @@ internal class RequestBodyReadTimeoutTest {
                 null,
             )
 
-        check(config.timeoutMillisFor(ShapeId.from("test#Echo")) == 60_000L)
-        check(config.timeoutMillisFor(ShapeId.from("test#Health")) == 60_000L)
+        check(config.timeoutMillisFor(ShapeId.from("test#Echo")) == 10_000L)
+        check(config.timeoutMillisFor(ShapeId.from("test#Health")) == 10_000L)
+        check(config.timeoutMillisFor(ShapeId.from("test#Upload")) == 3_600_000L)
     }
 
     @Test
-    fun `default request read timeout can be disabled`() {
+    fun `payload and non payload request read timeout defaults can be configured separately`() {
         val customizationConfig =
             objectNode(
                 """
                 {
                     "readTimeouts": {
-                        "defaultMillis": 0
+                        "defaultNonPayloadMillis": 15000,
+                        "defaultPayloadMillis": 300000
+                    }
+                }
+                """,
+            )
+
+        val config =
+            RequestBodyReadTimeouts.fromCustomizationConfig(
+                model,
+                ShapeId.from("test#TestService"),
+                customizationConfig,
+            )
+
+        check(config.timeoutMillisFor(ShapeId.from("test#Echo")) == 15_000L)
+        check(config.timeoutMillisFor(ShapeId.from("test#Health")) == 15_000L)
+        check(config.timeoutMillisFor(ShapeId.from("test#Upload")) == 300_000L)
+    }
+
+    @Test
+    fun `request read timeout values accept string units`() {
+        val customizationConfig =
+            objectNode(
+                """
+                {
+                    "readTimeouts": {
+                        "defaultNonPayloadMillis": "10 s",
+                        "defaultPayloadMillis": "3600000 ms",
+                        "operationMillis": {
+                            "test#Echo": "300000",
+                            "test#Health": "3 s",
+                            "test#Upload": "120s"
+                        }
+                    }
+                }
+                """,
+            )
+
+        val config =
+            RequestBodyReadTimeouts.fromCustomizationConfig(
+                model,
+                ShapeId.from("test#TestService"),
+                customizationConfig,
+            )
+
+        check(config.timeoutMillisFor(ShapeId.from("test#Echo")) == 300_000L)
+        check(config.timeoutMillisFor(ShapeId.from("test#Health")) == 3_000L)
+        check(config.timeoutMillisFor(ShapeId.from("test#Upload")) == 120_000L)
+    }
+
+    @Test
+    fun `payload and non payload request read timeout defaults can be disabled separately`() {
+        val customizationConfig =
+            objectNode(
+                """
+                {
+                    "readTimeouts": {
+                        "defaultNonPayloadMillis": 0,
+                        "defaultPayloadMillis": 0
                     }
                 }
                 """,
@@ -218,6 +285,7 @@ internal class RequestBodyReadTimeoutTest {
 
         check(config.timeoutMillisFor(ShapeId.from("test#Echo")) == null)
         check(config.timeoutMillisFor(ShapeId.from("test#Health")) == null)
+        check(config.timeoutMillisFor(ShapeId.from("test#Upload")) == null)
     }
 
     @Test
@@ -227,7 +295,8 @@ internal class RequestBodyReadTimeoutTest {
                 """
                 {
                     "readTimeouts": {
-                        "defaultMillis": 60000,
+                        "defaultNonPayloadMillis": 60000,
+                        "defaultPayloadMillis": 60000,
                         "operationMillis": {
                             "test#Echo": 0
                         }
@@ -245,6 +314,7 @@ internal class RequestBodyReadTimeoutTest {
 
         check(config.timeoutMillisFor(ShapeId.from("test#Echo")) == null)
         check(config.timeoutMillisFor(ShapeId.from("test#Health")) == 60_000L)
+        check(config.timeoutMillisFor(ShapeId.from("test#Upload")) == 60_000L)
     }
 
     @Test
@@ -254,7 +324,8 @@ internal class RequestBodyReadTimeoutTest {
                 """
                 {
                     "readTimeouts": {
-                        "defaultMillis": 0,
+                        "defaultNonPayloadMillis": 0,
+                        "defaultPayloadMillis": 0,
                         "operationMillis": {
                             "test#Echo": 300000
                         }
@@ -272,10 +343,11 @@ internal class RequestBodyReadTimeoutTest {
 
         check(config.timeoutMillisFor(ShapeId.from("test#Echo")) == 300_000L)
         check(config.timeoutMillisFor(ShapeId.from("test#Health")) == null)
+        check(config.timeoutMillisFor(ShapeId.from("test#Upload")) == null)
     }
 
     @Test
-    fun `operation override falls back to default request read timeout`() {
+    fun `operation override falls back to payload aware default request read timeouts`() {
         val customizationConfig =
             objectNode(
                 """
@@ -297,11 +369,12 @@ internal class RequestBodyReadTimeoutTest {
             )
 
         check(config.timeoutMillisFor(ShapeId.from("test#Echo")) == 300_000L)
-        check(config.timeoutMillisFor(ShapeId.from("test#Health")) == 60_000L)
+        check(config.timeoutMillisFor(ShapeId.from("test#Health")) == 10_000L)
+        check(config.timeoutMillisFor(ShapeId.from("test#Upload")) == 3_600_000L)
     }
 
     @Test
-    fun `no body operation override is accepted`() {
+    fun `operation overrides win over payload aware defaults`() {
         val config =
             RequestBodyReadTimeouts.fromCustomizationConfig(
                 model,
@@ -309,7 +382,31 @@ internal class RequestBodyReadTimeoutTest {
                 readTimeoutSettings().expectObjectMember("customizationConfig"),
             )
 
+        check(config.timeoutMillisFor(ShapeId.from("test#Echo")) == 300_000L)
         check(config.timeoutMillisFor(ShapeId.from("test#Health")) == 30_000L)
+        check(config.timeoutMillisFor(ShapeId.from("test#Upload")) == 120_000L)
+    }
+
+    @Test
+    fun `invalid request read timeout unit is rejected`() {
+        val customizationConfig =
+            objectNode(
+                """
+                {
+                    "readTimeouts": {
+                        "defaultNonPayloadMillis": "3m"
+                    }
+                }
+                """,
+            )
+
+        assertThrows<CodegenException> {
+            RequestBodyReadTimeouts.fromCustomizationConfig(
+                model,
+                ShapeId.from("test#TestService"),
+                customizationConfig,
+            )
+        }
     }
 
     @Test
@@ -319,7 +416,8 @@ internal class RequestBodyReadTimeoutTest {
                 """
                 {
                     "readTimeouts": {
-                        "defaultMillis": 10000,
+                        "defaultNonPayloadMillis": 10000,
+                        "defaultPayloadMillis": 60000,
                         "operationMillis": {
                             "test#Missing": 30000
                         }
@@ -343,10 +441,12 @@ internal class RequestBodyReadTimeoutTest {
             {
                 "customizationConfig": {
                     "readTimeouts": {
-                        "defaultMillis": 10000,
+                        "defaultNonPayloadMillis": 10000,
+                        "defaultPayloadMillis": 60000,
                         "operationMillis": {
                             "test#Echo": 300000,
-                            "test#Health": 30000
+                            "test#Health": 30000,
+                            "test#Upload": 120000
                         }
                     }
                 }
@@ -360,7 +460,8 @@ internal class RequestBodyReadTimeoutTest {
             {
                 "customizationConfig": {
                     "readTimeouts": {
-                        "defaultMillis": 0
+                        "defaultNonPayloadMillis": 0,
+                        "defaultPayloadMillis": 0
                     }
                 }
             }
@@ -373,7 +474,8 @@ internal class RequestBodyReadTimeoutTest {
             {
                 "customizationConfig": {
                     "readTimeouts": {
-                        "defaultMillis": 100
+                        "defaultNonPayloadMillis": 100,
+                        "defaultPayloadMillis": 100
                     }
                 }
             }

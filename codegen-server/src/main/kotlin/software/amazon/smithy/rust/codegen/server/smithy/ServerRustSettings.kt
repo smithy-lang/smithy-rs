@@ -8,14 +8,17 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.TopDownIndex
+import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.rust.codegen.core.smithy.CODEGEN_SETTINGS
 import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenConfig
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import java.util.Optional
 import java.util.logging.Logger
 
@@ -103,18 +106,64 @@ data class ServerRustSettings(
 }
 
 data class RequestBodyReadTimeouts(
-    val defaultMillis: Long,
+    val defaultNonPayloadMillis: Long,
+    val defaultPayloadMillis: Long,
     val operationMillis: Map<ShapeId, Long>,
+    val payloadOperationIds: Set<ShapeId>,
 ) {
     fun timeoutMillisFor(operationId: ShapeId): Long? =
-        (operationMillis[operationId] ?: defaultMillis)
+        (
+            operationMillis[operationId]
+                ?: if (operationId in payloadOperationIds) defaultPayloadMillis else defaultNonPayloadMillis
+        )
             .takeIf { it > 0 }
 
     companion object {
         private const val CONFIG_KEY = "readTimeouts"
-        private const val DEFAULT_MILLIS_KEY = "defaultMillis"
+        private const val DEFAULT_NON_PAYLOAD_MILLIS_KEY = "defaultNonPayloadMillis"
+        private const val DEFAULT_PAYLOAD_MILLIS_KEY = "defaultPayloadMillis"
         private const val OPERATION_MILLIS_KEY = "operationMillis"
-        const val DEFAULT_REQUEST_BODY_READ_TIMEOUT_MILLIS = 60_000L
+        const val DEFAULT_NON_PAYLOAD_REQUEST_BODY_READ_TIMEOUT_MILLIS = 10_000L
+        const val DEFAULT_REQUEST_BODY_READ_TIMEOUT_MILLIS = 3_600_000L
+
+
+        private fun parseTimeoutMillis(
+            node: Node,
+            configPath: String,
+        ): Long {
+            val timeoutMillis =
+                when {
+                    node.isNumberNode -> node.expectNumberNode().value.toLong()
+                    node.isStringNode -> parseTimeoutMillisString(node.expectStringNode().value, configPath)
+                    else ->
+                        throw CodegenException(
+                            "`$configPath` must be a non-negative millisecond number or a string like `3000`, `3s`, `3 s`, `3000ms`, or `3000 ms`",
+                        )
+                }
+            if (timeoutMillis < 0) {
+                throw CodegenException("`$configPath` must be non-negative")
+            }
+            return timeoutMillis
+        }
+
+        private fun parseTimeoutMillisString(
+            value: String,
+            configPath: String,
+        ): Long {
+            val trimmed = value.trim()
+            val match = TIMEOUT_VALUE_REGEX.matchEntire(trimmed)
+                ?: throw CodegenException(
+                    "`$configPath` must be a non-negative millisecond number or a string like `3000`, `3s`, `3 s`, `3000ms`, or `3000 ms`",
+                )
+            val amount = match.groupValues[1].toLong()
+            return when (match.groupValues[2]) {
+                "", "ms" -> amount
+                "s" -> Math.multiplyExact(amount, 1000L)
+                else -> throw CodegenException("`$configPath` has an unsupported timeout unit")
+            }
+        }
+
+        private val TIMEOUT_VALUE_REGEX = Regex("^([0-9]+)\\s*(ms|s)?$")
 
         fun fromCustomizationConfig(
             model: Model,
@@ -122,20 +171,36 @@ data class RequestBodyReadTimeouts(
             customizationConfig: ObjectNode?,
         ): RequestBodyReadTimeouts {
             val config = customizationConfig?.getObjectMember(CONFIG_KEY)?.orElse(null)
-            val defaultMillis =
+            val defaultNonPayloadMillis =
                 config
-                    ?.getNumberMember(DEFAULT_MILLIS_KEY)
+                    ?.getMember(DEFAULT_NON_PAYLOAD_MILLIS_KEY)
+                    ?.map { parseTimeoutMillis(it, "customizationConfig.$CONFIG_KEY.$DEFAULT_NON_PAYLOAD_MILLIS_KEY") }
                     ?.orElse(null)
-                    ?.value
-                    ?.toLong()
+                    ?: DEFAULT_NON_PAYLOAD_REQUEST_BODY_READ_TIMEOUT_MILLIS
+            val defaultPayloadMillis =
+                config
+                    ?.getMember(DEFAULT_PAYLOAD_MILLIS_KEY)
+                    ?.map { parseTimeoutMillis(it, "customizationConfig.$CONFIG_KEY.$DEFAULT_PAYLOAD_MILLIS_KEY") }
+                    ?.orElse(null)
                     ?: DEFAULT_REQUEST_BODY_READ_TIMEOUT_MILLIS
-            if (defaultMillis < 0) {
-                throw CodegenException("`customizationConfig.$CONFIG_KEY.$DEFAULT_MILLIS_KEY` must be non-negative")
-            }
 
             val service = model.expectShape(serviceId, ServiceShape::class.java)
+            val containedOperations = TopDownIndex.of(model).getContainedOperations(service)
             val containedOperationIds =
-                TopDownIndex.of(model).getContainedOperations(service)
+                containedOperations
+                    .map { it.id }
+                    .toSet()
+            val payloadOperationIds =
+                containedOperations
+                    .filter { operation ->
+                        operation.input
+                            .map { inputId ->
+                                model.expectShape(inputId).members().any { member ->
+                                    member.hasTrait<HttpPayloadTrait>()
+                                }
+                            }
+                            .orElse(false)
+                    }
                     .map { it.id }
                     .toSet()
             val operationMillis =
@@ -151,17 +216,20 @@ data class RequestBodyReadTimeouts(
                                     "which is not an operation attached to service `$serviceId`",
                             )
                         }
-                        val timeoutMillis = value.expectNumberNode().value.toLong()
-                        if (timeoutMillis < 0) {
-                            throw CodegenException(
-                                "`customizationConfig.$CONFIG_KEY.$OPERATION_MILLIS_KEY.$operationId` must be non-negative",
+                        operationId to
+                            parseTimeoutMillis(
+                                value,
+                                "customizationConfig.$CONFIG_KEY.$OPERATION_MILLIS_KEY.$operationId",
                             )
-                        }
-                        operationId to timeoutMillis
                     }?.toMap()
                     ?: emptyMap()
 
-            return RequestBodyReadTimeouts(defaultMillis, operationMillis)
+            return RequestBodyReadTimeouts(
+                defaultNonPayloadMillis,
+                defaultPayloadMillis,
+                operationMillis,
+                payloadOperationIds,
+            )
         }
     }
 }
