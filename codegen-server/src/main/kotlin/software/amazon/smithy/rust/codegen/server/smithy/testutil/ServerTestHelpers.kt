@@ -103,8 +103,10 @@ fun serverTestRustSettings(
     customizationConfig: ObjectNode? = null,
     requestBodyReadTimeouts: RequestBodyReadTimeouts =
         RequestBodyReadTimeouts(
+            RequestBodyReadTimeouts.DEFAULT_NON_PAYLOAD_REQUEST_BODY_READ_TIMEOUT_MILLIS,
             RequestBodyReadTimeouts.DEFAULT_REQUEST_BODY_READ_TIMEOUT_MILLIS,
             emptyMap(),
+            emptySet(),
         ),
 ) = ServerRustSettings(
     service,
