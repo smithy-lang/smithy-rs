@@ -22,6 +22,37 @@ use tokio::{
     sync::{OwnedSemaphorePermit, Semaphore},
 };
 
+#[derive(Debug)]
+pub(super) struct ConnectionLimit {
+    sem: Arc<Semaphore>,
+    max: usize,
+}
+
+impl ConnectionLimit {
+    pub(super) fn new(max: usize) -> Self {
+        Self {
+            sem: Arc::new(Semaphore::new(max)),
+            max,
+        }
+    }
+
+    pub(super) fn max(&self) -> usize {
+        self.max
+    }
+
+    pub(super) fn available_permits(&self) -> usize {
+        self.sem.available_permits()
+    }
+
+    pub(super) async fn acquire(&self) -> OwnedSemaphorePermit {
+        self.sem
+            .clone()
+            .acquire_owned()
+            .await
+            .expect("semaphore should never be closed")
+    }
+}
+
 /// Types that can listen for connections.
 pub trait Listener: Send + 'static {
     /// The listener's IO type.
@@ -95,7 +126,7 @@ pub trait ListenerExt: Listener + Sized {
     fn limit_connections(self, limit: usize) -> ConnLimiter<Self> {
         ConnLimiter {
             listener: self,
-            sem: Arc::new(Semaphore::new(limit)),
+            limit: ConnectionLimit::new(limit),
         }
     }
 
@@ -135,7 +166,7 @@ impl<L: Listener> ListenerExt for L {}
 #[derive(Debug)]
 pub struct ConnLimiter<T> {
     listener: T,
-    sem: Arc<Semaphore>,
+    limit: ConnectionLimit,
 }
 
 impl<T: Listener> Listener for ConnLimiter<T> {
@@ -143,12 +174,7 @@ impl<T: Listener> Listener for ConnLimiter<T> {
     type Addr = T::Addr;
 
     async fn accept(&mut self) -> (Self::Io, Self::Addr) {
-        let permit = self
-            .sem
-            .clone()
-            .acquire_owned()
-            .await
-            .expect("semaphore should never be closed");
+        let permit = self.limit.acquire().await;
         let (io, addr) = self.listener.accept().await;
         (ConnLimiterIo { io, permit }, addr)
     }

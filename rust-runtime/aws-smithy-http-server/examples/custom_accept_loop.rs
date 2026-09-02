@@ -6,7 +6,7 @@
 //! Example demonstrating a custom accept loop with connection-level timeouts.
 //!
 //! **NOTE: This is a demonstration example only, not production-ready code.**
-//! For most use cases, use the built-in `serve()` function instead.
+//! For most use cases, use `aws_smithy_http_server::serve::bind()` instead.
 //!
 //! This example shows how to implement your own custom accept loop if you need
 //! control over:
