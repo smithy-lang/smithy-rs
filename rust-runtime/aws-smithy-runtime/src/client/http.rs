@@ -10,10 +10,11 @@ use aws_smithy_runtime_api::client::http::SharedHttpClient;
 pub mod connection_poisoning;
 
 #[deprecated = "Direct HTTP test utility support from `aws-smithy-runtime` crate is deprecated. Please use the `test-util` feature from `aws-smithy-http-client` instead"]
-#[cfg(feature = "test-util")]
+#[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
 pub mod test_util {
     #![allow(missing_docs)]
 
+    #[cfg(feature = "legacy-test-util")]
     pub use aws_smithy_http_client::test_util::{
         legacy_capture_request as capture_request, CaptureRequestHandler, CaptureRequestReceiver,
     };
@@ -25,6 +26,7 @@ pub mod test_util {
 
     pub use aws_smithy_http_client::test_util::{ReplayEvent, StaticReplayClient};
 
+    #[cfg(feature = "legacy-test-util")]
     pub use aws_smithy_http_client::test_util::legacy_infallible::infallible_client_fn;
 
     pub use aws_smithy_http_client::test_util::NeverClient;
@@ -82,6 +84,7 @@ impl DefaultClientOptions {
 
 /// Creates an HTTPS client using the default TLS provider
 #[cfg(feature = "default-https-client")]
+#[allow(unused_variables)]
 pub(crate) fn default_https_client(options: DefaultClientOptions) -> Option<SharedHttpClient> {
     use aws_smithy_http_client::proxy::ProxyConfig;
     use aws_smithy_http_client::{tls, Builder, ConnectorBuilder};
@@ -97,14 +100,21 @@ pub(crate) fn default_https_client(options: DefaultClientOptions) -> Option<Shar
             conn_builder.set_sleep_impl(components.sleep_impl());
         }
 
-        #[expect(deprecated)]
-        if options
-            .behavior_version
-            .is_at_least(BehaviorVersion::v2025_08_07())
+        #[cfg(feature = "tls-rustls")]
+        {
+            #[expect(deprecated)]
+            if options
+                .behavior_version
+                .is_at_least(BehaviorVersion::v2025_08_07())
+            {
+                conn_builder.set_proxy_config(Some(ProxyConfig::from_env()));
+            } else {
+                conn_builder.set_proxy_config(Some(ProxyConfig::disabled()));
+            }
+        }
+        #[cfg(not(feature = "tls-rustls"))]
         {
             conn_builder.set_proxy_config(Some(ProxyConfig::from_env()));
-        } else {
-            conn_builder.set_proxy_config(Some(ProxyConfig::disabled()));
         }
 
         conn_builder.build()

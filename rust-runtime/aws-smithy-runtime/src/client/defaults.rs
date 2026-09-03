@@ -56,6 +56,7 @@ where
 }
 
 /// Runtime plugin that provides a default connector.
+#[cfg(feature = "tls-rustls")]
 #[deprecated(
     since = "1.8.0",
     note = "This function wasn't intended to be public, and didn't take the behavior major version as an argument, so it couldn't be evolved over time."
@@ -299,6 +300,7 @@ pub fn default_identity_cache_plugin() -> Option<SharedRuntimePlugin> {
 ///
 /// By default, when throughput falls below 1/Bs for more than 5 seconds, the
 /// stream is cancelled.
+#[cfg(feature = "tls-rustls")]
 #[deprecated(
     since = "1.2.0",
     note = "This function wasn't intended to be public, and didn't take the behavior major version as an argument, so it couldn't be evolved over time."
@@ -308,7 +310,7 @@ pub fn default_stalled_stream_protection_config_plugin() -> Option<SharedRuntime
     default_stalled_stream_protection_config_plugin_v2(BehaviorVersion::v2023_11_09())
 }
 fn default_stalled_stream_protection_config_plugin_v2(
-    behavior_version: BehaviorVersion,
+    _behavior_version: BehaviorVersion,
 ) -> Option<SharedRuntimePlugin> {
     Some(
         default_plugin(
@@ -320,12 +322,16 @@ fn default_stalled_stream_protection_config_plugin_v2(
             },
         )
         .with_config(layer("default_stalled_stream_protection_config", |layer| {
+            #[allow(unused_mut)]
             let mut config =
                 StalledStreamProtectionConfig::enabled().grace_period(Duration::from_secs(5));
             // Before v2024_03_28, upload streams did not have stalled stream protection by default
-            #[expect(deprecated)]
-            if !behavior_version.is_at_least(BehaviorVersion::v2024_03_28()) {
-                config = config.upload_enabled(false);
+            #[cfg(feature = "tls-rustls")]
+            {
+                #[expect(deprecated)]
+                if !_behavior_version.is_at_least(BehaviorVersion::v2024_03_28()) {
+                    config = config.upload_enabled(false);
+                }
             }
             layer.store_put(config.build());
         }))
@@ -427,14 +433,20 @@ pub fn default_plugins(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, RuntimePlugins};
+    use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
+    #[cfg(feature = "tls-rustls")]
+    use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins;
 
+    // These helpers are only used by tests that exercise pre-v2026_01_12 behavior versions,
+    // which are gated behind the `tls-rustls` feature (via `legacy-client`).
+    #[cfg(feature = "tls-rustls")]
     fn test_plugin_params(version: BehaviorVersion) -> DefaultPluginParams {
         DefaultPluginParams::new()
             .with_behavior_version(version)
             .with_retry_partition_name("dontcare")
             .with_is_aws_sdk(false) // Default to non-AWS SDK for existing tests
     }
+    #[cfg(feature = "tls-rustls")]
     fn config_for(plugins: impl IntoIterator<Item = SharedRuntimePlugin>) -> ConfigBag {
         let mut config = ConfigBag::base();
         let plugins = RuntimePlugins::new().with_client_plugins(plugins);
@@ -443,6 +455,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "tls-rustls")]
     #[expect(deprecated)]
     fn v2024_03_28_stalled_stream_protection_difference() {
         let latest = config_for(default_plugins(test_plugin_params(
@@ -489,6 +502,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "tls-rustls")]
     #[expect(deprecated)]
     fn test_retry_disabled_for_aws_sdk_old_behavior_version() {
         // Any version before v2026_01_12 should have retries disabled
@@ -553,6 +567,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "tls-rustls")]
     #[expect(deprecated)]
     fn test_behavior_version_gates_retry_for_aws_sdk() {
         // This test demonstrates the complete behavior:
@@ -591,6 +606,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "tls-rustls")]
     #[expect(deprecated)]
     fn test_complete_default_plugins_integration() {
         // This test simulates the complete flow as it would happen in a real AWS SDK client
