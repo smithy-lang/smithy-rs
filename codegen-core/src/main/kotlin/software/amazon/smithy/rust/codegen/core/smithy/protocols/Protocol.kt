@@ -36,6 +36,16 @@ interface Protocol {
     fun additionalRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> = emptyList()
 
     /**
+     * Returns the default `Content-Type` header that should be included on bodyless requests for wire protocol
+     * selection.
+     *
+     * This is intentionally separate from [HttpBindingResolver.requestContentType]: that method controls whether the
+     * generated serializer emits a protocol document body. Some REST protocols still need a `Content-Type` header on
+     * empty requests so a multi-protocol server can claim the request without changing the empty-body behavior.
+     */
+    fun requestContentTypeForProtocolSelection(operationShape: OperationShape): String? = null
+
+    /**
      * Returns additional HTTP headers that should be included in HTTP responses for the given operation for this protocol.
      *
      * These MUST all be lowercase, or the application will panic, as per

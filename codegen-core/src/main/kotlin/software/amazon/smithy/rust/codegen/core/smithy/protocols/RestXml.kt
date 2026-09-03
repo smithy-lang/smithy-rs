@@ -51,6 +51,8 @@ open class RestXml(val codegenContext: CodegenContext) : Protocol {
     override val defaultTimestampFormat: TimestampFormatTrait.Format =
         TimestampFormatTrait.Format.DATE_TIME
 
+    override fun requestContentTypeForProtocolSelection(operationShape: OperationShape): String = "application/xml"
+
     override fun structuredDataParser(): StructuredDataParserGenerator =
         RestXmlParserGenerator(codegenContext, restXmlErrors)
 
@@ -58,7 +60,7 @@ open class RestXml(val codegenContext: CodegenContext) : Protocol {
         XmlBindingTraitSerializerGenerator(codegenContext, httpBindingResolver)
 
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
+        ProtocolFunctions.crossOperationFn(codegenContext, "parse_http_error_metadata") { fnName ->
             rustBlockTemplate(
                 "pub fn $fnName(_response_status: u16, _response_headers: &#{Headers}, response_body: &[u8]) -> #{Result}<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
                 *errorScope,
@@ -68,7 +70,7 @@ open class RestXml(val codegenContext: CodegenContext) : Protocol {
         }
 
     override fun errorBodyContents(operationShape: OperationShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn("error_body_contents") { fnName ->
+        ProtocolFunctions.crossOperationFn(codegenContext, "error_body_contents") { fnName ->
             rustBlockTemplate(
                 "pub fn $fnName(body: &[u8]) -> &[u8]",
                 *errorScope,
@@ -95,7 +97,7 @@ open class RestXml(val codegenContext: CodegenContext) : Protocol {
         }
 
     override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn("parse_event_stream_error_metadata") { fnName ->
+        ProtocolFunctions.crossOperationFn(codegenContext, "parse_event_stream_error_metadata") { fnName ->
             rustBlockTemplate(
                 "pub fn $fnName(payload: &#{Bytes}) -> #{Result}<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
                 *errorScope,

@@ -17,6 +17,7 @@ use tower::Service;
 use crate::body::empty;
 use crate::body::BoxBody;
 use crate::extension::RuntimeErrorExtension;
+use crate::operation::OperationNotFound;
 use crate::protocol::aws_json_11::router::ROUTE_CUTOFF;
 use crate::response::IntoResponse;
 use crate::routing::tiny_map::TinyMap;
@@ -141,6 +142,12 @@ impl IntoResponse<RpcV2Cbor> for Error {
                 .body(empty())
                 .expect("invalid HTTP response for RPCv2 CBOR routing error; please file a bug report under https://github.com/awslabs/smithy-rs/issues"),
         }
+    }
+}
+
+impl OperationNotFound for RpcV2Cbor {
+    fn operation_not_found_response() -> http::Response<BoxBody> {
+        <Error as IntoResponse<RpcV2Cbor>>::into_response(Error::NotFound)
     }
 }
 

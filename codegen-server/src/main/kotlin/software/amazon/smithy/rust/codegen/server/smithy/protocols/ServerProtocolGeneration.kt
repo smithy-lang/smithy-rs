@@ -78,10 +78,13 @@ internal data class SelectedServerProtocol(
     val context: ServerCodegenContext,
     val generator: ServerProtocolGenerator,
     val modules: ServerProtocolModules,
+    val unsupportedOperationIds: Set<ShapeId> = emptySet(),
 ) {
     val protocol: ServerProtocol = generator.protocol
     val constraintViolationToRequestRejectionConversion: ConstraintViolationToRequestRejectionConversion =
         ConstraintViolationToRequestRejectionConversion(protocol, modules.operations)
+
+    fun supportsOperation(operationId: ShapeId): Boolean = operationId !in unsupportedOperationIds
 }
 
 /** Loader-supported protocols selected for a service, in canonical detection order. */

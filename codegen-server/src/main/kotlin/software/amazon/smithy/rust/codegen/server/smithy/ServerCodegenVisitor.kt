@@ -6,6 +6,8 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.build.PluginContext
+import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
+import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
@@ -30,6 +32,7 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.LengthTrait
+import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
@@ -162,11 +165,11 @@ open class ServerCodegenVisitor(
             discoverProtocols(decoratedModel, decoratedService, rustSymbolProviderConfig)
         val selectedProtocolIds = preliminaryProtocolDiscovery.protocolIds
 
-        // All selected protocols share this model, so apply protocol-based transformations only when they are safe for
-        // every selected protocol. For example, traits needed by one protocol must not be removed for another.
-        model =
-            ServerProtocolBasedTransformationFactory.transform(decoratedModel, selectedProtocolIds)
-                .let(EventStreamNormalizer::transform)
+        // Multi-protocol servers keep one canonical model for the public operation/type surface. Each selected
+        // protocol may still use its single-protocol model transformations for protocol-local binding and serde
+        // generation, but those transformed models are validated before use and must not remove or retarget service
+        // closure shapes.
+        model = decoratedModel.let(EventStreamNormalizer::transform)
         val service = settings.getService(model)
         val protocolDiscovery = discoverProtocols(model, service, rustSymbolProviderConfig)
         val serverSymbolProviders = protocolDiscovery.symbolProviders
@@ -197,12 +200,21 @@ open class ServerCodegenVisitor(
                 orderedProtocolIds.map { protocolId ->
                     val factory = factoriesByProtocol.getValue(protocolId)
                     val protocolModules = ServerProtocolModules.forProtocol(protocolId, protocolSelectionMetadata)
+                    val protocolModel =
+                        ServerProtocolBasedTransformationFactory.transform(
+                            decoratedModel,
+                            setOf(protocolId),
+                            preservePublicTypes = true,
+                        )
+                            .let(EventStreamNormalizer::transform)
+                    validateProtocolTransformDoesNotChangeServiceClosure(model, protocolModel, service, protocolId)
+                    val protocolService = settings.getService(protocolModel)
                     val protocolContext =
                         ServerCodegenContext(
-                            model,
+                            protocolModel,
                             serverSymbolProviders.symbolProvider,
                             null,
-                            service,
+                            protocolService,
                             protocolId,
                             settings,
                             serverSymbolProviders.unconstrainedShapeSymbolProvider,
@@ -217,13 +229,18 @@ open class ServerCodegenVisitor(
                         protocolContext,
                         factory.buildProtocolGenerator(protocolContext),
                         protocolModules,
+                        unsupportedOperationIds = unsupportedOperationsFor(protocolId, model, service),
                     )
                 },
                 protocolSelectionMetadata,
             )
 
         val primaryProtocol = protocolSelection.primary
-        codegenContext = primaryProtocol.context
+        codegenContext =
+            primaryProtocol.context.copy(
+                model = model,
+                serviceShape = service,
+            )
         protocolGeneratorFactory = primaryProtocol.factory
         protocolGenerator = primaryProtocol.generator
 
@@ -292,6 +309,60 @@ open class ServerCodegenVisitor(
                 },
             ),
         )
+
+    private fun unsupportedOperationsFor(
+        protocolId: ShapeId,
+        canonicalModel: Model,
+        service: ServiceShape,
+    ): Set<ShapeId> {
+        if (protocolId != AwsJson1_0Trait.ID && protocolId != AwsJson1_1Trait.ID) {
+            return emptySet()
+        }
+        return software.amazon.smithy.model.knowledge.TopDownIndex.of(canonicalModel)
+            .getContainedOperations(service)
+            .filter { operation -> operation.isEventStream(canonicalModel) }
+            .mapTo(linkedSetOf()) { operation -> operation.id }
+    }
+
+    private fun validateProtocolTransformDoesNotChangeServiceClosure(
+        canonicalModel: Model,
+        protocolModel: Model,
+        service: ServiceShape,
+        protocolId: ShapeId,
+    ) {
+        val canonicalShapes = DirectedWalker(canonicalModel).walkShapes(service).associateBy { it.id }
+        for ((shapeId, canonicalShape) in canonicalShapes) {
+            val protocolShape = protocolModel.getShape(shapeId).orElse(null)
+                ?: throw CodegenException(
+                    "Protocol-specific model transform for $protocolId removed service-closure shape $shapeId",
+                )
+            if (canonicalShape.type != protocolShape.type) {
+                throw CodegenException(
+                    "Protocol-specific model transform for $protocolId changed $shapeId from ${canonicalShape.type} to ${protocolShape.type}",
+                )
+            }
+            if (canonicalShape.hasTrait<StreamingTrait>() != protocolShape.hasTrait<StreamingTrait>()) {
+                throw CodegenException(
+                    "Protocol-specific model transform for $protocolId changed the public streaming type surface of $shapeId",
+                )
+            }
+            val canonicalMembers = canonicalShape.members().associateBy { it.memberName }
+            val protocolMembers = protocolShape.members().associateBy { it.memberName }
+            if (canonicalMembers.keys != protocolMembers.keys) {
+                throw CodegenException(
+                    "Protocol-specific model transform for $protocolId changed members on $shapeId",
+                )
+            }
+            for ((memberName, canonicalMember) in canonicalMembers) {
+                val protocolMember = protocolMembers.getValue(memberName)
+                if (canonicalMember.target != protocolMember.target) {
+                    throw CodegenException(
+                        "Protocol-specific model transform for $protocolId retargeted $shapeId\$$memberName from ${canonicalMember.target} to ${protocolMember.target}",
+                    )
+                }
+            }
+        }
+    }
 
     /**
      * Base model transformation applied to all services.
@@ -788,7 +859,7 @@ open class ServerCodegenVisitor(
             ServerServiceGenerator(
                 codegenContext,
                 isConfigBuilderFallible,
-                protocolSelection.map { it.protocol },
+                protocolSelection,
             ).render(this)
 
             ServiceConfigGenerator(codegenContext, configMethods).render(this)
@@ -826,9 +897,13 @@ open class ServerCodegenVisitor(
             }
         }
         perProtocolCodegenRenderer.renderEach({ it.modules.operations }) { context ->
+            if (!context.protocol.supportsOperation(shape.id)) {
+                return@renderEach
+            }
+            val protocolOperationShape = context.protocol.context.model.expectShape(shape.id, OperationShape::class.java)
             context.protocol.generator.renderOperation(
                 this,
-                shape,
+                protocolOperationShape,
                 generateSharedTypes = !codegenContext.isMultiProtocol,
             )
         }
@@ -839,7 +914,11 @@ open class ServerCodegenVisitor(
         // Generate each selected protocol's tests in its own module. Every request test still constructs the full
         // multi-protocol service, installs its own handler, and verifies that the target protocol reaches that handler.
         protocolSelection.forEach { testProtocol ->
+            if (!testProtocol.supportsOperation(shape.id)) {
+                return@forEach
+            }
             rustCrate.withModule(testProtocol.modules.protocolTests) {
+                val protocolOperationShape = testProtocol.context.model.expectShape(shape.id, OperationShape::class.java)
                 // Language-specific visitors replace the primary context and factory after this visitor is initialized.
                 // Preserve that legacy single-protocol behavior; multi-protocol generation uses each selection directly.
                 val testContext = if (codegenContext.isMultiProtocol) testProtocol.context else codegenContext
@@ -855,7 +934,7 @@ open class ServerCodegenVisitor(
                     } else {
                         protocolGeneratorFactory.protocol(testContext) as ServerProtocol
                     }
-                protocolTestsForOperation(this, shape, testContext, protocolSupport, protocol)
+                protocolTestsForOperation(this, protocolOperationShape, testContext, protocolSupport, protocol)
             }
         }
     }

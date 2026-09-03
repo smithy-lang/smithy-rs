@@ -34,6 +34,7 @@ object ServerProtocolBasedTransformationFactory {
     fun transform(
         model: Model,
         selectedProtocolIds: Set<ShapeId>,
+        preservePublicTypes: Boolean = false,
     ): Model {
         if (Rpcv2CborTrait.ID !in selectedProtocolIds || selectedProtocolIds.size > 1) {
             return model
@@ -52,7 +53,11 @@ object ServerProtocolBasedTransformationFactory {
                         .removeTraitIfPresent(HttpPayloadTrait.ID)
                 }
                 is BlobShape -> {
-                    shape.removeTraitIfPresent(StreamingTrait.ID)
+                    if (preservePublicTypes) {
+                        shape
+                    } else {
+                        shape.removeTraitIfPresent(StreamingTrait.ID)
+                    }
                 }
                 else -> shape
             }

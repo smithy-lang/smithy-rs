@@ -5,6 +5,7 @@
 
 use crate::body::BoxBody;
 use crate::extension::RuntimeErrorExtension;
+use crate::operation::OperationNotFound;
 use crate::response::IntoResponse;
 use crate::routing::multi_protocol::FallbackRejection;
 use crate::routing::{method_disallowed, UNKNOWN_OPERATION_EXCEPTION};
@@ -30,6 +31,12 @@ impl IntoResponse<RestJson1> for Error {
                 .expect("invalid HTTP response for REST JSON 1 routing error; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues"),
             Error::MethodNotAllowed => method_disallowed(),
         }
+    }
+}
+
+impl OperationNotFound for RestJson1 {
+    fn operation_not_found_response() -> http::Response<BoxBody> {
+        <Error as IntoResponse<RestJson1>>::into_response(Error::NotFound)
     }
 }
 

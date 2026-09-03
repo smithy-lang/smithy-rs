@@ -93,6 +93,8 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
 
+    override fun requestContentTypeForProtocolSelection(operationShape: OperationShape): String = "application/json"
+
     /**
      * RestJson1 implementations can denote errors in responses in several ways.
      * New server-side protocol implementations MUST use a header field named `X-Amzn-Errortype`.
@@ -118,7 +120,7 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
         JsonSerializerGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)
 
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
+        ProtocolFunctions.crossOperationFn(codegenContext, "parse_http_error_metadata") { fnName ->
             rustTemplate(
                 """
                 pub fn $fnName(_response_status: u16, response_headers: &#{Headers}, response_body: &[u8]) -> #{Result}<#{ErrorMetadataBuilder}, #{JsonError}> {
@@ -130,7 +132,7 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
         }
 
     override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn("parse_event_stream_error_metadata") { fnName ->
+        ProtocolFunctions.crossOperationFn(codegenContext, "parse_event_stream_error_metadata") { fnName ->
             // `HeaderMap::new()` doesn't allocate.
             rustTemplate(
                 """

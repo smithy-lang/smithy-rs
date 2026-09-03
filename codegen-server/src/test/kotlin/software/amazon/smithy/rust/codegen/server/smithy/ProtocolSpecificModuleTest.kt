@@ -398,6 +398,94 @@ class ProtocolSpecificModuleTest {
     }
 
     @Test
+    fun `aws json returns unsupported for event stream operations in multi protocol services`() {
+        val model =
+            """
+            ${'$'}version: "2"
+
+            namespace test
+
+            use aws.protocols#awsJson1_0
+            use aws.protocols#awsJson1_1
+            use aws.protocols#restJson1
+
+            @awsJson1_0
+            @awsJson1_1
+            @restJson1
+            service MultiProtocolService {
+                operations: [StreamEvents]
+            }
+
+            @http(method: "POST", uri: "/stream", code: 200)
+            operation StreamEvents {
+                output := {
+                    @httpPayload
+                    events: Events
+                }
+            }
+
+            @streaming
+            union Events {
+                message: MessageEvent
+            }
+
+            structure MessageEvent {
+                @eventPayload
+                message: String
+            }
+            """.asSmithyModel()
+
+        serverIntegrationTest(
+            model,
+            IntegrationTestParams(
+                service = "test#MultiProtocolService",
+                additionalSettings =
+                    ServerAdditionalSettings.builder()
+                        .withHttp1x()
+                        .toObjectNode(),
+            ),
+            testCoverage = HttpTestType.Default,
+        ) { codegenContext, rustCrate ->
+            rustCrate.testModule {
+                tokioTest("aws_json_event_stream_operations_are_unsupported") {
+                    rustTemplate(
+                        """
+                        use #{Tower}::ServiceExt;
+
+                        async fn assert_unsupported(content_type: &'static str) {
+                            let config = crate::MultiProtocolServiceConfig::builder().build();
+                            let service = crate::MultiProtocolService::builder(config).build_unchecked();
+                            let request = #{Http}::Request::builder()
+                                .method(#{Http}::Method::POST)
+                                .uri("/")
+                                .header("x-amz-target", "MultiProtocolService.StreamEvents")
+                                .header(#{Http}::header::ACCEPT, content_type)
+                                .header(#{Http}::header::CONTENT_TYPE, content_type)
+                                .body(#{BoxBody}::default())
+                                .unwrap();
+                            let response = service.oneshot(request).await.unwrap();
+                            assert_eq!(response.status(), #{Http}::StatusCode::NOT_FOUND);
+                            assert_eq!(
+                                response.headers().get(#{Http}::header::CONTENT_TYPE).unwrap(),
+                                content_type
+                            );
+                        }
+
+                        assert_unsupported("application/x-amz-json-1.0").await;
+                        assert_unsupported("application/x-amz-json-1.1").await;
+                        """,
+                        "Tower" to ServerCargoDependency.Tower.toType(),
+                        "Http" to RuntimeType.http(codegenContext.runtimeConfig),
+                        "BoxBody" to
+                            ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType()
+                                .resolve("body::BoxBody"),
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
     fun `multi protocol rejects the legacy HTTP runtime`() {
         val (restJsonModel, serviceShapeId) = loadSmithyConstraintsModelForProtocol(ModelProtocol.RestJson)
         val service =

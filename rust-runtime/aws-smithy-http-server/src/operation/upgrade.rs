@@ -271,3 +271,45 @@ where
         std::future::ready(Ok(InternalFailureException.into_response()))
     }
 }
+
+/// A protocol marker that can produce the response used when an operation is
+/// modeled on the service but unsupported by a specific generated protocol.
+pub trait OperationNotFound {
+    /// Returns the protocol-specific "operation not found" response.
+    fn operation_not_found_response() -> http::Response<BoxBody>;
+}
+
+/// A [`Service`] which always returns a protocol-specific operation-not-found response.
+#[derive(Copy)]
+pub struct UnsupportedOperation<P> {
+    _protocol: PhantomData<fn(P)>,
+}
+
+impl<P> Default for UnsupportedOperation<P> {
+    fn default() -> Self {
+        Self { _protocol: PhantomData }
+    }
+}
+
+impl<P> Clone for UnsupportedOperation<P> {
+    fn clone(&self) -> Self {
+        UnsupportedOperation { _protocol: PhantomData }
+    }
+}
+
+impl<R, P> Service<R> for UnsupportedOperation<P>
+where
+    P: OperationNotFound,
+{
+    type Response = http::Response<BoxBody>;
+    type Error = Infallible;
+    type Future = Ready<Result<Self::Response, Self::Error>>;
+
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, _request: R) -> Self::Future {
+        std::future::ready(Ok(P::operation_not_found_response()))
+    }
+}

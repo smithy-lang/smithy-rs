@@ -146,7 +146,7 @@ val customCodegenTests = "custom-test-models".let { customModels ->
 
 val multiProtocolCodegenTests = listOf(
     CodegenTest(
-        "com.aws.example.multi#PokemonService",
+        "com.aws.example#PokemonService",
         "pokemon-service-server-sdk",
         imports = listOf(
             "../codegen-core/common-test-models/pokemon.smithy",

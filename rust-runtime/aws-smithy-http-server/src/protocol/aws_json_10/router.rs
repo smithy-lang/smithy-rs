@@ -5,6 +5,7 @@
 
 use crate::body::{empty, BoxBody};
 use crate::extension::RuntimeErrorExtension;
+use crate::operation::OperationNotFound;
 use crate::response::IntoResponse;
 use crate::routing::{method_disallowed, UNKNOWN_OPERATION_EXCEPTION};
 
@@ -27,5 +28,11 @@ impl IntoResponse<AwsJson1_0> for Error {
                 .body(empty())
                 .expect("invalid HTTP response for AWS JSON 1.0 routing error; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues"),
         }
+    }
+}
+
+impl OperationNotFound for AwsJson1_0 {
+    fn operation_not_found_response() -> http::Response<BoxBody> {
+        <Error as IntoResponse<AwsJson1_0>>::into_response(Error::NotFound)
     }
 }

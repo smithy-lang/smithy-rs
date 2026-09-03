@@ -27,23 +27,24 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRpcV2CborProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.SelectedServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Error as ErrorModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Input as InputModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Output as OutputModule
 
-class ServerServiceGenerator(
+internal class ServerServiceGenerator(
     private val codegenContext: ServerCodegenContext,
     private val isConfigBuilderFallible: Boolean,
-    private val selectedProtocols: List<ServerProtocol>,
+    private val selectedProtocols: List<SelectedServerProtocol>,
 ) {
     init {
         require(selectedProtocols.isNotEmpty()) { "At least one server protocol must be selected" }
-        check(selectedProtocols.map { it.protocolShapeId } == codegenContext.protocolSelectionMetadata.protocolIds) {
+        check(selectedProtocols.map { it.protocol.protocolShapeId } == codegenContext.protocolSelectionMetadata.protocolIds) {
             "Selected protocols must match the protocol IDs in the codegen context"
         }
     }
 
-    private val protocol = selectedProtocols.first()
+    private val protocol = selectedProtocols.first().protocol
     private val runtimeConfig = codegenContext.runtimeConfig
     private val smithyHttpServer = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
     private val codegenScope =
@@ -120,7 +121,8 @@ class ServerServiceGenerator(
         if (!isMultiProtocol) {
             emptyMap()
         } else {
-            selectedProtocols.mapIndexed { index, proto ->
+            selectedProtocols.mapIndexed { index, selectedProtocol ->
+                val proto = selectedProtocol.protocol
                 val identifier = protocolIdentifier(proto, index)
                 val specsMap =
                     operations.associateWith { operationShape ->
@@ -200,11 +202,13 @@ class ServerServiceGenerator(
         if (!isMultiProtocol) {
             emptyList()
         } else {
-            selectedProtocols.mapIndexed { index, proto ->
+            selectedProtocols.mapIndexed { index, selectedProtocol ->
+                val proto = selectedProtocol.protocol
                 ProtocolRouterInfo(
                     identifier = protocolIdentifier(proto, index),
                     markerStruct = proto.markerStruct(),
                     routerType = proto.routerType(),
+                    unsupportedOperationIds = selectedProtocol.unsupportedOperationIds,
                 )
             }
         }
@@ -215,7 +219,10 @@ class ServerServiceGenerator(
         val identifier: String,
         val markerStruct: RuntimeType,
         val routerType: RuntimeType,
-    )
+        val unsupportedOperationIds: Set<software.amazon.smithy.model.shapes.ShapeId>,
+    ) {
+        fun supports(operationShape: OperationShape): Boolean = operationShape.id !in unsupportedOperationIds
+    }
 
     /**
      * Returns the marker and router type arguments for
@@ -312,7 +319,10 @@ class ServerServiceGenerator(
             }
         }
 
-    private fun protocolUpgradeBounds(operationType: String): Writable =
+    private fun protocolUpgradeBounds(
+        operationShape: OperationShape,
+        operationType: String,
+    ): Writable =
         writable {
             if (!isMultiProtocol) {
                 rustTemplate(
@@ -342,7 +352,7 @@ class ServerServiceGenerator(
                 )
             } else {
                 rust("ModelPl::Output: Clone,")
-                for (protoInfo in protocolInfos) {
+                for (protoInfo in protocolInfos.filter { it.supports(operationShape) }) {
                     rustTemplate(
                         """
                         #{SmithyHttpServer}::operation::ProtocolUpgradePlugin::<#{Protocol}, UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
@@ -398,7 +408,23 @@ class ServerServiceGenerator(
             }
         }
 
-    private fun protocolRouteConstruction(fieldName: String): Writable =
+    private fun unsupportedOperationRoute(protoInfo: ProtocolRouterInfo): Writable =
+        writable {
+            rustTemplate(
+                """
+                #{SmithyHttpServer}::routing::Route::new(
+                    #{SmithyHttpServer}::operation::UnsupportedOperation::<#{Protocol}>::default()
+                )
+                """,
+                *codegenScope,
+                "Protocol" to protoInfo.markerStruct,
+            )
+        }
+
+    private fun protocolRouteConstruction(
+        operationShape: OperationShape,
+        fieldName: String,
+    ): Writable =
         writable {
             if (!isMultiProtocol) {
                 rustTemplate(
@@ -410,8 +436,9 @@ class ServerServiceGenerator(
                     *codegenScope,
                 )
             } else {
-                for ((index, protoInfo) in protocolInfos.withIndex()) {
-                    val modeledService = if (index == protocolInfos.lastIndex) "svc" else "svc.clone()"
+                val supportedProtocolInfos = protocolInfos.filter { it.supports(operationShape) }
+                for ((index, protoInfo) in supportedProtocolInfos.withIndex()) {
+                    val modeledService = if (index == supportedProtocolInfos.lastIndex) "svc" else "svc.clone()"
                     val protocolService = "${protoInfo.identifier}_svc"
                     val protocolRoute = "${protoInfo.identifier}_route"
                     rustTemplate(
@@ -426,7 +453,16 @@ class ServerServiceGenerator(
                 }
                 rust("self.$fieldName = Some($protocolRoutesName {")
                 for (protoInfo in protocolInfos) {
-                    rust("${protoInfo.identifier}: ${protoInfo.identifier}_route,")
+                    if (protoInfo.supports(operationShape)) {
+                        rust("${protoInfo.identifier}: ${protoInfo.identifier}_route,")
+                    } else {
+                        rustTemplate(
+                            """
+                            ${protoInfo.identifier}: #{Route:W},
+                            """,
+                            "Route" to unsupportedOperationRoute(protoInfo),
+                        )
+                    }
                 }
                 rust("});")
                 rust("self")
@@ -572,8 +608,8 @@ class ServerServiceGenerator(
                     "Handler" to handler,
                     "HandlerFixed" to handlerFixed,
                     "HandlerImports" to handlerImports(crateName, operations),
-                    "ProtocolUpgradeBounds" to protocolUpgradeBounds(structName),
-                    "ProtocolRouteConstruction" to protocolRouteConstruction(fieldName),
+                    "ProtocolUpgradeBounds" to protocolUpgradeBounds(operationShape, structName),
+                    "ProtocolRouteConstruction" to protocolRouteConstruction(operationShape, fieldName),
                     "CustomSetter" to customSetter(fieldName, structName),
                     *codegenScope,
                 )
@@ -915,15 +951,24 @@ class ServerServiceGenerator(
                     }
                     rust("} = self.$fieldName.unwrap_or_else(|| $protocolRoutesName {")
                     for (protoInfo in protocolInfos) {
-                        rustTemplate(
-                            """
-                            ${protoInfo.identifier}: #{SmithyHttpServer}::routing::Route::new(
-                                #{SmithyHttpServer}::operation::MissingFailure::<#{Protocol}>::default()
-                            ),
-                            """,
-                            *codegenScope,
-                            "Protocol" to protoInfo.markerStruct,
-                        )
+                        if (protoInfo.supports(operationShape)) {
+                            rustTemplate(
+                                """
+                                ${protoInfo.identifier}: #{SmithyHttpServer}::routing::Route::new(
+                                    #{SmithyHttpServer}::operation::MissingFailure::<#{Protocol}>::default()
+                                ),
+                                """,
+                                *codegenScope,
+                                "Protocol" to protoInfo.markerStruct,
+                            )
+                        } else {
+                            rustTemplate(
+                                """
+                                ${protoInfo.identifier}: #{Route:W},
+                                """,
+                                "Route" to unsupportedOperationRoute(protoInfo),
+                            )
+                        }
                     }
                     rust("});")
                 }
