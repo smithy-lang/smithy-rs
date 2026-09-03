@@ -17,7 +17,16 @@ http-auth = ["aws-smithy-runtime-api/http-auth"]
 # Opt in to the pre-1.x `http`/`http-body` public API: `client::endpoint` and
 # `client::http::body::minimum_throughput::http_body_0_4_x`. Not enabled by default so that
 # http 0.2.x stays out of the default dependency tree.
-http-02x = ["dep:http-02x", "dep:http-body-04x", "aws-smithy-types/http-body-0-4-x"]
+http-02x = [
+    "dep:http-02x",
+    "dep:http-body-04x",
+    "aws-smithy-types/http-body-0-4-x",
+    # Chain to `aws-smithy-runtime-api`'s equivalent so that "I want the pre-1.x HTTP API" is a
+    # single switch. Nothing in this crate's gated modules needs those conversions, but a consumer
+    # of `aws-smithy-runtime` may not depend on `aws-smithy-runtime-api` directly and so would have
+    # no way to enable them. Adds no crates: `dep:http-02x` above already pulls http 0.2.x in.
+    "aws-smithy-runtime-api/http-02x",
+]
 # NOTE: connector-hyper-0-14-x and tls-rustls are "legacy" features related to default HTTP client based on hyper 0.14.x ecosystem
 connector-hyper-0-14-x = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/hyper-014", "aws-smithy-types/http-body-0-4-x"]
 tls-rustls = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/legacy-rustls-ring", "connector-hyper-0-14-x", "aws-smithy-runtime-api/legacy-client"]
