@@ -22,7 +22,7 @@ aws-smithy-legacy-http = { path = "../../../rust-runtime/aws-smithy-legacy-http/
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types/" }
 
 # Required for `HyperClientBuilder` in `client-connector` example.
-aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime/", features=["test-util", "legacy-test-util"] }
+aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime/", features=["legacy-test-util"] }
 
 # Required for `Metadata` in `custom-header-using-interceptor` example.
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api/", features=["client"] }

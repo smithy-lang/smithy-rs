@@ -44,10 +44,9 @@ test-util = [
 ]
 
 legacy-test-util = [
-    # non HTTP test utils
-    "aws-smithy-runtime-api/test-util",
-    "dep:tracing-subscriber",
-    "aws-smithy-http-client/test-util",
+    # A superset of `test-util`: the pre-1.x helpers are additive to the 1.x ones, and enabling
+    # only this feature should still give you a usable test setup.
+    "test-util",
     # legacy http test utils
     "connector-hyper-0-14-x",
     "aws-smithy-http-client/legacy-test-util",
