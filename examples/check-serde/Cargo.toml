@@ -1,0 +1,16 @@
+[package]
+name = "check-serde"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+aws-smithy-schema = { path = "../smithy-rs-multi-decoupled/rust-runtime/aws-smithy-schema" }
+aws-smithy-types = { path = "../smithy-rs-multi-decoupled/rust-runtime/aws-smithy-types" }
+aws-smithy-json = { path = "../smithy-rs-multi-decoupled/rust-runtime/aws-smithy-json" }
+aws-smithy-cbor = { path = "../smithy-rs-multi-decoupled/rust-runtime/aws-smithy-cbor" }
+aws-smithy-http = { path = "../smithy-rs-multi-decoupled/rust-runtime/aws-smithy-http" }
+http = "1.3.1"
+serde_json = "1.0.146"
+
+[profile.release]
+debug = true
