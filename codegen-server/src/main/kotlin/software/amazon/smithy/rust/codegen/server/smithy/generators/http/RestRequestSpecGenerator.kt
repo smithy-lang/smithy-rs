@@ -44,8 +44,8 @@ class RestRequestSpecGenerator(
                     for (segment in httpTrait.uri.segments) {
                         val variant =
                             when {
-                                segment.isGreedyLabel -> "Greedy"
-                                segment.isLabel -> "Label"
+                                segment.isGreedyLabel -> """Greedy(String::from("${segment.content}"))"""
+                                segment.isLabel -> """Label(String::from("${segment.content}"))"""
                                 else -> """Literal(String::from("${segment.content}"))"""
                             }
                         rustTemplate(

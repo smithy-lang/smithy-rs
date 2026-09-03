@@ -52,9 +52,9 @@ use aws_smithy_schema::codec::{Codec, DynCodec};
 use aws_smithy_schema::serde::{SerializableStruct, ShapeDeserializer};
 use aws_smithy_schema::{Schema, ShapeId};
 use bytes::Bytes;
-use std::{fmt, sync::Arc};
+use std::{any::Any, fmt, future::Future, pin::Pin, sync::Arc};
 
-use crate::body::BoxBody;
+use crate::body::{Body, BoxBody};
 use crate::deserialize::{DeserializableShape, DeserializeError};
 use crate::modeled_error::{HttpModeledError, HttpServerError, ServerError};
 use crate::protocol::ProtocolShape;
@@ -164,6 +164,46 @@ pub trait StaticEventStreamProtocol: StaticProtocol {
     const FRAMES_INITIAL_MESSAGES: bool;
 }
 
+/// Type-erased generated input deserializer used by dynamic server protocols.
+///
+/// Dynamic protocols own HTTP body handling. Once a protocol has built the
+/// correct shape deserializer for its wire format, this object drives the
+/// generated input walker and returns the concrete operation input erased as
+/// `Any`.
+pub trait DynInputDeserializer: Send {
+    /// Deserializes an operation input from the protocol-owned shape deserializer.
+    fn deserialize(
+        self: Box<Self>,
+        deserializer: &mut dyn ShapeDeserializer,
+    ) -> Result<Box<dyn Any + Send>, DeserializeError>;
+}
+
+/// A concrete dynamic input visitor for `T`.
+pub struct DynInputVisitor<T>(std::marker::PhantomData<T>);
+
+impl<T> DynInputVisitor<T> {
+    /// Creates a new dynamic input visitor.
+    pub fn new() -> Self {
+        Self(std::marker::PhantomData)
+    }
+}
+
+impl<T> DynInputDeserializer for DynInputVisitor<T>
+where
+    T: DeserializableShape + Send + 'static,
+{
+    fn deserialize(
+        self: Box<Self>,
+        deserializer: &mut dyn ShapeDeserializer,
+    ) -> Result<Box<dyn Any + Send>, DeserializeError> {
+        Ok(Box::new(T::deserialize(deserializer)?))
+    }
+}
+
+/// Future returned by dynamic request deserialization.
+pub type DeserializeInputFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<Box<dyn Any + Send>, ServerError>> + Send + 'a>>;
+
 /// Static authoring trait for server protocols.
 ///
 /// This is the server-side analogue of the client's
@@ -183,6 +223,20 @@ pub trait ServerProtocolInner<Req = http::Request<Bytes>>: Send + Sync + fmt::De
         request: &'a Req,
         input_schema: &Schema<'_>,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, ServerError>;
+
+    /// Deserializes a dynamic operation input from the original HTTP request.
+    ///
+    /// Implementations own body collection, content-type validation, and
+    /// event-stream body handling. The default implementation is intentionally
+    /// absent because returning borrowed deserializers from collected bytes is
+    /// not sound; concrete protocols must drive `input` inside this future.
+    fn deserialize_input<'a>(
+        &'a self,
+        request: http::Request<Body>,
+        input_schema: &'static Schema<'static>,
+        request_body_max_bytes: usize,
+        input: Box<dyn DynInputDeserializer>,
+    ) -> DeserializeInputFuture<'a>;
 
     /// Serializes a successful operation output.
     fn serialize_response(&self, schema: &Schema<'_>, output: &dyn SerializableStruct) -> http::Response<BoxBody>;
@@ -225,6 +279,15 @@ pub trait ServerProtocol<Req = http::Request<Bytes>>: Send + Sync + fmt::Debug {
         input_schema: &Schema<'_>,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, ServerError>;
 
+    /// Deserializes a dynamic operation input from the original HTTP request.
+    fn deserialize_input<'a>(
+        &'a self,
+        request: http::Request<Body>,
+        input_schema: &'static Schema<'static>,
+        request_body_max_bytes: usize,
+        input: Box<dyn DynInputDeserializer>,
+    ) -> DeserializeInputFuture<'a>;
+
     /// Serializes a successful operation output.
     fn serialize_response(&self, schema: &Schema<'_>, output: &dyn SerializableStruct) -> http::Response<BoxBody>;
 
@@ -265,6 +328,22 @@ where
         input_schema: &Schema<'_>,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, ServerError> {
         <Self as ServerProtocolInner<Req>>::deserialize_request(self, request, input_schema)
+    }
+
+    fn deserialize_input<'a>(
+        &'a self,
+        request: http::Request<Body>,
+        input_schema: &'static Schema<'static>,
+        request_body_max_bytes: usize,
+        input: Box<dyn DynInputDeserializer>,
+    ) -> DeserializeInputFuture<'a> {
+        <Self as ServerProtocolInner<Req>>::deserialize_input(
+            self,
+            request,
+            input_schema,
+            request_body_max_bytes,
+            input,
+        )
     }
 
     fn serialize_response(&self, schema: &Schema<'_>, output: &dyn SerializableStruct) -> http::Response<BoxBody> {

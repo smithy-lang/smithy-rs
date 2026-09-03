@@ -132,9 +132,9 @@ pub(crate) fn rest_request_spec(
         .filter(|segment| !segment.is_empty())
         .map(|segment| {
             if segment.starts_with('{') && segment.ends_with("+}") {
-                request_spec::PathSegment::Greedy
+                request_spec::PathSegment::Greedy(segment[1..segment.len() - 2].to_owned())
             } else if segment.starts_with('{') && segment.ends_with('}') {
-                request_spec::PathSegment::Label
+                request_spec::PathSegment::Label(segment[1..segment.len() - 1].to_owned())
             } else {
                 request_spec::PathSegment::Literal(segment.to_owned())
             }

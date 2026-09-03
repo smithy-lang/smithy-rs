@@ -11,8 +11,8 @@ use regex::Regex;
 #[derive(Debug, Clone)]
 pub enum PathSegment {
     Literal(String),
-    Label,
-    Greedy,
+    Label(String),
+    Greedy(String),
 }
 
 #[derive(Debug, Clone)]
@@ -96,6 +96,38 @@ pub(crate) enum Match {
     No,
 }
 
+/// A decoded URI label captured while matching a REST route.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LabelCapture {
+    name: String,
+    value: String,
+}
+
+impl LabelCapture {
+    /// Returns the Smithy member name bound to this URI label.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns the decoded label value.
+    pub fn value(&self) -> &str {
+        &self.value
+    }
+}
+
+/// A successful REST URI-pattern match.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RequestSpecMatch {
+    labels: Vec<LabelCapture>,
+}
+
+impl RequestSpecMatch {
+    /// Returns the decoded URI label captures.
+    pub fn labels(&self) -> &[LabelCapture] {
+        &self.labels
+    }
+}
+
 impl From<&PathSpec> for Regex {
     fn from(uri_path_spec: &PathSpec) -> Self {
         let sep = "/";
@@ -109,8 +141,8 @@ impl From<&PathSpec> for Regex {
                     PathSegment::Literal(literal) => Cow::Owned(regex::escape(literal)),
                     // TODO(https://github.com/awslabs/smithy/issues/975) URL spec says it should be ASCII but this regex accepts UTF-8:
                     // `*` instead of `+` because the empty string `""` can be bound to a label.
-                    PathSegment::Label => Cow::Borrowed("[^/]*"),
-                    PathSegment::Greedy => Cow::Borrowed(".*"),
+                    PathSegment::Label(_) => Cow::Borrowed("[^/]*"),
+                    PathSegment::Greedy(_) => Cow::Borrowed(".*"),
                 })
                 .fold(String::new(), |a, b| a + sep + &b)
         };
@@ -162,19 +194,34 @@ impl RequestSpec {
     }
 
     pub(crate) fn matches<B>(&self, req: &Request<B>) -> Match {
+        self.match_request(req).map_or(
+            Match::No,
+            |matched| {
+                if matched {
+                    Match::Yes
+                } else {
+                    Match::MethodNotAllowed
+                }
+            },
+        )
+    }
+
+    pub(crate) fn match_and_capture<B>(&self, req: &Request<B>) -> Result<Option<RequestSpecMatch>, String> {
         if let Some(_host_prefix) = &self.uri_spec.host_prefix {
             todo!("Look at host prefix");
         }
 
         if !self.uri_path_regex.is_match(req.uri().path()) {
-            return Match::No;
+            return Ok(None);
         }
+
+        let labels = self.capture_labels(req.uri().path())?;
 
         if self.uri_spec.path_and_query.query_segments.0.is_empty() {
             if self.method == req.method() {
-                return Match::Yes;
+                return Ok(Some(RequestSpecMatch { labels }));
             } else {
-                return Match::MethodNotAllowed;
+                return Ok(None);
             }
         }
 
@@ -190,41 +237,97 @@ impl RequestSpec {
                 match res {
                     Err(error) => {
                         tracing::debug!(query, %error, "failed to deserialize query string");
-                        Match::No
+                        Ok(None)
                     }
                     Ok(query_map) => {
                         for query_segment in self.uri_spec.path_and_query.query_segments.0.iter() {
                             match query_segment {
                                 QuerySegment::Key(key) => {
                                     if !query_map.iter().any(|(k, _v)| k == key) {
-                                        return Match::No;
+                                        return Ok(None);
                                     }
                                 }
                                 QuerySegment::KeyValue(key, expected_value) => {
                                     let mut it = query_map.iter().filter(|(k, _v)| k == key).peekable();
                                     if it.peek().is_none() {
-                                        return Match::No;
+                                        return Ok(None);
                                     }
 
                                     // The query key appears more than once. All of its values must
                                     // coincide and be equal to the expected value.
                                     if it.any(|(_k, v)| v != expected_value) {
-                                        return Match::No;
+                                        return Ok(None);
                                     }
                                 }
                             }
                         }
 
                         if self.method == req.method() {
-                            Match::Yes
+                            Ok(Some(RequestSpecMatch { labels }))
                         } else {
-                            Match::MethodNotAllowed
+                            Ok(None)
                         }
                     }
                 }
             }
-            None => Match::No,
+            None => Ok(None),
         }
+    }
+
+    fn match_request<B>(&self, req: &Request<B>) -> Option<bool> {
+        if let Some(_host_prefix) = &self.uri_spec.host_prefix {
+            todo!("Look at host prefix");
+        }
+
+        if !self.uri_path_regex.is_match(req.uri().path()) {
+            return None;
+        }
+
+        if self.uri_spec.path_and_query.query_segments.0.is_empty() {
+            return Some(self.method == req.method());
+        }
+
+        match req.uri().query() {
+            Some(query) => {
+                let res = serde_urlencoded::from_str::<Vec<(Cow<str>, Cow<str>)>>(query);
+                match res {
+                    Err(error) => {
+                        tracing::debug!(query, %error, "failed to deserialize query string");
+                        None
+                    }
+                    Ok(query_map) => {
+                        for query_segment in self.uri_spec.path_and_query.query_segments.0.iter() {
+                            match query_segment {
+                                QuerySegment::Key(key) => {
+                                    if !query_map.iter().any(|(k, _v)| k == key) {
+                                        return None;
+                                    }
+                                }
+                                QuerySegment::KeyValue(key, expected_value) => {
+                                    let mut it = query_map.iter().filter(|(k, _v)| k == key).peekable();
+                                    if it.peek().is_none() {
+                                        return None;
+                                    }
+                                    if it.any(|(_k, v)| v != expected_value) {
+                                        return None;
+                                    }
+                                }
+                            }
+                        }
+                        Some(self.method == req.method())
+                    }
+                }
+            }
+            None => None,
+        }
+    }
+
+    fn capture_labels(&self, path: &str) -> Result<Vec<LabelCapture>, String> {
+        let request_segments = request_path_segments(path);
+        let mut captures =
+            match_path_segments(&self.uri_spec.path_and_query.path_segments.0, &request_segments)?.unwrap_or_default();
+        captures.reverse();
+        Ok(captures)
     }
 
     // Helper function to build a `RequestSpec`.
@@ -247,6 +350,62 @@ impl RequestSpec {
     }
 }
 
+fn request_path_segments(path: &str) -> Vec<&str> {
+    if path == "/" {
+        Vec::new()
+    } else {
+        path.trim_start_matches('/').split('/').collect()
+    }
+}
+
+fn match_path_segments(pattern: &[PathSegment], request: &[&str]) -> Result<Option<Vec<LabelCapture>>, String> {
+    let Some((first, rest_pattern)) = pattern.split_first() else {
+        return Ok(request.is_empty().then(Vec::new));
+    };
+
+    match first {
+        PathSegment::Literal(literal) => {
+            if request.first().copied() == Some(literal.as_str()) {
+                match_path_segments(rest_pattern, &request[1..])
+            } else {
+                Ok(None)
+            }
+        }
+        PathSegment::Label(name) => {
+            let Some(raw) = request.first().copied() else {
+                return Ok(None);
+            };
+            let mut captures = match match_path_segments(rest_pattern, &request[1..])? {
+                Some(captures) => captures,
+                None => return Ok(None),
+            };
+            captures.push(LabelCapture {
+                name: name.clone(),
+                value: crate::schema::request_bindings::percent_decode(raw).map_err(|err| err.to_string())?,
+            });
+            Ok(Some(captures))
+        }
+        PathSegment::Greedy(name) => {
+            if request.is_empty() {
+                return Ok(None);
+            }
+            for end in (1..=request.len()).rev() {
+                let mut captures = match match_path_segments(rest_pattern, &request[end..])? {
+                    Some(captures) => captures,
+                    None => continue,
+                };
+                captures.push(LabelCapture {
+                    name: name.clone(),
+                    value: crate::schema::request_bindings::percent_decode(&request[..end].join("/"))
+                        .map_err(|err| err.to_string())?,
+                });
+                return Ok(Some(captures));
+            }
+            Ok(None)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -260,17 +419,23 @@ mod tests {
             (PathSpec(vec![]), "^/$"),
             (PathSpec(vec![PathSegment::Literal(String::from("a"))]), "^/a$"),
             (
-                PathSpec(vec![PathSegment::Literal(String::from("a")), PathSegment::Label]),
+                PathSpec(vec![
+                    PathSegment::Literal(String::from("a")),
+                    PathSegment::Label(String::from("label")),
+                ]),
                 "^/a/[^/]*$",
             ),
             (
-                PathSpec(vec![PathSegment::Literal(String::from("a")), PathSegment::Greedy]),
+                PathSpec(vec![
+                    PathSegment::Literal(String::from("a")),
+                    PathSegment::Greedy(String::from("greedy")),
+                ]),
                 "^/a/.*$",
             ),
             (
                 PathSpec(vec![
                     PathSegment::Literal(String::from("a")),
-                    PathSegment::Greedy,
+                    PathSegment::Greedy(String::from("greedy")),
                     PathSegment::Literal(String::from("suffix")),
                 ]),
                 "^/a/.*/suffix$",
@@ -299,7 +464,7 @@ mod tests {
 
     #[test]
     fn paths_must_match_spec_from_the_beginning_label() {
-        let spec = RequestSpec::from_parts(Method::GET, vec![PathSegment::Label], Vec::new());
+        let spec = RequestSpec::from_parts(Method::GET, vec![PathSegment::Label(String::from("label"))], Vec::new());
 
         let misses = vec![
             (Method::GET, "/prefix/label"),
@@ -317,7 +482,7 @@ mod tests {
             Method::GET,
             vec![
                 PathSegment::Literal(String::from("mg")),
-                PathSegment::Greedy,
+                PathSegment::Greedy(String::from("greedy")),
                 PathSegment::Literal(String::from("z")),
             ],
             Vec::new(),
@@ -414,7 +579,7 @@ mod tests {
             Method::GET,
             vec![
                 PathSegment::Literal(String::from("a")),
-                PathSegment::Label,
+                PathSegment::Label(String::from("label")),
                 PathSegment::Literal(String::from("b")),
             ],
             Vec::new(),
@@ -437,7 +602,7 @@ mod tests {
             Method::GET,
             vec![
                 PathSegment::Literal(String::from("a")),
-                PathSegment::Greedy,
+                PathSegment::Greedy(String::from("greedy")),
                 PathSegment::Literal(String::from("suffix")),
             ],
             Vec::new(),
@@ -472,7 +637,10 @@ mod tests {
     fn empty_segments_at_the_end_do_matter_label_spec() {
         let label_spec = RequestSpec::from_parts(
             Method::GET,
-            vec![PathSegment::Literal(String::from("a")), PathSegment::Label],
+            vec![
+                PathSegment::Literal(String::from("a")),
+                PathSegment::Label(String::from("label")),
+            ],
             Vec::new(),
         );
 
@@ -494,7 +662,7 @@ mod tests {
             Method::GET,
             vec![
                 PathSegment::Literal(String::from("ReDosLiteral")),
-                PathSegment::Label,
+                PathSegment::Label(String::from("label")),
                 PathSegment::Literal(String::from("(a+)+")),
             ],
             Vec::new(),

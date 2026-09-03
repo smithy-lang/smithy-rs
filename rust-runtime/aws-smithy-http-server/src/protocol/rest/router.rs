@@ -123,8 +123,8 @@ mod tests {
                     Method::GET,
                     vec![
                         PathSegment::Literal(String::from("a")),
-                        PathSegment::Label,
-                        PathSegment::Label,
+                        PathSegment::Label(String::from("label1")),
+                        PathSegment::Label(String::from("label2")),
                     ],
                     Vec::new(),
                 ),
@@ -135,7 +135,7 @@ mod tests {
                     Method::GET,
                     vec![
                         PathSegment::Literal(String::from("mg")),
-                        PathSegment::Greedy,
+                        PathSegment::Greedy(String::from("greedy")),
                         PathSegment::Literal(String::from("z")),
                     ],
                     Vec::new(),
@@ -214,7 +214,10 @@ mod tests {
             (
                 RequestSpec::from_parts(
                     Method::GET,
-                    vec![PathSegment::Literal(String::from("a")), PathSegment::Label],
+                    vec![
+                        PathSegment::Literal(String::from("a")),
+                        PathSegment::Label(String::from("label")),
+                    ],
                     Vec::new(),
                 ),
                 "A1",
@@ -224,7 +227,7 @@ mod tests {
                     Method::GET,
                     vec![
                         PathSegment::Literal(String::from("a")),
-                        PathSegment::Label,
+                        PathSegment::Label(String::from("label")),
                         PathSegment::Literal(String::from("a")),
                     ],
                     Vec::new(),
@@ -234,7 +237,10 @@ mod tests {
             (
                 RequestSpec::from_parts(
                     Method::GET,
-                    vec![PathSegment::Literal(String::from("b")), PathSegment::Greedy],
+                    vec![
+                        PathSegment::Literal(String::from("b")),
+                        PathSegment::Greedy(String::from("greedy")),
+                    ],
                     Vec::new(),
                 ),
                 "B1",
@@ -242,7 +248,10 @@ mod tests {
             (
                 RequestSpec::from_parts(
                     Method::GET,
-                    vec![PathSegment::Literal(String::from("b")), PathSegment::Greedy],
+                    vec![
+                        PathSegment::Literal(String::from("b")),
+                        PathSegment::Greedy(String::from("greedy")),
+                    ],
                     vec![QuerySegment::Key(String::from("q"))],
                 ),
                 "B2",

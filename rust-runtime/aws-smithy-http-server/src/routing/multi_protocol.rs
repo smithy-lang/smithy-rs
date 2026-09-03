@@ -418,11 +418,13 @@ where
                                 .expect("valid missing operation handler response"),
                         );
                     };
-                    req.extensions_mut()
-                        .insert::<SelectedProtocolContext>(SelectedProtocolContext::new(
+                    req.extensions_mut().insert::<SelectedProtocolContext>(
+                        SelectedProtocolContext::new_with_route_match(
                             registered.protocol.clone(),
                             operation_match.operation(),
-                        ));
+                            operation_match.route_match(),
+                        ),
+                    );
                     return MultiProtocolRoutingFuture::from_oneshot(handler.oneshot(req));
                 }
                 ProtocolRoutingOutcome::Rejected(response) => {
@@ -821,6 +823,16 @@ mod tests {
             _input_schema: &Schema<'_>,
         ) -> Result<Box<dyn aws_smithy_schema::serde::ShapeDeserializer + 'a>, crate::modeled_error::ServerError>
         {
+            panic!("fake protocol does not deserialize requests")
+        }
+
+        fn deserialize_input<'a>(
+            &'a self,
+            _request: http::Request<crate::body::Body>,
+            _input_schema: &'static Schema<'static>,
+            _request_body_max_bytes: usize,
+            _input: Box<dyn crate::schema::protocol::DynInputDeserializer>,
+        ) -> crate::schema::protocol::DeserializeInputFuture<'a> {
             panic!("fake protocol does not deserialize requests")
         }
 

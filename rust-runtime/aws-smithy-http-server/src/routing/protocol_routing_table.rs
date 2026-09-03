@@ -5,10 +5,10 @@
 
 use aws_smithy_schema::{Schema, ShapeId, ShapeType};
 use http::{HeaderMap, Method, Request, Uri};
-use std::{borrow::Cow, marker::PhantomData};
+use std::{any::Any, borrow::Cow, marker::PhantomData, sync::Arc};
 
 use crate::{
-    body::BoxBody,
+    body::{Body, BoxBody},
     deserialize::{DeserializeError, RequestDeserializationError},
     modeled_error::{HttpModeledError, HttpServerError, ServerError},
     protocol::{
@@ -31,13 +31,14 @@ use crate::{
     response::IntoResponse,
     routing::{
         operation_handler_bindings::{rest_request_spec, service_operation_key},
-        request_spec::{Match, RequestSpec},
+        request_spec::{LabelCapture, Match, RequestSpec},
         Router,
     },
     schema::{
         protocol::{
             aws_json as schema_aws_json, rest_json as schema_rest_json, rest_xml as schema_rest_xml,
-            rpc_v2_cbor as schema_rpc_v2_cbor, ServerProtocolInner, SharedServerProtocol,
+            rpc_v2_cbor as schema_rpc_v2_cbor, DeserializeInputFuture, DynInputDeserializer, ServerProtocolInner,
+            SharedServerProtocol,
         },
         OperationSchema, ServiceSchema,
     },
@@ -86,6 +87,7 @@ impl<'a> RequestRouteMetadata<'a> {
 pub struct SelectedProtocolContext {
     server_protocol: SharedServerProtocol,
     operation: &'static OperationSchema<'static>,
+    route_match: Option<RouteMatchData>,
 }
 
 impl SelectedProtocolContext {
@@ -94,6 +96,20 @@ impl SelectedProtocolContext {
         Self {
             server_protocol,
             operation,
+            route_match: None,
+        }
+    }
+
+    /// Creates selected protocol context with protocol-owned route match data.
+    pub fn new_with_route_match(
+        server_protocol: SharedServerProtocol,
+        operation: &'static OperationSchema<'static>,
+        route_match: Option<RouteMatchData>,
+    ) -> Self {
+        Self {
+            server_protocol,
+            operation,
+            route_match,
         }
     }
 
@@ -111,23 +127,93 @@ impl SelectedProtocolContext {
     pub fn operation(&self) -> &'static OperationSchema<'static> {
         self.operation
     }
+
+    /// Returns protocol-owned route match data.
+    pub fn route_match(&self) -> Option<&RouteMatchData> {
+        self.route_match.as_ref()
+    }
+}
+
+/// Protocol-owned data captured during routing.
+#[derive(Clone)]
+pub struct RouteMatchData {
+    inner: Arc<dyn Any + Send + Sync>,
+}
+
+impl RouteMatchData {
+    /// Creates route match data from a concrete protocol-owned value.
+    pub fn new<T>(data: T) -> Self
+    where
+        T: Any + Send + Sync,
+    {
+        Self { inner: Arc::new(data) }
+    }
+
+    /// Attempts to downcast the route match data.
+    pub fn downcast_ref<T>(&self) -> Option<&T>
+    where
+        T: Any,
+    {
+        self.inner.downcast_ref()
+    }
+}
+
+impl std::fmt::Debug for RouteMatchData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RouteMatchData").finish_non_exhaustive()
+    }
+}
+
+/// REST route data captured during routing.
+#[derive(Debug, Clone)]
+pub struct RestRouteMatch {
+    labels: Vec<LabelCapture>,
+}
+
+impl RestRouteMatch {
+    /// Creates a REST route match.
+    pub fn new(labels: Vec<LabelCapture>) -> Self {
+        Self { labels }
+    }
+
+    /// Returns the decoded URI label captures.
+    pub fn labels(&self) -> &[LabelCapture] {
+        &self.labels
+    }
 }
 
 /// A matched operation and its selected protocol context.
 #[derive(Debug, Clone)]
 pub struct OperationMatch {
     operation: &'static OperationSchema<'static>,
+    route_match: Option<RouteMatchData>,
 }
 
 impl OperationMatch {
     /// Creates a matched operation.
     pub fn new(operation: &'static OperationSchema<'static>) -> Self {
-        Self { operation }
+        Self {
+            operation,
+            route_match: None,
+        }
+    }
+
+    /// Creates a matched operation with protocol-owned route data.
+    pub fn new_with_route_match(
+        operation: &'static OperationSchema<'static>,
+        route_match: Option<RouteMatchData>,
+    ) -> Self {
+        Self { operation, route_match }
     }
 
     /// Returns the matched operation schema.
     pub fn operation(&self) -> &'static OperationSchema<'static> {
         self.operation
+    }
+
+    /// Returns protocol-owned route match data.
+    pub fn route_match(&self) -> Option<RouteMatchData> {
+        self.route_match.clone()
     }
 }
 
@@ -333,6 +419,75 @@ request_rejection_error!(RpcV2CborRequestRejection);
 request_rejection_error!(RestJsonRequestRejection);
 request_rejection_error!(RestXmlRequestRejection);
 
+#[derive(Debug)]
+struct DynModeledServerError(Box<dyn HttpModeledError>);
+
+impl std::fmt::Display for DynModeledServerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl std::error::Error for DynModeledServerError {}
+
+impl HttpServerError for DynModeledServerError {
+    fn status_code(&self) -> u16 {
+        HttpModeledError::status_code(&*self.0)
+    }
+
+    fn as_modeled_error(&self) -> Option<&dyn HttpModeledError> {
+        Some(&*self.0)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+fn request_body_error(error: impl std::fmt::Display) -> ServerError {
+    Box::new(RequestDeserializationError::new(
+        aws_smithy_schema::serde::SerdeError::custom(error.to_string()),
+    ))
+}
+
+async fn collect_request_body(
+    request: http::Request<Body>,
+    request_body_max_bytes: usize,
+) -> Result<http::Request<bytes::Bytes>, ServerError> {
+    let (parts, body) = request.into_parts();
+    let bytes = crate::body::collect_body_limited(body, request_body_max_bytes)
+        .await
+        .map_err(request_body_error)?;
+    Ok(http::Request::from_parts(parts, bytes))
+}
+
+fn empty_request_body(request: http::Request<Body>) -> http::Request<bytes::Bytes> {
+    let (parts, _body) = request.into_parts();
+    http::Request::from_parts(parts, bytes::Bytes::new())
+}
+
+fn rest_input_schema_needs_body(input_schema: &Schema<'_>) -> bool {
+    input_schema.members().iter().any(|member| {
+        member.http_payload().is_some()
+            || (member.http_label().is_none()
+                && member.http_query().is_none()
+                && member.http_header().is_none()
+                && member.http_prefix_headers().is_none()
+                && member.http_query_params().is_none())
+    })
+}
+
+fn drive_dynamic_input(
+    input: Box<dyn DynInputDeserializer>,
+    deserializer: &mut dyn aws_smithy_schema::serde::ShapeDeserializer,
+) -> Result<Box<dyn std::any::Any + Send>, ServerError> {
+    match input.deserialize(deserializer) {
+        Ok(input) => Ok(input),
+        Err(DeserializeError::Serde(err)) => Err(Box::new(RequestDeserializationError::new(err))),
+        Err(DeserializeError::ConstraintViolation(err)) => Err(Box::new(DynModeledServerError(err))),
+    }
+}
+
 /// AWS JSON operation routing table.
 #[derive(Debug, Clone)]
 pub struct AwsJsonOperationRoutingTable {
@@ -469,6 +624,24 @@ impl ServerProtocolInner<http::Request<bytes::Bytes>> for AwsJsonServerProtocol 
                     .map_err(|rejection| Box::new(AwsJsonRequestRejection(rejection)) as ServerError)
             }
         }
+    }
+
+    fn deserialize_input<'a>(
+        &'a self,
+        request: http::Request<Body>,
+        input_schema: &'static Schema<'static>,
+        request_body_max_bytes: usize,
+        input: Box<dyn DynInputDeserializer>,
+    ) -> DeserializeInputFuture<'a> {
+        Box::pin(async move {
+            let request = if input_schema.members().is_empty() {
+                empty_request_body(request)
+            } else {
+                collect_request_body(request, request_body_max_bytes).await?
+            };
+            let mut deserializer = self.deserialize_request(&request, input_schema)?;
+            drive_dynamic_input(input, &mut *deserializer)
+        })
     }
 
     fn serialize_response(
@@ -630,6 +803,24 @@ impl ServerProtocolInner<http::Request<bytes::Bytes>> for RpcV2CborServerProtoco
             .map_err(|rejection| Box::new(RpcV2CborRequestRejection(rejection)) as ServerError)
     }
 
+    fn deserialize_input<'a>(
+        &'a self,
+        request: http::Request<Body>,
+        input_schema: &'static Schema<'static>,
+        request_body_max_bytes: usize,
+        input: Box<dyn DynInputDeserializer>,
+    ) -> DeserializeInputFuture<'a> {
+        Box::pin(async move {
+            let request = if input_schema.members().is_empty() {
+                empty_request_body(request)
+            } else {
+                collect_request_body(request, request_body_max_bytes).await?
+            };
+            let mut deserializer = self.deserialize_request(&request, input_schema)?;
+            drive_dynamic_input(input, &mut *deserializer)
+        })
+    }
+
     fn serialize_response(
         &self,
         schema: &Schema<'_>,
@@ -733,7 +924,20 @@ impl ProtocolRouter for RestOperationRoutingTable {
                 match request_spec.matches(&candidate) {
                     Match::Yes => {
                         if self.accept_matches(request.headers, operation) {
-                            return ProtocolRoutingOutcome::OperationMatched(OperationMatch::new(operation));
+                            let route_match = match request_spec.match_and_capture(&candidate) {
+                                Ok(Some(matched)) => {
+                                    Some(RouteMatchData::new(RestRouteMatch::new(matched.labels().to_vec())))
+                                }
+                                Ok(None) => None,
+                                Err(error) => {
+                                    tracing::debug!(%error, "failed to capture REST route labels");
+                                    None
+                                }
+                            };
+                            return ProtocolRoutingOutcome::OperationMatched(OperationMatch::new_with_route_match(
+                                operation,
+                                route_match,
+                            ));
                         } else {
                             return ProtocolRoutingOutcome::RejectedNonExclusive(self.not_acceptable());
                         }
@@ -800,6 +1004,24 @@ impl ServerProtocolInner<http::Request<bytes::Bytes>> for RestServerProtocol {
             RestVersion::RestXml => schema_rest_xml::rest_xml_request_deserializer(input_schema, request)
                 .map_err(|rejection| Box::new(RestXmlRequestRejection(rejection)) as ServerError),
         }
+    }
+
+    fn deserialize_input<'a>(
+        &'a self,
+        request: http::Request<Body>,
+        input_schema: &'static Schema<'static>,
+        request_body_max_bytes: usize,
+        input: Box<dyn DynInputDeserializer>,
+    ) -> DeserializeInputFuture<'a> {
+        Box::pin(async move {
+            let request = if rest_input_schema_needs_body(input_schema) {
+                collect_request_body(request, request_body_max_bytes).await?
+            } else {
+                empty_request_body(request)
+            };
+            let mut deserializer = self.deserialize_request(&request, input_schema)?;
+            drive_dynamic_input(input, &mut *deserializer)
+        })
     }
 
     fn serialize_response(

@@ -17,17 +17,16 @@ use tower::{util::Oneshot, Service, ServiceExt};
 use tracing::error;
 
 use crate::{
-    body::BoxBody,
-    deserialize::{DeserializableShape, DeserializeError, RequestDeserializationError},
-    error::BoxError,
+    body::{Body, BoxBody},
+    deserialize::DeserializableShape,
     plugin::Plugin,
     request::{FromParts, FromRequest},
     response::IntoResponse,
     routing::SelectedProtocolContext,
     runtime_error::InternalFailureException,
+    schema::protocol::DynInputVisitor,
     service::ServiceShape,
 };
-use aws_smithy_schema::{Schema, ShapeId};
 
 use super::{DynOutput, IntoDynProtocolResponse, OperationShape, SchemaOperationShape};
 
@@ -101,7 +100,7 @@ where
     }
 }
 
-impl<Op, Extractors, B, S> Service<http::Request<B>> for DynUpgrade<Op, Extractors, S>
+impl<Op, Extractors, S> Service<http::Request<Body>> for DynUpgrade<Op, Extractors, S>
 where
     Op: SchemaOperationShape,
     Op::Input: DeserializableShape + Send + 'static,
@@ -111,8 +110,6 @@ where
     <Extractors as FromParts<DynProtocol>>::Rejection: std::fmt::Display,
     S: Service<(Op::Input, Extractors), Response = Op::Output, Error = Op::Error> + Clone + Send + 'static,
     S::Future: Send + 'static,
-    B: crate::body::HttpBody<Data = bytes::Bytes> + Send + 'static,
-    B::Error: Into<BoxError> + std::fmt::Display + Send + 'static,
 {
     type Response = http::Response<BoxBody>;
     type Error = Infallible;
@@ -122,7 +119,7 @@ where
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, req: http::Request<B>) -> Self::Future {
+    fn call(&mut self, req: http::Request<Body>) -> Self::Future {
         let clone = self.inner.clone();
         let service = std::mem::replace(&mut self.inner, clone);
 
@@ -144,34 +141,24 @@ where
                 }
             };
 
-            let input_schema = Op::SCHEMA.input();
-            let bytes = if input_schema_needs_body(protocol.protocol_id(), input_schema) {
-                match crate::body::collect_body_limited(body, request_body_max_bytes).await {
-                    Ok(bytes) => bytes,
-                    Err(err) => {
-                        tracing::debug!(error = %err, "failed to collect request body");
-                        let mut response = http::Response::new(crate::body::to_boxed(err.to_string()));
-                        *response.status_mut() = http::StatusCode::BAD_REQUEST;
-                        return Ok(response);
+            let request = http::Request::from_parts(parts, body);
+            let input = match protocol
+                .deserialize_input(
+                    request,
+                    Op::SCHEMA.input(),
+                    request_body_max_bytes,
+                    Box::new(DynInputVisitor::<Op::Input>::new()),
+                )
+                .await
+            {
+                Ok(input) => match input.downcast::<Op::Input>() {
+                    Ok(input) => *input,
+                    Err(_) => {
+                        tracing::error!("dynamic protocol returned the wrong operation input type");
+                        return Ok(internal_server_error());
                     }
-                }
-            } else {
-                bytes::Bytes::new()
-            };
-
-            let request = http::Request::from_parts(parts, bytes);
-            let input = {
-                let mut deserializer = match protocol.deserialize_request(&request, input_schema) {
-                    Ok(deserializer) => deserializer,
-                    Err(err) => return Ok(protocol.serialize_error(&*err)),
-                };
-                match Op::Input::deserialize(&mut *deserializer) {
-                    Ok(input) => input,
-                    Err(DeserializeError::Serde(err)) => {
-                        return Ok(protocol.serialize_error(&RequestDeserializationError::new(err)));
-                    }
-                    Err(DeserializeError::ConstraintViolation(err)) => return Ok(protocol.serialize_error(&*err)),
-                }
+                },
+                Err(err) => return Ok(protocol.serialize_error(&*err)),
             };
 
             let result = service.oneshot((input, extractors)).await;
@@ -182,29 +169,6 @@ where
             Ok(response)
         })
     }
-}
-
-fn input_schema_needs_body(protocol_id: &ShapeId<'_>, input_schema: &Schema<'_>) -> bool {
-    match protocol_id.as_str() {
-        "aws.protocols#restJson1" | "aws.protocols#restXml" => rest_input_schema_needs_body(input_schema),
-        "aws.protocols#awsJson1_0" | "aws.protocols#awsJson1_1" | "smithy.protocols#rpcv2Cbor" => {
-            !input_schema.members().is_empty()
-        }
-        // Internal decorator-provided protocols may interpret inputs in
-        // protocol-specific ways, so keep the previous conservative behavior.
-        _ => true,
-    }
-}
-
-fn rest_input_schema_needs_body(input_schema: &Schema<'_>) -> bool {
-    input_schema.members().iter().any(|member| {
-        member.http_payload().is_some()
-            || (member.http_label().is_none()
-                && member.http_query().is_none()
-                && member.http_header().is_none()
-                && member.http_prefix_headers().is_none()
-                && member.http_query_params().is_none())
-    })
 }
 
 fn internal_server_error() -> http::Response<BoxBody> {
@@ -218,13 +182,17 @@ fn internal_server_error() -> http::Response<BoxBody> {
 mod tests {
     use super::*;
     use crate::{
+        deserialize::{DeserializeError, RequestDeserializationError},
         routing::SelectedProtocolContext,
-        schema::{protocol::SharedServerProtocol, OperationSchema},
+        schema::{
+            protocol::{DeserializeInputFuture, DynInputDeserializer, SharedServerProtocol},
+            OperationSchema,
+        },
     };
     use aws_smithy_schema::{
         codec::DynCodec,
         serde::{SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer},
-        shape_id, ShapeType,
+        shape_id, Schema, ShapeId, ShapeType,
     };
     use bytes::Bytes;
     use http_body::{Frame, SizeHint};
@@ -259,47 +227,18 @@ mod tests {
     static PAYLOAD_MEMBER: Schema<'static> =
         Schema::new_member(shape_id!("test", "PayloadInput$body"), ShapeType::Blob, "body", 0).with_http_payload();
     static PAYLOAD_MEMBERS: &[&Schema<'static>] = &[&PAYLOAD_MEMBER];
-    static UNBOUND_MEMBER: Schema<'static> =
-        Schema::new_member(shape_id!("test", "BodyInput$value"), ShapeType::String, "value", 0);
-    static UNBOUND_MEMBERS: &[&Schema<'static>] = &[&UNBOUND_MEMBER];
-
     static BOUND_ONLY_INPUT_SCHEMA: Schema<'static> = Schema::new_struct(
         shape_id!("test", "BoundOnlyInput"),
         ShapeType::Structure,
         BOUND_ONLY_MEMBERS,
     );
-    static EMPTY_INPUT_SCHEMA: Schema<'static> =
-        Schema::new_struct(shape_id!("test", "EmptyInput"), ShapeType::Structure, EMPTY_MEMBERS);
     static PAYLOAD_INPUT_SCHEMA: Schema<'static> =
         Schema::new_struct(shape_id!("test", "PayloadInput"), ShapeType::Structure, PAYLOAD_MEMBERS);
-    static UNBOUND_INPUT_SCHEMA: Schema<'static> =
-        Schema::new_struct(shape_id!("test", "BodyInput"), ShapeType::Structure, UNBOUND_MEMBERS);
     static OUTPUT_SCHEMA: Schema<'static> =
         Schema::new_struct(shape_id!("test", "Output"), ShapeType::Structure, EMPTY_MEMBERS);
     static OPERATION_SCHEMA_SHAPE: Schema<'static> = Schema::new(shape_id!("test", "Operation"), ShapeType::Operation);
     static OPERATION_SCHEMA: OperationSchema<'static> =
         OperationSchema::new(&OPERATION_SCHEMA_SHAPE, &BOUND_ONLY_INPUT_SCHEMA, &OUTPUT_SCHEMA, &[]);
-
-    #[test]
-    fn rest_input_schema_body_classification() {
-        let rest_json = ShapeId::from_parts("aws.protocols#restJson1", "aws.protocols", "restJson1");
-
-        assert!(!input_schema_needs_body(&rest_json, &BOUND_ONLY_INPUT_SCHEMA));
-        assert!(!input_schema_needs_body(&rest_json, &EMPTY_INPUT_SCHEMA));
-        assert!(input_schema_needs_body(&rest_json, &PAYLOAD_INPUT_SCHEMA));
-        assert!(input_schema_needs_body(&rest_json, &UNBOUND_INPUT_SCHEMA));
-    }
-
-    #[test]
-    fn rpc_input_schema_body_classification() {
-        let aws_json = ShapeId::from_parts("aws.protocols#awsJson1_1", "aws.protocols", "awsJson1_1");
-        let rpc_v2_cbor = ShapeId::from_parts("smithy.protocols#rpcv2Cbor", "smithy.protocols", "rpcv2Cbor");
-
-        assert!(!input_schema_needs_body(&aws_json, &EMPTY_INPUT_SCHEMA));
-        assert!(input_schema_needs_body(&aws_json, &BOUND_ONLY_INPUT_SCHEMA));
-        assert!(!input_schema_needs_body(&rpc_v2_cbor, &EMPTY_INPUT_SCHEMA));
-        assert!(input_schema_needs_body(&rpc_v2_cbor, &UNBOUND_INPUT_SCHEMA));
-    }
 
     #[tokio::test]
     async fn dyn_upgrade_does_not_collect_rest_bound_only_input_body() {
@@ -308,7 +247,7 @@ mod tests {
         });
         let mut request = http::Request::builder()
             .uri("/pets/rex?age=7")
-            .body(PanicBody)
+            .body(Body::new(PanicBody))
             .expect("valid request");
         request
             .extensions_mut()
@@ -335,7 +274,7 @@ mod tests {
             protocol_id: ShapeId::from_parts("aws.protocols#restJson1", "aws.protocols", "restJson1"),
         });
         let mut request = http::Request::builder()
-            .body(http_body_util::Full::new(Bytes::from_static(b"payload")))
+            .body(Body::new(http_body_util::Full::new(Bytes::from_static(b"payload"))))
             .expect("valid request");
         request
             .extensions_mut()
@@ -437,6 +376,38 @@ mod tests {
             Ok(Box::new(BodyLenDeserializer {
                 body_len: request.body().len(),
             }))
+        }
+
+        fn deserialize_input<'a>(
+            &'a self,
+            request: http::Request<Body>,
+            input_schema: &'static Schema<'static>,
+            request_body_max_bytes: usize,
+            input: Box<dyn DynInputDeserializer>,
+        ) -> DeserializeInputFuture<'a> {
+            Box::pin(async move {
+                let body_len = if std::ptr::eq(input_schema, &PAYLOAD_INPUT_SCHEMA) {
+                    crate::body::collect_body_limited(request.into_body(), request_body_max_bytes)
+                        .await
+                        .map_err(|err| {
+                            Box::new(RequestDeserializationError::new(SerdeError::custom(err.to_string())))
+                                as crate::modeled_error::ServerError
+                        })?
+                        .len()
+                } else {
+                    0
+                };
+                let mut deserializer = BodyLenDeserializer { body_len };
+                input.deserialize(&mut deserializer).map_err(|err| match err {
+                    DeserializeError::Serde(err) => {
+                        Box::new(RequestDeserializationError::new(err)) as crate::modeled_error::ServerError
+                    }
+                    DeserializeError::ConstraintViolation(err) => {
+                        Box::new(RequestDeserializationError::new(SerdeError::custom(err.to_string())))
+                            as crate::modeled_error::ServerError
+                    }
+                })
+            })
         }
 
         fn serialize_response(

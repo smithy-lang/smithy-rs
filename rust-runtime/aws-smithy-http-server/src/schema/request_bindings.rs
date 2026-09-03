@@ -910,6 +910,7 @@ pub(crate) struct RestRequestDeserializer<'a, C> {
     headers: &'a http::HeaderMap,
     uri: &'a http::Uri,
     body: &'a [u8],
+    route_labels: Vec<(String, String)>,
 }
 
 impl<'a, C: Codec> RestRequestDeserializer<'a, C> {
@@ -919,6 +920,7 @@ impl<'a, C: Codec> RestRequestDeserializer<'a, C> {
             headers: &parts.headers,
             uri: &parts.uri,
             body,
+            route_labels: route_labels(&parts.extensions),
         }
     }
 
@@ -928,6 +930,7 @@ impl<'a, C: Codec> RestRequestDeserializer<'a, C> {
             headers: request.headers(),
             uri: request.uri(),
             body: request.body().as_ref(),
+            route_labels: route_labels(request.extensions()),
         }
     }
 
@@ -952,12 +955,21 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
     ) -> Result<(), SerdeError> {
         // Labels and query pairs are parsed once, up front.
         let has_labels = schema.members().iter().any(|m| m.http_label().is_some());
-        let labels: Vec<(&str, String)> = if has_labels {
-            let template = schema
-                .http()
-                .map(|h| h.uri())
-                .ok_or_else(|| SerdeError::invalid_input("input schema has @httpLabel members but no @http trait"))?;
-            extract_labels(template, self.uri.path())?
+        let labels: Vec<(Cow<'_, str>, String)> = if has_labels {
+            if !self.route_labels.is_empty() {
+                self.route_labels
+                    .iter()
+                    .map(|(name, value)| (Cow::Borrowed(name.as_str()), value.clone()))
+                    .collect()
+            } else {
+                let template = schema.http().map(|h| h.uri()).ok_or_else(|| {
+                    SerdeError::invalid_input("input schema has @httpLabel members but no @http trait")
+                })?;
+                extract_labels(template, self.uri.path())?
+                    .into_iter()
+                    .map(|(name, value)| (Cow::Borrowed(name), value))
+                    .collect()
+            }
         } else {
             Vec::new()
         };
@@ -977,7 +989,7 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
             if member.http_label().is_some() {
                 let value = labels
                     .iter()
-                    .find(|(name, _)| *name == member_name)
+                    .find(|(name, _)| name.as_ref() == member_name)
                     .map(|(_, v)| v.clone())
                     .ok_or_else(|| {
                         SerdeError::invalid_input(format!("no `{{{member_name}}}` label in the `@http` URI pattern"))
@@ -1106,6 +1118,21 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
     fn container_size(&self) -> Option<usize> {
         None
     }
+}
+
+fn route_labels(extensions: &http::Extensions) -> Vec<(String, String)> {
+    extensions
+        .get::<crate::routing::SelectedProtocolContext>()
+        .and_then(|selected| selected.route_match())
+        .and_then(|route_match| route_match.downcast_ref::<crate::routing::RestRouteMatch>())
+        .map(|matched| {
+            matched
+                .labels()
+                .iter()
+                .map(|label| (label.name().to_owned(), label.value().to_owned()))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 #[cfg(test)]

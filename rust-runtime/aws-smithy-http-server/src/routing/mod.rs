@@ -65,7 +65,7 @@ pub use self::{
     prefix::PrefixPolicy,
     protocol_routing_table::{
         IntoProtocolResponse, OperationMatch, ProtocolResponse, ProtocolRouter, ProtocolRoutingOutcome,
-        RequestRouteMetadata, SelectedProtocolContext,
+        RequestRouteMetadata, RestRouteMatch, RouteMatchData, SelectedProtocolContext,
     },
     route::Route,
 };
