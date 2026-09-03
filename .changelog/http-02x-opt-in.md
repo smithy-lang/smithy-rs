@@ -86,6 +86,11 @@ The `http` dependency is now optional, enabled by a new opt-in `http-02x` featur
 
 Prefer migrating to the `http` 1.x equivalents, which are enabled by default and are not deprecated: `PresignedRequest::make_http_1x_request` and `PresignedRequest::into_http_1x_request`.
 
+The generated test features changed too, so that building with `test-util` no longer drags `http` 0.2.x in:
+
+- `test-util` no longer enables `aws-smithy-runtime`'s test features. A build with `--features test-util` now has no `http` 0.2.x in its dependency tree at all — it is identical to a default build.
+- A new opt-in **`legacy-test-util`** feature provides the pre-1.x test helpers for anyone who still needs them, and pulls `http` 0.2.x back in when enabled. It also enables `test-util`, so `--features legacy-test-util` on its own is enough to compile and run tests.
+
 ### `aws-runtime`
 
 `aws-runtime`'s `http-02x` feature now enables `aws-smithy-types/http-body-0-4-x` itself. It previously inherited that feature transitively from `aws-smithy-runtime`, so enabling `aws-runtime/http-02x` on its own did not compile.
