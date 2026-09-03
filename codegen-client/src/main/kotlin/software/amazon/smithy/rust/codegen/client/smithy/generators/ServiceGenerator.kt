@@ -57,8 +57,17 @@ class ServiceGenerator(
             // consumer's build. Callers needing the pre-1.x helpers opt in to `legacy-test-util`.
             rustCrate.mergeFeature(TestUtilFeature.copy(deps = listOf()))
             if (codegenContext.settings.codegenConfig.includeLegacyClient) {
+                // `legacy-test-util` is a superset of `test-util`, matching the shape of
+                // `aws-smithy-runtime`'s own `legacy-test-util`. Without this, enabling only
+                // `legacy-test-util` gives you the pre-1.x HTTP helpers but not
+                // `aws-credential-types/test-util`, so `Credentials::for_tests()` and
+                // `Builder::with_test_defaults()` vanish and most tests fail to compile.
                 rustCrate.mergeFeature(
-                    Feature("legacy-test-util", default = false, listOf("aws-smithy-runtime/legacy-test-util")),
+                    Feature(
+                        "legacy-test-util",
+                        default = false,
+                        listOf("test-util", "aws-smithy-runtime/legacy-test-util"),
+                    ),
                 )
             }
 

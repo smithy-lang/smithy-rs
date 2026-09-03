@@ -37,12 +37,16 @@ class LegacyClientTest {
         assert(cargoToml.contains("rustls = [\"aws-smithy-runtime/tls-rustls\"]")) {
             "Expected Cargo.toml to contain 'rustls' feature by default, but it didn't.\n$cargoToml"
         }
-        assert(cargoToml.contains("legacy-test-util = [\"aws-smithy-runtime/legacy-test-util\"]")) {
-            "Expected Cargo.toml to offer an opt-in 'legacy-test-util' feature by default.\n$cargoToml"
+        // `legacy-test-util` is a superset of `test-util`, so enabling it alone still provides
+        // `Credentials::for_tests()` / `Builder::with_test_defaults()` and the tests compile.
+        assert(cargoToml.contains("legacy-test-util = [\"test-util\", \"aws-smithy-runtime/legacy-test-util\"]")) {
+            "Expected Cargo.toml to offer an opt-in 'legacy-test-util' feature that also enables 'test-util'.\n$cargoToml"
         }
-        // `test-util` must not reach the legacy test utilities: `aws-smithy-runtime/test-util`
-        // implies `legacy-test-util`, which would pull http 0.2.x back into the tree of anything
-        // built with `--features test-util`.
+        // `test-util` must not reach the legacy test utilities, and must not enable
+        // `aws-smithy-runtime/test-util` either: that reaches
+        // `aws-smithy-http-client/test-util` -> `aws-smithy-protocol-test`, whose default features
+        // include `http-02x`, which would pull http 0.2.x back into the tree of anything built with
+        // `--features test-util`.
         val testUtilLine = cargoToml.lines().single { it.startsWith("test-util = ") }
         assert(!testUtilLine.contains("aws-smithy-runtime/test-util")) {
             "Expected 'test-util' to not enable 'aws-smithy-runtime/test-util'.\n$testUtilLine"
