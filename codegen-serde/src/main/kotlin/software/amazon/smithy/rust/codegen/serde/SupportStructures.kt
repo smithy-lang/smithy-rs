@@ -231,6 +231,11 @@ object SupportStructures {
                     /// For protocols like JSON, this avoids the loss-of-information that occurs when these out-of-range values
                     /// are serialized as null.
                     pub out_of_range_floats_as_strings: bool,
+
+                    /// Serialize unset optional structure members as `None` instead of omitting them.
+                    ///
+                    /// Enable this for formats that require an exact structure length or fixed field positions.
+                    pub serialize_unset_fields: bool,
                 }
 
                 impl SerializationSettings {
@@ -238,10 +243,22 @@ object SupportStructures {
                     ///
                     /// Note: This may alter the type of the serialized output and make it impossible to deserialize as
                     /// numerical fields will be replaced with strings.
-                    pub const fn redact_sensitive_fields() -> Self { Self { redact_sensitive_fields: true, out_of_range_floats_as_strings: true } }
+                    pub const fn redact_sensitive_fields() -> Self {
+                        Self {
+                            redact_sensitive_fields: true,
+                            out_of_range_floats_as_strings: true,
+                            serialize_unset_fields: false,
+                        }
+                    }
 
                     /// Preserve the contents of sensitive fields during serializing
-                    pub const fn leak_sensitive_fields() -> Self { Self { redact_sensitive_fields: false, out_of_range_floats_as_strings: false } }
+                    pub const fn leak_sensitive_fields() -> Self {
+                        Self {
+                            redact_sensitive_fields: false,
+                            out_of_range_floats_as_strings: false,
+                            serialize_unset_fields: false,
+                        }
+                    }
                 }
                 """,
             )

@@ -244,6 +244,7 @@ class SerdeProtocolTestTest {
                 let mut serialization = SerializationSettings::default();
                 serialization.out_of_range_floats_as_strings =
                     out_of_range_floats_as_strings;
+                serialization.serialize_unset_fields = true;
 
                 let encoded = match format {
                     RoundTripFormat::Json => {
@@ -251,15 +252,11 @@ class SerdeProtocolTestTest {
                             .expect("failed to serialize JSON")
                     }
                     RoundTripFormat::Cbor => {
-                        // Direct CBOR serialization is covered separately from this
-                        // deserializer corpus because omitted optional fields currently
-                        // leave definite-length struct maps with an incorrect length.
-                        let value = #{serde_json}::to_value(
-                            &expected.serialize_ref(&serialization),
-                        ).expect("failed to capture the serde representation");
                         let mut encoded = #{Vec}::new();
-                        #{ciborium}::ser::into_writer(&value, &mut encoded)
-                            .expect("failed to serialize CBOR");
+                        #{ciborium}::ser::into_writer(
+                            &expected.serialize_ref(&serialization),
+                            &mut encoded,
+                        ).expect("failed to serialize CBOR");
                         encoded
                     }
                 };
