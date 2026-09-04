@@ -113,6 +113,20 @@ pub fn default_http_client_plugin_v2(
             let opts = crate::client::http::DefaultClientOptions::default()
                 .with_behavior_version(behavior_version);
             _default = crate::client::http::default_https_client(opts);
+
+            // Say so rather than substituting a different HTTP stack silently: the behavior
+            // version asked for the legacy one, and a caller who pinned it for a hyper 0.14.x
+            // quirk needs to know they are not getting it.
+            if _default.is_some() {
+                tracing::warn!(
+                    behavior_version = ?behavior_version,
+                    "this behavior version selects the legacy hyper 0.14.x HTTP client, which is \
+                     not available in this build, so the default hyper 1.x HTTPS client is being \
+                     used instead. Enable the `legacy-https-client` feature on your AWS SDK crate \
+                     (or `aws-smithy-runtime/tls-rustls`) to get the legacy stack, or move to \
+                     `BehaviorVersion::v2026_01_12()` or later to stop seeing this warning.",
+                );
+            }
         }
     }
 
@@ -443,6 +457,8 @@ pub fn default_plugins(
 mod tests {
     use super::*;
     use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, RuntimePlugins};
+    #[cfg(feature = "default-https-client")]
+    use tracing_test::traced_test;
 
     fn test_plugin_params(version: BehaviorVersion) -> DefaultPluginParams {
         DefaultPluginParams::new()
@@ -734,5 +750,37 @@ mod tests {
         }
 
         let _ = (old, latest);
+    }
+
+    /// Falling back must not be silent: a caller who pinned an old behavior version for a
+    /// hyper 0.14.x quirk needs to learn that they are on the hyper 1.x client instead.
+    ///
+    /// Gated to the configurations where the fallback actually runs. With `tls-rustls` the legacy
+    /// connector has a TLS implementation and returns `Some`, so no fallback happens and there is
+    /// correctly nothing to warn about.
+    #[test]
+    #[traced_test]
+    #[expect(deprecated)]
+    #[cfg(all(feature = "default-https-client", not(feature = "tls-rustls")))]
+    fn falling_back_to_the_hyper_1x_client_warns() {
+        let old = default_http_client_plugin_v2(BehaviorVersion::v2024_03_28());
+        assert!(old.is_some(), "the fallback should have supplied a client");
+        assert!(
+            logs_contain("selects the legacy hyper 0.14.x HTTP client"),
+            "falling back to the hyper 1.x client must be logged"
+        );
+    }
+
+    /// The converse: a behavior version that asks for the current stack has nothing to warn about.
+    #[test]
+    #[traced_test]
+    #[cfg(feature = "default-https-client")]
+    fn the_latest_behavior_version_does_not_warn() {
+        let latest = default_http_client_plugin_v2(BehaviorVersion::latest());
+        assert!(latest.is_some(), "the latest version should get a client");
+        assert!(
+            !logs_contain("selects the legacy hyper 0.14.x HTTP client"),
+            "the latest behavior version must not warn about the legacy stack"
+        );
     }
 }
