@@ -19,7 +19,7 @@ aws-smithy-observability = { path = "../../build/aws-sdk/sdk/aws-smithy-observab
 aws-smithy-observability-otel = { path = "../../build/aws-sdk/sdk/aws-smithy-observability-otel" }
 aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util"]}
 aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
-http = "0.2.0"
+http = "1"
 opentelemetry = { version = "0.26.0", features = ["metrics"] }
 opentelemetry_sdk = { version = "0.26.0", features = ["metrics", "testing"] }
 serial_test = "3.1.1"
