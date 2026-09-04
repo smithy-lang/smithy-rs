@@ -9,7 +9,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -22,12 +21,6 @@ class InterceptorConfigCustomization(codegenContext: ClientCodegenContext) : Con
         arrayOf(
             "Intercept" to configReexport(RuntimeType.intercept(runtimeConfig)),
             "SharedInterceptor" to configReexport(RuntimeType.sharedInterceptor(runtimeConfig)),
-            "Http" to
-                if (codegenContext.settings.codegenConfig.includeLegacyClient) {
-                    CargoDependency.Http0x.toType()
-                } else {
-                    CargoDependency.Http1x.toType()
-                },
         )
 
     override fun section(section: ServiceConfig) =
@@ -62,7 +55,6 @@ class InterceptorConfigCustomization(codegenContext: ClientCodegenContext) : Con
                         /// use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
                         /// use aws_smithy_types::config_bag::ConfigBag;
                         /// use $moduleUseName::config::Config;
-                        /// use #{Http}::uri::Uri;
                         ///
                         /// fn base_url() -> String {
                         ///     // ...
@@ -83,7 +75,7 @@ class InterceptorConfigCustomization(codegenContext: ClientCodegenContext) : Con
                         ///     ) -> Result<(), BoxError> {
                         ///         let request = context.request_mut();
                         ///         let uri = format!("{}{}", base_url(), request.uri());
-                        ///         *request.uri_mut() = uri.parse::<Uri>()?.into();
+                        ///         request.set_uri(uri)?;
                         ///
                         ///         Ok(())
                         ///     }
