@@ -1,4 +1,19 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+September 3rd, 2026
+===================
+**New this release:**
+- :tada: (all, [smithy-rs#4756](https://github.com/smithy-lang/smithy-rs/issues/4756), @amodam-user) `aws_smithy_types::Blob` now implements `Display` and renders its contents as a lowercase hex-encoded string in both `Display` and `Debug` output. Previously, the derived `Debug` implementation delegated to the underlying byte buffer, producing noisy `[u8, u8, ...]`-style output in service logs. Hex encoding keeps the payload legible without requiring the `@sensitive` trait for non-sensitive binary fields.
+- :tada: (all, [smithy-rs#4812](https://github.com/smithy-lang/smithy-rs/issues/4812)) Add configurable Serde deserialization for generated model types in `codegen-serde`.
+- :bug: (server, [smithy-rs#4803](https://github.com/smithy-lang/smithy-rs/issues/4803), @MinisculeGirraffe) Fix code generation for constrained unions that have a member named `error`. Such a member generates an `Error` variant that shadowed the `TryFrom::Error` associated type in the generated `TryFrom` implementation, making every `Self::Error` path ambiguous and producing a crate that did not compile. The generated code now refers to the constraint violation type by name.
+- :bug: (client, @lauzadis) Fix telemetry input capture code generation for required string members when `nullabilityCheckMode` is set to `SERVER`.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @MinisculeGirraffe ([smithy-rs#4803](https://github.com/smithy-lang/smithy-rs/issues/4803))
+- @amodam-user ([smithy-rs#4756](https://github.com/smithy-lang/smithy-rs/issues/4756))
+- @lauzadis
+
+
 August 21st, 2026
 =================
 **New this release:**
