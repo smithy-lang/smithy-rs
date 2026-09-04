@@ -76,9 +76,7 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
         // pulls `http` 0.2.x into the dependency tree, moved to the opt-in `legacy-https-client` feature.
         rustCrate.mergeFeature(Feature("default-https-client", default = true, listOf("aws-smithy-runtime/default-https-client")))
         rustCrate.mergeFeature(Feature("rustls", default = false, listOf("default-https-client")))
-        if (codegenContext.sdkSettings().includeLegacyClient) {
-            rustCrate.mergeFeature(Feature("legacy-https-client", default = false, listOf("aws-smithy-runtime/tls-rustls")))
-        }
+        rustCrate.mergeFeature(Feature("legacy-https-client", default = false, listOf("aws-smithy-runtime/tls-rustls")))
     }
 
     override fun libRsCustomizations(
