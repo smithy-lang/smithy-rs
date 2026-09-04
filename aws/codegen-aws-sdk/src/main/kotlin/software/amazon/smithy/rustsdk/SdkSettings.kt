@@ -34,6 +34,15 @@ class SdkSettings private constructor(private val awsSdk: ObjectNode?) {
                     "An endpoint resolver is only required when `awsSdkBuild` is set to true.",
             )
         }
+
+        if (awsSdk.getMember("includeLegacyClient").isPresent) {
+            logger.warning(
+                "`includeLegacyClient` is now a no-op and you may remove it from your configuration. " +
+                    "The legacy hyper 0.14.x stack is reached through the non-default `legacy-https-client` " +
+                    "feature, which is opt-in either way, so generated crates no longer need a codegen setting " +
+                    "to keep it out of the default dependency tree.",
+            )
+        }
     }
 
     companion object {
@@ -103,20 +112,6 @@ class SdkSettings private constructor(private val awsSdk: ObjectNode?) {
         get() =
             awsSdk?.getObjectMember("endpointBasedAuthScheme")?.orNull()
                 ?.getBooleanMember("enabled")?.orNull()?.value ?: false
-
-    /**
-     * Whether to offer the legacy hyper 0.14.x HTTP client as an opt-in feature on generated crates.
-     *
-     * When `true` (the default), the generated crate gets a non-default `legacy-https-client` feature that pulls in
-     * `aws-smithy-runtime/tls-rustls`, letting BehaviorVersion select the legacy hyper+rustls stack for callers
-     * who still need it.
-     *
-     * Set to `false` to omit `legacy-https-client` entirely, so the generated crate can only ever use the hyper 1.x
-     * client. Note this is not how `http` 0.2.x is kept out of the default build: `legacy-https-client` is opt-in
-     * either way, so leaving this `true` still yields a default dependency tree free of `http` 0.2.x.
-     */
-    val includeLegacyClient: Boolean
-        get() = awsSdk?.getBooleanMember("includeLegacyClient")?.orNull()?.value ?: true
 }
 
 fun ClientCodegenContext.sdkSettings() = SdkSettings.from(this.settings)
