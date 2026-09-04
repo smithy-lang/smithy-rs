@@ -26,12 +26,17 @@ use crate::{
         operation_handler_bindings::{BuildError, OperationHandlerBinding},
         operation_handler_map::OperationHandlerMap,
         protocol_routing_table::{
-            AwsJsonOperationRoutingTable, AwsJsonServerProtocol, ProtocolRouter, ProtocolRoutingOutcome,
-            RequestRouteMetadata, RestOperationRoutingTable, RestServerProtocol, RpcV2CborOperationRoutingTable,
-            RpcV2CborServerProtocol, SelectedProtocolContext,
+            AwsJsonOperationRoutingTable, ProtocolRouter, ProtocolRoutingOutcome, RequestRouteMetadata,
+            RestOperationRoutingTable, RpcV2CborOperationRoutingTable, SelectedProtocolContext,
         },
     },
-    schema::{protocol::SharedServerProtocol, ServiceSchema},
+    schema::{
+        protocol::{
+            aws_json::AwsJsonServerProtocol, rest::RestServerProtocol, rpc_v2_cbor::RpcV2CborServerProtocol,
+            SharedServerProtocol,
+        },
+        ServiceSchema,
+    },
 };
 
 /// Ordering constraint for a protocol routing registration.
@@ -80,6 +85,44 @@ struct RegisteredProtocolRoute {
     router: Box<dyn ProtocolRouter>,
 }
 
+/// A protocol routing table plus statically upgraded operation handlers.
+pub struct StaticProtocolRoutingRegistration<S> {
+    router: Box<dyn ProtocolRouter>,
+    handlers: OperationHandlerMap<S>,
+    constraints: Vec<ProtocolRoutingOrderConstraint>,
+}
+
+impl<S> StaticProtocolRoutingRegistration<S> {
+    /// Creates a static protocol routing registration.
+    pub fn new<I>(
+        router: impl ProtocolRouter + 'static,
+        bindings: I,
+        constraints: impl Into<Vec<ProtocolRoutingOrderConstraint>>,
+    ) -> Self
+    where
+        I: IntoIterator<Item = OperationHandlerBinding<S>>,
+    {
+        Self {
+            router: Box::new(router),
+            handlers: OperationHandlerMap::new(bindings),
+            constraints: constraints.into(),
+        }
+    }
+
+    fn protocol_id(&self) -> &str {
+        self.router.protocol_id().as_str()
+    }
+}
+
+impl<S> fmt::Debug for StaticProtocolRoutingRegistration<S> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("StaticProtocolRoutingRegistration")
+            .field("protocol_id", &self.router.protocol_id())
+            .field("constraints", &self.constraints)
+            .finish()
+    }
+}
+
 /// Factory for a protocol routing registration derived from a service schema.
 #[derive(Clone, Copy)]
 pub struct ProtocolRoutingFactory {
@@ -109,6 +152,11 @@ pub struct MultiProtocolRoutingService<S> {
     handlers: OperationHandlerMap<S>,
 }
 
+/// A routing service that selects a protocol table first, then dispatches through that protocol's static handler map.
+pub struct StaticMultiProtocolRoutingService<S> {
+    protocols: Vec<StaticProtocolRoutingRegistration<S>>,
+}
+
 impl<S> fmt::Debug for MultiProtocolRoutingService<S>
 where
     S: fmt::Debug,
@@ -117,6 +165,17 @@ where
         f.debug_struct("MultiProtocolRoutingService")
             .field("protocols_len", &self.protocols.len())
             .field("handlers", &self.handlers)
+            .finish()
+    }
+}
+
+impl<S> fmt::Debug for StaticMultiProtocolRoutingService<S>
+where
+    S: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("StaticMultiProtocolRoutingService")
+            .field("protocols", &self.protocols)
             .finish()
     }
 }
@@ -179,6 +238,33 @@ impl<S> MultiProtocolRoutingService<S> {
         MultiProtocolRoutingService {
             protocols: self.protocols,
             handlers: self.handlers.map(f),
+        }
+    }
+}
+
+impl<S> StaticMultiProtocolRoutingService<S> {
+    /// Creates a static multi-protocol routing service from protocol registrations.
+    pub fn new(registrations: Vec<StaticProtocolRoutingRegistration<S>>) -> Result<Self, BuildError> {
+        Ok(Self {
+            protocols: sort_static_protocol_routing_registrations(registrations)?,
+        })
+    }
+
+    /// Maps every operation handler through a closure.
+    pub fn map<SNew, F>(self, mut f: F) -> StaticMultiProtocolRoutingService<SNew>
+    where
+        F: FnMut(S) -> SNew,
+    {
+        StaticMultiProtocolRoutingService {
+            protocols: self
+                .protocols
+                .into_iter()
+                .map(|registration| StaticProtocolRoutingRegistration {
+                    router: registration.router,
+                    handlers: registration.handlers.map(&mut f),
+                    constraints: registration.constraints,
+                })
+                .collect(),
         }
     }
 }
@@ -283,20 +369,42 @@ fn rest_xml_routing_registration(
 fn sort_protocol_routing_registrations(
     registrations: Vec<ProtocolRoutingRegistration>,
 ) -> Result<Vec<ProtocolRoutingRegistration>, BuildError> {
+    sort_routing_registrations(
+        registrations,
+        |registration| registration.protocol.protocol_id().as_str(),
+        |registration| &registration.constraints,
+    )
+}
+
+fn sort_static_protocol_routing_registrations<S>(
+    registrations: Vec<StaticProtocolRoutingRegistration<S>>,
+) -> Result<Vec<StaticProtocolRoutingRegistration<S>>, BuildError> {
+    sort_routing_registrations(
+        registrations,
+        |registration| registration.protocol_id(),
+        |registration| &registration.constraints,
+    )
+}
+
+fn sort_routing_registrations<T>(
+    registrations: Vec<T>,
+    protocol_id: impl Fn(&T) -> &str,
+    constraints: impl Fn(&T) -> &[ProtocolRoutingOrderConstraint],
+) -> Result<Vec<T>, BuildError> {
     let len = registrations.len();
     let mut protocol_ids = Vec::with_capacity(len);
     for registration in &registrations {
-        let protocol_id = registration.protocol.protocol_id().as_str().to_owned();
-        if protocol_ids.iter().any(|existing| existing == &protocol_id) {
-            return Err(BuildError::DuplicateServerProtocol { protocol: protocol_id });
+        let id = protocol_id(registration).to_owned();
+        if protocol_ids.iter().any(|existing| existing == &id) {
+            return Err(BuildError::DuplicateServerProtocol { protocol: id });
         }
-        protocol_ids.push(protocol_id);
+        protocol_ids.push(id);
     }
 
     let mut edges = vec![Vec::<usize>::new(); len];
     let mut indegrees = vec![0usize; len];
     for (source, registration) in registrations.iter().enumerate() {
-        for constraint in &registration.constraints {
+        for constraint in constraints(registration) {
             let edge = match constraint {
                 ProtocolRoutingOrderConstraint::Before(target) => protocol_ids
                     .iter()
@@ -449,6 +557,65 @@ where
     }
 }
 
+impl<S, B, RespB> Service<http::Request<B>> for StaticMultiProtocolRoutingService<S>
+where
+    S: Service<http::Request<B>, Response = http::Response<RespB>> + Clone,
+    RespB: HttpBody<Data = Bytes> + Send + 'static,
+    RespB::Error: Into<BoxError>,
+{
+    type Response = Response<BoxBody>;
+    type Error = S::Error;
+    type Future = MultiProtocolRoutingFuture<S, B>;
+
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: http::Request<B>) -> Self::Future {
+        let metadata = RequestRouteMetadata::from_request(&req);
+        let mut fallback = None;
+
+        for registered in &self.protocols {
+            match registered.router.route(metadata) {
+                ProtocolRoutingOutcome::NoClaim => {}
+                ProtocolRoutingOutcome::OperationMatched(operation_match) => {
+                    tracing::debug!(
+                        protocol = %registered.router.protocol_id(),
+                        operation = %operation_match.operation().shape_id(),
+                        "matched static multi-protocol route",
+                    );
+                    let Some(handler) = registered.handlers.get(operation_match.operation()) else {
+                        return MultiProtocolRoutingFuture::from_response(
+                            http::Response::builder()
+                                .status(http::StatusCode::INTERNAL_SERVER_ERROR)
+                                .body(crate::body::to_boxed("operation handler missing"))
+                                .expect("valid missing operation handler response"),
+                        );
+                    };
+                    return MultiProtocolRoutingFuture::from_oneshot(handler.oneshot(req));
+                }
+                ProtocolRoutingOutcome::Rejected(response) => {
+                    tracing::debug!(protocol = %registered.router.protocol_id(), "terminal static multi-protocol routing rejection");
+                    return MultiProtocolRoutingFuture::from_response(response.into_response());
+                }
+                ProtocolRoutingOutcome::RejectedNonExclusive(response) => {
+                    tracing::debug!(protocol = %registered.router.protocol_id(), "candidate static multi-protocol routing rejection");
+                    fallback.get_or_insert(response);
+                }
+            }
+        }
+
+        MultiProtocolRoutingFuture::from_response(fallback.map(|response| response.into_response()).unwrap_or_else(
+            || {
+                http::Response::builder()
+                    .status(http::StatusCode::NOT_FOUND)
+                    .body(crate::body::empty())
+                    .expect("valid static multi-protocol not found response")
+            },
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -471,7 +638,10 @@ mod tests {
             OperationMatch, ProtocolRouter, ProtocolRoutingOutcome, RequestRouteMetadata,
         },
         routing::PrefixPolicy,
-        schema::{protocol::SharedServerProtocol, OperationSchema},
+        schema::{
+            protocol::{DeserializeInputConfig, SharedServerProtocol},
+            OperationSchema,
+        },
     };
 
     static UNIT: Schema<'static> = Schema::new(
@@ -817,21 +987,12 @@ mod tests {
             panic!("fake protocol does not deserialize requests")
         }
 
-        fn deserialize_request<'a>(
-            &self,
-            _request: &'a http::Request<bytes::Bytes>,
-            _input_schema: &Schema<'_>,
-        ) -> Result<Box<dyn aws_smithy_schema::serde::ShapeDeserializer + 'a>, crate::modeled_error::ServerError>
-        {
-            panic!("fake protocol does not deserialize requests")
-        }
-
         fn deserialize_input<'a>(
             &'a self,
             _request: http::Request<crate::body::Body>,
             _input_schema: &'static Schema<'static>,
-            _request_body_max_bytes: usize,
-            _input: Box<dyn crate::schema::protocol::DynInputDeserializer>,
+            _config: DeserializeInputConfig,
+            _input: Box<dyn crate::schema::protocol::ErasedInputBuilder>,
         ) -> crate::schema::protocol::DeserializeInputFuture<'a> {
             panic!("fake protocol does not deserialize requests")
         }
@@ -846,6 +1007,17 @@ mod tests {
 
         fn serialize_error(&self, _error: &dyn crate::modeled_error::HttpServerError) -> http::Response<BoxBody> {
             panic!("fake protocol does not serialize errors")
+        }
+    }
+
+    struct NeverBuildInput;
+
+    impl crate::schema::protocol::ErasedInputBuilder for NeverBuildInput {
+        fn build_input(
+            self: Box<Self>,
+            _deserializer: &mut dyn aws_smithy_schema::serde::ShapeDeserializer,
+        ) -> Result<Box<dyn std::any::Any + Send>, crate::deserialize::DeserializeError> {
+            panic!("request should be rejected before input is built")
         }
     }
 
@@ -1129,17 +1301,30 @@ mod tests {
         assert_eq!(context.operation().shape_id().as_str(), "test#GetValue");
     }
 
-    #[test]
-    fn selected_shared_protocol_uses_dynamic_deserialization_rejection() {
+    #[tokio::test]
+    async fn selected_shared_protocol_uses_dynamic_deserialization_rejection() {
         let context =
             SelectedProtocolContext::new(SharedServerProtocol::new(RestServerProtocol::rest_json_1()), &GET_VALUE);
         let request = Request::builder()
             .method(Method::POST)
             .uri("/value/abc")
-            .body(bytes::Bytes::from_static(b"{}"))
+            .body(crate::body::Body::new(http_body_util::Full::new(
+                bytes::Bytes::from_static(b"{}"),
+            )))
             .unwrap();
 
-        let error = match context.server_protocol().deserialize_request(&request, &OUTPUT) {
+        let error = match context
+            .server_protocol()
+            .deserialize_input(
+                request,
+                &OUTPUT,
+                DeserializeInputConfig {
+                    request_body_max_bytes: 1024,
+                },
+                Box::new(NeverBuildInput),
+            )
+            .await
+        {
             Ok(_) => panic!("expected restJson1 content-type rejection"),
             Err(error) => error,
         };

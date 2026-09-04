@@ -59,13 +59,15 @@ pub use self::{
     into_make_service_with_connect_info::{Connected, IntoMakeServiceWithConnectInfo},
     multi_protocol::{
         MultiProtocolRoutingFuture, MultiProtocolRoutingService, ProtocolRoutingFactory,
-        ProtocolRoutingOrderConstraint, ProtocolRoutingRegistration,
+        ProtocolRoutingOrderConstraint, ProtocolRoutingRegistration, StaticMultiProtocolRoutingService,
+        StaticProtocolRoutingRegistration,
     },
     operation_handler_bindings::{BuildError, OperationHandlerBinding, RouterForOperationHandlerBindings},
     prefix::PrefixPolicy,
     protocol_routing_table::{
-        IntoProtocolResponse, OperationMatch, ProtocolResponse, ProtocolRouter, ProtocolRoutingOutcome,
-        RequestRouteMetadata, RestRouteMatch, RouteMatchData, SelectedProtocolContext,
+        AwsJsonOperationRoutingTable, IntoProtocolResponse, OperationMatch, ProtocolResponse, ProtocolRouter,
+        ProtocolRoutingOutcome, RequestRouteMetadata, RestOperationRoutingTable, RestRouteMatch, RouteMatchData,
+        RpcV2CborOperationRoutingTable, SelectedProtocolContext,
     },
     route::Route,
 };

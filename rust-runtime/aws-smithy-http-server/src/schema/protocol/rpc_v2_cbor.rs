@@ -7,21 +7,28 @@ use std::sync::LazyLock;
 
 use aws_smithy_cbor::codec::{CborCodec, CborCodecSettings};
 use aws_smithy_schema::serde::{SerializableStruct, ShapeDeserializer};
-use aws_smithy_schema::Schema;
+use aws_smithy_schema::{Schema, ShapeId};
 
-use crate::body::BoxBody;
+use crate::body::{Body, BoxBody};
 use crate::deserialize::DeserializeError;
-use crate::modeled_error::HttpModeledError;
+use crate::modeled_error::{HttpModeledError, HttpServerError, ServerError};
 use crate::protocol::rpc_v2_cbor::RpcV2Cbor;
 use crate::response::IntoResponse;
 use crate::schema::protocol::discriminator::WithTypeFirst;
+use crate::schema::protocol::dynamic::{
+    build_erased_input, collect_request_body, empty_request_body, modeled_or_bad_request_response,
+    rpc_v2_cbor_request_deserialization_response, rpc_v2_cbor_request_rejection_response, RpcV2CborRequestRejection,
+};
 use crate::schema::protocol::request::{deserialize_rpc_request, rpc_request_deserializer};
 use crate::schema::protocol::response::{
     log_serialize_failure, serialize_modeled_error_response, serialize_operation_response, stamp_error_extension,
     AsSerializable, ResponseBindingMode,
 };
 
-use super::{StaticEventStreamProtocol, StaticProtocol};
+use super::{
+    DeserializeInputConfig, DeserializeInputFuture, ErasedInputBuilder, ServerProtocolInner, StaticEventStreamProtocol,
+    StaticProtocol,
+};
 
 // ============================================================================
 // rpcv2Cbor
@@ -148,4 +155,89 @@ impl StaticEventStreamProtocol for RpcV2Cbor {
     const EVENT_PAYLOAD_CONTENT_TYPE: &'static str = "application/cbor";
     const EVENT_STREAM_HTTP_CONTENT_TYPE: &'static str = "application/vnd.amazon.eventstream";
     const FRAMES_INITIAL_MESSAGES: bool = true;
+}
+
+/// RPC v2 CBOR server protocol implementation.
+#[derive(Debug, Clone)]
+pub struct RpcV2CborServerProtocol {
+    protocol: ShapeId<'static>,
+}
+
+impl RpcV2CborServerProtocol {
+    /// Creates an RPC v2 CBOR server protocol.
+    pub fn new() -> Self {
+        Self {
+            protocol: ShapeId::from_parts("smithy.protocols#rpcv2Cbor", "smithy.protocols", "rpcv2Cbor"),
+        }
+    }
+
+    fn request_deserializer<'a>(
+        &self,
+        request: &'a http::Request<bytes::Bytes>,
+        input_schema: &Schema<'_>,
+    ) -> Result<Box<dyn ShapeDeserializer + 'a>, ServerError> {
+        rpc_v2_cbor_request_deserializer(input_schema, request)
+            .map_err(|rejection| Box::new(RpcV2CborRequestRejection(rejection)) as ServerError)
+    }
+}
+
+impl Default for RpcV2CborServerProtocol {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ServerProtocolInner for RpcV2CborServerProtocol {
+    fn protocol_id(&self) -> &ShapeId<'static> {
+        &self.protocol
+    }
+
+    fn codec(&self) -> &dyn aws_smithy_schema::codec::DynCodec {
+        rpc_v2_cbor_codec()
+    }
+
+    fn deserialize_input<'a>(
+        &'a self,
+        request: http::Request<Body>,
+        input_schema: &'static Schema<'static>,
+        config: DeserializeInputConfig,
+        input: Box<dyn ErasedInputBuilder>,
+    ) -> DeserializeInputFuture<'a> {
+        Box::pin(async move {
+            let request = if input_schema.members().is_empty() {
+                empty_request_body(request)
+            } else {
+                collect_request_body(request, config.request_body_max_bytes).await?
+            };
+            let mut deserializer = self.request_deserializer(&request, input_schema)?;
+            build_erased_input(input, &mut *deserializer)
+        })
+    }
+
+    fn serialize_response(&self, schema: &Schema<'_>, output: &dyn SerializableStruct) -> http::Response<BoxBody> {
+        rpc_v2_cbor_serialize_response(schema, output)
+    }
+
+    fn serialize_error(&self, error: &dyn HttpServerError) -> http::Response<BoxBody> {
+        if let Some(err) = error.as_any().downcast_ref::<RpcV2CborRequestRejection>() {
+            return rpc_v2_cbor_request_rejection_response(err);
+        }
+        modeled_or_bad_request_response(
+            error,
+            rpc_v2_cbor_serialize_error,
+            rpc_v2_cbor_request_deserialization_response,
+        )
+    }
+
+    fn event_payload_content_type(&self) -> Option<&'static str> {
+        Some("application/cbor")
+    }
+
+    fn event_stream_http_content_type(&self) -> Option<&'static str> {
+        Some("application/vnd.amazon.eventstream")
+    }
+
+    fn frames_initial_messages(&self) -> bool {
+        true
+    }
 }

@@ -7,22 +7,29 @@ use std::sync::LazyLock;
 
 use aws_smithy_json::codec::{JsonCodec, JsonCodecSettings};
 use aws_smithy_schema::serde::{SerializableStruct, ShapeDeserializer};
-use aws_smithy_schema::Schema;
+use aws_smithy_schema::{Schema, ShapeId};
 
-use crate::body::BoxBody;
+use crate::body::{Body, BoxBody};
 use crate::deserialize::DeserializeError;
-use crate::modeled_error::HttpModeledError;
+use crate::modeled_error::{HttpModeledError, HttpServerError, ServerError};
 use crate::protocol::aws_json_10::AwsJson1_0;
 use crate::protocol::aws_json_11::AwsJson1_1;
 use crate::response::IntoResponse;
 use crate::schema::protocol::discriminator::{full_shape_id, shape_name_only, WithTypeLast};
+use crate::schema::protocol::dynamic::{
+    aws_json_request_deserialization_response, aws_json_request_rejection_response, build_erased_input,
+    collect_request_body, empty_request_body, modeled_or_bad_request_response, AwsJsonRequestRejection,
+};
 use crate::schema::protocol::request::{deserialize_rpc_request, rpc_request_deserializer};
 use crate::schema::protocol::response::{
     log_serialize_failure, serialize_modeled_error_response, serialize_operation_response, stamp_error_extension,
     AsSerializable, ResponseBindingMode,
 };
 
-use super::{StaticEventStreamProtocol, StaticProtocol};
+use super::{
+    DeserializeInputConfig, DeserializeInputFuture, ErasedInputBuilder, ServerProtocolInner, StaticEventStreamProtocol,
+    StaticProtocol,
+};
 
 // ============================================================================
 // awsJson 1.0 / 1.1
@@ -187,4 +194,127 @@ impl StaticEventStreamProtocol for AwsJson1_1 {
     const EVENT_PAYLOAD_CONTENT_TYPE: &'static str = "application/json";
     const EVENT_STREAM_HTTP_CONTENT_TYPE: &'static str = "application/x-amz-json-1.1";
     const FRAMES_INITIAL_MESSAGES: bool = true;
+}
+
+/// AWS JSON server protocol implementation.
+#[derive(Debug, Clone)]
+pub struct AwsJsonServerProtocol {
+    protocol: ShapeId<'static>,
+    version: AwsJsonVersion,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum AwsJsonVersion {
+    Json10,
+    Json11,
+}
+
+impl AwsJsonServerProtocol {
+    /// Creates an AWS JSON 1.0 server protocol.
+    pub fn aws_json_10() -> Self {
+        Self {
+            protocol: ShapeId::from_parts("aws.protocols#awsJson1_0", "aws.protocols", "awsJson1_0"),
+            version: AwsJsonVersion::Json10,
+        }
+    }
+
+    /// Creates an AWS JSON 1.1 server protocol.
+    pub fn aws_json_11() -> Self {
+        Self {
+            protocol: ShapeId::from_parts("aws.protocols#awsJson1_1", "aws.protocols", "awsJson1_1"),
+            version: AwsJsonVersion::Json11,
+        }
+    }
+
+    fn request_deserializer<'a>(
+        &self,
+        request: &'a http::Request<bytes::Bytes>,
+        input_schema: &Schema<'_>,
+    ) -> Result<Box<dyn ShapeDeserializer + 'a>, ServerError> {
+        match self.version {
+            AwsJsonVersion::Json10 => {
+                aws_json_request_deserializer("application/x-amz-json-1.0", input_schema, request)
+                    .map_err(|rejection| Box::new(AwsJsonRequestRejection(rejection)) as ServerError)
+            }
+            AwsJsonVersion::Json11 => {
+                aws_json_request_deserializer("application/x-amz-json-1.1", input_schema, request)
+                    .map_err(|rejection| Box::new(AwsJsonRequestRejection(rejection)) as ServerError)
+            }
+        }
+    }
+}
+
+impl ServerProtocolInner for AwsJsonServerProtocol {
+    fn protocol_id(&self) -> &ShapeId<'static> {
+        &self.protocol
+    }
+
+    fn codec(&self) -> &dyn aws_smithy_schema::codec::DynCodec {
+        aws_json_codec()
+    }
+
+    fn deserialize_input<'a>(
+        &'a self,
+        request: http::Request<Body>,
+        input_schema: &'static Schema<'static>,
+        config: DeserializeInputConfig,
+        input: Box<dyn ErasedInputBuilder>,
+    ) -> DeserializeInputFuture<'a> {
+        Box::pin(async move {
+            let request = if input_schema.members().is_empty() {
+                empty_request_body(request)
+            } else {
+                collect_request_body(request, config.request_body_max_bytes).await?
+            };
+            let mut deserializer = self.request_deserializer(&request, input_schema)?;
+            build_erased_input(input, &mut *deserializer)
+        })
+    }
+
+    fn serialize_response(&self, schema: &Schema<'_>, output: &dyn SerializableStruct) -> http::Response<BoxBody> {
+        match self.version {
+            AwsJsonVersion::Json10 => aws_json_10_serialize_response(schema, output),
+            AwsJsonVersion::Json11 => aws_json_11_serialize_response(schema, output),
+        }
+    }
+
+    fn serialize_error(&self, error: &dyn HttpServerError) -> http::Response<BoxBody> {
+        match self.version {
+            AwsJsonVersion::Json10 => {
+                if let Some(err) = error.as_any().downcast_ref::<AwsJsonRequestRejection>() {
+                    return aws_json_request_rejection_response::<AwsJson1_0>(err);
+                }
+                modeled_or_bad_request_response(
+                    error,
+                    aws_json_10_serialize_error,
+                    aws_json_request_deserialization_response::<AwsJson1_0>,
+                )
+            }
+            AwsJsonVersion::Json11 => {
+                if let Some(err) = error.as_any().downcast_ref::<AwsJsonRequestRejection>() {
+                    return aws_json_request_rejection_response::<AwsJson1_1>(err);
+                }
+                modeled_or_bad_request_response(
+                    error,
+                    aws_json_11_serialize_error,
+                    aws_json_request_deserialization_response::<AwsJson1_1>,
+                )
+            }
+        }
+    }
+
+    fn event_payload_content_type(&self) -> Option<&'static str> {
+        Some("application/json")
+    }
+
+    fn event_stream_http_content_type(&self) -> Option<&'static str> {
+        match self.version {
+            AwsJsonVersion::Json10 => Some("application/x-amz-json-1.0"),
+            AwsJsonVersion::Json11 => Some("application/x-amz-json-1.1"),
+        }
+    }
+
+    fn frames_initial_messages(&self) -> bool {
+        true
+    }
 }

@@ -18,13 +18,13 @@ use tracing::error;
 
 use crate::{
     body::{Body, BoxBody},
-    deserialize::DeserializableShape,
+    deserialize::{DeserializableShape, DeserializeError},
     plugin::Plugin,
     request::{FromParts, FromRequest},
     response::IntoResponse,
     routing::SelectedProtocolContext,
     runtime_error::InternalFailureException,
-    schema::protocol::DynInputVisitor,
+    schema::protocol::{DeserializeInputConfig, ErasedInputVisitor, StaticProtocol},
     service::ServiceShape,
 };
 
@@ -39,6 +39,13 @@ pub struct UpgradePlugin<Extractors> {
     _extractors: PhantomData<Extractors>,
 }
 
+/// Static schema upgrade plugin that explicitly selects protocol `P`.
+#[derive(Debug, Clone)]
+pub struct StaticUpgradePlugin<P, Extractors> {
+    _protocol: PhantomData<P>,
+    _extractors: PhantomData<Extractors>,
+}
+
 /// Marker used for protocol-agnostic [`FromParts`] extraction in
 /// [`DynUpgrade`].
 pub struct DynProtocol;
@@ -46,7 +53,7 @@ pub struct DynProtocol;
 /// Dynamic schema upgrade plugin.
 #[derive(Debug, Clone)]
 pub struct DynUpgradePlugin<Extractors> {
-    request_body_max_bytes: usize,
+    config: DeserializeInputConfig,
     _extractors: PhantomData<Extractors>,
 }
 
@@ -55,7 +62,7 @@ impl<Extractors> DynUpgradePlugin<Extractors> {
     /// body byte limit. `0` disables the limit.
     pub fn new(request_body_max_bytes: usize) -> Self {
         Self {
-            request_body_max_bytes,
+            config: DeserializeInputConfig { request_body_max_bytes },
             _extractors: PhantomData,
         }
     }
@@ -70,7 +77,7 @@ where
 
     fn apply(&self, inner: T) -> Self::Output {
         DynUpgrade {
-            request_body_max_bytes: self.request_body_max_bytes,
+            config: self.config,
             _operation: PhantomData,
             _extractors: PhantomData,
             inner,
@@ -80,7 +87,7 @@ where
 
 /// Dynamic schema upgrade service.
 pub struct DynUpgrade<Op, Extractors, S> {
-    request_body_max_bytes: usize,
+    config: DeserializeInputConfig,
     _operation: PhantomData<Op>,
     _extractors: PhantomData<Extractors>,
     inner: S,
@@ -92,7 +99,7 @@ where
 {
     fn clone(&self) -> Self {
         Self {
-            request_body_max_bytes: self.request_body_max_bytes,
+            config: self.config,
             _operation: PhantomData,
             _extractors: PhantomData,
             inner: self.inner.clone(),
@@ -123,7 +130,7 @@ where
         let clone = self.inner.clone();
         let service = std::mem::replace(&mut self.inner, clone);
 
-        let request_body_max_bytes = self.request_body_max_bytes;
+        let config = self.config;
 
         Box::pin(async move {
             let (mut parts, body) = req.into_parts();
@@ -146,8 +153,8 @@ where
                 .deserialize_input(
                     request,
                     Op::SCHEMA.input(),
-                    request_body_max_bytes,
-                    Box::new(DynInputVisitor::<Op::Input>::new()),
+                    config,
+                    Box::new(ErasedInputVisitor::<Op::Input>::new()),
                 )
                 .await
             {
@@ -185,7 +192,7 @@ mod tests {
         deserialize::{DeserializeError, RequestDeserializationError},
         routing::SelectedProtocolContext,
         schema::{
-            protocol::{DeserializeInputFuture, DynInputDeserializer, SharedServerProtocol},
+            protocol::{DeserializeInputFuture, ErasedInputBuilder, SharedServerProtocol},
             OperationSchema,
         },
     };
@@ -258,7 +265,9 @@ mod tests {
             Ok::<_, Infallible>(TestOutput)
         });
         let mut upgrade = DynUpgrade::<TestOperation, (), _> {
-            request_body_max_bytes: 1024,
+            config: DeserializeInputConfig {
+                request_body_max_bytes: 1024,
+            },
             _operation: PhantomData,
             _extractors: PhantomData,
             inner: service,
@@ -285,7 +294,9 @@ mod tests {
             Ok::<_, Infallible>(TestOutput)
         });
         let mut upgrade = DynUpgrade::<PayloadOperation, (), _> {
-            request_body_max_bytes: 1024,
+            config: DeserializeInputConfig {
+                request_body_max_bytes: 1024,
+            },
             _operation: PhantomData,
             _extractors: PhantomData,
             inner: service,
@@ -368,26 +379,16 @@ mod tests {
             panic!("test protocol codec should not be used")
         }
 
-        fn deserialize_request<'a>(
-            &self,
-            request: &'a http::Request<Bytes>,
-            _input_schema: &Schema<'_>,
-        ) -> Result<Box<dyn ShapeDeserializer + 'a>, crate::modeled_error::ServerError> {
-            Ok(Box::new(BodyLenDeserializer {
-                body_len: request.body().len(),
-            }))
-        }
-
         fn deserialize_input<'a>(
             &'a self,
             request: http::Request<Body>,
             input_schema: &'static Schema<'static>,
-            request_body_max_bytes: usize,
-            input: Box<dyn DynInputDeserializer>,
+            config: DeserializeInputConfig,
+            input: Box<dyn ErasedInputBuilder>,
         ) -> DeserializeInputFuture<'a> {
             Box::pin(async move {
                 let body_len = if std::ptr::eq(input_schema, &PAYLOAD_INPUT_SCHEMA) {
-                    crate::body::collect_body_limited(request.into_body(), request_body_max_bytes)
+                    crate::body::collect_body_limited(request.into_body(), config.request_body_max_bytes)
                         .await
                         .map_err(|err| {
                             Box::new(RequestDeserializationError::new(SerdeError::custom(err.to_string())))
@@ -398,7 +399,7 @@ mod tests {
                     0
                 };
                 let mut deserializer = BodyLenDeserializer { body_len };
-                input.deserialize(&mut deserializer).map_err(|err| match err {
+                input.build_input(&mut deserializer).map_err(|err| match err {
                     DeserializeError::Serde(err) => {
                         Box::new(RequestDeserializationError::new(err)) as crate::modeled_error::ServerError
                     }
@@ -554,6 +555,22 @@ impl<Extractors> UpgradePlugin<Extractors> {
     }
 }
 
+impl<P, Extractors> Default for StaticUpgradePlugin<P, Extractors> {
+    fn default() -> Self {
+        Self {
+            _protocol: PhantomData,
+            _extractors: PhantomData,
+        }
+    }
+}
+
+impl<P, Extractors> StaticUpgradePlugin<P, Extractors> {
+    /// Creates a new [`StaticUpgradePlugin`].
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
 impl<Ser, Op, T, Extractors> Plugin<Ser, Op, T> for UpgradePlugin<Extractors>
 where
     Ser: ServiceShape,
@@ -567,6 +584,114 @@ where
             _input: PhantomData,
             inner,
         }
+    }
+}
+
+impl<Ser, Op, T, P, Extractors> Plugin<Ser, Op, T> for StaticUpgradePlugin<P, Extractors>
+where
+    Ser: ServiceShape,
+    Op: SchemaOperationShape,
+{
+    type Output = StaticSchemaUpgrade<P, Op, Extractors, T>;
+
+    fn apply(&self, inner: T) -> Self::Output {
+        StaticSchemaUpgrade {
+            config: DeserializeInputConfig {
+                request_body_max_bytes: 0,
+            },
+            _protocol: PhantomData,
+            _operation: PhantomData,
+            _extractors: PhantomData,
+            inner,
+        }
+    }
+}
+
+/// Static schema upgrade service.
+///
+/// This is the statically dispatched analogue of [`DynUpgrade`]: the protocol is
+/// known in the type parameter `P`, while operation input/output/error schemas
+/// still come from [`SchemaOperationShape`].
+pub struct StaticSchemaUpgrade<P, Op, Extractors, S> {
+    config: DeserializeInputConfig,
+    _protocol: PhantomData<P>,
+    _operation: PhantomData<Op>,
+    _extractors: PhantomData<Extractors>,
+    inner: S,
+}
+
+impl<P, Op, Extractors, S> Clone for StaticSchemaUpgrade<P, Op, Extractors, S>
+where
+    S: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            config: self.config,
+            _protocol: PhantomData,
+            _operation: PhantomData,
+            _extractors: PhantomData,
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+impl<P, Op, Extractors, S> Service<http::Request<Body>> for StaticSchemaUpgrade<P, Op, Extractors, S>
+where
+    P: StaticProtocol,
+    Op: SchemaOperationShape,
+    Op::Input: DeserializableShape + Send + 'static,
+    Op::Output: IntoResponse<P> + Send + 'static,
+    Op::Error: IntoResponse<P> + Send + 'static,
+    Extractors: FromParts<P> + Send + 'static,
+    <Extractors as FromParts<P>>::Rejection: std::fmt::Display + IntoResponse<P>,
+    S: Service<(Op::Input, Extractors), Response = Op::Output, Error = Op::Error> + Clone + Send + 'static,
+    S::Future: Send + 'static,
+{
+    type Response = http::Response<BoxBody>;
+    type Error = Infallible;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: http::Request<Body>) -> Self::Future {
+        let clone = self.inner.clone();
+        let service = std::mem::replace(&mut self.inner, clone);
+        let config = self.config;
+
+        Box::pin(async move {
+            let (mut parts, body) = req.into_parts();
+
+            let extractors = match Extractors::from_parts(&mut parts) {
+                Ok(extractors) => extractors,
+                Err(err) => {
+                    tracing::error!(error = %err, "additional parameter for the handler function could not be constructed");
+                    return Ok(err.into_response());
+                }
+            };
+
+            let body = match crate::body::collect_body_limited(body, config.request_body_max_bytes).await {
+                Ok(body) => body,
+                Err(err) => {
+                    let rejection = P::RequestRejection::from(DeserializeError::Serde(
+                        aws_smithy_schema::serde::SerdeError::custom(err.to_string()),
+                    ));
+                    return Ok(P::request_rejection_into_response(rejection));
+                }
+            };
+
+            let input = match P::deserialize_request::<Op::Input>(Op::SCHEMA.input(), &parts, &body) {
+                Ok(input) => input,
+                Err(rejection) => return Ok(P::request_rejection_into_response(rejection)),
+            };
+
+            let result = service.oneshot((input, extractors)).await;
+            Ok(match result {
+                Ok(output) => output.into_response(),
+                Err(error) => error.into_response(),
+            })
+        })
     }
 }
 
