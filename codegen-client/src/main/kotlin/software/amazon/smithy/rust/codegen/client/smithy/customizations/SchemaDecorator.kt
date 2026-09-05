@@ -45,58 +45,44 @@ import software.amazon.smithy.rust.codegen.core.util.expectTrait
 object SchemaSerdeAllowlist {
     /**
      * Protocols for which schema-based serde is the sole path (no fallback).
-     *
-     * All supported protocols are enabled so the schema-serde path is exercised
-     * end-to-end: codegen, generated-client compilation, decorator tests, and
-     * the dynamodb integration tests all run against the schema-serde path.
-     *
-     * TODO(schema-serde): remove these protocols (restore `emptySet()`) before
-     * merging to main so every service lands back on the legacy per-shape
-     * codegen path, then re-enable protocols incrementally in follow-up PRs per
-     * the SEP's phased-rollout guidance.
      */
-    private val allowedProtocols: Set<ShapeId> =
-        setOf(
-            RestJson1Trait.ID,
-            AwsJson1_0Trait.ID,
-            AwsJson1_1Trait.ID,
-            RestXmlTrait.ID,
-            Rpcv2CborTrait.ID,
-        )
+    private val allowedProtocols: Set<ShapeId> = emptySet()
 
     /**
      * Individual services allowed regardless of protocol.
+     *
+     * We should uncomment the test models as we enable protocols
      */
     private val allowedServices: Set<String> =
         setOf(
             // Test model names, listed explicitly until protocols are fully enabled
             // restJson1
-            "aws.protocoltests.restjson#RestJson",
-            "aws.protocoltests.restjson#RestJsonExtras",
-            "aws.protocoltests.misc#MiscService",
-            "com.aws.example#PokemonService",
-            "com.amazonaws.ebs#Ebs",
+            // "aws.protocoltests.restjson#RestJson",
+            // "aws.protocoltests.restjson#RestJsonExtras",
+            // "aws.protocoltests.misc#MiscService",
+            // "com.aws.example#PokemonService",
+            // "com.amazonaws.ebs#Ebs",
             // awsJson1_0 / awsJson1_1
-            "aws.protocoltests.json10#JsonRpc10",
-            "aws.protocoltests.json#JsonProtocol",
-            "aws.protocoltests.json#TestService",
-            "aws.protocoltests.misc#QueryCompatService",
-            "com.amazonaws.simple#SimpleService",
-            "com.amazonaws.bignumbers#BigNumberService",
+            // "aws.protocoltests.json10#JsonRpc10",
+            // "aws.protocoltests.json#JsonProtocol",
+            // "aws.protocoltests.json#TestService",
+            // "aws.protocoltests.misc#QueryCompatService",
+            // "com.amazonaws.simple#SimpleService",
+            // "com.amazonaws.bignumbers#BigNumberService",
             // restXml
-            "aws.protocoltests.restxml#RestXml",
-            "aws.protocoltests.restxml#RestXmlExtras",
-            "aws.protocoltests.restxml.xmlns#RestXmlWithNamespace",
-            "aws.protocoltests.restxmlunwrapped#RestXmlExtrasUnwrappedErrors",
+            // "aws.protocoltests.restxml#RestXml",
+            // "aws.protocoltests.restxml#RestXmlExtras",
+            // "aws.protocoltests.restxml.xmlns#RestXmlWithNamespace",
+            // "aws.protocoltests.restxmlunwrapped#RestXmlExtrasUnwrappedErrors",
             // rpcv2Cbor
-            "smithy.protocoltests.rpcv2Cbor#RpcV2Protocol",
-            "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
-            "aws.protocoltests.rpcv2cbor#QueryCompatibleRpcV2Protocol",
-            "aws.protocoltests.rpcv2cbor#NonQueryCompatibleRpcV2Protocol",
+            // "smithy.protocoltests.rpcv2Cbor#RpcV2Protocol",
+            // "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
+            // "aws.protocoltests.rpcv2cbor#QueryCompatibleRpcV2Protocol",
+            // "aws.protocoltests.rpcv2cbor#NonQueryCompatibleRpcV2Protocol",
             // naming obstacle courses (protocol-independent codegen coverage)
-            "crate#Config",
-            "casing#ACRONYMInside_Service",
-            "naming_obs_structs#NamingObstacleCourseStructs",
+            // "crate#Config",
+            // "casing#ACRONYMInside_Service",
+            // "naming_obs_structs#NamingObstacleCourseStructs",
         )
 
     /**

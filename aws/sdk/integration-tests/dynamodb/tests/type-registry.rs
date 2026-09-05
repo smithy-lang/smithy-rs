@@ -13,12 +13,14 @@
 //!
 //! `Client::registry()` and `Client::error_registry()` are only generated when
 //! DynamoDB's protocol is on `SchemaSerdeAllowlist`, so this test compiles and
-//! runs only while that protocol is enabled there. It is currently enabled so it
-//! runs in CI against the schema-serde path.
+//! runs only while that protocol is enabled there. It is currently **disabled**
+//! because the allowlist is empty.
 //!
 //! TODO(schema-serde): Rust cannot query the codegen allowlist, so this gating
-//! is manual — re-add `#![cfg(any())]` here to disable this test when the
-//! protocols are removed from the allowlist.
+//! is manual — remove the `#![cfg(any())]` below to re-enable this test when
+//! awsJson1_0 (or DynamoDB specifically) is re-added to the allowlist.
+
+#![cfg(any())]
 
 use aws_sdk_dynamodb::types::Capacity;
 use aws_sdk_dynamodb::Client;
