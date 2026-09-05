@@ -89,7 +89,7 @@ private fun eventStreamWithInitialRequest(
             {
                 use #{futures_util}::StreamExt;
                 let body = #{body:W};
-                let initial_message = #{initial_message}(body);
+                let initial_message = #{initial_message}(body#{initial_message_protocol});
 
                 // Wrap the marshaller to handle both initial and regular messages
                 let wrapped_marshaller = #{EventOrInitialMarshaller}::new(marshaller);
@@ -112,6 +112,9 @@ private fun eventStreamWithInitialRequest(
             *preludeScope,
             "futures_util" to CargoDependency.FuturesUtil.toType(),
             "initial_message" to params.eventStreamMarshallerGenerator.renderInitialRequestGenerator(params.payloadContentType),
+            // The schema path's `initial_message_from_body` takes the protocol so it can
+            // label the body with the media type of whichever protocol encoded it.
+            "initial_message_protocol" to writable { if (useSchemaSerde) rust(", &protocol") },
             "body" to bodyExpr,
             "EventOrInitial" to eventOrInitial,
             "EventOrInitialMarshaller" to eventOrInitialMarshaller,
