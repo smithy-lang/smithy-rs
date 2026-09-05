@@ -55,6 +55,15 @@ object SchemaSerdeAllowlist {
      */
     private val allowedServices: Set<String> =
         setOf(
+            // --- Phased rollout: real AWS services ---
+            // Enabled one service at a time, ahead of enabling a whole protocol via
+            // `allowedProtocols`. A service entry only affects that service, so the
+            // protocol's other services (e.g. `config` for awsJson1_1) stay on the
+            // legacy path and keep acting as a control.
+            //
+            // awsJson1_1 — first service on the schema path. Its model lives at
+            // `aws/sdk/aws-models/ssm.json` so CI generates and tests it.
+            "com.amazonaws.ssm#AmazonSSM",
             // Test model names, listed explicitly until protocols are fully enabled
             // restJson1
             // "aws.protocoltests.restjson#RestJson",
