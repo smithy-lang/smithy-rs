@@ -37,11 +37,11 @@ use self::h1::{H1Records, H1ReuseReservation, H1Selection, OwnedH1};
 #[cfg(test)]
 use self::waiters::CellSnapshot;
 pub(in crate::client::pool) use self::waiters::WaiterId;
-use self::waiters::{AcquisitionQueue, DeliveryReservation, ResultInstallError};
-use super::admission::reuse::{H1Availability, H1AvailabilitySnapshot, ReuseId};
+use self::waiters::{AcquisitionQueue, CellCommitError, CellCommitOutcome, DeliveryReservation};
 use super::admission::{
-    AdmissionAction, CapacityLease, DeliveryGuard, DemandSnapshot, H2AdvertisementSnapshot,
-    OriginAdmission, ProtocolRequirement,
+    AdmissionAction, CapacityLease, DeliveryGuard, DemandSnapshot, H1MatchId,
+    H1ReservationDecision, H1SupplyStatus, H2SupplyStatus, OriginAdmission, ProtocolRequirement,
+    SupplyRevision,
 };
 use super::connection::CloseReason;
 #[cfg(test)]
@@ -100,24 +100,39 @@ pub(crate) struct OriginCell {
 /// Waiter outcomes and protocol residence share this lock. HTTP/1 returns,
 /// HTTP/2 activation gates, flight participants, and cancellation therefore
 /// commit against one acquisition order.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct CellState {
     /// Cell-local acquisition order and delivered results.
-    waiters: AcquisitionQueue,
+    acquisitions: AcquisitionQueue,
     /// Cell-owned HTTP/1 records and reusable sender order.
     h1: H1Records,
     /// Cell-owned HTTP/2 flight and installed generations.
     h2: h2::H2Records,
     /// One cross-cell reuse reservation and its local fairness debt.
     reuse: H1ReuseReservation,
-    /// Last HTTP/1 availability published to bounded-origin admission.
-    published_h1_availability: Option<H1Availability>,
-    /// Revision used to reject availability reports that cross out of order.
-    h1_availability_revision: u64,
-    /// Last complete H2 advertisement reported to origin admission.
-    published_h2_advertisement: Option<(h2::H2GenerationId, bool)>,
-    /// Revision used to reject H2 advertisements that cross out of order.
-    h2_advertisement_revision: u64,
+    /// Last admission-facing HTTP/1 status and its monotonic revision.
+    h1_supply_revision: SupplyRevision<H1SupplyStatus>,
+    /// Last admission-facing HTTP/2 status and its monotonic revision.
+    h2_supply_revision: SupplyRevision<H2SupplyStatus>,
+}
+
+impl Default for CellState {
+    fn default() -> Self {
+        Self {
+            acquisitions: AcquisitionQueue::default(),
+            h1: H1Records::default(),
+            h2: h2::H2Records::default(),
+            reuse: H1ReuseReservation::default(),
+            h1_supply_revision: SupplyRevision::new(
+                0,
+                H1SupplyStatus {
+                    has_returnable_connection: false,
+                    peer_use_blocked: false,
+                },
+            ),
+            h2_supply_revision: SupplyRevision::new(0, H2SupplyStatus::Unavailable),
+        }
+    }
 }
 
 impl CellState {
@@ -128,169 +143,175 @@ impl CellState {
             if std::thread::panicking() {
                 return;
             }
-            self.waiters.assert_consistent();
+            self.acquisitions.assert_consistent();
             self.h1.assert_consistent();
             self.h2.assert_consistent();
-            self.h2.assert_pending_waiters(&self.waiters);
+            self.h2.assert_pending_waiters(&self.acquisitions);
             self.reuse
                 .assert_consistent(self.h1.supports_installed_reuse());
         }
     }
 
-    /// Reports the HTTP/1 availability admission needs without exposing cell internals.
-    fn h1_availability(&self) -> H1Availability {
-        let local_h1_demand = self.waiters.can_accept_h1();
-        H1Availability {
-            advertised: self.h1.has_returnable(),
-            blocked: !self.reuse.is_available()
+    /// Derives the complete HTTP/1 status admission needs from cell-owned state.
+    fn h1_supply_status(&self) -> H1SupplyStatus {
+        let local_h1_demand = self.acquisitions.has_h1_compatible_waiter();
+        H1SupplyStatus {
+            has_returnable_connection: self.h1.has_returnable(),
+            peer_use_blocked: !self.reuse.is_available()
                 || self.reuse.blocks_peer_reuse(local_h1_demand)
-                || self.waiters.has_prior_h1_candidate(),
+                || self.acquisitions.has_prior_h1_candidate(),
         }
     }
 
-    /// Returns an availability update only when admission's view must change.
-    fn take_h1_availability_update(&mut self) -> Option<H1AvailabilitySnapshot> {
-        let current = self.h1_availability();
-        if self.published_h1_availability == Some(current) {
+    /// Returns an HTTP/1 revision only when admission's view must change.
+    ///
+    /// The first submission advances to revision one even for the initial
+    /// unavailable status because it also drives retained H1 matching.
+    fn take_h1_supply_update(&mut self) -> Option<SupplyRevision<H1SupplyStatus>> {
+        let current = self.h1_supply_status();
+        if self.h1_supply_revision.revision != 0 && self.h1_supply_revision.status == current {
             return None;
         }
-        Some(self.record_h1_availability(current))
+        Some(self.advance_h1_supply_revision(current))
     }
 
-    /// Returns the current versioned availability for a reuse transition.
-    fn report_h1_availability(&mut self) -> H1AvailabilitySnapshot {
-        let current = self.h1_availability();
-        if self.published_h1_availability == Some(current) {
-            return H1AvailabilitySnapshot::new(self.h1_availability_revision, current);
+    /// Returns the current HTTP/1 revision for an exact crossing fallback.
+    fn current_h1_supply_revision(&mut self) -> SupplyRevision<H1SupplyStatus> {
+        let current = self.h1_supply_status();
+        if self.h1_supply_revision.revision != 0 && self.h1_supply_revision.status == current {
+            return self.h1_supply_revision;
         }
-        self.record_h1_availability(current)
+        self.advance_h1_supply_revision(current)
     }
 
-    /// Advances the revision and records changed HTTP/1 availability.
-    fn record_h1_availability(&mut self, availability: H1Availability) -> H1AvailabilitySnapshot {
-        self.h1_availability_revision = self
-            .h1_availability_revision
-            .checked_add(1)
-            .expect("HTTP/1 availability revision exhausted");
-        self.published_h1_availability = Some(availability);
-        H1AvailabilitySnapshot::new(self.h1_availability_revision, availability)
-    }
-
-    /// Returns an H2 advertisement only when admission's view must change.
-    fn take_h2_advertisement_update(&mut self) -> Option<H2AdvertisementSnapshot> {
-        let current = self.h2_advertisement();
-        if self.published_h2_advertisement == current {
-            return None;
-        }
-        Some(self.record_h2_advertisement(current))
-    }
-
-    /// Returns the current versioned H2 advertisement for a reclaim transition.
-    fn report_h2_advertisement(&mut self) -> H2AdvertisementSnapshot {
-        let current = self.h2_advertisement();
-        if self.published_h2_advertisement == current {
-            return Self::h2_advertisement_snapshot(self.h2_advertisement_revision, current);
-        }
-        self.record_h2_advertisement(current)
-    }
-
-    /// Returns the exact publishable generation and its idle state.
-    fn h2_advertisement(&self) -> Option<(h2::H2GenerationId, bool)> {
-        self.h2
-            .publishable_generation()
-            .map(|generation| (generation, self.h2.is_idle(generation)))
-    }
-
-    /// Advances the revision and records changed H2 availability.
-    fn record_h2_advertisement(
+    fn advance_h1_supply_revision(
         &mut self,
-        advertisement: Option<(h2::H2GenerationId, bool)>,
-    ) -> H2AdvertisementSnapshot {
-        self.h2_advertisement_revision = self
-            .h2_advertisement_revision
+        status: H1SupplyStatus,
+    ) -> SupplyRevision<H1SupplyStatus> {
+        let revision = self
+            .h1_supply_revision
+            .revision
             .checked_add(1)
-            .expect("HTTP/2 advertisement revision exhausted");
-        self.published_h2_advertisement = advertisement;
-        Self::h2_advertisement_snapshot(self.h2_advertisement_revision, advertisement)
+            .expect("HTTP/1 supply revision exhausted");
+        self.h1_supply_revision = SupplyRevision::new(revision, status);
+        self.h1_supply_revision
     }
 
-    fn h2_advertisement_snapshot(
-        revision: u64,
-        advertisement: Option<(h2::H2GenerationId, bool)>,
-    ) -> H2AdvertisementSnapshot {
-        match advertisement {
-            Some((generation, true)) => H2AdvertisementSnapshot::idle(revision, generation),
-            Some((generation, false)) => H2AdvertisementSnapshot::accepting(revision, generation),
-            None => H2AdvertisementSnapshot::unavailable(revision),
+    /// Returns an HTTP/2 revision only when admission's view must change.
+    ///
+    /// Initial unavailability is suppressed because absence already represents
+    /// that state in admission.
+    fn take_h2_supply_update(&mut self) -> Option<SupplyRevision<H2SupplyStatus>> {
+        let current = self.h2_supply_status();
+        if self.h2_supply_revision.status == current {
+            return None;
         }
+        Some(self.advance_h2_supply_revision(current))
+    }
+
+    /// Returns the current HTTP/2 revision for an exact reclaim fallback.
+    fn current_h2_supply_revision(&mut self) -> SupplyRevision<H2SupplyStatus> {
+        let current = self.h2_supply_status();
+        if self.h2_supply_revision.status == current {
+            return self.h2_supply_revision;
+        }
+        self.advance_h2_supply_revision(current)
+    }
+
+    /// Derives the exact generation admission may route or reclaim.
+    fn h2_supply_status(&self) -> H2SupplyStatus {
+        match self.h2.publishable_generation() {
+            Some(generation) => H2SupplyStatus::Accepting {
+                generation,
+                idle: self.h2.is_idle(generation),
+            },
+            None => H2SupplyStatus::Unavailable,
+        }
+    }
+
+    fn advance_h2_supply_revision(
+        &mut self,
+        status: H2SupplyStatus,
+    ) -> SupplyRevision<H2SupplyStatus> {
+        let revision = self
+            .h2_supply_revision
+            .revision
+            .checked_add(1)
+            .expect("HTTP/2 supply revision exhausted");
+        self.h2_supply_revision = SupplyRevision::new(revision, status);
+        self.h2_supply_revision
     }
 
     /// Atomically decides whether a peer may reserve this cell's connection.
-    fn install_reuse(&mut self, reuse_id: ReuseId) -> ReuseInstall {
-        let local_h1_demand = self.waiters.can_accept_h1();
+    fn install_reuse(&mut self, match_id: H1MatchId) -> H1ReservationDecision<OwnedH1> {
+        let local_h1_demand = self.acquisitions.has_h1_compatible_waiter();
         if self.reuse.blocks_peer_reuse(local_h1_demand)
-            || self.waiters.has_prior_h1_candidate()
+            || self.acquisitions.has_prior_h1_candidate()
             || !self.reuse.is_available()
         {
-            let report = self.report_h1_availability();
+            let report = self.current_h1_supply_revision();
             self.assert_consistent();
-            return ReuseInstall::Rejected(report);
+            return H1ReservationDecision::Rejected(report);
         }
 
         if let Some(owner) = self.h1.take_idle_for_reuse() {
             assert!(
-                self.reuse.install_resolving(reuse_id),
+                self.reuse.install_resolving(match_id),
                 "available HTTP/1 connection could not install its reuse reservation"
             );
             self.assert_consistent();
-            return ReuseInstall::Candidate(owner);
+            return H1ReservationDecision::Candidate(owner);
         }
         if self.h1.has_returnable() {
             assert!(
-                self.reuse.install(reuse_id),
+                self.reuse.install(match_id),
                 "available HTTP/1 connection could not install its reuse reservation"
             );
             self.assert_consistent();
-            return ReuseInstall::Installed;
+            return H1ReservationDecision::Installed;
         }
 
-        let report = self.report_h1_availability();
+        let report = self.current_h1_supply_revision();
         self.assert_consistent();
-        ReuseInstall::Rejected(report)
+        H1ReservationDecision::Rejected(report)
     }
 
     /// Clears a reuse reservation and returns the cell's complete availability.
-    fn cancel_reuse(&mut self, reuse_id: ReuseId) -> H1AvailabilitySnapshot {
-        self.reuse.reject(reuse_id);
-        let local_h1_demand = self.waiters.can_accept_h1();
+    fn cancel_reuse(&mut self, match_id: H1MatchId) -> SupplyRevision<H1SupplyStatus> {
+        self.reuse.reject(match_id);
+        let local_h1_demand = self.acquisitions.has_h1_compatible_waiter();
         self.reuse.clear_unused_turn(local_h1_demand);
         self.assert_consistent();
-        self.report_h1_availability()
+        self.current_h1_supply_revision()
     }
 
     /// Clears a reservation before its provisional sender follows ordinary return.
-    fn reject_reuse_candidate(&mut self, reuse_id: ReuseId) {
-        self.reuse.reject(reuse_id);
+    fn reject_reuse_candidate(&mut self, match_id: H1MatchId) {
+        self.reuse.reject(match_id);
         self.assert_consistent();
     }
 
     /// Revalidates a reuse operation and sender residence as one cell transition.
-    fn commit_reuse(&mut self, reuse_id: ReuseId, owner: &OwnedH1) -> bool {
-        let committed = self.reuse.names(reuse_id) && self.h1.commit_return_to_waiter(owner);
+    fn commit_reuse(&mut self, match_id: H1MatchId, owner: &OwnedH1) -> bool {
+        let committed = self.reuse.names(match_id) && self.h1.commit_return_to_waiter(owner);
         self.assert_consistent();
         committed
     }
 
     /// Completes or rejects a reservation after its external action resolves.
-    fn finish_reuse(&mut self, reuse_id: ReuseId, transferred: bool) -> H1AvailabilitySnapshot {
+    fn finish_reuse(
+        &mut self,
+        match_id: H1MatchId,
+        transferred: bool,
+    ) -> SupplyRevision<H1SupplyStatus> {
         if transferred {
-            let local_h1_demand = self.waiters.can_accept_h1();
-            self.reuse.complete_transfer(reuse_id, local_h1_demand);
+            let local_h1_demand = self.acquisitions.has_h1_compatible_waiter();
+            self.reuse.complete_transfer(match_id, local_h1_demand);
         } else {
-            self.reuse.reject(reuse_id);
+            self.reuse.reject(match_id);
         }
         self.assert_consistent();
-        self.report_h1_availability()
+        self.current_h1_supply_revision()
     }
 
     /// Removes active HTTP/2-compatible demand already served by visible H2 state.
@@ -307,18 +328,9 @@ impl CellState {
 }
 
 /// Cell-local result of attempting to install one peer reuse reservation.
-enum ReuseInstall {
-    /// The reservation will intercept a future sender return.
-    Installed,
-    /// An idle sender was detached for immediate resolution.
-    Candidate(OwnedH1),
-    /// The cell could not reserve a connection for the operation.
-    Rejected(H1AvailabilitySnapshot),
-}
-
 /// A terminal result that may satisfy an acquisition waiter.
 #[derive(Debug)]
-pub(super) enum AcquisitionResult {
+pub(super) enum AcquisitionOutcome {
     /// An exclusive HTTP/1 sender selected from an installed cell-owned record.
     H1(H1Selection),
     /// A prospective request lease against one HTTP/2 generation.
@@ -326,16 +338,16 @@ pub(super) enum AcquisitionResult {
     /// Establishment failed before producing a dispatchable connection.
     Failed(ConnectorError),
     /// An HTTP/2 generation closed before serving a transferred attempt.
-    Reacquire,
+    RetryAcquisition,
 }
 
 /// One event observed while driving an acquisition attempt.
 #[derive(Debug)]
-pub(super) enum AcquisitionEvent {
+pub(super) enum AcquisitionStep {
     /// Capacity is available and one establishment attempt may start.
-    Establish(EstablishmentPermit),
+    StartEstablishment(EstablishmentPermit),
     /// A returned sender or establishment produced the terminal result.
-    Complete(AcquisitionResult),
+    Resolved(AcquisitionOutcome),
 }
 
 /// Optional bounded-origin capacity for one establishment attempt.
@@ -469,7 +481,7 @@ impl OriginCell {
         }
     }
 
-    /// Applies one materialized acquisition delivery after admission unlock.
+    /// Applies one resolved acquisition delivery after admission unlock.
     ///
     /// Connection-cell H1 revalidation has already completed, so reserving
     /// the requesting cell cannot be followed by another fallible connection-
@@ -478,7 +490,7 @@ impl OriginCell {
     /// # Panics
     ///
     /// Panics if a waiter reserved by this function disappears or enters a
-    /// state that cannot accept the committed acquisition event.
+    /// state that cannot accept the committed acquisition step.
     pub(in crate::client::pool) fn receive_delivery(
         cell: &Arc<Self>,
         delivery: DeliveryGuard,
@@ -486,49 +498,51 @@ impl OriginCell {
         let reservation = {
             let mut state = cell.state.lock();
             state
-                .waiters
+                .acquisitions
                 .reserve_delivery_waiter(delivery.demand(), &cell.eligibility_group)
         };
 
         let DeliveryReservation::Reserved { waiter, successor } = reservation else {
-            return delivery.reject(None);
+            return delivery.refuse(None);
         };
 
-        let (event, mut acknowledgement) = delivery.commit(successor);
-        let (installation, suppress_successor) = {
+        let (step, mut settlement) = delivery.into_step(successor);
+        let (commit, suppress_successor) = {
             let mut state = cell.state.lock();
-            let installation = match event {
-                AcquisitionEvent::Establish(permit) => {
-                    state.waiters.install_capacity(waiter, permit)
+            let commit = match step {
+                AcquisitionStep::StartEstablishment(permit) => {
+                    state.acquisitions.commit_capacity(waiter, permit)
                 }
-                AcquisitionEvent::Complete(result) => {
-                    state.waiters.install_borrowed_h1(waiter, result)
+                AcquisitionStep::Resolved(outcome) => {
+                    state.acquisitions.commit_borrowed_h1(waiter, outcome)
                 }
             };
-            (installation, state.h2.has_visible_h2())
+            (commit, state.h2.has_visible_h2())
         };
         if suppress_successor {
-            acknowledgement.suppress_h2_successor();
+            settlement.suppress_h2_successor();
         }
 
-        let accepted = installation.accepted;
-        let error = installation.error;
-        let waker = installation.waker;
-        let next = if accepted {
-            drop(installation.returned_events);
-            acknowledgement.accept()
-        } else {
-            acknowledgement.reject(installation.returned_events)
+        let (next, waker, error) = match commit {
+            CellCommitOutcome::Committed { waker } => (settlement.accept(), waker, None),
+            CellCommitOutcome::Refused { returned, waker } => {
+                (settlement.refuse(returned), waker, None)
+            }
+            CellCommitOutcome::Invalid {
+                returned,
+                waker,
+                error,
+            } => (settlement.refuse(returned), waker, Some(error)),
         };
         if let Some(waker) = waker {
             waker.wake();
         }
         if let Some(error) = error {
             match error {
-                ResultInstallError::MissingWaiter => {
+                CellCommitError::MissingWaiter => {
                     panic!("reserved waiter disappeared before acquisition delivery")
                 }
-                ResultInstallError::UnexpectedState => {
+                CellCommitError::UnexpectedState => {
                     panic!("reserved waiter entered an invalid acquisition-delivery state")
                 }
             }
@@ -539,7 +553,7 @@ impl OriginCell {
     /// Returns the number of retained acquisition waiters for boundary tests.
     #[cfg(test)]
     pub(super) fn retained_waiters_for_test(&self) -> usize {
-        self.state.lock().waiters.snapshot().retained
+        self.state.lock().acquisitions.snapshot().retained
     }
 
     /// Registers one acquisition waiter in cell-local arrival order.
@@ -550,7 +564,7 @@ impl OriginCell {
     pub(super) fn register_waiter(cell: &Arc<Self>, requirement: ProtocolRequirement) -> WaiterId {
         let (waiter, snapshot, h2_visible) = {
             let mut state = cell.state.lock();
-            let (waiter, snapshot) = state.waiters.register_waiter(
+            let (waiter, snapshot) = state.acquisitions.register_waiter(
                 requirement,
                 &cell.eligibility_group,
                 cell.admission.is_some(),
@@ -563,7 +577,7 @@ impl OriginCell {
         };
 
         if let (Some(admission), Some(snapshot), false) = (&cell.admission, snapshot, h2_visible) {
-            OriginAdmission::publish_demand(admission, cell.id.partition(), snapshot);
+            OriginAdmission::submit_demand_snapshot(admission, cell.id.partition(), snapshot);
         }
         Self::service_h2_waiters(cell);
         Self::service_peer_h2_waiters(cell);
@@ -583,15 +597,21 @@ impl OriginCell {
             state.h2.cancel_peer_activation(waiter);
             state.h2.cancel_pending_waiter(waiter);
             state
-                .waiters
+                .acquisitions
                 .cancel_waiter(waiter, &cell.eligibility_group)
                 .map(|mut cancelled| {
-                    let mut local_install = if state.waiters.can_accept_h1() {
+                    let mut local_install = if state.acquisitions.has_h1_compatible_waiter() {
                         state.h1.select_idle().map(|owner| {
                             state.reuse.consume_local_turn();
-                            state.waiters.install_returned_h1(
-                                || AcquisitionResult::H1(H1Selection::new(cell, owner)),
+                            let (waiter, resolution) = state.acquisitions.offer_returned_h1(
+                                || AcquisitionOutcome::H1(H1Selection::new(cell, owner)),
                                 &cell.eligibility_group,
+                            );
+                            (
+                                waiter.expect(
+                                    "compatible HTTP/1 waiter disappeared during local offer",
+                                ),
+                                resolution,
                             )
                         })
                     } else {
@@ -599,10 +619,8 @@ impl OriginCell {
                     };
                     cancelled.demand_updates =
                         state.publishable_demand_updates(cancelled.demand_updates);
-                    if let Some(install) = &mut local_install {
-                        if let Some(waiter) = install.waiter {
-                            state.h2.cancel_pending_waiter(waiter);
-                        }
+                    if let Some((waiter, install)) = &mut local_install {
+                        state.h2.cancel_pending_waiter(*waiter);
                         install.demand_updates = state.publishable_demand_updates(std::mem::take(
                             &mut install.demand_updates,
                         ));
@@ -622,19 +640,19 @@ impl OriginCell {
                     local_install
                         .as_ref()
                         .into_iter()
-                        .flat_map(|install| install.demand_updates.iter().cloned()),
+                        .flat_map(|(_, install)| install.demand_updates.iter().cloned()),
                 )
                 .flatten()
             {
-                OriginAdmission::publish_demand(admission, cell.id.partition(), snapshot);
+                OriginAdmission::submit_demand_snapshot(admission, cell.id.partition(), snapshot);
             }
         }
 
         // Ready results and any locally rejected event cross the lock boundary
         // before their fallback can re-enter the pool.
-        drop(cancelled.returned_events);
-        if let Some(install) = local_install {
-            drop(install.returned_event);
+        drop(cancelled.returned_steps);
+        if let Some((_, install)) = local_install {
+            drop(install.returned_step);
             if let Some(waker) = install.waker {
                 waker.wake();
             }
@@ -642,12 +660,12 @@ impl OriginCell {
 
         let availability = {
             let mut state = cell.state.lock();
-            let local_h1_demand = state.waiters.can_accept_h1();
+            let local_h1_demand = state.acquisitions.has_h1_compatible_waiter();
             state.reuse.clear_unused_turn(local_h1_demand);
             state.assert_consistent();
-            state.take_h1_availability_update()
+            state.take_h1_supply_update()
         };
-        cell.publish_h1_availability(availability);
+        cell.submit_h1_supply_update(availability);
         Self::service_h2_waiters(cell);
         Self::service_peer_h2_waiters(cell);
         true
@@ -667,14 +685,14 @@ impl OriginCell {
         &self,
         waiter: WaiterId,
         cx: &mut Context<'_>,
-    ) -> Poll<AcquisitionEvent> {
+    ) -> Poll<AcquisitionStep> {
         let mut state = self.state.lock();
-        state.waiters.poll_waiter(waiter, cx)
+        state.acquisitions.poll_waiter(waiter, cx)
     }
 
     /// Marks an establishment attempt as started before its first connector poll.
     pub(super) fn start_establishment(&self, waiter: WaiterId) -> bool {
-        self.state.lock().waiters.start_establishment(waiter)
+        self.state.lock().acquisitions.start_establishment(waiter)
     }
 
     /// Commits one terminal establishment result to its launching waiter.
@@ -687,39 +705,42 @@ impl OriginCell {
     ///
     /// Panics if the launching waiter disappeared or left the launching state
     /// before its owned establishment completed.
-    pub(super) fn complete_establishment(&self, waiter: WaiterId, result: AcquisitionResult) {
-        let served_with_h1 = matches!(&result, AcquisitionResult::H1(_));
-        let installation = {
+    pub(super) fn complete_establishment(&self, waiter: WaiterId, result: AcquisitionOutcome) {
+        let served_with_h1 = matches!(&result, AcquisitionOutcome::H1(_));
+        let commit = {
             let mut state = self.state.lock();
-            let installation = state.waiters.install_establishment_result(waiter, result);
-            let served_with_h1 = served_with_h1
-                && !installation.returned_events.iter().any(|event| {
-                    matches!(
-                        event,
-                        Some(AcquisitionEvent::Complete(AcquisitionResult::H1(_)))
-                    )
-                });
-            if installation.accepted {
+            let commit = state.acquisitions.commit_establishment(waiter, result);
+            let accepted = matches!(commit, CellCommitOutcome::Committed { .. });
+            if accepted {
                 if served_with_h1 {
                     state.reuse.consume_local_turn();
                 } else {
-                    let local_h1_demand = state.waiters.can_accept_h1();
+                    let local_h1_demand = state.acquisitions.has_h1_compatible_waiter();
                     state.reuse.clear_unused_turn(local_h1_demand);
                 }
                 state.assert_consistent();
             }
-            installation
+            commit
         };
-        drop(installation.returned_events);
-        if let Some(waker) = installation.waker {
+        let (returned, waker, error) = match commit {
+            CellCommitOutcome::Committed { waker } => ([None, None], waker, None),
+            CellCommitOutcome::Refused { returned, waker } => (returned, waker, None),
+            CellCommitOutcome::Invalid {
+                returned,
+                waker,
+                error,
+            } => (returned, waker, Some(error)),
+        };
+        drop(returned);
+        if let Some(waker) = waker {
             waker.wake();
         }
-        if let Some(error) = installation.error {
+        if let Some(error) = error {
             match error {
-                ResultInstallError::MissingWaiter => {
+                CellCommitError::MissingWaiter => {
                     unreachable!("establishment result reported a missing waiter")
                 }
-                ResultInstallError::UnexpectedState => {
+                CellCommitError::UnexpectedState => {
                     panic!("establishment completed for a waiter that was not launching")
                 }
             }
@@ -727,17 +748,17 @@ impl OriginCell {
         let availability = {
             let mut state = self.state.lock();
             state.assert_consistent();
-            state.take_h1_availability_update()
+            state.take_h1_supply_update()
         };
-        self.publish_h1_availability(availability);
+        self.submit_h1_supply_update(availability);
     }
 
     #[cfg(test)]
     pub(super) fn take_ready_lease(cell: &Arc<Self>, waiter: WaiterId) -> Option<CapacityLease> {
         let permit = match cell.take_ready_event(waiter)? {
-            AcquisitionEvent::Establish(permit) => permit,
-            AcquisitionEvent::Complete(_) => {
-                panic!("capacity test received a terminal acquisition result")
+            AcquisitionStep::StartEstablishment(permit) => permit,
+            AcquisitionStep::Resolved(_) => {
+                panic!("capacity test received a terminal acquisition outcome")
             }
         };
         assert!(Self::cancel_waiter(cell, waiter));
@@ -747,27 +768,27 @@ impl OriginCell {
     #[cfg(test)]
     fn take_ready_h1(&self, waiter: WaiterId) -> Option<H1Selection> {
         match self.take_ready_event(waiter)? {
-            AcquisitionEvent::Complete(AcquisitionResult::H1(selection)) => Some(selection),
-            AcquisitionEvent::Complete(AcquisitionResult::H2(_)) => {
+            AcquisitionStep::Resolved(AcquisitionOutcome::H1(selection)) => Some(selection),
+            AcquisitionStep::Resolved(AcquisitionOutcome::H2(_)) => {
                 panic!("HTTP/1 ownership test received an HTTP/2 activation")
             }
-            AcquisitionEvent::Complete(AcquisitionResult::Failed(_)) => {
+            AcquisitionStep::Resolved(AcquisitionOutcome::Failed(_)) => {
                 panic!("HTTP/1 ownership test received establishment failure")
             }
-            AcquisitionEvent::Complete(AcquisitionResult::Reacquire) => {
+            AcquisitionStep::Resolved(AcquisitionOutcome::RetryAcquisition) => {
                 panic!("HTTP/1 ownership test received an internal reacquisition")
             }
-            AcquisitionEvent::Establish(_) => {
+            AcquisitionStep::StartEstablishment(_) => {
                 panic!("HTTP/1 ownership test received establishment capacity")
             }
         }
     }
 
     #[cfg(test)]
-    fn take_ready_event(&self, waiter: WaiterId) -> Option<AcquisitionEvent> {
+    fn take_ready_event(&self, waiter: WaiterId) -> Option<AcquisitionStep> {
         let mut state = self.state.lock();
         match state
-            .waiters
+            .acquisitions
             .poll_waiter(waiter, &mut Context::from_waker(std::task::Waker::noop()))
         {
             Poll::Ready(event) => Some(event),
@@ -780,11 +801,11 @@ impl OriginCell {
         &self,
         requirement: ProtocolRequirement,
     ) -> (WaiterId, DemandSnapshot) {
-        let (waiter, snapshot) =
-            self.state
-                .lock()
-                .waiters
-                .register_waiter(requirement, &self.eligibility_group, true);
+        let (waiter, snapshot) = self.state.lock().acquisitions.register_waiter(
+            requirement,
+            &self.eligibility_group,
+            true,
+        );
         (
             waiter,
             snapshot.expect("first unpublished waiter did not create demand"),
@@ -793,7 +814,7 @@ impl OriginCell {
 
     #[cfg(test)]
     fn snapshot(&self) -> CellSnapshot {
-        self.state.lock().waiters.snapshot()
+        self.state.lock().acquisitions.snapshot()
     }
 }
 
@@ -906,20 +927,20 @@ mod tests {
     }
 
     #[test]
-    fn h1_availability_revision_advances_only_when_availability_changes() {
+    fn h1_supply_revision_advances_only_when_status_changes() {
         let mut state = CellState::default();
-        assert!(state.take_h1_availability_update().is_some());
-        assert_eq!(1, state.h1_availability_revision);
-        assert!(state.take_h1_availability_update().is_none());
-        assert_eq!(1, state.h1_availability_revision);
+        assert!(state.take_h1_supply_update().is_some());
+        assert_eq!(1, state.h1_supply_revision.revision);
+        assert!(state.take_h1_supply_update().is_none());
+        assert_eq!(1, state.h1_supply_revision.revision);
 
         let (connection, _physical) = unbounded_connection(1);
         state
             .h1
             .install_idle(connection, H1Sender::test(11), None)
             .unwrap();
-        assert!(state.take_h1_availability_update().is_some());
-        assert_eq!(2, state.h1_availability_revision);
+        assert!(state.take_h1_supply_update().is_some());
+        assert_eq!(2, state.h1_supply_revision.revision);
     }
 
     #[test]
@@ -930,12 +951,12 @@ mod tests {
             .h1
             .install_selected(connection, H1Sender::test(11))
             .expect("fresh HTTP/1 record was rejected");
-        let reuse_id = ReuseId::for_test(1);
-        assert!(state.reuse.install(reuse_id));
+        let match_id = H1MatchId::for_test(1);
+        assert!(state.reuse.install(match_id));
 
-        assert!(state.h1_availability().blocked);
+        assert!(state.h1_supply_status().peer_use_blocked);
 
-        assert!(state.reuse.reject(reuse_id));
+        assert!(state.reuse.reject(match_id));
         assert!(state.h1.close_owned(&owner));
         drop(owner);
     }
@@ -1187,7 +1208,7 @@ mod tests {
     fn returned_h1_and_establishment_complete_one_acquisition_attempt() {
         let cell = unbounded_cell();
         let waiter = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
-        let AcquisitionEvent::Establish(permit) = cell
+        let AcquisitionStep::StartEstablishment(permit) = cell
             .take_ready_event(waiter)
             .expect("unbounded miss did not start establishment")
         else {
@@ -1203,7 +1224,7 @@ mod tests {
         let fresh = OriginCell::install_selected_h1(&cell, fresh_connection, H1Sender::test(22));
 
         drop(returning);
-        cell.complete_establishment(waiter, AcquisitionResult::H1(fresh));
+        cell.complete_establishment(waiter, AcquisitionOutcome::H1(fresh));
 
         assert_eq!((2, 1), cell.h1_counts());
         let winner = cell
@@ -1222,7 +1243,7 @@ mod tests {
         let returning = OriginCell::install_selected_h1(&cell, connection, H1Sender::test(11));
 
         let waiter = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
-        let AcquisitionEvent::Establish(permit) = cell
+        let AcquisitionStep::StartEstablishment(permit) = cell
             .take_ready_event(waiter)
             .expect("bounded miss received no capacity")
         else {
@@ -1251,7 +1272,7 @@ mod tests {
         let returning = OriginCell::install_selected_h1(&cell, connection, H1Sender::test(11));
 
         let older = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
-        let AcquisitionEvent::Establish(permit) = cell
+        let AcquisitionStep::StartEstablishment(permit) = cell
             .take_ready_event(older)
             .expect("older waiter received no establishment capacity")
         else {
@@ -1280,10 +1301,10 @@ mod tests {
     }
 
     #[test]
-    fn establishment_failure_is_a_terminal_acquisition_result() {
+    fn establishment_failure_is_a_terminal_acquisition_outcome() {
         let cell = unbounded_cell();
         let waiter = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
-        let AcquisitionEvent::Establish(permit) = cell
+        let AcquisitionStep::StartEstablishment(permit) = cell
             .take_ready_event(waiter)
             .expect("unbounded miss did not start establishment")
         else {
@@ -1294,16 +1315,16 @@ mod tests {
 
         cell.complete_establishment(
             waiter,
-            AcquisitionResult::Failed(ConnectorError::io(
+            AcquisitionOutcome::Failed(ConnectorError::io(
                 std::io::Error::other("synthetic establishment failure").into(),
             )),
         );
 
-        let AcquisitionEvent::Complete(AcquisitionResult::Failed(error)) = cell
+        let AcquisitionStep::Resolved(AcquisitionOutcome::Failed(error)) = cell
             .take_ready_event(waiter)
             .expect("establishment failure was not delivered")
         else {
-            panic!("establishment failure produced the wrong acquisition event");
+            panic!("establishment failure produced the wrong acquisition step");
         };
         assert!(error.is_io());
         assert_eq!(0, cell.snapshot().retained);
@@ -1312,14 +1333,14 @@ mod tests {
     #[test]
     fn establishment_completion_clears_the_served_waiters_local_turn() {
         let cell = unbounded_cell();
-        let reuse_id = ReuseId::for_test(1);
+        let reuse_id = H1MatchId::for_test(1);
         {
             let mut state = cell.state.lock();
             assert!(state.reuse.install_resolving(reuse_id));
             assert!(state.reuse.complete_transfer(reuse_id, true));
         }
         let waiter = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
-        let AcquisitionEvent::Establish(permit) = cell
+        let AcquisitionStep::StartEstablishment(permit) = cell
             .take_ready_event(waiter)
             .expect("unbounded miss did not prepare establishment")
         else {
@@ -1330,7 +1351,7 @@ mod tests {
         let (connection, _physical) = unbounded_connection(1);
         let fresh = OriginCell::install_selected_h1(&cell, connection, H1Sender::test(11));
 
-        cell.complete_establishment(waiter, AcquisitionResult::H1(fresh));
+        cell.complete_establishment(waiter, AcquisitionOutcome::H1(fresh));
 
         assert!(!cell.state.lock().reuse.local_turn_owed());
         drop(
@@ -1342,14 +1363,14 @@ mod tests {
     #[test]
     fn failed_establishment_preserves_a_turn_for_compatible_successor() {
         let cell = unbounded_cell();
-        let reuse_id = ReuseId::for_test(1);
+        let reuse_id = H1MatchId::for_test(1);
         {
             let mut state = cell.state.lock();
             assert!(state.reuse.install_resolving(reuse_id));
             assert!(state.reuse.complete_transfer(reuse_id, true));
         }
         let failed = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
-        let AcquisitionEvent::Establish(permit) = cell
+        let AcquisitionStep::StartEstablishment(permit) = cell
             .take_ready_event(failed)
             .expect("unbounded miss did not prepare establishment")
         else {
@@ -1361,7 +1382,7 @@ mod tests {
 
         cell.complete_establishment(
             failed,
-            AcquisitionResult::Failed(ConnectorError::io(
+            AcquisitionOutcome::Failed(ConnectorError::io(
                 std::io::Error::other("synthetic establishment failure").into(),
             )),
         );
@@ -1369,7 +1390,7 @@ mod tests {
         assert!(cell.state.lock().reuse.local_turn_owed());
         assert!(matches!(
             cell.take_ready_event(failed),
-            Some(AcquisitionEvent::Complete(AcquisitionResult::Failed(_)))
+            Some(AcquisitionStep::Resolved(AcquisitionOutcome::Failed(_)))
         ));
         assert!(OriginCell::cancel_waiter(&cell, successor));
         assert!(!cell.state.lock().reuse.local_turn_owed());
@@ -1378,14 +1399,14 @@ mod tests {
     #[test]
     fn failed_establishment_clears_a_turn_after_local_demand_drains() {
         let cell = unbounded_cell();
-        let reuse_id = ReuseId::for_test(1);
+        let reuse_id = H1MatchId::for_test(1);
         {
             let mut state = cell.state.lock();
             assert!(state.reuse.install_resolving(reuse_id));
             assert!(state.reuse.complete_transfer(reuse_id, true));
         }
         let waiter = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
-        let AcquisitionEvent::Establish(permit) = cell
+        let AcquisitionStep::StartEstablishment(permit) = cell
             .take_ready_event(waiter)
             .expect("unbounded miss did not prepare establishment")
         else {
@@ -1396,7 +1417,7 @@ mod tests {
 
         cell.complete_establishment(
             waiter,
-            AcquisitionResult::Failed(ConnectorError::io(
+            AcquisitionOutcome::Failed(ConnectorError::io(
                 std::io::Error::other("synthetic establishment failure").into(),
             )),
         );
@@ -1404,7 +1425,7 @@ mod tests {
         assert!(!cell.state.lock().reuse.local_turn_owed());
         assert!(matches!(
             cell.take_ready_event(waiter),
-            Some(AcquisitionEvent::Complete(AcquisitionResult::Failed(_)))
+            Some(AcquisitionStep::Resolved(AcquisitionOutcome::Failed(_)))
         ));
     }
 
@@ -1412,7 +1433,7 @@ mod tests {
     fn completion_after_waiter_cancellation_returns_the_new_h1() {
         let cell = unbounded_cell();
         let waiter = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
-        let AcquisitionEvent::Establish(permit) = cell
+        let AcquisitionStep::StartEstablishment(permit) = cell
             .take_ready_event(waiter)
             .expect("unbounded miss did not start establishment")
         else {
@@ -1424,7 +1445,7 @@ mod tests {
 
         let (connection, _physical) = unbounded_connection(1);
         let fresh = OriginCell::install_selected_h1(&cell, connection, H1Sender::test(11));
-        cell.complete_establishment(waiter, AcquisitionResult::H1(fresh));
+        cell.complete_establishment(waiter, AcquisitionOutcome::H1(fresh));
 
         assert_eq!((1, 1), cell.h1_counts());
         assert_eq!(
@@ -1439,7 +1460,7 @@ mod tests {
     fn returned_h1_prevents_the_first_establishment_poll() {
         let cell = unbounded_cell();
         let waiter = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
-        let AcquisitionEvent::Establish(permit) = cell
+        let AcquisitionStep::StartEstablishment(permit) = cell
             .take_ready_event(waiter)
             .expect("unbounded miss did not prepare establishment")
         else {
@@ -1467,7 +1488,7 @@ mod tests {
         drop(selection);
 
         assert_eq!((1, 1), cell.h1_counts());
-        let AcquisitionEvent::Establish(permit) = cell
+        let AcquisitionStep::StartEstablishment(permit) = cell
             .take_ready_event(waiter)
             .expect("unbounded miss did not start establishment")
         else {
@@ -1486,7 +1507,7 @@ mod tests {
         let h2_head = OriginCell::register_waiter(&cell, ProtocolRequirement::H2Required);
         let h1_successor = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
 
-        let AcquisitionEvent::Establish(permit) = cell
+        let AcquisitionStep::StartEstablishment(permit) = cell
             .take_ready_event(h2_head)
             .expect("HTTP/2 demand did not receive reclaimed local capacity")
         else {
@@ -1684,13 +1705,13 @@ mod tests {
         let (waiter, demand) =
             cell.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
         let mut delivery =
-            OriginAdmission::publish_without_driving(&admission, cell.id().partition(), demand)
+            OriginAdmission::submit_without_running(&admission, cell.id().partition(), demand)
                 .expect("published demand did not reserve capacity");
-        assert!(delivery.materialize_for_test());
+        assert!(delivery.resolve_payload_for_test());
         let reservation = {
             let mut state = cell.state.lock();
             state
-                .waiters
+                .acquisitions
                 .reserve_delivery_waiter(delivery.demand(), &cell.eligibility_group)
         };
         let DeliveryReservation::Reserved {
@@ -1701,27 +1722,29 @@ mod tests {
             panic!("current delivery was rejected");
         };
         assert_eq!(waiter, reserved);
-        let (event, acknowledgement) = delivery.commit(successor);
-        let AcquisitionEvent::Establish(permit) = event else {
+        let (event, settlement) = delivery.into_step(successor);
+        let AcquisitionStep::StartEstablishment(permit) = event else {
             panic!("capacity delivery materialized a non-capacity event");
         };
 
         assert!(OriginCell::cancel_waiter(&cell, waiter));
-        let installation = {
+        let commitment = {
             let mut state = cell.state.lock();
-            state.waiters.install_capacity(waiter, permit)
+            state.acquisitions.commit_capacity(waiter, permit)
         };
-        assert!(installation.returned_events[0].is_none());
+        let CellCommitOutcome::Refused { returned, .. } = commitment else {
+            panic!("cancelled delivery accepted its capacity");
+        };
+        assert!(returned[0].is_none());
         assert!(matches!(
-            installation.returned_events[1],
-            Some(AcquisitionEvent::Establish(_))
+            returned[1],
+            Some(AcquisitionStep::StartEstablishment(_))
         ));
-        assert!(installation.error.is_none());
         assert_eq!(0, cell.snapshot().retained);
 
-        drop(installation.returned_events);
+        drop(returned);
         assert_eq!(1, admission.available_capacity_for_test());
-        assert!(acknowledgement.accept().is_none());
+        assert!(settlement.accept().is_none());
         assert_eq!(1, admission.available_capacity_for_test());
     }
 
@@ -1741,13 +1764,13 @@ mod tests {
         let (waiter, demand) =
             cell.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
         let mut delivery =
-            OriginAdmission::publish_without_driving(&admission, cell.id().partition(), demand)
+            OriginAdmission::submit_without_running(&admission, cell.id().partition(), demand)
                 .expect("published demand did not reserve capacity");
-        assert!(delivery.materialize_for_test());
+        assert!(delivery.resolve_payload_for_test());
         let reservation = {
             let mut state = cell.state.lock();
             state
-                .waiters
+                .acquisitions
                 .reserve_delivery_waiter(delivery.demand(), &cell.eligibility_group)
         };
         let DeliveryReservation::Reserved {
@@ -1762,17 +1785,20 @@ mod tests {
         drop(first_return);
         drop(second_return);
         assert_eq!((2, 1), cell.h1_counts());
-        let (event, acknowledgement) = delivery.commit(successor);
-        let AcquisitionEvent::Establish(permit) = event else {
+        let (event, settlement) = delivery.into_step(successor);
+        let AcquisitionStep::StartEstablishment(permit) = event else {
             panic!("capacity delivery materialized a non-capacity event");
         };
-        let installation = {
+        let commitment = {
             let mut state = cell.state.lock();
-            state.waiters.install_capacity(waiter, permit)
+            state.acquisitions.commit_capacity(waiter, permit)
         };
-        assert!(installation.returned_events[0].is_some());
-        drop(installation.returned_events);
-        assert!(acknowledgement.accept().is_none());
+        let CellCommitOutcome::Refused { returned, .. } = commitment else {
+            panic!("capacity delivery displaced a local HTTP/1 result");
+        };
+        assert!(returned[0].is_some());
+        drop(returned);
+        assert!(settlement.accept().is_none());
 
         assert_eq!(1, admission.available_capacity_for_test());
         let selected = cell
@@ -1791,13 +1817,13 @@ mod tests {
         let (waiter, demand) =
             cell.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
         let mut delivery =
-            OriginAdmission::publish_without_driving(&admission, cell.id().partition(), demand)
+            OriginAdmission::submit_without_running(&admission, cell.id().partition(), demand)
                 .expect("published demand did not reserve capacity");
-        assert!(delivery.materialize_for_test());
+        assert!(delivery.resolve_payload_for_test());
         let reservation = {
             let mut state = cell.state.lock();
             state
-                .waiters
+                .acquisitions
                 .reserve_delivery_waiter(delivery.demand(), &cell.eligibility_group)
         };
         let DeliveryReservation::Reserved {
@@ -1811,17 +1837,20 @@ mod tests {
 
         drop(returning);
         assert!(OriginCell::cancel_waiter(&cell, waiter));
-        let (event, acknowledgement) = delivery.commit(successor);
-        let AcquisitionEvent::Establish(permit) = event else {
+        let (event, settlement) = delivery.into_step(successor);
+        let AcquisitionStep::StartEstablishment(permit) = event else {
             panic!("capacity delivery materialized a non-capacity event");
         };
-        let installation = {
+        let commitment = {
             let mut state = cell.state.lock();
-            state.waiters.install_capacity(waiter, permit)
+            state.acquisitions.commit_capacity(waiter, permit)
         };
-        assert!(installation.returned_events.iter().all(Option::is_some));
-        drop(installation.returned_events);
-        assert!(acknowledgement.accept().is_none());
+        let CellCommitOutcome::Refused { returned, .. } = commitment else {
+            panic!("cancelled crossing retained one of its returned resources");
+        };
+        assert!(returned.iter().all(Option::is_some));
+        drop(returned);
+        assert!(settlement.accept().is_none());
 
         assert_eq!(1, admission.available_capacity_for_test());
         assert_eq!(0, cell.snapshot().retained);
@@ -1840,7 +1869,7 @@ mod tests {
         let (first, first_demand) =
             cell.register_waiter_without_publish(ProtocolRequirement::H2Required);
         let second = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
-        let stale = OriginAdmission::publish_without_driving(
+        let stale = OriginAdmission::submit_without_running(
             &admission,
             cell.id().partition(),
             first_demand,
@@ -1848,7 +1877,7 @@ mod tests {
         .expect("first demand did not reserve capacity");
 
         assert!(OriginCell::cancel_waiter(&cell, first));
-        OriginAdmission::drive(Some(AdmissionAction::Delivery(stale)));
+        OriginAdmission::run_action_chain(Some(AdmissionAction::Deliver(stale)));
 
         let lease = OriginCell::take_ready_lease(&cell, second)
             .expect("replacement demand did not receive refunnelled capacity");
@@ -1928,17 +1957,17 @@ mod tests {
             .take_ready_event(waiter)
             .expect("HTTP/2 waiter did not receive an activation")
         {
-            AcquisitionEvent::Complete(AcquisitionResult::H2(activation)) => activation,
-            AcquisitionEvent::Establish(_) => {
+            AcquisitionStep::Resolved(AcquisitionOutcome::H2(activation)) => activation,
+            AcquisitionStep::StartEstablishment(_) => {
                 panic!("HTTP/2 waiter received establishment capacity")
             }
-            AcquisitionEvent::Complete(AcquisitionResult::H1(_)) => {
+            AcquisitionStep::Resolved(AcquisitionOutcome::H1(_)) => {
                 panic!("HTTP/2 waiter received an HTTP/1 sender")
             }
-            AcquisitionEvent::Complete(AcquisitionResult::Reacquire) => {
+            AcquisitionStep::Resolved(AcquisitionOutcome::RetryAcquisition) => {
                 panic!("HTTP/2 waiter was returned for reacquisition")
             }
-            AcquisitionEvent::Complete(AcquisitionResult::Failed(error)) => {
+            AcquisitionStep::Resolved(AcquisitionOutcome::Failed(error)) => {
                 panic!("HTTP/2 waiter received an establishment failure: {error}")
             }
         }
@@ -2008,7 +2037,7 @@ mod tests {
             install_bounded_h2(&admission, &connection_cell, 1);
         let (waiter, demand) =
             requesting_cell.register_waiter_without_publish(ProtocolRequirement::H2Required);
-        let action = OriginAdmission::publish_action_without_driving(
+        let action = OriginAdmission::submit_action_without_running(
             &admission,
             requesting_cell.id().partition(),
             demand,
@@ -2027,14 +2056,14 @@ mod tests {
     }
 
     #[test]
-    fn requesting_cell_cancellation_closes_an_in_flight_route_fence() {
+    fn requesting_cell_cancellation_closes_an_in_flight_route_assignment() {
         let (admission, connection_cell, requesting_cell) =
             bounded_peer_cells(1, EligibilityGroup::Pool, EligibilityGroup::Pool);
         let (generation, _connection, _physical) =
             install_bounded_h2(&admission, &connection_cell, 1);
         let (waiter, demand) =
             requesting_cell.register_waiter_without_publish(ProtocolRequirement::H2Required);
-        let action = OriginAdmission::publish_action_without_driving(
+        let action = OriginAdmission::submit_action_without_running(
             &admission,
             requesting_cell.id().partition(),
             demand,
@@ -2042,7 +2071,7 @@ mod tests {
         .expect("peer demand did not prepare a route");
 
         assert!(OriginCell::cancel_waiter(&requesting_cell, waiter));
-        OriginAdmission::drive(Some(action));
+        OriginAdmission::run_action_chain(Some(action));
 
         assert_eq!(0, requesting_cell.snapshot().retained);
         assert_eq!(0, admission.ordered_demand_count_for_test());
@@ -2063,7 +2092,7 @@ mod tests {
             install_bounded_h2(&admission, &connection_cell, 1);
         let (waiter, demand) =
             requesting_cell.register_waiter_without_publish(ProtocolRequirement::H2Required);
-        let action = OriginAdmission::publish_action_without_driving(
+        let action = OriginAdmission::submit_action_without_running(
             &admission,
             requesting_cell.id().partition(),
             demand,
@@ -2077,7 +2106,7 @@ mod tests {
         ));
         let (second, _second_connection, _second_physical) =
             install_bounded_h2(&admission, &connection_cell, 2);
-        OriginAdmission::drive(Some(action));
+        OriginAdmission::run_action_chain(Some(action));
 
         let activation = take_ready_h2(&requesting_cell, waiter);
         assert_eq!(second, activation.generation());
@@ -2097,7 +2126,7 @@ mod tests {
             install_bounded_h2(&admission, &connection_cell, 1);
         let (waiter, demand) =
             requesting_cell.register_waiter_without_publish(ProtocolRequirement::H2Required);
-        assert!(OriginCell::install_h2_route(
+        assert!(OriginCell::attach_h2_route(
             &requesting_cell,
             h2::H2Route::new(&connection_cell, first),
             &EligibilityGroup::Pool,
@@ -2177,13 +2206,13 @@ mod tests {
         let (first, demand) =
             requesting_cell.register_waiter_without_publish(ProtocolRequirement::H2Required);
         let second = OriginCell::register_waiter(&requesting_cell, ProtocolRequirement::H2Required);
-        let action = OriginAdmission::publish_action_without_driving(
+        let action = OriginAdmission::submit_action_without_running(
             &admission,
             requesting_cell.id().partition(),
             demand,
         )
         .expect("peer demand did not prepare a route");
-        OriginAdmission::drive(Some(action));
+        OriginAdmission::run_action_chain(Some(action));
         let third = OriginCell::register_waiter(&requesting_cell, ProtocolRequirement::H2Required);
 
         let first_activation = take_ready_h2(&requesting_cell, first);
@@ -2355,7 +2384,7 @@ mod loom_tests {
         loom::model(|| {
             let cell = unbounded_cell();
             let waiter = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
-            let AcquisitionEvent::Establish(permit) = cell
+            let AcquisitionStep::StartEstablishment(permit) = cell
                 .take_ready_event(waiter)
                 .expect("unbounded miss did not start establishment")
             else {
@@ -2376,7 +2405,7 @@ mod loom_tests {
             let returning = loom::thread::spawn(move || drop(returning));
             let completion_cell = cell.clone();
             let completing = loom::thread::spawn(move || {
-                completion_cell.complete_establishment(waiter, AcquisitionResult::H1(fresh));
+                completion_cell.complete_establishment(waiter, AcquisitionOutcome::H1(fresh));
             });
             returning.join().unwrap();
             completing.join().unwrap();
@@ -2384,7 +2413,7 @@ mod loom_tests {
             assert_eq!((2, 1), cell.h1_counts());
             let winner = cell
                 .take_ready_h1(waiter)
-                .expect("both acquisition results were lost");
+                .expect("both acquisition outcomes were lost");
             assert!(matches!(winner.test_sender_id(), 11 | 22));
             drop(winner);
             assert_eq!((2, 2), cell.h1_counts());
@@ -2396,7 +2425,7 @@ mod loom_tests {
         loom::model(|| {
             let cell = unbounded_cell();
             let waiter = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
-            let AcquisitionEvent::Establish(permit) = cell
+            let AcquisitionStep::StartEstablishment(permit) = cell
                 .take_ready_event(waiter)
                 .expect("unbounded miss did not prepare establishment")
             else {
@@ -2420,7 +2449,7 @@ mod loom_tests {
                     ConnectionState::unbounded(connection_info(2));
                 let fresh =
                     OriginCell::install_selected_h1(&cell, fresh_connection, H1Sender::test(22));
-                cell.complete_establishment(waiter, AcquisitionResult::H1(fresh));
+                cell.complete_establishment(waiter, AcquisitionOutcome::H1(fresh));
             }
 
             let winner = cell
@@ -2446,10 +2475,10 @@ mod loom_tests {
             let (waiter, demand) =
                 cell.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
             let mut delivery =
-                OriginAdmission::publish_without_driving(&admission, cell.id().partition(), demand)
+                OriginAdmission::submit_without_running(&admission, cell.id().partition(), demand)
                     .expect("published demand did not reserve capacity");
             assert!(
-                delivery.materialize_for_test(),
+                delivery.resolve_payload_for_test(),
                 "capacity delivery did not materialize"
             );
 
@@ -2485,11 +2514,17 @@ mod loom_tests {
             let waiter =
                 OriginCell::register_waiter(&requesting_cell, ProtocolRequirement::H1Compatible);
 
-            let returning = loom::thread::spawn(move || drop(returning));
+            // Loom's default 4 KiB coroutine stack is too small for the full
+            // sender-return and admission-settlement path modeled here.
+            let returning = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || drop(returning))
+                .unwrap();
             let cancel_requesting_cell = requesting_cell.clone();
-            let cancelling = loom::thread::spawn(move || {
-                OriginCell::cancel_waiter(&cancel_requesting_cell, waiter)
-            });
+            let cancelling = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || OriginCell::cancel_waiter(&cancel_requesting_cell, waiter))
+                .unwrap();
             returning.join().unwrap();
             assert!(cancelling.join().unwrap());
 
@@ -2521,18 +2556,18 @@ mod loom_tests {
             );
             let (waiter, demand) =
                 requesting_cell.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
-            let install = OriginAdmission::publish_action_without_driving(
+            let install = OriginAdmission::submit_action_without_running(
                 &admission,
                 requesting_cell.id().partition(),
                 demand,
             )
-            .expect("peer demand did not prepare a reuse operation");
+            .expect("peer demand did not prepare an H1 match");
             let delivery = install
-                .drive_once_for_test()
-                .expect("reuse operation installation did not prepare a delivery");
+                .run_once_for_test()
+                .expect("H1 supplier reservation did not prepare a delivery");
 
             let delivering = loom::thread::spawn(move || {
-                OriginAdmission::drive(Some(delivery));
+                OriginAdmission::run_action_chain(Some(delivery));
             });
             let returning = loom::thread::spawn(move || drop(local));
             delivering.join().unwrap();
@@ -2568,18 +2603,18 @@ mod loom_tests {
             let close = H1CloseHandle::new(&connection_cell, &connection);
             let (waiter, demand) =
                 requesting_cell.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
-            let install = OriginAdmission::publish_action_without_driving(
+            let install = OriginAdmission::submit_action_without_running(
                 &admission,
                 requesting_cell.id().partition(),
                 demand,
             )
-            .expect("peer demand did not prepare a reuse operation");
+            .expect("peer demand did not prepare an H1 match");
             let delivery = install
-                .drive_once_for_test()
-                .expect("reuse operation installation did not prepare a delivery");
+                .run_once_for_test()
+                .expect("H1 supplier reservation did not prepare a delivery");
 
             let delivering = loom::thread::spawn(move || {
-                OriginAdmission::drive(Some(delivery));
+                OriginAdmission::run_action_chain(Some(delivery));
             });
             let closing = loom::thread::spawn(move || close.close(CloseReason::Poisoned));
             delivering.join().unwrap();
@@ -2589,20 +2624,20 @@ mod loom_tests {
                 .take_ready_event(waiter)
                 .expect("borrow/close race stranded its requesting cell waiter");
             match event {
-                AcquisitionEvent::Complete(AcquisitionResult::H1(selection)) => {
+                AcquisitionStep::Resolved(AcquisitionOutcome::H1(selection)) => {
                     drop(selection);
                 }
-                AcquisitionEvent::Establish(permit) => {
+                AcquisitionStep::StartEstablishment(permit) => {
                     assert!(OriginCell::cancel_waiter(&requesting_cell, waiter));
                     drop(permit);
                 }
-                AcquisitionEvent::Complete(AcquisitionResult::Failed(error)) => {
+                AcquisitionStep::Resolved(AcquisitionOutcome::Failed(error)) => {
                     panic!("unexpected establishment failure: {error}")
                 }
-                AcquisitionEvent::Complete(AcquisitionResult::Reacquire) => {
+                AcquisitionStep::Resolved(AcquisitionOutcome::RetryAcquisition) => {
                     panic!("HTTP/1 reuse model requested reacquisition")
                 }
-                AcquisitionEvent::Complete(AcquisitionResult::H2(_)) => {
+                AcquisitionStep::Resolved(AcquisitionOutcome::H2(_)) => {
                     panic!("HTTP/1 reuse model received an HTTP/2 activation")
                 }
             }
@@ -2663,10 +2698,10 @@ mod loom_tests {
             let (first, demand) =
                 cell.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
             let mut delivery =
-                OriginAdmission::publish_without_driving(&admission, cell.id().partition(), demand)
+                OriginAdmission::submit_without_running(&admission, cell.id().partition(), demand)
                     .unwrap();
             assert!(
-                delivery.materialize_for_test(),
+                delivery.resolve_payload_for_test(),
                 "capacity delivery did not materialize"
             );
 
@@ -2701,7 +2736,7 @@ mod loom_tests {
 
             let install_cell = requesting_cell.clone();
             let installing = loom::thread::spawn(move || {
-                OriginCell::install_h2_route(
+                OriginCell::attach_h2_route(
                     &install_cell,
                     route,
                     &EligibilityGroup::Pool,
@@ -2739,7 +2774,7 @@ mod loom_tests {
             let generation = OriginCell::install_h2_for_test(&connection_cell, connection, 1, None);
             let (waiter, demand) =
                 requesting_cell.register_waiter_without_publish(ProtocolRequirement::H2Required);
-            let action = OriginAdmission::publish_action_without_driving(
+            let action = OriginAdmission::submit_action_without_running(
                 &admission,
                 requesting_cell.id().partition(),
                 demand,
@@ -2747,7 +2782,7 @@ mod loom_tests {
             .expect("peer demand did not prepare a route");
 
             let publishing = loom::thread::spawn(move || {
-                OriginAdmission::drive(Some(action));
+                OriginAdmission::run_action_chain(Some(action));
             });
             let closing_cell = connection_cell.clone();
             let closing = loom::thread::spawn(move || {
@@ -2785,7 +2820,7 @@ mod loom_tests {
             let generation = OriginCell::install_h2_for_test(&connection_cell, connection, 1, None);
             let (waiter, demand) =
                 requesting_cell.register_waiter_without_publish(ProtocolRequirement::H2Required);
-            let action = OriginAdmission::publish_action_without_driving(
+            let action = OriginAdmission::submit_action_without_running(
                 &admission,
                 requesting_cell.id().partition(),
                 demand,
@@ -2793,7 +2828,7 @@ mod loom_tests {
             .expect("peer demand did not prepare a route");
 
             let publishing = loom::thread::spawn(move || {
-                OriginAdmission::drive(Some(action));
+                OriginAdmission::run_action_chain(Some(action));
             });
             let closing_cell = connection_cell.clone();
             let closing = loom::thread::spawn(move || {

@@ -18,7 +18,7 @@
 use super::super::cell::h2::{
     H2CloseHandle, H2DriverGuard, H2FlightId, H2FlightInstall, H2GenerationJoin, H2Sender,
 };
-use super::super::cell::{AcquisitionResult, EstablishmentPermit, OriginCell, WaiterId};
+use super::super::cell::{AcquisitionOutcome, EstablishmentPermit, OriginCell, WaiterId};
 use super::super::connection::{
     CloseReason, ConnectionInfo, ConnectionIo, ConnectionState, NegotiatedProtocol,
 };
@@ -323,7 +323,7 @@ fn fail_participants(cell: &OriginCell, flight: H2FlightId, error: ConnectorErro
     for participant in participants {
         cell.complete_establishment(
             participant,
-            AcquisitionResult::Failed(error.connector_error()),
+            AcquisitionOutcome::Failed(error.connector_error()),
         );
     }
 }
@@ -332,7 +332,7 @@ fn fail_participants(cell: &OriginCell, flight: H2FlightId, error: ConnectorErro
 mod tests {
     use super::*;
     use crate::client::pool::admission::ProtocolRequirement;
-    use crate::client::pool::cell::AcquisitionEvent;
+    use crate::client::pool::cell::{AcquisitionOutcome, AcquisitionStep};
     use crate::client::pool::origin::OriginKey;
     use crate::client::pool::partition::EligibilityGroup;
     use http_1x::uri::Scheme;
@@ -353,7 +353,7 @@ mod tests {
     fn launching_waiter(cell: &crate::sync::Arc<OriginCell>) -> WaiterId {
         let waiter = OriginCell::register_waiter(cell, ProtocolRequirement::H2Required);
         let event = cell.poll_waiter(waiter, &mut Context::from_waker(Waker::noop()));
-        let Poll::Ready(AcquisitionEvent::Establish(permit)) = event else {
+        let Poll::Ready(AcquisitionStep::StartEstablishment(permit)) = event else {
             panic!("new H2 waiter did not receive establishment authority");
         };
         assert!(cell.start_establishment(waiter));
@@ -363,7 +363,7 @@ mod tests {
 
     fn failed_event(cell: &OriginCell, waiter: WaiterId) -> ConnectorError {
         let event = cell.poll_waiter(waiter, &mut Context::from_waker(Waker::noop()));
-        let Poll::Ready(AcquisitionEvent::Complete(AcquisitionResult::Failed(error))) = event
+        let Poll::Ready(AcquisitionStep::Resolved(AcquisitionOutcome::Failed(error))) = event
         else {
             panic!("flight participant did not receive a failure");
         };

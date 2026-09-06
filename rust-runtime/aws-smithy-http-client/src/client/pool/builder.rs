@@ -7,7 +7,7 @@
 
 use super::establish::{self, TransportFactory};
 use super::maintenance::MaintenanceConfig;
-use super::registry::{PartitionRegistry, PartitionRegistryError};
+use super::registry::{AdmissionPolicy, PartitionRegistry, PartitionRegistryError};
 use super::{ConnectionPool, ConnectionReuseScope, Partition, PoolConfig, PoolInner};
 use crate::client::{TlsProviderSelected, TlsUnset};
 use crate::sync::Arc;
@@ -420,12 +420,12 @@ impl<Tls> Builder<Tls> {
             time_source: time_source.clone(),
             sleep: sleep_impl.clone(),
         };
-        let allow_h2_reclaim_for_h1 = transport.guarantees_http1();
+        let admission_policy = max_connections_per_host
+            .map(|limit| AdmissionPolicy::new(limit, transport.guarantees_http1()));
         let registry = PartitionRegistry::new(
             self.partitions,
             self.reuse_scope,
-            max_connections_per_host,
-            allow_h2_reclaim_for_h1,
+            admission_policy,
             maintenance,
         )
         .map_err(BuildError::from)?;

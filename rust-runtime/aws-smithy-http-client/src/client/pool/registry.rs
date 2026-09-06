@@ -28,6 +28,32 @@ use std::fmt;
 use std::num::{NonZeroU16, NonZeroUsize};
 use std::sync::{Arc as StdArc, OnceLock};
 
+/// Bounded-origin policy shared by every partition cell for that origin.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct AdmissionPolicy {
+    /// Maximum number of logically open connections for one canonical origin.
+    connection_limit: NonZeroUsize,
+    /// Whether replacement establishment can be forced to HTTP/1.
+    can_reclaim_h2_for_h1: bool,
+}
+
+impl AdmissionPolicy {
+    pub(super) fn new(connection_limit: NonZeroUsize, can_reclaim_h2_for_h1: bool) -> Self {
+        Self {
+            connection_limit,
+            can_reclaim_h2_for_h1,
+        }
+    }
+
+    pub(super) fn connection_limit(self) -> NonZeroUsize {
+        self.connection_limit
+    }
+
+    pub(super) fn can_reclaim_h2_for_h1(self) -> bool {
+        self.can_reclaim_h2_for_h1
+    }
+}
+
 /// Fixed partition set and the origin-wide admission states it shares.
 #[derive(Debug)]
 pub(crate) struct PartitionRegistry {
@@ -35,12 +61,10 @@ pub(crate) struct PartitionRegistry {
     partitions: HashMap<PartitionId, Arc<PartitionState>>,
     /// Policy used to derive a new cell's eligibility group.
     reuse_scope: ConnectionReuseScope,
-    /// Optional origin-wide bound used when admission is first created.
-    max_connections_per_host: Option<NonZeroUsize>,
-    /// Whether admission may close idle H2 capacity for H1-required demand.
-    allow_h2_reclaim_for_h1: bool,
+    /// Bounded-origin policy, absent when connection count is unbounded.
+    admission_policy: Option<AdmissionPolicy>,
     /// Admission authorities retained by canonical origin.
-    bounded_origins: Mutex<HashMap<OriginKey, Arc<OriginAdmission>>>,
+    admissions: Mutex<HashMap<OriginKey, Arc<OriginAdmission>>>,
 }
 
 impl PartitionRegistry {
@@ -48,8 +72,7 @@ impl PartitionRegistry {
     pub(crate) fn new(
         partitions: Option<Vec<Partition>>,
         reuse_scope: ConnectionReuseScope,
-        max_connections_per_host: Option<NonZeroUsize>,
-        allow_h2_reclaim_for_h1: bool,
+        admission_policy: Option<AdmissionPolicy>,
         maintenance: MaintenanceConfig,
     ) -> Result<Self, PartitionRegistryError> {
         let Some(partitions) = partitions else {
@@ -59,9 +82,8 @@ impl PartitionRegistry {
             return Ok(Self {
                 partitions,
                 reuse_scope,
-                max_connections_per_host,
-                allow_h2_reclaim_for_h1,
-                bounded_origins: Mutex::new(HashMap::new()),
+                admission_policy,
+                admissions: Mutex::new(HashMap::new()),
             });
         };
 
@@ -89,9 +111,8 @@ impl PartitionRegistry {
         Ok(Self {
             partitions: by_id,
             reuse_scope,
-            max_connections_per_host,
-            allow_h2_reclaim_for_h1,
-            bounded_origins: Mutex::new(HashMap::new()),
+            admission_policy,
+            admissions: Mutex::new(HashMap::new()),
         })
     }
 
@@ -135,14 +156,12 @@ impl PartitionRegistry {
     /// Unbounded registries return `None`. Concurrent first use of a bounded
     /// origin converges on one retained authority.
     fn origin_admission(&self, origin: &OriginKey) -> Option<Arc<OriginAdmission>> {
-        let limit = self.max_connections_per_host?;
+        let policy = self.admission_policy?;
         let admission = {
-            let mut origins = self.bounded_origins.lock();
+            let mut origins = self.admissions.lock();
             origins
                 .entry(origin.clone())
-                .or_insert_with(|| {
-                    OriginAdmission::new(origin.clone(), limit, self.allow_h2_reclaim_for_h1)
-                })
+                .or_insert_with(|| OriginAdmission::new(origin.clone(), policy))
                 .clone()
         };
         Some(admission)
@@ -423,6 +442,10 @@ mod tests {
         Partition::new(PartitionId::from_index(index), TestSpawner)
     }
 
+    fn admission_policy(limit: Option<NonZeroUsize>) -> Option<AdmissionPolicy> {
+        limit.map(|limit| AdmissionPolicy::new(limit, true))
+    }
+
     #[cfg(feature = "rt-tokio")]
     fn anonymous_registry(
         reuse_scope: ConnectionReuseScope,
@@ -431,8 +454,7 @@ mod tests {
         PartitionRegistry::new(
             None,
             reuse_scope,
-            max_connections_per_host,
-            true,
+            admission_policy(max_connections_per_host),
             MaintenanceConfig::default(),
         )
         .unwrap()
@@ -446,8 +468,7 @@ mod tests {
         PartitionRegistry::new(
             Some(partitions.into_iter().collect()),
             reuse_scope,
-            max_connections_per_host,
-            true,
+            admission_policy(max_connections_per_host),
             MaintenanceConfig::default(),
         )
     }
@@ -692,7 +713,7 @@ mod tests {
             .unwrap();
 
         assert!(cell.admission().is_none());
-        assert!(registry.bounded_origins.lock().is_empty());
+        assert!(registry.admissions.lock().is_empty());
     }
 
     #[test]
@@ -758,11 +779,12 @@ mod loom_tests {
         reuse_scope: ConnectionReuseScope,
         max_connections_per_host: Option<NonZeroUsize>,
     ) -> Result<PartitionRegistry, PartitionRegistryError> {
+        let admission_policy =
+            max_connections_per_host.map(|limit| AdmissionPolicy::new(limit, true));
         PartitionRegistry::new(
             Some(partitions.into_iter().collect()),
             reuse_scope,
-            max_connections_per_host,
-            true,
+            admission_policy,
             MaintenanceConfig::default(),
         )
     }

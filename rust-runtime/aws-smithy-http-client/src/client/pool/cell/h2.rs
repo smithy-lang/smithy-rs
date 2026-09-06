@@ -58,10 +58,11 @@
 //! the cell lock. Hyper acceptance converts that reservation to an accepted
 //! request lease with independent upload and response endpoints.
 
+use super::super::admission::{H2SupplyStatus, SupplyRevision};
 use super::super::connection::{ConnectionInfo, ConnectionState, DispatchGuard};
 use super::super::partition::PartitionId;
-use super::waiters::{AcquisitionQueue, WaiterInstall};
-use super::{AcquisitionEvent, AcquisitionResult, CellState, OriginCell, WaiterId};
+use super::waiters::{AcquisitionQueue, WaiterResolution};
+use super::{AcquisitionOutcome, AcquisitionStep, CellState, OriginCell, WaiterId};
 use crate::sync::{Arc, Mutex, Weak};
 use aws_smithy_runtime_api::client::connection::ConnectionId;
 use aws_smithy_types::body::SdkBody;
@@ -830,13 +831,13 @@ impl H2Records {
         let has_prioritized = peer
             .gate
             .priority_cutoff()
-            .is_some_and(|cutoff| waiters.has_h2_candidate_through(cutoff));
+            .is_some_and(|cutoff| waiters.has_h2_compatible_waiter_through(cutoff));
         let cutoff = match peer.gate.next_turn(has_prioritized) {
             GateTurn::Unavailable => return None,
             GateTurn::Open => None,
             GateTurn::Through(cutoff) => Some(cutoff),
         };
-        let waiter = waiters.oldest_h2_candidate()?;
+        let waiter = waiters.oldest_h2_compatible_waiter()?;
         if cutoff.is_some_and(|cutoff| waiter > cutoff) {
             return None;
         }
@@ -860,7 +861,7 @@ impl H2Records {
             peer.route.id() == prepared.route.id()
                 && peer.crossing == Some(prepared.waiter)
                 && (!prepared.gated || peer.gate.activating() == Some(prepared.waiter))
-                && waiters.is_oldest_h2_candidate(prepared.waiter)
+                && waiters.is_oldest_h2_compatible_waiter(prepared.waiter)
         })
     }
 
@@ -1062,7 +1063,7 @@ impl H2Records {
         for record in self.generations.values() {
             for waiter in &record.pending_waiters {
                 assert!(
-                    waiters.is_launching_h2_candidate(*waiter),
+                    waiters.is_launching_h2_waiter(*waiter),
                     "HTTP/2 generation retained a waiter that was no longer launchable"
                 );
             }
@@ -1644,14 +1645,14 @@ impl OriginCell {
         cell: &Arc<Self>,
         generation: H2GenerationId,
     ) -> Option<H2Activation> {
-        let (parts, advertisement) = {
+        let (parts, revision) = {
             let mut state = cell.state.lock();
             let parts = state.h2.activate(generation)?;
             state.assert_consistent();
-            let advertisement = state.take_h2_advertisement_update();
-            (parts, advertisement)
+            let revision = state.take_h2_supply_update();
+            (parts, revision)
         };
-        Self::publish_h2_advertisement(cell, advertisement);
+        Self::submit_h2_supply_update(cell, revision);
         Some(H2Activation::new(cell.clone(), generation, parts, None))
     }
 
@@ -1675,15 +1676,15 @@ impl OriginCell {
     fn cancel_h2_activation(cell: &Arc<Self>, generation: H2GenerationId) {
         // Keep the detached generation outside the lock's unwind scope. Its
         // sender drop may wake Hyper's driver.
-        let (removed, advertisement) = {
+        let (removed, revision) = {
             let mut state = cell.state.lock();
             let removed = state.h2.cancel(generation);
             state.assert_consistent();
-            let advertisement = state.take_h2_advertisement_update();
-            (removed, advertisement)
+            let revision = state.take_h2_supply_update();
+            (removed, revision)
         };
         drop(removed);
-        Self::publish_h2_advertisement(cell, advertisement);
+        Self::submit_h2_supply_update(cell, revision);
         Self::service_h2_waiters(cell);
     }
 
@@ -1691,45 +1692,45 @@ impl OriginCell {
     fn complete_h2_request(cell: &Arc<Self>, generation: H2GenerationId) {
         // Keep the detached generation outside the lock's unwind scope. Its
         // sender drop may wake Hyper's driver.
-        let (removed, advertisement) = {
+        let (removed, revision) = {
             let mut state = cell.state.lock();
             let removed = state.h2.complete_request(generation);
             state.assert_consistent();
-            let advertisement = state.take_h2_advertisement_update();
-            (removed, advertisement)
+            let revision = state.take_h2_supply_update();
+            (removed, revision)
         };
         drop(removed);
-        Self::publish_h2_advertisement(cell, advertisement);
+        Self::submit_h2_supply_update(cell, revision);
     }
 
     /// Offers one local activation while preserving the generation cutoff.
     fn service_h2_gate_locked(
         cell: &Arc<Self>,
         state: &mut CellState,
-        returned_event: &mut Option<AcquisitionEvent>,
-    ) -> Option<WaiterInstall> {
+        returned_step: &mut Option<AcquisitionStep>,
+    ) -> Option<WaiterResolution> {
         let generation = state.h2.accepting()?;
         let has_prioritized = state
             .h2
             .priority_cutoff()
-            .is_some_and(|cutoff| state.waiters.has_h2_candidate_through(cutoff));
+            .is_some_and(|cutoff| state.acquisitions.has_h2_compatible_waiter_through(cutoff));
         let cutoff = match state.h2.next_gate_turn(has_prioritized) {
             GateTurn::Unavailable => return None,
             GateTurn::Open => None,
             GateTurn::Through(cutoff) => Some(cutoff),
         };
-        state.waiters.oldest_h2_candidate()?;
+        state.acquisitions.oldest_h2_compatible_waiter()?;
 
         let h2 = &mut state.h2;
-        let waiters = &mut state.waiters;
-        let mut install = waiters.install_h2(
+        let acquisitions = &mut state.acquisitions;
+        let (waiter, mut install) = acquisitions.offer_h2_activation(
             cutoff,
             |waiter| {
                 let parts = h2
                     .activate(generation)
                     .expect("accepting HTTP/2 generation could not create a gated activation");
                 let gated = h2.begin_gate_activation(waiter);
-                AcquisitionResult::H2(H2Activation::new(
+                AcquisitionOutcome::H2(H2Activation::new(
                     cell.clone(),
                     generation,
                     parts,
@@ -1738,43 +1739,40 @@ impl OriginCell {
             },
             &cell.eligibility_group,
         );
-        *returned_event = install.returned_event.take();
+        *returned_step = install.returned_step.take();
         install.demand_updates = state.publishable_demand_updates(install.demand_updates);
         state.assert_consistent();
-        install.waiter.is_some().then_some(install)
+        waiter.is_some().then_some(install)
     }
 
     /// Runs publication, fallback, and wake work after the cell lock is released.
-    fn finish_h2_install(cell: &Arc<Self>, install: Option<WaiterInstall>) {
+    fn finish_h2_offer(cell: &Arc<Self>, install: Option<WaiterResolution>) {
         let Some(install) = install else {
             return;
         };
         if let Some(admission) = &cell.admission {
             for snapshot in install.demand_updates.into_iter().flatten() {
-                super::super::admission::OriginAdmission::publish_demand(
+                super::super::admission::OriginAdmission::submit_demand_snapshot(
                     admission,
                     cell.id.partition(),
                     snapshot,
                 );
             }
         }
-        drop(install.returned_event);
+        drop(install.returned_step);
         if let Some(waker) = install.waker {
             waker.wake();
         }
     }
 
-    /// Publishes one complete local-generation report after cell unlock.
-    fn publish_h2_advertisement(
-        cell: &Arc<Self>,
-        snapshot: Option<super::super::admission::H2AdvertisementSnapshot>,
-    ) {
-        if let (Some(admission), Some(snapshot)) = (&cell.admission, snapshot) {
-            super::super::admission::OriginAdmission::update_h2_advertisement(
+    /// Submits one changed local-generation status after cell unlock.
+    fn submit_h2_supply_update(cell: &Arc<Self>, revision: Option<SupplyRevision<H2SupplyStatus>>) {
+        if let (Some(admission), Some(revision)) = (&cell.admission, revision) {
+            super::super::admission::OriginAdmission::apply_h2_supply_revision(
                 admission,
                 cell.id.partition(),
                 cell.eligibility_group.clone(),
-                snapshot,
+                revision,
             );
         }
     }
@@ -1785,7 +1783,7 @@ impl OriginCell {
         snapshot: Option<super::super::admission::DemandSnapshot>,
     ) {
         if let (Some(admission), Some(snapshot)) = (&cell.admission, snapshot) {
-            super::super::admission::OriginAdmission::publish_demand(
+            super::super::admission::OriginAdmission::submit_demand_snapshot(
                 admission,
                 cell.id.partition(),
                 snapshot,
@@ -1795,35 +1793,35 @@ impl OriginCell {
 
     /// Advances a generation gate after one activation accepts or cancels.
     fn finish_h2_gate(cell: &Arc<Self>, generation: H2GenerationId, waiter: WaiterId) {
-        let mut returned_event = None;
-        let (install, advertisement) = {
+        let mut returned_step = None;
+        let (install, revision) = {
             let mut state = cell.state.lock();
             if !state.h2.finish_gate_activation(generation, waiter) {
                 return;
             }
-            let install = Self::service_h2_gate_locked(cell, &mut state, &mut returned_event);
+            let install = Self::service_h2_gate_locked(cell, &mut state, &mut returned_step);
             state.assert_consistent();
-            let advertisement = state.take_h2_advertisement_update();
-            (install, advertisement)
+            let revision = state.take_h2_supply_update();
+            (install, revision)
         };
-        drop(returned_event);
-        Self::publish_h2_advertisement(cell, advertisement);
-        Self::finish_h2_install(cell, install);
+        drop(returned_step);
+        Self::submit_h2_supply_update(cell, revision);
+        Self::finish_h2_offer(cell, install);
     }
 
     /// Offers the accepting local generation to one queued acquisition.
     pub(in crate::client::pool) fn service_h2_waiters(cell: &Arc<Self>) {
-        let mut returned_event = None;
-        let (install, advertisement) = {
+        let mut returned_step = None;
+        let (install, revision) = {
             let mut state = cell.state.lock();
-            let install = Self::service_h2_gate_locked(cell, &mut state, &mut returned_event);
+            let install = Self::service_h2_gate_locked(cell, &mut state, &mut returned_step);
             state.assert_consistent();
-            let advertisement = state.take_h2_advertisement_update();
-            (install, advertisement)
+            let revision = state.take_h2_supply_update();
+            (install, revision)
         };
-        drop(returned_event);
-        Self::publish_h2_advertisement(cell, advertisement);
-        Self::finish_h2_install(cell, install);
+        drop(returned_step);
+        Self::submit_h2_supply_update(cell, revision);
+        Self::finish_h2_offer(cell, install);
     }
 
     /// Returns whether one exact connection generation still accepts activations.
@@ -1834,12 +1832,12 @@ impl OriginCell {
         cell.state.lock().h2.is_accepting(generation)
     }
 
-    /// Installs requesting-cell visibility for one peer generation route.
+    /// Attaches requesting-cell visibility for one peer generation route.
     ///
     /// The named local demand remains queued behind the route gate. Advancing
     /// its snapshot version makes admission acknowledgement authoritative
     /// without losing the demand if this exact route later becomes stale.
-    pub(in crate::client::pool) fn install_h2_route(
+    pub(in crate::client::pool) fn attach_h2_route(
         cell: &Arc<Self>,
         route: H2Route,
         group: &super::super::partition::EligibilityGroup,
@@ -1849,10 +1847,10 @@ impl OriginCell {
             return false;
         }
         let mut state = cell.state.lock();
-        if !state.waiters.suppress_published_demand(demand) {
+        if !state.acquisitions.supersede_demand_snapshot(demand) {
             return false;
         }
-        let cutoff = state.waiters.route_cutoff();
+        let cutoff = state.acquisitions.route_cutoff();
         state.h2.install_peer_route(route, cutoff);
         state.assert_consistent();
         true
@@ -1866,8 +1864,10 @@ impl OriginCell {
         loop {
             let prepared = {
                 let mut state = cell.state.lock();
-                let CellState { h2, waiters, .. } = &mut *state;
-                let prepared = h2.prepare_peer_activation(waiters);
+                let CellState {
+                    h2, acquisitions, ..
+                } = &mut *state;
+                let prepared = h2.prepare_peer_activation(acquisitions);
                 state.assert_consistent();
                 prepared
             };
@@ -1882,13 +1882,13 @@ impl OriginCell {
                         return;
                     }
                     let snapshot = state
-                        .waiters
+                        .acquisitions
                         .current_demand_snapshot(&cell.eligibility_group);
                     state.assert_consistent();
                     snapshot
                 };
                 if let (Some(admission), Some(snapshot)) = (&cell.admission, snapshot) {
-                    super::super::admission::OriginAdmission::publish_demand(
+                    super::super::admission::OriginAdmission::submit_demand_snapshot(
                         admission,
                         cell.id.partition(),
                         snapshot,
@@ -1898,12 +1898,12 @@ impl OriginCell {
             };
 
             let mut activation = Some(activation);
-            let mut returned_event = None;
+            let mut returned_step = None;
             let install = {
                 let mut state = cell.state.lock();
                 let current = state
                     .h2
-                    .peer_activation_is_current(&prepared, &state.waiters);
+                    .peer_activation_is_current(&prepared, &state.acquisitions);
                 if !current {
                     state.h2.finish_peer_crossing(route_id, prepared.waiter);
                     if prepared.gated {
@@ -1918,10 +1918,10 @@ impl OriginCell {
                             .expect("peer HTTP/2 activation disappeared")
                             .attach_peer_gate(cell, route_id, prepared.waiter);
                     }
-                    let mut install = state.waiters.install_h2(
+                    let (waiter, mut install) = state.acquisitions.offer_h2_activation(
                         prepared.cutoff,
                         |_| {
-                            AcquisitionResult::H2(
+                            AcquisitionOutcome::H2(
                                 activation
                                     .take()
                                     .expect("peer HTTP/2 activation was installed twice"),
@@ -1929,21 +1929,21 @@ impl OriginCell {
                         },
                         &cell.eligibility_group,
                     );
-                    returned_event = install.returned_event.take();
+                    returned_step = install.returned_step.take();
                     install.demand_updates =
                         state.publishable_demand_updates(install.demand_updates);
                     state.h2.finish_peer_crossing(route_id, prepared.waiter);
-                    if install.waiter.is_none() && prepared.gated {
+                    if waiter.is_none() && prepared.gated {
                         state.h2.finish_peer_gate(route_id, prepared.waiter);
                     }
                     state.assert_consistent();
-                    install.waiter.is_some().then_some(install)
+                    waiter.is_some().then_some(install)
                 }
             };
             drop(activation);
-            drop(returned_event);
+            drop(returned_step);
             if install.is_some() {
-                Self::finish_h2_install(cell, install);
+                Self::finish_h2_offer(cell, install);
                 return;
             }
         }
@@ -2031,25 +2031,27 @@ impl OriginCell {
     pub(in crate::client::pool) fn select_h2(cell: &Arc<Self>) -> Option<H2Activation> {
         let local = {
             let mut state = cell.state.lock();
-            let queued = state.waiters.has_h2_candidate();
+            let queued = state.acquisitions.has_h2_compatible_waiter();
             if state.h2.direct_is_allowed(queued) {
                 let generation = state.h2.accepting()?;
                 let parts = state.h2.activate(generation)?;
                 state.assert_consistent();
-                let advertisement = state.take_h2_advertisement_update();
-                Some((generation, parts, advertisement))
+                let revision = state.take_h2_supply_update();
+                Some((generation, parts, revision))
             } else {
                 None
             }
         };
-        if let Some((generation, parts, advertisement)) = local {
-            Self::publish_h2_advertisement(cell, advertisement);
+        if let Some((generation, parts, revision)) = local {
+            Self::submit_h2_supply_update(cell, revision);
             return Some(H2Activation::new(cell.clone(), generation, parts, None));
         }
 
         let route = {
             let state = cell.state.lock();
-            state.h2.open_peer_route(state.waiters.has_h2_candidate())?
+            state
+                .h2
+                .open_peer_route(state.acquisitions.has_h2_compatible_waiter())?
         };
         let route_id = route.id();
         let Some(activation) = route.activate(cell.id.partition()) else {
@@ -2058,9 +2060,10 @@ impl OriginCell {
         };
         let current = {
             let state = cell.state.lock();
-            state
-                .h2
-                .direct_peer_route_is_current(route_id, state.waiters.has_h2_candidate())
+            state.h2.direct_peer_route_is_current(
+                route_id,
+                state.acquisitions.has_h2_compatible_waiter(),
+            )
         };
         current.then_some(activation)
     }
@@ -2073,7 +2076,7 @@ impl OriginCell {
                 return;
             }
             let snapshot = state
-                .waiters
+                .acquisitions
                 .current_demand_snapshot(&cell.eligibility_group);
             state.assert_consistent();
             snapshot
@@ -2087,23 +2090,23 @@ impl OriginCell {
         waiter: WaiterId,
         generation: H2GenerationId,
     ) -> H2GenerationJoin {
-        let mut returned_event = None;
-        let (install, advertisement) = {
+        let mut returned_step = None;
+        let (install, revision) = {
             let mut state = cell.state.lock();
-            if !state.waiters.is_launching_h2_candidate(waiter) {
+            if !state.acquisitions.is_launching_h2_waiter(waiter) {
                 return H2GenerationJoin::WaiterCompleted;
             }
             if !state.h2.prioritize_waiter(generation, waiter) {
                 return H2GenerationJoin::GenerationChanged;
             }
-            let install = Self::service_h2_gate_locked(cell, &mut state, &mut returned_event);
+            let install = Self::service_h2_gate_locked(cell, &mut state, &mut returned_step);
             state.assert_consistent();
-            let advertisement = state.take_h2_advertisement_update();
-            (install, advertisement)
+            let revision = state.take_h2_supply_update();
+            (install, revision)
         };
-        drop(returned_event);
-        Self::publish_h2_advertisement(cell, advertisement);
-        Self::finish_h2_install(cell, install);
+        drop(returned_step);
+        Self::submit_h2_supply_update(cell, revision);
+        Self::finish_h2_offer(cell, install);
         H2GenerationJoin::Joined
     }
 
@@ -2126,26 +2129,26 @@ impl OriginCell {
         sender: H2Sender,
         idle_deadline: Option<SystemTime>,
     ) -> Result<H2GenerationId, (Arc<ConnectionState>, H2Sender)> {
-        let mut returned_event = None;
-        let (completion, install, advertisement) = {
+        let mut returned_step = None;
+        let (completion, install, revision) = {
             let mut state = cell.state.lock();
             let completion = state
                 .h2
                 .complete_flight(flight, connection, sender, idle_deadline);
             let install = if completion.is_ok() {
-                let cutoff = state.waiters.route_cutoff();
+                let cutoff = state.acquisitions.route_cutoff();
                 state.h2.prioritize_through(cutoff);
-                Self::service_h2_gate_locked(cell, &mut state, &mut returned_event)
+                Self::service_h2_gate_locked(cell, &mut state, &mut returned_step)
             } else {
                 None
             };
             state.assert_consistent();
-            let advertisement = state.take_h2_advertisement_update();
-            (completion, install, advertisement)
+            let revision = state.take_h2_supply_update();
+            (completion, install, revision)
         };
-        drop(returned_event);
-        Self::publish_h2_advertisement(cell, advertisement);
-        Self::finish_h2_install(cell, install);
+        drop(returned_step);
+        Self::submit_h2_supply_update(cell, revision);
+        Self::finish_h2_offer(cell, install);
         if completion.is_ok() {
             cell.notify_maintenance(idle_deadline);
         }
@@ -2163,41 +2166,38 @@ impl OriginCell {
         participants
     }
 
-    /// Returns the complete current advertisement for an unlocked crossing.
-    pub(in crate::client::pool) fn report_h2_advertisement(
+    /// Returns the complete current H2 supply revision for an unlocked crossing.
+    pub(in crate::client::pool) fn current_h2_supply_revision(
         &self,
-    ) -> super::super::admission::H2AdvertisementSnapshot {
+    ) -> SupplyRevision<H2SupplyStatus> {
         let mut state = self.state.lock();
-        let snapshot = state.report_h2_advertisement();
+        let revision = state.current_h2_supply_revision();
         state.assert_consistent();
-        snapshot
+        revision
     }
 
     /// Reclaims one exact idle generation and reports its resulting availability.
     pub(in crate::client::pool) fn reclaim_idle_h2(
         cell: &Arc<Self>,
         generation: H2GenerationId,
-    ) -> (
-        super::super::admission::H2AdvertisementSnapshot,
-        Option<ConnectionId>,
-    ) {
+    ) -> (SupplyRevision<H2SupplyStatus>, Option<ConnectionId>) {
         // A zero-request generation may hold the last capacity-owning
         // connection reference. Keep it outside the cell-lock unwind scope.
         let detached;
-        let (advertisement, demand) = {
+        let (revision, demand) = {
             let mut state = cell.state.lock();
             detached = state.h2.begin_idle_reclaim(generation);
-            let advertisement = state.report_h2_advertisement();
+            let revision = state.current_h2_supply_revision();
             let demand = detached.as_ref().and_then(|_| {
                 state
-                    .waiters
+                    .acquisitions
                     .current_demand_snapshot(&cell.eligibility_group)
             });
             state.assert_consistent();
-            (advertisement, demand)
+            (revision, demand)
         };
         let Some(detached) = detached else {
-            return (advertisement, None);
+            return (revision, None);
         };
         let H2CloseTransition {
             connection,
@@ -2212,7 +2212,7 @@ impl OriginCell {
         drop(removed_generation);
         Self::publish_current_demand(cell, demand);
         let reclaimed = connection.logical_close(super::super::connection::CloseReason::Reclaimed);
-        (advertisement, reclaimed.then_some(connection_id))
+        (revision, reclaimed.then_some(connection_id))
     }
 
     /// Moves one exact generation to draining and closes its connection.
@@ -2224,19 +2224,19 @@ impl OriginCell {
         // A zero-request generation may hold the last capacity-owning
         // connection reference. Keep it outside the cell-lock unwind scope.
         let detached;
-        let (advertisement, demand) = {
+        let (revision, demand) = {
             let mut state = cell.state.lock();
             detached = state.h2.begin_close(generation);
-            let advertisement = detached
+            let revision = detached
                 .as_ref()
-                .and_then(|_| state.take_h2_advertisement_update());
+                .and_then(|_| state.take_h2_supply_update());
             let demand = detached.as_ref().and_then(|_| {
                 state
-                    .waiters
+                    .acquisitions
                     .current_demand_snapshot(&cell.eligibility_group)
             });
             state.assert_consistent();
-            (advertisement, demand)
+            (revision, demand)
         };
         let Some(detached) = detached else {
             return false;
@@ -2247,10 +2247,10 @@ impl OriginCell {
             removed_generation,
         } = detached;
         drop(removed_generation);
-        Self::publish_h2_advertisement(cell, advertisement);
+        Self::submit_h2_supply_update(cell, revision);
         Self::publish_current_demand(cell, demand);
         for waiter in pending_waiters {
-            cell.complete_establishment(waiter, AcquisitionResult::Reacquire);
+            cell.complete_establishment(waiter, AcquisitionOutcome::RetryAcquisition);
         }
         connection.logical_close(reason)
     }
@@ -2283,7 +2283,7 @@ impl OriginCell {
         sender_id: u64,
         idle_deadline: Option<SystemTime>,
     ) -> H2GenerationId {
-        let (generation, advertisement) = {
+        let (generation, revision) = {
             let mut state = cell.state.lock();
             let generation = state.h2.install_generation(
                 BTreeSet::new(),
@@ -2292,10 +2292,10 @@ impl OriginCell {
                 idle_deadline,
             );
             state.assert_consistent();
-            let advertisement = state.take_h2_advertisement_update();
-            (generation, advertisement)
+            let revision = state.take_h2_supply_update();
+            (generation, revision)
         };
-        Self::publish_h2_advertisement(cell, advertisement);
+        Self::submit_h2_supply_update(cell, revision);
         cell.notify_maintenance(idle_deadline);
         generation
     }
@@ -2354,7 +2354,7 @@ mod tests {
         let event = cell
             .take_ready_event(waiter)
             .expect("unbounded H2 waiter did not receive establishment authority");
-        let super::super::AcquisitionEvent::Establish(permit) = event else {
+        let super::super::AcquisitionStep::StartEstablishment(permit) = event else {
             panic!("new H2 waiter completed before establishment");
         };
         assert!(cell.start_establishment(waiter));
@@ -2386,7 +2386,7 @@ mod tests {
         let event = cell
             .take_ready_event(waiter)
             .expect("flight completion did not satisfy its waiter");
-        let super::super::AcquisitionEvent::Complete(super::super::AcquisitionResult::H2(
+        let super::super::AcquisitionStep::Resolved(super::super::AcquisitionOutcome::H2(
             activation,
         )) = event
         else {
@@ -2455,7 +2455,7 @@ mod tests {
             H2GenerationJoin::WaiterCompleted,
             OriginCell::join_h2_generation(&cell, first, generation)
         );
-        let super::super::AcquisitionEvent::Complete(super::super::AcquisitionResult::H2(
+        let super::super::AcquisitionStep::Resolved(super::super::AcquisitionOutcome::H2(
             activation,
         )) = cell
             .take_ready_event(first)
@@ -2472,8 +2472,8 @@ mod tests {
         drop(activation);
         assert!(matches!(
             cell.take_ready_event(second),
-            Some(super::super::AcquisitionEvent::Complete(
-                super::super::AcquisitionResult::Reacquire
+            Some(super::super::AcquisitionStep::Resolved(
+                super::super::AcquisitionOutcome::RetryAcquisition
             ))
         ));
         assert_eq!(0, cell.retained_waiters_for_test());
@@ -2499,7 +2499,7 @@ mod tests {
             OriginCell::select_h2(&cell).is_none(),
             "direct arrival bypassed committed waiters"
         );
-        let super::super::AcquisitionEvent::Complete(super::super::AcquisitionResult::H2(
+        let super::super::AcquisitionStep::Resolved(super::super::AcquisitionOutcome::H2(
             first_activation,
         )) = cell
             .take_ready_event(first)
@@ -2513,7 +2513,7 @@ mod tests {
             OriginCell::select_h2(&cell).is_none(),
             "direct arrival bypassed the second committed waiter"
         );
-        let super::super::AcquisitionEvent::Complete(super::super::AcquisitionResult::H2(
+        let super::super::AcquisitionStep::Resolved(super::super::AcquisitionOutcome::H2(
             second_activation,
         )) = cell
             .take_ready_event(second)
@@ -2553,7 +2553,7 @@ mod tests {
         cell.state.lock().h2.prioritize_through(Some(WaiterId(0)));
 
         let first = OriginCell::register_waiter(&cell, ProtocolRequirement::H2Required);
-        let super::super::AcquisitionEvent::Complete(super::super::AcquisitionResult::H2(
+        let super::super::AcquisitionStep::Resolved(super::super::AcquisitionOutcome::H2(
             first_activation,
         )) = cell
             .take_ready_event(first)
@@ -2574,7 +2574,7 @@ mod tests {
             "cancelling an open-gate activation stranded its successor"
         );
 
-        let super::super::AcquisitionEvent::Complete(super::super::AcquisitionResult::H2(
+        let super::super::AcquisitionStep::Resolved(super::super::AcquisitionOutcome::H2(
             third_activation,
         )) = cell
             .take_ready_event(third)
@@ -2607,7 +2607,7 @@ mod tests {
         let generation =
             OriginCell::complete_h2_flight(&cell, flight, connection, H2Sender::test(1), None)
                 .expect("flight did not install");
-        let super::super::AcquisitionEvent::Complete(super::super::AcquisitionResult::H2(
+        let super::super::AcquisitionStep::Resolved(super::super::AcquisitionOutcome::H2(
             first_activation,
         )) = cell
             .take_ready_event(first)
@@ -2631,7 +2631,7 @@ mod tests {
         let cell = cell();
         let first = begin_waiter(&cell);
         let second = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
-        let super::super::AcquisitionEvent::Establish(permit) = cell
+        let super::super::AcquisitionStep::StartEstablishment(permit) = cell
             .take_ready_event(second)
             .expect("second participant did not receive establishment authority")
         else {
@@ -2651,7 +2651,7 @@ mod tests {
         let generation =
             OriginCell::complete_h2_flight(&cell, flight, h2_connection, H2Sender::test(1), None)
                 .expect("flight did not install");
-        let super::super::AcquisitionEvent::Complete(super::super::AcquisitionResult::H2(
+        let super::super::AcquisitionStep::Resolved(super::super::AcquisitionOutcome::H2(
             first_activation,
         )) = cell
             .take_ready_event(first)
@@ -2667,7 +2667,7 @@ mod tests {
             super::super::h1::H1Sender::test(2),
         );
         drop(returning);
-        let super::super::AcquisitionEvent::Complete(super::super::AcquisitionResult::H1(
+        let super::super::AcquisitionStep::Resolved(super::super::AcquisitionOutcome::H1(
             selection,
         )) = cell
             .take_ready_event(second)
@@ -2735,7 +2735,7 @@ mod tests {
             OriginCell::complete_h2_flight(&cell, flight, connection, H2Sender::test(1), None)
                 .expect("flight did not install");
 
-        let super::super::AcquisitionEvent::Complete(super::super::AcquisitionResult::H2(
+        let super::super::AcquisitionStep::Resolved(super::super::AcquisitionOutcome::H2(
             first_activation,
         )) = cell
             .take_ready_event(first)
@@ -2752,8 +2752,8 @@ mod tests {
         ));
         assert!(matches!(
             cell.take_ready_event(second),
-            Some(super::super::AcquisitionEvent::Complete(
-                super::super::AcquisitionResult::Reacquire
+            Some(super::super::AcquisitionStep::Resolved(
+                super::super::AcquisitionOutcome::RetryAcquisition
             ))
         ));
         drop(first_activation);
@@ -2779,7 +2779,7 @@ mod tests {
         let mut participants = Vec::new();
         for _ in 0..2 {
             let waiter = OriginCell::register_waiter(&cell, ProtocolRequirement::H2Required);
-            let super::super::AcquisitionEvent::Establish(permit) = cell
+            let super::super::AcquisitionStep::StartEstablishment(permit) = cell
                 .take_ready_event(waiter)
                 .expect("bounded participant did not receive capacity")
             else {
@@ -2807,7 +2807,7 @@ mod tests {
         let generation =
             OriginCell::complete_h2_flight(&cell, flight, connection, H2Sender::test(1), None)
                 .expect("bounded flight did not install");
-        let super::super::AcquisitionEvent::Complete(super::super::AcquisitionResult::H2(
+        let super::super::AcquisitionStep::Resolved(super::super::AcquisitionOutcome::H2(
             first_activation,
         )) = cell
             .take_ready_event(first)
@@ -2823,8 +2823,8 @@ mod tests {
         ));
         assert!(matches!(
             cell.take_ready_event(second),
-            Some(super::super::AcquisitionEvent::Complete(
-                super::super::AcquisitionResult::Reacquire
+            Some(super::super::AcquisitionStep::Resolved(
+                super::super::AcquisitionOutcome::RetryAcquisition
             ))
         ));
         drop(first_activation);
@@ -3240,7 +3240,7 @@ mod tests {
 
         let (waiter, demand) =
             requesting_cell.register_waiter_without_publish(ProtocolRequirement::H1Required);
-        let action = OriginAdmission::publish_action_without_driving(
+        let action = OriginAdmission::submit_action_without_running(
             &admission,
             requesting_cell.id().partition(),
             demand,
@@ -3289,7 +3289,7 @@ mod tests {
             generation,
             CloseReason::ProtocolClosed,
         ));
-        let super::super::AcquisitionEvent::Establish(permit) = requesting_cell
+        let super::super::AcquisitionStep::StartEstablishment(permit) = requesting_cell
             .take_ready_event(waiter)
             .expect("ordinary H2 close did not release capacity")
         else {
@@ -3315,7 +3315,7 @@ mod tests {
         OriginCell::install_h2_for_test(&connection_cell, connection.clone(), 1, None);
 
         let waiter = OriginCell::register_waiter(&requesting_cell, ProtocolRequirement::H1Required);
-        let super::super::AcquisitionEvent::Establish(permit) = requesting_cell
+        let super::super::AcquisitionStep::StartEstablishment(permit) = requesting_cell
             .take_ready_event(waiter)
             .expect("idle HTTP/2 reclaim did not deliver capacity")
         else {
@@ -3357,7 +3357,7 @@ mod tests {
         assert_eq!(None, connection.snapshot().close_reason);
 
         drop(activation);
-        let super::super::AcquisitionEvent::Establish(permit) = requesting_cell
+        let super::super::AcquisitionStep::StartEstablishment(permit) = requesting_cell
             .take_ready_event(waiter)
             .expect("idle transition did not resume H1-required demand")
         else {

@@ -17,17 +17,145 @@
 //! directly instead of scanning every partition.
 //!
 //! The same demand occupies both orders because capacity delivery and HTTP/2
-//! route installation can race to satisfy it. Reserving either position
-//! retains a fence in both orders until the requesting cell accepts or rejects
-//! the handoff. The other resource therefore cannot serve the same demand
-//! while the first handoff is running outside the admission lock.
+//! route installation can race to satisfy it. Assigning either position keeps
+//! both positions attached until the requesting cell accepts or refuses the
+//! handoff. The other resource cannot select the same demand while the first
+//! handoff runs outside the admission lock.
 
-use super::{
-    DeliveryAckResult, DeliveryId, DemandId, DemandSnapshot, DemandState, IntrusiveLinks,
-    IntrusiveOrder, Permit, ProtocolRequirement,
-};
+use super::{CapacityPermit, IntrusiveLinks, IntrusiveOrder};
 use crate::client::pool::partition::{EligibilityGroup, PartitionId};
 use std::collections::HashMap;
+
+/// Protocol capability required by the head waiter in a cell.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ProtocolRequirement {
+    /// The waiter requires HTTP/1 wire semantics.
+    H1Required,
+    /// The waiter may dispatch over HTTP/1 or HTTP/2.
+    H1Compatible,
+    /// The waiter requires HTTP/2.
+    H2Required,
+}
+
+impl ProtocolRequirement {
+    pub(crate) fn accepts_h1(self) -> bool {
+        self != Self::H2Required
+    }
+
+    pub(crate) fn accepts_h2(self) -> bool {
+        self != Self::H1Required
+    }
+}
+
+/// Identity of one cell-local demand generation.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub(crate) struct DemandId(u64);
+
+impl DemandId {
+    pub(crate) const fn from_u64(value: u64) -> Self {
+        Self(value)
+    }
+}
+
+/// Strict ordering of complete snapshots within one [`DemandId`].
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub(crate) struct SnapshotVersion(u64);
+
+impl SnapshotVersion {
+    pub(crate) const INITIAL: Self = Self(0);
+
+    pub(crate) fn next(self) -> Self {
+        Self(
+            self.0
+                .checked_add(1)
+                .expect("demand snapshot version exhausted"),
+        )
+    }
+}
+
+/// Complete state submitted for one demand identity.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum DemandState {
+    Active {
+        requirement: ProtocolRequirement,
+        eligibility_group: EligibilityGroup,
+    },
+    Inactive,
+}
+
+/// Versioned replacement state for one cell's current demand generation.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct DemandSnapshot {
+    pub(super) id: DemandId,
+    pub(super) version: SnapshotVersion,
+    pub(super) state: DemandState,
+}
+
+impl DemandSnapshot {
+    pub(crate) fn active(
+        id: DemandId,
+        version: SnapshotVersion,
+        requirement: ProtocolRequirement,
+        eligibility_group: EligibilityGroup,
+    ) -> Self {
+        Self {
+            id,
+            version,
+            state: DemandState::Active {
+                requirement,
+                eligibility_group,
+            },
+        }
+    }
+
+    pub(crate) fn accepts_h2(&self) -> bool {
+        matches!(
+            self.state,
+            DemandState::Active { requirement, .. } if requirement.accepts_h2()
+        )
+    }
+
+    pub(crate) fn inactive(id: DemandId, version: SnapshotVersion) -> Self {
+        Self {
+            id,
+            version,
+            state: DemandState::Inactive,
+        }
+    }
+
+    #[cfg(test)]
+    pub(in crate::client::pool) fn id_for_test(&self) -> DemandId {
+        self.id
+    }
+
+    pub(in crate::client::pool) fn is_active(&self) -> bool {
+        matches!(self.state, DemandState::Active { .. })
+    }
+
+    fn is_newer_than(&self, current: &Self) -> bool {
+        self.id > current.id || (self.id == current.id && self.version > current.version)
+    }
+}
+
+/// Never-reused identity of one resource-to-demand assignment.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(super) struct DemandAssignmentId(pub(super) u64);
+
+/// Exact demand temporarily assigned while a resource crosses lock domains.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct DemandAssignment {
+    pub(super) id: DemandAssignmentId,
+    pub(super) requester: PartitionId,
+    pub(super) demand: DemandId,
+}
+
+/// Admission's settlement of one detached demand assignment.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) enum DemandAssignmentOutcome {
+    Accepted { successor: Option<DemandSnapshot> },
+    RetrySamePosition,
+    Refused { successor: Option<DemandSnapshot> },
+}
 
 /// Cross-cell demand records and their scheduling orders.
 ///
@@ -35,10 +163,10 @@ use std::collections::HashMap;
 ///
 /// - `records` owns the newest snapshot for every retained cell.
 /// - the origin order and the record's eligibility-group order contain exactly
-///   the `Queued` and `Delivering` records;
-/// - links for both views live inside those ordered residence variants;
-/// - an origin delivery fences the origin head; and
-/// - an HTTP/2 route installation fences its eligibility-group head.
+///   the `Queued` and `PendingAssignment` records;
+/// - links for both orders live inside those schedule states;
+/// - an origin assignment owns the origin head; and
+/// - an HTTP/2 route assignment owns its eligibility-group head.
 ///
 /// Admission coordinates capacity extraction with this schedule while holding
 /// the same origin lock.
@@ -56,7 +184,7 @@ pub(super) struct DemandSchedule {
 #[derive(Clone, Debug)]
 pub(super) struct QueuedDemand {
     /// Cell whose oldest waiter owns this demand generation.
-    pub(super) requesting_partition: PartitionId,
+    pub(super) requester: PartitionId,
     /// Demand identity revalidated at each crossing.
     pub(super) demand: DemandId,
     /// Protocol capability required by the requesting cell waiter.
@@ -68,12 +196,12 @@ pub(super) struct QueuedDemand {
 /// Latest snapshot and scheduling residence for one stable cell.
 #[derive(Debug)]
 struct DemandRecord {
-    /// Newest complete publication observed for the cell.
+    /// Newest complete snapshot observed for the cell.
     pub(super) latest: DemandSnapshot,
-    /// Stable group retained while an inactive replacement crosses a fence.
-    group: Option<EligibilityGroup>,
+    /// Stable group retained while an inactive replacement crosses an assignment.
+    eligibility_group: Option<EligibilityGroup>,
     /// Scheduling residence, including links while ordered.
-    residence: DemandResidence,
+    schedule_state: DemandScheduleState,
 }
 
 /// Links retained by one demand in both scheduling views.
@@ -85,38 +213,29 @@ struct DemandLinks {
     group: IntrusiveLinks<PartitionId>,
 }
 
-/// Order whose head is fenced by one delivery crossing.
+/// Order whose head is held by one detached demand assignment.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum DeliveryView {
+enum DemandOrder {
     /// Capacity or HTTP/1 delivery selected from origin order.
     Origin,
     /// HTTP/2 route selected from eligibility-group order.
     Group,
 }
 
-/// Selects one of a demand residence's intrusive link sets.
-#[derive(Clone, Copy)]
-enum DemandOrderView {
-    /// Origin-wide capacity and HTTP/1 order.
-    Origin,
-    /// Eligibility-group all-protocol order.
-    Group,
-}
-
-/// Admission residence for one partition's latest demand.
+/// Scheduling state for one partition's latest demand.
 ///
 /// ```text
-/// Idle -- active publication ------------------------------> Queued
-/// Queued -- reserve head ----------------------------------> Delivering
-/// Queued -- inactive or replacement publication ----------> Idle
-/// Delivering -- retry unchanged demand --------------------> Queued
-/// Delivering -- accept, reject, or replacement retry ------> Idle
-/// Idle -- active successor remains ------------------------> Queued
+/// Unscheduled -- active snapshot --------------------------> Queued
+/// Queued -- prepare assignment ----------------------------> PendingAssignment
+/// Queued -- inactive or replacement snapshot -------------> Unscheduled
+/// PendingAssignment -- retry unchanged demand -------------> Queued
+/// PendingAssignment -- accept/refuse/replacement retry ----> Unscheduled
+/// Unscheduled -- active successor remains -----------------> Queued
 /// ```
 #[derive(Clone, Debug)]
-enum DemandResidence {
+enum DemandScheduleState {
     /// The cell has no demand represented in scheduling.
-    Idle,
+    Unscheduled,
     /// The demand is waiting in origin order.
     Queued {
         /// Demand generation represented by this residence.
@@ -124,15 +243,13 @@ enum DemandResidence {
         /// Origin-wide and eligibility-group scheduling links.
         links: DemandLinks,
     },
-    /// One delivery or route guard fences this demand.
-    Delivering {
-        /// Demand generation fenced at one scheduling head.
-        demand: DemandId,
-        /// Snapshot version current when admission created the fence.
+    /// One delivery or route guard owns this demand assignment.
+    PendingAssignment {
+        /// Exact assignment allowed to settle this state.
+        assignment: DemandAssignment,
+        /// Snapshot version current when admission created the assignment.
         version: super::SnapshotVersion,
-        /// Delivery allowed to complete this fence.
-        delivery: DeliveryId,
-        /// Scheduling view whose head owns this crossing.
+        /// Scheduling order whose head selected this assignment.
         #[cfg_attr(
             not(debug_assertions),
             allow(
@@ -140,23 +257,23 @@ enum DemandResidence {
                 reason = "the scheduling view is retained for debug invariant checks"
             )
         )]
-        view: DeliveryView,
+        selected_order: DemandOrder,
         /// Both scheduling positions retained until acknowledgement.
         links: DemandLinks,
     },
 }
 
-impl DemandResidence {
+impl DemandScheduleState {
     #[cfg(any(debug_assertions, test))]
     /// Borrows one view's links while this record is ordered.
-    fn links(&self, view: DemandOrderView) -> Option<&IntrusiveLinks<PartitionId>> {
+    fn links(&self, order: DemandOrder) -> Option<&IntrusiveLinks<PartitionId>> {
         let links = match self {
-            Self::Idle => return None,
-            Self::Queued { links, .. } | Self::Delivering { links, .. } => links,
+            Self::Unscheduled => return None,
+            Self::Queued { links, .. } | Self::PendingAssignment { links, .. } => links,
         };
-        match view {
-            DemandOrderView::Origin => Some(&links.origin),
-            DemandOrderView::Group => Some(&links.group),
+        match order {
+            DemandOrder::Origin => Some(&links.origin),
+            DemandOrder::Group => Some(&links.group),
         }
     }
 
@@ -165,61 +282,47 @@ impl DemandResidence {
     /// # Panics
     ///
     /// Panics when called for an idle record.
-    fn links_mut(&mut self, view: DemandOrderView) -> &mut IntrusiveLinks<PartitionId> {
+    fn links_mut(&mut self, order: DemandOrder) -> &mut IntrusiveLinks<PartitionId> {
         let links = match self {
-            Self::Idle => panic!("idle demand has no scheduling links"),
-            Self::Queued { links, .. } | Self::Delivering { links, .. } => links,
+            Self::Unscheduled => panic!("unscheduled demand has no scheduling links"),
+            Self::Queued { links, .. } | Self::PendingAssignment { links, .. } => links,
         };
-        match view {
-            DemandOrderView::Origin => &mut links.origin,
-            DemandOrderView::Group => &mut links.group,
+        match order {
+            DemandOrder::Origin => &mut links.origin,
+            DemandOrder::Group => &mut links.group,
         }
     }
 
     /// Detaches both link sets while moving a record out of scheduling.
     fn into_links(self) -> Option<DemandLinks> {
         match self {
-            Self::Idle => None,
-            Self::Queued { links, .. } | Self::Delivering { links, .. } => Some(links),
+            Self::Unscheduled => None,
+            Self::Queued { links, .. } | Self::PendingAssignment { links, .. } => Some(links),
         }
     }
-}
-
-/// Demand reserved at the order head for one capacity delivery.
-pub(super) struct ScheduledDemand {
-    /// Selected destination cell.
-    pub(super) requesting_partition: PartitionId,
-    /// Demand identity current when the crossing was prepared.
-    pub(super) demand: DemandId,
 }
 
 /// Connection capacity extracted under admission lock before crossing to a cell.
 #[derive(Debug)]
 pub(super) struct PreparedCapacityDelivery {
-    /// Permit transferred into the delivery guard.
-    pub(super) permit: Permit,
-    /// Fence identity allocated for this crossing.
-    pub(super) delivery: DeliveryId,
-    /// Selected destination cell.
-    pub(super) requesting_partition: PartitionId,
-    /// Demand identity current when the crossing was prepared.
-    pub(super) demand: DemandId,
+    pub(super) assignment: DemandAssignment,
+    pub(super) permit: CapacityPermit,
 }
 
 impl DemandSchedule {
-    /// Applies a complete snapshot and updates its cell's scheduling residence.
-    pub(super) fn publish(&mut self, requesting_partition: PartitionId, snapshot: DemandSnapshot) {
-        if let Some(current) = self.records.get(&requesting_partition) {
+    /// Applies a complete snapshot and updates its cell's scheduling state.
+    pub(super) fn apply_snapshot(&mut self, requester: PartitionId, snapshot: DemandSnapshot) {
+        if let Some(current) = self.records.get(&requester) {
             if !snapshot.is_newer_than(&current.latest) {
                 return;
             }
         } else {
             self.records.insert(
-                requesting_partition,
+                requester,
                 DemandRecord {
                     latest: snapshot.clone(),
-                    group: None,
-                    residence: DemandResidence::Idle,
+                    eligibility_group: None,
+                    schedule_state: DemandScheduleState::Unscheduled,
                 },
             );
         }
@@ -227,14 +330,14 @@ impl DemandSchedule {
         let should_remove = matches!(
             &self
                 .records
-                .get(&requesting_partition)
-                .expect("published demand record disappeared")
-                .residence,
-            DemandResidence::Queued { demand, .. }
+                .get(&requester)
+                .expect("demand record disappeared")
+                .schedule_state,
+            DemandScheduleState::Queued { demand, .. }
                 if *demand != snapshot.id || !snapshot.is_active()
         );
         if should_remove {
-            self.remove_from_order(&requesting_partition);
+            self.remove_from_order(&requester);
         }
 
         if let DemandState::Active {
@@ -242,60 +345,65 @@ impl DemandSchedule {
         } = &snapshot.state
         {
             self.records
-                .get_mut(&requesting_partition)
-                .expect("published demand record disappeared")
-                .group = Some(eligibility_group.clone());
+                .get_mut(&requester)
+                .expect("demand record disappeared")
+                .eligibility_group = Some(eligibility_group.clone());
         }
         self.records
-            .get_mut(&requesting_partition)
-            .expect("published demand record disappeared")
+            .get_mut(&requester)
+            .expect("demand record disappeared")
             .latest = snapshot;
 
         let record = self
             .records
-            .get(&requesting_partition)
-            .expect("published demand record disappeared");
-        if record.latest.is_active() && matches!(&record.residence, DemandResidence::Idle) {
-            self.enqueue(requesting_partition);
+            .get(&requester)
+            .expect("demand record disappeared");
+        if record.latest.is_active()
+            && matches!(&record.schedule_state, DemandScheduleState::Unscheduled)
+        {
+            self.enqueue(requester);
         }
         self.assert_consistent();
     }
 
     /// Appends an idle active demand to both scheduling orders.
-    fn enqueue(&mut self, requesting_partition: PartitionId) {
+    fn enqueue(&mut self, requester: PartitionId) {
         let group = self
-            .group_for(&requesting_partition)
+            .group_for(&requester)
             .expect("enqueued demand was inactive");
-        let origin = self.origin_order.push_back(requesting_partition);
+        let origin = self.origin_order.push_back(requester);
         let group_links = self
             .group_orders
             .entry(group)
             .or_default()
-            .push_back(requesting_partition);
+            .push_back(requester);
         if let Some(previous) = origin.previous {
             self.records
                 .get_mut(&previous)
                 .expect("origin demand tail disappeared")
-                .residence
-                .links_mut(DemandOrderView::Origin)
-                .next = Some(requesting_partition);
+                .schedule_state
+                .links_mut(DemandOrder::Origin)
+                .next = Some(requester);
         }
         if let Some(previous) = group_links.previous {
             self.records
                 .get_mut(&previous)
                 .expect("group demand tail disappeared")
-                .residence
-                .links_mut(DemandOrderView::Group)
-                .next = Some(requesting_partition);
+                .schedule_state
+                .links_mut(DemandOrder::Group)
+                .next = Some(requester);
         }
 
         let record = self
             .records
-            .get_mut(&requesting_partition)
+            .get_mut(&requester)
             .expect("queued demand record disappeared");
-        debug_assert!(matches!(record.residence, DemandResidence::Idle));
+        debug_assert!(matches!(
+            record.schedule_state,
+            DemandScheduleState::Unscheduled
+        ));
         let demand = record.latest.id;
-        record.residence = DemandResidence::Queued {
+        record.schedule_state = DemandScheduleState::Queued {
             demand,
             links: DemandLinks {
                 origin,
@@ -305,18 +413,18 @@ impl DemandSchedule {
     }
 
     /// Removes an ordered demand from both views and leaves its record idle.
-    fn remove_from_order(&mut self, requesting_partition: &PartitionId) {
+    fn remove_from_order(&mut self, requester: &PartitionId) {
         let group = self
-            .group_for(requesting_partition)
+            .group_for(requester)
             .expect("removed demand had no eligibility group");
-        let residence = {
+        let schedule_state = {
             let record = self
                 .records
-                .get_mut(requesting_partition)
+                .get_mut(requester)
                 .expect("removed demand record disappeared");
-            std::mem::replace(&mut record.residence, DemandResidence::Idle)
+            std::mem::replace(&mut record.schedule_state, DemandScheduleState::Unscheduled)
         };
-        let links = residence
+        let links = schedule_state
             .into_links()
             .expect("removed demand had no scheduling links");
 
@@ -324,42 +432,41 @@ impl DemandSchedule {
             self.records
                 .get_mut(&previous)
                 .expect("previous origin demand disappeared")
-                .residence
-                .links_mut(DemandOrderView::Origin)
+                .schedule_state
+                .links_mut(DemandOrder::Origin)
                 .next = links.origin.next;
         }
         if let Some(next) = links.origin.next {
             self.records
                 .get_mut(&next)
                 .expect("next origin demand disappeared")
-                .residence
-                .links_mut(DemandOrderView::Origin)
+                .schedule_state
+                .links_mut(DemandOrder::Origin)
                 .previous = links.origin.previous;
         }
-        self.origin_order
-            .remove(*requesting_partition, links.origin);
+        self.origin_order.remove(*requester, links.origin);
 
         if let Some(previous) = links.group.previous {
             self.records
                 .get_mut(&previous)
                 .expect("previous group demand disappeared")
-                .residence
-                .links_mut(DemandOrderView::Group)
+                .schedule_state
+                .links_mut(DemandOrder::Group)
                 .next = links.group.next;
         }
         if let Some(next) = links.group.next {
             self.records
                 .get_mut(&next)
                 .expect("next group demand disappeared")
-                .residence
-                .links_mut(DemandOrderView::Group)
+                .schedule_state
+                .links_mut(DemandOrder::Group)
                 .previous = links.group.previous;
         }
         let order = self
             .group_orders
             .get_mut(&group)
             .expect("ordered demand lost its eligibility-group order");
-        order.remove(*requesting_partition, links.group);
+        order.remove(*requester, links.group);
         if order.len() == 0 {
             self.group_orders.remove(&group);
         }
@@ -375,8 +482,8 @@ impl DemandSchedule {
                 .records
                 .get(&head)
                 .expect("order head disappeared")
-                .residence,
-            DemandResidence::Queued { .. }
+                .schedule_state,
+            DemandScheduleState::Queued { .. }
         )
     }
 
@@ -384,18 +491,18 @@ impl DemandSchedule {
     pub(super) fn queued_head(&self) -> Option<QueuedDemand> {
         let head = self.origin_order.head()?;
         let record = self.records.get(&head).expect("order head disappeared");
-        let DemandResidence::Queued { demand, .. } = &record.residence else {
+        let DemandScheduleState::Queued { demand, .. } = &record.schedule_state else {
             return None;
         };
         let DemandState::Active {
-            head: requirement,
+            requirement,
             eligibility_group,
         } = &record.latest.state
         else {
             unreachable!("queued demand became inactive");
         };
         Some(QueuedDemand {
-            requesting_partition: head,
+            requester: head,
             demand: *demand,
             requirement: *requirement,
             eligibility_group: eligibility_group.clone(),
@@ -409,11 +516,11 @@ impl DemandSchedule {
             .records
             .get(&head)
             .expect("group demand head disappeared");
-        let DemandResidence::Queued { demand, .. } = &record.residence else {
+        let DemandScheduleState::Queued { demand, .. } = &record.schedule_state else {
             return None;
         };
         let DemandState::Active {
-            head: requirement,
+            requirement,
             eligibility_group,
         } = &record.latest.state
         else {
@@ -421,7 +528,7 @@ impl DemandSchedule {
         };
         debug_assert_eq!(eligibility_group, group);
         Some(QueuedDemand {
-            requesting_partition: head,
+            requester: head,
             demand: *demand,
             requirement: *requirement,
             eligibility_group: eligibility_group.clone(),
@@ -429,230 +536,205 @@ impl DemandSchedule {
     }
 
     /// Returns the latest eligibility group retained for one cell.
-    pub(super) fn group_for(&self, requesting_partition: &PartitionId) -> Option<EligibilityGroup> {
+    pub(super) fn group_for(&self, requester: &PartitionId) -> Option<EligibilityGroup> {
         self.records
-            .get(requesting_partition)
-            .and_then(|record| record.group.clone())
+            .get(requester)
+            .and_then(|record| record.eligibility_group.clone())
     }
 
     /// Returns whether `requesting_partition` still has this demand queued for a new action.
-    pub(super) fn is_current_queued(
-        &self,
-        requesting_partition: &PartitionId,
-        demand: DemandId,
-    ) -> bool {
-        self.records
-            .get(requesting_partition)
-            .is_some_and(|record| {
-                record.latest.id == demand
-                    && record.latest.is_active()
-                    && matches!(
-                        record.residence,
-                        DemandResidence::Queued {
-                            demand: current,
-                            ..
-                        } if current == demand
-                    )
-            })
+    pub(super) fn is_current_queued(&self, requester: &PartitionId, demand: DemandId) -> bool {
+        self.records.get(requester).is_some_and(|record| {
+            record.latest.id == demand
+                && record.latest.is_active()
+                && matches!(
+                    record.schedule_state,
+                    DemandScheduleState::Queued {
+                        demand: current,
+                        ..
+                    } if current == demand
+                )
+        })
     }
 
-    /// Fences one reuse operation's demand while it remains the origin-order head.
-    pub(super) fn reserve_reuse_demand(
+    /// Assigns exact origin-head demand after an H1 match resolves.
+    pub(super) fn prepare_h1_assignment(
         &mut self,
-        requesting_partition: &PartitionId,
+        requester: &PartitionId,
         demand: DemandId,
-        delivery: DeliveryId,
-    ) -> Option<ScheduledDemand> {
-        if !self.is_current_queued(requesting_partition, demand) {
+        assignment_id: DemandAssignmentId,
+    ) -> Option<DemandAssignment> {
+        if !self.is_current_queued(requester, demand) || self.origin_order.head()? != *requester {
             return None;
         }
-        let head = self.origin_order.head()?;
-        if head != *requesting_partition {
-            return None;
-        }
-        self.reserve_origin_head(delivery)
+        self.prepare_assignment(*requester, assignment_id, DemandOrder::Origin)
     }
 
-    /// Fences one eligibility-group head for an H2 route installation.
-    pub(super) fn reserve_group_head(
+    /// Assigns one exact eligibility-group head to an H2 route.
+    pub(super) fn prepare_group_assignment(
         &mut self,
-        group: &EligibilityGroup,
-        requesting_partition: &PartitionId,
+        eligibility_group: &EligibilityGroup,
+        requester: &PartitionId,
         demand: DemandId,
-        delivery: DeliveryId,
-    ) -> Option<ScheduledDemand> {
-        if !self.is_current_queued(requesting_partition, demand)
-            || self.group_orders.get(group)?.head() != Some(*requesting_partition)
+        assignment_id: DemandAssignmentId,
+    ) -> Option<DemandAssignment> {
+        if !self.is_current_queued(requester, demand)
+            || self.group_orders.get(eligibility_group)?.head() != Some(*requester)
         {
             return None;
         }
-        self.reserve(*requesting_partition, delivery, DeliveryView::Group)
+        self.prepare_assignment(*requester, assignment_id, DemandOrder::Group)
     }
 
-    /// Changes the origin head into a delivery fence at the same positions.
-    pub(super) fn reserve_origin_head(&mut self, delivery: DeliveryId) -> Option<ScheduledDemand> {
-        let head = self.origin_order.head()?;
-        self.reserve(head, delivery, DeliveryView::Origin)
-    }
-
-    /// Changes one queued demand into a delivery fence.
-    fn reserve(
+    /// Assigns the origin-order head to one capacity delivery.
+    pub(super) fn prepare_origin_assignment(
         &mut self,
-        requesting_partition: PartitionId,
-        delivery: DeliveryId,
-        view: DeliveryView,
-    ) -> Option<ScheduledDemand> {
+        assignment_id: DemandAssignmentId,
+    ) -> Option<DemandAssignment> {
+        let requester = self.origin_order.head()?;
+        self.prepare_assignment(requester, assignment_id, DemandOrder::Origin)
+    }
+
+    fn prepare_assignment(
+        &mut self,
+        requester: PartitionId,
+        assignment_id: DemandAssignmentId,
+        selected_order: DemandOrder,
+    ) -> Option<DemandAssignment> {
         let record = self
             .records
-            .get_mut(&requesting_partition)
+            .get_mut(&requester)
             .expect("order head disappeared");
-        let residence = std::mem::replace(&mut record.residence, DemandResidence::Idle);
-        match residence {
-            DemandResidence::Queued { demand, links } => {
+        let schedule_state =
+            std::mem::replace(&mut record.schedule_state, DemandScheduleState::Unscheduled);
+        match schedule_state {
+            DemandScheduleState::Queued { demand, links } => {
                 debug_assert_eq!(record.latest.id, demand);
                 debug_assert!(record.latest.is_active());
-                record.residence = DemandResidence::Delivering {
+                let assignment = DemandAssignment {
+                    id: assignment_id,
+                    requester,
                     demand,
+                };
+                record.schedule_state = DemandScheduleState::PendingAssignment {
+                    assignment: assignment.clone(),
                     version: record.latest.version,
-                    delivery,
-                    view,
+                    selected_order,
                     links,
                 };
                 self.assert_consistent();
-                Some(ScheduledDemand {
-                    requesting_partition,
-                    demand,
-                })
+                Some(assignment)
             }
-            residence => {
-                record.residence = residence;
+            schedule_state => {
+                record.schedule_state = schedule_state;
                 None
             }
         }
     }
 
-    /// Returns whether the test-observed delivery fence still names this demand.
-    ///
-    /// Production reservation revalidates the demand identity through
-    /// `AcquisitionQueue::reserve_delivery_waiter`; this helper only exposes
-    /// admission-side fence state to focused tests.
     #[cfg(test)]
-    pub(super) fn delivery_is_current(
-        &self,
-        delivery: DeliveryId,
-        requesting_partition: &PartitionId,
-        demand: DemandId,
-    ) -> bool {
-        let Some(record) = self.records.get(requesting_partition) else {
+    pub(super) fn assignment_is_current(&self, assignment: &DemandAssignment) -> bool {
+        let Some(record) = self.records.get(&assignment.requester) else {
             return false;
         };
         matches!(
-            &record.residence,
-            DemandResidence::Delivering {
-                demand: current_demand,
-                delivery: current_delivery,
-                ..
-            } if *current_delivery == delivery
-                && *current_demand == demand
-                && record.latest.id == demand
-                && record.latest.is_active()
+            &record.schedule_state,
+            DemandScheduleState::PendingAssignment { assignment: current, .. }
+                if current == assignment
+                    && record.latest.id == assignment.demand
+                    && record.latest.is_active()
         )
     }
 
-    /// Closes one delivery fence and resolves the demand's next residence.
-    ///
-    /// `Accepted` consumes the delivered generation and installs a newer
-    /// successor when the requesting cell supplied one. `RetrySameResidence`
-    /// restores the same generation at its existing order position when it
-    /// remains live; if it was replaced, the latest active generation is
-    /// appended as new demand. `Rejected` removes the fenced generation after
-    /// its permit has been refunnelled and applies the same successor
-    /// arbitration as acceptance.
-    pub(super) fn finish_delivery(
+    /// Settles one detached assignment and resolves the demand's next state.
+    pub(super) fn settle_assignment(
         &mut self,
-        delivery: DeliveryId,
-        requesting_partition: &PartitionId,
-        result: DeliveryAckResult,
+        assignment: &DemandAssignment,
+        outcome: DemandAssignmentOutcome,
     ) {
-        let Some(record) = self.records.get(requesting_partition) else {
+        let requester = &assignment.requester;
+        let Some(record) = self.records.get(requester) else {
             return;
         };
-        let delivered_demand = match &record.residence {
-            DemandResidence::Delivering {
-                demand,
+        let assigned = match &record.schedule_state {
+            DemandScheduleState::PendingAssignment {
+                assignment: current,
                 version,
-                delivery: current,
                 ..
-            } if *current == delivery => (*demand, *version),
+            } if current == assignment => (current.demand, *version),
             _ => return,
         };
-        let (delivered_demand, delivered_version) = delivered_demand;
+        let (assigned_demand, assigned_version) = assigned;
 
-        match result {
-            DeliveryAckResult::RetrySameResidence => {
+        match outcome {
+            DemandAssignmentOutcome::RetrySamePosition => {
                 let record = self
                     .records
-                    .get(requesting_partition)
-                    .expect("delivery demand record disappeared");
-                if record.latest.id == delivered_demand && record.latest.is_active() {
+                    .get(requester)
+                    .expect("assigned demand record disappeared");
+                if record.latest.id == assigned_demand && record.latest.is_active() {
                     let record = self
                         .records
-                        .get_mut(requesting_partition)
-                        .expect("delivery demand record disappeared");
-                    let residence = std::mem::replace(&mut record.residence, DemandResidence::Idle);
-                    let DemandResidence::Delivering {
-                        demand,
-                        version: _,
-                        delivery: current,
-                        view: _,
+                        .get_mut(requester)
+                        .expect("assigned demand record disappeared");
+                    let schedule_state = std::mem::replace(
+                        &mut record.schedule_state,
+                        DemandScheduleState::Unscheduled,
+                    );
+                    let DemandScheduleState::PendingAssignment {
+                        assignment: current,
                         links,
-                    } = residence
+                        ..
+                    } = schedule_state
                     else {
-                        unreachable!("delivery fence disappeared");
+                        unreachable!("demand assignment disappeared");
                     };
-                    debug_assert_eq!(current, delivery);
-                    record.residence = DemandResidence::Queued { demand, links };
+                    debug_assert_eq!(current, *assignment);
+                    record.schedule_state = DemandScheduleState::Queued {
+                        demand: current.demand,
+                        links,
+                    };
                     self.assert_consistent();
                     return;
                 }
 
-                self.remove_from_order(requesting_partition);
+                self.remove_from_order(requester);
                 if self
                     .records
-                    .get(requesting_partition)
-                    .expect("delivery demand record disappeared")
+                    .get(requester)
+                    .expect("assigned demand record disappeared")
                     .latest
                     .is_active()
                 {
-                    self.enqueue(*requesting_partition);
+                    self.enqueue(*requester);
                 }
             }
-            DeliveryAckResult::Accepted { successor }
-            | DeliveryAckResult::Rejected { successor } => {
-                self.remove_from_order(requesting_partition);
+            DemandAssignmentOutcome::Accepted { successor }
+            | DemandAssignmentOutcome::Refused { successor } => {
+                self.remove_from_order(requester);
 
                 let install_successor = successor.as_ref().is_some_and(|successor| {
-                    successor.id > delivered_demand
+                    successor.id > assigned_demand
                         && successor.is_newer_than(
                             &self
                                 .records
-                                .get(requesting_partition)
-                                .expect("delivery demand record disappeared")
+                                .get(requester)
+                                .expect("assigned demand record disappeared")
                                 .latest,
                         )
                 });
                 if install_successor {
                     self.records
-                        .get_mut(requesting_partition)
-                        .expect("delivery demand record disappeared")
+                        .get_mut(requester)
+                        .expect("assigned demand record disappeared")
                         .latest = successor.expect("validated successor disappeared");
                 } else {
                     let retirement =
-                        DemandSnapshot::inactive(delivered_demand, delivered_version.next());
+                        DemandSnapshot::inactive(assigned_demand, assigned_version.next());
                     let record = self
                         .records
-                        .get_mut(requesting_partition)
-                        .expect("delivery demand record disappeared");
+                        .get_mut(requester)
+                        .expect("assigned demand record disappeared");
                     if retirement.is_newer_than(&record.latest) {
                         record.latest = retirement;
                     }
@@ -660,27 +742,22 @@ impl DemandSchedule {
 
                 if self
                     .records
-                    .get(requesting_partition)
-                    .expect("delivery demand record disappeared")
+                    .get(requester)
+                    .expect("assigned demand record disappeared")
                     .latest
                     .is_active()
                 {
-                    self.enqueue(*requesting_partition);
+                    self.enqueue(*requester);
                 }
             }
         }
         self.assert_consistent();
     }
 
-    /// Returns the latest complete snapshot retained for `requesting_partition`.
+    /// Returns the latest complete snapshot retained for `requester`.
     #[cfg(test)]
-    pub(super) fn latest_for_test(
-        &self,
-        requesting_partition: &PartitionId,
-    ) -> Option<&DemandSnapshot> {
-        self.records
-            .get(requesting_partition)
-            .map(|record| &record.latest)
+    pub(super) fn latest_for_test(&self, requester: &PartitionId) -> Option<&DemandSnapshot> {
+        self.records.get(requester).map(|record| &record.latest)
     }
 
     #[cfg(test)]
@@ -692,19 +769,24 @@ impl DemandSchedule {
     pub(super) fn queued_len(&self) -> usize {
         self.records
             .values()
-            .filter(|record| matches!(&record.residence, DemandResidence::Queued { .. }))
+            .filter(|record| matches!(&record.schedule_state, DemandScheduleState::Queued { .. }))
             .count()
     }
 
     #[cfg(test)]
-    pub(super) fn delivering_len(&self) -> usize {
+    pub(super) fn pending_assignment_count(&self) -> usize {
         self.records
             .values()
-            .filter(|record| matches!(&record.residence, DemandResidence::Delivering { .. }))
+            .filter(|record| {
+                matches!(
+                    &record.schedule_state,
+                    DemandScheduleState::PendingAssignment { .. }
+                )
+            })
             .count()
     }
 
-    /// Checks residence, link, length, group, and fence relationships.
+    /// Checks residence, link, length, group, and assignment relationships.
     fn assert_consistent(&self) {
         #[cfg(any(debug_assertions, test))]
         {
@@ -720,24 +802,24 @@ impl DemandSchedule {
         let ordered_records = self
             .records
             .values()
-            .filter(|record| record.residence.links(DemandOrderView::Origin).is_some())
+            .filter(|record| record.schedule_state.links(DemandOrder::Origin).is_some())
             .count();
-        let origin_deliveries = self
+        let origin_assignments = self
             .records
             .values()
             .filter(|record| {
                 matches!(
-                    record.residence,
-                    DemandResidence::Delivering {
-                        view: DeliveryView::Origin,
+                    record.schedule_state,
+                    DemandScheduleState::PendingAssignment {
+                        selected_order: DemandOrder::Origin,
                         ..
                     }
                 )
             })
             .count();
         assert!(
-            origin_deliveries <= 1,
-            "more than one origin delivery fence was active"
+            origin_assignments <= 1,
+            "more than one origin demand assignment was active"
         );
         self.origin_order.assert_consistent(
             ordered_records,
@@ -748,34 +830,38 @@ impl DemandSchedule {
                     .records
                     .get(&requesting_partition)
                     .expect("origin-ordered demand disappeared");
-                match &record.residence {
-                    DemandResidence::Idle => {
-                        unreachable!("origin-ordered demand became idle")
+                match &record.schedule_state {
+                    DemandScheduleState::Unscheduled => {
+                        unreachable!("origin-ordered demand became unscheduled")
                     }
-                    DemandResidence::Queued { demand, .. } => {
+                    DemandScheduleState::Queued { demand, .. } => {
                         assert!(record.latest.is_active(), "queued demand became inactive");
                         assert_eq!(
                             record.latest.id, *demand,
-                            "queued residence did not match its latest demand"
+                            "queued schedule state did not match its latest demand"
                         );
                     }
-                    DemandResidence::Delivering { demand, view, .. } => {
-                        if *view == DeliveryView::Origin {
+                    DemandScheduleState::PendingAssignment {
+                        assignment,
+                        selected_order,
+                        ..
+                    } => {
+                        if *selected_order == DemandOrder::Origin {
                             assert_eq!(
                                 Some(requesting_partition),
                                 self.origin_order.head(),
-                                "origin delivery fence moved away from its head"
+                                "origin demand assignment moved away from its head"
                             );
                         }
                         assert!(
-                            record.latest.id >= *demand,
-                            "delivery fence named a future demand"
+                            record.latest.id >= assignment.demand,
+                            "demand assignment named a future demand"
                         );
                     }
                 }
                 *record
-                    .residence
-                    .links(DemandOrderView::Origin)
+                    .schedule_state
+                    .links(DemandOrder::Origin)
                     .expect("origin-ordered demand lost its links")
             },
         );
@@ -783,15 +869,15 @@ impl DemandSchedule {
         let group_ordered_records = self
             .records
             .values()
-            .filter(|record| record.residence.links(DemandOrderView::Group).is_some())
+            .filter(|record| record.schedule_state.links(DemandOrder::Group).is_some())
             .count();
         for record in self
             .records
             .values()
-            .filter(|record| record.residence.links(DemandOrderView::Group).is_some())
+            .filter(|record| record.schedule_state.links(DemandOrder::Group).is_some())
         {
             let group = record
-                .group
+                .eligibility_group
                 .as_ref()
                 .expect("group-ordered demand lost its eligibility group");
             assert!(
@@ -809,30 +895,30 @@ impl DemandSchedule {
         );
 
         for (group, order) in &self.group_orders {
-            let group_deliveries = self
+            let group_assignments = self
                 .records
                 .values()
                 .filter(|record| {
-                    record.group.as_ref() == Some(group)
+                    record.eligibility_group.as_ref() == Some(group)
                         && matches!(
-                            record.residence,
-                            DemandResidence::Delivering {
-                                view: DeliveryView::Group,
+                            record.schedule_state,
+                            DemandScheduleState::PendingAssignment {
+                                selected_order: DemandOrder::Group,
                                 ..
                             }
                         )
                 })
                 .count();
             assert!(
-                group_deliveries <= 1,
-                "more than one group delivery fence was active"
+                group_assignments <= 1,
+                "more than one group demand assignment was active"
             );
             let expected = self
                 .records
                 .values()
                 .filter(|record| {
-                    record.residence.links(DemandOrderView::Group).is_some()
-                        && record.group.as_ref() == Some(group)
+                    record.schedule_state.links(DemandOrder::Group).is_some()
+                        && record.eligibility_group.as_ref() == Some(group)
                 })
                 .count();
             order.assert_consistent(
@@ -845,26 +931,26 @@ impl DemandSchedule {
                         .get(&requesting_partition)
                         .expect("group-ordered demand disappeared");
                     assert_eq!(
-                        record.group.as_ref(),
+                        record.eligibility_group.as_ref(),
                         Some(group),
                         "demand occupied the wrong eligibility-group order"
                     );
                     if matches!(
-                        record.residence,
-                        DemandResidence::Delivering {
-                            view: DeliveryView::Group,
+                        record.schedule_state,
+                        DemandScheduleState::PendingAssignment {
+                            selected_order: DemandOrder::Group,
                             ..
                         }
                     ) {
                         assert_eq!(
                             Some(requesting_partition),
                             order.head(),
-                            "group route fence moved away from its head"
+                            "group route assignment moved away from its head"
                         );
                     }
                     *record
-                        .residence
-                        .links(DemandOrderView::Group)
+                        .schedule_state
+                        .links(DemandOrder::Group)
                         .expect("group-ordered demand lost its links")
                 },
             );
@@ -894,54 +980,53 @@ mod tests {
         let pool = EligibilityGroup::Pool;
         let isolated = EligibilityGroup::Partition(partition(2));
         let mut schedule = DemandSchedule::default();
-        schedule.publish(partition(1), active(1, pool.clone()));
-        schedule.publish(partition(2), active(2, isolated.clone()));
-        schedule.publish(partition(3), active(3, pool.clone()));
+        schedule.apply_snapshot(partition(1), active(1, pool.clone()));
+        schedule.apply_snapshot(partition(2), active(2, isolated.clone()));
+        schedule.apply_snapshot(partition(3), active(3, pool.clone()));
 
         assert_eq!(
             Some(partition(1)),
-            schedule.queued_head().map(|head| head.requesting_partition)
+            schedule.queued_head().map(|head| head.requester)
         );
         assert_eq!(
             Some(partition(1)),
-            schedule
-                .queued_group_head(&pool)
-                .map(|head| head.requesting_partition)
+            schedule.queued_group_head(&pool).map(|head| head.requester)
         );
         assert_eq!(
             Some(partition(2)),
             schedule
                 .queued_group_head(&isolated)
-                .map(|head| head.requesting_partition)
+                .map(|head| head.requester)
         );
 
-        let delivery = DeliveryId(7);
-        schedule
-            .reserve_group_head(&pool, &partition(1), DemandId::from_u64(1), delivery)
+        let assignment = schedule
+            .prepare_group_assignment(
+                &pool,
+                &partition(1),
+                DemandId::from_u64(1),
+                DemandAssignmentId(7),
+            )
             .expect("pool group head should reserve");
         assert!(schedule.queued_group_head(&pool).is_none());
         assert_eq!(
             Some(partition(2)),
             schedule
                 .queued_group_head(&isolated)
-                .map(|head| head.requesting_partition)
+                .map(|head| head.requester)
         );
         assert!(schedule.queued_head().is_none());
 
-        schedule.finish_delivery(
-            delivery,
-            &partition(1),
-            DeliveryAckResult::Accepted { successor: None },
+        schedule.settle_assignment(
+            &assignment,
+            DemandAssignmentOutcome::Accepted { successor: None },
         );
         assert_eq!(
             Some(partition(2)),
-            schedule.queued_head().map(|head| head.requesting_partition)
+            schedule.queued_head().map(|head| head.requester)
         );
         assert_eq!(
             Some(partition(3)),
-            schedule
-                .queued_group_head(&pool)
-                .map(|head| head.requesting_partition)
+            schedule.queued_group_head(&pool).map(|head| head.requester)
         );
     }
 
@@ -949,41 +1034,45 @@ mod tests {
     fn retry_preserves_both_order_positions() {
         let group = EligibilityGroup::Pool;
         let mut schedule = DemandSchedule::default();
-        schedule.publish(partition(1), active(1, group.clone()));
-        schedule.publish(partition(2), active(2, group.clone()));
+        schedule.apply_snapshot(partition(1), active(1, group.clone()));
+        schedule.apply_snapshot(partition(2), active(2, group.clone()));
 
-        let delivery = DeliveryId(9);
-        schedule
-            .reserve_group_head(&group, &partition(1), DemandId::from_u64(1), delivery)
+        let assignment = schedule
+            .prepare_group_assignment(
+                &group,
+                &partition(1),
+                DemandId::from_u64(1),
+                DemandAssignmentId(9),
+            )
             .expect("group head should reserve");
-        schedule.finish_delivery(
-            delivery,
-            &partition(1),
-            DeliveryAckResult::RetrySameResidence,
-        );
+        schedule.settle_assignment(&assignment, DemandAssignmentOutcome::RetrySamePosition);
 
         assert_eq!(
             Some(partition(1)),
-            schedule.queued_head().map(|head| head.requesting_partition)
+            schedule.queued_head().map(|head| head.requester)
         );
         assert_eq!(
             Some(partition(1)),
             schedule
                 .queued_group_head(&group)
-                .map(|head| head.requesting_partition)
+                .map(|head| head.requester)
         );
     }
 
     #[test]
-    fn inactive_snapshot_during_group_fence_retires_without_losing_group() {
+    fn inactive_snapshot_during_group_assignment_retires_without_losing_group() {
         let group = EligibilityGroup::Pool;
         let mut schedule = DemandSchedule::default();
-        schedule.publish(partition(1), active(1, group.clone()));
-        let delivery = DeliveryId(11);
-        schedule
-            .reserve_group_head(&group, &partition(1), DemandId::from_u64(1), delivery)
+        schedule.apply_snapshot(partition(1), active(1, group.clone()));
+        let assignment = schedule
+            .prepare_group_assignment(
+                &group,
+                &partition(1),
+                DemandId::from_u64(1),
+                DemandAssignmentId(11),
+            )
             .expect("group head should reserve");
-        schedule.publish(
+        schedule.apply_snapshot(
             partition(1),
             DemandSnapshot::inactive(
                 DemandId::from_u64(1),
@@ -991,23 +1080,19 @@ mod tests {
             ),
         );
 
-        schedule.finish_delivery(
-            delivery,
-            &partition(1),
-            DeliveryAckResult::RetrySameResidence,
-        );
+        schedule.settle_assignment(&assignment, DemandAssignmentOutcome::RetrySamePosition);
         assert_eq!(0, schedule.len());
         assert!(schedule.queued_group_head(&group).is_none());
     }
 
     #[test]
-    fn accepted_fence_does_not_retire_a_newer_active_publication() {
+    fn accepted_assignment_does_not_retire_a_newer_active_snapshot() {
         let group = EligibilityGroup::Pool;
         let partition = partition(1);
         let demand = DemandId::from_u64(1);
         let initial = super::super::SnapshotVersion::INITIAL;
         let mut schedule = DemandSchedule::default();
-        schedule.publish(
+        schedule.apply_snapshot(
             partition,
             DemandSnapshot::active(
                 demand,
@@ -1016,9 +1101,8 @@ mod tests {
                 group.clone(),
             ),
         );
-        let delivery = DeliveryId(12);
-        schedule
-            .reserve_group_head(&group, &partition, demand, delivery)
+        let assignment = schedule
+            .prepare_group_assignment(&group, &partition, demand, DemandAssignmentId(12))
             .expect("group head should reserve");
         let republished = DemandSnapshot::active(
             demand,
@@ -1026,37 +1110,41 @@ mod tests {
             ProtocolRequirement::H2Required,
             group.clone(),
         );
-        schedule.publish(partition, republished.clone());
+        schedule.apply_snapshot(partition, republished.clone());
 
-        schedule.finish_delivery(
-            delivery,
-            &partition,
-            DeliveryAckResult::Accepted { successor: None },
+        schedule.settle_assignment(
+            &assignment,
+            DemandAssignmentOutcome::Accepted { successor: None },
         );
 
         assert_eq!(Some(&republished), schedule.latest_for_test(&partition));
         assert_eq!(
             Some(partition),
-            schedule.queued_head().map(|head| head.requesting_partition)
+            schedule.queued_head().map(|head| head.requester)
         );
         assert_eq!(
             Some(partition),
             schedule
                 .queued_group_head(&group)
-                .map(|head| head.requesting_partition)
+                .map(|head| head.requester)
         );
     }
 
     #[test]
-    fn group_reservation_rejects_a_stale_demand_identity() {
+    fn group_assignment_rejects_a_stale_demand_identity() {
         let group = EligibilityGroup::Pool;
         let partition = partition(1);
         let mut schedule = DemandSchedule::default();
-        schedule.publish(partition, active(1, group.clone()));
-        schedule.publish(partition, active(2, group.clone()));
+        schedule.apply_snapshot(partition, active(1, group.clone()));
+        schedule.apply_snapshot(partition, active(2, group.clone()));
 
         assert!(schedule
-            .reserve_group_head(&group, &partition, DemandId::from_u64(1), DeliveryId(13),)
+            .prepare_group_assignment(
+                &group,
+                &partition,
+                DemandId::from_u64(1),
+                DemandAssignmentId(13),
+            )
             .is_none());
         assert_eq!(
             Some(DemandId::from_u64(2)),
@@ -1067,24 +1155,28 @@ mod tests {
     }
 
     #[test]
-    fn stale_acknowledgement_does_not_close_a_newer_delivery_fence() {
+    fn stale_settlement_does_not_close_a_newer_assignment() {
         let group = EligibilityGroup::Pool;
         let partition = partition(1);
         let demand = DemandId::from_u64(1);
         let mut schedule = DemandSchedule::default();
-        schedule.publish(partition, active(1, group.clone()));
-        schedule
-            .reserve_group_head(&group, &partition, demand, DeliveryId(14))
+        schedule.apply_snapshot(partition, active(1, group.clone()));
+        let assignment = schedule
+            .prepare_group_assignment(&group, &partition, demand, DemandAssignmentId(14))
             .expect("group head should reserve");
+        let stale = DemandAssignment {
+            id: DemandAssignmentId(15),
+            requester: partition,
+            demand,
+        };
 
-        schedule.finish_delivery(
-            DeliveryId(15),
-            &partition,
-            DeliveryAckResult::Accepted { successor: None },
+        schedule.settle_assignment(
+            &stale,
+            DemandAssignmentOutcome::Accepted { successor: None },
         );
 
-        assert!(schedule.delivery_is_current(DeliveryId(14), &partition, demand));
-        assert!(!schedule.delivery_is_current(DeliveryId(15), &partition, demand));
+        assert!(schedule.assignment_is_current(&assignment));
+        assert!(!schedule.assignment_is_current(&stale));
         assert_eq!(
             Some(&active(1, group)),
             schedule.latest_for_test(&partition)
@@ -1096,7 +1188,7 @@ mod tests {
     fn consistency_check_rejects_an_orphaned_group_link() {
         let group = EligibilityGroup::Pool;
         let mut schedule = DemandSchedule::default();
-        schedule.publish(partition(1), active(1, group.clone()));
+        schedule.apply_snapshot(partition(1), active(1, group.clone()));
 
         schedule.group_orders.remove(&group);
         schedule.assert_consistent();
