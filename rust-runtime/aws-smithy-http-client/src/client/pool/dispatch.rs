@@ -27,7 +27,7 @@ mod h1;
 mod h2;
 
 use self::h1::H1DispatchOutcome;
-use self::h2::H2DispatchResult;
+use self::h2::H2DispatchOutcome;
 use super::admission::ProtocolRequirement;
 use super::cell::h1::H1Selection;
 use super::cell::h2::H2Activation;
@@ -44,7 +44,7 @@ use std::future::poll_fn;
 use std::sync::Arc as StdArc;
 
 /// Replacement selections allowed after the initial HTTP/2 dispatch attempt.
-const MAX_H2_REACQUISITIONS: usize = 2;
+const MAX_H2_REPLACEMENTS: usize = 2;
 
 /// Operation settings known before the request's origin cell is resolved.
 ///
@@ -143,7 +143,7 @@ async fn acquire_and_dispatch(
     mut request: Request<SdkBody>,
 ) -> Result<Response<SdkBody>, ConnectorError> {
     let requirement = protocol_requirement(&request);
-    let mut h2_reacquisitions = H2ReacquisitionBudget::default();
+    let mut h2_replacements = H2ReplacementBudget::default();
 
     loop {
         match acquire_for_dispatch(&context, requirement).await? {
@@ -155,10 +155,10 @@ async fn acquire_and_dispatch(
             }
             DispatchTarget::H2(activation) => {
                 match h2::dispatch(&context, request, activation).await? {
-                    H2DispatchResult::Response(response) => return Ok(response),
-                    H2DispatchResult::Reacquire(reacquisition) => {
-                        let (returned, error) = reacquisition.into_parts();
-                        if !h2_reacquisitions.admit_replacement() {
+                    H2DispatchOutcome::Response(response) => return Ok(response),
+                    H2DispatchOutcome::NotAccepted(unaccepted) => {
+                        let (returned, error) = unaccepted.into_parts();
+                        if !h2_replacements.admit_replacement() {
                             return Err(error);
                         }
                         request = returned;
@@ -227,8 +227,8 @@ async fn acquire_for_dispatch(
                 }
                 AcquisitionStep::Resolved(AcquisitionOutcome::H2(activation)) => {
                     waiter_guard.disarm();
-                    OriginCell::service_h2_waiters(&context.cell);
-                    OriginCell::service_peer_h2_waiters(&context.cell);
+                    OriginCell::offer_local_h2(&context.cell);
+                    OriginCell::offer_peer_h2(&context.cell);
                     tracing::trace!(
                         connection_id = %activation.connection().id(),
                         request_partition = ?context.partition.id(),
@@ -283,18 +283,18 @@ async fn acquire_for_dispatch(
 }
 /// Per-request bound on replacement HTTP/2 selections.
 #[derive(Default)]
-struct H2ReacquisitionBudget {
+struct H2ReplacementBudget {
     /// Replacement selections admitted after the initial selection.
-    completed: usize,
+    used: usize,
 }
 
-impl H2ReacquisitionBudget {
+impl H2ReplacementBudget {
     /// Returns whether one more replacement selection may proceed.
     fn admit_replacement(&mut self) -> bool {
-        if self.completed >= MAX_H2_REACQUISITIONS {
+        if self.used >= MAX_H2_REPLACEMENTS {
             return false;
         }
-        self.completed += 1;
+        self.used += 1;
         true
     }
 }
@@ -553,9 +553,9 @@ mod tests {
     }
 
     #[test]
-    fn h2_reacquisition_is_bounded_after_two_replacements() {
-        let mut budget = H2ReacquisitionBudget::default();
-        for _ in 0..MAX_H2_REACQUISITIONS {
+    fn h2_replacement_is_bounded_after_two_selections() {
+        let mut budget = H2ReplacementBudget::default();
+        for _ in 0..MAX_H2_REPLACEMENTS {
             assert!(budget.admit_replacement());
         }
         assert!(!budget.admit_replacement());

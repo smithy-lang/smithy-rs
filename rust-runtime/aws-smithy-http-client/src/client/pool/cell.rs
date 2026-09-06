@@ -13,11 +13,11 @@
 //! [`AcquisitionQueue`] owns every live acquisition attempt, including the
 //! bounded FIFO, delivery crossings, establishment launch, cancellation, and
 //! terminal results. Its module documents the complete transition model.
-//! [`CellState`] couples that model to HTTP/1 sender residence, HTTP/2
-//! flight and generation residence, generation gates, and the cross-cell reuse
-//! reservation. A local HTTP/1 return either satisfies one acquisition or
-//! becomes idle, never both. An HTTP/2 activation becomes visible only with a
-//! prospective generation lease and one recorded gate opportunity.
+//! [`CellState`] couples that model to HTTP/1 sender ownership, HTTP/2 flights,
+//! connection generations, activation gates, and cross-cell reuse. A local
+//! HTTP/1 return either satisfies one acquisition or becomes idle, never both.
+//! An HTTP/2 activation becomes visible only with a prospective request claim
+//! and one recorded activation turn.
 //!
 //! Permits, senders, admission updates, and task wakes are detached from
 //! mutable state before their fallback or callback runs. This keeps drop and
@@ -105,8 +105,8 @@ struct CellState {
     acquisitions: AcquisitionQueue,
     /// Complete HTTP/1 sender and peer-reservation state.
     h1: H1CellState,
-    /// Cell-owned HTTP/2 flight and installed generations.
-    h2: h2::H2Records,
+    /// Complete HTTP/2 acquisition state for this cell.
+    h2: h2::H2CellState,
     /// Last admission-facing HTTP/1 status and its monotonic revision.
     h1_supply_revision: SupplyRevision<H1SupplyStatus>,
     /// Last admission-facing HTTP/2 status and its monotonic revision.
@@ -118,7 +118,7 @@ impl Default for CellState {
         Self {
             acquisitions: AcquisitionQueue::default(),
             h1: H1CellState::default(),
-            h2: h2::H2Records::default(),
+            h2: h2::H2CellState::default(),
             h1_supply_revision: SupplyRevision::new(
                 0,
                 H1SupplyStatus {
@@ -214,7 +214,7 @@ impl CellState {
 
     /// Derives the exact generation admission may route or reclaim.
     fn h2_supply_status(&self) -> H2SupplyStatus {
-        match self.h2.publishable_generation() {
+        match self.h2.peer_routable_generation() {
             Some(generation) => H2SupplyStatus::Accepting {
                 generation,
                 idle: self.h2.is_idle(generation),
@@ -597,8 +597,8 @@ impl OriginCell {
         if let (Some(admission), Some(snapshot), false) = (&cell.admission, snapshot, h2_visible) {
             OriginAdmission::submit_demand_snapshot(admission, cell.id.partition(), snapshot);
         }
-        Self::service_h2_waiters(cell);
-        Self::service_peer_h2_waiters(cell);
+        Self::offer_local_h2(cell);
+        Self::offer_peer_h2(cell);
         waiter
     }
 
@@ -684,8 +684,8 @@ impl OriginCell {
             state.take_h1_supply_update()
         };
         cell.submit_h1_supply_update(supply_update);
-        Self::service_h2_waiters(cell);
-        Self::service_peer_h2_waiters(cell);
+        Self::offer_local_h2(cell);
+        Self::offer_peer_h2(cell);
         true
     }
 
@@ -2162,7 +2162,7 @@ mod tests {
         ));
         let (second, _second_connection, _second_physical) =
             install_bounded_h2(&admission, &connection_cell, 2);
-        OriginCell::service_peer_h2_waiters(&requesting_cell);
+        OriginCell::offer_peer_h2(&requesting_cell);
         let activation = take_ready_h2(&requesting_cell, waiter);
         assert_eq!(second, activation.generation());
         drop(activation);
@@ -2811,7 +2811,7 @@ mod loom_tests {
             });
             let servicing_cell = requesting_cell.clone();
             let servicing = loom::thread::spawn(move || {
-                OriginCell::service_peer_h2_waiters(&servicing_cell);
+                OriginCell::offer_peer_h2(&servicing_cell);
             });
 
             publishing.join().unwrap();

@@ -16,7 +16,7 @@
 //! handshake or driver submission.
 
 use super::super::cell::h2::{
-    H2CloseHandle, H2DriverGuard, H2FlightId, H2FlightInstall, H2GenerationJoin, H2Sender,
+    H2CloseHandle, H2DriverGuard, H2FlightDecision, H2FlightId, H2GenerationJoinOutcome, H2Sender,
 };
 use super::super::cell::{AcquisitionOutcome, EstablishmentPermit, OriginCell, WaiterId};
 use super::super::connection::{
@@ -103,8 +103,8 @@ pub(super) async fn establish_h2(
     connected: Connected,
 ) -> EstablishmentOutcome {
     loop {
-        match context.cell.install_or_join_h2_flight(waiter) {
-            H2FlightInstall::Accepting(generation) => {
+        match context.cell.converge_h2_flight(waiter) {
+            H2FlightDecision::UseGeneration(generation) => {
                 tracing::trace!(
                     request_partition = ?context.partition.id(),
                     connection_partition = ?context.cell.id().partition(),
@@ -115,15 +115,15 @@ pub(super) async fn establish_h2(
                     "HTTP/2 establishment found an accepting generation"
                 );
                 match OriginCell::join_h2_generation(&context.cell, waiter, generation) {
-                    H2GenerationJoin::GenerationChanged => continue,
-                    H2GenerationJoin::Joined | H2GenerationJoin::WaiterCompleted => {
+                    H2GenerationJoinOutcome::GenerationChanged => continue,
+                    H2GenerationJoinOutcome::Joined | H2GenerationJoinOutcome::WaiterResolved => {
                         drop(io);
                         drop(permit);
                         return EstablishmentOutcome::WaiterCompletionTransferred;
                     }
                 }
             }
-            H2FlightInstall::Joined => {
+            H2FlightDecision::JoinedFlight => {
                 tracing::trace!(
                     request_partition = ?context.partition.id(),
                     connection_partition = ?context.cell.id().partition(),
@@ -136,7 +136,7 @@ pub(super) async fn establish_h2(
                 drop(permit);
                 return EstablishmentOutcome::WaiterCompletionTransferred;
             }
-            H2FlightInstall::Driver(flight) => {
+            H2FlightDecision::RunFlight(flight) => {
                 tracing::trace!(
                     request_partition = ?context.partition.id(),
                     connection_partition = ?context.cell.id().partition(),
@@ -375,12 +375,12 @@ mod tests {
         let cell = cell();
         let first = launching_waiter(&cell);
         let second = launching_waiter(&cell);
-        let H2FlightInstall::Driver(flight) = cell.install_or_join_h2_flight(first) else {
+        let H2FlightDecision::RunFlight(flight) = cell.converge_h2_flight(first) else {
             panic!("first participant did not become the flight driver");
         };
         assert!(matches!(
-            cell.install_or_join_h2_flight(second),
-            H2FlightInstall::Joined
+            cell.converge_h2_flight(second),
+            H2FlightDecision::JoinedFlight
         ));
 
         let mut completion = FlightCompletionGuard::new(cell.clone(), flight);
@@ -409,12 +409,12 @@ mod tests {
         let cell = cell();
         let live = launching_waiter(&cell);
         let cancelled = launching_waiter(&cell);
-        let H2FlightInstall::Driver(flight) = cell.install_or_join_h2_flight(live) else {
+        let H2FlightDecision::RunFlight(flight) = cell.converge_h2_flight(live) else {
             panic!("first participant did not become the flight driver");
         };
         assert!(matches!(
-            cell.install_or_join_h2_flight(cancelled),
-            H2FlightInstall::Joined
+            cell.converge_h2_flight(cancelled),
+            H2FlightDecision::JoinedFlight
         ));
         assert!(OriginCell::cancel_waiter(&cell, cancelled));
 
