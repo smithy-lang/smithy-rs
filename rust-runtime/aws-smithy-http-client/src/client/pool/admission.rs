@@ -53,7 +53,9 @@ use self::demand::{
     DemandAssignment, DemandAssignmentId, DemandAssignmentOutcome, DemandSchedule,
     PreparedCapacityDelivery,
 };
-pub(crate) use self::demand::{DemandId, DemandSnapshot, ProtocolRequirement, SnapshotVersion};
+pub(in crate::client::pool) use self::demand::{
+    DemandId, DemandSnapshot, ProtocolRequirement, SnapshotVersion,
+};
 use self::h1::{
     H1CancellationAction, H1CapacityReclaim, H1ReservationAction, H1SupplierSettlement, H1Supply,
 };
@@ -98,7 +100,7 @@ impl fmt::Debug for CapacityPermit {
 /// The state lock is the only authority for available capacity while it
 /// resides in admission, and for demand order while no delivery is crossing
 /// to a cell. Delivery work is detached before this lock is released.
-pub(crate) struct OriginAdmission {
+pub(in crate::client::pool) struct OriginAdmission {
     /// Canonical origin shared by every partition represented in `state`.
     origin: OriginKey,
     /// Whether admission may close idle H2 capacity for H1-required demand.
@@ -109,7 +111,7 @@ pub(crate) struct OriginAdmission {
 
 impl OriginAdmission {
     /// Creates admission for one bounded origin policy.
-    pub(crate) fn new(origin: OriginKey, policy: AdmissionPolicy) -> Arc<Self> {
+    pub(in crate::client::pool) fn new(origin: OriginKey, policy: AdmissionPolicy) -> Arc<Self> {
         Arc::new(Self {
             origin,
             can_reclaim_h2_for_h1: policy.can_reclaim_h2_for_h1(),
@@ -140,7 +142,10 @@ impl OriginAdmission {
     }
 
     /// Registers or returns the unique retained cell for an identity.
-    pub(crate) fn register_cell(origin: &Arc<Self>, candidate: Arc<OriginCell>) -> Arc<OriginCell> {
+    pub(in crate::client::pool) fn register_cell(
+        origin: &Arc<Self>,
+        candidate: Arc<OriginCell>,
+    ) -> Arc<OriginCell> {
         let partition = candidate.id().partition();
         assert_eq!(
             origin.origin(),
@@ -168,7 +173,7 @@ impl OriginAdmission {
     }
 
     /// Submits a complete demand snapshot and runs resulting detached actions.
-    pub(crate) fn submit_demand_snapshot(
+    pub(in crate::client::pool) fn submit_demand_snapshot(
         admission: &Arc<Self>,
         requester: PartitionId,
         snapshot: DemandSnapshot,
@@ -357,9 +362,9 @@ impl OriginAdmission {
     }
 
     #[cfg(test)]
-    fn counts(&self) -> AdmissionCounts {
+    fn probe(&self) -> AdmissionProbe {
         let state = self.state.lock();
-        AdmissionCounts {
+        AdmissionProbe {
             limit: state.capacity.limit,
             available: state.available_capacity(),
             ordered: state.demand.len(),
@@ -461,7 +466,7 @@ impl fmt::Debug for OriginAdmission {
 ///
 /// Dropping a lease may synchronously deliver capacity to another waiter, so
 /// callers must move it out of protected state before drop.
-pub(crate) struct CapacityLease {
+pub(in crate::client::pool) struct CapacityLease {
     /// Admission state to which this slot returns when the lease ends.
     admission: Arc<OriginAdmission>,
     /// Permit returned to admission when this lease ends.
@@ -665,7 +670,7 @@ impl AdmissionState {
 /// Test snapshot of the bounded-origin capacity and demand ledger.
 #[cfg(test)]
 #[derive(Debug, Eq, PartialEq)]
-struct AdmissionCounts {
+struct AdmissionProbe {
     /// Configured connection capacity.
     limit: usize,
     /// Permits not currently owned by a connection or delivery.
@@ -1026,8 +1031,8 @@ mod loom_tests {
             release.join().unwrap();
             publish.join().unwrap();
 
-            assert_eq!(1, origin.counts().available);
-            assert!(origin.counts().ordered <= 1);
+            assert_eq!(1, origin.probe().available);
+            assert!(origin.probe().ordered <= 1);
         });
     }
 
@@ -1073,10 +1078,10 @@ mod loom_tests {
                 "outstanding demand assignment admitted a second delivery"
             );
 
-            let counts = origin.counts();
-            assert_eq!(2, counts.available);
-            assert_eq!(0, counts.assigned);
-            assert_eq!(0, counts.ordered);
+            let probe = origin.probe();
+            assert_eq!(2, probe.available);
+            assert_eq!(0, probe.assigned);
+            assert_eq!(0, probe.ordered);
         });
     }
 }

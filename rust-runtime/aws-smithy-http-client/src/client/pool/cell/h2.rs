@@ -67,9 +67,11 @@ pub(in crate::client::pool) use request::{
 };
 use request::{H2ActivationResources, H2ActivationTurnGuard};
 
-use super::super::admission::{H2SupplyStatus, SupplyRevision};
-use super::super::connection::ConnectionState;
-use super::super::partition::PartitionId;
+use super::super::admission::{
+    DemandId, DemandSnapshot, H2SupplyStatus, OriginAdmission, SupplyRevision,
+};
+use super::super::connection::{CloseReason, ConnectionState};
+use super::super::partition::{EligibilityGroup, PartitionId};
 use super::waiters::{AcquisitionQueue, WaiterResolution};
 use super::{AcquisitionOutcome, AcquisitionStep, CellState, OriginCell, WaiterId};
 use crate::sync::{Arc, Weak};
@@ -1225,11 +1227,7 @@ impl OriginCell {
         };
         if let Some(admission) = &cell.admission {
             for snapshot in resolution.demand_updates.into_iter().flatten() {
-                super::super::admission::OriginAdmission::submit_demand_snapshot(
-                    admission,
-                    cell.id.partition(),
-                    snapshot,
-                );
+                OriginAdmission::submit_demand_snapshot(admission, cell.id.partition(), snapshot);
             }
         }
         drop(resolution.returned_step);
@@ -1241,7 +1239,7 @@ impl OriginCell {
     /// Submits one changed local-generation status after cell unlock.
     fn submit_h2_supply_update(cell: &Arc<Self>, revision: Option<SupplyRevision<H2SupplyStatus>>) {
         if let (Some(admission), Some(revision)) = (&cell.admission, revision) {
-            super::super::admission::OriginAdmission::apply_h2_supply_revision(
+            OriginAdmission::apply_h2_supply_revision(
                 admission,
                 cell.id.partition(),
                 cell.eligibility_group.clone(),
@@ -1251,16 +1249,9 @@ impl OriginCell {
     }
 
     /// Publishes the current local demand after its last H2 route disappears.
-    fn publish_current_demand(
-        cell: &Arc<Self>,
-        snapshot: Option<super::super::admission::DemandSnapshot>,
-    ) {
+    fn publish_current_demand(cell: &Arc<Self>, snapshot: Option<DemandSnapshot>) {
         if let (Some(admission), Some(snapshot)) = (&cell.admission, snapshot) {
-            super::super::admission::OriginAdmission::submit_demand_snapshot(
-                admission,
-                cell.id.partition(),
-                snapshot,
-            );
+            OriginAdmission::submit_demand_snapshot(admission, cell.id.partition(), snapshot);
         }
     }
 
@@ -1313,8 +1304,8 @@ impl OriginCell {
     pub(in crate::client::pool) fn attach_h2_route(
         cell: &Arc<Self>,
         route: H2Route,
-        group: &super::super::partition::EligibilityGroup,
-        demand: super::super::admission::DemandId,
+        group: &EligibilityGroup,
+        demand: DemandId,
     ) -> bool {
         if &cell.eligibility_group != group || route.connection_partition() == cell.id.partition() {
             return false;
@@ -1361,7 +1352,7 @@ impl OriginCell {
                     snapshot
                 };
                 if let (Some(admission), Some(snapshot)) = (&cell.admission, snapshot) {
-                    super::super::admission::OriginAdmission::submit_demand_snapshot(
+                    OriginAdmission::submit_demand_snapshot(
                         admission,
                         cell.id.partition(),
                         snapshot,
@@ -1455,10 +1446,7 @@ impl H2CloseHandle {
     }
 
     /// Begins drain when the cell still contains this generation.
-    pub(in crate::client::pool) fn close(
-        &self,
-        reason: super::super::connection::CloseReason,
-    ) -> bool {
+    pub(in crate::client::pool) fn close(&self, reason: CloseReason) -> bool {
         self.cell
             .upgrade()
             .is_some_and(|cell| OriginCell::close_h2(&cell, self.generation, reason))
@@ -1485,16 +1473,14 @@ impl H2DriverGuard {
     /// Records ordinary driver completion.
     pub(in crate::client::pool) fn protocol_closed(mut self) {
         self.active = false;
-        self.close
-            .close(super::super::connection::CloseReason::ProtocolClosed);
+        self.close.close(CloseReason::ProtocolClosed);
     }
 }
 
 impl Drop for H2DriverGuard {
     fn drop(&mut self) {
         if self.active {
-            self.close
-                .close(super::super::connection::CloseReason::OwnerRuntimeShutdown);
+            self.close.close(CloseReason::OwnerRuntimeShutdown);
         }
     }
 }
@@ -1684,7 +1670,7 @@ impl OriginCell {
         let connection_id = connection.id();
         drop(removed_generation);
         Self::publish_current_demand(cell, demand);
-        let reclaimed = connection.logical_close(super::super::connection::CloseReason::Reclaimed);
+        let reclaimed = connection.logical_close(CloseReason::Reclaimed);
         (revision, reclaimed.then_some(connection_id))
     }
 
@@ -1692,7 +1678,7 @@ impl OriginCell {
     pub(super) fn close_h2(
         cell: &Arc<Self>,
         generation: H2GenerationId,
-        reason: super::super::connection::CloseReason,
+        reason: CloseReason,
     ) -> bool {
         // A zero-request generation may hold the last capacity-owning
         // connection reference. Keep it outside the cell-lock unwind scope.
@@ -1814,7 +1800,7 @@ mod tests {
         id: u64,
     ) -> (
         Arc<ConnectionState>,
-        super::super::super::connection::PhysicalConnectionGuard,
+        super::super::super::connection::RootIoGuard,
     ) {
         ConnectionState::unbounded(ConnectionInfo::for_test(
             ConnectionId::new(id),
@@ -1841,7 +1827,7 @@ mod tests {
     ) -> (
         H2GenerationId,
         Arc<ConnectionState>,
-        super::super::super::connection::PhysicalConnectionGuard,
+        super::super::super::connection::RootIoGuard,
     ) {
         let waiter = begin_waiter(cell);
         let H2FlightDecision::RunFlight(flight) = cell.converge_h2_flight(waiter) else {
@@ -2388,7 +2374,7 @@ mod tests {
                 .expect("open connection rejected dispatch");
             activation.accept(dispatch);
             assert_eq!((0, 1), generation_counts(&cell, generation));
-            assert_eq!(1, connection.snapshot().in_flight);
+            assert_eq!(1, connection.probe().in_flight);
 
             if upload_first {
                 drop(upload);
@@ -2401,7 +2387,7 @@ mod tests {
             }
 
             assert_eq!((0, 0), generation_counts(&cell, generation));
-            assert_eq!(0, connection.snapshot().in_flight);
+            assert_eq!(0, connection.probe().in_flight);
         }
     }
 
@@ -2597,14 +2583,14 @@ mod tests {
         assert!(stale.close(CloseReason::ProtocolClosed));
         assert_eq!(
             Some(CloseReason::ProtocolClosed),
-            first_connection.snapshot().close_reason
+            first_connection.probe().close_reason
         );
 
         let (second, second_connection, _second_physical) = open_test_generation(&cell, 2);
         assert_ne!(first, second);
         assert!(OriginCell::activate_h2(&cell, first).is_none());
         assert!(!stale.close(CloseReason::Poisoned));
-        assert_eq!(None, second_connection.snapshot().close_reason);
+        assert_eq!(None, second_connection.probe().close_reason);
         assert_eq!(Some(second), cell.accepting_h2_generation());
     }
 
@@ -2694,7 +2680,7 @@ mod tests {
         assert!(cell.state.lock().h2.generations.contains_key(&generation));
         drop(response);
         assert!(!cell.state.lock().h2.generations.contains_key(&generation));
-        assert_eq!(0, connection.snapshot().in_flight);
+        assert_eq!(0, connection.probe().in_flight);
     }
 
     #[test]
@@ -2707,7 +2693,7 @@ mod tests {
 
         assert_eq!(
             Some(CloseReason::OwnerRuntimeShutdown),
-            connection.snapshot().close_reason
+            connection.probe().close_reason
         );
         assert_eq!(None, cell.accepting_h2_generation());
     }
@@ -2744,7 +2730,7 @@ mod tests {
 
         assert!(OriginCell::cancel_waiter(&requesting_cell, waiter));
         drop(activation);
-        assert_eq!(None, connection.snapshot().close_reason);
+        assert_eq!(None, connection.probe().close_reason);
         assert!(OriginCell::close_h2(
             &connection_cell,
             generation,
@@ -2773,7 +2759,7 @@ mod tests {
             requesting_cell.take_ready_event(waiter).is_none(),
             "H1-required demand reclaimed capacity without an HTTP/1 guarantee"
         );
-        assert_eq!(None, connection.snapshot().close_reason);
+        assert_eq!(None, connection.probe().close_reason);
         assert_eq!(Some(generation), connection_cell.accepting_h2_generation());
 
         assert!(OriginCell::close_h2(
@@ -2816,7 +2802,7 @@ mod tests {
 
         assert_eq!(
             Some(CloseReason::Reclaimed),
-            connection.snapshot().close_reason
+            connection.probe().close_reason
         );
         assert_eq!(None, connection_cell.accepting_h2_generation());
         drop(permit);
@@ -2846,7 +2832,7 @@ mod tests {
             requesting_cell.take_ready_event(waiter).is_none(),
             "active HTTP/2 generation was reclaimed"
         );
-        assert_eq!(None, connection.snapshot().close_reason);
+        assert_eq!(None, connection.probe().close_reason);
 
         drop(activation);
         let super::super::AcquisitionStep::StartEstablishment(permit) = requesting_cell
@@ -2857,7 +2843,7 @@ mod tests {
         };
         assert_eq!(
             Some(CloseReason::Reclaimed),
-            connection.snapshot().close_reason
+            connection.probe().close_reason
         );
         drop(permit);
         assert_eq!(1, admission.available_capacity_for_test());
@@ -2872,7 +2858,7 @@ mod tests {
 
         assert_eq!(
             Some(CloseReason::PoolDropped),
-            connection.snapshot().close_reason
+            connection.probe().close_reason
         );
         assert_eq!(None, cell.accepting_h2_generation());
     }
@@ -2921,10 +2907,7 @@ mod loom_tests {
 
             drop(activation.join().unwrap());
             assert!(close.join().unwrap());
-            assert_eq!(
-                Some(CloseReason::Poisoned),
-                connection.snapshot().close_reason
-            );
+            assert_eq!(Some(CloseReason::Poisoned), connection.probe().close_reason);
             assert!(!cell.state.lock().h2.generations.contains_key(&generation));
         });
     }
@@ -2950,7 +2933,7 @@ mod loom_tests {
             upload.join().unwrap();
             response.join().unwrap();
 
-            assert_eq!(0, connection.snapshot().in_flight);
+            assert_eq!(0, connection.probe().in_flight);
             let state = cell.state.lock();
             let record = state
                 .h2
@@ -2989,14 +2972,14 @@ mod loom_tests {
             first_side.join().unwrap();
             assert!(close.join().unwrap());
 
-            assert_eq!(1, connection.snapshot().in_flight);
+            assert_eq!(1, connection.probe().in_flight);
             assert_eq!(
                 Some((0, 1)),
                 cell.h2_request_counts(generation),
                 "draining generation released before its second request side"
             );
             drop(response);
-            assert_eq!(0, connection.snapshot().in_flight);
+            assert_eq!(0, connection.probe().in_flight);
             assert_eq!(
                 None,
                 cell.h2_request_counts(generation),

@@ -16,6 +16,7 @@ use super::super::cell::h1::{H1Exchange, H1Selection};
 use super::super::connection::{CloseReason, ConnectionState, DispatchGuard};
 use super::super::partition::DriverSpawner;
 use super::{AcquisitionContext, H1HostHeaderInserted, RequestDispatchError};
+use crate::client::downcast_error;
 use aws_smithy_runtime_api::client::connection::CaptureSmithyConnection;
 use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_types::body::SdkBody;
@@ -126,19 +127,13 @@ pub(super) async fn dispatch(
                 }
                 let metadata =
                     captured_metadata.unwrap_or_else(|| connection.info().metadata(close_handle));
-                return Err(
-                    super::super::super::downcast_error(Box::new(error.into_error()))
-                        .with_connection(metadata),
-                );
+                return Err(downcast_error(Box::new(error.into_error())).with_connection(metadata));
             }
             exchange.retire_connection(CloseReason::IncompleteH1Exchange);
             drop(dispatch);
             let metadata =
                 captured_metadata.unwrap_or_else(|| connection.info().metadata(close_handle));
-            Err(
-                super::super::super::downcast_error(Box::new(error.into_error()))
-                    .with_connection(metadata),
-            )
+            Err(downcast_error(Box::new(error.into_error())).with_connection(metadata))
         }
     }
 }
@@ -160,7 +155,7 @@ fn guard_h1_response(
     let (parts, body) = response.into_parts();
     if upgrade {
         exchange.retire_connection(CloseReason::Upgraded);
-        dispatch.complete();
+        dispatch.release();
         return Response::from_parts(parts, SdkBody::from_body_1_x(body));
     }
     let body = H1ResponseBody::new(body, exchange, dispatch, spawner);
@@ -329,7 +324,7 @@ impl H1ResponseLifecycle {
             }
         }
         if let Some(dispatch) = self.dispatch.take() {
-            dispatch.complete();
+            dispatch.release();
         }
     }
 }
@@ -635,7 +630,7 @@ mod tests {
 
         assert_eq!(
             Some(CloseReason::OwnerRuntimeShutdown),
-            connection.snapshot().close_reason
+            connection.probe().close_reason
         );
     }
 
@@ -1050,7 +1045,7 @@ mod tests {
         assert!(first.await.unwrap_err().is_cancelled());
         assert_eq!(
             Some(CloseReason::IncompleteH1Exchange),
-            connection.snapshot().close_reason
+            connection.probe().close_reason
         );
 
         let second_uri: Uri = format!("{endpoint}/after-cancelled-exchange")
@@ -1438,7 +1433,7 @@ mod tests {
         consume(request(&pool, mismatched, server.uri("/mismatched-interface")).await).await;
         assert_eq!(
             Some(CloseReason::Reclaimed),
-            first_connection.snapshot().close_reason
+            first_connection.probe().close_reason
         );
         assert_eq!(
             2,
@@ -1599,7 +1594,7 @@ mod tests {
 
         assert_eq!(
             Some(CloseReason::Upgraded),
-            connection.snapshot().close_reason,
+            connection.probe().close_reason,
             "the upgraded HTTP/1 sender returned to pool policy"
         );
         assert_eq!(1, cell.admission().unwrap().available_capacity_for_test());

@@ -50,23 +50,26 @@
 //!         |-- PartitionState per partition
 //!         |   |-- runtime placement and idle maintenance
 //!         |   `-- OriginCell per canonical origin
-//!         |       |-- acquisition queue
-//!         |       `-- protocol connection records
+//!         |       |-- acquisition queue and supply revisions
+//!         |       |-- H1 connection ownership
+//!         |       `-- H2 flights, generations, routes, and gates
 //!         `-- OriginAdmission per bounded origin
-//!             |-- connection permits
-//!             |-- cross-cell demand order
-//!             `-- peer reuse indexes
+//!             |-- capacity budget
+//!             |-- demand schedule
+//!             |-- H1 supply index and retained matches
+//!             `-- H2 supply index and route/reclaim state
 //! ```
 //!
 //! One `OriginCell` lock owns local acquisition order and protocol residence.
 //! For a bounded origin, `OriginAdmission` separately owns the origin-wide
-//! connection limit and cross-cell scheduling. An H2 request-lease lock owns
+//! connection limit and cross-cell matching. An H2 request-claim lock owns
 //! its two endpoint bits. `ConnectionState` owns logical connection lifetime,
 //! and partition maintenance owns its scheduler state.
 //!
-//! No two pool locks are held together. Delivery and publication guards carry
-//! payload or identity between cell and admission scopes. H2 lease completion
-//! detaches its dispatch guard before entering connection or cell state.
+//! No two pool locks are held together. Demand snapshots and supply revisions
+//! move cell state into admission. Assignments and detached guards carry one
+//! selected payload or route back toward a cell. H2 claim completion detaches
+//! its dispatch guard before entering connection or cell state.
 //! Maintenance detaches cells and wakers before expiration or wake callbacks.
 //!
 //! # HTTP/1 request lifecycle
@@ -125,8 +128,8 @@
 //!             |-- HTTP/2 -> join or drive one flight -> H2Activation
 //!             `-- HTTP/1 -> H1Selection or incompatible-version error
 //!
-//! H2Activation -- Hyper accepts request --> accepted request lease
-//! accepted request lease
+//! H2Activation -- Hyper accepts request --> H2RequestClaim
+//! H2RequestClaim
 //!     |-- request body ends or drops -----> upload endpoint complete
 //!     `-- response body ends or drops ----> response endpoint complete
 //! both endpoints complete ----------------> release generation request count
@@ -141,13 +144,13 @@
 //! both endpoints end. Hyper remains responsible for stream identifiers,
 //! stream credit, and flow control.
 //!
-//! Peer publication moves only route identity. The socket, protocol driver,
+//! A peer route moves only generation identity. The socket, protocol driver,
 //! request handle, and capacity remain with the connection-owning partition.
 //!
 //! `ConnectionState` separates logical close, accepted-request accounting, and
 //! root-I/O ownership. Logical close rejects new dispatch and releases bounded
 //! capacity. `DispatchGuard` follows an accepted request, while
-//! `PhysicalConnectionGuard` follows root I/O until the pool no longer owns
+//! `RootIoGuard` follows root I/O until the pool no longer owns
 //! that transport; neither describes the operating system TCP state. All
 //! connection-owned work runs through the partition [`DriverSpawner`].
 
@@ -253,7 +256,7 @@ struct PoolConfig {
 struct PoolInner {
     /// Immutable settings shared by pool operations.
     config: PoolConfig,
-    /// Fixed partitions and lazily published per-origin state.
+    /// Fixed partitions and lazily created per-origin state.
     registry: PartitionRegistry,
     /// Type-erased construction of one partition-bound transport.
     transport: StdArc<dyn TransportFactory>,

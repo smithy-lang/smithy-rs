@@ -1217,12 +1217,12 @@ impl AcquisitionQueue {
     }
 
     #[cfg(test)]
-    pub(super) fn snapshot(&self) -> CellSnapshot {
+    pub(super) fn probe(&self) -> AcquisitionProbe {
         let (waiting, demand) = match &self.waiting {
             WaitingQueueState::Empty => (0, None),
             WaitingQueueState::Active { len, demand, .. } => (len.get(), Some(demand.id)),
         };
-        CellSnapshot {
+        AcquisitionProbe {
             waiting,
             retained: self.records.len(),
             demand,
@@ -1344,7 +1344,7 @@ struct RemovedHead {
 
 #[cfg(test)]
 #[derive(Debug)]
-pub(super) struct CellSnapshot {
+pub(super) struct AcquisitionProbe {
     pub(super) waiting: usize,
     pub(super) retained: usize,
     pub(super) demand: Option<DemandId>,

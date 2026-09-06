@@ -189,7 +189,7 @@ pub enum ConnectionReuseScope {
 /// scope groups equal interface bindings, and pool scope creates one group for
 /// the whole pool.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub(crate) enum EligibilityGroup {
+pub(in crate::client::pool) enum EligibilityGroup {
     /// Only the partition with this identity is eligible.
     Partition(PartitionId),
     /// Partitions with this exact interface binding are eligible.

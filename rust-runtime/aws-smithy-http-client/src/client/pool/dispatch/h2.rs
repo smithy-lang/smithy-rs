@@ -19,8 +19,9 @@
 use super::super::cell::h2::{
     H2Activation, H2CloseHandle, H2DispatchParts, H2ResponseGuard, H2UploadGuard,
 };
-use super::super::connection::ConnectionState;
+use super::super::connection::{CloseReason, ConnectionState};
 use super::{AcquisitionContext, H1HostHeaderInserted};
+use crate::client::downcast_error;
 use crate::sync::{Arc, Mutex};
 use aws_smithy_runtime_api::client::connection::CaptureSmithyConnection;
 use aws_smithy_runtime_api::client::result::ConnectorError;
@@ -106,7 +107,7 @@ pub(super) async fn dispatch(
         response,
     } = activation.take_dispatch_parts();
     if sender.is_closed() {
-        close.close(super::super::connection::CloseReason::ProtocolClosed);
+        close.close(CloseReason::ProtocolClosed);
         let metadata = captured_metadata.unwrap_or_else(|| connection.info().h2_metadata(close));
         return resolve_unaccepted_request(
             request,
@@ -141,15 +142,14 @@ pub(super) async fn dispatch(
             drop(response);
             drop(dispatch);
             drop(activation);
-            close.close(super::super::connection::CloseReason::ProtocolClosed);
+            close.close(CloseReason::ProtocolClosed);
             let metadata =
                 captured_metadata.unwrap_or_else(|| connection.info().h2_metadata(close));
             resolve_unaccepted_request(
                 returned,
                 reused,
                 UnacceptedStage::ReturnedByHyper,
-                super::super::super::downcast_error(Box::new(error.into_error()))
-                    .with_connection(metadata),
+                downcast_error(Box::new(error.into_error())).with_connection(metadata),
             )
         }
         Poll::Ready(result) => {
@@ -226,27 +226,23 @@ fn resolve_h2_send(
                     body.clear();
                 }
                 drop(response_guard);
-                close.close(super::super::connection::CloseReason::ProtocolClosed);
+                close.close(CloseReason::ProtocolClosed);
                 let metadata =
                     captured_metadata.unwrap_or_else(|| connection.info().h2_metadata(close));
                 return resolve_unaccepted_request(
                     request,
                     reused,
                     UnacceptedStage::ReturnedByHyper,
-                    super::super::super::downcast_error(Box::new(error.into_error()))
-                        .with_connection(metadata),
+                    downcast_error(Box::new(error.into_error())).with_connection(metadata),
                 );
             }
             if sender_closed {
-                close.close(super::super::connection::CloseReason::ProtocolClosed);
+                close.close(CloseReason::ProtocolClosed);
             }
             drop(response_guard);
             let metadata =
                 captured_metadata.unwrap_or_else(|| connection.info().h2_metadata(close));
-            Err(
-                super::super::super::downcast_error(Box::new(error.into_error()))
-                    .with_connection(metadata),
-            )
+            Err(downcast_error(Box::new(error.into_error())).with_connection(metadata))
         }
     }
 }

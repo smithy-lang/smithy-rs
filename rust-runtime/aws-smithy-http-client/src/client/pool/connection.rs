@@ -7,11 +7,10 @@
 //!
 //! [`ConnectionState`] serializes dispatch commitment with logical close.
 //! [`DispatchGuard`] accounts for accepted requests.
-//! [`PhysicalConnectionGuard`] follows root I/O until the pool no longer owns
-//! it, including transfer through a protocol upgrade. This physical transition
-//! does not assert that the peer or kernel has completed the underlying TCP
-//! close. Logical close returns bounded capacity without waiting for either
-//! lifetime to finish.
+//! [`RootIoGuard`] follows root I/O until the pool no longer owns it, including
+//! transfer through a protocol upgrade. This transition does not assert that
+//! the peer or kernel has completed the underlying TCP close. Logical close
+//! returns bounded capacity without waiting for either lifetime to finish.
 
 use super::admission::CapacityLease;
 use super::origin::OriginKey;
@@ -198,18 +197,18 @@ pub(super) struct ConnectionState {
     /// Identity and transport facts shared with metadata and lifecycle events.
     info: Arc<ConnectionInfo>,
     /// Dispatch, logical-close, and root-I/O completion state.
-    lifecycle: Mutex<LifecycleState>,
+    lifecycle: Mutex<ConnectionLifecycle>,
 }
 
 /// Connection lifetime state serialized with dispatch commitment and close.
 #[derive(Debug)]
-struct LifecycleState {
+struct ConnectionLifecycle {
     /// Dispatch eligibility and ownership of bounded capacity.
     logical: LogicalState,
     /// Requests that committed before logical close.
     in_flight: usize,
     /// Whether ownership of root transport I/O has ended.
-    physical_complete: bool,
+    root_io_complete: bool,
 }
 
 /// Whether a connection may accept dispatch and still owns bounded capacity.
@@ -221,7 +220,7 @@ enum LogicalState {
     /// Dispatch may commit.
     Open {
         /// Bounded-origin slot released by logical close, when configured.
-        lease: Option<CapacityLease>,
+        capacity: Option<CapacityLease>,
     },
     /// New dispatch is rejected while accepted work may still drain.
     Closed {
@@ -236,23 +235,23 @@ impl ConnectionState {
     /// For TLS transports, the connector has completed TLS and ALPN before this
     /// call. Hyper protocol setup and cell installation have not occurred.
     ///
-    /// The returned guard is the unique physical-lifetime owner. After Hyper
+    /// The returned guard is the unique root-I/O owner. After Hyper
     /// returns a request handle, [`Self::open`] attaches optional bounded
     /// capacity before cell installation makes the connection discoverable.
-    pub(super) fn pending_open(info: Arc<ConnectionInfo>) -> (Arc<Self>, PhysicalConnectionGuard) {
+    pub(super) fn pending_open(info: Arc<ConnectionInfo>) -> (Arc<Self>, RootIoGuard) {
         let connection = Arc::new(Self {
             info,
-            lifecycle: Mutex::new(LifecycleState {
+            lifecycle: Mutex::new(ConnectionLifecycle {
                 logical: LogicalState::PendingOpen,
                 in_flight: 0,
-                physical_complete: false,
+                root_io_complete: false,
             }),
         });
-        let physical = PhysicalConnectionGuard {
+        let root_io = RootIoGuard {
             connection: connection.clone(),
             active: true,
         };
-        (connection, physical)
+        (connection, root_io)
     }
 
     /// Opens dispatch commitment and transfers optional bounded capacity.
@@ -267,38 +266,37 @@ impl ConnectionState {
         if !matches!(lifecycle.logical, LogicalState::PendingOpen) {
             return Err(lease);
         }
-        lifecycle.logical = LogicalState::Open { lease };
+        lifecycle.logical = LogicalState::Open { capacity: lease };
         Ok(())
     }
 
     /// Creates a connection whose origin has no admission bound.
     ///
-    /// The returned guard is the unique physical-lifetime owner and must move
-    /// with the root I/O task.
+    /// The returned guard is the unique root-I/O owner and must move with the
+    /// root I/O task.
     #[cfg(test)]
-    pub(super) fn unbounded(info: Arc<ConnectionInfo>) -> (Arc<Self>, PhysicalConnectionGuard) {
-        let (connection, physical) = Self::pending_open(info);
+    pub(super) fn unbounded(info: Arc<ConnectionInfo>) -> (Arc<Self>, RootIoGuard) {
+        let (connection, root_io) = Self::pending_open(info);
         connection
             .open(None)
             .expect("new unbounded connection could not open");
-        (connection, physical)
+        (connection, root_io)
     }
 
     /// Creates a connection that takes ownership of one bounded-origin slot.
     ///
-    /// The returned guard is the unique physical-lifetime owner and must move
-    /// with the root I/O task. Logical close returns `lease` independently of
-    /// that guard.
+    /// The returned guard is the unique root-I/O owner and must move with the
+    /// root I/O task. Logical close returns `lease` independently of that guard.
     #[cfg(test)]
     pub(super) fn bounded(
         info: Arc<ConnectionInfo>,
         lease: CapacityLease,
-    ) -> (Arc<Self>, PhysicalConnectionGuard) {
-        let (connection, physical) = Self::pending_open(info);
+    ) -> (Arc<Self>, RootIoGuard) {
+        let (connection, root_io) = Self::pending_open(info);
         connection
             .open(Some(lease))
             .expect("new bounded connection could not open");
-        (connection, physical)
+        (connection, root_io)
     }
 
     /// Returns this connection's stable identity.
@@ -353,8 +351,8 @@ impl ConnectionState {
                     lifecycle.logical = LogicalState::Closed { reason };
                     None
                 }
-                LogicalState::Open { lease } => {
-                    let lease = lease.take();
+                LogicalState::Open { capacity } => {
+                    let lease = capacity.take();
                     lifecycle.logical = LogicalState::Closed { reason };
                     lease
                 }
@@ -411,8 +409,8 @@ impl ConnectionState {
         refined
     }
 
-    /// Verifies a close reason at a protocol handoff boundary in debug builds.
-    #[cfg(debug_assertions)]
+    /// Verifies a close reason at a protocol handoff boundary in debug builds and tests.
+    #[cfg(any(debug_assertions, test))]
     pub(super) fn debug_assert_close_reason(&self, expected: CloseReason) {
         let lifecycle = self.lifecycle.lock();
         let actual = match lifecycle.logical {
@@ -424,7 +422,7 @@ impl ConnectionState {
     }
 
     /// Removes one dispatch previously committed by [`Self::try_commit_dispatch`].
-    fn finish_dispatch(&self) {
+    fn release_dispatch(&self) {
         let mut lifecycle = self.lifecycle.lock();
         lifecycle.in_flight = lifecycle
             .in_flight
@@ -436,15 +434,15 @@ impl ConnectionState {
     ///
     /// # Panics
     ///
-    /// Panics if physical ownership completes more than once.
-    fn finish_physical(&self) {
+    /// Panics if root-I/O ownership completes more than once.
+    fn release_root_io(&self) {
         {
             let mut lifecycle = self.lifecycle.lock();
             assert!(
-                !lifecycle.physical_complete,
-                "physical connection ownership completed more than once"
+                !lifecycle.root_io_complete,
+                "connection root-I/O ownership completed more than once"
             );
-            lifecycle.physical_complete = true;
+            lifecycle.root_io_complete = true;
         }
         tracing::debug!(
             connection_id = %self.id(),
@@ -458,16 +456,16 @@ impl ConnectionState {
 
     /// Returns a consistent lifecycle snapshot.
     #[cfg(test)]
-    pub(super) fn snapshot(&self) -> ConnectionSnapshot {
+    pub(super) fn probe(&self) -> ConnectionProbe {
         let lifecycle = self.lifecycle.lock();
-        ConnectionSnapshot {
+        ConnectionProbe {
             close_reason: match lifecycle.logical {
                 LogicalState::PendingOpen => None,
                 LogicalState::Open { .. } => None,
                 LogicalState::Closed { reason } => Some(reason),
             },
             in_flight: lifecycle.in_flight,
-            physical_complete: lifecycle.physical_complete,
+            root_io_complete: lifecycle.root_io_complete,
         }
     }
 }
@@ -484,13 +482,13 @@ impl fmt::Debug for ConnectionState {
 #[cfg(test)]
 /// Observable lifecycle state used by protocol coordination and focused tests.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct ConnectionSnapshot {
+pub(super) struct ConnectionProbe {
     /// Reason logical close won, or `None` while dispatch is accepted.
     pub(super) close_reason: Option<CloseReason>,
     /// Number of dispatches that have not completed.
     pub(super) in_flight: usize,
     /// Whether root-I/O ownership has completed.
-    pub(super) physical_complete: bool,
+    pub(super) root_io_complete: bool,
 }
 
 /// One dispatch that committed before logical close.
@@ -515,16 +513,16 @@ impl DispatchGuard {
     ///
     /// Dropping an uncompleted guard performs the same accounting as a
     /// cancellation fallback.
-    pub(super) fn complete(mut self) {
+    pub(super) fn release(mut self) {
         self.active = false;
-        self.connection.finish_dispatch();
+        self.connection.release_dispatch();
     }
 }
 
 impl Drop for DispatchGuard {
     fn drop(&mut self) {
         if self.active {
-            self.connection.finish_dispatch();
+            self.connection.release_dispatch();
         }
     }
 }
@@ -535,29 +533,29 @@ impl Drop for DispatchGuard {
 /// protocol drain or upgrade. Completion says only that the pool no longer
 /// owns the root transport; the operating system may continue TCP teardown.
 #[derive(Debug)]
-pub(super) struct PhysicalConnectionGuard {
-    /// Shared state whose physical lifetime this guard owns.
+pub(super) struct RootIoGuard {
+    /// Shared state whose root-I/O lifetime this guard owns.
     connection: Arc<ConnectionState>,
-    /// Whether `Drop` still owes physical completion.
+    /// Whether `Drop` still owes root-I/O completion.
     active: bool,
 }
 
-impl PhysicalConnectionGuard {
+impl RootIoGuard {
     /// Consumes the guard and records root-I/O completion immediately.
     ///
     /// Dropping an uncompleted guard performs the same transition during task
     /// cancellation or runtime shutdown.
     #[cfg(test)]
-    pub(super) fn complete(mut self) {
+    pub(super) fn release(mut self) {
         self.active = false;
-        self.connection.finish_physical();
+        self.connection.release_root_io();
     }
 }
 
-impl Drop for PhysicalConnectionGuard {
+impl Drop for RootIoGuard {
     fn drop(&mut self) {
         if self.active {
-            self.connection.finish_physical();
+            self.connection.release_root_io();
         }
     }
 }
@@ -573,15 +571,15 @@ pin_project! {
         #[pin]
         inner: T,
         // Declared after `inner` so transport destruction precedes the
-        // physical-completion signal.
-        physical: PhysicalConnectionGuard,
+        // root-I/O completion signal.
+        root_io: RootIoGuard,
     }
 }
 
 impl<T> ConnectionIo<T> {
-    /// Attaches the unique physical-lifetime guard to root transport I/O.
-    pub(super) fn new(inner: T, physical: PhysicalConnectionGuard) -> Self {
-        Self { inner, physical }
+    /// Attaches the unique ownership guard to root transport I/O.
+    pub(super) fn new(inner: T, root_io: RootIoGuard) -> Self {
+        Self { inner, root_io }
     }
 
     /// Returns the wrapped transport.
@@ -668,70 +666,64 @@ mod tests {
     }
 
     #[test]
-    fn logical_close_releases_capacity_before_physical_completion() {
+    fn logical_close_releases_capacity_before_root_io_completion() {
         let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
         let lease = OriginAdmission::lease_for_test(&origin);
-        let (connection, physical) = ConnectionState::bounded(test_info(1), lease);
+        let (connection, root_io) = ConnectionState::bounded(test_info(1), lease);
 
         assert!(connection.logical_close(CloseReason::Reclaimed));
         assert!(!connection.logical_close(CloseReason::PoolDropped));
         assert_eq!(1, origin.available_capacity_for_test());
-        assert!(!connection.snapshot().physical_complete);
+        assert!(!connection.probe().root_io_complete);
         assert_eq!(
             Some(CloseReason::Reclaimed),
-            connection.snapshot().close_reason
+            connection.probe().close_reason
         );
 
-        drop(physical);
-        assert!(connection.snapshot().physical_complete);
+        drop(root_io);
+        assert!(connection.probe().root_io_complete);
     }
 
     #[test]
     fn upgrade_refines_only_a_driver_observed_protocol_close() {
         let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
         let lease = OriginAdmission::lease_for_test(&origin);
-        let (connection, _physical) = ConnectionState::bounded(test_info(1), lease);
+        let (connection, _root_io) = ConnectionState::bounded(test_info(1), lease);
 
         assert!(connection.logical_close(CloseReason::ProtocolClosed));
         assert!(connection.refine_protocol_close_as_upgrade());
-        assert_eq!(
-            Some(CloseReason::Upgraded),
-            connection.snapshot().close_reason
-        );
+        assert_eq!(Some(CloseReason::Upgraded), connection.probe().close_reason);
         assert_eq!(1, origin.available_capacity_for_test());
         assert!(!connection.refine_protocol_close_as_upgrade());
 
-        let (poisoned, _physical) = ConnectionState::unbounded(test_info(2));
+        let (poisoned, _root_io) = ConnectionState::unbounded(test_info(2));
         assert!(poisoned.logical_close(CloseReason::Poisoned));
         assert!(!poisoned.refine_protocol_close_as_upgrade());
-        assert_eq!(
-            Some(CloseReason::Poisoned),
-            poisoned.snapshot().close_reason
-        );
+        assert_eq!(Some(CloseReason::Poisoned), poisoned.probe().close_reason);
     }
 
     #[test]
     fn committed_dispatch_drains_after_logical_close() {
-        let (connection, _physical) = ConnectionState::unbounded(test_info(1));
+        let (connection, _root_io) = ConnectionState::unbounded(test_info(1));
         let dispatch = ConnectionState::try_commit_dispatch(&connection).unwrap();
         assert_eq!(ConnectionId::new(1), dispatch.connection_id());
 
         assert!(connection.logical_close(CloseReason::ProtocolClosed));
         assert!(ConnectionState::try_commit_dispatch(&connection).is_none());
-        assert_eq!(1, connection.snapshot().in_flight);
+        assert_eq!(1, connection.probe().in_flight);
 
-        dispatch.complete();
-        assert_eq!(0, connection.snapshot().in_flight);
+        dispatch.release();
+        assert_eq!(0, connection.probe().in_flight);
     }
 
     #[test]
-    fn physical_guard_is_created_once_with_the_connection() {
-        let (connection, physical) = ConnectionState::unbounded(test_info(1));
+    fn root_io_guard_is_created_once_with_the_connection() {
+        let (connection, root_io) = ConnectionState::unbounded(test_info(1));
         assert_eq!(ConnectionId::new(1), connection.id());
         assert_eq!(PartitionId::from_index(0), connection.owner_partition());
-        assert!(!connection.snapshot().physical_complete);
-        physical.complete();
-        assert!(connection.snapshot().physical_complete);
+        assert!(!connection.probe().root_io_complete);
+        root_io.release();
+        assert!(connection.probe().root_io_complete);
     }
 
     #[test]
@@ -750,7 +742,7 @@ mod tests {
                 .proxy(true)
                 .extra(ConnectorMarker("connector-extra")),
         );
-        let (connection, _physical) = ConnectionState::unbounded(info);
+        let (connection, _root_io) = ConnectionState::unbounded(info);
 
         assert_eq!(ConnectionId::new(7), connection.info().id());
         assert_eq!(&origin, connection.info().origin());
@@ -768,15 +760,15 @@ mod tests {
     }
 
     #[test]
-    fn root_io_drop_completes_physical_lifetime() {
-        let (connection, physical) = ConnectionState::unbounded(test_info(1));
-        let io = ConnectionIo::new("transport", physical);
+    fn root_io_drop_completes_pool_ownership() {
+        let (connection, root_io) = ConnectionState::unbounded(test_info(1));
+        let io = ConnectionIo::new("transport", root_io);
         assert_eq!(&"transport", io.get_ref());
-        assert!(!connection.snapshot().physical_complete);
+        assert!(!connection.probe().root_io_complete);
 
         drop(io);
 
-        assert!(connection.snapshot().physical_complete);
+        assert!(connection.probe().root_io_complete);
     }
 }
 
@@ -793,7 +785,7 @@ mod loom_tests {
     #[test]
     fn dispatch_commit_linearizes_against_close() {
         loom::model(|| {
-            let (connection, _physical) = ConnectionState::unbounded(test_info(1));
+            let (connection, _root_io) = ConnectionState::unbounded(test_info(1));
 
             let dispatch_connection = connection.clone();
             let dispatch = loom::thread::spawn(move || {
@@ -806,16 +798,16 @@ mod loom_tests {
 
             let dispatch = dispatch.join().unwrap();
             assert!(close.join().unwrap());
-            let snapshot = connection.snapshot();
-            assert_eq!(Some(CloseReason::ProtocolClosed), snapshot.close_reason);
+            let probe = connection.probe();
+            assert_eq!(Some(CloseReason::ProtocolClosed), probe.close_reason);
             assert!(ConnectionState::try_commit_dispatch(&connection).is_none());
             match dispatch {
                 Some(dispatch) => {
-                    assert_eq!(1, snapshot.in_flight);
+                    assert_eq!(1, probe.in_flight);
                     drop(dispatch);
-                    assert_eq!(0, connection.snapshot().in_flight);
+                    assert_eq!(0, connection.probe().in_flight);
                 }
-                None => assert_eq!(0, snapshot.in_flight),
+                None => assert_eq!(0, probe.in_flight),
             }
         });
     }
@@ -825,7 +817,7 @@ mod loom_tests {
         loom::model(|| {
             let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
             let lease = OriginAdmission::lease_for_test(&origin);
-            let (connection, _physical) = ConnectionState::bounded(test_info(1), lease);
+            let (connection, _root_io) = ConnectionState::bounded(test_info(1), lease);
             let first_connection = connection.clone();
             let first =
                 loom::thread::spawn(move || first_connection.logical_close(CloseReason::Poisoned));
@@ -838,7 +830,7 @@ mod loom_tests {
             let second = second.join().unwrap();
             assert_ne!(first, second);
             assert_eq!(1, origin.available_capacity_for_test());
-            let reason = connection.snapshot().close_reason.unwrap();
+            let reason = connection.probe().close_reason.unwrap();
             assert!(matches!(
                 reason,
                 CloseReason::Poisoned | CloseReason::PoolDropped

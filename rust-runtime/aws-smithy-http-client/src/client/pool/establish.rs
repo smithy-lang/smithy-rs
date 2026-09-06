@@ -28,6 +28,7 @@ use super::admission::ProtocolRequirement;
 use super::cell::{AcquisitionOutcome, EstablishmentPermit, WaiterId};
 use super::dispatch::AcquisitionContext;
 use super::PoolInner;
+use crate::client::downcast_error;
 use aws_smithy_runtime_api::client::connection::ConnectionId;
 use aws_smithy_runtime_api::client::result::ConnectorError;
 use std::error::Error;
@@ -67,9 +68,9 @@ pub(super) async fn establish(
                 error = ?error,
                 "transport establishment failed"
             );
-            return EstablishmentOutcome::Complete(AcquisitionOutcome::Failed(
-                super::super::downcast_error(error),
-            ));
+            return EstablishmentOutcome::Complete(AcquisitionOutcome::Failed(downcast_error(
+                error,
+            )));
         }
     };
     let connected = io.connected();
