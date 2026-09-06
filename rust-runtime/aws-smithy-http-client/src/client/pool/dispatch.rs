@@ -31,7 +31,7 @@ use self::h2::H2DispatchResult;
 use super::admission::ProtocolRequirement;
 use super::cell::h1::H1Selection;
 use super::cell::h2::H2Activation;
-use super::cell::{AcquisitionEvent, AcquisitionResult, OriginCell, WaiterId};
+use super::cell::{AcquisitionOutcome, AcquisitionStep, OriginCell, WaiterId};
 use super::establish::{self, TransportTimeout};
 use super::partition::DriverSpawner;
 use super::registry::PartitionState;
@@ -221,11 +221,11 @@ async fn acquire_for_dispatch(
         let mut waiter_guard = WaiterGuard::new(context.cell.clone(), waiter);
         loop {
             match poll_fn(|cx| context.cell.poll_waiter(waiter, cx)).await {
-                AcquisitionEvent::Complete(AcquisitionResult::H1(selection)) => {
+                AcquisitionStep::Resolved(AcquisitionOutcome::H1(selection)) => {
                     waiter_guard.disarm();
                     return Ok(DispatchTarget::H1(selection));
                 }
-                AcquisitionEvent::Complete(AcquisitionResult::H2(activation)) => {
+                AcquisitionStep::Resolved(AcquisitionOutcome::H2(activation)) => {
                     waiter_guard.disarm();
                     OriginCell::service_h2_waiters(&context.cell);
                     OriginCell::service_peer_h2_waiters(&context.cell);
@@ -240,15 +240,15 @@ async fn acquire_for_dispatch(
                     );
                     return Ok(DispatchTarget::H2(activation));
                 }
-                AcquisitionEvent::Complete(AcquisitionResult::Failed(error)) => {
+                AcquisitionStep::Resolved(AcquisitionOutcome::Failed(error)) => {
                     waiter_guard.disarm();
                     return Err(error);
                 }
-                AcquisitionEvent::Complete(AcquisitionResult::Reacquire) => {
+                AcquisitionStep::Resolved(AcquisitionOutcome::RetryAcquisition) => {
                     waiter_guard.disarm();
                     continue 'acquire;
                 }
-                AcquisitionEvent::Establish(permit) => {
+                AcquisitionStep::StartEstablishment(permit) => {
                     tracing::trace!(
                         request_partition = ?context.partition.id(),
                         origin_scheme = %context.cell.id().origin().scheme(),
@@ -323,7 +323,7 @@ impl EstablishmentCompletionGuard {
         self.cell.start_establishment(self.waiter)
     }
 
-    fn complete(mut self, result: AcquisitionResult) {
+    fn complete(mut self, result: AcquisitionOutcome) {
         self.active = false;
         self.cell.complete_establishment(self.waiter, result);
     }
@@ -338,7 +338,7 @@ impl Drop for EstablishmentCompletionGuard {
         if self.active {
             let error = ConnectorError::io(EstablishmentTaskDropped.into());
             self.cell
-                .complete_establishment(self.waiter, AcquisitionResult::Failed(error));
+                .complete_establishment(self.waiter, AcquisitionOutcome::Failed(error));
             tracing::debug!(
                 request_partition = ?self.cell.id().partition(),
                 connection_partition = ?self.cell.id().partition(),
@@ -363,7 +363,7 @@ impl std::fmt::Display for EstablishmentTaskDropped {
 
 impl std::error::Error for EstablishmentTaskDropped {}
 
-/// Cancels a request's waiter until it consumes a terminal acquisition result.
+/// Cancels a request's waiter until it consumes a terminal acquisition outcome.
 struct WaiterGuard {
     cell: Arc<OriginCell>,
     waiter: WaiterId,

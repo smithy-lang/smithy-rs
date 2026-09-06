@@ -51,12 +51,12 @@
 //! temporarily be the ready result in that same cell; cell teardown makes the
 //! fallback close the connection directly.
 
-use super::super::admission::reuse::{
-    H1AvailabilitySnapshot, PreparedReuseInstall, ReuseCandidate, ReuseId, ReuseInstallResult,
+use super::super::admission::{
+    AdmissionAction, H1Candidate, H1MatchId, H1ReservationDecision, H1SupplyStatus,
+    OriginAdmission, PreparedH1Reservation, SupplyRevision,
 };
-use super::super::admission::{AdmissionAction, OriginAdmission};
 use super::super::connection::{CloseReason, ConnectionState};
-use super::{AcquisitionResult, OriginCell, ReuseInstall};
+use super::{AcquisitionOutcome, OriginCell};
 use crate::sync::{Arc, Weak};
 use aws_smithy_runtime_api::client::connection::ConnectionId;
 use std::collections::{HashMap, VecDeque};
@@ -160,42 +160,42 @@ enum H1ReuseReservationState {
     #[default]
     Available,
     /// The next reusable sender return is reserved for this reuse operation.
-    Installed(ReuseId),
+    Installed(H1MatchId),
     /// A provisional sender is outside the connection-owning cell lock for this reuse operation.
-    Resolving(ReuseId),
+    Resolving(H1MatchId),
 }
 
 impl H1ReuseReservation {
     /// Installs a reuse operation that will intercept a future reusable return.
-    pub(super) fn install(&mut self, reuse_id: ReuseId) -> bool {
+    pub(super) fn install(&mut self, match_id: H1MatchId) -> bool {
         if !matches!(self.state, H1ReuseReservationState::Available) {
             return false;
         }
-        self.state = H1ReuseReservationState::Installed(reuse_id);
+        self.state = H1ReuseReservationState::Installed(match_id);
         true
     }
 
     /// Installs a reuse operation that has already extracted an idle sender.
-    pub(super) fn install_resolving(&mut self, reuse_id: ReuseId) -> bool {
+    pub(super) fn install_resolving(&mut self, match_id: H1MatchId) -> bool {
         if !matches!(self.state, H1ReuseReservationState::Available) {
             return false;
         }
-        self.state = H1ReuseReservationState::Resolving(reuse_id);
+        self.state = H1ReuseReservationState::Resolving(match_id);
         true
     }
 
     /// Reserves the next reusable return for an installed reuse operation.
-    pub(super) fn intercept_return(&mut self) -> Option<ReuseId> {
-        let H1ReuseReservationState::Installed(reuse_id) = self.state else {
+    pub(super) fn intercept_return(&mut self) -> Option<H1MatchId> {
+        let H1ReuseReservationState::Installed(match_id) = self.state else {
             return None;
         };
-        self.state = H1ReuseReservationState::Resolving(reuse_id);
-        Some(reuse_id)
+        self.state = H1ReuseReservationState::Resolving(match_id);
+        Some(match_id)
     }
 
     /// Clears a matching reuse operation without earning a local fairness turn.
-    pub(super) fn reject(&mut self, reuse_id: ReuseId) -> bool {
-        if !self.names(reuse_id) {
+    pub(super) fn reject(&mut self, match_id: H1MatchId) -> bool {
+        if !self.names(match_id) {
             return false;
         }
         self.state = H1ReuseReservationState::Available;
@@ -203,8 +203,8 @@ impl H1ReuseReservation {
     }
 
     /// Completes an irreversible transfer and records any usable local turn.
-    pub(super) fn complete_transfer(&mut self, reuse_id: ReuseId, local_h1_demand: bool) -> bool {
-        if !matches!(self.state, H1ReuseReservationState::Resolving(current) if current == reuse_id)
+    pub(super) fn complete_transfer(&mut self, match_id: H1MatchId, local_h1_demand: bool) -> bool {
+        if !matches!(self.state, H1ReuseReservationState::Resolving(current) if current == match_id)
         {
             return false;
         }
@@ -242,11 +242,11 @@ impl H1ReuseReservation {
     }
 
     /// Returns whether this reservation still names the given operation.
-    pub(super) fn names(&self, reuse_id: ReuseId) -> bool {
+    pub(super) fn names(&self, match_id: H1MatchId) -> bool {
         matches!(
             self.state,
             H1ReuseReservationState::Installed(current) | H1ReuseReservationState::Resolving(current)
-                if current == reuse_id
+                if current == match_id
         )
     }
 
@@ -1102,9 +1102,9 @@ impl OriginCell {
             let mut state = cell.state.lock();
             let installed = state.h1.install_selected(connection, sender);
             state.assert_consistent();
-            (installed, state.take_h1_availability_update())
+            (installed, state.take_h1_supply_update())
         };
-        cell.publish_h1_availability(availability);
+        cell.submit_h1_supply_update(availability);
         match installed {
             Ok(owner) => H1Selection::new(cell, owner),
             Err(owner) => {
@@ -1133,9 +1133,9 @@ impl OriginCell {
             let mut state = cell.state.lock();
             let installed = state.h1.install_idle(connection, sender, deadline);
             state.assert_consistent();
-            (installed, state.take_h1_availability_update())
+            (installed, state.take_h1_supply_update())
         };
-        cell.publish_h1_availability(availability);
+        cell.submit_h1_supply_update(availability);
         if let Err(owner) = installed {
             owner
                 .connection()
@@ -1158,73 +1158,78 @@ impl OriginCell {
             let availability = cell
                 .admission
                 .as_ref()
-                .and_then(|_| state.take_h1_availability_update());
+                .and_then(|_| state.take_h1_supply_update());
             (owner, availability)
         };
-        cell.publish_h1_availability(availability);
+        cell.submit_h1_supply_update(availability);
         let owner = owner?;
         Some(H1Selection::new(cell, owner))
     }
 
-    /// Reserves this cell's selected connection for one peer reuse operation.
-    pub(in crate::client::pool) fn install_h1_reuse(
+    /// Commits one admission-selected supplier reservation at this cell.
+    pub(in crate::client::pool) fn commit_h1_reservation(
         cell: &Arc<Self>,
-        origin: Arc<OriginAdmission>,
-        prepared: PreparedReuseInstall,
+        admission: Arc<OriginAdmission>,
+        prepared: PreparedH1Reservation,
     ) -> Option<AdmissionAction> {
         let decision = {
             let mut state = cell.state.lock();
-            state.install_reuse(prepared.id)
+            state.install_reuse(prepared.match_id)
         };
 
-        let result = match decision {
-            ReuseInstall::Installed => ReuseInstallResult::Installed,
-            ReuseInstall::Candidate(owner) => {
+        let decision = match decision {
+            H1ReservationDecision::Installed => H1ReservationDecision::Installed,
+            H1ReservationDecision::Candidate(owner) => {
                 let provisional = ProvisionalH1::new(cell, owner);
-                ReuseInstallResult::Candidate(ReuseCandidate::new(
-                    origin.clone(),
-                    prepared.id,
+                H1ReservationDecision::Candidate(H1Candidate::new(
+                    admission.clone(),
+                    prepared.match_id,
                     cell.id.partition(),
                     provisional,
                 ))
             }
-            ReuseInstall::Rejected(availability) => ReuseInstallResult::Rejected(availability),
+            H1ReservationDecision::Rejected(revision) => H1ReservationDecision::Rejected(revision),
         };
-        OriginAdmission::finish_h1_reuse_install(&origin, prepared.id, cell.id.partition(), result)
+        OriginAdmission::settle_h1_reservation(
+            &admission,
+            prepared.match_id,
+            cell.id.partition(),
+            decision,
+        )
     }
 
     /// Clears an installed or resolving reservation after request cancellation.
-    pub(in crate::client::pool) fn cancel_h1_reuse(
+    pub(in crate::client::pool) fn cancel_h1_reservation(
         &self,
-        reuse_id: ReuseId,
-    ) -> H1AvailabilitySnapshot {
-        self.state.lock().cancel_reuse(reuse_id)
+        match_id: H1MatchId,
+    ) -> SupplyRevision<H1SupplyStatus> {
+        self.state.lock().cancel_reuse(match_id)
     }
 
     /// Returns a rejected provisional sender through ordinary connection-owning cell handling.
-    pub(in crate::client::pool) fn reject_h1_reuse_candidate(
+    pub(in crate::client::pool) fn reject_h1_match(
         cell: &Arc<Self>,
-        reuse_id: ReuseId,
+        match_id: H1MatchId,
         provisional: ProvisionalH1,
-    ) -> H1AvailabilitySnapshot {
+    ) -> SupplyRevision<H1SupplyStatus> {
         {
             let mut state = cell.state.lock();
-            state.reject_reuse_candidate(reuse_id);
+            state.reject_reuse_candidate(match_id);
         }
         drop(provisional);
         let mut state = cell.state.lock();
         state.assert_consistent();
-        state.report_h1_availability()
+        state.current_h1_supply_revision()
     }
 
-    /// Revalidates a reuse operation and commits its provisional sender for dispatch.
-    pub(in crate::client::pool) fn commit_h1_reuse(
+    /// Revalidates one match and commits its provisional sender for dispatch.
+    pub(in crate::client::pool) fn commit_h1_match(
         cell: &Arc<Self>,
-        reuse_id: ReuseId,
+        match_id: H1MatchId,
         provisional: ProvisionalH1,
     ) -> Result<H1Selection, ProvisionalH1> {
         let (connection_cell, owner) = provisional.into_parts();
-        let committed = cell.state.lock().commit_reuse(reuse_id, &owner);
+        let committed = cell.state.lock().commit_reuse(match_id, &owner);
         if committed {
             Ok(H1Selection::new(cell, owner))
         } else {
@@ -1233,43 +1238,43 @@ impl OriginCell {
     }
 
     /// Closes a selected sender and records fairness only if close wins.
-    pub(in crate::client::pool) fn reclaim_h1_reuse(
+    pub(in crate::client::pool) fn reclaim_h1_candidate(
         cell: &Arc<Self>,
-        reuse_id: ReuseId,
+        match_id: H1MatchId,
         provisional: ProvisionalH1,
-    ) -> Result<(H1AvailabilitySnapshot, bool), ProvisionalH1> {
+    ) -> Result<(SupplyRevision<H1SupplyStatus>, bool), ProvisionalH1> {
         let (connection_cell, owner) = provisional.into_parts();
-        if !cell.state.lock().reuse.names(reuse_id) {
+        if !cell.state.lock().reuse.names(match_id) {
             return Err(ProvisionalH1::from_parts(connection_cell, owner));
         }
 
         let close_won = Self::retire_h1_owner(cell, owner, CloseReason::Reclaimed);
         let availability = {
             let mut state = cell.state.lock();
-            let availability = state.finish_reuse(reuse_id, close_won);
+            let revision = state.finish_reuse(match_id, close_won);
             state.assert_consistent();
-            availability
+            revision
         };
         Ok((availability, close_won))
     }
 
-    /// Completes local reuse state after a requesting cell accepts the sender.
-    pub(in crate::client::pool) fn complete_h1_reuse(
+    /// Completes local match state after a requesting cell accepts the sender.
+    pub(in crate::client::pool) fn complete_h1_match(
         &self,
-        reuse_id: ReuseId,
+        match_id: H1MatchId,
         transferred: bool,
-    ) -> H1AvailabilitySnapshot {
-        self.state.lock().finish_reuse(reuse_id, transferred)
+    ) -> SupplyRevision<H1SupplyStatus> {
+        self.state.lock().finish_reuse(match_id, transferred)
     }
 
-    /// Publishes this cell's HTTP/1 availability when the origin is bounded.
-    pub(super) fn publish_h1_availability(&self, availability: Option<H1AvailabilitySnapshot>) {
-        if let (Some(admission), Some(availability)) = (&self.admission, availability) {
-            OriginAdmission::update_h1_availability(
+    /// Submits this cell's changed HTTP/1 supply when the origin is bounded.
+    pub(super) fn submit_h1_supply_update(&self, revision: Option<SupplyRevision<H1SupplyStatus>>) {
+        if let (Some(admission), Some(revision)) = (&self.admission, revision) {
+            OriginAdmission::apply_h1_supply_revision(
                 admission,
                 self.id.partition(),
                 self.eligibility_group.clone(),
-                availability,
+                revision,
             );
         }
     }
@@ -1285,7 +1290,7 @@ impl OriginCell {
         let mut owner = Some(owner);
         let mut installation = None;
         let mut intercepted = None;
-        let mut rejected_reuse = None;
+        let mut rejected_match = None;
         let idle_deadline = cell.idle_deadline();
         let should_retire = {
             let mut state = cell.state.lock();
@@ -1293,30 +1298,30 @@ impl OriginCell {
                 .h1
                 .accepts_return(owner.as_ref().expect("HTTP/1 owner disappeared"));
             if !returnable {
-                if let Some(reuse_id) = state.reuse.intercept_return() {
-                    let snapshot = state.finish_reuse(reuse_id, false);
-                    rejected_reuse = Some((reuse_id, snapshot));
+                if let Some(match_id) = state.reuse.intercept_return() {
+                    let revision = state.finish_reuse(match_id, false);
+                    rejected_match = Some((match_id, revision));
                 } else {
                     state.assert_consistent();
                 }
                 true
-            } else if let Some(reuse_id) = state.reuse.intercept_return() {
+            } else if let Some(match_id) = state.reuse.intercept_return() {
                 if state
                     .h1
                     .reserve_for_reuse(owner.as_ref().expect("HTTP/1 owner disappeared"))
                 {
                     state.assert_consistent();
                     intercepted = Some((
-                        reuse_id,
+                        match_id,
                         ProvisionalH1::new(cell, owner.take().expect("HTTP/1 owner disappeared")),
                     ));
                     false
                 } else {
-                    let snapshot = state.finish_reuse(reuse_id, false);
-                    rejected_reuse = Some((reuse_id, snapshot));
+                    let revision = state.finish_reuse(match_id, false);
+                    rejected_match = Some((match_id, revision));
                     true
                 }
-            } else if state.waiters.can_accept_h1()
+            } else if state.acquisitions.has_h1_compatible_waiter()
                 && state
                     .h1
                     .commit_return_to_waiter(owner.as_ref().expect("HTTP/1 owner disappeared"))
@@ -1325,18 +1330,16 @@ impl OriginCell {
                 state.assert_consistent();
                 let mut returned = owner.take().expect("HTTP/1 owner disappeared");
                 returned.mark_reused();
-                installation = Some(state.waiters.install_returned_h1(
-                    || AcquisitionResult::H1(H1Selection::new(cell, returned)),
+                let (waiter, mut install) = state.acquisitions.offer_returned_h1(
+                    || AcquisitionOutcome::H1(H1Selection::new(cell, returned)),
                     &cell.eligibility_group,
-                ));
-                let install = installation
-                    .as_mut()
-                    .expect("HTTP/1 installation disappeared");
-                if let Some(waiter) = install.waiter {
-                    state.h2.cancel_pending_waiter(waiter);
-                }
+                );
+                state.h2.cancel_pending_waiter(
+                    waiter.expect("compatible HTTP/1 waiter disappeared during offer"),
+                );
                 install.demand_updates =
                     state.publishable_demand_updates(std::mem::take(&mut install.demand_updates));
+                installation = Some(install);
                 false
             } else {
                 let returned = state.h1.return_idle(
@@ -1360,16 +1363,16 @@ impl OriginCell {
             if tracing::level_enabled!(tracing::Level::TRACE) {
                 trace_h1_return(cell, connection_id, H1ReturnTrace::Rejected);
             }
-            if let Some((reuse_id, snapshot)) = rejected_reuse {
+            if let Some((match_id, revision)) = rejected_match {
                 let admission = cell
                     .admission
                     .as_ref()
                     .expect("an HTTP/1 reuse operation requires bounded admission");
-                OriginAdmission::reject_returned_h1_reuse(
+                OriginAdmission::reject_returned_h1_match(
                     admission,
-                    reuse_id,
+                    match_id,
                     cell.id.partition(),
-                    snapshot,
+                    revision,
                 );
             }
             Self::retire_h1_owner(
@@ -1380,22 +1383,22 @@ impl OriginCell {
             return;
         }
 
-        if let Some((reuse_id, provisional)) = intercepted {
+        if let Some((match_id, provisional)) = intercepted {
             if tracing::level_enabled!(tracing::Level::TRACE) {
-                trace_h1_return(cell, connection_id, H1ReturnTrace::ReuseIntercepted);
+                trace_h1_return(cell, connection_id, H1ReturnTrace::MatchIntercepted);
             }
             let admission = cell
                 .admission
                 .as_ref()
                 .expect("an HTTP/1 reuse operation requires bounded admission");
-            let candidate = ReuseCandidate::new(
+            let candidate = H1Candidate::new(
                 admission.clone(),
-                reuse_id,
+                match_id,
                 cell.id.partition(),
                 provisional,
             );
-            let action = OriginAdmission::resolve_h1_reuse(admission, reuse_id, candidate);
-            OriginAdmission::drive(action);
+            let action = OriginAdmission::resolve_h1_match(admission, match_id, candidate);
+            OriginAdmission::run_action_chain(action);
             return;
         }
 
@@ -1405,8 +1408,8 @@ impl OriginCell {
             }
             cell.notify_maintenance(idle_deadline);
             if cell.admission.is_some() {
-                let availability = cell.state.lock().take_h1_availability_update();
-                cell.publish_h1_availability(availability);
+                let revision = cell.state.lock().take_h1_supply_update();
+                cell.submit_h1_supply_update(revision);
             }
             return;
         };
@@ -1415,16 +1418,16 @@ impl OriginCell {
         }
         if let Some(admission) = &cell.admission {
             for snapshot in installation.demand_updates.into_iter().flatten() {
-                OriginAdmission::publish_demand(admission, cell.id.partition(), snapshot);
+                OriginAdmission::submit_demand_snapshot(admission, cell.id.partition(), snapshot);
             }
         }
-        drop(installation.returned_event);
+        drop(installation.returned_step);
         if let Some(waker) = installation.waker {
             waker.wake();
         }
         if cell.admission.is_some() {
-            let availability = cell.state.lock().take_h1_availability_update();
-            cell.publish_h1_availability(availability);
+            let revision = cell.state.lock().take_h1_supply_update();
+            cell.submit_h1_supply_update(revision);
         }
     }
 
@@ -1446,9 +1449,9 @@ impl OriginCell {
         let mut state = cell.state.lock();
         state.h1.finish_close(id);
         state.assert_consistent();
-        let availability = state.take_h1_availability_update();
+        let revision = state.take_h1_supply_update();
         drop(state);
-        cell.publish_h1_availability(availability);
+        cell.submit_h1_supply_update(revision);
         won
     }
 
@@ -1460,12 +1463,12 @@ impl OriginCell {
             let mut state = cell.state.lock();
             let close = state.h1.begin_close(id);
             state.assert_consistent();
-            close.map(|close| (close, state.take_h1_availability_update()))
+            close.map(|close| (close, state.take_h1_supply_update()))
         }) else {
             return false;
         };
 
-        cell.publish_h1_availability(availability);
+        cell.submit_h1_supply_update(availability);
         let remove_record = close.sender.is_some();
         let won = close.connection.logical_close(reason);
         drop(close.sender);
@@ -1495,7 +1498,7 @@ enum H1ReturnTrace {
     /// The owning cell no longer accepts the sender.
     Rejected,
     /// Origin admission reserved the sender for peer demand.
-    ReuseIntercepted,
+    MatchIntercepted,
     /// No compatible demand exists, so the sender became idle.
     Idle,
     /// A waiter in the owning cell accepted the sender.
@@ -1516,7 +1519,7 @@ fn trace_h1_return(cell: &OriginCell, connection_id: ConnectionId, outcome: H1Re
             origin_port = ?cell.id.origin().port(),
             "HTTP/1 return was rejected by its connection-owning cell"
         ),
-        H1ReturnTrace::ReuseIntercepted => tracing::trace!(
+        H1ReturnTrace::MatchIntercepted => tracing::trace!(
             connection_id = %connection_id,
             connection_partition = ?cell.id.partition(),
             origin_scheme = %cell.id.origin().scheme(),
@@ -1568,11 +1571,11 @@ mod tests {
     }
     #[test]
     fn reuse_reservation_distinguishes_install_resolution_and_completion() {
-        let reuse_id = ReuseId::for_test(1);
+        let reuse_id = H1MatchId::for_test(1);
         let mut slot = H1ReuseReservation::default();
 
         assert!(slot.install(reuse_id));
-        assert!(!slot.install(ReuseId::for_test(2)));
+        assert!(!slot.install(H1MatchId::for_test(2)));
         assert_eq!(Some(reuse_id), slot.intercept_return());
         assert!(slot.complete_transfer(reuse_id, true));
         assert!(slot.local_turn_owed());
@@ -1581,7 +1584,7 @@ mod tests {
 
     #[test]
     fn rejection_does_not_manufacture_a_fairness_turn() {
-        let reuse_id = ReuseId::for_test(1);
+        let reuse_id = H1MatchId::for_test(1);
         let mut slot = H1ReuseReservation::default();
 
         assert!(slot.install_resolving(reuse_id));
@@ -1591,7 +1594,7 @@ mod tests {
 
     #[test]
     fn owed_turn_blocks_only_while_local_h1_demand_can_use_it() {
-        let reuse_id = ReuseId::for_test(1);
+        let reuse_id = H1MatchId::for_test(1);
         let mut slot = H1ReuseReservation::default();
         assert!(slot.install_resolving(reuse_id));
         assert!(slot.complete_transfer(reuse_id, true));

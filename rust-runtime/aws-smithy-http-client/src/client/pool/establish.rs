@@ -25,7 +25,7 @@ pub(super) use transport::{from_interface_connector, TransportFactory, Transport
 
 use self::transport::TransportConnectContext;
 use super::admission::ProtocolRequirement;
-use super::cell::{AcquisitionResult, EstablishmentPermit, WaiterId};
+use super::cell::{AcquisitionOutcome, EstablishmentPermit, WaiterId};
 use super::dispatch::AcquisitionContext;
 use super::PoolInner;
 use aws_smithy_runtime_api::client::connection::ConnectionId;
@@ -37,7 +37,7 @@ use std::sync::atomic::Ordering;
 /// Result of one owner-runtime establishment task.
 pub(super) enum EstablishmentOutcome {
     /// The launching waiter receives this terminal result.
-    Complete(AcquisitionResult),
+    Complete(AcquisitionOutcome),
     /// An H2 flight or generation now owns the launching waiter's completion.
     WaiterCompletionTransferred,
 }
@@ -67,7 +67,7 @@ pub(super) async fn establish(
                 error = ?error,
                 "transport establishment failed"
             );
-            return EstablishmentOutcome::Complete(AcquisitionResult::Failed(
+            return EstablishmentOutcome::Complete(AcquisitionOutcome::Failed(
                 super::super::downcast_error(error),
             ));
         }
@@ -86,7 +86,7 @@ pub(super) async fn establish(
     if negotiated_h2 && !requirement.accepts_h2() {
         drop(io);
         drop(permit);
-        return EstablishmentOutcome::Complete(AcquisitionResult::Failed(
+        return EstablishmentOutcome::Complete(AcquisitionOutcome::Failed(
             negotiated_protocol_mismatch(requirement),
         ));
     }
@@ -97,8 +97,8 @@ pub(super) async fn establish(
         EstablishmentOutcome::Complete(
             h1::establish_h1(context, permit, io, connected)
                 .await
-                .map(AcquisitionResult::H1)
-                .unwrap_or_else(AcquisitionResult::Failed),
+                .map(AcquisitionOutcome::H1)
+                .unwrap_or_else(AcquisitionOutcome::Failed),
         )
     }
 }
