@@ -27,11 +27,11 @@ use std::sync::Arc as StdArc;
 use std::task::{Context, Poll};
 
 /// Result of one HTTP/1 dispatch attempt while the pool owns the request.
-pub(super) enum H1DispatchResult {
+pub(super) enum H1DispatchOutcome {
     /// Hyper accepted the request and produced a guarded response.
     Response(Response<SdkBody>),
     /// The selection became stale or Hyper returned the request unsent.
-    Reacquire(Request<SdkBody>),
+    NotAccepted(Request<SdkBody>),
 }
 
 /// Attempts one dispatch through an acquired HTTP/1 selection.
@@ -43,7 +43,7 @@ pub(super) async fn dispatch(
     context: &AcquisitionContext,
     mut request: Request<SdkBody>,
     mut selection: H1Selection,
-) -> Result<H1DispatchResult, ConnectorError> {
+) -> Result<H1DispatchOutcome, ConnectorError> {
     let request_method = request.method().clone();
     let reused = selection.is_reused();
     let connection = selection.connection().clone();
@@ -86,7 +86,7 @@ pub(super) async fn dispatch(
         );
         *request.uri_mut() = context.absolute_uri.clone();
         selection.retire_connection(CloseReason::ProtocolClosed);
-        return Ok(H1DispatchResult::Reacquire(request));
+        return Ok(H1DispatchOutcome::NotAccepted(request));
     };
     let send = selection.sender_mut().hyper_mut().try_send_request(request);
 
@@ -99,7 +99,7 @@ pub(super) async fn dispatch(
             connection
                 .info()
                 .apply_connector_extras(response.extensions_mut());
-            Ok(H1DispatchResult::Response(guard_response(
+            Ok(H1DispatchOutcome::Response(guard_h1_response(
                 response,
                 request_method,
                 exchange,
@@ -122,7 +122,7 @@ pub(super) async fn dispatch(
                         "reused HTTP/1 connection returned request unsent"
                     );
                     *returned.uri_mut() = context.absolute_uri.clone();
-                    return Ok(H1DispatchResult::Reacquire(returned));
+                    return Ok(H1DispatchOutcome::NotAccepted(returned));
                 }
                 let metadata =
                     captured_metadata.unwrap_or_else(|| connection.info().metadata(close_handle));
@@ -148,7 +148,7 @@ pub(super) async fn dispatch(
 /// An ordinary response retains both guards until Hyper proves a complete
 /// message boundary. Successful CONNECT and `101` responses retire the pool
 /// record before the response exposes Hyper's upgraded root I/O.
-fn guard_response(
+fn guard_h1_response(
     response: Response<hyper::body::Incoming>,
     method: Method,
     exchange: H1Exchange,
@@ -204,14 +204,14 @@ impl H1ResponseBody {
     /// Completes response ownership using the current body-task waker.
     fn finish_with_context(&mut self, cx: &mut Context<'_>) {
         if let Some(lifecycle) = self.lifecycle.take() {
-            lifecycle.finish(Some(cx));
+            lifecycle.resolve(Some(cx));
         }
     }
 
     /// Completes response ownership without a task context when already ready.
     fn finish_without_context(&mut self) {
         if let Some(lifecycle) = self.lifecycle.take() {
-            lifecycle.finish(None);
+            lifecycle.resolve(None);
         }
     }
 
@@ -301,7 +301,7 @@ impl H1ResponseLifecycle {
     /// Readiness is first polled with the response body's task context when one
     /// is available. Pending readiness moves to an owner-runtime task so the
     /// completed body does not retain connection ownership.
-    fn finish(mut self, cx: Option<&mut Context<'_>>) {
+    fn resolve(mut self, cx: Option<&mut Context<'_>>) {
         let mut exchange = self
             .exchange
             .take()
@@ -629,7 +629,7 @@ mod tests {
             PartitionId::ANONYMOUS,
         ));
         let selection =
-            OriginCell::install_selected_h1(&cell, connection.clone(), H1Sender::test(11));
+            OriginCell::insert_selected_h1(&cell, connection.clone(), H1Sender::test(11));
 
         drop(H1ReadinessTask::new(selection.into_exchange()));
 
@@ -942,7 +942,7 @@ mod tests {
                 submitted: submitted.clone(),
             }),
         }
-        .finish(None);
+        .resolve(None);
 
         assert_eq!(baseline, submitted.load(Ordering::SeqCst));
     }

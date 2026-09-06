@@ -540,8 +540,8 @@ request on partition P for origin O
 That is the entire path for a reuse hit. It performs no origin-wide coordination, reads no other partition's
 state, and touches no `OriginAdmission` or peer index. Its synchronization is
 the requesting partition's own cell lock. A peer may acquire that lock to
-install or settle a bounded cross-cell reuse operation, so the lock can be
-contended, but the local hit does not consult origin-wide state. Its work is
+reserve or settle a bounded H1 match, so the lock can be contended, but the
+local hit does not consult origin-wide state. Its work is
 independent of partition count, and traffic for another origin does not share
 the cell.
 
@@ -913,7 +913,7 @@ local selection misses on cell C
   `-- publish complete snapshot R to OriginAdmission
         |
         +-- free permit
-        |     `-- create capacity delivery fence for R
+        |     `-- assign capacity to R
         |
         `-- no free permit
               `-- queue R in its origin order and applicable eligibility-group views
@@ -928,7 +928,7 @@ local selection misses on cell C
                     |     `-- borrow or reclaim for the oldest origin demand
                     |
                     `-- permit is released or reclaimed
-                          `-- create capacity delivery fence for R
+                          `-- assign capacity to R
 
 capacity delivery reaches C
   |
@@ -1003,73 +1003,78 @@ capacity lease to admission. The requesting cell can then establish on its own
 partition. Reclaim moves no dispatch or I/O authority and is not limited by the
 reuse scope.
 
-Admission retains one origin-wide FIFO and one FIFO per eligibility group over
-cells that own an HTTP/1 connection that is idle or may return. A cell appears
-at most once in each applicable view. It is removed from both views while a
-reuse operation is nonterminal or while a usable local fairness turn is owed,
-and is reinserted from its next complete availability report.
+`H1SupplyIndex` retains one origin-wide FIFO and one FIFO per eligibility
+group over cells that own an HTTP/1 connection that is idle or may return.
+A cell appears at most once in each applicable view. It is removed from both
+views while an H1 match is nonterminal or while a usable local fairness turn
+is owed, and is reinserted from its next complete supply revision.
 
-Every availability report carries a monotonic revision assigned under the
-connection-owning cell lock. Admission ignores an equal or older revision, so
-reports crossing the unlocked cell-to-admission boundary cannot hide newer
-state. An advertisement is a scheduling hint, not a connection handle or
+Every `SupplyRevision<H1SupplyStatus>` carries a monotonic revision assigned
+under the connection-owning cell lock. Admission ignores an equal or older
+revision, so values crossing the unlocked cell-to-admission boundary cannot
+hide newer state. The status is a policy input, not a connection handle or
 capacity owner.
 
-Borrow and reclaim share one cross-cell reuse protocol:
+Borrow and reclaim share one retained H1 match lifecycle:
 
 ```rust
-enum ReuseMode {
-    Borrow,
-    Reclaim,
+enum H1MatchKind {
+    BorrowSender,
+    ReclaimCapacity,
 }
 
-enum ReusePhase {
-    Installing,
-    Installed,
+enum H1MatchState {
+    Reserving,
+    WaitingForSender,
     Resolving,
     Cancelling,
 }
 
-struct ReuseOperation {
-    id: ReuseId,
-    connection_partition: PartitionId,
-    requesting_partition: PartitionId,
+struct H1Match {
+    supplier: PartitionId,
+    requester: PartitionId,
     demand: DemandId,
-    mode: ReuseMode,
-    phase: ReusePhase,
+    kind: H1MatchKind,
+    state: H1MatchState,
     cancelled: bool,
 }
 
-enum H1ReuseReservationState {
+enum H1ReservationState {
     Available,
-    Installed(ReuseId),
-    Resolving(ReuseId),
+    Installed(H1MatchId),
+    Resolving(H1MatchId),
 }
 
-struct H1ReuseReservation {
-    state: H1ReuseReservationState,
+struct H1Reservation {
+    state: H1ReservationState,
     local_turn_owed: bool,
+}
+
+struct H1CellState {
+    records: HashMap<ConnectionId, H1Record>,
+    idle_order: VecDeque<ConnectionId>,
+    peer_reservation: H1Reservation,
 }
 ```
 
-Admission owns `ReuseOperation`; the connection-owning cell owns
-`H1ReuseReservation`. Each connection-owning and requesting cell participates
-in at most one nonterminal operation at a time. The operation mode is fixed at
-selection. A reclaim selected from the origin-wide order cannot become a borrow
-because its cells may belong to different eligibility groups. A borrow could
-become a reclaim without violating eligibility, but keeping both modes fixed
-avoids adding a second terminal path after installation; a rejected operation
+Admission owns `H1Match`; the supplier cell owns `H1CellState` and its
+`H1Reservation`. Each supplier and requesting cell participates in at most one
+nonterminal match at a time. The match kind is fixed at selection. A reclaim
+selected from the origin-wide order cannot become a borrow because its cells
+may belong to different eligibility groups. A borrow could become a reclaim
+without violating eligibility, but keeping both kinds fixed avoids adding a
+second terminal path after reservation; a rejected match
 returns to admission for a fresh selection.
 
-An operation installs and resolves without nesting the admission,
-connection-owning-cell, or requesting-cell locks:
+A match reserves and resolves without nesting the admission, supplier-cell, or
+requesting-cell locks:
 
 ```text
 OriginAdmission owns queued demand R
   |
-  `-- select peer connection-owning cell C
-        `-- create ReuseOperation K in Installing
-              `-- install K under C's lock
+  `-- H1SupplyIndex selects peer supplier cell C
+        `-- retain H1Match K in Reserving
+              `-- reserve K under C's lock
         |
         +-- C owes a usable local turn
         |     `-- reject K; R stays queued
@@ -1078,7 +1083,7 @@ OriginAdmission owns queued demand R
         |     `-- reject K; R stays queued
         |
         +-- idle H1 available
-        |     `-- C reservation -> Resolving(K); candidate guard owns H1
+        |     `-- C reservation -> Resolving(K); H1Candidate owns sender
         |
         +-- active or returning H1 exists
         |     `-- C reservation -> Installed(K); reserve next reusable return
@@ -1087,25 +1092,25 @@ OriginAdmission owns queued demand R
               `-- reject K; R stays queued
 
 Installed(K) + reusable return at C
-  `-- C reservation -> Resolving(K); candidate guard owns H1
+  `-- C reservation -> Resolving(K); H1Candidate owns sender
 
 candidate reaches OriginAdmission
   |
   +-- K or R is stale, cancelled, or already satisfied
-  |     `-- candidate guard returns H1 through C's ordinary return path
+  |     `-- H1Candidate returns sender through C's ordinary return path
   |
-  +-- K is Borrow
-  |     `-- fence R as Delivering(R, D)
+  +-- K is BorrowSender
+  |     `-- create DemandAssignment D for R
   |           `-- commit C's candidate before reserving requesting-cell waiter
   |                 +-- accepted -> waiter owns H1 selection
-  |                 `-- rejected -> return H1 to C, then close D
+  |                 `-- refused -> return H1 to C, then retry D
   |
-  `-- K is Reclaim
+  `-- K is ReclaimCapacity
         `-- revalidate under C's lock and attempt logical close
               `-- released permit enters ordinary capacity delivery
 
-terminal C report
-  `-- remove K; refresh C's availability; schedule next action
+terminal H1SupplyOutcome
+  `-- remove K; apply C's latest supply revision; schedule next action
 ```
 
 A provisional candidate revalidates the connection generation, logical-close
@@ -1114,25 +1119,25 @@ state, idle policy, and matching cell reservation before it becomes an
 through ordinary owning-cell policy. If another close wins the reclaim race,
 the released permit still follows its normal exactly-once admission path.
 
-An installed reservation intercepts a reusable return under the
-connection-owning cell lock before the handle can become locally idle. Local
+An installed reservation intercepts a reusable return under the supplier-cell
+lock before the handle can become locally idle. Local
 H1-compatible demand that arrives after installation may therefore be
 overtaken once. An irreversible borrow or successful reclaim records one local
 fairness turn when compatible local demand exists. The next local H1 service
 consumes that turn; if compatible demand disappears first, the turn clears.
 An H2-required local head cannot consume the turn and does not block a reuse
-operation that can make progress.
+match that can make progress.
 
-Cancellation marks an installing or resolving operation stale. An installed
-reservation crosses back to the connection-owning cell and is cleared. A
+Cancellation marks a reserving or resolving match stale. An installed
+reservation crosses back to the supplier cell and is cleared. A
 candidate already outside the cell lock returns through ordinary owning-cell
 policy. Cancellation after irreversible transfer does not revoke an earned
 fairness turn.
 
-Every cross-lock action owns a typed fallback. Dropping an install or
-cancellation action clears the cell reservation and completes the admission
-operation. Dropping a candidate returns its request handle before the
-connection-owning cell is advertised again. Dropping a capacity delivery
+Every cross-lock action owns a typed fallback. Dropping an
+`H1ReservationAction` or `H1CancellationAction` clears the cell reservation and
+settles the admission match. Dropping an `H1Candidate` returns its sender before
+the supplier cell becomes selectable again. Dropping a `DeliveryGuard`
 returns the permit to admission. Fallbacks run no connector, protocol, wake,
 or listener code while a pool lock is held.
 
@@ -1144,7 +1149,7 @@ proportional to waiter or partition count, and schedules wakes or callbacks only
 
 Pool coordination uses a crate-level synchronization facade so production and Loom tests compile the same
 lock-bearing code. Production lock wrappers retain access to guarded state after standard-library poisoning so
-poisoning alone cannot prevent a later `Drop` fallback from returning a permit or closing a delivery fence.
+poisoning alone cannot prevent a later `Drop` fallback from returning a permit or settling a demand assignment.
 This does not make an interrupted state transition valid: code under a pool lock still preserves its
 invariants without relying on poison recovery. Test builds also assert that a thread holds at most one pool
 lock, turning the no-nesting rule into an executable check across the ordinary suite.
@@ -1168,18 +1173,18 @@ OriginAdmission(O)
   demand order:
     oldest -> C2/R8(H1) -> C0/R3(H2) -> C3/R5(H2) -> C1/R9(H1)
 
-  available H1 connection-owning cells:
+  selectable H1 supplier cells:
     origin view:       C0 -> C2 -> C3
     group eth0 view:   C0 -> C3
     group eth1 view:   C2
 ```
 
 The demand order contains the current head generation from every requesting
-cell waiting for origin capacity. An availability view contains a
-connection-owning cell at most once while it has an H1 record that may return
-or be reclaimed, has no nonterminal reuse operation, and owes no usable local
-turn or older local H1 candidate. Removing a cell repairs both views
-immediately, so grant work does not drain stale availability tickets.
+cell waiting for origin capacity. An H1 supply view contains a supplier cell at
+most once while it has an H1 record that may return or be reclaimed, has no
+nonterminal match, and owes no usable local turn or older local H1-compatible
+waiter. Removing a cell repairs both views immediately, so admission does not
+drain stale supply entries.
 
 HTTP/1 selection begins with the oldest origin demand:
 
@@ -1187,18 +1192,18 @@ HTTP/1 selection begins with the oldest origin demand:
 oldest origin demand R from requesting cell Q
   |
   +-- R accepts H1 and an eligible peer cell C exists
-  |     `-- install Borrow reuse(C, Q, R)
+  |     `-- retain BorrowSender match(C, Q, R)
   |
   +-- another peer H1 cell C exists
-  |     `-- install Reclaim reuse(C, Q, R)
+  |     `-- retain ReclaimCapacity match(C, Q, R)
   |
   `-- no peer connection
-        `-- wait for capacity, local service, or a later availability report
+        `-- wait for capacity, local service, or a later supply revision
 ```
 
-The connection selector skips the requesting cell. Same-cell idle selection
-and return are resolved under that cell's lock and do not create a cross-cell
-operation. Borrow takes the oldest eligible peer; reclaim takes the oldest
+The supply selector skips the requesting cell. Same-cell idle selection and
+return are resolved under that cell's lock and do not create a cross-cell
+match. Borrow takes the oldest eligible peer; reclaim takes the oldest
 origin-wide peer.
 
 The origin demand head is no younger than any eligibility-group demand head.
@@ -1222,132 +1227,136 @@ grant one resource is independent of the number of cells and partitions.
 
 #### Delivery
 
-A released permit or provisional H1 can serve only one waiter. It must cross from admission to a cell without
-being lost, copied, or left attached to a cancelled demand generation. An advertised H2 generation is different:
-the connection record retains its permit and many compatible requests may take request leases from it. The
-logical states keep these two cases separate:
+A released permit or provisional H1 can serve only one waiter. It must cross
+from admission to a cell without being lost, copied, or left attached to a
+cancelled demand generation. `DemandAssignment` names the exact requester and
+demand while that resource crosses lock domains:
 
 ```rust
-enum DemandResidence {
-    Idle,
+struct DemandAssignment {
+    id: DemandAssignmentId,
+    requester: PartitionId,
+    demand: DemandId,
+}
+
+enum DemandScheduleState {
+    Unscheduled,
     Queued {
         demand: DemandId,
-        links: OrderLinks,
+        links: DemandLinks,
     },
-    Delivering {
-        demand: DemandId,
-        delivery: DeliveryId,
-        links: OrderLinks,
+    PendingAssignment {
+        assignment: DemandAssignment,
+        version: SnapshotVersion,
+        selected_order: DemandOrder,
+        links: DemandLinks,
     },
 }
 
-enum AcquisitionPayload {
-    Capacity(Permit),
+enum DeliveryPayload {
+    Capacity(CapacityPermit),
     BorrowedH1 {
-        reuse_id: ReuseId,
-        connection_partition: PartitionId,
-        candidate: ReuseCandidate,
+        match_id: H1MatchId,
+        supplier: PartitionId,
+        candidate: H1Candidate,
     },
 }
 
-enum MaterializedPayload {
-    Capacity(EstablishmentPermit),
-    BorrowedH1 {
-        reuse_id: ReuseId,
-        connection_partition: PartitionId,
-        selection: H1Selection,
-    },
-}
-
-enum DeliveryKind {
-    Capacity,
-    BorrowedH1 {
-        reuse_id: ReuseId,
-        connection_partition: PartitionId,
-    },
-}
-
-enum DeliveryAckResult {
-    Accepted { successor: Option<DemandSnapshot> },
-    RetrySameResidence,
-    Rejected { successor: Option<DemandSnapshot> },
-}
-
-enum DeliveryGuardState {
-    Undelivered {
-        payload: AcquisitionPayload,
-        on_drop: DeliveryAckResult,
-    },
-    Materialized {
-        payload: MaterializedPayload,
-        on_drop: DeliveryAckResult,
+enum DeliveryState {
+    Pending(DeliveryPayload),
+    Ready {
+        step: AcquisitionStep,
+        settlement: DeliverySettlementKind,
     },
     Disarmed,
 }
 
-struct DeliveryAck {
-    delivery: DeliveryId,
-    requesting_partition: PartitionId,
+struct DeliveryGuard {
+    admission: Arc<OriginAdmission>,
+    assignment: DemandAssignment,
+    state: DeliveryState,
+}
+
+struct DeliverySettlement {
+    admission: Arc<OriginAdmission>,
+    assignment: DemandAssignment,
     successor: Option<DemandSnapshot>,
-    kind: DeliveryKind,
+    kind: Option<DeliverySettlementKind>,
+}
+
+enum DeliverySettlementKind {
+    Capacity,
+    BorrowedH1 {
+        connection_id: ConnectionId,
+        match_id: H1MatchId,
+        supplier: PartitionId,
+    },
+}
+
+enum DemandAssignmentOutcome {
+    Accepted { successor: Option<DemandSnapshot> },
+    RetrySamePosition,
+    Refused { successor: Option<DemandSnapshot> },
 }
 ```
 
-`Queued` and `Delivering` retain the same links in origin order.
-`Delivering` fences that position until the requesting cell acknowledges the
-delivery, so a younger demand cannot pass a payload between lock domains. A
-reuse operation does not add another demand residence: demand remains `Queued`
-while reservation installation resolves and becomes `Delivering` only when a
-borrowed H1 or permit is ready to cross.
+`Queued` and `PendingAssignment` retain the same origin and eligibility-group
+links. A pending assignment excludes another resource from selecting that
+demand without moving it to the back of either order. An H1 match does not
+assign demand while supplier reservation crosses locks. Only a resolved borrow,
+or an available permit, creates an assignment.
 
 One `DeliveryGuard` carries either capacity or a borrowed H1. It materializes
 every fallible connection-owning-cell transition before reserving the
 requesting waiter. Capacity becomes an `EstablishmentPermit`; a borrowed
 candidate revalidates its owning-cell reservation and becomes an
 `H1Selection`. If candidate commit fails, the guard returns the handle and
-closes or retries the admission fence without changing requesting-cell state.
+retries the assignment without changing requesting-cell state.
 
 An owned one-to-one delivery follows this sequence:
 
 ```text
 OriginAdmission lock
   Queued(R)
-    -> Delivering(R, D)
-    -> extract DeliveryGuard::Undelivered(payload, retry R)
+    -> PendingAssignment(D)
+    -> extract DeliveryGuard::Pending(payload)
 unlock OriginAdmission
   |
-  +-- materialize payload
-  |     +-- failure -> refunnel payload; finish D; requesting cell unchanged
-  |     `-- success -> DeliveryGuard::Materialized
+  +-- resolve payload
+  |     +-- failure -> refunnel payload; retry D; requesting cell unchanged
+  |     `-- success -> DeliveryGuard::Ready
   |
   `-- lock requesting cell
         +-- R and its oldest compatible waiter are live -> reserve waiter
         `-- stale, cancelled, satisfied, or incompatible -> reject guard
       unlock requesting cell
-        `-- convert payload into acquisition event + DeliveryAck
+        `-- convert payload into AcquisitionStep + DeliverySettlement
               `-- lock requesting cell
-                    +-- accepted -> waiter owns event; acknowledge D
-                    `-- cancelled -> return event; refunnel and reject D
+                    +-- accepted -> waiter owns step; settle D as accepted
+                    `-- cancelled -> return step; settle D as refused
 ```
 
 The admission, connection-owning-cell, and requesting-cell locks are never
 nested. Between them, the delivery guard is the only payload owner. After
-requesting-cell installation, `DeliveryAck` owns the admission fence and the
-requesting waiter owns the establishment permit or H1 selection.
+requesting-cell installation, `DeliverySettlement` owns assignment settlement
+and any supplier-cell completion still owed; the requesting waiter owns the
+establishment permit or H1 selection.
 
-The guard makes every drop point terminal. Dropping `Undelivered` returns its raw payload before updating the
-fence. Dropping `Materialized` drops the establishment permit or returns the selected H1 to its
-connection-owning cell, then updates the fence. Dropping `DeliveryAck` completes its stored acknowledgement
-after requesting-cell state has become authoritative. Normal execution performs the same transitions
-explicitly and disarms each fallback.
+The guard makes every drop point terminal. Dropping `Pending` returns its raw
+payload before retrying the assignment. Dropping `Ready` drops the
+establishment permit or returns the selected H1 to its owning cell, then retries
+the assignment. Once the requesting cell owns the step, dropping
+`DeliverySettlement` records acceptance because cell state is authoritative.
+Explicit refusal returns the step before settling the assignment as refused.
 
-`Accepted` consumes the generation and either idles the ticket or installs its successor at the applicable
-tails.
-`RetrySameResidence` is used only when the same generation remains useful but this payload or route cannot
-serve it; it preserves the ticket's position. `Rejected` closes the old residence after the requesting cell has
-refunnelled any owned payload and carries the complete current successor, if one. A complete newer demand snapshot
-may retire or replace a residence before its action reaches the requesting cell; local generation validation
-then rejects the late action without resurrecting old demand.
+`Accepted` consumes the generation and either unschedules it or installs its
+successor at the applicable tails. `RetrySamePosition` preserves the same
+generation and both order positions. `Refused` ends the old generation after
+the requesting cell has refunnelled any owned payload and carries the complete
+current successor, if one. A complete newer demand snapshot may retire or
+replace an assignment before its action reaches the requesting cell; local
+generation validation then rejects the late action without resurrecting old
+demand.
 
 #### HTTP/2 peer routing
 
@@ -1403,9 +1412,9 @@ capacity lease. The route guard revalidates it at the connection-owning and requ
 advertisement is removed or updated before the next turn, so peer H2 discovery does not scan cells.
 
 Under bounded pressure, an accepting generation may also be announced to the
-head of its eligibility-group all-protocol view. Admission fences that demand
-generation in `Delivering` with a `DeliveryId`; the route action carries
-only connection-owning cell and generation identities plus an acknowledgement
+head of its eligibility-group all-protocol view. Admission creates a
+`DemandAssignment` for that exact generation; the route action carries only the
+assignment, connection-owning cell, and generation identities plus a settlement
 fallback, never the record's capacity lease.
 The requesting cell revalidates the generation identity, accepting state, demand
 generation, and reuse scope.
@@ -1436,7 +1445,7 @@ releases a permit.
 For bounded origins, a generation advertises only its zero-to-one and one-to-zero request-work transitions.
 Intermediate multiplexed request counts remain cell-local. Unbounded origins have no admission route scheduling.
 
-Dropping a pending route guard submits its `on_drop` acknowledgement so the fence retries or closes;
+Dropping a pending route guard submits its fallback so the assignment retries or settles;
 there is no single-owner payload to refunnel. Committing route installation stores the requesting-cell
 acknowledgement, which is submitted before the guard disarms.
 
@@ -1461,8 +1470,8 @@ checks specified in [Appendix B](#appendix-b-validation).
   when the transport factory guarantees an HTTP/1 establishment result.
 * **H2 work advertisement** [safety, optimization] — bounded cells advertise when a generation crosses between
   zero and nonzero request work; intermediate stream counts require no admission update.
-* **Single delivery** [safety] — one delivery identity owns at most one permit or provisional H1, commits it
-  to at most one requesting waiter, and retains its scheduling fence until requesting-cell acknowledgement.
+* **Single delivery** [safety] — one demand assignment carries at most one permit or provisional H1, commits it
+  to at most one requesting waiter, and remains pending until requesting-cell settlement.
 * **Refunnelling** [safety] — rejection, supersession, cancellation, task drop, or panic returns every
   undelivered permit to admission and every undelivered H1 to its connection-owning cell exactly once.
 * **Route ownership** [safety] — an H2 route carries generation identity, never the connection's
@@ -1472,25 +1481,25 @@ checks specified in [Appendix B](#appendix-b-validation).
 * **Cross-cell order** [safety] — H1 borrow and reclaim both serve the current origin head, preferring an
   eligible peer connection for borrow and otherwise reclaiming an origin peer. Peer H2 routing uses its
   all-protocol eligibility-group head. Same-cell H1 service remains cell-local.
-* **Reuse operation completion** [safety] — one reuse operation reserves at most one connection-owning cell and
-  one requesting cell; it remains authoritative until owning-cell completion and any borrowed delivery record
-  acknowledges its terminal state.
-* **Return interception** [liveness] — an installed reuse reservation intercepts the next reusable H1 before it
+* **H1 match completion** [safety] — one H1 match reserves at most one supplier cell and one requesting cell; it
+  remains authoritative until supplier-cell completion and any borrowed demand assignment settles its terminal
+  state.
+* **Return interception** [liveness] — an installed H1 reservation intercepts the next reusable H1 before it
   becomes idle, so a connection cycling continuously between active and reusable cannot strand requesting
   demand.
 * **Owning-cell fairness turn** [liveness] — one irreversible cross-cell transfer creates one local turn when
   compatible local demand exists; the turn clears only when that demand is served or disappears.
-* **Acknowledged progress** [liveness] — every extracted delivery or reuse action either acknowledges a
-  terminal transition or executes its typed fallback, so a scheduling fence cannot remain pending solely
-  because the executing future was dropped.
+* **Acknowledged progress** [liveness] — every extracted delivery or detached action either settles a terminal
+  transition or executes its typed fallback, so a demand assignment cannot remain pending solely because the
+  executing future was dropped.
 * **Cross-lock isolation** [safety] — admission and cell locks are never nested, and no pool lock is held
   across an await or while running connector, protocol, wake, or listener code. A synchronous fallback may
   visit a bounded sequence of lock domains but holds at most one pool lock at a time; each transition retains
   an idempotent fallback, and wakes and callbacks remain deferred until after unlock.
 * **Bounded peer discovery** [optimization] — reuse and route work select connection state from stored
-  origin or group heads and validate one cell rather than scanning cells or connections. H1 availability is
-  linked once and repaired eagerly; a cell publishes again only when its complete advertised or blocked state
-  changes, and admission ignores reports older than its accepted availability revision.
+  origin or group heads and validate one cell rather than scanning cells or connections. H1 supply is linked
+  once and repaired eagerly; a cell submits again only when its complete returnable or peer-blocked status
+  changes, and admission ignores older supply revisions.
 
 ### Liveness
 
@@ -1503,7 +1512,7 @@ HTTP/2 peer routing adds eligibility-group demand views because a route can be i
 generation is reusable, and routing does not consume origin capacity. A terminal outcome sends any successor
 generation to
 the applicable tails. An owning-cell fairness turn permits one local overtake after an irreversible
-cross-cell transfer, but repeated reuse operations cannot keep that cell or an older peer from progressing.
+cross-cell transfer, but repeated H1 matches cannot keep that cell or an older peer from progressing.
 
 Within a cell, the generation gate offers a newly published H2 generation to already committed compatible
 waiters before newer arrivals. Scheduling is work-conserving among eligible waiters: if a resource a waiter
@@ -1766,7 +1775,7 @@ Every H1 return revalidates the record's generation, poison state, and idle
 policy under the connection-owning cell lock. An unbounded origin serves
 compatible local demand or installs the connection as idle directly because it
 has no admission state or cross-cell reuse. For a bounded origin, the same
-transition also checks its installed reuse reservation. An installed
+transition also checks its installed peer reservation. An installed
 reservation extracts the sender into a provisional candidate for borrow or
 reclaim. Without a reservation, the owning cell first serves compatible local
 demand and otherwise installs the sender as idle. This complete decision is
@@ -1774,9 +1783,10 @@ cell-local; a returning sender does not synchronously consult admission.
 
 After the cell transition, a bounded connection-owning cell publishes an
 availability change only when its complete advertised or blocked state changed.
-Demand-driven admission may then install a future peer reuse operation, but it
-cannot interpose between the just-completed local return decision and its sender ownership. `Reserved` is
-counted as active rather than idle because no request may select it. Every transition revalidates retirement
+Demand-driven admission may then retain a future H1 match, but it cannot
+interpose between the just-completed local return decision and its sender
+ownership. `ReservedForPeer` is counted as active rather than idle because no
+request may select it. Every transition revalidates retirement
 state, so a body that finishes concurrently with poison, reclaim, driver failure, or pool shutdown cannot
 republish a connection after retirement.
 
@@ -1942,7 +1952,8 @@ physical completion, so capacity and lifecycle accounting do not depend on what 
   lease, after both endpoints terminate, without retiring a healthy accepting generation.
 * **Return revalidation** [safety] — an H1 return checks generation and retirement state under its
   connection-owning cell before becoming visible; a sender awaiting admission remains owned by that cell and
-  non-dispatchable in `Reserved`, so a late completion cannot reverse logical close or bypass return ordering.
+  non-dispatchable in `ReservedForPeer`, so a late completion cannot reverse logical close or bypass return
+  ordering.
 * **Physical completion tracking** [safety] — root-I/O drop, not logical close or driver-future completion
   alone, terminates the physical connection lifetime, including after H1 upgrade.
 
@@ -2114,7 +2125,7 @@ impl ConnectionPool {
 ```
 
 `establishing` starts when an attempt or flight is admitted and ends when it fails or installs a record.
-`h1_idle` and `h1_active` partition logically open H1 records; checked-out and `Reserved` H1 records are
+`h1_idle` and `h1_active` partition logically open H1 records; checked-out and `ReservedForPeer` H1 records are
 active, while only dispatch-eligible records in the idle set are idle.
 `h2_accepting` counts generations that may issue request leases, while `h2_active_streams` counts accepted
 request leases across accepting and draining generations. Logical close moves a connection out of those
@@ -2545,16 +2556,16 @@ aws-smithy-http-client/src/client/
     registry.rs        — PartitionRegistry, PartitionState, and stable cell publication
     cell.rs            — OriginCell and cell-level acquisition coordination
     cell/
-      h1.rs            — HTTP/1 records, sender ownership, and reuse reservation
+      h1.rs            — H1CellState, sender ownership, and peer reservation
       h2.rs            — HTTP/2 flights, generations, routes, gates, and request leases
       waiters.rs       — local acquisition queue and delivery reservation
     admission.rs       — bounded-origin capacity and unlocked action driving
     admission/
-      demand.rs        — versioned demand order and delivery fences
+      demand.rs        — versioned demand order and assignments
       order.rs         — checked intrusive order shared by admission indexes
-      reuse.rs         — H1 availability order and cross-cell reuse operations
-      delivery.rs      — capacity/H1 crossing guards and acknowledgements
-      h2_routes.rs     — HTTP/2 advertisements, peer route scheduling, and fences
+      h1.rs            — H1 supply indexes, retained matches, and detached actions
+      delivery.rs      — capacity/H1 assignment handoff and settlement
+      h2.rs            — H2 supply indexes, peer routing, and reclaim
     establish.rs       — negotiated-protocol routing and connection identity
     establish/
       h1.rs            — HTTP/1 handshake, installation, and driver
@@ -2562,7 +2573,7 @@ aws-smithy-http-client/src/client/
       transport.rs     — connector selection, placement, timeout, and ALPN inputs
     dispatch.rs        — protocol-neutral request routing
     dispatch/
-      h1.rs            — HTTP/1 dispatch, reacquisition, and response ownership
+      h1.rs            — HTTP/1 dispatch, non-acceptance, and response ownership
       h2.rs            — HTTP/2 dispatch and two-ended request completion
     maintenance.rs     — idle-deadline scheduling and partition task lifetime
     connection.rs      — records, leases, logical close, physical completion
@@ -2624,8 +2635,8 @@ The required evidence maps to the architecture as follows:
 | Construction, topology, origin identity, and stable cells             | unit/property; allocation instrumentation; controlled runtime; Loom cell creation | invalid configurations fail; equivalent URIs share one origin; canonical request hits allocate no host storage; each pair has one stable cell; the anonymous partition binds one runtime but moves across its workers; explicit placement follows its contract |
 | Smithy `HttpClient` boundary and operation policy                     | unit; controlled runtime; differential                                            | settings-specific facades share one pool and admission authority; request version does not split pool or admission identity; timeout scope, maintenance ownership, validation timing, and `hyper/1.x` metadata are preserved                                   |
 | Local reuse, establishment, ALPN convergence, and generation identity | unit/property; bounded transitions; controlled runtime; wire; differential        | local hits avoid origin-wide coordination; connector readiness and placement hold; one H2 flight/generation wins; losing transports, leases, and waiters terminate exactly once                                                                                |
-| Admission, demand generations, and origin/group ordering              | property; bounded transitions; Loom scheduling kernels; stress                    | the bound is never exceeded; stale demand snapshots and availability reports cannot resurrect obsolete state; each resource uses the correct scheduling scope; eligible committed demand has bounded overtaking                                                |
-| Capacity delivery, H1 reuse operations, and owning-cell turns         | bounded transitions; Loom delivery/reuse kernels; controlled cancellation         | every permit and provisional H1 has one owner; candidate transfer revalidates owning-cell state; acknowledgement fences close; cancellation and task drop refunnel once; return interception cannot starve owning-cell demand                                  |
+| Admission, demand generations, and origin/group ordering              | property; bounded transitions; Loom scheduling kernels; stress                    | the bound is never exceeded; stale demand snapshots and supply revisions cannot resurrect obsolete state; each resource uses the correct scheduling scope; eligible committed demand has bounded overtaking                                                |
+| Capacity delivery, H1 matches, and owning-cell turns                  | bounded transitions; Loom delivery/reuse kernels; controlled cancellation         | every permit and provisional H1 has one owner; candidate transfer revalidates owning-cell state; demand assignments settle; cancellation and task drop refunnel once; return interception cannot starve owning-cell demand                                  |
 | H2 peer routing and request leases                                    | bounded transitions; Loom route kernel; wire                                      | routes move no capacity; generation gates prioritize committed waiters; stale generations cannot dispatch; upload and response endpoints both terminate before lease release                                                                                      |
 | Dispatch, retry, bodies, upgrades, and metadata                       | controlled runtime; wire; differential                                            | one selected sender commits and calls Hyper without an intermediate published state; only Hyper-certified unsent reuse retries; cancellation has a stage-local owner; H1 framing and H2 stream isolation hold; metadata and error behavior are preserved       |
 | Logical and physical close, maintenance, events, and statistics       | unit/property; Loom close/guard/maintenance kernels; time/runtime; wire           | driver completion and cancellation request logical close; permit release occurs once; root-I/O drop ends physical accounting; idle deadlines and shutdown clean up; callbacks see committed state and gauges converge to lifecycle state                       |

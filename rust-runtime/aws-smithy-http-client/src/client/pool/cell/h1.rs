@@ -5,26 +5,26 @@
 
 //! HTTP/1 connection records and exclusive request-sender ownership.
 //!
-//! Every installed connection remains in its connection-owning [`H1Records`]
+//! Every installed connection remains in its connection-owning [`H1CellState`]
 //! until logical close. While the record is live, its exclusive sender exists
 //! in exactly one place: inside an `Idle` record or in one external owner while
-//! the record is `Selected` or `Reserved`. Transitions move the sender; they
+//! the record is `Selected` or `ReservedForPeer`. Transitions move the sender; they
 //! never copy it. The residence records that ownership:
 //!
 //! ```text
-//! completed handshake -- install_selected --------------------> Selected
-//! test fixture ------- install_idle ---------------------------> Idle(sender)
+//! completed handshake -- insert_selected ---------------------> Selected
+//! test fixture ------- insert_idle ----------------------------> Idle(sender)
 //!
 //! Idle(sender) -- select_idle --------------------------------> Selected
-//! Idle(sender) -- take_idle_for_reuse ------------------------> Reserved
-//! Selected ---- reserve_for_reuse ----------------------------> Reserved
-//! Reserved ---- commit_return_to_waiter ----------------------> Selected
+//! Idle(sender) -- take_idle_candidate ----------------> ReservedForPeer
+//! Selected ---- reserve_for_peer ---------------------> ReservedForPeer
+//! ReservedForPeer -- commit_return_to_waiter -----------------> Selected
 //! Selected ---- return_idle ----------------------------------> Idle(sender)
-//! Reserved ---- return_idle ----------------------------------> Idle(sender)
+//! ReservedForPeer -- return_idle -----------------------------> Idle(sender)
 //!
 //! Idle(sender) ------------ begin_close ----------------------> Closing
-//! Selected / Reserved ---- begin_close / close_owned --------> Closing
-//! Closing -------- finish_close ------------------------------> removed
+//! Selected / ReservedForPeer -- begin_close / close_owned ---> Closing
+//! Closing -------- remove_closed -----------------------------> removed
 //! ```
 //!
 //! Outside the lock, ownership moves through values whose drop behavior is
@@ -52,8 +52,8 @@
 //! fallback close the connection directly.
 
 use super::super::admission::{
-    AdmissionAction, H1Candidate, H1MatchId, H1ReservationDecision, H1SupplyStatus,
-    OriginAdmission, PreparedH1Reservation, SupplyRevision,
+    AdmissionAction, H1Candidate, H1MatchId, H1SupplyStatus, OriginAdmission,
+    PreparedH1Reservation, SupplyRevision,
 };
 use super::super::connection::{CloseReason, ConnectionState};
 use super::{AcquisitionOutcome, OriginCell};
@@ -139,87 +139,86 @@ impl fmt::Debug for H1Sender {
     }
 }
 
-/// Local reservation for one cross-cell reuse operation and its fairness debt.
+/// Local reservation for one peer match and its fairness debt.
 ///
 /// Reservation residence and fairness debt are separate because a completed
 /// transfer releases the reservation immediately, while the debt remains until
 /// later local service or the disappearance of compatible local demand.
 #[derive(Debug, Default)]
-pub(super) struct H1ReuseReservation {
-    /// Residence of the current reuse reservation.
-    state: H1ReuseReservationState,
+struct H1Reservation {
+    /// State of the current peer reservation.
+    state: H1ReservationState,
     /// Whether this cell's next usable HTTP/1 turn must remain local after the
     /// operation that earned it has completed.
     local_turn_owed: bool,
 }
 
-/// Authoritative residence of one cell-local reuse reservation.
+/// Authoritative state of one cell-local peer reservation.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-enum H1ReuseReservationState {
-    /// No reuse operation may intercept a sender return.
+enum H1ReservationState {
+    /// No peer match may intercept a sender return.
     #[default]
     Available,
-    /// The next reusable sender return is reserved for this reuse operation.
+    /// The next reusable sender return is reserved for this match.
     Installed(H1MatchId),
-    /// A provisional sender is outside the connection-owning cell lock for this reuse operation.
+    /// A provisional sender is outside the cell lock for this match.
     Resolving(H1MatchId),
 }
 
-impl H1ReuseReservation {
-    /// Installs a reuse operation that will intercept a future reusable return.
-    pub(super) fn install(&mut self, match_id: H1MatchId) -> bool {
-        if !matches!(self.state, H1ReuseReservationState::Available) {
+impl H1Reservation {
+    /// Reserves a future reusable return for one retained match.
+    fn reserve_waiting(&mut self, match_id: H1MatchId) -> bool {
+        if !matches!(self.state, H1ReservationState::Available) {
             return false;
         }
-        self.state = H1ReuseReservationState::Installed(match_id);
+        self.state = H1ReservationState::Installed(match_id);
         true
     }
 
-    /// Installs a reuse operation that has already extracted an idle sender.
-    pub(super) fn install_resolving(&mut self, match_id: H1MatchId) -> bool {
-        if !matches!(self.state, H1ReuseReservationState::Available) {
+    /// Reserves a match that already owns an extracted idle sender.
+    fn reserve_resolving(&mut self, match_id: H1MatchId) -> bool {
+        if !matches!(self.state, H1ReservationState::Available) {
             return false;
         }
-        self.state = H1ReuseReservationState::Resolving(match_id);
+        self.state = H1ReservationState::Resolving(match_id);
         true
     }
 
-    /// Reserves the next reusable return for an installed reuse operation.
-    pub(super) fn intercept_return(&mut self) -> Option<H1MatchId> {
-        let H1ReuseReservationState::Installed(match_id) = self.state else {
+    /// Transfers a waiting match into resolution on sender return.
+    fn take_return_match(&mut self) -> Option<H1MatchId> {
+        let H1ReservationState::Installed(match_id) = self.state else {
             return None;
         };
-        self.state = H1ReuseReservationState::Resolving(match_id);
+        self.state = H1ReservationState::Resolving(match_id);
         Some(match_id)
     }
 
-    /// Clears a matching reuse operation without earning a local fairness turn.
-    pub(super) fn reject(&mut self, match_id: H1MatchId) -> bool {
+    /// Releases a matching reservation without earning a local fairness turn.
+    fn release(&mut self, match_id: H1MatchId) -> bool {
         if !self.names(match_id) {
             return false;
         }
-        self.state = H1ReuseReservationState::Available;
+        self.state = H1ReservationState::Available;
         true
     }
 
     /// Completes an irreversible transfer and records any usable local turn.
     pub(super) fn complete_transfer(&mut self, match_id: H1MatchId, local_h1_demand: bool) -> bool {
-        if !matches!(self.state, H1ReuseReservationState::Resolving(current) if current == match_id)
-        {
+        if !matches!(self.state, H1ReservationState::Resolving(current) if current == match_id) {
             return false;
         }
-        self.state = H1ReuseReservationState::Available;
+        self.state = H1ReservationState::Available;
         self.local_turn_owed |= local_h1_demand;
         true
     }
 
-    /// Returns whether a usable local turn currently excludes a peer reuse operation.
-    pub(super) fn blocks_peer_reuse(&self, local_h1_demand: bool) -> bool {
+    /// Returns whether a usable local turn currently excludes a peer H1 match.
+    fn blocks_peer_selection(&self, local_h1_demand: bool) -> bool {
         self.local_turn_owed && local_h1_demand
     }
 
     /// Consumes an owed turn when local HTTP/1 service wins.
-    pub(super) fn consume_local_turn(&mut self) -> bool {
+    fn consume_local_turn(&mut self) -> bool {
         if !self.local_turn_owed {
             return false;
         }
@@ -228,7 +227,7 @@ impl H1ReuseReservation {
     }
 
     /// Clears debt that can no longer be consumed by local demand.
-    pub(super) fn clear_unused_turn(&mut self, local_h1_demand: bool) -> bool {
+    fn clear_unused_turn(&mut self, local_h1_demand: bool) -> bool {
         if !self.local_turn_owed || local_h1_demand {
             return false;
         }
@@ -236,30 +235,30 @@ impl H1ReuseReservation {
         true
     }
 
-    /// Returns whether another reuse reservation may be installed.
-    pub(super) fn is_available(&self) -> bool {
-        matches!(self.state, H1ReuseReservationState::Available)
+    /// Returns whether another peer reservation may be installed.
+    fn is_available(&self) -> bool {
+        matches!(self.state, H1ReservationState::Available)
     }
 
     /// Returns whether this reservation still names the given operation.
-    pub(super) fn names(&self, match_id: H1MatchId) -> bool {
+    fn names(&self, match_id: H1MatchId) -> bool {
         matches!(
             self.state,
-            H1ReuseReservationState::Installed(current) | H1ReuseReservationState::Resolving(current)
+            H1ReservationState::Installed(current) | H1ReservationState::Resolving(current)
                 if current == match_id
         )
     }
 
     /// Checks relationships that are not already encoded by the state enum.
     #[cfg(any(debug_assertions, test))]
-    pub(super) fn assert_consistent(&self, _supports_installed_reuse: bool) {
+    fn assert_consistent(&self, supports_peer_reservation: bool) {
         if std::thread::panicking() {
             return;
         }
-        if matches!(self.state, H1ReuseReservationState::Installed(_)) {
+        if matches!(self.state, H1ReservationState::Installed(_)) {
             assert!(
-                _supports_installed_reuse,
-                "installed HTTP/1 reuse operation had no externally owned connection-owning cell record to settle it"
+                supports_peer_reservation,
+                "installed HTTP/1 peer reservation had no externally owned sender record to settle it"
             );
         }
     }
@@ -270,13 +269,15 @@ impl H1ReuseReservation {
     }
 }
 
-/// Records owned by one cell and the order of reusable senders.
+/// Complete HTTP/1 sender and peer-reservation state under one cell lock.
 #[derive(Debug, Default)]
-pub(super) struct H1Records {
+pub(super) struct H1CellState {
     /// Every installed record that has not completed logical close.
     records: HashMap<ConnectionId, H1Record>,
     /// Reusable records in return order; selection takes the newest sender.
-    idle: VecDeque<ConnectionId>,
+    idle_order: VecDeque<ConnectionId>,
+    /// Peer match that may intercept the next reusable sender return.
+    peer_reservation: H1Reservation,
 }
 
 /// One cell-owned HTTP/1 connection record.
@@ -285,12 +286,12 @@ struct H1Record {
     /// Shared logical and physical connection lifetime.
     connection: Arc<ConnectionState>,
     /// Location of the record's exclusive sender.
-    residence: H1Residence,
+    sender_state: H1SenderResidence,
 }
 
 /// Authoritative location of one exclusive HTTP/1 sender.
 #[derive(Debug)]
-enum H1Residence {
+enum H1SenderResidence {
     /// The sender is stored in this record and available for local selection.
     Idle {
         /// Exclusive sender available for the next local request.
@@ -301,19 +302,80 @@ enum H1Residence {
     /// A request-side [`H1Selection`] or [`H1Exchange`] owns the sender.
     Selected,
     /// A [`ProvisionalH1`] owns the sender for cross-cell reuse.
-    Reserved,
+    ReservedForPeer,
     /// Logical close has started and no new selection or return may commit.
     Closing,
 }
 
-impl H1Records {
+impl H1CellState {
+    /// Returns whether admission may install another peer reservation.
+    pub(super) fn peer_reservation_available(&self) -> bool {
+        self.peer_reservation.is_available()
+    }
+
+    /// Returns whether fairness currently excludes peer selection.
+    pub(super) fn blocks_peer_selection(&self, local_h1_demand: bool) -> bool {
+        self.peer_reservation.blocks_peer_selection(local_h1_demand)
+    }
+
+    /// Reserves a future sender return for one retained peer match.
+    pub(super) fn reserve_waiting(&mut self, match_id: H1MatchId) -> bool {
+        self.peer_reservation.reserve_waiting(match_id)
+    }
+
+    /// Reserves a peer match that already owns an extracted sender.
+    pub(super) fn reserve_resolving(&mut self, match_id: H1MatchId) -> bool {
+        self.peer_reservation.reserve_resolving(match_id)
+    }
+
+    /// Takes a waiting peer match when a reusable sender returns.
+    pub(super) fn take_return_match(&mut self) -> Option<H1MatchId> {
+        self.peer_reservation.take_return_match()
+    }
+
+    /// Releases a peer reservation without recording a local turn.
+    pub(super) fn release_peer_reservation(&mut self, match_id: H1MatchId) -> bool {
+        self.peer_reservation.release(match_id)
+    }
+
+    /// Returns whether the peer reservation still names `match_id`.
+    pub(super) fn names_peer_reservation(&self, match_id: H1MatchId) -> bool {
+        self.peer_reservation.names(match_id)
+    }
+
+    /// Completes a transferred peer sender and records any local fairness turn.
+    pub(super) fn complete_peer_transfer(
+        &mut self,
+        match_id: H1MatchId,
+        local_h1_demand: bool,
+    ) -> bool {
+        self.peer_reservation
+            .complete_transfer(match_id, local_h1_demand)
+    }
+
+    /// Consumes an owed local turn after local HTTP/1 service wins.
+    pub(super) fn consume_local_turn(&mut self) -> bool {
+        self.peer_reservation.consume_local_turn()
+    }
+
+    /// Clears fairness debt that no live local demand can consume.
+    pub(super) fn clear_unused_turn(&mut self, local_h1_demand: bool) -> bool {
+        self.peer_reservation.clear_unused_turn(local_h1_demand)
+    }
+
+    /// Returns whether this cell owes its next usable sender to local demand.
+    #[cfg(test)]
+    pub(super) fn local_turn_owed(&self) -> bool {
+        self.peer_reservation.local_turn_owed()
+    }
+
     /// Installs a fresh connection as selected by its launching acquisition.
-    pub(super) fn install_selected(
+    pub(super) fn insert_selected(
         &mut self,
         connection: Arc<ConnectionState>,
         sender: H1Sender,
-    ) -> Result<OwnedH1, OwnedH1> {
-        let owner = OwnedH1::new(connection, sender, false);
+    ) -> Result<OwnedH1Sender, OwnedH1Sender> {
+        let owner = OwnedH1Sender::new(connection, sender, false);
         if self.records.contains_key(&owner.id()) {
             return Err(owner);
         }
@@ -321,7 +383,7 @@ impl H1Records {
             owner.id(),
             H1Record {
                 connection: owner.connection.clone(),
-                residence: H1Residence::Selected,
+                sender_state: H1SenderResidence::Selected,
             },
         );
         self.assert_consistent();
@@ -330,159 +392,163 @@ impl H1Records {
 
     /// Installs a connection that completed without a live launching waiter.
     #[cfg(test)]
-    pub(super) fn install_idle(
+    pub(super) fn insert_idle(
         &mut self,
         connection: Arc<ConnectionState>,
         sender: H1Sender,
         deadline: Option<SystemTime>,
-    ) -> Result<(), OwnedH1> {
-        let owner = OwnedH1::new(connection, sender, true);
+    ) -> Result<(), OwnedH1Sender> {
+        let owner = OwnedH1Sender::new(connection, sender, true);
         if self.records.contains_key(&owner.id()) {
             return Err(owner);
         }
         let id = owner.id();
-        let OwnedH1 {
+        let OwnedH1Sender {
             connection, sender, ..
         } = owner;
         self.records.insert(
             id,
             H1Record {
                 connection,
-                residence: H1Residence::Idle { sender, deadline },
+                sender_state: H1SenderResidence::Idle { sender, deadline },
             },
         );
-        self.idle.push_back(id);
+        self.idle_order.push_back(id);
         self.assert_consistent();
         Ok(())
     }
 
     /// Takes the most recently returned idle sender for one request.
-    pub(super) fn select_idle(&mut self) -> Option<OwnedH1> {
-        let id = self.idle.pop_back()?;
+    pub(super) fn select_idle(&mut self) -> Option<OwnedH1Sender> {
+        let id = self.idle_order.pop_back()?;
         let record = self
             .records
             .get_mut(&id)
             .expect("idle HTTP/1 record disappeared");
-        if !matches!(record.residence, H1Residence::Idle { .. }) {
+        if !matches!(record.sender_state, H1SenderResidence::Idle { .. }) {
             panic!("idle HTTP/1 order named a non-idle record");
         }
-        let H1Residence::Idle { sender, .. } =
-            std::mem::replace(&mut record.residence, H1Residence::Selected)
+        let H1SenderResidence::Idle { sender, .. } =
+            std::mem::replace(&mut record.sender_state, H1SenderResidence::Selected)
         else {
             unreachable!("HTTP/1 residence changed under the cell lock");
         };
-        let owner = OwnedH1::new(record.connection.clone(), sender, true);
+        let owner = OwnedH1Sender::new(record.connection.clone(), sender, true);
         self.assert_consistent();
         Some(owner)
     }
 
     /// Extracts the newest idle sender into provisional return residence.
     ///
-    /// A return reuse uses this path so rejection can follow the same ordinary
+    /// A returning sender uses this path so rejection can follow the same ordinary
     /// return fallback as a sender intercepted after an active exchange.
-    pub(super) fn take_idle_for_reuse(&mut self) -> Option<OwnedH1> {
-        let id = self.idle.pop_back()?;
+    pub(super) fn take_idle_candidate(&mut self) -> Option<OwnedH1Sender> {
+        let id = self.idle_order.pop_back()?;
         let record = self
             .records
             .get_mut(&id)
             .expect("idle HTTP/1 record disappeared");
-        let H1Residence::Idle { sender, .. } =
-            std::mem::replace(&mut record.residence, H1Residence::Reserved)
+        let H1SenderResidence::Idle { sender, .. } =
+            std::mem::replace(&mut record.sender_state, H1SenderResidence::ReservedForPeer)
         else {
             panic!("idle HTTP/1 order named a non-idle record");
         };
-        let owner = OwnedH1::new(record.connection.clone(), sender, true);
+        let owner = OwnedH1Sender::new(record.connection.clone(), sender, true);
         self.assert_consistent();
         Some(owner)
     }
 
-    /// Returns whether a sender could satisfy a connection-owning cell reuse now or on return.
+    /// Returns whether a sender could satisfy peer selection now or on return.
     pub(super) fn has_returnable(&self) -> bool {
         self.records.values().any(|record| {
             matches!(
-                record.residence,
-                H1Residence::Idle { .. } | H1Residence::Selected | H1Residence::Reserved
+                record.sender_state,
+                H1SenderResidence::Idle { .. }
+                    | H1SenderResidence::Selected
+                    | H1SenderResidence::ReservedForPeer
             )
         })
     }
 
     /// Returns whether `owner` may still re-enter reusable return policy.
-    pub(super) fn accepts_return(&self, owner: &OwnedH1) -> bool {
+    pub(super) fn accepts_return(&self, owner: &OwnedH1Sender) -> bool {
         self.records.get(&owner.id()).is_some_and(|record| {
             matches!(
-                record.residence,
-                H1Residence::Selected | H1Residence::Reserved
+                record.sender_state,
+                H1SenderResidence::Selected | H1SenderResidence::ReservedForPeer
             )
         })
     }
 
-    /// Returns whether an installed reuse still has a cell-local reservation.
+    /// Returns whether an installed peer reservation still has sender state.
     ///
     /// Logical close may move an externally owned sender to `Closing` before
-    /// its return resolves the installed reuse, so reuse consistency is
-    /// broader than current reuse eligibility.
+    /// its return resolves the installed match, so reservation consistency is
+    /// broader than current peer selectability.
     #[cfg(any(debug_assertions, test))]
-    pub(super) fn supports_installed_reuse(&self) -> bool {
+    fn supports_peer_reservation(&self) -> bool {
         self.records.values().any(|record| {
             matches!(
-                record.residence,
-                H1Residence::Selected | H1Residence::Reserved | H1Residence::Closing
+                record.sender_state,
+                H1SenderResidence::Selected
+                    | H1SenderResidence::ReservedForPeer
+                    | H1SenderResidence::Closing
             )
         })
     }
 
     /// Reserves an external sender for cross-cell reuse.
-    pub(super) fn reserve_for_reuse(&mut self, owner: &OwnedH1) -> bool {
+    pub(super) fn reserve_for_peer(&mut self, owner: &OwnedH1Sender) -> bool {
         let Some(record) = self.records.get_mut(&owner.id()) else {
             return false;
         };
-        match record.residence {
-            H1Residence::Selected => {
-                record.residence = H1Residence::Reserved;
+        match record.sender_state {
+            H1SenderResidence::Selected => {
+                record.sender_state = H1SenderResidence::ReservedForPeer;
                 self.assert_consistent();
                 true
             }
-            H1Residence::Reserved => true,
-            H1Residence::Idle { .. } | H1Residence::Closing => false,
+            H1SenderResidence::ReservedForPeer => true,
+            H1SenderResidence::Idle { .. } | H1SenderResidence::Closing => false,
         }
     }
 
     /// Restores a returned sender to idle storage.
     pub(super) fn return_idle(
         &mut self,
-        owner: OwnedH1,
+        owner: OwnedH1Sender,
         deadline: Option<SystemTime>,
-    ) -> Result<(), OwnedH1> {
+    ) -> Result<(), OwnedH1Sender> {
         let Some(record) = self.records.get_mut(&owner.id()) else {
             return Err(owner);
         };
         if !matches!(
-            record.residence,
-            H1Residence::Selected | H1Residence::Reserved
+            record.sender_state,
+            H1SenderResidence::Selected | H1SenderResidence::ReservedForPeer
         ) {
             return Err(owner);
         }
         let id = owner.id();
-        let OwnedH1 { sender, .. } = owner;
-        record.residence = H1Residence::Idle { sender, deadline };
-        self.idle.push_back(id);
+        let OwnedH1Sender { sender, .. } = owner;
+        record.sender_state = H1SenderResidence::Idle { sender, deadline };
+        self.idle_order.push_back(id);
         self.assert_consistent();
         Ok(())
     }
 
     /// Commits a selected or returning sender to a waiting request.
-    pub(super) fn commit_return_to_waiter(&mut self, owner: &OwnedH1) -> bool {
+    pub(super) fn commit_return_to_waiter(&mut self, owner: &OwnedH1Sender) -> bool {
         let Some(record) = self.records.get_mut(&owner.id()) else {
             return false;
         };
-        match record.residence {
-            H1Residence::Selected => true,
-            H1Residence::Reserved => {
-                record.residence = H1Residence::Selected;
+        match record.sender_state {
+            H1SenderResidence::Selected => true,
+            H1SenderResidence::ReservedForPeer => {
+                record.sender_state = H1SenderResidence::Selected;
                 self.assert_consistent();
                 true
             }
-            H1Residence::Idle { .. } | H1Residence::Closing => false,
+            H1SenderResidence::Idle { .. } | H1SenderResidence::Closing => false,
         }
     }
 
@@ -490,15 +556,15 @@ impl H1Records {
     ///
     /// The caller still owns the sender and must complete logical close after
     /// releasing the cell lock.
-    pub(super) fn close_owned(&mut self, owner: &OwnedH1) -> bool {
+    pub(super) fn close_owned(&mut self, owner: &OwnedH1Sender) -> bool {
         let should_close = match self.records.get_mut(&owner.id()) {
-            Some(record) => match record.residence {
-                H1Residence::Selected | H1Residence::Reserved => {
-                    record.residence = H1Residence::Closing;
+            Some(record) => match record.sender_state {
+                H1SenderResidence::Selected | H1SenderResidence::ReservedForPeer => {
+                    record.sender_state = H1SenderResidence::Closing;
                     true
                 }
-                H1Residence::Closing => false,
-                H1Residence::Idle { .. } => {
+                H1SenderResidence::Closing => false,
+                H1SenderResidence::Idle { .. } => {
                     panic!("externally owned HTTP/1 sender was recorded as idle")
                 }
             },
@@ -512,40 +578,40 @@ impl H1Records {
     ///
     /// Idle close extracts the sender. Selected and returning records stay
     /// represented as `Closing` until their external owner comes back.
-    pub(super) fn begin_close(&mut self, id: ConnectionId) -> Option<CloseRecord> {
+    pub(super) fn begin_close(&mut self, id: ConnectionId) -> Option<H1CloseTransition> {
         let record = self.records.get_mut(&id)?;
         let connection = record.connection.clone();
-        let sender = match &record.residence {
-            H1Residence::Idle { .. } => {
+        let sender = match &record.sender_state {
+            H1SenderResidence::Idle { .. } => {
                 let position = self
-                    .idle
+                    .idle_order
                     .iter()
                     .position(|candidate| *candidate == id)
                     .expect("idle HTTP/1 record was absent from idle order");
-                self.idle.remove(position);
-                let H1Residence::Idle { sender, .. } =
-                    std::mem::replace(&mut record.residence, H1Residence::Closing)
+                self.idle_order.remove(position);
+                let H1SenderResidence::Idle { sender, .. } =
+                    std::mem::replace(&mut record.sender_state, H1SenderResidence::Closing)
                 else {
                     unreachable!("HTTP/1 residence changed under the cell lock");
                 };
                 Some(sender)
             }
-            H1Residence::Selected | H1Residence::Reserved => {
-                record.residence = H1Residence::Closing;
+            H1SenderResidence::Selected | H1SenderResidence::ReservedForPeer => {
+                record.sender_state = H1SenderResidence::Closing;
                 None
             }
-            H1Residence::Closing => return None,
+            H1SenderResidence::Closing => return None,
         };
         self.assert_consistent();
-        Some(CloseRecord { connection, sender })
+        Some(H1CloseTransition { connection, sender })
     }
 
     /// Removes a record after logical close and sender destruction complete.
-    pub(super) fn finish_close(&mut self, id: ConnectionId) {
+    pub(super) fn remove_closed(&mut self, id: ConnectionId) {
         let Some(record) = self.records.get(&id) else {
             return;
         };
-        if !matches!(record.residence, H1Residence::Closing) {
+        if !matches!(record.sender_state, H1SenderResidence::Closing) {
             return;
         }
         self.records.remove(&id);
@@ -555,7 +621,7 @@ impl H1Records {
     /// Returns the installed record and idle counts.
     #[cfg(test)]
     pub(super) fn counts(&self) -> (usize, usize) {
-        (self.records.len(), self.idle.len())
+        (self.records.len(), self.idle_order.len())
     }
 
     /// Returns the sole installed connection for focused dispatch tests.
@@ -576,13 +642,13 @@ impl H1Records {
 
     /// Returns idle records whose configured deadline has elapsed.
     pub(super) fn expired_idle(&self, now: SystemTime) -> Vec<ConnectionId> {
-        self.idle
+        self.idle_order
             .iter()
             .copied()
             .filter(|id| {
                 matches!(
-                    self.records.get(id).map(|record| &record.residence),
-                    Some(H1Residence::Idle {
+                    self.records.get(id).map(|record| &record.sender_state),
+                    Some(H1SenderResidence::Idle {
                         deadline: Some(deadline),
                         ..
                     }) if *deadline <= now
@@ -593,16 +659,16 @@ impl H1Records {
 
     /// Returns the nearest configured deadline among reusable senders.
     pub(super) fn nearest_idle_deadline(&self) -> Option<SystemTime> {
-        self.idle
+        self.idle_order
             .iter()
             .filter_map(|id| {
                 match &self
                     .records
                     .get(id)
                     .expect("idle HTTP/1 record disappeared")
-                    .residence
+                    .sender_state
                 {
-                    H1Residence::Idle { deadline, .. } => *deadline,
+                    H1SenderResidence::Idle { deadline, .. } => *deadline,
                     _ => unreachable!("idle HTTP/1 order named a non-idle record"),
                 }
             })
@@ -621,22 +687,24 @@ impl H1Records {
             if std::thread::panicking() {
                 return;
             }
+            self.peer_reservation
+                .assert_consistent(self.supports_peer_reservation());
             let idle_records = self
                 .records
                 .values()
-                .filter(|record| matches!(record.residence, H1Residence::Idle { .. }))
+                .filter(|record| matches!(record.sender_state, H1SenderResidence::Idle { .. }))
                 .count();
             assert_eq!(
                 idle_records,
-                self.idle.len(),
+                self.idle_order.len(),
                 "HTTP/1 idle count did not match idle order"
             );
             let mut seen = HashMap::new();
-            for id in &self.idle {
+            for id in &self.idle_order {
                 assert!(
                     matches!(
-                        self.records.get(id).map(|record| &record.residence),
-                        Some(H1Residence::Idle { .. })
+                        self.records.get(id).map(|record| &record.sender_state),
+                        Some(H1SenderResidence::Idle { .. })
                     ),
                     "HTTP/1 idle order named a missing or non-idle record"
                 );
@@ -651,7 +719,7 @@ impl H1Records {
 
 /// Exclusive sender and connection state detached from a connection-owning cell record.
 #[derive(Debug)]
-pub(super) struct OwnedH1 {
+pub(super) struct OwnedH1Sender {
     /// Shared lifetime state for the physical connection.
     connection: Arc<ConnectionState>,
     /// The one Hyper HTTP/1 sender for the connection.
@@ -660,7 +728,7 @@ pub(super) struct OwnedH1 {
     reused: bool,
 }
 
-impl OwnedH1 {
+impl OwnedH1Sender {
     /// Creates detached sender ownership.
     fn new(connection: Arc<ConnectionState>, sender: H1Sender, reused: bool) -> Self {
         Self {
@@ -705,7 +773,7 @@ impl OwnedH1 {
 /// Returns an external sender to its connection-owning cell.
 ///
 /// A sender whose cell was torn down closes its connection directly.
-fn return_to_connection_cell(connection_cell: &Weak<OriginCell>, owner: OwnedH1) {
+fn return_to_connection_cell(connection_cell: &Weak<OriginCell>, owner: OwnedH1Sender) {
     if let Some(connection_cell) = connection_cell.upgrade() {
         OriginCell::return_h1_owner(&connection_cell, owner);
     } else {
@@ -719,7 +787,7 @@ fn return_to_connection_cell(connection_cell: &Weak<OriginCell>, owner: OwnedH1)
 /// A sender whose cell was torn down closes its connection directly.
 fn retire_at_connection_cell(
     connection_cell: &Weak<OriginCell>,
-    owner: OwnedH1,
+    owner: OwnedH1Sender,
     reason: CloseReason,
 ) {
     if let Some(connection_cell) = connection_cell.upgrade() {
@@ -731,7 +799,7 @@ fn retire_at_connection_cell(
 }
 
 /// State detached when close begins for a record named by identity.
-pub(super) struct CloseRecord {
+pub(super) struct H1CloseTransition {
     /// Connection whose logical lifetime close must end.
     pub(super) connection: Arc<ConnectionState>,
     /// Idle sender extracted for destruction, if close found one in the cell.
@@ -749,12 +817,12 @@ pub(in crate::client::pool) struct H1Selection {
     /// Non-retaining reference to the cell that owns the installed record.
     connection_cell: Weak<OriginCell>,
     /// Sender ownership until return, retirement, or response transfer.
-    owner: Option<OwnedH1>,
+    owner: Option<OwnedH1Sender>,
 }
 
 impl H1Selection {
     /// Creates a selected sender owned outside the connection-owning cell lock.
-    pub(super) fn new(connection_cell: &Arc<OriginCell>, owner: OwnedH1) -> Self {
+    pub(super) fn new(connection_cell: &Arc<OriginCell>, owner: OwnedH1Sender) -> Self {
         Self {
             connection_cell: Weak::from_arc(connection_cell),
             owner: Some(owner),
@@ -813,7 +881,7 @@ impl H1Selection {
         H1CloseHandle {
             connection_cell: self.connection_cell.clone(),
             connection: Weak::from_arc(owner.connection()),
-            id: owner.id(),
+            connection_id: owner.id(),
         }
     }
 
@@ -844,7 +912,7 @@ impl fmt::Debug for H1Selection {
                     .upgrade()
                     .map(|connection_cell| connection_cell.id().clone()),
             )
-            .field("connection_id", &self.owner.as_ref().map(OwnedH1::id))
+            .field("connection_id", &self.owner.as_ref().map(OwnedH1Sender::id))
             .finish()
     }
 }
@@ -869,7 +937,7 @@ pub(in crate::client::pool) struct H1Exchange {
     /// Non-retaining reference to the cell that owns the selected record.
     connection_cell: Weak<OriginCell>,
     /// Sender held until Hyper proves it may return.
-    owner: Option<OwnedH1>,
+    owner: Option<OwnedH1Sender>,
 }
 
 impl H1Exchange {
@@ -929,7 +997,7 @@ impl fmt::Debug for H1Exchange {
                     .upgrade()
                     .map(|connection_cell| connection_cell.id().clone()),
             )
-            .field("connection_id", &self.owner.as_ref().map(OwnedH1::id))
+            .field("connection_id", &self.owner.as_ref().map(OwnedH1Sender::id))
             .finish()
     }
 }
@@ -946,23 +1014,23 @@ impl Drop for H1Exchange {
     }
 }
 
-/// Sender temporarily detached from a `Reserved` record for peer reuse.
+/// Sender temporarily detached from a `ReservedForPeer` record.
 ///
-/// Reuse arbitration creates this value before crossing from the
+/// Admission matching creates this value before crossing from the
 /// connection-owning cell to a requesting cell. A successful borrow converts
 /// it into [`H1Selection`]; reclaim closes the connection and releases its
 /// capacity. Rejection, cancellation, or `Drop` returns the sender through
 /// ordinary connection-owning-cell policy.
 pub(in crate::client::pool) struct ProvisionalH1 {
-    /// Non-retaining connection-owning cell whose record remains in `Reserved`.
+    /// Non-retaining owning cell whose record remains `ReservedForPeer`.
     connection_cell: Weak<OriginCell>,
     /// Sender reserved by the provisional action.
-    owner: Option<OwnedH1>,
+    owner: Option<OwnedH1Sender>,
 }
 
 impl ProvisionalH1 {
-    /// Creates a provisional owner for a sender extracted by reuse arbitration.
-    pub(super) fn new(connection_cell: &Arc<OriginCell>, owner: OwnedH1) -> Self {
+    /// Creates a provisional owner for a sender extracted by admission matching.
+    pub(super) fn new(connection_cell: &Arc<OriginCell>, owner: OwnedH1Sender) -> Self {
         Self {
             connection_cell: Weak::from_arc(connection_cell),
             owner: Some(owner),
@@ -977,8 +1045,8 @@ impl ProvisionalH1 {
             .id()
     }
 
-    /// Transfers the cell reference and sender into the next reuse transition.
-    pub(super) fn into_parts(mut self) -> (Weak<OriginCell>, OwnedH1) {
+    /// Transfers the cell reference and sender into the next match transition.
+    pub(super) fn into_parts(mut self) -> (Weak<OriginCell>, OwnedH1Sender) {
         let owner = self
             .owner
             .take()
@@ -986,8 +1054,8 @@ impl ProvisionalH1 {
         (self.connection_cell.clone(), owner)
     }
 
-    /// Restores provisional ownership when a reuse transition cannot commit.
-    pub(super) fn from_parts(connection_cell: Weak<OriginCell>, owner: OwnedH1) -> Self {
+    /// Restores provisional ownership when a match transition cannot commit.
+    pub(super) fn from_parts(connection_cell: Weak<OriginCell>, owner: OwnedH1Sender) -> Self {
         Self {
             connection_cell,
             owner: Some(owner),
@@ -1005,7 +1073,7 @@ impl fmt::Debug for ProvisionalH1 {
                     .upgrade()
                     .map(|connection_cell| connection_cell.id().clone()),
             )
-            .field("connection_id", &self.owner.as_ref().map(OwnedH1::id))
+            .field("connection_id", &self.owner.as_ref().map(OwnedH1Sender::id))
             .finish()
     }
 }
@@ -1027,7 +1095,7 @@ pub(in crate::client::pool) struct H1CloseHandle {
     /// Core fallback when the connection-owning cell no longer exists.
     connection: Weak<ConnectionState>,
     /// Generation identity rejected by stale close actions.
-    id: ConnectionId,
+    connection_id: ConnectionId,
 }
 
 impl H1CloseHandle {
@@ -1039,14 +1107,14 @@ impl H1CloseHandle {
         Self {
             connection_cell: Weak::from_arc(connection_cell),
             connection: Weak::from_arc(connection),
-            id: connection.id(),
+            connection_id: connection.id(),
         }
     }
 
     /// Begins logical close and returns whether this signal won.
     pub(in crate::client::pool) fn close(&self, reason: CloseReason) -> bool {
         if let Some(connection_cell) = self.connection_cell.upgrade() {
-            return OriginCell::close_h1(&connection_cell, self.id, reason);
+            return OriginCell::close_h1(&connection_cell, self.connection_id, reason);
         }
         self.connection
             .upgrade()
@@ -1093,18 +1161,18 @@ impl OriginCell {
     /// # Panics
     ///
     /// Panics if this cell already contains the connection identity.
-    pub(in crate::client::pool) fn install_selected_h1(
+    pub(in crate::client::pool) fn insert_selected_h1(
         cell: &Arc<Self>,
         connection: Arc<ConnectionState>,
         sender: H1Sender,
     ) -> H1Selection {
-        let (installed, availability) = {
+        let (installed, supply_update) = {
             let mut state = cell.state.lock();
-            let installed = state.h1.install_selected(connection, sender);
+            let installed = state.h1.insert_selected(connection, sender);
             state.assert_consistent();
             (installed, state.take_h1_supply_update())
         };
-        cell.submit_h1_supply_update(availability);
+        cell.submit_h1_supply_update(supply_update);
         match installed {
             Ok(owner) => H1Selection::new(cell, owner),
             Err(owner) => {
@@ -1123,19 +1191,19 @@ impl OriginCell {
     ///
     /// Panics if this cell already contains the connection identity.
     #[cfg(test)]
-    pub(in crate::client::pool) fn install_idle_h1(
+    pub(in crate::client::pool) fn insert_idle_h1(
         cell: &Arc<Self>,
         connection: Arc<ConnectionState>,
         sender: H1Sender,
     ) {
         let deadline = cell.idle_deadline();
-        let (installed, availability) = {
+        let (installed, supply_update) = {
             let mut state = cell.state.lock();
-            let installed = state.h1.install_idle(connection, sender, deadline);
+            let installed = state.h1.insert_idle(connection, sender, deadline);
             state.assert_consistent();
             (installed, state.take_h1_supply_update())
         };
-        cell.submit_h1_supply_update(availability);
+        cell.submit_h1_supply_update(supply_update);
         if let Err(owner) = installed {
             owner
                 .connection()
@@ -1148,20 +1216,20 @@ impl OriginCell {
 
     /// Selects the newest reusable H1 sender without origin-wide coordination.
     pub(in crate::client::pool) fn select_h1(cell: &Arc<Self>) -> Option<H1Selection> {
-        let (owner, availability) = {
+        let (owner, supply_update) = {
             let mut state = cell.state.lock();
             let owner = state.h1.select_idle();
             if owner.is_some() {
-                state.reuse.consume_local_turn();
+                state.h1.consume_local_turn();
             }
             state.assert_consistent();
-            let availability = cell
+            let supply_update = cell
                 .admission
                 .as_ref()
                 .and_then(|_| state.take_h1_supply_update());
-            (owner, availability)
+            (owner, supply_update)
         };
-        cell.submit_h1_supply_update(availability);
+        cell.submit_h1_supply_update(supply_update);
         let owner = owner?;
         Some(H1Selection::new(cell, owner))
     }
@@ -1174,22 +1242,18 @@ impl OriginCell {
     ) -> Option<AdmissionAction> {
         let decision = {
             let mut state = cell.state.lock();
-            state.install_reuse(prepared.match_id)
+            state.commit_h1_reservation(prepared.match_id)
         };
 
-        let decision = match decision {
-            H1ReservationDecision::Installed => H1ReservationDecision::Installed,
-            H1ReservationDecision::Candidate(owner) => {
-                let provisional = ProvisionalH1::new(cell, owner);
-                H1ReservationDecision::Candidate(H1Candidate::new(
-                    admission.clone(),
-                    prepared.match_id,
-                    cell.id.partition(),
-                    provisional,
-                ))
-            }
-            H1ReservationDecision::Rejected(revision) => H1ReservationDecision::Rejected(revision),
-        };
+        let decision = decision.map_candidate(|owner| {
+            let provisional = ProvisionalH1::new(cell, owner);
+            H1Candidate::new(
+                admission.clone(),
+                prepared.match_id,
+                cell.id.partition(),
+                provisional,
+            )
+        });
         OriginAdmission::settle_h1_reservation(
             &admission,
             prepared.match_id,
@@ -1203,7 +1267,7 @@ impl OriginCell {
         &self,
         match_id: H1MatchId,
     ) -> SupplyRevision<H1SupplyStatus> {
-        self.state.lock().cancel_reuse(match_id)
+        self.state.lock().cancel_h1_reservation(match_id)
     }
 
     /// Returns a rejected provisional sender through ordinary connection-owning cell handling.
@@ -1214,7 +1278,7 @@ impl OriginCell {
     ) -> SupplyRevision<H1SupplyStatus> {
         {
             let mut state = cell.state.lock();
-            state.reject_reuse_candidate(match_id);
+            state.reject_h1_match(match_id);
         }
         drop(provisional);
         let mut state = cell.state.lock();
@@ -1229,7 +1293,7 @@ impl OriginCell {
         provisional: ProvisionalH1,
     ) -> Result<H1Selection, ProvisionalH1> {
         let (connection_cell, owner) = provisional.into_parts();
-        let committed = cell.state.lock().commit_reuse(match_id, &owner);
+        let committed = cell.state.lock().commit_h1_match(match_id, &owner);
         if committed {
             Ok(H1Selection::new(cell, owner))
         } else {
@@ -1244,18 +1308,18 @@ impl OriginCell {
         provisional: ProvisionalH1,
     ) -> Result<(SupplyRevision<H1SupplyStatus>, bool), ProvisionalH1> {
         let (connection_cell, owner) = provisional.into_parts();
-        if !cell.state.lock().reuse.names(match_id) {
+        if !cell.state.lock().h1.names_peer_reservation(match_id) {
             return Err(ProvisionalH1::from_parts(connection_cell, owner));
         }
 
         let close_won = Self::retire_h1_owner(cell, owner, CloseReason::Reclaimed);
-        let availability = {
+        let supply_update = {
             let mut state = cell.state.lock();
-            let revision = state.finish_reuse(match_id, close_won);
+            let revision = state.complete_h1_match(match_id, close_won);
             state.assert_consistent();
             revision
         };
-        Ok((availability, close_won))
+        Ok((supply_update, close_won))
     }
 
     /// Completes local match state after a requesting cell accepts the sender.
@@ -1264,7 +1328,7 @@ impl OriginCell {
         match_id: H1MatchId,
         transferred: bool,
     ) -> SupplyRevision<H1SupplyStatus> {
-        self.state.lock().finish_reuse(match_id, transferred)
+        self.state.lock().complete_h1_match(match_id, transferred)
     }
 
     /// Submits this cell's changed HTTP/1 supply when the origin is bounded.
@@ -1285,7 +1349,7 @@ impl OriginCell {
     /// run after the cell lock is released. `owner` remains outside the locked
     /// scope so sender or connection drop cannot run while the cell guard is
     /// live.
-    fn return_h1_owner(cell: &Arc<Self>, owner: OwnedH1) {
+    fn return_h1_owner(cell: &Arc<Self>, owner: OwnedH1Sender) {
         let connection_id = owner.id();
         let mut owner = Some(owner);
         let mut installation = None;
@@ -1298,17 +1362,17 @@ impl OriginCell {
                 .h1
                 .accepts_return(owner.as_ref().expect("HTTP/1 owner disappeared"));
             if !returnable {
-                if let Some(match_id) = state.reuse.intercept_return() {
-                    let revision = state.finish_reuse(match_id, false);
+                if let Some(match_id) = state.h1.take_return_match() {
+                    let revision = state.complete_h1_match(match_id, false);
                     rejected_match = Some((match_id, revision));
                 } else {
                     state.assert_consistent();
                 }
                 true
-            } else if let Some(match_id) = state.reuse.intercept_return() {
+            } else if let Some(match_id) = state.h1.take_return_match() {
                 if state
                     .h1
-                    .reserve_for_reuse(owner.as_ref().expect("HTTP/1 owner disappeared"))
+                    .reserve_for_peer(owner.as_ref().expect("HTTP/1 owner disappeared"))
                 {
                     state.assert_consistent();
                     intercepted = Some((
@@ -1317,7 +1381,7 @@ impl OriginCell {
                     ));
                     false
                 } else {
-                    let revision = state.finish_reuse(match_id, false);
+                    let revision = state.complete_h1_match(match_id, false);
                     rejected_match = Some((match_id, revision));
                     true
                 }
@@ -1326,7 +1390,7 @@ impl OriginCell {
                     .h1
                     .commit_return_to_waiter(owner.as_ref().expect("HTTP/1 owner disappeared"))
             {
-                state.reuse.consume_local_turn();
+                state.h1.consume_local_turn();
                 state.assert_consistent();
                 let mut returned = owner.take().expect("HTTP/1 owner disappeared");
                 returned.mark_reused();
@@ -1367,7 +1431,7 @@ impl OriginCell {
                 let admission = cell
                     .admission
                     .as_ref()
-                    .expect("an HTTP/1 reuse operation requires bounded admission");
+                    .expect("an H1 match requires bounded admission");
                 OriginAdmission::reject_returned_h1_match(
                     admission,
                     match_id,
@@ -1385,12 +1449,16 @@ impl OriginCell {
 
         if let Some((match_id, provisional)) = intercepted {
             if tracing::level_enabled!(tracing::Level::TRACE) {
-                trace_h1_return(cell, connection_id, H1ReturnTrace::MatchIntercepted);
+                trace_h1_return(
+                    cell,
+                    connection_id,
+                    H1ReturnTrace::PeerReservationIntercepted,
+                );
             }
             let admission = cell
                 .admission
                 .as_ref()
-                .expect("an HTTP/1 reuse operation requires bounded admission");
+                .expect("an H1 match requires bounded admission");
             let candidate = H1Candidate::new(
                 admission.clone(),
                 match_id,
@@ -1434,7 +1502,7 @@ impl OriginCell {
     /// Retires an externally owned H1 sender and removes its connection-owning cell record.
     ///
     /// Returns whether this path won the connection's logical-close race.
-    fn retire_h1_owner(cell: &Arc<Self>, owner: OwnedH1, reason: CloseReason) -> bool {
+    fn retire_h1_owner(cell: &Arc<Self>, owner: OwnedH1Sender, reason: CloseReason) -> bool {
         let should_close = {
             let mut state = cell.state.lock();
             let should_close = state.h1.close_owned(&owner);
@@ -1447,7 +1515,7 @@ impl OriginCell {
         drop(owner);
 
         let mut state = cell.state.lock();
-        state.h1.finish_close(id);
+        state.h1.remove_closed(id);
         state.assert_consistent();
         let revision = state.take_h1_supply_update();
         drop(state);
@@ -1459,7 +1527,7 @@ impl OriginCell {
     ///
     /// Returns whether this signal won the connection's logical-close race.
     pub(super) fn close_h1(cell: &Arc<Self>, id: ConnectionId, reason: CloseReason) -> bool {
-        let Some((close, availability)) = ({
+        let Some((close, supply_update)) = ({
             let mut state = cell.state.lock();
             let close = state.h1.begin_close(id);
             state.assert_consistent();
@@ -1468,13 +1536,13 @@ impl OriginCell {
             return false;
         };
 
-        cell.submit_h1_supply_update(availability);
+        cell.submit_h1_supply_update(supply_update);
         let remove_record = close.sender.is_some();
         let won = close.connection.logical_close(reason);
         drop(close.sender);
         if remove_record {
             let mut state = cell.state.lock();
-            state.h1.finish_close(id);
+            state.h1.remove_closed(id);
             state.assert_consistent();
         }
         won
@@ -1498,7 +1566,7 @@ enum H1ReturnTrace {
     /// The owning cell no longer accepts the sender.
     Rejected,
     /// Origin admission reserved the sender for peer demand.
-    MatchIntercepted,
+    PeerReservationIntercepted,
     /// No compatible demand exists, so the sender became idle.
     Idle,
     /// A waiter in the owning cell accepted the sender.
@@ -1519,13 +1587,13 @@ fn trace_h1_return(cell: &OriginCell, connection_id: ConnectionId, outcome: H1Re
             origin_port = ?cell.id.origin().port(),
             "HTTP/1 return was rejected by its connection-owning cell"
         ),
-        H1ReturnTrace::MatchIntercepted => tracing::trace!(
+        H1ReturnTrace::PeerReservationIntercepted => tracing::trace!(
             connection_id = %connection_id,
             connection_partition = ?cell.id.partition(),
             origin_scheme = %cell.id.origin().scheme(),
             origin_host = cell.id.origin().host(),
             origin_port = ?cell.id.origin().port(),
-            "HTTP/1 return was intercepted by a cross-cell reuse operation"
+            "HTTP/1 return was intercepted by a peer reservation"
         ),
         H1ReturnTrace::Idle => tracing::trace!(
             connection_id = %connection_id,
@@ -1557,9 +1625,9 @@ mod tests {
     fn closing_a_selected_record_rejects_its_later_return() {
         let info = ConnectionInfo::for_test(ConnectionId::new(1), PartitionId::from_index(1));
         let (connection, _physical) = ConnectionState::unbounded(info);
-        let mut records = H1Records::default();
+        let mut records = H1CellState::default();
         let owner = records
-            .install_selected(connection, H1Sender::test(11))
+            .insert_selected(connection, H1Sender::test(11))
             .expect("fresh HTTP/1 record was rejected");
 
         assert!(records.accepts_return(&owner));
@@ -1567,41 +1635,41 @@ mod tests {
         assert!(!records.accepts_return(&owner));
 
         drop(owner);
-        records.finish_close(ConnectionId::new(1));
+        records.remove_closed(ConnectionId::new(1));
     }
     #[test]
-    fn reuse_reservation_distinguishes_install_resolution_and_completion() {
-        let reuse_id = H1MatchId::for_test(1);
-        let mut slot = H1ReuseReservation::default();
+    fn peer_reservation_distinguishes_waiting_resolution_and_completion() {
+        let match_id = H1MatchId::for_test(1);
+        let mut slot = H1Reservation::default();
 
-        assert!(slot.install(reuse_id));
-        assert!(!slot.install(H1MatchId::for_test(2)));
-        assert_eq!(Some(reuse_id), slot.intercept_return());
-        assert!(slot.complete_transfer(reuse_id, true));
+        assert!(slot.reserve_waiting(match_id));
+        assert!(!slot.reserve_waiting(H1MatchId::for_test(2)));
+        assert_eq!(Some(match_id), slot.take_return_match());
+        assert!(slot.complete_transfer(match_id, true));
         assert!(slot.local_turn_owed());
         assert!(slot.is_available());
     }
 
     #[test]
     fn rejection_does_not_manufacture_a_fairness_turn() {
-        let reuse_id = H1MatchId::for_test(1);
-        let mut slot = H1ReuseReservation::default();
+        let match_id = H1MatchId::for_test(1);
+        let mut slot = H1Reservation::default();
 
-        assert!(slot.install_resolving(reuse_id));
-        assert!(slot.reject(reuse_id));
+        assert!(slot.reserve_resolving(match_id));
+        assert!(slot.release(match_id));
         assert!(!slot.local_turn_owed());
     }
 
     #[test]
     fn owed_turn_blocks_only_while_local_h1_demand_can_use_it() {
-        let reuse_id = H1MatchId::for_test(1);
-        let mut slot = H1ReuseReservation::default();
-        assert!(slot.install_resolving(reuse_id));
-        assert!(slot.complete_transfer(reuse_id, true));
+        let match_id = H1MatchId::for_test(1);
+        let mut slot = H1Reservation::default();
+        assert!(slot.reserve_resolving(match_id));
+        assert!(slot.complete_transfer(match_id, true));
 
-        assert!(slot.blocks_peer_reuse(true));
-        assert!(!slot.blocks_peer_reuse(false));
+        assert!(slot.blocks_peer_selection(true));
+        assert!(!slot.blocks_peer_selection(false));
         assert!(slot.clear_unused_turn(false));
-        assert!(!slot.blocks_peer_reuse(true));
+        assert!(!slot.blocks_peer_selection(true));
     }
 }

@@ -26,7 +26,7 @@
 mod h1;
 mod h2;
 
-use self::h1::H1DispatchResult;
+use self::h1::H1DispatchOutcome;
 use self::h2::H2DispatchResult;
 use super::admission::ProtocolRequirement;
 use super::cell::h1::H1Selection;
@@ -149,8 +149,8 @@ async fn acquire_and_dispatch(
         match acquire_for_dispatch(&context, requirement).await? {
             DispatchTarget::H1(selection) => {
                 match h1::dispatch(&context, request, selection).await? {
-                    H1DispatchResult::Response(response) => return Ok(response),
-                    H1DispatchResult::Reacquire(returned) => request = returned,
+                    H1DispatchOutcome::Response(response) => return Ok(response),
+                    H1DispatchOutcome::NotAccepted(returned) => request = returned,
                 }
             }
             DispatchTarget::H2(activation) => {
