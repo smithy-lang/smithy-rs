@@ -329,7 +329,7 @@ impl AcquisitionQueue {
         }
     }
 
-    /// Advances the active demand beyond an accepted route publication.
+    /// Advances the active demand beyond an accepted peer route.
     ///
     /// Admission retires the published version when it acknowledges route
     /// visibility. The waiter remains queued locally while the route gate
@@ -368,8 +368,8 @@ impl AcquisitionQueue {
         self.oldest_h2_candidate() == Some(waiter)
     }
 
-    /// Returns the newest waiter identity committed before a publication.
-    pub(super) fn publication_cutoff(&self) -> Option<WaiterId> {
+    /// Returns the newest waiter identity committed before peer route installation.
+    pub(super) fn route_cutoff(&self) -> Option<WaiterId> {
         (!self.records.is_empty()).then(|| {
             WaiterId(
                 self.next_waiter
@@ -942,7 +942,7 @@ impl AcquisitionQueue {
 
     /// Offers an H2 activation to the oldest compatible acquisition.
     ///
-    /// `cutoff` retains publication priority. A later waiter is left pending
+    /// `cutoff` retains peer-route priority. A later waiter is left pending
     /// until every live acquisition at or before the cutoff has received an
     /// activation opportunity.
     pub(super) fn install_h2(
@@ -1116,7 +1116,7 @@ impl AcquisitionQueue {
 
     /// Checks map, FIFO, and demand relationships in debug and test builds.
     pub(super) fn assert_consistent(&self) {
-        #[cfg(debug_assertions)]
+        #[cfg(any(debug_assertions, test))]
         {
             if std::thread::panicking() {
                 return;
@@ -1125,7 +1125,7 @@ impl AcquisitionQueue {
         }
     }
 
-    #[cfg(debug_assertions)]
+    #[cfg(any(debug_assertions, test))]
     fn assert_consistent_debug(&self) {
         let waiting_records = self
             .records

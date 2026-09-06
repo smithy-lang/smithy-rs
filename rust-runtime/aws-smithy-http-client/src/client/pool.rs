@@ -127,8 +127,8 @@
 //!
 //! H2Activation -- Hyper accepts request --> accepted request lease
 //! accepted request lease
-//!     |-- request body ends or drops -----> send endpoint complete
-//!     `-- response body ends or drops ----> receive endpoint complete
+//!     |-- request body ends or drops -----> upload endpoint complete
+//!     `-- response body ends or drops ----> response endpoint complete
 //! both endpoints complete ----------------> release generation request count
 //! ```
 //!
@@ -180,8 +180,11 @@ pub use partition::TokioDriverSpawner;
 pub use partition::{ConnectionReuseScope, DriverSpawner, Partition, PartitionId};
 
 use crate::sync::Arc;
+use aws_smithy_runtime_api::client::result::ConnectorError;
+use aws_smithy_types::body::SdkBody;
 use establish::TransportFactory;
-use registry::PartitionRegistry;
+use http_1x::{Request, Response};
+use registry::{PartitionRegistry, PartitionState};
 use std::fmt;
 use std::num::NonZeroUsize;
 use std::sync::atomic::AtomicU64;
@@ -208,6 +211,16 @@ impl ConnectionPool {
     /// Returns a builder for a new connection pool.
     pub fn builder() -> Builder<super::TlsUnset> {
         Builder::default()
+    }
+
+    /// Routes one request from its selected partition through pool dispatch.
+    pub(in crate::client::pool) async fn send_request(
+        &self,
+        partition: Arc<PartitionState>,
+        request: Request<SdkBody>,
+        options: dispatch::RequestOptions,
+    ) -> Result<Response<SdkBody>, ConnectorError> {
+        dispatch::send(self, partition, request, options).await
     }
 }
 
