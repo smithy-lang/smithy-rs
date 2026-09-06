@@ -2661,7 +2661,7 @@ mod tests {
         };
 
         let (h1_connection, _h1_physical) = connection(2);
-        let returning = OriginCell::install_selected_h1(
+        let returning = OriginCell::insert_selected_h1(
             &cell,
             h1_connection,
             super::super::h1::H1Sender::test(2),

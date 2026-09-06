@@ -39,7 +39,7 @@ use super::{
     IntrusiveLinks, IntrusiveOrder, OriginAdmission, SupplyRevision,
 };
 use crate::client::pool::cell::h1::{H1Selection, ProvisionalH1};
-use crate::client::pool::cell::OriginCell;
+use crate::client::pool::cell::{H1ReservationDecision, OriginCell};
 use crate::client::pool::partition::{EligibilityGroup, PartitionId};
 use crate::sync::Arc;
 use aws_smithy_runtime_api::client::connection::ConnectionId;
@@ -113,16 +113,6 @@ impl H1SupplyOutcome {
             Self::SupplierLive { supplier, .. } | Self::SupplierExpired { supplier } => supplier,
         }
     }
-}
-
-/// Supplier-cell decision for one H1 reservation attempt.
-pub(in crate::client::pool) enum H1ReservationDecision<C> {
-    /// A future reusable return will satisfy the retained match.
-    Installed,
-    /// An idle sender was extracted immediately.
-    Candidate(C),
-    /// The connection cell could not reserve supply for the retained match.
-    Rejected(SupplyRevision<H1SupplyStatus>),
 }
 
 /// Admission's indexed view of supplier cells exposing selectable H1 supply.
@@ -207,10 +197,10 @@ enum H1MatchState {
     Cancelling,
 }
 
-/// Work required to install a reuse reservation outside the admission lock.
+/// Work required to reserve one supplier outside the admission lock.
 #[derive(Debug)]
 pub(in crate::client::pool) struct PreparedH1Reservation {
-    /// Operation being installed.
+    /// Match whose supplier is being reserved.
     pub(in crate::client::pool) match_id: H1MatchId,
     /// Cell whose connection was selected while admission was locked.
     pub(in crate::client::pool) supplier: PartitionId,
@@ -218,7 +208,7 @@ pub(in crate::client::pool) struct PreparedH1Reservation {
 
 /// Work required to cancel a reservation outside the admission lock.
 pub(super) struct PreparedH1Cancellation {
-    /// Operation whose reservation must be cleared.
+    /// Match whose supplier reservation must be cleared.
     match_id: H1MatchId,
     /// Cell that owns the reservation.
     supplier: PartitionId,

@@ -330,7 +330,7 @@ enum DeliverySettlementKind {
         connection_id: ConnectionId,
         /// Retained H1 match completed by this settlement.
         match_id: H1MatchId,
-        /// Cell whose local reuse reservation must complete.
+        /// Cell whose local peer reservation must complete.
         supplier: PartitionId,
     },
 }

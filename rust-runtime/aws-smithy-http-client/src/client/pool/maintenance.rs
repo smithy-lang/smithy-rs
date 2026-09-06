@@ -690,7 +690,7 @@ mod tests {
         tokio::task::yield_now().await;
         assert_eq!(None, maintenance.snapshot().scheduled_deadline);
 
-        OriginCell::install_idle_h1(&cell, connection(1), H1Sender::test(1));
+        OriginCell::insert_idle_h1(&cell, connection(1), H1Sender::test(1));
         let sleep = gate.expect_sleep().await;
         assert_eq!(timeout, sleep.duration());
         assert!(maintenance.snapshot().scheduled_deadline.is_some());
@@ -723,7 +723,7 @@ mod tests {
         let timeout = Duration::from_secs(10);
         let (maintenance, cell, mut gate) = managed_cell(timeout);
         let connection = connection(1);
-        OriginCell::install_idle_h1(&cell, connection.clone(), H1Sender::test(1));
+        OriginCell::insert_idle_h1(&cell, connection.clone(), H1Sender::test(1));
         PartitionMaintenance::start(&maintenance, &TokioDriverSpawner::current());
 
         let sleep = gate.expect_sleep().await;
@@ -801,7 +801,7 @@ mod tests {
         let timeout = Duration::from_secs(10);
         let (maintenance, cell, mut gate) = managed_cell(timeout);
         let connection = connection(1);
-        OriginCell::install_idle_h1(&cell, connection.clone(), H1Sender::test(1));
+        OriginCell::insert_idle_h1(&cell, connection.clone(), H1Sender::test(1));
         PartitionMaintenance::start(&maintenance, &TokioDriverSpawner::current());
 
         let sleep = gate.expect_sleep().await;
@@ -826,7 +826,7 @@ mod tests {
             SharedAsyncSleep::new(sleep),
         );
         let connection = connection(1);
-        OriginCell::install_idle_h1(&cell, connection.clone(), H1Sender::test(1));
+        OriginCell::insert_idle_h1(&cell, connection.clone(), H1Sender::test(1));
         PartitionMaintenance::start(&maintenance, &TokioDriverSpawner::current());
 
         let sleep = gate.expect_sleep().await;

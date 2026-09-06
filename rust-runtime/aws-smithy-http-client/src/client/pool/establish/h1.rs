@@ -45,7 +45,7 @@ pub(in crate::client::pool) async fn establish_h1(
         "HTTP/1 connection establishment started"
     );
 
-    let result = handshake_and_install_h1(context, permit, io, connected).await;
+    let result = run_h1_handshake(context, permit, io, connected).await;
     match &result {
         Ok(selection) => {
             let connection = selection.connection();
@@ -73,7 +73,7 @@ pub(in crate::client::pool) async fn establish_h1(
 }
 
 /// Handshakes and installs one already connected HTTP/1 transport.
-async fn handshake_and_install_h1(
+async fn run_h1_handshake(
     context: AcquisitionContext,
     permit: EstablishmentPermit,
     io: BoxConn,
@@ -120,7 +120,7 @@ async fn handshake_and_install_h1(
     }
 
     let selection =
-        OriginCell::install_selected_h1(&cell, connection.clone(), H1Sender::from_hyper(sender));
+        OriginCell::insert_selected_h1(&cell, connection.clone(), H1Sender::from_hyper(sender));
     let driver_guard = H1DriverGuard::new(H1CloseHandle::new(&cell, &connection));
     let driver_info = connection.info().clone();
     owner_spawner.spawn(Box::pin(async move {

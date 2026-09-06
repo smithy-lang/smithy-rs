@@ -61,7 +61,7 @@ use self::h2::{H2CapacityReclaim, H2RouteGuard, H2Supply, PreparedH2Reclaim, Pre
 use self::order::{IntrusiveLinks, IntrusiveOrder};
 pub(in crate::client::pool) use delivery::DeliveryGuard;
 pub(in crate::client::pool) use h1::{
-    H1Candidate, H1MatchId, H1ReservationDecision, H1SupplyStatus, PreparedH1Reservation,
+    H1Candidate, H1MatchId, H1SupplyStatus, PreparedH1Reservation,
 };
 pub(in crate::client::pool) use h2::H2SupplyStatus;
 
