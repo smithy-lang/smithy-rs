@@ -251,18 +251,16 @@ impl H1ReuseReservation {
     }
 
     /// Checks relationships that are not already encoded by the state enum.
+    #[cfg(any(debug_assertions, test))]
     pub(super) fn assert_consistent(&self, _supports_installed_reuse: bool) {
-        #[cfg(debug_assertions)]
-        {
-            if std::thread::panicking() {
-                return;
-            }
-            if matches!(self.state, H1ReuseReservationState::Installed(_)) {
-                assert!(
-                    _supports_installed_reuse,
-                    "installed HTTP/1 reuse operation had no externally owned connection-owning cell record to settle it"
-                );
-            }
+        if std::thread::panicking() {
+            return;
+        }
+        if matches!(self.state, H1ReuseReservationState::Installed(_)) {
+            assert!(
+                _supports_installed_reuse,
+                "installed HTTP/1 reuse operation had no externally owned connection-owning cell record to settle it"
+            );
         }
     }
 
@@ -423,6 +421,7 @@ impl H1Records {
     /// Logical close may move an externally owned sender to `Closing` before
     /// its return resolves the installed reuse, so reuse consistency is
     /// broader than current reuse eligibility.
+    #[cfg(any(debug_assertions, test))]
     pub(super) fn supports_installed_reuse(&self) -> bool {
         self.records.values().any(|record| {
             matches!(
@@ -617,7 +616,7 @@ impl H1Records {
 
     /// Checks that idle records and the idle order describe the same set.
     pub(super) fn assert_consistent(&self) {
-        #[cfg(debug_assertions)]
+        #[cfg(any(debug_assertions, test))]
         {
             if std::thread::panicking() {
                 return;
@@ -805,7 +804,7 @@ impl H1Selection {
         }
     }
 
-    /// Returns non-retaining close authority for this selected generation.
+    /// Returns non-retaining close authority for this selected connection.
     pub(in crate::client::pool) fn close_handle(&self) -> H1CloseHandle {
         let owner = self
             .owner
@@ -1058,7 +1057,7 @@ impl H1CloseHandle {
 /// Driver-owned fallback that closes its H1 record on termination.
 #[derive(Debug)]
 pub(in crate::client::pool) struct H1DriverGuard {
-    /// Non-retaining generation close authority.
+    /// Non-retaining connection close authority.
     close: H1CloseHandle,
     /// Whether drop still represents owner-runtime shutdown.
     active: bool,

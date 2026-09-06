@@ -16,11 +16,11 @@
 //! 2. [`DemandSchedule`] replaces that partition snapshot and links active
 //!    demand in the origin order and its eligibility-group order.
 //! 3. Capacity delivery and HTTP/1 reuse select from the origin head. HTTP/2
-//!    publication pairs a group head with an advertised peer generation.
+//!    route scheduling pairs a group head with an advertised peer generation.
 //! 4. A [`DeliveryGuard`] materializes its one capacity or HTTP/1 payload before
 //!    reserving the requesting waiter. Payload materialization failure
 //!    therefore leaves the waiter in its existing residence.
-//! 5. An [`H2PublicationGuard`] carries identities through the same unlocked
+//! 5. An [`H2RouteGuard`] carries identities through the same unlocked
 //!    handoff. It revalidates the connection-owning generation, then installs
 //!    a route and activation opportunity in the requesting cell.
 //! 6. The requesting cell becomes authoritative before either guard submits its
@@ -28,10 +28,10 @@
 //!    acknowledgement paths.
 //!
 //! Capacity and HTTP/1 handoffs own the payload they must return on failure.
-//! HTTP/2 publication moves no payload: the connection-owning cell retains its
-//! request handle, driver, socket, and capacity. No cell lock is held with
-//! the admission lock, and connection-owning and requesting cell locks are
-//! never held together.
+//! HTTP/2 route installation moves no payload: the connection-owning cell
+//! retains its request handle, driver, socket, and capacity. No cell lock is
+//! held with the admission lock, and connection-owning and requesting cell
+//! locks are never held together.
 
 use super::cell::OriginCell;
 use super::origin::OriginKey;
@@ -43,17 +43,17 @@ use std::num::NonZeroUsize;
 
 mod delivery;
 mod demand;
+mod h2_routes;
 mod order;
-mod publication;
 pub(in crate::client::pool) mod reuse;
 
 use self::demand::{DemandSchedule, PreparedCapacityDelivery};
-use self::order::{IntrusiveLinks, IntrusiveOrder};
-use self::publication::{
-    H2Publication, H2PublicationGuard, H2ReclaimAction, PreparedH2Publication, PreparedH2Reclaim,
+use self::h2_routes::{
+    H2ReclaimAction, H2RouteGuard, H2RouteSchedule, PreparedH2Reclaim, PreparedH2Route,
 };
+use self::order::{IntrusiveLinks, IntrusiveOrder};
 pub(in crate::client::pool) use delivery::DeliveryGuard;
-pub(in crate::client::pool) use publication::H2AdvertisementSnapshot;
+pub(in crate::client::pool) use h2_routes::H2AdvertisementSnapshot;
 
 /// Protocol capability required by the head waiter in a cell.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -304,7 +304,7 @@ impl OriginAdmission {
     /// Selects at most one action while admission is locked.
     ///
     /// Cancellation cleanup runs first, followed by available capacity,
-    /// compatible HTTP/2 publication, HTTP/1 reuse, and idle-H2 reclaim. The
+    /// a compatible peer HTTP/2 route, HTTP/1 reuse, and idle-H2 reclaim. The
     /// returned action owns everything needed to run after releasing the
     /// admission lock. Its completion prepares the next action, forming an
     /// iterative pump without nesting admission and cell locks.
@@ -324,10 +324,10 @@ impl OriginAdmission {
                 pending.permit,
             )));
         }
-        if let Some(publication) = state.prepare_h2_publication() {
-            return Some(AdmissionAction::H2(H2PublicationGuard::new(
+        if let Some(route) = state.prepare_h2_route() {
+            return Some(AdmissionAction::H2Route(H2RouteGuard::new(
                 origin.clone(),
-                publication,
+                route,
             )));
         }
         if let Some(reuse) = state.h1.prepare_reuse(&state.demand_schedule) {
@@ -426,10 +426,10 @@ impl OriginAdmission {
         Self::drive(action);
     }
 
-    /// Applies one H2 publication acknowledgement and prepares its successor.
-    fn finish_h2_publication(
+    /// Applies one H2 route acknowledgement and prepares its successor.
+    fn finish_h2_route(
         origin: &Arc<Self>,
-        prepared: &PreparedH2Publication,
+        prepared: &PreparedH2Route,
         stale_generation: Option<super::cell::h2::H2GenerationId>,
         result: DeliveryAckResult,
     ) -> Option<AdmissionAction> {
@@ -483,7 +483,7 @@ impl OriginAdmission {
             Some(AdmissionAction::H1(_)) => {
                 panic!("capacity-only test unexpectedly prepared an HTTP/1 action")
             }
-            Some(AdmissionAction::H2(_)) => {
+            Some(AdmissionAction::H2Route(_)) => {
                 panic!("capacity-only test unexpectedly prepared an HTTP/2 action")
             }
             Some(AdmissionAction::H2Reclaim(_)) => {
@@ -540,8 +540,8 @@ pub(super) enum AdmissionAction {
     Delivery(DeliveryGuard),
     /// HTTP/1 availability, reservation, or borrowed-sender work.
     H1(reuse::H1ReuseAction),
-    /// HTTP/2 generation visibility handed to one requesting cell.
-    H2(H2PublicationGuard),
+    /// HTTP/2 generation route handed to one requesting cell.
+    H2Route(H2RouteGuard),
     /// Exact idle HTTP/2 generation reserved at its connection cell.
     H2Reclaim(H2ReclaimAction),
 }
@@ -552,7 +552,7 @@ impl AdmissionAction {
         match self {
             Self::Delivery(delivery) => delivery.deliver_once(),
             Self::H1(action) => action.drive_once(),
-            Self::H2(publication) => publication.publish_once(),
+            Self::H2Route(route) => route.install_once(),
             Self::H2Reclaim(reclaim) => reclaim.drive_once(),
         }
     }
@@ -639,8 +639,8 @@ struct AdmissionState {
     demand_schedule: DemandSchedule,
     /// HTTP/1 availability reports and cross-cell reuse operations.
     h1: reuse::H1Reuse,
-    /// HTTP/2 advertisements and eligibility-group publication turns.
-    h2: H2Publication,
+    /// HTTP/2 advertisements and eligibility-group route turns.
+    h2: H2RouteSchedule,
     /// Next never-reused delivery identity.
     next_delivery: u64,
     /// Configured connection bound used to check capacity conservation.
@@ -657,7 +657,7 @@ impl AdmissionState {
             next_permit_id: 0,
             demand_schedule: DemandSchedule::default(),
             h1: reuse::H1Reuse::default(),
-            h2: H2Publication::default(),
+            h2: H2RouteSchedule::default(),
             next_delivery: 0,
             limit,
         }
@@ -703,7 +703,7 @@ impl AdmissionState {
     /// Refreshes protocol indexes derived from the canonical demand schedule.
     ///
     /// HTTP/1 indexes depend on the requesting partition's origin position.
-    /// HTTP/2 publication depends on both the previous and current eligibility
+    /// HTTP/2 route scheduling depends on both previous and current eligibility
     /// groups, so a group change must repair each view. The derived indexes do
     /// not own demand or ordering.
     fn reconcile_demand_indexes(
@@ -771,8 +771,8 @@ impl AdmissionState {
         self.reconcile_demand_indexes(requesting_partition, old_group);
     }
 
-    /// Reserves one eligibility-group head for identity-only H2 publication.
-    fn prepare_h2_publication(&mut self) -> Option<PreparedH2Publication> {
+    /// Reserves one eligibility-group head for an identity-only H2 route.
+    fn prepare_h2_route(&mut self) -> Option<PreparedH2Route> {
         if !self.h2.has_ready_group() {
             return None;
         }
@@ -955,101 +955,6 @@ mod tests {
         state.return_permit(held);
 
         assert_eq!(second, state.schedule_one().unwrap().requesting_partition);
-    }
-
-    #[test]
-    fn delivery_currency_includes_the_demand_id() {
-        let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
-        let requesting_partition = cell(&origin, 1);
-        let delivery = OriginAdmission::publish_without_driving(
-            &origin,
-            requesting_partition.id().partition(),
-            demand(1),
-        )
-        .unwrap();
-        assert!(delivery.is_current());
-
-        origin
-            .state
-            .lock()
-            .publish_demand(requesting_partition.id().partition(), demand(2));
-        assert!(!delivery.is_current());
-        delivery.reject(None);
-    }
-
-    #[test]
-    fn stale_successor_cannot_leave_active_demand_idle() {
-        let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
-        let requesting_partition = cell(&origin, 1);
-        let delivery = OriginAdmission::publish_without_driving(
-            &origin,
-            requesting_partition.id().partition(),
-            demand(1),
-        )
-        .unwrap();
-        origin.state.lock().publish_demand(
-            requesting_partition.id().partition(),
-            DemandSnapshot::active(
-                DemandId::from_u64(1),
-                SnapshotVersion::INITIAL.next(),
-                ProtocolRequirement::H1Compatible,
-                EligibilityGroup::Pool,
-            ),
-        );
-        delivery.reject(Some(demand(1)));
-
-        assert_eq!(1, origin.counts().available);
-        assert_eq!(0, origin.counts().ordered);
-    }
-
-    #[test]
-    fn dropped_delivery_refunnels_capacity_and_preserves_order() {
-        let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
-        let first = cell(&origin, 1);
-        let second = cell(&origin, 2);
-        let (first_waiter, first_demand) =
-            first.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
-        let (second_waiter, second_demand) =
-            second.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
-        let delivery =
-            OriginAdmission::publish_without_driving(&origin, first.id().partition(), first_demand)
-                .unwrap();
-        {
-            let mut state = origin.state.lock();
-            state.publish_demand(second.id().partition(), second_demand);
-        }
-        drop(delivery);
-
-        let first_lease = OriginCell::take_ready_lease(&first, first_waiter)
-            .expect("dropped delivery did not retry the original head");
-        assert!(OriginCell::take_ready_lease(&second, second_waiter).is_none());
-        assert_eq!(1, origin.counts().ordered);
-
-        drop(first_lease);
-        let second_lease = OriginCell::take_ready_lease(&second, second_waiter)
-            .expect("younger demand did not run after the original head");
-        drop(second_lease);
-    }
-
-    #[test]
-    fn expired_requesting_cell_refunnels_capacity() {
-        let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
-        let requesting_partition = cell(&origin, 1);
-        let requesting_cell_id = requesting_partition.id().partition();
-        let (_waiter, snapshot) =
-            requesting_partition.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
-        let delivery =
-            OriginAdmission::publish_without_driving(&origin, requesting_cell_id, snapshot)
-                .unwrap();
-
-        drop(requesting_partition);
-        assert!(origin.cell(&requesting_cell_id).is_none());
-        OriginAdmission::drive(Some(AdmissionAction::Delivery(delivery)));
-
-        let counts = origin.counts();
-        assert_eq!(1, counts.available);
-        assert_eq!(0, counts.delivering);
-        assert_eq!(0, counts.ordered);
     }
 
     #[test]

@@ -288,7 +288,7 @@ crate::cfg::cfg_tls! {
                 tls::Provider::Rustls(crypto_mode) => {
                     let tcp_nodelay = self.tcp_nodelay;
                     let tcp_keepalive = self.tcp_keepalive.clone().resolve(None);
-                    let transport = establish::cached_transport_factory_for_interface(
+                    let transport = establish::from_cached_interface_connector(
                         move |interface, alpn_protocols| {
                             let mut connector =
                                 HttpConnector::new_with_resolver(GaiResolver::new());
@@ -311,7 +311,7 @@ crate::cfg::cfg_tls! {
                 tls::Provider::S2nTls => {
                     let tcp_nodelay = self.tcp_nodelay;
                     let tcp_keepalive = self.tcp_keepalive.clone().resolve(None);
-                    let transport = establish::cached_transport_factory_for_interface(
+                    let transport = establish::from_cached_interface_connector(
                         move |interface, _alpn_protocols| {
                             let mut connector =
                                 HttpConnector::new_with_resolver(GaiResolver::new());
@@ -341,7 +341,7 @@ impl Builder<TlsUnset> {
         let mut connector = HttpConnector::new_with_resolver(GaiResolver::new());
         connector.set_nodelay(self.tcp_nodelay);
         connector.set_keepalive(self.tcp_keepalive.clone().resolve(None));
-        let transport = establish::transport_factory_for_interface(move |interface| {
+        let transport = establish::from_interface_connector(move |interface| {
             let mut connector = connector.clone();
             set_default_connector_interface(&mut connector, interface);
             connector
@@ -368,7 +368,7 @@ impl Builder<TlsUnset> {
             + Unpin
             + 'static,
     {
-        self.build_with_transport(establish::transport_factory(connector))
+        self.build_with_transport(establish::from_connector(connector))
     }
 
     #[cfg(all(test, feature = "rt-tokio"))]
@@ -388,7 +388,7 @@ impl Builder<TlsUnset> {
             + Unpin
             + 'static,
     {
-        self.build_with_transport(establish::transport_factory(connector))
+        self.build_with_transport(establish::from_connector(connector))
     }
 }
 

@@ -16,11 +16,11 @@
 //! without consuming that permit or delaying A. The group order finds B
 //! directly instead of scanning every partition.
 //!
-//! The same demand occupies both orders because capacity and HTTP/2 publication
-//! can race to satisfy it. Reserving either position retains a fence in both
-//! orders until the requesting cell accepts or rejects the handoff. The other
-//! resource therefore cannot serve the same demand while the first handoff is
-//! running outside the admission lock.
+//! The same demand occupies both orders because capacity delivery and HTTP/2
+//! route installation can race to satisfy it. Reserving either position
+//! retains a fence in both orders until the requesting cell accepts or rejects
+//! the handoff. The other resource therefore cannot serve the same demand
+//! while the first handoff is running outside the admission lock.
 
 use super::{
     DeliveryAckResult, DeliveryId, DemandId, DemandSnapshot, DemandState, IntrusiveLinks,
@@ -38,7 +38,7 @@ use std::collections::HashMap;
 ///   the `Queued` and `Delivering` records;
 /// - links for both views live inside those ordered residence variants;
 /// - an origin delivery fences the origin head; and
-/// - an HTTP/2 publication fences its eligibility-group head.
+/// - an HTTP/2 route installation fences its eligibility-group head.
 ///
 /// Admission coordinates capacity extraction with this schedule while holding
 /// the same origin lock.
@@ -90,7 +90,7 @@ struct DemandLinks {
 enum DeliveryView {
     /// Capacity or HTTP/1 delivery selected from origin order.
     Origin,
-    /// HTTP/2 publication selected from eligibility-group order.
+    /// HTTP/2 route selected from eligibility-group order.
     Group,
 }
 
@@ -124,7 +124,7 @@ enum DemandResidence {
         /// Origin-wide and eligibility-group scheduling links.
         links: DemandLinks,
     },
-    /// One delivery or publication guard fences this demand.
+    /// One delivery or route guard fences this demand.
     Delivering {
         /// Demand generation fenced at one scheduling head.
         demand: DemandId,
@@ -473,7 +473,7 @@ impl DemandSchedule {
         self.reserve_origin_head(delivery)
     }
 
-    /// Fences one eligibility-group head for an H2 publication.
+    /// Fences one eligibility-group head for an H2 route installation.
     pub(super) fn reserve_group_head(
         &mut self,
         group: &EligibilityGroup,
@@ -859,7 +859,7 @@ impl DemandSchedule {
                         assert_eq!(
                             Some(requesting_partition),
                             order.head(),
-                            "group publication fence moved away from its head"
+                            "group route fence moved away from its head"
                         );
                     }
                     *record

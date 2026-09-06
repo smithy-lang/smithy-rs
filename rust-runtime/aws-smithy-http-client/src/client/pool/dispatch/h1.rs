@@ -15,7 +15,6 @@
 use super::super::cell::h1::{H1Exchange, H1Selection};
 use super::super::connection::{CloseReason, ConnectionState, DispatchGuard};
 use super::super::partition::DriverSpawner;
-use super::super::ConnectionPool;
 use super::{AcquisitionContext, H1HostHeaderInserted, RequestDispatchError};
 use aws_smithy_runtime_api::client::connection::CaptureSmithyConnection;
 use aws_smithy_runtime_api::client::result::ConnectorError;
@@ -35,114 +34,111 @@ pub(super) enum H1DispatchResult {
     Reacquire(Request<SdkBody>),
 }
 
-impl ConnectionPool {
-    /// Attempts one dispatch through an acquired HTTP/1 selection.
-    ///
-    /// The parent may reacquire only when this function returns the original
-    /// request. A fresh connection's send error is terminal even if Hyper
-    /// returns the request.
-    pub(super) async fn dispatch_h1(
-        &self,
-        context: &AcquisitionContext,
-        mut request: Request<SdkBody>,
-        mut selection: H1Selection,
-    ) -> Result<H1DispatchResult, ConnectorError> {
-        let request_method = request.method().clone();
-        let reused = selection.is_reused();
-        let connection = selection.connection().clone();
-        let close_handle = selection.close_handle();
-        let captured_metadata = request
-            .extensions()
-            .get::<CaptureSmithyConnection>()
-            .cloned()
-            .map(|capture| {
-                let metadata = connection.info().metadata(close_handle.clone());
-                let captured = metadata.clone();
-                capture.set_connection_retriever(move || Some(captured.clone()));
-                metadata
-            });
+/// Attempts one dispatch through an acquired HTTP/1 selection.
+///
+/// The parent may reacquire only when this function returns the original
+/// request. A fresh connection's send error is terminal even if Hyper returns
+/// the request.
+pub(super) async fn dispatch(
+    context: &AcquisitionContext,
+    mut request: Request<SdkBody>,
+    mut selection: H1Selection,
+) -> Result<H1DispatchResult, ConnectorError> {
+    let request_method = request.method().clone();
+    let reused = selection.is_reused();
+    let connection = selection.connection().clone();
+    let close_handle = selection.close_handle();
+    let captured_metadata = request
+        .extensions()
+        .get::<CaptureSmithyConnection>()
+        .cloned()
+        .map(|capture| {
+            let metadata = connection.info().metadata(close_handle.clone());
+            let captured = metadata.clone();
+            capture.set_connection_retriever(move || Some(captured.clone()));
+            metadata
+        });
 
-        if request.version() == Version::HTTP_2 {
-            let metadata =
-                captured_metadata.unwrap_or_else(|| connection.info().metadata(close_handle));
-            return Err(ConnectorError::user(
-                "an HTTP/2 request cannot use an HTTP/1 connection".into(),
-            )
-            .with_connection(metadata));
+    if request.version() == Version::HTTP_2 {
+        let metadata =
+            captured_metadata.unwrap_or_else(|| connection.info().metadata(close_handle));
+        return Err(ConnectorError::user(
+            "an HTTP/2 request cannot use an HTTP/1 connection".into(),
+        )
+        .with_connection(metadata));
+    }
+
+    add_host_header(&mut request, &context.absolute_uri)
+        .map_err(|error| ConnectorError::user(error.into()))?;
+    rewrite_h1_request_target(&mut request, connection.info().is_proxied());
+
+    // Commit against logical close before transferring the request to
+    // Hyper. A close that wins this race leaves the request untouched.
+    let Some(dispatch) = ConnectionState::try_commit_dispatch(&connection) else {
+        tracing::trace!(
+            connection_id = %connection.id(),
+            request_partition = ?context.partition.id(),
+            connection_partition = ?connection.owner_partition(),
+            origin_scheme = %connection.info().origin().scheme(),
+            origin_host = connection.info().origin().host(),
+            origin_port = ?connection.info().origin().port(),
+            "HTTP/1 selection became stale before dispatch"
+        );
+        *request.uri_mut() = context.absolute_uri.clone();
+        selection.retire_connection(CloseReason::ProtocolClosed);
+        return Ok(H1DispatchResult::Reacquire(request));
+    };
+    let send = selection.sender_mut().hyper_mut().try_send_request(request);
+
+    let exchange = selection.into_exchange();
+    match send.await {
+        Ok(mut response) => {
+            // Response-body ownership keeps both the accepted dispatch
+            // and exclusive request handle out of the pool until Hyper
+            // proves a complete message boundary.
+            connection
+                .info()
+                .apply_connector_extras(response.extensions_mut());
+            Ok(H1DispatchResult::Response(guard_response(
+                response,
+                request_method,
+                exchange,
+                dispatch,
+                context.owner_spawner.clone(),
+            )))
         }
-
-        add_host_header(&mut request, &context.absolute_uri)
-            .map_err(|error| ConnectorError::user(error.into()))?;
-        rewrite_h1_request_target(&mut request, connection.info().is_proxied());
-
-        // Commit against logical close before transferring the request to
-        // Hyper. A close that wins this race leaves the request untouched.
-        let Some(dispatch) = ConnectionState::try_commit_dispatch(&connection) else {
-            tracing::trace!(
-                connection_id = %connection.id(),
-                request_partition = ?context.partition.id(),
-                connection_partition = ?connection.owner_partition(),
-                origin_scheme = %connection.info().origin().scheme(),
-                origin_host = connection.info().origin().host(),
-                origin_port = ?connection.info().origin().port(),
-                "HTTP/1 selection became stale before dispatch"
-            );
-            *request.uri_mut() = context.absolute_uri.clone();
-            selection.retire_connection(CloseReason::ProtocolClosed);
-            return Ok(H1DispatchResult::Reacquire(request));
-        };
-        let send = selection.sender_mut().hyper_mut().try_send_request(request);
-
-        let exchange = selection.into_exchange();
-        match send.await {
-            Ok(mut response) => {
-                // Response-body ownership keeps both the accepted dispatch
-                // and exclusive request handle out of the pool until Hyper
-                // proves a complete message boundary.
-                connection
-                    .info()
-                    .apply_connector_extras(response.extensions_mut());
-                Ok(H1DispatchResult::Response(guard_response(
-                    response,
-                    request_method,
-                    exchange,
-                    dispatch,
-                    context.owner_spawner.clone(),
-                )))
-            }
-            Err(mut error) => {
-                if let Some(mut returned) = error.take_message() {
-                    exchange.retire_connection(CloseReason::ProtocolClosed);
-                    drop(dispatch);
-                    if reused {
-                        tracing::trace!(
-                            connection_id = %connection.id(),
-                            request_partition = ?context.partition.id(),
-                            connection_partition = ?connection.owner_partition(),
-                            origin_scheme = %connection.info().origin().scheme(),
-                            origin_host = connection.info().origin().host(),
-                            origin_port = ?connection.info().origin().port(),
-                            "reused HTTP/1 connection returned request unsent"
-                        );
-                        *returned.uri_mut() = context.absolute_uri.clone();
-                        return Ok(H1DispatchResult::Reacquire(returned));
-                    }
-                    let metadata = captured_metadata
-                        .unwrap_or_else(|| connection.info().metadata(close_handle));
-                    return Err(
-                        super::super::super::downcast_error(Box::new(error.into_error()))
-                            .with_connection(metadata),
-                    );
-                }
-                exchange.retire_connection(CloseReason::IncompleteH1Exchange);
+        Err(mut error) => {
+            if let Some(mut returned) = error.take_message() {
+                exchange.retire_connection(CloseReason::ProtocolClosed);
                 drop(dispatch);
+                if reused {
+                    tracing::trace!(
+                        connection_id = %connection.id(),
+                        request_partition = ?context.partition.id(),
+                        connection_partition = ?connection.owner_partition(),
+                        origin_scheme = %connection.info().origin().scheme(),
+                        origin_host = connection.info().origin().host(),
+                        origin_port = ?connection.info().origin().port(),
+                        "reused HTTP/1 connection returned request unsent"
+                    );
+                    *returned.uri_mut() = context.absolute_uri.clone();
+                    return Ok(H1DispatchResult::Reacquire(returned));
+                }
                 let metadata =
                     captured_metadata.unwrap_or_else(|| connection.info().metadata(close_handle));
-                Err(
+                return Err(
                     super::super::super::downcast_error(Box::new(error.into_error()))
                         .with_connection(metadata),
-                )
+                );
             }
+            exchange.retire_connection(CloseReason::IncompleteH1Exchange);
+            drop(dispatch);
+            let metadata =
+                captured_metadata.unwrap_or_else(|| connection.info().metadata(close_handle));
+            Err(
+                super::super::super::downcast_error(Box::new(error.into_error()))
+                    .with_connection(metadata),
+            )
         }
     }
 }
@@ -435,6 +431,7 @@ mod tests {
     use crate::client::pool::cell::h1::H1Sender;
     use crate::client::pool::cell::OriginCell;
     use crate::client::pool::connection::ConnectionInfo;
+    use crate::client::pool::dispatch::RequestOptions;
     use crate::client::pool::registry::PartitionState;
     use crate::client::pool::{
         Client, ConnectionId, ConnectionPool, ConnectionReuseScope, Partition, PartitionId,
@@ -659,7 +656,7 @@ mod tests {
             .unwrap();
 
         let error = pool
-            .send_request(partition, request, None)
+            .send_request(partition, request, RequestOptions::default())
             .await
             .expect_err("dropped establishment task did not fail the request");
         assert!(error.is_io());
@@ -761,7 +758,7 @@ mod tests {
         pool.send_request(
             partition,
             Request::get(uri).body(SdkBody::empty()).unwrap(),
-            None,
+            RequestOptions::default(),
         )
         .await
         .unwrap()
@@ -974,7 +971,7 @@ mod tests {
                 .send_request(
                     first_partition,
                     Request::get(first_uri).body(SdkBody::empty()).unwrap(),
-                    None,
+                    RequestOptions::default(),
                 )
                 .await
         });
@@ -1037,7 +1034,7 @@ mod tests {
                 .send_request(
                     first_partition,
                     Request::get(first_uri).body(SdkBody::empty()).unwrap(),
-                    None,
+                    RequestOptions::default(),
                 )
                 .await
         });
@@ -1170,7 +1167,7 @@ mod tests {
         h2_request.extensions_mut().insert(capture.clone());
 
         let error = pool
-            .send_request(partition.clone(), h2_request, None)
+            .send_request(partition.clone(), h2_request, RequestOptions::default())
             .await
             .expect_err("an HTTP/2 request unexpectedly used HTTP/1");
         assert!(error.is_user());
@@ -1208,7 +1205,7 @@ mod tests {
             .unwrap();
         first.extensions_mut().insert(capture.clone());
         let response = pool
-            .send_request(partition.clone(), first, None)
+            .send_request(partition.clone(), first, RequestOptions::default())
             .await
             .unwrap();
         consume(response).await;
@@ -1242,7 +1239,7 @@ mod tests {
             .unwrap();
 
         let error = pool
-            .send_request(partition, request, None)
+            .send_request(partition, request, RequestOptions::default())
             .await
             .expect_err("exhausted connection identifiers unexpectedly established a connection");
         assert!(error.is_other());
@@ -1278,7 +1275,7 @@ mod tests {
         let request = Request::get("http://example.com/")
             .body(SdkBody::empty())
             .unwrap();
-        let mut send = Box::pin(pool.send_request(partition, request, None));
+        let mut send = Box::pin(pool.send_request(partition, request, RequestOptions::default()));
         let waker = std::task::Waker::noop();
         let mut context = Context::from_waker(waker);
 
@@ -1569,7 +1566,11 @@ mod tests {
         let request_partition = partition.clone();
         let response = tokio::spawn(async move {
             request_pool
-                .send_request(request_partition, upgrade_request, None)
+                .send_request(
+                    request_partition,
+                    upgrade_request,
+                    RequestOptions::default(),
+                )
                 .await
                 .unwrap()
         });

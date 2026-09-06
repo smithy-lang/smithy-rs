@@ -3,33 +3,38 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Cross-cell HTTP/2 generation publication for bounded origins.
+//! Peer HTTP/2 route scheduling for bounded origins.
 //!
-//! A connection cell advertises only its exact accepting generation. Admission
-//! pairs that identity with the oldest demand in the same eligibility group.
-//! The requesting cell stores an identity-only route; the connection-owning
-//! cell retains its sender, driver, socket, and capacity lease.
+//! A partition may send a request on another partition's HTTP/2 connection
+//! when both partitions belong to the same eligibility group. The connection
+//! cell reports the exact accepting generation to admission. Admission pairs
+//! that report with compatible demand and installs an identity-only route in
+//! the requesting cell. The connection cell keeps the Hyper request handle,
+//! protocol driver, transport, and capacity lease.
 //!
 //! ```text
-//! connection-cell report -> advertisement indexed by eligibility group
-//! group demand + peer advertisement -> publication fence
-//! connection generation validation -> requesting-cell route visibility
-//! requesting-cell visibility -> admission acknowledgement
-//! stale connection or requesting cell -> retry or retire fenced demand
-//! idle generation + H1-required demand -> exact-generation reclaim
+//! connection cell A: advertise accepting generation G
+//! admission:         demand from B + advertisement(A, G) -> fence demand
+//! connection cell A: validate that G still accepts requests
+//! requesting cell B: install route(A, G)
+//! admission:         acknowledge the fenced demand version
 //! ```
 //!
-//! An accepting generation with no prospective or accepted requests also
-//! enters an origin-wide reclaim order. H1-required demand may reserve one
-//! exact idle generation, revalidate it under the connection-cell lock, and
-//! close it to return bounded capacity. Busy generations never enter that
-//! order.
+//! The route carries no connection state. Each use upgrades the connection
+//! cell reference and revalidates generation `G` before reserving one request
+//! stream. A stale generation, cancelled requesting cell, or rejected route
+//! repairs the fence so live demand remains schedulable.
 //!
-//! The connection-owning and requesting cell locks never nest.
-//! [`H2PublicationGuard`] owns the admission fence between those scopes and
-//! submits a terminal acknowledgement on drop. [`H2ReclaimAction`] owns an
-//! idle-generation reservation and repairs admission's view if the crossing is
-//! rejected or dropped.
+//! Idle accepting generations have a second use under an origin connection
+//! limit. H1-required demand may reserve one exact idle generation, validate
+//! that it is still idle, and close it to return capacity for an HTTP/1
+//! connection attempt. A busy generation never enters this reclaim order.
+//!
+//! Admission, connection-cell, and requesting-cell locks are acquired in
+//! separate steps. [`H2RouteGuard`] owns the demand fence while route
+//! installation crosses those steps and submits a terminal acknowledgement on
+//! drop. [`H2ReclaimAction`] provides the same fallback for an idle-generation
+//! reclaim reservation.
 
 use super::{
     AdmissionAction, DeliveryAckResult, DeliveryId, DemandId, DemandSchedule, IntrusiveLinks,
@@ -49,7 +54,7 @@ pub(in crate::client::pool) struct H2AdvertisementSnapshot {
     revision: u64,
     /// Exact accepting generation, or `None` after withdrawal.
     generation: Option<H2GenerationId>,
-    /// Whether the accepting generation has no prospective or accepted requests.
+    /// Whether the accepting generation has no prospective or active requests.
     idle: bool,
 }
 
@@ -82,7 +87,7 @@ impl H2AdvertisementSnapshot {
     }
 }
 
-/// Admission-owned H2 advertisements and publication-ready groups.
+/// Admission-owned H2 advertisements, route scheduling, and idle reclaim.
 ///
 /// At every completed transition:
 ///
@@ -94,10 +99,10 @@ impl H2AdvertisementSnapshot {
 /// - `ready_groups` contains exactly the groups with H2-compatible queued
 ///   demand and an advertised peer connection;
 /// - at most one reclaim reservation crosses to a connection cell; and
-/// - advertisements, prepared publications, and reclaim reservations own no
+/// - advertisements, prepared routes, and reclaim reservations own no
 ///   connection capacity or protocol sender.
 #[derive(Debug, Default)]
-pub(super) struct H2Publication {
+pub(super) struct H2RouteSchedule {
     /// Latest report retained for each connection cell.
     advertisements: HashMap<PartitionId, AdvertisementRecord>,
     /// Advertised connection cells ordered within each reuse group.
@@ -106,7 +111,7 @@ pub(super) struct H2Publication {
     idle_order: IntrusiveOrder<PartitionId>,
     /// Groups that have both compatible demand and a peer advertisement.
     ready_groups: BTreeSet<EligibilityGroup>,
-    /// Group selected by the previous publication turn.
+    /// Group selected by the previous route turn.
     last_ready_group: Option<EligibilityGroup>,
     /// Exact idle generation currently crossing to its connection cell.
     reclaiming: Option<PreparedH2Reclaim>,
@@ -115,7 +120,7 @@ pub(super) struct H2Publication {
 /// Admission's latest complete report for one connection cell.
 #[derive(Debug)]
 struct AdvertisementRecord {
-    /// Reuse group in which this connection may be published.
+    /// Reuse group in which this connection may be advertised.
     group: EligibilityGroup,
     /// Newest connection-cell report retained by admission.
     revision: u64,
@@ -160,12 +165,12 @@ impl AdvertisementResidence {
 
 /// Identity selected before connection and requesting cell validation.
 #[derive(Clone, Debug)]
-pub(super) struct PreparedH2Publication {
+pub(super) struct PreparedH2Route {
     /// Admission fence identity.
     pub(super) delivery: DeliveryId,
     /// Cell whose demand is fenced.
     pub(super) requesting_partition: PartitionId,
-    /// Exact demand generation selected for publication.
+    /// Exact demand generation selected for route installation.
     pub(super) demand: DemandId,
     /// Cell that owns the advertised connection.
     pub(super) connection_partition: PartitionId,
@@ -191,7 +196,7 @@ pub(super) struct PreparedH2Reclaim {
 }
 
 /// Candidate selected from stored demand and advertisement heads.
-struct PublicationCandidate {
+struct H2RouteCandidate {
     /// Requesting cell selected from the group demand head.
     requesting_partition: PartitionId,
     /// Demand generation at that head.
@@ -204,8 +209,8 @@ struct PublicationCandidate {
     group: EligibilityGroup,
 }
 
-impl H2Publication {
-    /// Returns whether some eligibility group may start a publication turn.
+impl H2RouteSchedule {
+    /// Returns whether some eligibility group may start a route turn.
     pub(super) fn has_ready_group(&self) -> bool {
         !self.ready_groups.is_empty()
     }
@@ -283,7 +288,7 @@ impl H2Publication {
         self.assert_consistent(demand);
     }
 
-    /// Recomputes whether one group can start a publication.
+    /// Recomputes whether one group can install a peer route.
     pub(super) fn reconcile_group(&mut self, group: &EligibilityGroup, demand: &DemandSchedule) {
         let ready = demand
             .queued_group_head(group)
@@ -303,7 +308,7 @@ impl H2Publication {
     }
 
     /// Selects one group head and one peer advertisement without scanning cells.
-    fn candidate(&mut self, demand: &DemandSchedule) -> Option<PublicationCandidate> {
+    fn candidate(&mut self, demand: &DemandSchedule) -> Option<H2RouteCandidate> {
         let group = self
             .last_ready_group
             .as_ref()
@@ -330,7 +335,7 @@ impl H2Publication {
         let generation = record
             .generation
             .expect("selected H2 advertisement had no generation");
-        Some(PublicationCandidate {
+        Some(H2RouteCandidate {
             requesting_partition: queued.requesting_partition,
             demand: queued.demand,
             connection_partition,
@@ -339,12 +344,12 @@ impl H2Publication {
         })
     }
 
-    /// Reserves one group demand and creates its unlocked publication identity.
+    /// Reserves one group demand and creates its unlocked route identity.
     pub(super) fn prepare(
         &mut self,
         demand: &mut DemandSchedule,
         delivery: DeliveryId,
-    ) -> Option<PreparedH2Publication> {
+    ) -> Option<PreparedH2Route> {
         let candidate = self.candidate(demand)?;
         demand.reserve_group_head(
             &candidate.group,
@@ -355,7 +360,7 @@ impl H2Publication {
         self.last_ready_group = Some(candidate.group.clone());
         self.reconcile_group(&candidate.group, demand);
         self.assert_consistent(demand);
-        Some(PreparedH2Publication {
+        Some(PreparedH2Route {
             delivery,
             requesting_partition: candidate.requesting_partition,
             demand: candidate.demand,
@@ -660,24 +665,24 @@ impl H2Publication {
                 .collect::<BTreeSet<_>>();
             assert_eq!(
                 expected_ready, self.ready_groups,
-                "HTTP/2 publication-ready groups did not match demand and advertisements"
+                "HTTP/2 route-ready groups did not match demand and advertisements"
             );
         }
     }
 }
 
-/// Identity-only publication crossing with a terminal admission fallback.
-pub(in crate::client::pool) struct H2PublicationGuard {
+/// Identity-only route installation with a terminal admission fallback.
+pub(in crate::client::pool) struct H2RouteGuard {
     /// Admission owner of the fenced demand and advertisement.
     origin: Arc<OriginAdmission>,
     /// Identities revalidated across the unlocked cell transitions.
-    prepared: PreparedH2Publication,
+    prepared: PreparedH2Route,
     /// Terminal acknowledgement submitted if the crossing unwinds.
     on_drop: Option<DeliveryAckResult>,
 }
 
-impl H2PublicationGuard {
-    pub(super) fn new(origin: Arc<OriginAdmission>, prepared: PreparedH2Publication) -> Self {
+impl H2RouteGuard {
+    pub(super) fn new(origin: Arc<OriginAdmission>, prepared: PreparedH2Route) -> Self {
         Self {
             origin,
             prepared,
@@ -691,7 +696,7 @@ impl H2PublicationGuard {
     /// advertisement and retries the same demand residence. A missing
     /// requesting cell retires the demand. Requesting-cell rejection retries
     /// only when the original demand and route installation are still useful.
-    pub(super) fn publish_once(self) -> Option<AdmissionAction> {
+    pub(super) fn install_once(self) -> Option<AdmissionAction> {
         let generation = self.prepared.generation;
         let Some(connection_cell) = self.origin.cell(&self.prepared.connection_partition) else {
             return self.finish(DeliveryAckResult::RetrySameResidence, Some(generation));
@@ -732,7 +737,7 @@ impl H2PublicationGuard {
         // The unlocked cell crossing is complete. Admission owns the fence
         // again, so unwinding must not replay a failed acknowledgement.
         self.on_drop = None;
-        let next = OriginAdmission::finish_h2_publication(
+        let next = OriginAdmission::finish_h2_route(
             &self.origin,
             &self.prepared,
             stale_generation,
@@ -752,18 +757,17 @@ impl H2PublicationGuard {
             h2_generation = ?self.prepared.generation,
             demand = ?self.prepared.demand,
             outcome,
-            "HTTP/2 peer publication completed"
+            "HTTP/2 peer route installation completed"
         );
     }
 }
 
-impl Drop for H2PublicationGuard {
+impl Drop for H2RouteGuard {
     fn drop(&mut self) {
         let Some(result) = self.on_drop.take() else {
             return;
         };
-        let next =
-            OriginAdmission::finish_h2_publication(&self.origin, &self.prepared, None, result);
+        let next = OriginAdmission::finish_h2_route(&self.origin, &self.prepared, None, result);
         self.trace("guard_drop");
         OriginAdmission::drive(next);
     }
@@ -883,22 +887,22 @@ mod tests {
         let second = generation(11);
         let mut schedule = DemandSchedule::default();
         schedule.publish(requesting_partition, demand(1, group.clone()));
-        let mut publication = H2Publication::default();
-        publication.update(
+        let mut routes = H2RouteSchedule::default();
+        routes.update(
             connection_partition,
             group.clone(),
             H2AdvertisementSnapshot::accepting(1, first),
             &schedule,
         );
-        publication.update(
+        routes.update(
             connection_partition,
             group.clone(),
             H2AdvertisementSnapshot::accepting(2, second),
             &schedule,
         );
 
-        publication.remove_if_exact(&connection_partition, first, &schedule);
-        let prepared = publication
+        routes.remove_if_exact(&connection_partition, first, &schedule);
+        let prepared = routes
             .prepare(&mut schedule, DeliveryId(1))
             .expect("newer advertisement should remain publishable");
         assert_eq!(second, prepared.generation);
@@ -914,26 +918,26 @@ mod tests {
         let current = generation(10);
         let mut schedule = DemandSchedule::default();
         schedule.publish(requesting_partition, demand(1, group.clone()));
-        let mut publication = H2Publication::default();
-        publication.update(
+        let mut routes = H2RouteSchedule::default();
+        routes.update(
             connection_partition,
             group,
             H2AdvertisementSnapshot::accepting(1, current),
             &schedule,
         );
 
-        publication.remove_if_exact(&connection_partition, current, &schedule);
+        routes.remove_if_exact(&connection_partition, current, &schedule);
 
-        assert!(!publication.has_ready_group());
-        assert!(publication.group_orders.is_empty());
+        assert!(!routes.has_ready_group());
+        assert!(routes.group_orders.is_empty());
         assert!(matches!(
-            publication.advertisements[&connection_partition].residence,
+            routes.advertisements[&connection_partition].residence,
             AdvertisementResidence::Unavailable
         ));
     }
 
     #[test]
-    fn publication_skips_the_requesting_cell_and_selects_a_peer_in_its_group() {
+    fn route_schedule_skips_the_requesting_cell_and_selects_a_peer_in_its_group() {
         let pool = EligibilityGroup::Pool;
         let isolated = EligibilityGroup::Partition(partition(3));
         let requesting_partition = partition(1);
@@ -942,27 +946,27 @@ mod tests {
         let mut schedule = DemandSchedule::default();
         schedule.publish(requesting_partition, demand(1, pool.clone()));
         schedule.publish(other_group, demand(2, isolated.clone()));
-        let mut publication = H2Publication::default();
-        publication.update(
+        let mut routes = H2RouteSchedule::default();
+        routes.update(
             requesting_partition,
             pool.clone(),
             H2AdvertisementSnapshot::accepting(1, generation(1)),
             &schedule,
         );
-        publication.update(
+        routes.update(
             peer,
             pool,
             H2AdvertisementSnapshot::accepting(1, generation(2)),
             &schedule,
         );
-        publication.update(
+        routes.update(
             other_group,
             isolated,
             H2AdvertisementSnapshot::accepting(1, generation(3)),
             &schedule,
         );
 
-        let prepared = publication
+        let prepared = routes
             .prepare(&mut schedule, DeliveryId(1))
             .expect("pool demand should find its peer connection");
         assert_eq!(requesting_partition, prepared.requesting_partition);
@@ -978,28 +982,28 @@ mod tests {
         let current = generation(2);
         let mut schedule = DemandSchedule::default();
         schedule.publish(requesting_partition, demand(1, group.clone()));
-        let mut publication = H2Publication::default();
-        publication.update(
+        let mut routes = H2RouteSchedule::default();
+        routes.update(
             connection_partition,
             group.clone(),
             H2AdvertisementSnapshot::accepting(2, current),
             &schedule,
         );
-        publication.update(
+        routes.update(
             connection_partition,
             group,
             H2AdvertisementSnapshot::accepting(1, generation(1)),
             &schedule,
         );
 
-        let prepared = publication
+        let prepared = routes
             .prepare(&mut schedule, DeliveryId(1))
             .expect("current advertisement should remain publishable");
         assert_eq!(current, prepared.generation);
     }
 
     #[test]
-    fn h1_required_demand_is_not_publication_ready() {
+    fn h1_required_demand_is_not_route_ready() {
         let group = EligibilityGroup::Pool;
         let requesting_partition = partition(1);
         let connection_partition = partition(2);
@@ -1013,20 +1017,20 @@ mod tests {
                 group.clone(),
             ),
         );
-        let mut publication = H2Publication::default();
-        publication.update(
+        let mut routes = H2RouteSchedule::default();
+        routes.update(
             connection_partition,
             group,
             H2AdvertisementSnapshot::accepting(1, generation(1)),
             &schedule,
         );
 
-        assert!(!publication.has_ready_group());
-        assert!(publication.prepare(&mut schedule, DeliveryId(1)).is_none());
+        assert!(!routes.has_ready_group());
+        assert!(routes.prepare(&mut schedule, DeliveryId(1)).is_none());
     }
 
     #[test]
-    fn publication_turns_rotate_across_ready_groups() {
+    fn route_turns_rotate_across_ready_groups() {
         let first_group = EligibilityGroup::Partition(partition(10));
         let second_group = EligibilityGroup::Partition(partition(20));
         let first_request = partition(1);
@@ -1036,21 +1040,21 @@ mod tests {
         let mut schedule = DemandSchedule::default();
         schedule.publish(first_request, demand(1, first_group.clone()));
         schedule.publish(second_request, demand(2, second_group.clone()));
-        let mut publication = H2Publication::default();
-        publication.update(
+        let mut routes = H2RouteSchedule::default();
+        routes.update(
             first_connection,
             first_group.clone(),
             H2AdvertisementSnapshot::accepting(1, generation(1)),
             &schedule,
         );
-        publication.update(
+        routes.update(
             second_connection,
             second_group.clone(),
             H2AdvertisementSnapshot::accepting(1, generation(2)),
             &schedule,
         );
 
-        let first = publication
+        let first = routes
             .prepare(&mut schedule, DeliveryId(1))
             .expect("first ready group was not selected");
         schedule.finish_delivery(
@@ -1058,35 +1062,33 @@ mod tests {
             &first.requesting_partition,
             DeliveryAckResult::RetrySameResidence,
         );
-        publication.reconcile_group(&first.group, &schedule);
+        routes.reconcile_group(&first.group, &schedule);
 
-        let second = publication
+        let second = routes
             .prepare(&mut schedule, DeliveryId(2))
             .expect("second ready group was not selected");
         assert_ne!(first.group, second.group);
     }
 
     #[test]
-    #[should_panic(
-        expected = "HTTP/2 publication-ready groups did not match demand and advertisements"
-    )]
+    #[should_panic(expected = "HTTP/2 route-ready groups did not match demand and advertisements")]
     fn consistency_check_rejects_a_missing_ready_group() {
         let group = EligibilityGroup::Pool;
         let connection_partition = partition(1);
         let requesting_partition = partition(2);
         let mut schedule = DemandSchedule::default();
         schedule.publish(requesting_partition, demand(1, group.clone()));
-        let mut publication = H2Publication::default();
-        publication.update(
+        let mut routes = H2RouteSchedule::default();
+        routes.update(
             connection_partition,
             group,
             H2AdvertisementSnapshot::accepting(1, generation(1)),
             &schedule,
         );
 
-        publication.ready_groups.clear();
+        routes.ready_groups.clear();
 
-        publication.assert_consistent(&schedule);
+        routes.assert_consistent(&schedule);
     }
 
     #[test]
@@ -1097,8 +1099,8 @@ mod tests {
         let current = generation(10);
         let mut schedule = DemandSchedule::default();
         schedule.publish(requesting_partition, h1_demand(1, group.clone()));
-        let mut publication = H2Publication::default();
-        publication.update(
+        let mut routes = H2RouteSchedule::default();
+        routes.update(
             connection_partition,
             group.clone(),
             H2AdvertisementSnapshot::accepting(1, current),
@@ -1106,30 +1108,30 @@ mod tests {
         );
 
         assert!(
-            publication.prepare_reclaim(&schedule).is_none(),
+            routes.prepare_reclaim(&schedule).is_none(),
             "busy HTTP/2 generation entered reclaim order"
         );
 
-        publication.update(
+        routes.update(
             connection_partition,
             group,
             H2AdvertisementSnapshot::idle(2, current),
             &schedule,
         );
-        let prepared = publication
+        let prepared = routes
             .prepare_reclaim(&schedule)
             .expect("idle HTTP/2 generation was not selected");
         assert_eq!(requesting_partition, prepared.requesting_partition);
         assert_eq!(connection_partition, prepared.connection_partition);
         assert_eq!(current, prepared.generation);
-        assert!(publication.idle_order.head().is_none());
+        assert!(routes.idle_order.head().is_none());
 
-        publication.finish_reclaim(
+        routes.finish_reclaim(
             &prepared,
             Some(H2AdvertisementSnapshot::idle(2, current)),
             &schedule,
         );
-        assert_eq!(Some(connection_partition), publication.idle_order.head());
+        assert_eq!(Some(connection_partition), routes.idle_order.head());
     }
 
     #[test]
@@ -1141,30 +1143,30 @@ mod tests {
         let replacement = generation(11);
         let mut schedule = DemandSchedule::default();
         schedule.publish(requesting_partition, h1_demand(1, group.clone()));
-        let mut publication = H2Publication::default();
-        publication.update(
+        let mut routes = H2RouteSchedule::default();
+        routes.update(
             connection_partition,
             group.clone(),
             H2AdvertisementSnapshot::idle(1, old),
             &schedule,
         );
-        let prepared = publication
+        let prepared = routes
             .prepare_reclaim(&schedule)
             .expect("idle HTTP/2 generation was not selected");
 
-        publication.update(
+        routes.update(
             connection_partition,
             group,
             H2AdvertisementSnapshot::idle(2, replacement),
             &schedule,
         );
-        publication.finish_reclaim(
+        routes.finish_reclaim(
             &prepared,
             Some(H2AdvertisementSnapshot::idle(1, old)),
             &schedule,
         );
 
-        let next = publication
+        let next = routes
             .prepare_reclaim(&schedule)
             .expect("replacement generation was not restored to reclaim order");
         assert_eq!(replacement, next.generation);

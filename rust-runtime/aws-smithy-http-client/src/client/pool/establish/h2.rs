@@ -119,7 +119,7 @@ pub(super) async fn establish_h2(
                     H2GenerationJoin::Joined | H2GenerationJoin::WaiterCompleted => {
                         drop(io);
                         drop(permit);
-                        return EstablishmentOutcome::Transferred;
+                        return EstablishmentOutcome::WaiterCompletionTransferred;
                     }
                 }
             }
@@ -134,7 +134,7 @@ pub(super) async fn establish_h2(
                 );
                 drop(io);
                 drop(permit);
-                return EstablishmentOutcome::Transferred;
+                return EstablishmentOutcome::WaiterCompletionTransferred;
             }
             H2FlightInstall::Driver(flight) => {
                 tracing::trace!(
@@ -147,7 +147,7 @@ pub(super) async fn establish_h2(
                     "HTTP/2 establishment started a flight"
                 );
                 drive_flight(context, flight, permit, io, connected).await;
-                return EstablishmentOutcome::Transferred;
+                return EstablishmentOutcome::WaiterCompletionTransferred;
             }
         }
     }

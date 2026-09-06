@@ -5,11 +5,23 @@
 
 //! Request routing and protocol dispatch.
 //!
-//! This module is the request entry point after a [`super::Client`] has
-//! resolved its partition. It rejects unsupported request forms, resolves the
-//! origin cell and partition runtime, and owns acquisition across protocol
-//! selection. Child modules prepare protocol wire forms and retain response
-//! ownership.
+//! A [`super::Client`] supplies its partition and one request. This module then
+//! performs the request journey in four phases:
+//!
+//! 1. validate protocol-sensitive request semantics;
+//! 2. resolve the origin cell and its owner runtime;
+//! 3. acquire the next authority that can make progress; and
+//! 4. submit through the selected HTTP protocol.
+//!
+//! Acquisition does not necessarily acquire a connection. A request may
+//! receive an exclusive HTTP/1 sender, an activation on an existing HTTP/2
+//! generation, or authority to establish a new transport. A waiter event is
+//! the lower-level transition that supplies one of those outcomes.
+//!
+//! Protocol dispatch may return the original request only when Hyper did not
+//! accept it. The same acquisition remains authoritative while the dispatcher
+//! selects a replacement; this is not an SDK request retry. Child modules own
+//! protocol wire preparation and accepted-response lifetime.
 
 mod h1;
 mod h2;
@@ -17,6 +29,8 @@ mod h2;
 use self::h1::H1DispatchResult;
 use self::h2::H2DispatchResult;
 use super::admission::ProtocolRequirement;
+use super::cell::h1::H1Selection;
+use super::cell::h2::H2Activation;
 use super::cell::{AcquisitionEvent, AcquisitionResult, OriginCell, WaiterId};
 use super::establish::{self, TransportTimeout};
 use super::partition::DriverSpawner;
@@ -31,6 +45,23 @@ use std::sync::Arc as StdArc;
 
 /// Replacement selections allowed after the initial HTTP/2 dispatch attempt.
 const MAX_H2_REACQUISITIONS: usize = 2;
+
+/// Operation settings known before the request's origin cell is resolved.
+///
+/// This value is separate from [`AcquisitionContext`], which also contains
+/// cell and runtime state discovered by dispatch.
+#[derive(Clone, Debug, Default)]
+pub(super) struct RequestOptions {
+    /// Transport connection timeout configured for this operation.
+    connect_timeout: Option<TransportTimeout>,
+}
+
+impl RequestOptions {
+    /// Creates operation settings for one pool request.
+    pub(super) fn new(connect_timeout: Option<TransportTimeout>) -> Self {
+        Self { connect_timeout }
+    }
+}
 
 /// Stable state shared by acquisition and protocol dispatch for one request.
 ///
@@ -53,194 +84,84 @@ pub(super) struct AcquisitionContext {
     pub(super) connect_timeout: Option<TransportTimeout>,
 }
 
-impl ConnectionPool {
-    /// Resolves common acquisition state and dispatches one request.
-    pub(super) async fn send_request(
-        &self,
-        partition: Arc<PartitionState>,
-        request: Request<SdkBody>,
-        connect_timeout: Option<TransportTimeout>,
-    ) -> Result<Response<SdkBody>, ConnectorError> {
-        validate_request_before_acquisition(&request)
-            .map_err(|error| ConnectorError::user(error.into()))?;
+/// Resolves request-scoped pool state and runs acquisition through dispatch.
+pub(super) async fn send(
+    pool: &ConnectionPool,
+    partition: Arc<PartitionState>,
+    request: Request<SdkBody>,
+    options: RequestOptions,
+) -> Result<Response<SdkBody>, ConnectorError> {
+    validate_request_before_acquisition(&request)
+        .map_err(|error| ConnectorError::user(error.into()))?;
 
-        let absolute_uri = request.uri().clone();
-        let cell = self
-            .inner
-            .registry
-            .resolve_cell(&partition, &absolute_uri)
-            .map_err(|error| ConnectorError::user(error.into()))?;
-        tracing::trace!(
-            request_partition = ?partition.id(),
-            origin_scheme = %cell.id().origin().scheme(),
-            origin_host = cell.id().origin().host(),
-            origin_port = ?cell.id().origin().port(),
-            "request resolved to connection-pool cell"
-        );
+    let absolute_uri = request.uri().clone();
+    let cell = pool
+        .inner
+        .registry
+        .resolve_cell(&partition, &absolute_uri)
+        .map_err(|error| ConnectorError::user(error.into()))?;
+    tracing::trace!(
+        request_partition = ?partition.id(),
+        origin_scheme = %cell.id().origin().scheme(),
+        origin_host = cell.id().origin().host(),
+        origin_port = ?cell.id().origin().port(),
+        "request resolved to connection-pool cell"
+    );
 
-        let owner_spawner = partition
-            .owner_spawner()
-            .map_err(|error| ConnectorError::user(error.into()))?;
-        partition.ensure_maintenance_started(owner_spawner.as_ref());
+    let owner_spawner = partition
+        .owner_spawner()
+        .map_err(|error| ConnectorError::user(error.into()))?;
+    partition.ensure_maintenance_started(owner_spawner.as_ref());
 
-        let context = AcquisitionContext {
-            pool: self.inner.clone(),
-            partition,
-            cell,
-            absolute_uri,
-            owner_spawner,
-            connect_timeout,
-        };
+    let context = AcquisitionContext {
+        pool: pool.inner.clone(),
+        partition,
+        cell,
+        absolute_uri,
+        owner_spawner,
+        connect_timeout: options.connect_timeout,
+    };
 
-        self.dispatch_acquired(context, request).await
-    }
+    acquire_and_dispatch(context, request).await
+}
 
-    /// Acquires a compatible protocol value and dispatches the request.
-    ///
-    /// Reacquisition is allowed only while a protocol dispatcher returns the
-    /// original request envelope.
-    async fn dispatch_acquired(
-        &self,
-        context: AcquisitionContext,
-        mut request: Request<SdkBody>,
-    ) -> Result<Response<SdkBody>, ConnectorError> {
-        let requirement = protocol_requirement(&request);
-        let mut h2_reacquisitions = H2ReacquisitionBudget::default();
+/// Request authority ready for one protocol-specific dispatch attempt.
+enum DispatchTarget {
+    /// Exclusive HTTP/1 sender ownership.
+    H1(H1Selection),
+    /// Prospective request reservation on one exact HTTP/2 generation.
+    H2(H2Activation),
+}
 
-        loop {
-            match Self::acquire(&context, requirement).await? {
-                AcquisitionResult::H1(selection) => {
-                    match self.dispatch_h1(&context, request, selection).await? {
-                        H1DispatchResult::Response(response) => return Ok(response),
-                        H1DispatchResult::Reacquire(returned) => request = returned,
-                    }
+/// Acquires protocol dispatch authority and submits the request to Hyper.
+///
+/// A protocol dispatcher may return the original request only when Hyper did
+/// not accept it. After one HTTP/2 target reaches dispatch, at most two stale
+/// replacements may return the request for another selection.
+async fn acquire_and_dispatch(
+    context: AcquisitionContext,
+    mut request: Request<SdkBody>,
+) -> Result<Response<SdkBody>, ConnectorError> {
+    let requirement = protocol_requirement(&request);
+    let mut h2_reacquisitions = H2ReacquisitionBudget::default();
+
+    loop {
+        match acquire_for_dispatch(&context, requirement).await? {
+            DispatchTarget::H1(selection) => {
+                match h1::dispatch(&context, request, selection).await? {
+                    H1DispatchResult::Response(response) => return Ok(response),
+                    H1DispatchResult::Reacquire(returned) => request = returned,
                 }
-                AcquisitionResult::H2(activation) => {
-                    match self.dispatch_h2(&context, request, activation).await? {
-                        H2DispatchResult::Response(response) => return Ok(response),
-                        H2DispatchResult::Reacquire(reacquisition) => {
-                            let (returned, error) = reacquisition.into_parts();
-                            if !h2_reacquisitions.admit_replacement() {
-                                return Err(error);
-                            }
-                            request = returned;
+            }
+            DispatchTarget::H2(activation) => {
+                match h2::dispatch(&context, request, activation).await? {
+                    H2DispatchResult::Response(response) => return Ok(response),
+                    H2DispatchResult::Reacquire(reacquisition) => {
+                        let (returned, error) = reacquisition.into_parts();
+                        if !h2_reacquisitions.admit_replacement() {
+                            return Err(error);
                         }
-                    }
-                }
-                AcquisitionResult::Failed(_) => {
-                    unreachable!("failed acquisition returned as a successful result")
-                }
-                AcquisitionResult::Reacquire => {
-                    unreachable!("internal reacquisition escaped the acquisition loop")
-                }
-            }
-        }
-    }
-
-    /// Acquires one protocol value compatible with the request.
-    ///
-    /// Local reusable values complete immediately. Otherwise one waiter
-    /// remains registered while it receives a reusable protocol value, an
-    /// establishment failure, or authority to start establishment.
-    async fn acquire(
-        context: &AcquisitionContext,
-        requirement: ProtocolRequirement,
-    ) -> Result<AcquisitionResult, ConnectorError> {
-        'acquire: loop {
-            if requirement.accepts_h2() {
-                if let Some(activation) = OriginCell::select_h2(&context.cell) {
-                    tracing::trace!(
-                        connection_id = %activation.connection().id(),
-                        request_partition = ?context.partition.id(),
-                        connection_partition = ?activation.connection().owner_partition(),
-                        origin_scheme = %context.cell.id().origin().scheme(),
-                        origin_host = context.cell.id().origin().host(),
-                        origin_port = ?context.cell.id().origin().port(),
-                        "HTTP/2 pool hit; activating local generation"
-                    );
-                    return Ok(AcquisitionResult::H2(activation));
-                }
-            }
-            if requirement.accepts_h1() {
-                if let Some(selection) = OriginCell::select_h1(&context.cell) {
-                    tracing::trace!(
-                        connection_id = %selection.connection_id(),
-                        request_partition = ?context.partition.id(),
-                        connection_partition = ?selection.connection().owner_partition(),
-                        origin_scheme = %selection.connection().info().origin().scheme(),
-                        origin_host = selection.connection().info().origin().host(),
-                        origin_port = ?selection.connection().info().origin().port(),
-                        "HTTP/1 pool hit; reusing idle connection"
-                    );
-                    return Ok(AcquisitionResult::H1(selection));
-                }
-            }
-
-            let waiter = OriginCell::register_waiter(&context.cell, requirement);
-            tracing::trace!(
-                request_partition = ?context.partition.id(),
-                origin_scheme = %context.cell.id().origin().scheme(),
-                origin_host = context.cell.id().origin().host(),
-                origin_port = ?context.cell.id().origin().port(),
-                protocol_requirement = ?requirement,
-                "connection acquisition queued"
-            );
-            let mut waiter_guard = WaiterGuard::new(context.cell.clone(), waiter);
-            loop {
-                match poll_fn(|cx| context.cell.poll_waiter(waiter, cx)).await {
-                    AcquisitionEvent::Complete(AcquisitionResult::H1(selection)) => {
-                        waiter_guard.disarm();
-                        return Ok(AcquisitionResult::H1(selection));
-                    }
-                    AcquisitionEvent::Complete(AcquisitionResult::H2(activation)) => {
-                        waiter_guard.disarm();
-                        OriginCell::service_h2_waiters(&context.cell);
-                        OriginCell::service_peer_h2_waiters(&context.cell);
-                        tracing::trace!(
-                            connection_id = %activation.connection().id(),
-                            request_partition = ?context.partition.id(),
-                            connection_partition = ?activation.connection().owner_partition(),
-                            origin_scheme = %context.cell.id().origin().scheme(),
-                            origin_host = context.cell.id().origin().host(),
-                            origin_port = ?context.cell.id().origin().port(),
-                            "HTTP/2 acquisition completed"
-                        );
-                        return Ok(AcquisitionResult::H2(activation));
-                    }
-                    AcquisitionEvent::Complete(AcquisitionResult::Failed(error)) => {
-                        waiter_guard.disarm();
-                        return Err(error);
-                    }
-                    AcquisitionEvent::Complete(AcquisitionResult::Reacquire) => {
-                        waiter_guard.disarm();
-                        continue 'acquire;
-                    }
-                    AcquisitionEvent::Establish(permit) => {
-                        tracing::trace!(
-                            request_partition = ?context.partition.id(),
-                            origin_scheme = %context.cell.id().origin().scheme(),
-                            origin_host = context.cell.id().origin().host(),
-                            origin_port = ?context.cell.id().origin().port(),
-                            "connection establishment starting"
-                        );
-                        let attempt =
-                            establish::establish(context.clone(), waiter, permit, requirement);
-                        let completion =
-                            EstablishmentCompletionGuard::new(context.cell.clone(), waiter);
-                        context.owner_spawner.spawn(Box::pin(async move {
-                            let mut completion = completion;
-                            if !completion.start() {
-                                drop(attempt);
-                                completion.disarm();
-                                return;
-                            }
-                            match attempt.await {
-                                establish::EstablishmentOutcome::Complete(result) => {
-                                    completion.complete(result);
-                                }
-                                establish::EstablishmentOutcome::Transferred => completion.disarm(),
-                            }
-                        }));
+                        request = returned;
                     }
                 }
             }
@@ -248,6 +169,118 @@ impl ConnectionPool {
     }
 }
 
+/// Acquires the next protocol value that can dispatch this request.
+///
+/// Local reusable values complete immediately under the cell lock. On a miss,
+/// one waiter remains registered while reuse and establishment race to supply
+/// dispatch authority. `poll_waiter` performs one synchronous state poll; no
+/// cell lock is retained while this future is pending.
+async fn acquire_for_dispatch(
+    context: &AcquisitionContext,
+    requirement: ProtocolRequirement,
+) -> Result<DispatchTarget, ConnectorError> {
+    'acquire: loop {
+        if requirement.accepts_h2() {
+            if let Some(activation) = OriginCell::select_h2(&context.cell) {
+                tracing::trace!(
+                    connection_id = %activation.connection().id(),
+                    request_partition = ?context.partition.id(),
+                    connection_partition = ?activation.connection().owner_partition(),
+                    origin_scheme = %context.cell.id().origin().scheme(),
+                    origin_host = context.cell.id().origin().host(),
+                    origin_port = ?context.cell.id().origin().port(),
+                    "HTTP/2 pool hit; activating local generation"
+                );
+                return Ok(DispatchTarget::H2(activation));
+            }
+        }
+        if requirement.accepts_h1() {
+            if let Some(selection) = OriginCell::select_h1(&context.cell) {
+                tracing::trace!(
+                    connection_id = %selection.connection_id(),
+                    request_partition = ?context.partition.id(),
+                    connection_partition = ?selection.connection().owner_partition(),
+                    origin_scheme = %selection.connection().info().origin().scheme(),
+                    origin_host = selection.connection().info().origin().host(),
+                    origin_port = ?selection.connection().info().origin().port(),
+                    "HTTP/1 pool hit; reusing idle connection"
+                );
+                return Ok(DispatchTarget::H1(selection));
+            }
+        }
+
+        let waiter = OriginCell::register_waiter(&context.cell, requirement);
+        tracing::trace!(
+            request_partition = ?context.partition.id(),
+            origin_scheme = %context.cell.id().origin().scheme(),
+            origin_host = context.cell.id().origin().host(),
+            origin_port = ?context.cell.id().origin().port(),
+            protocol_requirement = ?requirement,
+            "connection acquisition queued"
+        );
+        let mut waiter_guard = WaiterGuard::new(context.cell.clone(), waiter);
+        loop {
+            match poll_fn(|cx| context.cell.poll_waiter(waiter, cx)).await {
+                AcquisitionEvent::Complete(AcquisitionResult::H1(selection)) => {
+                    waiter_guard.disarm();
+                    return Ok(DispatchTarget::H1(selection));
+                }
+                AcquisitionEvent::Complete(AcquisitionResult::H2(activation)) => {
+                    waiter_guard.disarm();
+                    OriginCell::service_h2_waiters(&context.cell);
+                    OriginCell::service_peer_h2_waiters(&context.cell);
+                    tracing::trace!(
+                        connection_id = %activation.connection().id(),
+                        request_partition = ?context.partition.id(),
+                        connection_partition = ?activation.connection().owner_partition(),
+                        origin_scheme = %context.cell.id().origin().scheme(),
+                        origin_host = context.cell.id().origin().host(),
+                        origin_port = ?context.cell.id().origin().port(),
+                        "HTTP/2 acquisition completed"
+                    );
+                    return Ok(DispatchTarget::H2(activation));
+                }
+                AcquisitionEvent::Complete(AcquisitionResult::Failed(error)) => {
+                    waiter_guard.disarm();
+                    return Err(error);
+                }
+                AcquisitionEvent::Complete(AcquisitionResult::Reacquire) => {
+                    waiter_guard.disarm();
+                    continue 'acquire;
+                }
+                AcquisitionEvent::Establish(permit) => {
+                    tracing::trace!(
+                        request_partition = ?context.partition.id(),
+                        origin_scheme = %context.cell.id().origin().scheme(),
+                        origin_host = context.cell.id().origin().host(),
+                        origin_port = ?context.cell.id().origin().port(),
+                        "connection establishment starting"
+                    );
+                    let attempt =
+                        establish::establish(context.clone(), waiter, permit, requirement);
+                    let completion =
+                        EstablishmentCompletionGuard::new(context.cell.clone(), waiter);
+                    context.owner_spawner.spawn(Box::pin(async move {
+                        let mut completion = completion;
+                        if !completion.start() {
+                            drop(attempt);
+                            completion.disarm();
+                            return;
+                        }
+                        match attempt.await {
+                            establish::EstablishmentOutcome::Complete(result) => {
+                                completion.complete(result);
+                            }
+                            establish::EstablishmentOutcome::WaiterCompletionTransferred => {
+                                completion.disarm();
+                            }
+                        }
+                    }));
+                }
+            }
+        }
+    }
+}
 /// Per-request bound on replacement HTTP/2 selections.
 #[derive(Default)]
 struct H2ReacquisitionBudget {

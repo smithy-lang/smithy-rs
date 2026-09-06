@@ -198,13 +198,11 @@ impl HttpConnector for PoolConnector {
             let request = request.try_into_http1x().map_err(|error| {
                 aws_smithy_runtime_api::client::result::ConnectorError::user(error.into())
             })?;
-            let send = pool.send_request(
-                partition,
-                request,
-                connect_timeout.zip(sleep.clone()).map(|(duration, sleep)| {
-                    super::establish::TransportTimeout::new(duration, sleep)
-                }),
-            );
+            let options =
+                super::dispatch::RequestOptions::new(connect_timeout.zip(sleep.clone()).map(
+                    |(duration, sleep)| super::establish::TransportTimeout::new(duration, sleep),
+                ));
+            let send = pool.send_request(partition, request, options);
             let response = timeout::maybe_timeout_future(
                 send,
                 read_timeout,

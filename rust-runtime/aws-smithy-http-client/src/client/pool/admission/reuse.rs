@@ -699,7 +699,7 @@ impl H1Reuse {
 
     /// Checks reuse-operation indexes and both availability orders after every mutation.
     fn assert_consistent(&self) {
-        #[cfg(debug_assertions)]
+        #[cfg(any(debug_assertions, test))]
         {
             if std::thread::panicking() {
                 return;
@@ -708,7 +708,7 @@ impl H1Reuse {
         }
     }
 
-    #[cfg(debug_assertions)]
+    #[cfg(any(debug_assertions, test))]
     fn assert_consistent_debug(&self) {
         for (id, operation) in &self.operations {
             assert_eq!(
@@ -756,7 +756,7 @@ impl H1Reuse {
         }
     }
 
-    #[cfg(debug_assertions)]
+    #[cfg(any(debug_assertions, test))]
     fn assert_order(
         &self,
         order: &IntrusiveOrder<PartitionId>,
@@ -802,7 +802,7 @@ pub(in crate::client::pool) enum H1ReuseAction {
     /// Cancel an installed reservation.
     Cancel(ReuseCancelAction),
     /// Close a selected connection and release its capacity.
-    Reclaim(ReclaimAction),
+    Reclaim(H1ReclaimAction),
     /// Complete the connection cell after a sender transfer.
     CompleteConnectionCell(ConnectionCellCompletion),
 }
@@ -1040,7 +1040,7 @@ impl Drop for ReuseCandidate {
 }
 
 /// Reclaim decision carrying its selected provisional sender.
-pub(in crate::client::pool) struct ReclaimAction {
+pub(in crate::client::pool) struct H1ReclaimAction {
     /// Admission authority that selected reclaim.
     origin: Arc<OriginAdmission>,
     /// Cell whose demand receives capacity released by reclaim.
@@ -1051,7 +1051,7 @@ pub(in crate::client::pool) struct ReclaimAction {
     candidate: Option<ReuseCandidate>,
 }
 
-impl ReclaimAction {
+impl H1ReclaimAction {
     /// Attempts logical close outside admission and reports the connection cell result.
     fn drive_once(mut self) -> Option<AdmissionAction> {
         let candidate = self
@@ -1253,14 +1253,14 @@ impl OriginAdmission {
                         candidate,
                     )))
                 }
-                ReuseMode::Reclaim => {
-                    Some(AdmissionAction::H1(H1ReuseAction::Reclaim(ReclaimAction {
+                ReuseMode::Reclaim => Some(AdmissionAction::H1(H1ReuseAction::Reclaim(
+                    H1ReclaimAction {
                         origin: origin.clone(),
                         requesting_partition: record.requesting_partition,
                         reuse_id: id,
                         candidate: Some(candidate),
-                    })))
-                }
+                    },
+                ))),
             }
         };
         action

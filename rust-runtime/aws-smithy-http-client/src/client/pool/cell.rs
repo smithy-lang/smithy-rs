@@ -124,16 +124,17 @@ impl CellState {
     /// Checks the coupled waiter, sender, and reuse-reservation state machines.
     fn assert_consistent(&self) {
         #[cfg(any(debug_assertions, test))]
-        if std::thread::panicking() {
-            return;
+        {
+            if std::thread::panicking() {
+                return;
+            }
+            self.waiters.assert_consistent();
+            self.h1.assert_consistent();
+            self.h2.assert_consistent();
+            self.h2.assert_pending_waiters(&self.waiters);
+            self.reuse
+                .assert_consistent(self.h1.supports_installed_reuse());
         }
-        self.waiters.assert_consistent();
-        self.h1.assert_consistent();
-        self.h2.assert_consistent();
-        #[cfg(any(debug_assertions, test))]
-        self.h2.assert_pending_waiters(&self.waiters);
-        self.reuse
-            .assert_consistent(self.h1.supports_installed_reuse());
     }
 
     /// Reports the HTTP/1 availability admission needs without exposing cell internals.
@@ -653,6 +654,10 @@ impl OriginCell {
     }
 
     /// Polls the next event for one acquisition waiter.
+    ///
+    /// The cell lock is held only for this synchronous state-machine poll. It
+    /// is released before `Poll::Pending` returns to the async caller and is
+    /// never held while polling Hyper, connector I/O, or user code.
     ///
     /// # Panics
     ///
@@ -1964,7 +1969,7 @@ mod tests {
     }
 
     #[test]
-    fn peer_h2_publication_respects_eligibility_group() {
+    fn peer_h2_route_respects_eligibility_group() {
         let groups = [
             (
                 EligibilityGroup::Partition(PartitionId::from_index(1)),
@@ -1996,7 +2001,7 @@ mod tests {
     }
 
     #[test]
-    fn dropped_publication_guard_retries_the_same_demand() {
+    fn dropped_route_guard_retries_the_same_demand() {
         let (admission, connection_cell, requesting_cell) =
             bounded_peer_cells(1, EligibilityGroup::Pool, EligibilityGroup::Pool);
         let (generation, _connection, _physical) =
@@ -2008,7 +2013,7 @@ mod tests {
             requesting_cell.id().partition(),
             demand,
         )
-        .expect("peer demand did not prepare publication");
+        .expect("peer demand did not prepare a route");
 
         drop(action);
 
@@ -2022,7 +2027,7 @@ mod tests {
     }
 
     #[test]
-    fn requesting_cell_cancellation_closes_an_in_flight_publication_fence() {
+    fn requesting_cell_cancellation_closes_an_in_flight_route_fence() {
         let (admission, connection_cell, requesting_cell) =
             bounded_peer_cells(1, EligibilityGroup::Pool, EligibilityGroup::Pool);
         let (generation, _connection, _physical) =
@@ -2034,7 +2039,7 @@ mod tests {
             requesting_cell.id().partition(),
             demand,
         )
-        .expect("peer demand did not prepare publication");
+        .expect("peer demand did not prepare a route");
 
         assert!(OriginCell::cancel_waiter(&requesting_cell, waiter));
         OriginAdmission::drive(Some(action));
@@ -2051,7 +2056,7 @@ mod tests {
     }
 
     #[test]
-    fn stale_publication_retries_against_a_replacement_generation() {
+    fn stale_route_retries_against_a_replacement_generation() {
         let (admission, connection_cell, requesting_cell) =
             bounded_peer_cells(1, EligibilityGroup::Pool, EligibilityGroup::Pool);
         let (first, _first_connection, _first_physical) =
@@ -2063,7 +2068,7 @@ mod tests {
             requesting_cell.id().partition(),
             demand,
         )
-        .expect("peer demand did not prepare publication");
+        .expect("peer demand did not prepare a route");
 
         assert!(OriginCell::close_h2(
             &connection_cell,
@@ -2164,7 +2169,7 @@ mod tests {
     }
 
     #[test]
-    fn peer_generation_gate_preserves_prepublication_order() {
+    fn peer_generation_gate_preserves_pre_route_order() {
         let (admission, connection_cell, requesting_cell) =
             bounded_peer_cells(1, EligibilityGroup::Pool, EligibilityGroup::Pool);
         let (generation, _connection, _physical) =
@@ -2177,7 +2182,7 @@ mod tests {
             requesting_cell.id().partition(),
             demand,
         )
-        .expect("peer demand did not prepare publication");
+        .expect("peer demand did not prepare a route");
         OriginAdmission::drive(Some(action));
         let third = OriginCell::register_waiter(&requesting_cell, ProtocolRequirement::H2Required);
 
@@ -2723,7 +2728,7 @@ mod loom_tests {
     }
 
     #[test]
-    fn h2_publication_acknowledgement_races_generation_close_and_route_service() {
+    fn h2_route_acknowledgement_races_generation_close_and_route_service() {
         let mut model = loom::model::Builder::new();
         model.preemption_bound = Some(3);
         model.check(|| {
@@ -2739,7 +2744,7 @@ mod loom_tests {
                 requesting_cell.id().partition(),
                 demand,
             )
-            .expect("peer demand did not prepare publication");
+            .expect("peer demand did not prepare a route");
 
             let publishing = loom::thread::spawn(move || {
                 OriginAdmission::drive(Some(action));
@@ -2759,7 +2764,7 @@ mod loom_tests {
 
             assert!(
                 OriginCell::cancel_waiter(&requesting_cell, waiter),
-                "publication acknowledgement lost the live demand"
+                "route acknowledgement lost the live demand"
             );
             assert_eq!(0, requesting_cell.snapshot().retained);
             assert_eq!(0, admission.ordered_demand_count_for_test());
@@ -2769,7 +2774,7 @@ mod loom_tests {
     }
 
     #[test]
-    fn h2_publication_close_race_preserves_capacity_ownership() {
+    fn h2_route_close_race_preserves_capacity_ownership() {
         let mut model = loom::model::Builder::new();
         model.preemption_bound = Some(2);
         model.check(|| {
@@ -2785,7 +2790,7 @@ mod loom_tests {
                 requesting_cell.id().partition(),
                 demand,
             )
-            .expect("peer demand did not prepare publication");
+            .expect("peer demand did not prepare a route");
 
             let publishing = loom::thread::spawn(move || {
                 OriginAdmission::drive(Some(action));

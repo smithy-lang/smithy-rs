@@ -3,27 +3,34 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! HTTP/2 flight, generation, route, and request-lease ownership.
+//! HTTP/2 connection, stream, route, and request-lifetime ownership.
 //!
-//! One connection-owning cell stores the authoritative HTTP/2 generation.
-//! Other cells store only [`H2Route`] identities and revalidate them at the
-//! connection-owning cell before dispatch. A generation may stop accepting
-//! new requests while prospective and accepted requests still drain.
+//! HTTP/2 carries many concurrent request and response exchanges as streams on
+//! one connection. The pool calls one installed lifetime of that connection a
+//! generation. The cell that established the connection owns its generation,
+//! including the Hyper request handle, driver, transport, and capacity.
+//!
+//! A flight is the post-ALPN handshake work shared by concurrent requests
+//! waiting for that generation. A successful flight installs one accepting
+//! generation; failed or superseded flight work installs nothing.
+//!
+//! An accepting generation may issue new request streams. A draining
+//! generation issues no new streams but remains recorded while selected or
+//! accepted requests still own it.
+//!
+//! A requesting cell may store an [`H2Route`] to a peer cell's generation.
+//! The route carries only cell and generation identity. [`H2Activation`]
+//! revalidates that identity under the connection-cell lock, reserves one
+//! prospective stream, and carries a transient sender clone to Hyper.
+//!
+//! Each Hyper-accepted request owns one lease with two independent endpoints:
+//! request-upload completion and response-lifetime completion. The generation
+//! releases the request only after both endpoints terminate, including drop,
+//! error, and bodyless completion paths.
 //!
 //! [`H2Records`] is the invariant owner under the cell lock. It stores one
-//! post-ALPN flight, the accepting and draining generations, a local generation
-//! gate, and at most one peer route. A route carries only connection partition
-//! and generation identity. [`H2Activation`] is the unlocked value that carries
-//! a prospective lease and transient sender from selection to Hyper acceptance.
-//!
-//! ```text
-//! requesting cell                        connection-owning cell
-//! peer route + local gate --identity---> exact accepting generation
-//!                                      |-- increment prospective count
-//!                                      `-- clone transient sender
-//!                                               |
-//!                                               `--> H2Activation
-//! ```
+//! flight, accepting and draining generations, activation priority, and one
+//! peer route.
 //!
 //! ```text
 //! no flight -- post-ALPN owner task ----------------------> Flight
@@ -35,19 +42,21 @@
 //! ```
 //!
 //! ```text
-//! no peer route -- publication ---------------------------> PeerRoute(generation)
-//! PeerRoute(A) -- replacement publication ---------------> PeerRoute(B)
-//! PeerRoute -- stale activation or local generation -----> no peer route
+//! requesting cell                        connection-owning cell
+//! peer route + local gate --identity---> exact accepting generation
+//!                                      |-- reserve one prospective stream
+//!                                      `-- clone transient sender
+//!                                               |
+//!                                               `--> H2Activation
 //! ```
 //!
 //! Generation installation makes the sender visible before the owner task
-//! submits the Hyper driver. An activation in that interval is accepted by
-//! Hyper's dispatch channel and remains pending until the driver is polled.
+//! submits the Hyper driver. An activation accepted in that interval remains
+//! pending in Hyper's dispatch channel until the driver is polled.
 //!
-//! Activation reserves a prospective lease before a sender clone leaves the
-//! cell lock. Hyper acceptance converts that reservation to one accepted
-//! lease. The accepted lease is released only after both request-send and
-//! response-receive endpoints terminate.
+//! Activation reserves its prospective lease before the sender clone leaves
+//! the cell lock. Hyper acceptance converts that reservation to an accepted
+//! request lease with independent upload and response endpoints.
 
 use super::super::connection::{ConnectionInfo, ConnectionState, DispatchGuard};
 use super::super::partition::PartitionId;
@@ -201,7 +210,7 @@ impl H2Route {
 /// - at most one flight and one accepting generation exist;
 /// - the accepting identity names an `Accepting` record;
 /// - every other generation is `Draining`;
-/// - prospective and accepted request counts are checked and non-wrapping;
+/// - prospective and active request counts are checked and non-wrapping;
 /// - a draining record remains until both counts reach zero; and
 /// - each flight participant identity appears at most once.
 #[derive(Debug, Default)]
@@ -246,8 +255,8 @@ struct H2Generation {
     prospective: usize,
     /// Whether Hyper has accepted a request on this generation.
     has_dispatched: bool,
-    /// Accepted requests whose two lease endpoints have not both terminated.
-    accepted: usize,
+    /// Requests accepted by Hyper whose two lease endpoints have not both terminated.
+    active_requests: usize,
     /// Expiration deadline while the generation remains accepting.
     idle_deadline: Option<SystemTime>,
 }
@@ -287,7 +296,7 @@ enum GenerationGate {
         /// Prioritized waiter whose activation has not accepted or cancelled.
         activating: Option<WaiterId>,
     },
-    /// The publication cutoff drained; queued work still precedes direct arrivals.
+    /// The peer-route cutoff drained; queued work still precedes direct arrivals.
     Open { generation: H2GenerationId },
 }
 
@@ -505,7 +514,7 @@ impl H2Records {
                 residence: H2Residence::Accepting,
                 prospective: 0,
                 has_dispatched: false,
-                accepted: 0,
+                active_requests: 0,
                 idle_deadline,
             },
         );
@@ -610,7 +619,7 @@ impl H2Records {
         !queued && matches!(self.gate, GenerationGate::Open { .. })
     }
 
-    /// Returns the publication cutoff while older waiters remain prioritized.
+    /// Returns the peer-route cutoff while older waiters remain prioritized.
     fn priority_cutoff(&self) -> Option<WaiterId> {
         self.gate.priority_cutoff()
     }
@@ -646,10 +655,10 @@ impl H2Records {
             return false;
         }
         record.prospective -= 1;
-        record.accepted = record
-            .accepted
+        record.active_requests = record
+            .active_requests
             .checked_add(1)
-            .expect("HTTP/2 accepted request count exhausted");
+            .expect("HTTP/2 active request count exhausted");
         record.has_dispatched = true;
         self.assert_consistent();
         true
@@ -679,7 +688,7 @@ impl H2Records {
     ///
     /// # Panics
     ///
-    /// Panics if the lease's exact generation or accepted count is missing.
+    /// Panics if the lease's exact generation or active request count is missing.
     #[must_use]
     fn complete_request(&mut self, generation: H2GenerationId) -> Option<H2Generation> {
         let record = self
@@ -687,14 +696,19 @@ impl H2Records {
             .get_mut(&generation)
             .expect("HTTP/2 request generation disappeared before lease completion");
         assert!(
-            record.accepted > 0,
-            "HTTP/2 accepted request count underflowed"
+            record.active_requests > 0,
+            "HTTP/2 active request count underflowed"
         );
-        record.accepted -= 1;
+        record.active_requests -= 1;
         self.remove_finished_drain(generation)
     }
 
-    /// Moves one exact accepting generation to draining.
+    /// Stops one exact generation from accepting new request streams.
+    ///
+    /// Selected and accepted streams retain the generation in `Draining`
+    /// until their leases finish. A generation with no request work is removed
+    /// immediately. Pending establishment participants are returned so they
+    /// can acquire another connection.
     #[must_use]
     fn begin_close(&mut self, generation: H2GenerationId) -> Option<H2CloseTransition> {
         if self.accepting != Some(generation) {
@@ -708,7 +722,7 @@ impl H2Records {
         self.accepting = None;
         self.gate = GenerationGate::Closed;
         let pending_waiters = std::mem::take(&mut record.pending_waiters);
-        let remove_record = record.prospective == 0 && record.accepted == 0;
+        let remove_record = record.prospective == 0 && record.active_requests == 0;
         let connection = record.connection.clone();
         let removed_generation = remove_record
             .then(|| self.generations.remove(&generation))
@@ -754,7 +768,9 @@ impl H2Records {
             return false;
         }
         self.generations.get(&generation).is_some_and(|record| {
-            record.pending_waiters.is_empty() && record.prospective == 0 && record.accepted == 0
+            record.pending_waiters.is_empty()
+                && record.prospective == 0
+                && record.active_requests == 0
         })
     }
 
@@ -957,7 +973,7 @@ impl H2Records {
         let remove = self.generations.get(&generation).is_some_and(|record| {
             record.residence == H2Residence::Draining
                 && record.prospective == 0
-                && record.accepted == 0
+                && record.active_requests == 0
         });
         remove
             .then(|| self.generations.remove(&generation))
@@ -1028,7 +1044,7 @@ impl H2Records {
             for record in self.generations.values() {
                 if record.residence == H2Residence::Draining {
                     assert!(
-                        record.prospective > 0 || record.accepted > 0,
+                        record.prospective > 0 || record.active_requests > 0,
                         "empty HTTP/2 draining generation was retained"
                     );
                     assert!(
@@ -1060,7 +1076,7 @@ struct PreparedPeerActivation {
     route: H2Route,
     /// Oldest waiter selected for this activation.
     waiter: WaiterId,
-    /// Publication cutoff that this waiter must satisfy.
+    /// Peer-route cutoff that this waiter must satisfy.
     cutoff: Option<WaiterId>,
     /// Whether acceptance or cancellation must discharge a priority turn.
     gated: bool,
@@ -1090,10 +1106,10 @@ struct H2ActivationParts {
 pub(in crate::client::pool) struct H2DispatchParts {
     /// Transient sender clone for one dispatch attempt.
     pub(in crate::client::pool) sender: H2Sender,
-    /// Request-send endpoint retained by the request body.
-    pub(in crate::client::pool) send_endpoint: H2LeaseEndpoint,
-    /// Response-receive endpoint retained by the response body.
-    pub(in crate::client::pool) receive_endpoint: H2LeaseEndpoint,
+    /// Upload-completion guard retained by the request body.
+    pub(in crate::client::pool) upload_endpoint: H2LeaseEndpoint,
+    /// Response-lifetime guard retained by the response future or body.
+    pub(in crate::client::pool) response_endpoint: H2LeaseEndpoint,
 }
 
 /// Prospective request reservation against one exact generation.
@@ -1114,7 +1130,7 @@ pub(in crate::client::pool) struct H2Activation {
     reused: bool,
     /// Connection retained until acceptance or cancellation.
     connection: Arc<ConnectionState>,
-    /// Shared state for the request's send and receive endpoints.
+    /// Shared state for the request's upload and response endpoints.
     lease: Arc<H2LeaseCore>,
     /// Requesting-cell priority discharged only at acceptance or cancellation.
     gate: Option<H2GateToken>,
@@ -1145,8 +1161,8 @@ impl H2Activation {
             cell: Weak::from_arc(&cell),
             generation,
             state: Mutex::new(H2LeaseState::Prospective {
-                send_complete: false,
-                receive_complete: false,
+                upload_complete: false,
+                response_complete: false,
             }),
         });
         Self {
@@ -1188,18 +1204,18 @@ impl H2Activation {
             .sender
             .take()
             .expect("HTTP/2 activation dispatch parts already taken");
-        let trace = H2EndpointTrace::new(self);
+        let identity = H2RequestIdentity::new(self);
         H2DispatchParts {
             sender,
-            send_endpoint: H2LeaseEndpoint::new(
+            upload_endpoint: H2LeaseEndpoint::new(
                 self.lease.clone(),
-                H2Endpoint::Send,
-                Some(trace.clone()),
+                H2Endpoint::RequestUpload,
+                Some(identity.clone()),
             ),
-            receive_endpoint: H2LeaseEndpoint::new(
+            response_endpoint: H2LeaseEndpoint::new(
                 self.lease.clone(),
-                H2Endpoint::Receive,
-                Some(trace),
+                H2Endpoint::Response,
+                Some(identity),
             ),
         }
     }
@@ -1336,9 +1352,9 @@ impl H2GateToken {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum H2Endpoint {
     /// Request-body upload lifetime.
-    Send,
+    RequestUpload,
     /// Response future and response-body lifetime.
-    Receive,
+    Response,
 }
 
 /// Shared request-lease phase and endpoint bits.
@@ -1346,16 +1362,16 @@ enum H2LeaseState {
     /// Generation count reserved before Hyper accepts the request.
     Prospective {
         /// Whether upload ownership already terminated.
-        send_complete: bool,
+        upload_complete: bool,
         /// Whether response ownership already terminated.
-        receive_complete: bool,
+        response_complete: bool,
     },
     /// Hyper accepted the request and connection dispatch is retained.
     Accepted {
         /// Whether upload ownership already terminated.
-        send_complete: bool,
+        upload_complete: bool,
         /// Whether response ownership already terminated.
-        receive_complete: bool,
+        response_complete: bool,
         /// Accepted-dispatch accounting released with the second endpoint.
         dispatch: DispatchGuard,
     },
@@ -1379,23 +1395,23 @@ impl H2LeaseCore {
         let mut dispatch = Some(dispatch);
         let complete = {
             let mut state = self.state.lock();
-            let (send_complete, receive_complete) = match &*state {
+            let (upload_complete, response_complete) = match &*state {
                 H2LeaseState::Prospective {
-                    send_complete,
-                    receive_complete,
-                } => (*send_complete, *receive_complete),
+                    upload_complete,
+                    response_complete,
+                } => (*upload_complete, *response_complete),
                 H2LeaseState::Accepted { .. } | H2LeaseState::Complete => {
                     drop(state);
                     panic!("HTTP/2 request lease accepted outside prospective state");
                 }
             };
-            if send_complete && receive_complete {
+            if upload_complete && response_complete {
                 *state = H2LeaseState::Complete;
                 true
             } else {
                 *state = H2LeaseState::Accepted {
-                    send_complete,
-                    receive_complete,
+                    upload_complete,
+                    response_complete,
                     dispatch: dispatch
                         .take()
                         .expect("HTTP/2 dispatch guard disappeared before acceptance"),
@@ -1423,25 +1439,25 @@ impl H2LeaseCore {
             let mut state = self.state.lock();
             match &mut *state {
                 H2LeaseState::Prospective {
-                    send_complete,
-                    receive_complete,
+                    upload_complete,
+                    response_complete,
                 } => {
                     match endpoint {
-                        H2Endpoint::Send => *send_complete = true,
-                        H2Endpoint::Receive => *receive_complete = true,
+                        H2Endpoint::RequestUpload => *upload_complete = true,
+                        H2Endpoint::Response => *response_complete = true,
                     }
                     None
                 }
                 H2LeaseState::Accepted {
-                    send_complete,
-                    receive_complete,
+                    upload_complete,
+                    response_complete,
                     ..
                 } => {
                     match endpoint {
-                        H2Endpoint::Send => *send_complete = true,
-                        H2Endpoint::Receive => *receive_complete = true,
+                        H2Endpoint::RequestUpload => *upload_complete = true,
+                        H2Endpoint::Response => *response_complete = true,
                     }
-                    if *send_complete && *receive_complete {
+                    if *upload_complete && *response_complete {
                         let previous = std::mem::replace(&mut *state, H2LeaseState::Complete);
                         let H2LeaseState::Accepted { dispatch, .. } = previous else {
                             unreachable!("completed HTTP/2 lease changed state under its lock");
@@ -1473,18 +1489,18 @@ impl H2LeaseCore {
     }
 }
 
-/// Structured identity retained by one request-lease endpoint.
+/// Request and connection identity retained for endpoint completion logs.
 #[derive(Clone)]
-struct H2EndpointTrace {
+struct H2RequestIdentity {
     /// Partition that issued the request.
     request_partition: PartitionId,
     /// Stable connection identity and origin metadata.
     connection: Arc<ConnectionInfo>,
-    /// Generation that owns the endpoint.
+    /// Generation that owns the request lease.
     generation: H2GenerationId,
 }
 
-impl H2EndpointTrace {
+impl H2RequestIdentity {
     fn new(activation: &H2Activation) -> Self {
         Self {
             request_partition: activation.request_partition,
@@ -1498,20 +1514,24 @@ impl H2EndpointTrace {
 pub(in crate::client::pool) struct H2LeaseEndpoint {
     /// Shared request-lease state.
     core: Arc<H2LeaseCore>,
-    /// Send or receive side owned by this guard.
+    /// Upload or response side owned by this guard.
     endpoint: H2Endpoint,
-    /// Structured fields emitted on terminal completion.
-    trace: Option<H2EndpointTrace>,
+    /// Request and connection fields emitted on terminal completion.
+    identity: Option<H2RequestIdentity>,
     /// Whether drop must finish this endpoint.
     active: bool,
 }
 
 impl H2LeaseEndpoint {
-    fn new(core: Arc<H2LeaseCore>, endpoint: H2Endpoint, trace: Option<H2EndpointTrace>) -> Self {
+    fn new(
+        core: Arc<H2LeaseCore>,
+        endpoint: H2Endpoint,
+        identity: Option<H2RequestIdentity>,
+    ) -> Self {
         Self {
             core,
             endpoint,
-            trace,
+            identity,
             active: true,
         }
     }
@@ -1523,8 +1543,8 @@ impl H2LeaseEndpoint {
             cell: Weak::from_arc(cell),
             generation: H2GenerationId(0),
             state: Mutex::new(H2LeaseState::Prospective {
-                send_complete: false,
-                receive_complete: false,
+                upload_complete: false,
+                response_complete: false,
             }),
         });
         (
@@ -1533,18 +1553,18 @@ impl H2LeaseEndpoint {
         )
     }
 
-    /// Creates a detached send endpoint and observation handle for body tests.
+    /// Creates a detached upload endpoint and observation handle for body tests.
     #[cfg(all(test, not(smithy_http_client_loom), feature = "rt-tokio"))]
-    pub(in crate::client::pool) fn send_for_test(cell: &Arc<OriginCell>) -> (Self, H2LeaseProbe) {
-        Self::for_test(cell, H2Endpoint::Send)
+    pub(in crate::client::pool) fn upload_for_test(cell: &Arc<OriginCell>) -> (Self, H2LeaseProbe) {
+        Self::for_test(cell, H2Endpoint::RequestUpload)
     }
 
-    /// Creates a detached receive endpoint and observation handle for body tests.
+    /// Creates a detached response endpoint and observation handle for body tests.
     #[cfg(all(test, not(smithy_http_client_loom), feature = "rt-tokio"))]
-    pub(in crate::client::pool) fn receive_for_test(
+    pub(in crate::client::pool) fn response_for_test(
         cell: &Arc<OriginCell>,
     ) -> (Self, H2LeaseProbe) {
-        Self::for_test(cell, H2Endpoint::Receive)
+        Self::for_test(cell, H2Endpoint::Response)
     }
 
     /// Completes this endpoint before dropping the guard.
@@ -1555,19 +1575,19 @@ impl H2LeaseEndpoint {
     fn finish(&mut self) {
         if self.active {
             self.active = false;
-            let request_complete = self.core.complete_endpoint(self.endpoint);
-            if let Some(trace) = self.trace.take() {
+            let request_lease_complete = self.core.complete_endpoint(self.endpoint);
+            if let Some(identity) = self.identity.take() {
                 tracing::trace!(
-                    connection_id = %trace.connection.id(),
-                    request_partition = ?trace.request_partition,
-                    connection_partition = ?trace.connection.owner_partition(),
-                    origin_scheme = %trace.connection.origin().scheme(),
-                    origin_host = trace.connection.origin().host(),
-                    origin_port = ?trace.connection.origin().port(),
-                    h2_generation = ?trace.generation,
+                    connection_id = %identity.connection.id(),
+                    request_partition = ?identity.request_partition,
+                    connection_partition = ?identity.connection.owner_partition(),
+                    origin_scheme = %identity.connection.origin().scheme(),
+                    origin_host = identity.connection.origin().host(),
+                    origin_port = ?identity.connection.origin().port(),
+                    h2_generation = ?identity.generation,
                     endpoint = ?self.endpoint,
-                    request_complete,
-                    "HTTP/2 request endpoint completed"
+                    request_lease_complete,
+                    "HTTP/2 request lease endpoint completed"
                 );
             }
         }
@@ -1589,29 +1609,29 @@ pub(in crate::client::pool) struct H2LeaseProbe {
 
 #[cfg(all(test, not(smithy_http_client_loom), feature = "rt-tokio"))]
 impl H2LeaseProbe {
-    /// Returns whether the send endpoint reached its terminal transition.
-    pub(in crate::client::pool) fn send_complete(&self) -> bool {
+    /// Returns whether the upload endpoint reached its terminal transition.
+    pub(in crate::client::pool) fn upload_complete(&self) -> bool {
         matches!(
             &*self.core.state.lock(),
             H2LeaseState::Prospective {
-                send_complete: true,
+                upload_complete: true,
                 ..
             } | H2LeaseState::Accepted {
-                send_complete: true,
+                upload_complete: true,
                 ..
             } | H2LeaseState::Complete
         )
     }
 
-    /// Returns whether the receive endpoint reached its terminal transition.
-    pub(in crate::client::pool) fn receive_complete(&self) -> bool {
+    /// Returns whether the response endpoint reached its terminal transition.
+    pub(in crate::client::pool) fn response_complete(&self) -> bool {
         matches!(
             &*self.core.state.lock(),
             H2LeaseState::Prospective {
-                receive_complete: true,
+                response_complete: true,
                 ..
             } | H2LeaseState::Accepted {
-                receive_complete: true,
+                response_complete: true,
                 ..
             } | H2LeaseState::Complete
         )
@@ -1814,7 +1834,7 @@ impl OriginCell {
         cell.state.lock().h2.is_accepting(generation)
     }
 
-    /// Installs requesting-cell visibility for one peer generation publication.
+    /// Installs requesting-cell visibility for one peer generation route.
     ///
     /// The named local demand remains queued behind the route gate. Advancing
     /// its snapshot version makes admission acknowledgement authoritative
@@ -1832,7 +1852,7 @@ impl OriginCell {
         if !state.waiters.suppress_published_demand(demand) {
             return false;
         }
-        let cutoff = state.waiters.publication_cutoff();
+        let cutoff = state.waiters.route_cutoff();
         state.h2.install_peer_route(route, cutoff);
         state.assert_consistent();
         true
@@ -2113,7 +2133,7 @@ impl OriginCell {
                 .h2
                 .complete_flight(flight, connection, sender, idle_deadline);
             let install = if completion.is_ok() {
-                let cutoff = state.waiters.publication_cutoff();
+                let cutoff = state.waiters.route_cutoff();
                 state.h2.prioritize_through(cutoff);
                 Self::service_h2_gate_locked(cell, &mut state, &mut returned_event)
             } else {
@@ -2235,13 +2255,13 @@ impl OriginCell {
         connection.logical_close(reason)
     }
 
-    /// Returns the exact accepting generation for publication.
+    /// Returns the exact accepting generation for peer routing.
     #[cfg(test)]
     pub(in crate::client::pool) fn accepting_h2_generation(&self) -> Option<H2GenerationId> {
         self.state.lock().h2.accepting()
     }
 
-    /// Returns the prospective and accepted request counts for one generation.
+    /// Returns the prospective and active request counts for one generation.
     #[cfg(test)]
     pub(in crate::client::pool) fn h2_request_counts(
         &self,
@@ -2252,7 +2272,7 @@ impl OriginCell {
             .h2
             .generations
             .get(&generation)
-            .map(|record| (record.prospective, record.accepted))
+            .map(|record| (record.prospective, record.active_requests))
     }
 
     /// Installs an accepting generation without a Hyper handshake.
@@ -2822,8 +2842,8 @@ mod tests {
         assert!(!activation.is_reused());
         let H2DispatchParts {
             sender: _sender,
-            send_endpoint: send,
-            receive_endpoint: receive,
+            upload_endpoint: send,
+            response_endpoint: receive,
         } = activation.take_dispatch_parts();
         let dispatch = ConnectionState::try_commit_dispatch(&connection)
             .expect("open connection rejected dispatch");
@@ -2869,8 +2889,8 @@ mod tests {
                 OriginCell::select_h2(&cell).expect("accepting generation was not selected");
             let H2DispatchParts {
                 sender: _sender,
-                send_endpoint: send,
-                receive_endpoint: receive,
+                upload_endpoint: send,
+                response_endpoint: receive,
             } = activation.take_dispatch_parts();
             let dispatch = ConnectionState::try_commit_dispatch(&connection)
                 .expect("open connection rejected dispatch");
@@ -3052,7 +3072,7 @@ mod tests {
                     residence: H2Residence::Draining,
                     prospective: 0,
                     has_dispatched: false,
-                    accepted: 0,
+                    active_requests: 0,
                     idle_deadline: None,
                 },
             );
@@ -3137,7 +3157,7 @@ mod tests {
                     residence: H2Residence::Draining,
                     prospective: 0,
                     has_dispatched: false,
-                    accepted: 0,
+                    active_requests: 0,
                     idle_deadline: None,
                 },
             );
@@ -3165,8 +3185,8 @@ mod tests {
             OriginCell::select_h2(&cell).expect("accepting generation was not selected");
         let H2DispatchParts {
             sender: _sender,
-            send_endpoint: send,
-            receive_endpoint: receive,
+            upload_endpoint: send,
+            response_endpoint: receive,
         } = activation.take_dispatch_parts();
         let dispatch = ConnectionState::try_commit_dispatch(&connection)
             .expect("open connection rejected dispatch");
@@ -3426,8 +3446,8 @@ mod loom_tests {
                 OriginCell::activate_h2(&cell, generation).expect("generation did not activate");
             let H2DispatchParts {
                 sender: _sender,
-                send_endpoint: send,
-                receive_endpoint: receive,
+                upload_endpoint: send,
+                response_endpoint: receive,
             } = activation.take_dispatch_parts();
             let dispatch = ConnectionState::try_commit_dispatch(&connection)
                 .expect("open connection rejected dispatch");
@@ -3445,7 +3465,7 @@ mod loom_tests {
                 .generations
                 .get(&generation)
                 .expect("accepting generation disappeared");
-            assert_eq!(0, record.accepted);
+            assert_eq!(0, record.active_requests);
         });
     }
 
@@ -3462,8 +3482,8 @@ mod loom_tests {
                 OriginCell::activate_h2(&cell, generation).expect("generation did not activate");
             let H2DispatchParts {
                 sender: _sender,
-                send_endpoint: send,
-                receive_endpoint: receive,
+                upload_endpoint: send,
+                response_endpoint: receive,
             } = activation.take_dispatch_parts();
             let dispatch = ConnectionState::try_commit_dispatch(&connection)
                 .expect("open connection rejected dispatch");
