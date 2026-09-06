@@ -218,7 +218,7 @@ async fn acquire_for_dispatch(
             protocol_requirement = ?requirement,
             "connection acquisition queued"
         );
-        let mut waiter_guard = WaiterGuard::new(context.cell.clone(), waiter);
+        let mut waiter_guard = WaiterCancellationGuard::new(context.cell.clone(), waiter);
         loop {
             match poll_fn(|cx| context.cell.poll_waiter(waiter, cx)).await {
                 AcquisitionStep::Resolved(AcquisitionOutcome::H1(selection)) => {
@@ -364,13 +364,13 @@ impl std::fmt::Display for EstablishmentTaskDropped {
 impl std::error::Error for EstablishmentTaskDropped {}
 
 /// Cancels a request's waiter until it consumes a terminal acquisition outcome.
-struct WaiterGuard {
+struct WaiterCancellationGuard {
     cell: Arc<OriginCell>,
     waiter: WaiterId,
     active: bool,
 }
 
-impl WaiterGuard {
+impl WaiterCancellationGuard {
     fn new(cell: Arc<OriginCell>, waiter: WaiterId) -> Self {
         Self {
             cell,
@@ -384,7 +384,7 @@ impl WaiterGuard {
     }
 }
 
-impl Drop for WaiterGuard {
+impl Drop for WaiterCancellationGuard {
     fn drop(&mut self) {
         if self.active {
             OriginCell::cancel_waiter(&self.cell, self.waiter);

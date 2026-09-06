@@ -520,8 +520,8 @@ mod tests {
         );
         delivery.refuse(Some(demand(1)));
 
-        assert_eq!(1, origin.counts().available);
-        assert_eq!(0, origin.counts().ordered);
+        assert_eq!(1, origin.probe().available);
+        assert_eq!(0, origin.probe().ordered);
     }
 
     #[test]
@@ -545,7 +545,7 @@ mod tests {
         let first_lease = OriginCell::take_ready_lease(&first, first_waiter)
             .expect("dropped delivery did not retry the original head");
         assert!(OriginCell::take_ready_lease(&second, second_waiter).is_none());
-        assert_eq!(1, origin.counts().ordered);
+        assert_eq!(1, origin.probe().ordered);
 
         drop(first_lease);
         let second_lease = OriginCell::take_ready_lease(&second, second_waiter)
@@ -567,9 +567,9 @@ mod tests {
         assert!(origin.cell(&requesting_cell_id).is_none());
         OriginAdmission::run_action_chain(Some(AdmissionAction::Deliver(delivery)));
 
-        let counts = origin.counts();
-        assert_eq!(1, counts.available);
-        assert_eq!(0, counts.assigned);
-        assert_eq!(0, counts.ordered);
+        let probe = origin.probe();
+        assert_eq!(1, probe.available);
+        assert_eq!(0, probe.assigned);
+        assert_eq!(0, probe.ordered);
     }
 }

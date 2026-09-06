@@ -421,7 +421,7 @@ impl<Tls> Builder<Tls> {
             sleep: sleep_impl.clone(),
         };
         let admission_policy = max_connections_per_host
-            .map(|limit| AdmissionPolicy::new(limit, transport.guarantees_http1()));
+            .map(|limit| AdmissionPolicy::new(limit, transport.can_guarantee_http1()));
         let registry = PartitionRegistry::new(
             self.partitions,
             self.reuse_scope,

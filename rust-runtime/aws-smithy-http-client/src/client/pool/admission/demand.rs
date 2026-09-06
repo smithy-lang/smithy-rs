@@ -28,7 +28,7 @@ use std::collections::HashMap;
 
 /// Protocol capability required by the head waiter in a cell.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ProtocolRequirement {
+pub(in crate::client::pool) enum ProtocolRequirement {
     /// The waiter requires HTTP/1 wire semantics.
     H1Required,
     /// The waiter may dispatch over HTTP/1 or HTTP/2.
@@ -38,33 +38,33 @@ pub(crate) enum ProtocolRequirement {
 }
 
 impl ProtocolRequirement {
-    pub(crate) fn accepts_h1(self) -> bool {
+    pub(in crate::client::pool) fn accepts_h1(self) -> bool {
         self != Self::H2Required
     }
 
-    pub(crate) fn accepts_h2(self) -> bool {
+    pub(in crate::client::pool) fn accepts_h2(self) -> bool {
         self != Self::H1Required
     }
 }
 
 /// Identity of one cell-local demand generation.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub(crate) struct DemandId(u64);
+pub(in crate::client::pool) struct DemandId(u64);
 
 impl DemandId {
-    pub(crate) const fn from_u64(value: u64) -> Self {
+    pub(in crate::client::pool) const fn from_u64(value: u64) -> Self {
         Self(value)
     }
 }
 
 /// Strict ordering of complete snapshots within one [`DemandId`].
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub(crate) struct SnapshotVersion(u64);
+pub(in crate::client::pool) struct SnapshotVersion(u64);
 
 impl SnapshotVersion {
-    pub(crate) const INITIAL: Self = Self(0);
+    pub(in crate::client::pool) const INITIAL: Self = Self(0);
 
-    pub(crate) fn next(self) -> Self {
+    pub(in crate::client::pool) fn next(self) -> Self {
         Self(
             self.0
                 .checked_add(1)
@@ -75,7 +75,7 @@ impl SnapshotVersion {
 
 /// Complete state submitted for one demand identity.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum DemandState {
+pub(in crate::client::pool) enum DemandState {
     Active {
         requirement: ProtocolRequirement,
         eligibility_group: EligibilityGroup,
@@ -85,14 +85,14 @@ pub(crate) enum DemandState {
 
 /// Versioned replacement state for one cell's current demand generation.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct DemandSnapshot {
+pub(in crate::client::pool) struct DemandSnapshot {
     pub(super) id: DemandId,
     pub(super) version: SnapshotVersion,
     pub(super) state: DemandState,
 }
 
 impl DemandSnapshot {
-    pub(crate) fn active(
+    pub(in crate::client::pool) fn active(
         id: DemandId,
         version: SnapshotVersion,
         requirement: ProtocolRequirement,
@@ -108,14 +108,14 @@ impl DemandSnapshot {
         }
     }
 
-    pub(crate) fn accepts_h2(&self) -> bool {
+    pub(in crate::client::pool) fn accepts_h2(&self) -> bool {
         matches!(
             self.state,
             DemandState::Active { requirement, .. } if requirement.accepts_h2()
         )
     }
 
-    pub(crate) fn inactive(id: DemandId, version: SnapshotVersion) -> Self {
+    pub(in crate::client::pool) fn inactive(id: DemandId, version: SnapshotVersion) -> Self {
         Self {
             id,
             version,

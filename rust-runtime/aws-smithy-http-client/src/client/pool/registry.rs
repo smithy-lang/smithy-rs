@@ -56,7 +56,7 @@ impl AdmissionPolicy {
 
 /// Fixed partition set and the origin-wide admission states it shares.
 #[derive(Debug)]
-pub(crate) struct PartitionRegistry {
+pub(in crate::client::pool) struct PartitionRegistry {
     /// Immutable partition identities resolved when a client is built.
     partitions: HashMap<PartitionId, Arc<PartitionState>>,
     /// Policy used to derive a new cell's eligibility group.
@@ -69,7 +69,7 @@ pub(crate) struct PartitionRegistry {
 
 impl PartitionRegistry {
     /// Creates the anonymous partition or validates and retains explicit partitions.
-    pub(crate) fn new(
+    pub(in crate::client::pool) fn new(
         partitions: Option<Vec<Partition>>,
         reuse_scope: ConnectionReuseScope,
         admission_policy: Option<AdmissionPolicy>,
@@ -117,12 +117,15 @@ impl PartitionRegistry {
     }
 
     /// Resolves a retained partition once during client construction.
-    pub(crate) fn partition(&self, id: PartitionId) -> Option<Arc<PartitionState>> {
+    pub(in crate::client::pool) fn partition(
+        &self,
+        id: PartitionId,
+    ) -> Option<Arc<PartitionState>> {
         self.partitions.get(&id).cloned()
     }
 
     /// Resolves the stable cell for an already-resolved partition and URI.
-    pub(crate) fn resolve_cell(
+    pub(in crate::client::pool) fn resolve_cell(
         &self,
         partition: &PartitionState,
         uri: &Uri,
@@ -179,7 +182,7 @@ impl PartitionRegistry {
     }
 
     /// Stops partition maintenance and logically closes every connection.
-    pub(crate) fn close_all(&self, reason: CloseReason) {
+    pub(in crate::client::pool) fn close_all(&self, reason: CloseReason) {
         for partition in self.partitions.values() {
             partition.shutdown_maintenance();
         }
@@ -196,7 +199,7 @@ impl PartitionRegistry {
 
 /// Runtime placement and retained origin cells for one partition.
 #[derive(Debug)]
-pub(crate) struct PartitionState {
+pub(in crate::client::pool) struct PartitionState {
     /// Stable identity copied into every cell and owned connection.
     id: PartitionId,
     /// Configured spawner, or the first spawner published for the anonymous
@@ -235,12 +238,12 @@ impl PartitionState {
     }
 
     /// Returns this partition's stable identity.
-    pub(crate) fn id(&self) -> PartitionId {
+    pub(in crate::client::pool) fn id(&self) -> PartitionId {
         self.id
     }
 
     /// Returns this partition's optional network-interface binding.
-    pub(crate) fn interface(&self) -> Option<&StdArc<str>> {
+    pub(in crate::client::pool) fn interface(&self) -> Option<&StdArc<str>> {
         self.interface.as_ref()
     }
 
@@ -249,7 +252,7 @@ impl PartitionState {
     /// Explicit partitions retain their declared spawner. The anonymous
     /// partition captures the first Tokio runtime on which it is used, and
     /// all later requests use that same runtime.
-    pub(crate) fn owner_spawner(
+    pub(in crate::client::pool) fn owner_spawner(
         &self,
     ) -> Result<StdArc<dyn DriverSpawner>, MissingAnonymousRuntime> {
         if let Some(spawner) = self.spawner.get() {
@@ -288,12 +291,12 @@ impl PartitionState {
 
     /// Returns the number of cells retained by this partition.
     #[cfg(test)]
-    pub(crate) fn cell_count(&self) -> usize {
+    pub(in crate::client::pool) fn cell_count(&self) -> usize {
         self.origins.read().len()
     }
 
     /// Ensures idle maintenance is running on this partition's owner runtime.
-    pub(crate) fn ensure_maintenance_started(&self, spawner: &dyn DriverSpawner) {
+    pub(in crate::client::pool) fn ensure_maintenance_started(&self, spawner: &dyn DriverSpawner) {
         PartitionMaintenance::start(&self.maintenance, spawner);
     }
 
@@ -382,7 +385,7 @@ impl SchemePortKey {
 
 /// Error returned for an invalid explicit partition set.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum PartitionRegistryError {
+pub(in crate::client::pool) enum PartitionRegistryError {
     /// No partitions were declared.
     EmptyExplicitPartitionSet,
     /// More than one partition used the same identity.

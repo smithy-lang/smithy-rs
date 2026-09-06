@@ -980,7 +980,7 @@ impl H1Exchange {
             retire_at_connection_cell(&self.connection_cell, owner, reason);
             if let Some(connection) = upgrade {
                 connection.refine_protocol_close_as_upgrade();
-                #[cfg(debug_assertions)]
+                #[cfg(any(debug_assertions, test))]
                 connection.debug_assert_close_reason(CloseReason::Upgraded);
             }
         }

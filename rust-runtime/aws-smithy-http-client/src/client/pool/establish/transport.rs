@@ -102,7 +102,7 @@ pub(in crate::client::pool) trait TransportFactory:
     Send + Sync + 'static
 {
     /// Returns whether an H1-required attempt is guaranteed to negotiate H1.
-    fn guarantees_http1(&self) -> bool;
+    fn can_guarantee_http1(&self) -> bool;
 
     /// Creates one partition-bound transport.
     ///
@@ -115,7 +115,7 @@ struct ServiceTransportFactory<F> {
     /// Builds a connector with the selected network-interface binding.
     connector_for_interface: F,
     /// Whether every H1-required connection is guaranteed to negotiate H1.
-    guarantees_http1: bool,
+    can_guarantee_http1: bool,
 }
 
 impl<F, C, IO> TransportFactory for ServiceTransportFactory<F>
@@ -126,8 +126,8 @@ where
     C::Future: Send + 'static,
     IO: AsyncConn,
 {
-    fn guarantees_http1(&self) -> bool {
-        self.guarantees_http1
+    fn can_guarantee_http1(&self) -> bool {
+        self.can_guarantee_http1
     }
 
     fn connect(&self, context: TransportConnectContext<'_>) -> TransportFuture {
@@ -192,7 +192,7 @@ where
 /// Erases a service connector and its HTTP/1 negotiation guarantee.
 fn service_factory<F, C, IO>(
     connector_for_interface: F,
-    guarantees_http1: bool,
+    can_guarantee_http1: bool,
 ) -> StdArc<dyn TransportFactory>
 where
     F: Fn(Option<&str>) -> C + Send + Sync + 'static,
@@ -203,7 +203,7 @@ where
 {
     StdArc::new(ServiceTransportFactory {
         connector_for_interface,
-        guarantees_http1,
+        can_guarantee_http1,
     })
 }
 
@@ -217,7 +217,7 @@ where
 #[cfg(any(feature = "__rustls", feature = "s2n-tls"))]
 pub(in crate::client::pool) fn from_cached_interface_connector<F, C, IO>(
     connector_for_interface: F,
-    guarantees_http1: bool,
+    can_guarantee_http1: bool,
 ) -> StdArc<dyn TransportFactory>
 where
     F: Fn(Option<&str>, AlpnProtocols) -> C + Send + Sync + 'static,
@@ -226,14 +226,14 @@ where
     C::Future: Send + 'static,
     IO: AsyncConn,
 {
-    struct Cached<F, C> {
+    struct CachedTransportFactory<F, C> {
         factory: F,
-        guarantees_http1: bool,
+        can_guarantee_http1: bool,
         connectors:
             crate::sync::Mutex<std::collections::HashMap<(Option<String>, AlpnProtocols), C>>,
     }
 
-    impl<F, C, IO> TransportFactory for Cached<F, C>
+    impl<F, C, IO> TransportFactory for CachedTransportFactory<F, C>
     where
         F: Fn(Option<&str>, AlpnProtocols) -> C + Send + Sync + 'static,
         C: Service<Uri, Response = IO> + Clone + Send + Sync + 'static,
@@ -241,8 +241,8 @@ where
         C::Future: Send + 'static,
         IO: AsyncConn,
     {
-        fn guarantees_http1(&self) -> bool {
-            self.guarantees_http1
+        fn can_guarantee_http1(&self) -> bool {
+            self.can_guarantee_http1
         }
 
         fn connect(&self, context: TransportConnectContext<'_>) -> TransportFuture {
@@ -276,9 +276,9 @@ where
         }
     }
 
-    StdArc::new(Cached {
+    StdArc::new(CachedTransportFactory {
         factory: connector_for_interface,
-        guarantees_http1,
+        can_guarantee_http1,
         connectors: crate::sync::Mutex::new(std::collections::HashMap::new()),
     })
 }

@@ -17,6 +17,7 @@ use super::super::connection::{
 use super::super::dispatch::AcquisitionContext;
 use super::next_connection_id;
 use crate::client::connect::BoxConn;
+use crate::client::downcast_error;
 use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_types::body::SdkBody;
 use hyper_util::client::legacy::connect::Connected;
@@ -97,8 +98,8 @@ async fn run_h1_handshake(
         NegotiatedProtocol::Http1,
         connected,
     );
-    let (connection, physical) = ConnectionState::pending_open(info);
-    let io = ConnectionIo::new(io, physical);
+    let (connection, root_io) = ConnectionState::pending_open(info);
+    let io = ConnectionIo::new(io, root_io);
 
     let (sender, driver) = match hyper::client::conn::http1::Builder::new()
         .handshake::<_, SdkBody>(io)
@@ -107,7 +108,7 @@ async fn run_h1_handshake(
         Ok(established) => established,
         Err(error) => {
             connection.logical_close(CloseReason::ProtocolClosed);
-            return Err(super::super::super::downcast_error(Box::new(error)));
+            return Err(downcast_error(Box::new(error)));
         }
     };
 

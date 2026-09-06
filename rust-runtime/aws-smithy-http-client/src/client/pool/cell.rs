@@ -35,7 +35,7 @@ use self::h1::H1DriverGuard;
 use self::h1::H1Sender;
 use self::h1::{H1CellState, H1Selection, OwnedH1Sender};
 #[cfg(test)]
-use self::waiters::CellSnapshot;
+use self::waiters::AcquisitionProbe;
 pub(in crate::client::pool) use self::waiters::WaiterId;
 use self::waiters::{AcquisitionQueue, CellCommitError, CellCommitOutcome, DeliveryReservation};
 use super::admission::{
@@ -59,7 +59,7 @@ use std::time::SystemTime;
 
 /// Stable identity of an [`OriginCell`].
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(crate) struct CellId {
+pub(in crate::client::pool) struct CellId {
     /// Partition that owns this cell's connection work.
     partition: PartitionId,
     /// Canonical origin whose requests share this cell.
@@ -71,17 +71,17 @@ impl CellId {
         Self { partition, origin }
     }
 
-    pub(crate) fn partition(&self) -> PartitionId {
+    pub(in crate::client::pool) fn partition(&self) -> PartitionId {
         self.partition
     }
 
-    pub(crate) fn origin(&self) -> &OriginKey {
+    pub(in crate::client::pool) fn origin(&self) -> &OriginKey {
         &self.origin
     }
 }
 
 /// Stable state shared by requests for one partition and canonical origin.
-pub(crate) struct OriginCell {
+pub(in crate::client::pool) struct OriginCell {
     /// Complete identity used by partition and admission indexes.
     id: CellId,
     /// Partitions whose connections may satisfy this cell's demand.
@@ -427,17 +427,17 @@ impl OriginCell {
         }
     }
 
-    pub(crate) fn id(&self) -> &CellId {
+    pub(in crate::client::pool) fn id(&self) -> &CellId {
         &self.id
     }
 
     #[cfg(test)]
-    pub(crate) fn eligibility_group(&self) -> &EligibilityGroup {
+    pub(in crate::client::pool) fn eligibility_group(&self) -> &EligibilityGroup {
         &self.eligibility_group
     }
 
     #[cfg(test)]
-    pub(crate) fn admission(&self) -> Option<&Arc<OriginAdmission>> {
+    pub(in crate::client::pool) fn admission(&self) -> Option<&Arc<OriginAdmission>> {
         self.admission.as_ref()
     }
 
@@ -571,7 +571,7 @@ impl OriginCell {
     /// Returns the number of retained acquisition waiters for boundary tests.
     #[cfg(test)]
     pub(super) fn retained_waiters_for_test(&self) -> usize {
-        self.state.lock().acquisitions.snapshot().retained
+        self.state.lock().acquisitions.probe().retained
     }
 
     /// Registers one acquisition waiter in cell-local arrival order.
@@ -831,8 +831,8 @@ impl OriginCell {
     }
 
     #[cfg(test)]
-    fn snapshot(&self) -> CellSnapshot {
-        self.state.lock().acquisitions.snapshot()
+    fn probe(&self) -> AcquisitionProbe {
+        self.state.lock().acquisitions.probe()
     }
 }
 
@@ -937,10 +937,7 @@ mod tests {
 
     fn unbounded_connection(
         id: u64,
-    ) -> (
-        Arc<ConnectionState>,
-        super::super::connection::PhysicalConnectionGuard,
-    ) {
+    ) -> (Arc<ConnectionState>, super::super::connection::RootIoGuard) {
         ConnectionState::unbounded(connection_info(id))
     }
 
@@ -1013,7 +1010,7 @@ mod tests {
 
         assert_eq!(
             Some(CloseReason::PoolDropped),
-            connection.snapshot().close_reason
+            connection.probe().close_reason
         );
     }
 
@@ -1042,7 +1039,7 @@ mod tests {
         assert_eq!(1, admission.available_capacity_for_test());
         assert_eq!(
             Some(CloseReason::IncompleteH1Exchange),
-            connection.snapshot().close_reason
+            connection.probe().close_reason
         );
     }
 
@@ -1060,7 +1057,7 @@ mod tests {
             .expect("returned sender did not satisfy the waiter");
         assert_eq!(11, selected.test_sender_id());
         assert!(selected.is_reused());
-        assert_eq!(0, cell.snapshot().retained);
+        assert_eq!(0, cell.probe().retained);
         drop(selected);
         assert_eq!((1, 1), cell.h1_counts());
     }
@@ -1124,7 +1121,7 @@ mod tests {
 
         assert_eq!(
             Some(CloseReason::Reclaimed),
-            connection.snapshot().close_reason
+            connection.probe().close_reason
         );
         assert_eq!((0, 0), connection_cell.h1_counts());
         assert_eq!(0, admission.available_capacity_for_test());
@@ -1349,7 +1346,7 @@ mod tests {
             panic!("establishment failure produced the wrong acquisition step");
         };
         assert!(error.is_io());
-        assert_eq!(0, cell.snapshot().retained);
+        assert_eq!(0, cell.probe().retained);
     }
 
     #[test]
@@ -1559,10 +1556,7 @@ mod tests {
 
         drop(selection);
         assert_eq!((0, 0), cell.h1_counts());
-        assert_eq!(
-            Some(CloseReason::Poisoned),
-            connection.snapshot().close_reason
-        );
+        assert_eq!(Some(CloseReason::Poisoned), connection.probe().close_reason);
     }
 
     #[test]
@@ -1578,10 +1572,7 @@ mod tests {
         driver.protocol_closed();
         return_task.retire_connection(CloseReason::Upgraded);
 
-        assert_eq!(
-            Some(CloseReason::Upgraded),
-            connection.snapshot().close_reason
-        );
+        assert_eq!(Some(CloseReason::Upgraded), connection.probe().close_reason);
         assert_eq!(1, admission.available_capacity_for_test());
         assert_eq!((0, 0), cell.h1_counts());
     }
@@ -1597,7 +1588,7 @@ mod tests {
         drop(driver);
         assert_eq!(
             Some(CloseReason::OwnerRuntimeShutdown),
-            connection.snapshot().close_reason
+            connection.probe().close_reason
         );
         drop(selection);
         assert_eq!((0, 0), cell.h1_counts());
@@ -1629,7 +1620,7 @@ mod tests {
 
         assert_eq!(
             Some(CloseReason::OwnerRuntimeShutdown),
-            connection.snapshot().close_reason
+            connection.probe().close_reason
         );
         drop(selection);
         assert_eq!((0, 0), cell.h1_counts());
@@ -1653,7 +1644,7 @@ mod tests {
         drop(second_lease);
         let third_lease = OriginCell::take_ready_lease(&cell, third).unwrap();
         drop(third_lease);
-        assert_eq!(0, cell.snapshot().retained);
+        assert_eq!(0, cell.probe().retained);
     }
 
     #[test]
@@ -1663,14 +1654,14 @@ mod tests {
         let second = OriginCell::register_waiter(&cell, ProtocolRequirement::H2Required);
         let third = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
         let fourth = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
-        let demand = cell.snapshot().demand;
+        let demand = cell.probe().demand;
 
         assert!(OriginCell::cancel_waiter(&cell, second));
         assert!(OriginCell::cancel_waiter(&cell, fourth));
-        assert_eq!(demand, cell.snapshot().demand);
-        assert_eq!(2, cell.snapshot().waiting);
+        assert_eq!(demand, cell.probe().demand);
+        assert_eq!(2, cell.probe().waiting);
         let fifth = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
-        assert_eq!(3, cell.snapshot().waiting);
+        assert_eq!(3, cell.probe().waiting);
 
         drop(held);
         let first_lease = OriginCell::take_ready_lease(&cell, first).unwrap();
@@ -1683,7 +1674,7 @@ mod tests {
         drop(third_lease);
 
         drop(OriginCell::take_ready_lease(&cell, fifth).unwrap());
-        assert_eq!(0, cell.snapshot().retained);
+        assert_eq!(0, cell.probe().retained);
     }
 
     #[test]
@@ -1707,7 +1698,7 @@ mod tests {
         drop(third_lease);
 
         drop(OriginCell::take_ready_lease(&cell, fourth).unwrap());
-        assert_eq!(0, cell.snapshot().retained);
+        assert_eq!(0, cell.probe().retained);
     }
 
     #[test]
@@ -1762,7 +1753,7 @@ mod tests {
             returned[1],
             Some(AcquisitionStep::StartEstablishment(_))
         ));
-        assert_eq!(0, cell.snapshot().retained);
+        assert_eq!(0, cell.probe().retained);
 
         drop(returned);
         assert_eq!(1, admission.available_capacity_for_test());
@@ -1875,7 +1866,7 @@ mod tests {
         assert!(settlement.accept().is_none());
 
         assert_eq!(1, admission.available_capacity_for_test());
-        assert_eq!(0, cell.snapshot().retained);
+        assert_eq!(0, cell.probe().retained);
         assert_eq!((1, 1), cell.h1_counts());
         assert_eq!(
             11,
@@ -1934,10 +1925,10 @@ mod tests {
         ));
 
         let waiter = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
-        assert_eq!(0, cell.snapshot().waiting);
-        assert_eq!(1, cell.snapshot().retained);
+        assert_eq!(0, cell.probe().waiting);
+        assert_eq!(1, cell.probe().retained);
         assert!(OriginCell::cancel_waiter(&cell, waiter));
-        assert_eq!(0, cell.snapshot().retained);
+        assert_eq!(0, cell.probe().retained);
     }
 
     #[test]
@@ -1962,7 +1953,7 @@ mod tests {
     ) -> (
         h2::H2GenerationId,
         Arc<ConnectionState>,
-        super::super::connection::PhysicalConnectionGuard,
+        super::super::connection::RootIoGuard,
     ) {
         let lease = OriginAdmission::lease_for_test(admission);
         let (connection, physical) = ConnectionState::bounded(
@@ -2010,7 +2001,7 @@ mod tests {
         assert_eq!(0, admission.available_capacity_for_test());
         assert_eq!(Some(generation), connection_cell.accepting_h2_generation());
         drop(activation);
-        assert_eq!(0, requesting_cell.snapshot().retained);
+        assert_eq!(0, requesting_cell.probe().retained);
         assert!(OriginCell::close_h2(
             &connection_cell,
             generation,
@@ -2095,7 +2086,7 @@ mod tests {
         assert!(OriginCell::cancel_waiter(&requesting_cell, waiter));
         OriginAdmission::run_action_chain(Some(action));
 
-        assert_eq!(0, requesting_cell.snapshot().retained);
+        assert_eq!(0, requesting_cell.probe().retained);
         assert_eq!(0, admission.ordered_demand_count_for_test());
         assert_eq!(0, admission.available_capacity_for_test());
         assert_eq!(Some(generation), connection_cell.accepting_h2_generation());
@@ -2345,10 +2336,7 @@ mod loom_tests {
             drop(selected);
 
             assert_eq!((0, 0), cell.h1_counts());
-            assert_eq!(
-                Some(CloseReason::Poisoned),
-                connection.snapshot().close_reason
-            );
+            assert_eq!(Some(CloseReason::Poisoned), connection.probe().close_reason);
         });
     }
 
@@ -2368,10 +2356,7 @@ mod loom_tests {
             assert!(closing.join().unwrap());
 
             assert_eq!((0, 0), cell.h1_counts());
-            assert_eq!(
-                Some(CloseReason::Poisoned),
-                connection.snapshot().close_reason
-            );
+            assert_eq!(Some(CloseReason::Poisoned), connection.probe().close_reason);
         });
     }
 
@@ -2391,7 +2376,7 @@ mod loom_tests {
             assert!(cancelling.join().unwrap());
 
             assert_eq!((1, 1), cell.h1_counts());
-            assert_eq!(0, cell.snapshot().retained);
+            assert_eq!(0, cell.probe().retained);
             assert_eq!(
                 11,
                 OriginCell::select_h1(&cell)
@@ -2550,7 +2535,7 @@ mod loom_tests {
             assert!(cancelling.join().unwrap());
 
             assert_eq!((1, 1), connection_cell.h1_counts());
-            assert_eq!(0, requesting_cell.snapshot().retained);
+            assert_eq!(0, requesting_cell.probe().retained);
             assert_eq!(0, admission.ordered_demand_count_for_test());
             admission.clear_modeled_cells_for_test();
         });
@@ -2662,7 +2647,7 @@ mod loom_tests {
                     panic!("HTTP/1 reuse model received an HTTP/2 activation")
                 }
             }
-            assert_eq!(0, requesting_cell.snapshot().retained);
+            assert_eq!(0, requesting_cell.probe().retained);
             assert_eq!(1, admission.available_capacity_for_test());
             admission.clear_modeled_cells_for_test();
         });
@@ -2770,7 +2755,7 @@ mod loom_tests {
             let _installed = installing.join().unwrap();
             assert!(cancelling.join().unwrap());
 
-            assert_eq!(0, requesting_cell.snapshot().retained);
+            assert_eq!(0, requesting_cell.probe().retained);
             assert_eq!(0, admission.ordered_demand_count_for_test());
             assert_eq!(0, admission.available_capacity_for_test());
             assert!(OriginCell::close_h2(
@@ -2822,7 +2807,7 @@ mod loom_tests {
                 OriginCell::cancel_waiter(&requesting_cell, waiter),
                 "route acknowledgement lost the live demand"
             );
-            assert_eq!(0, requesting_cell.snapshot().retained);
+            assert_eq!(0, requesting_cell.probe().retained);
             assert_eq!(0, admission.ordered_demand_count_for_test());
             assert_eq!(1, admission.available_capacity_for_test());
             admission.clear_modeled_cells_for_test();
@@ -2859,7 +2844,7 @@ mod loom_tests {
             assert!(closing.join().unwrap());
 
             assert!(OriginCell::cancel_waiter(&requesting_cell, waiter));
-            assert_eq!(0, requesting_cell.snapshot().retained);
+            assert_eq!(0, requesting_cell.probe().retained);
             assert_eq!(0, admission.ordered_demand_count_for_test());
             assert_eq!(1, admission.available_capacity_for_test());
             admission.clear_modeled_cells_for_test();

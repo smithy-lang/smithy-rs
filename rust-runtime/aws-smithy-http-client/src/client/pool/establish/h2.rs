@@ -26,6 +26,7 @@ use super::super::dispatch::AcquisitionContext;
 use super::super::partition::DriverSpawner;
 use super::{next_connection_id, EstablishmentOutcome};
 use crate::client::connect::BoxConn;
+use crate::client::downcast_error;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_types::body::SdkBody;
@@ -176,8 +177,8 @@ async fn drive_flight(
         NegotiatedProtocol::Http2,
         connected,
     );
-    let (connection, physical) = ConnectionState::pending_open(info);
-    let io = ConnectionIo::new(io, physical);
+    let (connection, root_io) = ConnectionState::pending_open(info);
+    let io = ConnectionIo::new(io, root_io);
     let executor = PartitionExecutor {
         spawner: context.owner_spawner.clone(),
     };
@@ -188,7 +189,7 @@ async fn drive_flight(
         Ok(established) => established,
         Err(error) => {
             connection.logical_close(CloseReason::ProtocolClosed);
-            completion.fail(super::super::super::downcast_error(Box::new(error)));
+            completion.fail(downcast_error(Box::new(error)));
             return;
         }
     };

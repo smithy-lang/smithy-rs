@@ -192,9 +192,9 @@ impl PartitionMaintenance {
     }
 
     #[cfg(all(test, feature = "rt-tokio", not(smithy_http_client_loom)))]
-    fn snapshot(&self) -> MaintenanceSnapshot {
+    fn probe(&self) -> MaintenanceProbe {
         let state = self.state.lock();
-        MaintenanceSnapshot {
+        MaintenanceProbe {
             started: self.started.load(Ordering::Acquire),
             shutdown: state.shutdown,
             scheduled_deadline: state.scheduled_deadline,
@@ -378,7 +378,7 @@ async fn wait_for_sleep_or_revision(
 }
 
 #[cfg(all(test, feature = "rt-tokio", not(smithy_http_client_loom)))]
-struct MaintenanceSnapshot {
+struct MaintenanceProbe {
     started: bool,
     shutdown: bool,
     scheduled_deadline: Option<SystemTime>,
@@ -516,10 +516,10 @@ mod tests {
         };
 
         PartitionMaintenance::start(&maintenance, &spawner);
-        assert!(!maintenance.snapshot().started);
+        assert!(!maintenance.probe().started);
         PartitionMaintenance::start(&maintenance, &spawner);
         assert_eq!(2, submitted.load(Ordering::SeqCst));
-        assert!(!maintenance.snapshot().started);
+        assert!(!maintenance.probe().started);
     }
 
     #[test]
@@ -536,7 +536,7 @@ mod tests {
         PartitionMaintenance::start(&maintenance, &spawner);
 
         assert_eq!(0, submitted.load(Ordering::SeqCst));
-        assert!(!maintenance.snapshot().started);
+        assert!(!maintenance.probe().started);
     }
 
     #[derive(Clone, Debug)]
@@ -669,7 +669,7 @@ mod tests {
         }
         assert_eq!(1, spawner.submitted.load(Ordering::SeqCst));
         assert_eq!(1, spawner.active.load(Ordering::SeqCst));
-        assert!(maintenance.snapshot().started);
+        assert!(maintenance.probe().started);
 
         maintenance.shutdown();
         for _ in 0..10 {
@@ -678,7 +678,7 @@ mod tests {
             }
             tokio::task::yield_now().await;
         }
-        assert!(maintenance.snapshot().shutdown);
+        assert!(maintenance.probe().shutdown);
         assert_eq!(0, spawner.active.load(Ordering::SeqCst));
     }
 
@@ -688,12 +688,12 @@ mod tests {
         let (maintenance, cell, mut gate) = managed_cell(timeout);
         PartitionMaintenance::start(&maintenance, &TokioDriverSpawner::current());
         tokio::task::yield_now().await;
-        assert_eq!(None, maintenance.snapshot().scheduled_deadline);
+        assert_eq!(None, maintenance.probe().scheduled_deadline);
 
         OriginCell::insert_idle_h1(&cell, connection(1), H1Sender::test(1));
         let sleep = gate.expect_sleep().await;
         assert_eq!(timeout, sleep.duration());
-        assert!(maintenance.snapshot().scheduled_deadline.is_some());
+        assert!(maintenance.probe().scheduled_deadline.is_some());
         maintenance.shutdown();
     }
 
@@ -715,7 +715,7 @@ mod tests {
         assert_eq!(revision, maintenance.state.lock().revision);
         maintenance.notify_deadline(Some(earlier));
         assert!(maintenance.state.lock().revision > revision);
-        assert_eq!(Some(earlier), maintenance.snapshot().scheduled_deadline);
+        assert_eq!(Some(earlier), maintenance.probe().scheduled_deadline);
     }
 
     #[tokio::test]
@@ -728,18 +728,18 @@ mod tests {
 
         let sleep = gate.expect_sleep().await;
         assert_eq!(timeout, sleep.duration());
-        assert_eq!(None, connection.snapshot().close_reason);
+        assert_eq!(None, connection.probe().close_reason);
         sleep.allow_progress();
 
         for _ in 0..10 {
-            if connection.snapshot().close_reason == Some(super::super::CloseReason::IdleTimeout) {
+            if connection.probe().close_reason == Some(super::super::CloseReason::IdleTimeout) {
                 break;
             }
             tokio::task::yield_now().await;
         }
         assert_eq!(
             Some(super::super::CloseReason::IdleTimeout),
-            connection.snapshot().close_reason
+            connection.probe().close_reason
         );
     }
     #[tokio::test]
@@ -752,18 +752,18 @@ mod tests {
 
         let sleep = gate.expect_sleep().await;
         assert_eq!(timeout, sleep.duration());
-        assert_eq!(None, connection.snapshot().close_reason);
+        assert_eq!(None, connection.probe().close_reason);
         sleep.allow_progress();
 
         for _ in 0..10 {
-            if connection.snapshot().close_reason == Some(super::super::CloseReason::IdleTimeout) {
+            if connection.probe().close_reason == Some(super::super::CloseReason::IdleTimeout) {
                 break;
             }
             tokio::task::yield_now().await;
         }
         assert_eq!(
             Some(super::super::CloseReason::IdleTimeout),
-            connection.snapshot().close_reason
+            connection.probe().close_reason
         );
         assert_eq!(None, cell.accepting_h2_generation());
     }
@@ -811,7 +811,7 @@ mod tests {
             tokio::task::yield_now().await;
         }
 
-        assert_eq!(None, connection.snapshot().close_reason);
+        assert_eq!(None, connection.probe().close_reason);
         drop(selection);
     }
 
@@ -835,14 +835,14 @@ mod tests {
         sleep.allow_progress();
 
         for _ in 0..10 {
-            if connection.snapshot().close_reason == Some(super::super::CloseReason::IdleTimeout) {
+            if connection.probe().close_reason == Some(super::super::CloseReason::IdleTimeout) {
                 break;
             }
             tokio::task::yield_now().await;
         }
         assert_eq!(
             Some(super::super::CloseReason::IdleTimeout),
-            connection.snapshot().close_reason
+            connection.probe().close_reason
         );
     }
 }
