@@ -5,18 +5,20 @@
 
 //! HTTP/2 dispatch and two-ended request completion.
 //!
-//! [`H2Activation`] arrives with a prospective generation lease and a transient
+//! [`H2Activation`] arrives with prospective request authority and a transient
 //! sender cloned from the connection-owning cell. Dispatch first checks sender
 //! and logical-connection state, then polls Hyper once. A request returned from
 //! that poll was not accepted and may re-enter protocol acquisition.
 //!
-//! After Hyper accepts the request, the activation becomes an accepted lease.
-//! [`H2RequestBody`] owns the upload endpoint and [`H2ResponseBody`] owns the
-//! response endpoint. Either may finish first; the generation request count is
+//! After Hyper accepts the request, the activation becomes an accepted claim.
+//! [`H2RequestBody`] owns the upload guard and [`H2ResponseBody`] owns the
+//! response guard. Either may finish first; the generation request count is
 //! released only after both finish. A returned request re-arms the existing
 //! body wrapper rather than nesting wrappers around the original body.
 
-use super::super::cell::h2::{H2Activation, H2CloseHandle, H2DispatchParts, H2LeaseEndpoint};
+use super::super::cell::h2::{
+    H2Activation, H2CloseHandle, H2DispatchParts, H2ResponseGuard, H2UploadGuard,
+};
 use super::super::connection::ConnectionState;
 use super::{AcquisitionContext, H1HostHeaderInserted};
 use crate::sync::{Arc, Mutex};
@@ -34,26 +36,29 @@ use std::task::{Context, Poll};
     clippy::large_enum_variant,
     reason = "boxing the successful response would allocate on every HTTP/2 request"
 )]
-pub(super) enum H2DispatchResult {
+pub(super) enum H2DispatchOutcome {
     /// Hyper accepted the request and produced a guarded response.
     Response(Response<SdkBody>),
     /// Hyper did not accept the request, so it may re-enter acquisition.
-    Reacquire(Box<H2Reacquisition>),
+    NotAccepted(Box<H2UnacceptedRequest>),
 }
 
 /// Request and terminal fallback retained for one replacement selection.
-pub(super) struct H2Reacquisition {
+pub(super) struct H2UnacceptedRequest {
     /// Original request Hyper did not accept.
     request: Request<SdkBody>,
     /// Error returned if the request exhausts its replacement budget.
-    error: ConnectorError,
+    terminal_error: ConnectorError,
 }
 
-impl H2Reacquisition {
+impl H2UnacceptedRequest {
     /// Returns the original request and its terminal fallback.
     pub(super) fn into_parts(self: Box<Self>) -> (Request<SdkBody>, ConnectorError) {
-        let Self { request, error } = *self;
-        (request, error)
+        let Self {
+            request,
+            terminal_error,
+        } = *self;
+        (request, terminal_error)
     }
 }
 
@@ -65,13 +70,13 @@ struct H2AcceptedDispatch {
     close: H2CloseHandle,
     /// Metadata captured before the request moved into Hyper.
     captured_metadata: Option<aws_smithy_runtime_api::client::connection::ConnectionMetadata>,
-    /// Response endpoint transferred to the guarded response body.
-    response_endpoint: H2LeaseEndpoint,
+    /// Response guard transferred to the guarded response body.
+    response_guard: H2ResponseGuard,
     /// Whether the generation accepted an earlier request.
     reused: bool,
 }
 
-/// Dispatches one request through a prospective H2 generation lease.
+/// Dispatches one request through prospective H2 request authority.
 ///
 /// Pool-side staleness reacquires before Hyper sees the request. Once Hyper
 /// returns an envelope, only a reused generation may reacquire.
@@ -79,7 +84,7 @@ pub(super) async fn dispatch(
     context: &AcquisitionContext,
     mut request: Request<SdkBody>,
     mut activation: H2Activation,
-) -> Result<H2DispatchResult, ConnectorError> {
+) -> Result<H2DispatchOutcome, ConnectorError> {
     prepare_h2_request(&mut request, &context.absolute_uri);
     let connection = activation.connection().clone();
     let reused = activation.is_reused();
@@ -97,13 +102,13 @@ pub(super) async fn dispatch(
 
     let H2DispatchParts {
         mut sender,
-        upload_endpoint,
-        response_endpoint,
+        upload,
+        response,
     } = activation.take_dispatch_parts();
     if sender.is_closed() {
         close.close(super::super::connection::CloseReason::ProtocolClosed);
         let metadata = captured_metadata.unwrap_or_else(|| connection.info().h2_metadata(close));
-        return finish_unaccepted_request(
+        return resolve_unaccepted_request(
             request,
             reused,
             UnacceptedStage::BeforeHyper,
@@ -113,7 +118,7 @@ pub(super) async fn dispatch(
     }
     let Some(dispatch) = ConnectionState::try_commit_dispatch(&connection) else {
         let metadata = captured_metadata.unwrap_or_else(|| connection.info().h2_metadata(close));
-        return finish_unaccepted_request(
+        return resolve_unaccepted_request(
             request,
             reused,
             UnacceptedStage::BeforeHyper,
@@ -122,7 +127,7 @@ pub(super) async fn dispatch(
         );
     };
 
-    let body = H2RequestBodyHandle::arm(&mut request, upload_endpoint);
+    let body = H2RequestBodyHandle::arm(&mut request, upload);
 
     let mut send = Box::pin(sender.hyper_mut().try_send_request(request));
     let first = poll_fn(|cx| Poll::Ready(send.as_mut().poll(cx))).await;
@@ -133,13 +138,13 @@ pub(super) async fn dispatch(
                 .take_message()
                 .expect("checked returned request disappeared");
             body.clear();
-            drop(response_endpoint);
+            drop(response);
             drop(dispatch);
             drop(activation);
             close.close(super::super::connection::CloseReason::ProtocolClosed);
             let metadata =
                 captured_metadata.unwrap_or_else(|| connection.info().h2_metadata(close));
-            finish_unaccepted_request(
+            resolve_unaccepted_request(
                 returned,
                 reused,
                 UnacceptedStage::ReturnedByHyper,
@@ -150,14 +155,14 @@ pub(super) async fn dispatch(
         Poll::Ready(result) => {
             activation.accept(dispatch);
             let sender_closed = sender.is_closed();
-            finish_h2_send(
+            resolve_h2_send(
                 sender_closed,
                 result,
                 H2AcceptedDispatch {
                     connection,
                     close,
                     captured_metadata,
-                    response_endpoint,
+                    response_guard: response,
                     reused,
                 },
             )
@@ -166,14 +171,14 @@ pub(super) async fn dispatch(
             activation.accept(dispatch);
             let result = send.await;
             let sender_closed = sender.is_closed();
-            finish_h2_send(
+            resolve_h2_send(
                 sender_closed,
                 result,
                 H2AcceptedDispatch {
                     connection,
                     close,
                     captured_metadata,
-                    response_endpoint,
+                    response_guard: response,
                     reused,
                 },
             )
@@ -185,19 +190,19 @@ pub(super) async fn dispatch(
     clippy::result_large_err,
     reason = "ConnectorError preserves SDK classification and connection metadata"
 )]
-fn finish_h2_send(
+fn resolve_h2_send(
     sender_closed: bool,
     result: Result<
         Response<hyper::body::Incoming>,
         hyper::client::conn::TrySendError<Request<SdkBody>>,
     >,
     accepted: H2AcceptedDispatch,
-) -> Result<H2DispatchResult, ConnectorError> {
+) -> Result<H2DispatchOutcome, ConnectorError> {
     let H2AcceptedDispatch {
         connection,
         close,
         captured_metadata,
-        response_endpoint,
+        response_guard,
         reused,
     } = accepted;
     match result {
@@ -206,8 +211,8 @@ fn finish_h2_send(
                 .info()
                 .apply_connector_extras(response.extensions_mut());
             let (parts, body) = response.into_parts();
-            let body = H2ResponseBody::new(body, response_endpoint);
-            Ok(H2DispatchResult::Response(Response::from_parts(
+            let body = H2ResponseBody::new(body, response_guard);
+            Ok(H2DispatchOutcome::Response(Response::from_parts(
                 parts,
                 SdkBody::from_body_1_x(body),
             )))
@@ -220,11 +225,11 @@ fn finish_h2_send(
                 if let Some(body) = request.extensions().get::<H2RequestBodyHandle>() {
                     body.clear();
                 }
-                drop(response_endpoint);
+                drop(response_guard);
                 close.close(super::super::connection::CloseReason::ProtocolClosed);
                 let metadata =
                     captured_metadata.unwrap_or_else(|| connection.info().h2_metadata(close));
-                return finish_unaccepted_request(
+                return resolve_unaccepted_request(
                     request,
                     reused,
                     UnacceptedStage::ReturnedByHyper,
@@ -235,7 +240,7 @@ fn finish_h2_send(
             if sender_closed {
                 close.close(super::super::connection::CloseReason::ProtocolClosed);
             }
-            drop(response_endpoint);
+            drop(response_guard);
             let metadata =
                 captured_metadata.unwrap_or_else(|| connection.info().h2_metadata(close));
             Err(
@@ -276,17 +281,19 @@ enum UnacceptedStage {
     clippy::result_large_err,
     reason = "ConnectorError preserves SDK classification and connection metadata"
 )]
-fn finish_unaccepted_request(
+fn resolve_unaccepted_request(
     request: Request<SdkBody>,
     reused: bool,
     stage: UnacceptedStage,
     error: ConnectorError,
-) -> Result<H2DispatchResult, ConnectorError> {
+) -> Result<H2DispatchOutcome, ConnectorError> {
     if stage == UnacceptedStage::BeforeHyper || reused {
-        Ok(H2DispatchResult::Reacquire(Box::new(H2Reacquisition {
-            request,
-            error,
-        })))
+        Ok(H2DispatchOutcome::NotAccepted(Box::new(
+            H2UnacceptedRequest {
+                request,
+                terminal_error: error,
+            },
+        )))
     } else {
         Err(error)
     }
@@ -307,13 +314,13 @@ impl std::error::Error for H2ConnectionClosedBeforeDispatch {}
 /// Handle retained in a request extension after its body is wrapped once.
 #[derive(Clone)]
 struct H2RequestBodyHandle {
-    /// Re-armable upload endpoint shared with the wrapped request body.
-    slot: Arc<Mutex<Option<H2LeaseEndpoint>>>,
+    /// Re-armable upload guard shared with the wrapped request body.
+    slot: Arc<Mutex<Option<H2UploadGuard>>>,
 }
 
 impl H2RequestBodyHandle {
-    /// Wraps an unwrapped body and arms the current upload endpoint.
-    fn arm(request: &mut Request<SdkBody>, endpoint: H2LeaseEndpoint) -> Self {
+    /// Wraps an unwrapped body and arms the current upload guard.
+    fn arm(request: &mut Request<SdkBody>, upload: H2UploadGuard) -> Self {
         let is_end_stream = request.body().is_end_stream();
         let handle = request
             .extensions()
@@ -331,25 +338,25 @@ impl H2RequestBodyHandle {
                 request.extensions_mut().insert(handle.clone());
                 handle
             });
-        arm_upload_endpoint(&handle.slot, endpoint);
+        arm_upload_guard(&handle.slot, upload);
         if is_end_stream {
-            finish_upload_endpoint(&handle.slot);
+            finish_upload(&handle.slot);
         }
         handle
     }
 
-    /// Disarms an endpoint after Hyper returns the request unaccepted.
+    /// Disarms the upload guard after Hyper returns the request unaccepted.
     fn clear(&self) {
-        finish_upload_endpoint(&self.slot);
+        finish_upload(&self.slot);
     }
 }
 
-/// Request body whose endpoint can be re-armed after certified non-acceptance.
+/// Request body whose upload guard can be re-armed after non-acceptance.
 struct H2RequestBody {
     /// Original SDK body wrapped exactly once.
     inner: SdkBody,
-    /// Endpoint replaced when Hyper returns an unaccepted request.
-    slot: Arc<Mutex<Option<H2LeaseEndpoint>>>,
+    /// Guard replaced when Hyper returns an unaccepted request.
+    slot: Arc<Mutex<Option<H2UploadGuard>>>,
 }
 
 impl Body for H2RequestBody {
@@ -362,7 +369,7 @@ impl Body for H2RequestBody {
     ) -> Poll<Option<Result<hyper::body::Frame<Self::Data>, Self::Error>>> {
         let result = Pin::new(&mut self.inner).poll_frame(cx);
         if matches!(result, Poll::Ready(None) | Poll::Ready(Some(Err(_)))) {
-            finish_upload_endpoint(&self.slot);
+            finish_upload(&self.slot);
         }
         result
     }
@@ -378,36 +385,36 @@ impl Body for H2RequestBody {
 
 impl Drop for H2RequestBody {
     fn drop(&mut self) {
-        finish_upload_endpoint(&self.slot);
+        finish_upload(&self.slot);
     }
 }
 
-/// Response body that owns the response endpoint through stream completion.
+/// Response body that owns the response guard through stream completion.
 struct H2ResponseBody {
     /// Hyper response stream.
     inner: hyper::body::Incoming,
-    /// Response endpoint completed on terminal frame, error, or drop.
-    response: Option<H2LeaseEndpoint>,
+    /// Response guard finished on terminal frame, error, or drop.
+    response: Option<H2ResponseGuard>,
 }
 
 impl H2ResponseBody {
-    /// Wraps a response and completes an endpoint already at end stream.
-    fn new(inner: hyper::body::Incoming, response: H2LeaseEndpoint) -> Self {
+    /// Wraps a response and finishes a guard already at end stream.
+    fn new(inner: hyper::body::Incoming, response: H2ResponseGuard) -> Self {
         let is_end_stream = inner.is_end_stream();
         Self {
             inner,
-            response: retain_response_endpoint(is_end_stream, response),
+            response: retain_response_guard(is_end_stream, response),
         }
     }
 }
 
-/// Retains a response endpoint only while response frames may remain.
-fn retain_response_endpoint(
+/// Retains a response guard only while response frames may remain.
+fn retain_response_guard(
     is_end_stream: bool,
-    response: H2LeaseEndpoint,
-) -> Option<H2LeaseEndpoint> {
+    response: H2ResponseGuard,
+) -> Option<H2ResponseGuard> {
     if is_end_stream {
-        response.complete();
+        response.finish();
         None
     } else {
         Some(response)
@@ -424,8 +431,8 @@ impl Body for H2ResponseBody {
     ) -> Poll<Option<Result<hyper::body::Frame<Self::Data>, Self::Error>>> {
         let result = Pin::new(&mut self.inner).poll_frame(cx);
         if matches!(result, Poll::Ready(None) | Poll::Ready(Some(Err(_)))) {
-            if let Some(endpoint) = self.response.take() {
-                endpoint.complete();
+            if let Some(response) = self.response.take() {
+                response.finish();
             }
         }
         result
@@ -440,16 +447,16 @@ impl Body for H2ResponseBody {
     }
 }
 
-fn arm_upload_endpoint(slot: &Arc<Mutex<Option<H2LeaseEndpoint>>>, endpoint: H2LeaseEndpoint) {
-    let previous = slot.lock().replace(endpoint);
+fn arm_upload_guard(slot: &Arc<Mutex<Option<H2UploadGuard>>>, upload: H2UploadGuard) {
+    let previous = slot.lock().replace(upload);
     drop(previous);
 }
 
-/// Terminates the upload endpoint after upload completion, error, or rejection.
-fn finish_upload_endpoint(slot: &Arc<Mutex<Option<H2LeaseEndpoint>>>) {
-    let endpoint = slot.lock().take();
-    if let Some(endpoint) = endpoint {
-        endpoint.complete();
+/// Finishes the upload guard after upload completion, error, or rejection.
+fn finish_upload(slot: &Arc<Mutex<Option<H2UploadGuard>>>) {
+    let upload = slot.lock().take();
+    if let Some(upload) = upload {
+        upload.finish();
     }
 }
 
@@ -495,27 +502,27 @@ mod tests {
             .body(SdkBody::from("payload"))
             .unwrap();
 
-        let (first_endpoint, first_probe) = H2LeaseEndpoint::upload_for_test(&cell);
-        let first = H2RequestBodyHandle::arm(&mut request, first_endpoint);
+        let (first_upload, first_probe) = H2UploadGuard::for_test(&cell);
+        let first = H2RequestBodyHandle::arm(&mut request, first_upload);
         let first_slot = first.slot.clone();
-        assert!(!first_probe.upload_complete());
+        assert!(!first_probe.upload_finished());
 
-        let (second_endpoint, second_probe) = H2LeaseEndpoint::upload_for_test(&cell);
-        let second = H2RequestBodyHandle::arm(&mut request, second_endpoint);
+        let (second_upload, second_probe) = H2UploadGuard::for_test(&cell);
+        let second = H2RequestBodyHandle::arm(&mut request, second_upload);
         assert!(
             Arc::ptr_eq(&first_slot, &second.slot),
             "rearming replaced the request-body wrapper"
         );
         assert!(
-            first_probe.upload_complete(),
-            "rearming did not cancel the prior prospective endpoint"
+            first_probe.upload_finished(),
+            "rearming did not cancel the prior prospective upload guard"
         );
-        assert!(!second_probe.upload_complete());
+        assert!(!second_probe.upload_finished());
 
         second.clear();
         assert!(
-            second_probe.upload_complete(),
-            "returned request retained its rejected upload endpoint"
+            second_probe.upload_finished(),
+            "returned request retained its rejected upload guard"
         );
         let body = request
             .into_body()
@@ -527,35 +534,36 @@ mod tests {
     }
 
     #[test]
-    fn empty_request_body_completes_its_upload_endpoint_when_armed() {
+    fn empty_request_body_finishes_its_upload_guard_when_armed() {
         let cell = cell();
         let mut request = Request::new(SdkBody::empty());
-        let (endpoint, probe) = H2LeaseEndpoint::upload_for_test(&cell);
+        let (upload, probe) = H2UploadGuard::for_test(&cell);
 
-        H2RequestBodyHandle::arm(&mut request, endpoint);
+        H2RequestBodyHandle::arm(&mut request, upload);
 
-        assert!(probe.upload_complete());
+        assert!(probe.upload_finished());
     }
+
     #[test]
-    fn dropping_request_body_completes_its_upload_endpoint() {
+    fn dropping_request_body_finishes_its_upload_guard() {
         let cell = cell();
         let mut request = Request::new(SdkBody::from("payload"));
-        let (endpoint, probe) = H2LeaseEndpoint::upload_for_test(&cell);
+        let (upload, probe) = H2UploadGuard::for_test(&cell);
 
-        H2RequestBodyHandle::arm(&mut request, endpoint);
+        H2RequestBodyHandle::arm(&mut request, upload);
         let body = std::mem::replace(request.body_mut(), SdkBody::empty());
         drop(body);
 
-        assert!(probe.upload_complete());
+        assert!(probe.upload_finished());
     }
 
     #[tokio::test]
-    async fn request_body_error_completes_its_upload_endpoint() {
+    async fn request_body_error_finishes_its_upload_guard() {
         let cell = cell();
         let mut request = Request::new(SdkBody::from_body_1_x(FailingBody));
-        let (endpoint, probe) = H2LeaseEndpoint::upload_for_test(&cell);
+        let (upload, probe) = H2UploadGuard::for_test(&cell);
 
-        H2RequestBodyHandle::arm(&mut request, endpoint);
+        H2RequestBodyHandle::arm(&mut request, upload);
         let frame = request
             .body_mut()
             .frame()
@@ -563,18 +571,18 @@ mod tests {
             .expect("failing body omitted its error frame");
 
         assert!(frame.is_err());
-        assert!(probe.upload_complete());
+        assert!(probe.upload_finished());
     }
 
     #[test]
-    fn bodyless_response_completes_its_response_endpoint_without_drop() {
+    fn bodyless_response_finishes_its_response_guard_without_drop() {
         let cell = cell();
-        let (endpoint, probe) = H2LeaseEndpoint::response_for_test(&cell);
+        let (response, probe) = H2ResponseGuard::for_test(&cell);
 
-        let retained = retain_response_endpoint(true, endpoint);
+        let retained = retain_response_guard(true, response);
 
         assert!(retained.is_none());
-        assert!(probe.response_complete());
+        assert!(probe.response_finished());
     }
 
     #[test]
@@ -602,7 +610,7 @@ mod tests {
 
     #[test]
     fn retry_authority_distinguishes_pool_checks_from_hyper_returns() {
-        let checked_before_hyper = finish_unaccepted_request(
+        let checked_before_hyper = resolve_unaccepted_request(
             Request::new(SdkBody::empty()),
             false,
             UnacceptedStage::BeforeHyper,
@@ -610,10 +618,10 @@ mod tests {
         );
         assert!(matches!(
             checked_before_hyper,
-            Ok(H2DispatchResult::Reacquire(_))
+            Ok(H2DispatchOutcome::NotAccepted(_))
         ));
 
-        let fresh_hyper_return = finish_unaccepted_request(
+        let fresh_hyper_return = resolve_unaccepted_request(
             Request::new(SdkBody::empty()),
             false,
             UnacceptedStage::ReturnedByHyper,
@@ -621,7 +629,7 @@ mod tests {
         );
         assert!(fresh_hyper_return.is_err());
 
-        let reused_hyper_return = finish_unaccepted_request(
+        let reused_hyper_return = resolve_unaccepted_request(
             Request::new(SdkBody::empty()),
             true,
             UnacceptedStage::ReturnedByHyper,
@@ -629,7 +637,7 @@ mod tests {
         );
         assert!(matches!(
             reused_hyper_return,
-            Ok(H2DispatchResult::Reacquire(_))
+            Ok(H2DispatchOutcome::NotAccepted(_))
         ));
     }
 }

@@ -706,8 +706,8 @@ impl H2RouteGuard {
         }
 
         let next = self.settle(DemandAssignmentOutcome::Accepted { successor: None }, None);
-        OriginCell::service_h2_waiters(&requesting_cell);
-        OriginCell::service_peer_h2_waiters(&requesting_cell);
+        OriginCell::offer_local_h2(&requesting_cell);
+        OriginCell::offer_peer_h2(&requesting_cell);
         next
     }
 
