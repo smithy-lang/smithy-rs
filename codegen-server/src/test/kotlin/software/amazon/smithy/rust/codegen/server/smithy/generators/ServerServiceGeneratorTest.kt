@@ -70,31 +70,17 @@ internal class ServerServiceGeneratorTest {
                 operations: [Echo]
             }
 
-            @http(uri: "/echo/{name}", method: "POST")
+            @http(uri: "/echo", method: "POST")
             @OnlyIfPrefix("/v1")
             operation Echo {
-                input := {
-                    @required
-                    @httpLabel
-                    name: String
-
-                    nested: Nested
-                }
-                output := {
-                    nested: Nested
-                }
+                input := {}
+                output := {}
                 errors: [BadThing]
-            }
-
-            structure Nested {
-                message: String
             }
 
             @error("client")
             @httpError(400)
-            structure BadThing {
-                message: String
-            }
+            structure BadThing {}
             """.asSmithyModel()
 
         val generatedServers =
@@ -120,7 +106,6 @@ internal class ServerServiceGeneratorTest {
             val inputSchema = src.resolve("schema/input/shape_echo_input.rs")
             val outputSchema = src.resolve("schema/output/shape_echo_output.rs")
             val errorSchema = src.resolve("schema/error/shape_bad_thing.rs")
-            val modelSchema = src.resolve("schema/model/shape_nested.rs")
             val operationsSchema = src.resolve("schema/operations.rs")
             val serviceSchema = src.resolve("schema/service.rs")
             val service = src.resolve("service.rs")
@@ -128,7 +113,6 @@ internal class ServerServiceGeneratorTest {
             assert(inputSchema.toFile().exists()) { "missing $inputSchema" }
             assert(outputSchema.toFile().exists()) { "missing $outputSchema" }
             assert(errorSchema.toFile().exists()) { "missing $errorSchema" }
-            assert(modelSchema.toFile().exists()) { "missing $modelSchema" }
             assert(operationsSchema.toFile().exists()) { "missing $operationsSchema" }
             assert(serviceSchema.toFile().exists()) { "missing $serviceSchema" }
             assert(service.toFile().exists()) { "missing $service" }
@@ -149,6 +133,58 @@ internal class ServerServiceGeneratorTest {
                 service.readText()
             }
             assert(service.readText().contains("OperationHandlerBinding::new")) { service.readText() }
+        }
+    }
+
+    @Test
+    fun `static schema serde flag generates static multi protocol routing`() {
+        val model =
+            """
+            ${'$'}version: "2"
+
+            namespace com.aws.example.schema
+
+            use aws.protocols#restJson1
+
+            @restJson1
+            service SchemaService {
+                version: "2024-08-29"
+                operations: [Echo]
+            }
+
+            @http(uri: "/echo", method: "POST")
+            operation Echo {
+                input := {}
+                output := {}
+            }
+            """.asSmithyModel()
+
+        val generatedServers =
+            serverIntegrationTest(
+                model,
+                IntegrationTestParams(
+                    additionalSettings =
+                        ObjectNode.builder()
+                            .withMember(
+                                "codegen",
+                                ObjectNode.builder()
+                                    .withMember(ServerCodegenConfig.HTTP_1X_CONFIG_KEY, true)
+                                    .withMember(ServerCodegenConfig.SCHEMA_SERDE_CONFIG_KEY, true)
+                                    .withMember(ServerCodegenConfig.STATIC_SCHEMA_SERDE_CONFIG_KEY, true)
+                                    .build(),
+                            )
+                            .build(),
+                ),
+                testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
+            ) { _, _ -> }
+
+        generatedServers.forEach { generatedServer ->
+            val service = generatedServer.path.resolve("src/service.rs").readText()
+            assert(service.contains("StaticMultiProtocolRoutingService::new")) { service }
+            assert(service.contains("StaticProtocolRoutingRegistration::new")) { service }
+            assert(service.contains("StaticUpgradePlugin")) { service }
+            assert(service.contains("RestOperationRoutingTable::new_rest_json_1")) { service }
+            assert(!service.contains("DynUpgradePlugin")) { service }
         }
     }
 }

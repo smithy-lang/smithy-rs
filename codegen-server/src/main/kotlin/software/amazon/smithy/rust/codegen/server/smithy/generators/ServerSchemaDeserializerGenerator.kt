@@ -34,15 +34,16 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
-import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.shapeModuleName
-import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
+import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.findStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
+import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 
 /**
  * Generates the server-side schema-driven deserialization walker for a structure or
@@ -80,8 +81,7 @@ class ServerSchemaDeserializerGenerator(
     private val serviceShape = codegenContext.serviceShape
     private val runtimeConfig = codegenContext.runtimeConfig
 
-    private fun canReachConstrained(shape: Shape): Boolean =
-        shape.canReachConstrainedShape(model, symbolProvider)
+    private fun canReachConstrained(shape: Shape): Boolean = shape.canReachConstrainedShape(model, symbolProvider)
 
     /** The type the deser fn for [shape] produces — mirrors the legacy `returnSymbolToParseFn`. */
     private fun parseAsBuilder(shape: Shape): Boolean =
@@ -258,6 +258,7 @@ class ServerSchemaDeserializerGenerator(
         val builderPath = shape.serverBuilderSymbol(codegenContext).rustType().qualifiedName()
         val parse = parseSymbolFullName(shape)
         val members = shape.allMembers.values.toList()
+        val usesServerIngestionBuilder = shape.isReachableFromOperationInput()
 
         val arms = StringBuilder()
         // Streaming-blob members never travel through the codec: the operation glue
@@ -269,7 +270,12 @@ class ServerSchemaDeserializerGenerator(
             val target = model.expectShape(member.target)
             if (target.hasTrait(StreamingTrait::class.java)) {
                 if (target is software.amazon.smithy.model.shapes.BlobShape) {
-                    val setterName = "set_" + member.memberName.toSnakeCase()
+                    val setterName =
+                        if (usesServerIngestionBuilder) {
+                            "set_" + member.memberName.toSnakeCase()
+                        } else {
+                            symbolProvider.toMemberName(member)
+                        }
                     streamingPlaceholders.append(
                         """
                         builder = builder.$setterName(::aws_smithy_types::byte_stream::ByteStream::new(::aws_smithy_types::body::SdkBody::empty()));
@@ -278,11 +284,15 @@ class ServerSchemaDeserializerGenerator(
                 }
                 return@forEachIndexed
             }
-            // Feed the builder through its `pub(crate) set_*` setters — the builder's
-            // unconstrained-type ingestion surface (principle 3: the walker validates
-            // nothing; the single top-level `build()` enforces all constraints,
-            // producing today's `ConstraintViolation` values with frozen messages).
-            val setterName = "set_" + member.memberName.toSnakeCase()
+            // Operation input shapes have server-only `set_*` setters that accept
+            // unconstrained values. Other schema-serde structs, such as operation
+            // outputs used in event streams, use the normal generated builder API.
+            val setterName =
+                if (usesServerIngestionBuilder) {
+                    "set_" + member.memberName.toSnakeCase()
+                } else {
+                    symbolProvider.toMemberName(member)
+                }
             val expr = readTargetExpr(target, "member")
             val boxed = symbolProvider.toSymbol(member).isRustBoxed()
             val bare = if (boxed) "::std::boxed::Box::new($expr.into())" else expr

@@ -28,7 +28,10 @@ use crate::{
     service::ServiceShape,
 };
 
-use super::{DynOutput, IntoDynProtocolResponse, OperationShape, SchemaOperationShape};
+use super::{
+    DynEventStreamInput, DynOutput, IntoDynEventStreamResponse, IntoDynProtocolResponse, OperationShape,
+    SchemaOperationShape,
+};
 
 /// A [`Plugin`] responsible for taking an operation [`Service`], accepting and returning Smithy
 /// types and converting it into a [`Service`] taking and returning [`http`] types.
@@ -57,9 +60,28 @@ pub struct DynUpgradePlugin<Extractors> {
     _extractors: PhantomData<Extractors>,
 }
 
+/// Dynamic schema event-stream upgrade plugin.
+#[derive(Debug, Clone)]
+pub struct DynEventStreamUpgradePlugin<Extractors> {
+    config: DeserializeInputConfig,
+    _extractors: PhantomData<Extractors>,
+}
+
 impl<Extractors> DynUpgradePlugin<Extractors> {
     /// Creates a dynamic upgrade plugin with the given non-streaming request
     /// body byte limit. `0` disables the limit.
+    pub fn new(request_body_max_bytes: usize) -> Self {
+        Self {
+            config: DeserializeInputConfig { request_body_max_bytes },
+            _extractors: PhantomData,
+        }
+    }
+}
+
+impl<Extractors> DynEventStreamUpgradePlugin<Extractors> {
+    /// Creates a dynamic event-stream upgrade plugin with the given request
+    /// body byte limit for any non-streaming payload portions. `0` disables
+    /// the limit.
     pub fn new(request_body_max_bytes: usize) -> Self {
         Self {
             config: DeserializeInputConfig { request_body_max_bytes },
@@ -85,6 +107,23 @@ where
     }
 }
 
+impl<Ser, Op, T, Extractors> Plugin<Ser, Op, T> for DynEventStreamUpgradePlugin<Extractors>
+where
+    Ser: ServiceShape,
+    Op: SchemaOperationShape,
+{
+    type Output = DynEventStreamUpgrade<Op, Extractors, T>;
+
+    fn apply(&self, inner: T) -> Self::Output {
+        DynEventStreamUpgrade {
+            config: self.config,
+            _operation: PhantomData,
+            _extractors: PhantomData,
+            inner,
+        }
+    }
+}
+
 /// Dynamic schema upgrade service.
 pub struct DynUpgrade<Op, Extractors, S> {
     config: DeserializeInputConfig,
@@ -93,7 +132,29 @@ pub struct DynUpgrade<Op, Extractors, S> {
     inner: S,
 }
 
+/// Dynamic schema event-stream upgrade service.
+pub struct DynEventStreamUpgrade<Op, Extractors, S> {
+    config: DeserializeInputConfig,
+    _operation: PhantomData<Op>,
+    _extractors: PhantomData<Extractors>,
+    inner: S,
+}
+
 impl<Op, Extractors, S> Clone for DynUpgrade<Op, Extractors, S>
+where
+    S: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            config: self.config,
+            _operation: PhantomData,
+            _extractors: PhantomData,
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+impl<Op, Extractors, S> Clone for DynEventStreamUpgrade<Op, Extractors, S>
 where
     S: Clone,
 {
@@ -171,6 +232,62 @@ where
             let result = service.oneshot((input, extractors)).await;
             let response = match result {
                 Ok(output) => protocol.serialize_response(output.schema(), &output),
+                Err(error) => error.into_dyn_response(&*protocol),
+            };
+            Ok(response)
+        })
+    }
+}
+
+impl<Op, Extractors, S> Service<http::Request<Body>> for DynEventStreamUpgrade<Op, Extractors, S>
+where
+    Op: SchemaOperationShape,
+    Op::Input: DynEventStreamInput + Send + 'static,
+    Op::Output: IntoDynEventStreamResponse + Send + 'static,
+    Op::Error: IntoDynProtocolResponse + Send + 'static,
+    Extractors: FromParts<DynProtocol> + Send + 'static,
+    <Extractors as FromParts<DynProtocol>>::Rejection: std::fmt::Display,
+    S: Service<(Op::Input, Extractors), Response = Op::Output, Error = Op::Error> + Clone + Send + 'static,
+    S::Future: Send + 'static,
+{
+    type Response = http::Response<BoxBody>;
+    type Error = Infallible;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: http::Request<Body>) -> Self::Future {
+        let clone = self.inner.clone();
+        let service = std::mem::replace(&mut self.inner, clone);
+        let config = self.config;
+
+        Box::pin(async move {
+            let (mut parts, body) = req.into_parts();
+            let Some(selected) = parts.extensions.get::<SelectedProtocolContext>().cloned() else {
+                tracing::error!("selected protocol context missing from request extensions");
+                return Ok(internal_server_error());
+            };
+            let protocol = selected.server_protocol().clone();
+
+            let extractors = match Extractors::from_parts(&mut parts) {
+                Ok(extractors) => extractors,
+                Err(err) => {
+                    tracing::error!(error = %err, "additional parameter for the handler function could not be constructed");
+                    return Ok(err.into_response());
+                }
+            };
+
+            let request = http::Request::from_parts(parts, body);
+            let input = match Op::Input::from_dyn_event_stream_request(protocol.clone(), request, config).await {
+                Ok(input) => input,
+                Err(response) => return Ok(response),
+            };
+
+            let result = service.oneshot((input, extractors)).await;
+            let response = match result {
+                Ok(output) => output.into_dyn_event_stream_response(protocol),
                 Err(error) => error.into_dyn_response(&*protocol),
             };
             Ok(response)

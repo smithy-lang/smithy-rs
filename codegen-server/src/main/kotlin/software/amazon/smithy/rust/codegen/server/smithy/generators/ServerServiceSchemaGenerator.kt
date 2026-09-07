@@ -10,8 +10,8 @@ import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.model.traits.HttpTrait
+import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -116,22 +116,22 @@ class ServerServiceSchemaGenerator(
         val prefixPolicy = prefixPolicy(operation)
         val prefixPolicyStatics: String
         val prefixPolicyChain: String
-            if (prefixPolicy == null) {
-                prefixPolicyStatics = ""
-                prefixPolicyChain = ""
-            } else {
-                val prefixesConst = "${prefix}_PREFIXES"
-                val prefixes =
-                    prefixPolicy.prefixes.joinToString(",\n") { normalizePrefix(it).dq() }
-                val canonicalAllowed = prefixPolicy.canonicalAllowed.toString()
-                prefixPolicyStatics =
-                    """
-                    static $prefixesConst: &[&str] = &[
-                        $prefixes
-                    ];
-                    """.trimIndent()
-                prefixPolicyChain = "\n    .with_prefix_policy(#{PrefixPolicy}::new($canonicalAllowed, $prefixesConst))"
-            }
+        if (prefixPolicy == null) {
+            prefixPolicyStatics = ""
+            prefixPolicyChain = ""
+        } else {
+            val prefixesConst = "${prefix}_PREFIXES"
+            val prefixes =
+                prefixPolicy.prefixes.joinToString(",\n") { normalizePrefix(it).dq() }
+            val canonicalAllowed = prefixPolicy.canonicalAllowed.toString()
+            prefixPolicyStatics =
+                """
+                static $prefixesConst: &[&str] = &[
+                    $prefixes
+                ];
+                """.trimIndent()
+            prefixPolicyChain = "\n    .with_prefix_policy(#{PrefixPolicy}::new($canonicalAllowed, $prefixesConst))"
+        }
         val errorRefs =
             operation.errorsSet
                 .sorted()
@@ -227,8 +227,7 @@ class ServerServiceSchemaGenerator(
     private fun operationConstName(operation: OperationShape): String =
         symbolProvider.toSymbol(operation).name.toSnakeCase().uppercase()
 
-    private fun serviceConstName(): String =
-        service.id.name.toSnakeCase().uppercase()
+    private fun serviceConstName(): String = service.id.name.toSnakeCase().uppercase()
 
     private fun schemaConstRef(shape: Shape): String =
         if (shape.id == ShapeId.from("smithy.api#Unit")) {

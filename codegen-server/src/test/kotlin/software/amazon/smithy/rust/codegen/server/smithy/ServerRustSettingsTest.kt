@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 
@@ -47,5 +48,45 @@ internal class ServerRustSettingsTest {
     @Test
     fun `schemaSerde can be enabled from codegen config`() {
         settings(""""schemaSerde": true""").codegenConfig.schemaSerde shouldBe true
+    }
+
+    @Test
+    fun `staticSchemaSerde defaults to disabled`() {
+        settings("").codegenConfig.staticSchemaSerde shouldBe false
+    }
+
+    @Test
+    fun `staticSchemaSerde can be enabled from codegen config`() {
+        settings(
+            """
+            "http-1x": true,
+            "schemaSerde": true,
+            "staticSchemaSerde": true
+            """,
+        ).codegenConfig.staticSchemaSerde shouldBe true
+    }
+
+    @Test
+    fun `staticSchemaSerde requires schemaSerde`() {
+        assertThrows<IllegalArgumentException> {
+            settings(
+                """
+                "http-1x": true,
+                "staticSchemaSerde": true
+                """,
+            )
+        }
+    }
+
+    @Test
+    fun `staticSchemaSerde requires http1x`() {
+        assertThrows<IllegalArgumentException> {
+            settings(
+                """
+                "schemaSerde": true,
+                "staticSchemaSerde": true
+                """,
+            )
+        }
     }
 }

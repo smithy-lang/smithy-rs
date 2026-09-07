@@ -37,6 +37,9 @@ object ServerProtocolBasedTransformationFactory {
         settings: ServerRustSettings,
     ): Model {
         val service = settings.getService(model)
+        if (settings.codegenConfig.schemaSerde) {
+            return model
+        }
         if (!service.hasTrait<Rpcv2CborTrait>()) {
             return model
         }

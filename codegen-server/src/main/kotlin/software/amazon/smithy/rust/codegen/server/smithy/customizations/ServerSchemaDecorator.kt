@@ -68,7 +68,7 @@ class ServerSchemaDecorator : ServerCodegenDecorator {
                 RustModule.pubCrate(
                     codegenContext.symbolProvider.shapeModuleName(codegenContext.serviceShape, shape),
                     parent = schemaRoleModule,
-            )
+                )
             rustCrate.withModule(shapeModule) {
                 rust("##![allow(dead_code)]")
                 val schemaConstName = serverSchemaShapeConstName(codegenContext, shape)

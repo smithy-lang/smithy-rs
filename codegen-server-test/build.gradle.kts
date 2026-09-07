@@ -35,6 +35,7 @@ smithy {
 
 val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
     val pokemonProtocolModels = "../examples/pokemon-service-protocols/model"
+    val pokemonBenchmarkModels = "../examples-static/model"
     fun CodegenTest.http1Version(): CodegenTest =
         this.copy(
             extraCodegenConfig =
@@ -115,6 +116,21 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
                 "pokemon-service-protocols-rpcv2-cbor-server-sdk",
                 imports = listOf("$pokemonProtocolModels/pokemon-rpcv2-cbor.smithy", "$commonModels/pokemon-common.smithy"),
                 extraCodegenConfig = """"schemaSerde": true""",
+            ),
+        )
+    val pokemonBenchmarkCodegenTests =
+        listOf(
+            CodegenTest(
+                "com.aws.example#PokemonService",
+                "pokemon-service-dynamic-server-sdk",
+                imports = listOf("$pokemonBenchmarkModels/pokemon-multiprotocol.smithy"),
+                extraCodegenConfig = """"schemaSerde": true""",
+            ),
+            CodegenTest(
+                "com.aws.example#PokemonService",
+                "pokemon-service-static-server-sdk",
+                imports = listOf("$pokemonBenchmarkModels/pokemon-multiprotocol.smithy"),
+                extraCodegenConfig = """"schemaSerde": true, "staticSchemaSerde": true""",
             ),
         )
     listOf(
@@ -215,7 +231,7 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
             imports = listOf("$commonModels/pokemon-awsjson.smithy", "$commonModels/pokemon-common.smithy"),
         ),
     ).plus(pokemonProtocolStandardCodegenTests).flatMap { it.bothHttpVersions() } +
-        pokemonSchemaSerdeCodegenTests.map { it.http1Version() }
+        (pokemonSchemaSerdeCodegenTests + pokemonBenchmarkCodegenTests).map { it.http1Version() }
 }
 // When iterating on protocol tests use this to speed up codegen:
 //    .filter { it.module == "rpcv2Cbor_extras" || it.module == "rpcv2Cbor_extras_no_initial_response" }

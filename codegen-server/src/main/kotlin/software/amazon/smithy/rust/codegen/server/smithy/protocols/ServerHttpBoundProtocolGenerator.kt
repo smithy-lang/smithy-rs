@@ -409,6 +409,54 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             "serialize_response" to serverSerializeResponse(operationShape),
         )
 
+        if (codegenContext.settings.codegenConfig.schemaSerde &&
+            runtimeConfig.httpVersion == HttpVersion.Http1x &&
+            (
+                operationShape.inputShape(model).findStreamingMember(model)?.isEventStream(model) == true ||
+                    operationShape.outputShape(model).findStreamingMember(model)?.isEventStream(model) == true
+            )
+        ) {
+            rustTemplate(
+                """
+                impl #{SmithyHttpServer}::operation::DynEventStreamInput for #{I} {
+                    type Future = std::pin::Pin<Box<dyn std::future::Future<Output = Result<#{I}, #{SmithyHttpServer}::response::Response>> + Send>>;
+
+                    fn from_dyn_event_stream_request(
+                        _protocol: #{SmithyHttpServer}::schema::protocol::SharedServerProtocol,
+                        request: #{http}::Request<#{SmithyHttpServer}::body::Body>,
+                        _config: #{SmithyHttpServer}::schema::protocol::DeserializeInputConfig,
+                    ) -> Self::Future {
+                        Box::pin(async move {
+                            <#{I} as #{SmithyHttpServer}::request::FromRequest<#{Marker}, #{SmithyHttpServer}::body::Body>>::from_request(request)
+                                .await
+                                .map_err(#{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response)
+                        })
+                    }
+                }
+
+                impl #{SmithyHttpServer}::operation::IntoDynEventStreamResponse for #{O} {
+                    fn into_dyn_event_stream_response(
+                        self,
+                        _protocol: #{SmithyHttpServer}::schema::protocol::SharedServerProtocol,
+                    ) -> #{SmithyHttpServer}::response::Response {
+                        match #{serialize_response}(self) {
+                            Ok(response) => response,
+                            Err(e) => {
+                                #{Tracing}::error!(error = %e, "failed to serialize response");
+                                #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
+                            }
+                        }
+                    }
+                }
+                """,
+                *codegenScope,
+                "I" to inputSymbol,
+                "O" to outputSymbol,
+                "Marker" to protocol.markerStruct(),
+                "serialize_response" to serverSerializeResponse(operationShape),
+            )
+        }
+
         if (operationShape.operationErrors(model).isNotEmpty()) {
             rustTemplate(
                 """

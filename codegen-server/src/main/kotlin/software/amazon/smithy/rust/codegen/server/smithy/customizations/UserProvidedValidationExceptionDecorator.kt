@@ -232,7 +232,9 @@ class UserProvidedValidationExceptionConversionGenerator(
                 if (codegenContext.runtimeConfig.httpVersion == HttpVersion.Http1x &&
                     codegenContext.settings.codegenConfig.schemaSerde
                 ) {
-                    writable { rustTemplate("Self::SchemaConstraintViolation(#{Box}::new(validation_exception))", "Box" to RuntimeType.Box) }
+                    writable {
+                        rustTemplate("Self::SchemaConstraintViolation(#{Box}::new(validation_exception))", "Box" to RuntimeType.Box)
+                    }
                 } else {
                     val shapeModuleName =
                         codegenContext.symbolProvider.shapeModuleName(codegenContext.serviceShape, validationExceptionStructure)

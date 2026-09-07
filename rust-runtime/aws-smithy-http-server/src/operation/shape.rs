@@ -3,13 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use std::future::Future;
 use std::marker::PhantomData;
 
 use super::{Handler, IntoService, Normalize, OperationService};
 use crate::{
-    body::BoxBody,
+    body::{Body, BoxBody},
     modeled_error::HttpServerError,
-    schema::{protocol::ServerProtocol, OperationSchema},
+    schema::{
+        protocol::{DeserializeInputConfig, ServerProtocol, SharedServerProtocol},
+        OperationSchema,
+    },
     shape_id::ShapeId,
 };
 
@@ -45,6 +49,27 @@ pub trait DynOutput: aws_smithy_schema::serde::SerializableStruct {
 pub trait IntoDynProtocolResponse {
     /// Converts this operation error into an HTTP response using the selected protocol.
     fn into_dyn_response(self, protocol: &dyn ServerProtocol) -> http::Response<BoxBody>;
+}
+
+/// Operation inputs containing event-stream members that can be constructed
+/// through the selected erased server protocol.
+pub trait DynEventStreamInput: Sized {
+    /// Future returned by dynamic event-stream request deserialization.
+    type Future: Future<Output = Result<Self, http::Response<BoxBody>>> + Send + 'static;
+
+    /// Builds the typed operation input from the original request.
+    fn from_dyn_event_stream_request(
+        protocol: SharedServerProtocol,
+        request: http::Request<Body>,
+        config: DeserializeInputConfig,
+    ) -> Self::Future;
+}
+
+/// Operation outputs containing event-stream members that can be serialized
+/// through the selected erased server protocol.
+pub trait IntoDynEventStreamResponse {
+    /// Converts this output into an HTTP event-stream response.
+    fn into_dyn_event_stream_response(self, protocol: SharedServerProtocol) -> http::Response<BoxBody>;
 }
 
 impl IntoDynProtocolResponse for std::convert::Infallible {

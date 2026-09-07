@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.OperationShape
@@ -23,6 +24,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.findStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
@@ -35,6 +37,63 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Error as ErrorModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Input as InputModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Output as OutputModule
+
+private const val STATIC_SCHEMA_MISSING_PROTOCOL_ROUTE_MESSAGE =
+    "\"static schema route should exist for every protocol registered by this generated service\""
+
+private data class StaticSchemaProtocol(
+    val shapeId: String,
+    val fieldName: String,
+    val markerPath: String,
+    val routingTableType: String,
+    val routingTableConstructor: String,
+    val constraints: List<String> = emptyList(),
+) {
+    fun markerType(smithyHttpServer: RuntimeType): RuntimeType = smithyHttpServer.resolve(markerPath)
+}
+
+private val BUILTIN_STATIC_SCHEMA_PROTOCOLS =
+    listOf(
+        StaticSchemaProtocol(
+            shapeId = "smithy.protocols#rpcv2Cbor",
+            fieldName = "rpc_v2_cbor",
+            markerPath = "protocol::rpc_v2_cbor::RpcV2Cbor",
+            routingTableType = "RpcV2CborOperationRoutingTable",
+            routingTableConstructor = "new",
+            constraints = listOf("aws.protocols#awsJson1_1"),
+        ),
+        StaticSchemaProtocol(
+            shapeId = "aws.protocols#awsJson1_1",
+            fieldName = "aws_json_11",
+            markerPath = "protocol::aws_json_11::AwsJson1_1",
+            routingTableType = "AwsJsonOperationRoutingTable",
+            routingTableConstructor = "new_aws_json_11",
+            constraints = listOf("aws.protocols#awsJson1_0"),
+        ),
+        StaticSchemaProtocol(
+            shapeId = "aws.protocols#awsJson1_0",
+            fieldName = "aws_json_10",
+            markerPath = "protocol::aws_json_10::AwsJson1_0",
+            routingTableType = "AwsJsonOperationRoutingTable",
+            routingTableConstructor = "new_aws_json_10",
+            constraints = listOf("aws.protocols#restJson1"),
+        ),
+        StaticSchemaProtocol(
+            shapeId = "aws.protocols#restJson1",
+            fieldName = "rest_json_1",
+            markerPath = "protocol::rest_json_1::RestJson1",
+            routingTableType = "RestOperationRoutingTable",
+            routingTableConstructor = "new_rest_json_1",
+            constraints = listOf("aws.protocols#restXml"),
+        ),
+        StaticSchemaProtocol(
+            shapeId = "aws.protocols#restXml",
+            fieldName = "rest_xml",
+            markerPath = "protocol::rest_xml::RestXml",
+            routingTableType = "RestOperationRoutingTable",
+            routingTableConstructor = "new_rest_xml",
+        ),
+    )
 
 class ServerServiceGenerator(
     private val codegenContext: ServerCodegenContext,
@@ -62,6 +121,12 @@ class ServerServiceGenerator(
     private val serviceId = service.id
     private val serviceName = serviceId.name.toPascalCase()
     private val builderName = "${serviceName}Builder"
+    private val shouldGenerateOperationHandlerBindings =
+        codegenContext.settings.codegenConfig.schemaSerde &&
+            codegenContext.runtimeConfig.httpVersion == HttpVersion.Http1x
+    private val staticSchemaSerde =
+        shouldGenerateOperationHandlerBindings &&
+            codegenContext.settings.codegenConfig.staticSchemaSerde
 
     /** Calculate all `operationShape`s contained within the `ServiceShape`. */
     private val index = TopDownIndex.of(codegenContext.model)
@@ -79,18 +144,40 @@ class ServerServiceGenerator(
 
     /** A `Writable` block of "field: Type" for the builder. */
     private val builderFields =
-        builderFieldNames.values.map { name -> "$name: Option<#{SmithyHttpServer}::routing::Route<Body>>" }
+        builderFieldNames.values.map { name ->
+            if (staticSchemaSerde) {
+                "$name: Option<StaticSchemaOperationRoutes<Body>>"
+            } else {
+                "$name: Option<#{SmithyHttpServer}::routing::Route<Body>>"
+            }
+        }
 
     /** The name of the local private module containing the functions that return the request for each operation */
     private val requestSpecsModuleName = "request_specs"
-    private val shouldGenerateOperationHandlerBindings =
-        codegenContext.settings.codegenConfig.schemaSerde &&
-            codegenContext.runtimeConfig.httpVersion == HttpVersion.Http1x
+    private val staticSchemaProtocols =
+        if (staticSchemaSerde) {
+            val declaredProtocols =
+                ServiceIndex.of(model).getProtocols(service).keys
+                    .map { it.toString() }
+                    .toSet()
+            BUILTIN_STATIC_SCHEMA_PROTOCOLS.filter { it.shapeId in declaredProtocols }
+        } else {
+            emptyList()
+        }
 
     private fun operationUsesDynUpgrade(operation: OperationShape): Boolean =
         shouldGenerateOperationHandlerBindings &&
+            !staticSchemaSerde &&
             operation.inputShape(model).findStreamingMember(model) == null &&
             operation.outputShape(model).findStreamingMember(model) == null
+
+    private fun operationUsesDynEventStreamUpgrade(operation: OperationShape): Boolean =
+        shouldGenerateOperationHandlerBindings &&
+            !staticSchemaSerde &&
+            (
+                operation.inputShape(model).findStreamingMember(model)?.isEventStream(model) == true ||
+                    operation.outputShape(model).findStreamingMember(model)?.isEventStream(model) == true
+            )
 
     private val usedRequestSpecFunctionNames = mutableSetOf<String>()
 
@@ -103,34 +190,38 @@ class ServerServiceGenerator(
      * to that protocol and gated behind the `rpcV2CborAddCapitalizedRoute` setting.
      */
     private val requestSpecMap: Map<OperationShape, List<Pair<String, Writable>>> =
-        operations.associateWith { operationShape ->
-            val operationName = symbolProvider.toSymbol(operationShape).name
-            val requestSpecModule = smithyHttpServer.resolve("routing::request_spec")
-            val primarySpec =
-                protocol.serverRouterRequestSpec(operationShape, operationName, serviceId.name, requestSpecModule)
-            val aliasSpecs =
-                if (protocol is ServerRpcV2CborProtocol) {
-                    protocol.additionalRouterRequestSpecAliases(operationShape, serviceId.name)
-                } else {
-                    emptyList()
-                }
-            val specs = listOf(primarySpec) + aliasSpecs
-            val baseFunctionName = RustReservedWords.escapeIfNeeded(operationName.toSnakeCase())
-            specs.mapIndexed { index, spec ->
-                val functionName = allocateRequestSpecFunctionName(baseFunctionName, index)
-                val functionBody =
-                    writable {
-                        rustTemplate(
-                            """
+        if (shouldGenerateOperationHandlerBindings) {
+            emptyMap()
+        } else {
+            operations.associateWith { operationShape ->
+                val operationName = symbolProvider.toSymbol(operationShape).name
+                val requestSpecModule = smithyHttpServer.resolve("routing::request_spec")
+                val primarySpec =
+                    protocol.serverRouterRequestSpec(operationShape, operationName, serviceId.name, requestSpecModule)
+                val aliasSpecs =
+                    if (protocol is ServerRpcV2CborProtocol) {
+                        protocol.additionalRouterRequestSpecAliases(operationShape, serviceId.name)
+                    } else {
+                        emptyList()
+                    }
+                val specs = listOf(primarySpec) + aliasSpecs
+                val baseFunctionName = RustReservedWords.escapeIfNeeded(operationName.toSnakeCase())
+                specs.mapIndexed { index, spec ->
+                    val functionName = allocateRequestSpecFunctionName(baseFunctionName, index)
+                    val functionBody =
+                        writable {
+                            rustTemplate(
+                                """
                             fn $functionName() -> #{SpecType} {
                                 #{Spec:W}
                             }
                             """,
-                            "Spec" to spec,
-                            "SpecType" to protocol.serverRouterRequestSpecType(requestSpecModule),
-                        )
-                    }
-                Pair(functionName, functionBody)
+                                "Spec" to spec,
+                                "SpecType" to protocol.serverRouterRequestSpecType(requestSpecModule),
+                            )
+                        }
+                    Pair(functionName, functionBody)
+                }
             }
         }
 
@@ -158,20 +249,197 @@ class ServerServiceGenerator(
         }
     }
 
+    private fun operationSetterBounds(
+        structName: String,
+        upgradePlugin: RuntimeType,
+    ): Writable =
+        writable {
+            if (staticSchemaSerde) {
+                rustTemplate(
+                    """
+                    ModelPl::Output: Clone,
+                    #{StaticProtocolBounds:W}
+                    """,
+                    "StaticProtocolBounds" to staticSchemaProtocols.map { staticProtocolSetterBounds(structName, it) }.join("\n"),
+                    *codegenScope,
+                )
+            } else {
+                rustTemplate(
+                    """
+                    #{UpgradePlugin}::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
+                        $serviceName<L>,
+                        crate::operation_shape::$structName,
+                        ModelPl::Output
+                    >,
+                    HttpPl: #{SmithyHttpServer}::plugin::Plugin<
+                        $serviceName<L>,
+                        crate::operation_shape::$structName,
+                        <
+                            #{UpgradePlugin}::<UpgradeExtractors>
+                            as #{SmithyHttpServer}::plugin::Plugin<
+                                $serviceName<L>,
+                                crate::operation_shape::$structName,
+                                ModelPl::Output
+                            >
+                        >::Output
+                    >,
+
+                    HttpPl::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
+                    <HttpPl::Output as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
+                    """,
+                    "UpgradePlugin" to upgradePlugin,
+                    *codegenScope,
+                )
+            }
+        }
+
+    private fun staticProtocolSetterBounds(
+        structName: String,
+        protocol: StaticSchemaProtocol,
+    ): Writable =
+        writable {
+            rustTemplate(
+                """
+                #{StaticUpgradePlugin}<#{Protocol}, UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
+                    $serviceName<L>,
+                    crate::operation_shape::$structName,
+                    ModelPl::Output
+                >,
+                HttpPl: #{SmithyHttpServer}::plugin::Plugin<
+                    $serviceName<L>,
+                    crate::operation_shape::$structName,
+                    <
+                        #{StaticUpgradePlugin}<#{Protocol}, UpgradeExtractors>
+                        as #{SmithyHttpServer}::plugin::Plugin<
+                            $serviceName<L>,
+                            crate::operation_shape::$structName,
+                            ModelPl::Output
+                        >
+                    >::Output
+                >,
+                <HttpPl as #{SmithyHttpServer}::plugin::Plugin<
+                    $serviceName<L>,
+                    crate::operation_shape::$structName,
+                    <
+                        #{StaticUpgradePlugin}<#{Protocol}, UpgradeExtractors>
+                        as #{SmithyHttpServer}::plugin::Plugin<
+                            $serviceName<L>,
+                            crate::operation_shape::$structName,
+                            ModelPl::Output
+                        >
+                    >::Output
+                >>::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
+                <<HttpPl as #{SmithyHttpServer}::plugin::Plugin<
+                    $serviceName<L>,
+                    crate::operation_shape::$structName,
+                    <
+                        #{StaticUpgradePlugin}<#{Protocol}, UpgradeExtractors>
+                        as #{SmithyHttpServer}::plugin::Plugin<
+                            $serviceName<L>,
+                            crate::operation_shape::$structName,
+                            ModelPl::Output
+                        >
+                    >::Output
+                >>::Output as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
+                """,
+                "StaticUpgradePlugin" to smithyHttpServer.resolve("operation::StaticUpgradePlugin"),
+                "Protocol" to protocol.markerType(smithyHttpServer),
+                *codegenScope,
+            )
+        }
+
+    private fun operationSetterBody(
+        fieldName: String,
+        upgradePlugin: RuntimeType,
+        upgradePluginConstructor: String,
+    ): Writable =
+        writable {
+            if (staticSchemaSerde) {
+                rustTemplate(
+                    """
+                    let routes = StaticSchemaOperationRoutes {
+                        #{StaticRoutes:W}
+                    };
+                    self.${fieldName}_custom(routes)
+                    """,
+                    "StaticRoutes" to
+                        staticSchemaProtocols.map { protocol ->
+                            writable {
+                                rustTemplate(
+                                    """
+                                ${protocol.fieldName}: Some({
+                                    let svc = svc.clone();
+                                    let svc = #{StaticUpgradePlugin}::<#{Protocol}, UpgradeExtractors>::new().apply(svc);
+                                    let svc = self.http_plugin.apply(svc);
+                                    #{SmithyHttpServer}::routing::Route::new(svc)
+                                }),
+                                """,
+                                    "StaticUpgradePlugin" to smithyHttpServer.resolve("operation::StaticUpgradePlugin"),
+                                    "Protocol" to protocol.markerType(smithyHttpServer),
+                                    *codegenScope,
+                                )
+                            }
+                        }.join("\n"),
+                    *codegenScope,
+                )
+            } else {
+                rustTemplate(
+                    """
+                    let svc = $upgradePluginConstructor.apply(svc);
+                    let svc = self.http_plugin.apply(svc);
+                    self.${fieldName}_custom(svc)
+                    """,
+                    "UpgradePlugin" to upgradePlugin,
+                )
+            }
+        }
+
+    private fun customSetter(fieldName: String): Writable =
+        writable {
+            if (staticSchemaSerde) {
+                rust(
+                    """
+                    fn ${fieldName}_custom(mut self, routes: StaticSchemaOperationRoutes<Body>) -> Self
+                    {
+                        self.$fieldName = Some(routes);
+                        self
+                    }
+                    """,
+                )
+            } else {
+                rustTemplate(
+                    """
+                    fn ${fieldName}_custom<S>(mut self, svc: S) -> Self
+                    where
+                        S: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
+                        S::Future: Send + 'static,
+                    {
+                        self.$fieldName = Some(#{SmithyHttpServer}::routing::Route::new(svc));
+                        self
+                    }
+                    """,
+                    *codegenScope,
+                )
+            }
+        }
+
     /** A `Writable` block containing all the `Handler` and `Operation` setters for the builder. */
     private fun builderSetters(): Writable =
         writable {
             for ((operationShape, structName) in operationStructNames) {
-                val fieldName = builderFieldNames[operationShape]
+                val fieldName = builderFieldNames[operationShape]!!
                 val usesDynUpgrade = operationUsesDynUpgrade(operationShape)
+                val usesDynEventStreamUpgrade = operationUsesDynEventStreamUpgrade(operationShape)
                 val upgradePlugin =
-                    if (usesDynUpgrade) {
+                    if (usesDynEventStreamUpgrade) {
+                        smithyHttpServer.resolve("operation::DynEventStreamUpgradePlugin")
+                    } else if (usesDynUpgrade) {
                         smithyHttpServer.resolve("operation::DynUpgradePlugin")
                     } else {
                         smithyHttpServer.resolve("operation::UpgradePlugin")
                     }
                 val upgradePluginConstructor =
-                    if (usesDynUpgrade) {
+                    if (usesDynUpgrade || usesDynEventStreamUpgrade) {
                         "#{UpgradePlugin}::<UpgradeExtractors>::new(${codegenContext.settings.codegenConfig.requestBodyMaxBytes}usize)"
                     } else {
                         "#{UpgradePlugin}::<UpgradeExtractors>::new()"
@@ -219,35 +487,14 @@ class ServerServiceGenerator(
                             crate::operation_shape::$structName,
                             #{SmithyHttpServer}::operation::IntoService<crate::operation_shape::$structName, HandlerType>
                         >,
-                        #{UpgradePlugin}::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
-                            $serviceName<L>,
-                            crate::operation_shape::$structName,
-                            ModelPl::Output
-                        >,
-                        HttpPl: #{SmithyHttpServer}::plugin::Plugin<
-                            $serviceName<L>,
-                            crate::operation_shape::$structName,
-                            <
-                                #{UpgradePlugin}::<UpgradeExtractors>
-                                as #{SmithyHttpServer}::plugin::Plugin<
-                                    $serviceName<L>,
-                                    crate::operation_shape::$structName,
-                                    ModelPl::Output
-                                >
-                            >::Output
-                        >,
-
-                        HttpPl::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
-                        <HttpPl::Output as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
+                        #{OperationSetterBounds:W}
 
                     {
                         use #{SmithyHttpServer}::operation::OperationShapeExt;
                         use #{SmithyHttpServer}::plugin::Plugin;
                         let svc = crate::operation_shape::$structName::from_handler(handler);
                         let svc = self.model_plugin.apply(svc);
-                        let svc = $upgradePluginConstructor.apply(svc);
-                        let svc = self.http_plugin.apply(svc);
-                        self.${fieldName}_custom(svc)
+                        #{OperationSetterBody:W}
                     }
 
                     /// Sets the [`$structName`](crate::operation_shape::$structName) operation.
@@ -283,53 +530,28 @@ class ServerServiceGenerator(
                             crate::operation_shape::$structName,
                             #{SmithyHttpServer}::operation::Normalize<crate::operation_shape::$structName, S>
                         >,
-                        #{UpgradePlugin}::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
-                            $serviceName<L>,
-                            crate::operation_shape::$structName,
-                            ModelPl::Output
-                        >,
-                        HttpPl: #{SmithyHttpServer}::plugin::Plugin<
-                            $serviceName<L>,
-                            crate::operation_shape::$structName,
-                            <
-                                #{UpgradePlugin}::<UpgradeExtractors>
-                                as #{SmithyHttpServer}::plugin::Plugin<
-                                    $serviceName<L>,
-                                    crate::operation_shape::$structName,
-                                    ModelPl::Output
-                                >
-                            >::Output
-                        >,
-
-                        HttpPl::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
-                        <HttpPl::Output as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
+                        #{OperationSetterBounds:W}
 
                     {
                         use #{SmithyHttpServer}::operation::OperationShapeExt;
                         use #{SmithyHttpServer}::plugin::Plugin;
                         let svc = crate::operation_shape::$structName::from_service(service);
                         let svc = self.model_plugin.apply(svc);
-                        let svc = $upgradePluginConstructor.apply(svc);
-                        let svc = self.http_plugin.apply(svc);
-                        self.${fieldName}_custom(svc)
+                        #{OperationSetterBody:W}
                     }
 
                     /// Sets the [`$structName`](crate::operation_shape::$structName) to a custom [`Service`](tower::Service).
                     /// not constrained by the Smithy contract.
-                    fn ${fieldName}_custom<S>(mut self, svc: S) -> Self
-                    where
-                        S: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
-                        S::Future: Send + 'static,
-                    {
-                        self.$fieldName = Some(#{SmithyHttpServer}::routing::Route::new(svc));
-                        self
-                    }
+                    #{CustomSetter:W}
                     """,
                     "Router" to protocol.routerType(),
                     "Protocol" to protocol.markerStruct(),
                     "Handler" to handler,
                     "HandlerFixed" to handlerFixed,
                     "HandlerImports" to handlerImports(crateName, operations),
+                    "OperationSetterBounds" to operationSetterBounds(structName, upgradePlugin),
+                    "OperationSetterBody" to operationSetterBody(fieldName, upgradePlugin, upgradePluginConstructor),
+                    "CustomSetter" to customSetter(fieldName),
                     "UpgradePlugin" to upgradePlugin,
                     *codegenScope,
                 )
@@ -403,7 +625,12 @@ class ServerServiceGenerator(
                 writable {
                     for (operationShape in operations) {
                         val fieldName = builderFieldNames[operationShape]!!
-                        val specFunctions = requestSpecMap.getValue(operationShape)
+                        val specFunctions =
+                            if (shouldGenerateOperationHandlerBindings) {
+                                emptyList()
+                            } else {
+                                requestSpecMap.getValue(operationShape)
+                            }
                         emitRouteEntries(operationShape, specFunctions) { isClone ->
                             val accessor = if (isClone) "self.$fieldName.clone()" else "self.$fieldName"
                             rust("$accessor.expect($expectMessageVariableName)")
@@ -411,7 +638,9 @@ class ServerServiceGenerator(
                     }
                 }
             val routingServiceConstruction =
-                if (shouldGenerateOperationHandlerBindings) {
+                if (staticSchemaSerde) {
+                    staticMultiProtocolRoutingServiceConstruction(checked = true)
+                } else if (shouldGenerateOperationHandlerBindings) {
                     multiProtocolRoutingServiceConstruction(routesArrayElements)
                 } else {
                     writable {
@@ -455,6 +684,7 @@ class ServerServiceGenerator(
                         let $expectMessageVariableName = "this should never panic since we are supposed to check beforehand that a handler has been registered for this operation; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues";
 
                         #{PatternInitializations:W}
+                        #{CheckedStaticRouteInitializations:W}
 
                         #{RoutingServiceConstruction:W}
                     };
@@ -468,6 +698,7 @@ class ServerServiceGenerator(
                 "RoutingServiceType" to routedServiceType("L::Service"),
                 "ApplyLayer" to applyConfiguredLayerToRoute(),
                 "NullabilityChecks" to nullabilityChecks,
+                "CheckedStaticRouteInitializations" to checkedStaticRouteInitializations(expectMessageVariableName),
                 "RoutingServiceConstruction" to routingServiceConstruction,
                 "PatternInitializations" to patternInitializations(),
                 *RuntimeType.preludeScope,
@@ -501,6 +732,107 @@ class ServerServiceGenerator(
             )
         }
 
+    private fun checkedStaticRouteInitializations(expectMessageVariableName: String): Writable =
+        writable {
+            if (!staticSchemaSerde) {
+                return@writable
+            }
+            for ((_, fieldName) in builderFieldNames) {
+                rust("let $fieldName = self.$fieldName.expect($expectMessageVariableName);")
+            }
+        }
+
+    private fun staticMultiProtocolRoutingServiceConstruction(checked: Boolean): Writable =
+        writable {
+            rustTemplate(
+                """
+                #{SmithyHttpServer}::routing::StaticMultiProtocolRoutingService::new(vec![
+                    #{Registrations:W}
+                ])
+                .expect("generated service schema should build a static multi-protocol router")
+                """,
+                "Registrations" to staticSchemaProtocols.map { staticProtocolRoutingRegistration(it, checked) }.join("\n"),
+                *codegenScope,
+            )
+        }
+
+    private fun staticProtocolRoutingRegistration(
+        protocol: StaticSchemaProtocol,
+        checked: Boolean,
+    ): Writable =
+        writable {
+            rustTemplate(
+                """
+                #{SmithyHttpServer}::routing::StaticProtocolRoutingRegistration::new(
+                    #{Router:W},
+                    [
+                        #{Bindings:W}
+                    ],
+                    [#{Constraints:W}],
+                ),
+                """,
+                "Router" to staticProtocolRouter(protocol),
+                "Bindings" to staticProtocolOperationBindings(protocol, checked),
+                "Constraints" to
+                    protocol.constraints.map { constraint ->
+                        val escapedConstraint = constraint.replace("#", "##")
+                        writable {
+                            rustTemplate(
+                                "#{SmithyHttpServer}::routing::ProtocolRoutingOrderConstraint::Before(\"$escapedConstraint\")",
+                                *codegenScope,
+                            )
+                        }
+                    }.join(", "),
+                *codegenScope,
+            )
+        }
+
+    private fun staticProtocolRouter(protocol: StaticSchemaProtocol): Writable =
+        writable {
+            rustTemplate(
+                """
+                #{SmithyHttpServer}::routing::${protocol.routingTableType}::${protocol.routingTableConstructor}(
+                    &crate::schema::${serviceSchemaConstName()},
+                )
+                """,
+                *codegenScope,
+            )
+        }
+
+    private fun staticProtocolOperationBindings(
+        protocol: StaticSchemaProtocol,
+        checked: Boolean,
+    ): Writable =
+        writable {
+            for ((operationShape, fieldName) in builderFieldNames) {
+                val operationSchema = operationSchemaConstName(operationShape)
+                val routeExpr =
+                    if (checked) {
+                        "$fieldName.${protocol.fieldName}.expect($STATIC_SCHEMA_MISSING_PROTOCOL_ROUTE_MESSAGE)"
+                    } else {
+                        """
+                        self.$fieldName
+                            .as_ref()
+                            .and_then(|routes| routes.${protocol.fieldName}.clone())
+                            .unwrap_or_else(|| {
+                                let svc = #{SmithyHttpServer}::operation::MissingFailure::<#{Protocol}>::default();
+                                #{SmithyHttpServer}::routing::Route::new(svc)
+                            })
+                        """.trimIndent()
+                    }
+                rustTemplate(
+                    """
+                    #{SmithyHttpServer}::routing::OperationHandlerBinding::new(
+                        &crate::schema::operations::$operationSchema,
+                        $routeExpr
+                    ),
+                    """,
+                    "Protocol" to protocol.markerType(smithyHttpServer),
+                    *codegenScope,
+                )
+            }
+        }
+
     /**
      * Renders `PatternString::compile_regex()` function calls for every
      * `@pattern`-constrained string shape in the service closure.
@@ -532,7 +864,12 @@ class ServerServiceGenerator(
                 writable {
                     for (operationShape in operations) {
                         val fieldName = builderFieldNames[operationShape]!!
-                        val specFunctions = requestSpecMap.getValue(operationShape)
+                        val specFunctions =
+                            if (shouldGenerateOperationHandlerBindings) {
+                                emptyList()
+                            } else {
+                                requestSpecMap.getValue(operationShape)
+                            }
                         emitRouteEntries(operationShape, specFunctions) { isClone ->
                             val accessor = if (isClone) "self.$fieldName.clone()" else "self.$fieldName"
                             rustTemplate(
@@ -549,7 +886,9 @@ class ServerServiceGenerator(
                     }
                 }
             val routingServiceConstruction =
-                if (shouldGenerateOperationHandlerBindings) {
+                if (staticSchemaSerde) {
+                    staticMultiProtocolRoutingServiceConstruction(checked = false)
+                } else if (shouldGenerateOperationHandlerBindings) {
                     multiProtocolRoutingServiceConstruction(pairs)
                 } else {
                     writable {
@@ -593,6 +932,8 @@ class ServerServiceGenerator(
             val builderGenerics = listOf("Body", "L", "HttpPl", "ModelPl").joinToString(", ")
             rustTemplate(
                 """
+                #{StaticSchemaOperationRoutes:W}
+
                 /// The service builder for [`$serviceName`].
                 ///
                 /// Constructed via [`$serviceName::builder`].
@@ -613,9 +954,34 @@ class ServerServiceGenerator(
                     #{BuildUncheckedMethod:W}
                 }
                 """,
+                "StaticSchemaOperationRoutes" to staticSchemaOperationRoutesStruct(),
                 "Setters" to builderSetters(),
                 "BuildMethod" to buildMethod(),
                 "BuildUncheckedMethod" to buildUncheckedMethod(),
+                *codegenScope,
+            )
+        }
+
+    private fun staticSchemaOperationRoutesStruct(): Writable =
+        writable {
+            if (!staticSchemaSerde) {
+                return@writable
+            }
+            rustTemplate(
+                """
+                struct StaticSchemaOperationRoutes<Body> {
+                    #{Fields:W}
+                }
+                """,
+                "Fields" to
+                    staticSchemaProtocols.map { protocol ->
+                        writable {
+                            rustTemplate(
+                                "${protocol.fieldName}: Option<#{SmithyHttpServer}::routing::Route<Body>>,",
+                                *codegenScope,
+                            )
+                        }
+                    }.join("\n"),
                 *codegenScope,
             )
         }
@@ -651,8 +1017,7 @@ class ServerServiceGenerator(
     private fun operationSchemaConstName(operationShape: OperationShape): String =
         symbolProvider.toSymbol(operationShape).name.toSnakeCase().uppercase()
 
-    private fun serviceSchemaConstName(): String =
-        service.id.name.toSnakeCase().uppercase()
+    private fun serviceSchemaConstName(): String = service.id.name.toSnakeCase().uppercase()
 
     /** Returns a `Writable` comma delimited sequence of `builder_field: None`. */
     private fun notSetFields(): Writable =
@@ -781,9 +1146,10 @@ class ServerServiceGenerator(
                 """,
                 "NotSetFields1" to notSetFields(),
                 "NotSetFields2" to notSetFields(),
-                "DefaultRoutingService" to routedServiceType(
-                    "#{SmithyHttpServer}::routing::Route<#{SmithyHttpServer}::body::Body>",
-                ),
+                "DefaultRoutingService" to
+                    routedServiceType(
+                        "#{SmithyHttpServer}::routing::Route<#{SmithyHttpServer}::body::Body>",
+                    ),
                 "RouteConvenienceImpl" to routeConvenienceImpl(),
                 "Router" to protocol.routerType(),
                 "Protocol" to protocol.markerStruct(),
@@ -793,7 +1159,55 @@ class ServerServiceGenerator(
 
     private fun routeConvenienceImpl(): Writable =
         writable {
-            if (shouldGenerateOperationHandlerBindings) {
+            if (staticSchemaSerde) {
+                rustTemplate(
+                    """
+                    impl<S> $serviceName<#{SmithyHttpServer}::routing::StaticMultiProtocolRoutingService<S>> {
+                        /// Applies a [`Layer`](#{Tower}::Layer) uniformly to all routes.
+                        ##[deprecated(
+                            since = "0.57.0",
+                            note = "please add layers to the `${serviceName}Config` object instead; see https://github.com/smithy-lang/smithy-rs/discussions/3096"
+                        )]
+                        pub fn layer<L>(
+                            self,
+                            layer: &L,
+                        ) -> $serviceName<#{SmithyHttpServer}::routing::StaticMultiProtocolRoutingService<L::Service>>
+                        where
+                            L: #{Tower}::Layer<S>,
+                        {
+                            $serviceName {
+                                svc: self.svc.map(|s| layer.layer(s)),
+                            }
+                        }
+
+                        /// Applies [`Route::new`](#{SmithyHttpServer}::routing::Route::new) to all routes.
+                        ///
+                        /// This has the effect of erasing all types accumulated via layers.
+                        pub fn boxed<B>(
+                            self,
+                        ) -> $serviceName<
+                            #{SmithyHttpServer}::routing::StaticMultiProtocolRoutingService<
+                                #{SmithyHttpServer}::routing::Route<B>,
+                            >,
+                        >
+                        where
+                            S: #{Tower}::Service<
+                                #{Http}::Request<B>,
+                                Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>,
+                                Error = std::convert::Infallible,
+                            >,
+                            S: Clone + Send + 'static,
+                            S::Future: Send + 'static,
+                        {
+                            self.layer(&::tower::layer::layer_fn(
+                                #{SmithyHttpServer}::routing::Route::new,
+                            ))
+                        }
+                    }
+                    """,
+                    *codegenScope,
+                )
+            } else if (shouldGenerateOperationHandlerBindings) {
                 rustTemplate(
                     """
                     impl<S> $serviceName<#{SmithyHttpServer}::routing::MultiProtocolRoutingService<S>> {
@@ -911,7 +1325,12 @@ class ServerServiceGenerator(
 
     private fun routedServiceType(routeType: String): Writable =
         writable {
-            if (shouldGenerateOperationHandlerBindings) {
+            if (staticSchemaSerde) {
+                rustTemplate(
+                    "#{SmithyHttpServer}::routing::StaticMultiProtocolRoutingService<$routeType>",
+                    *codegenScope,
+                )
+            } else if (shouldGenerateOperationHandlerBindings) {
                 rustTemplate(
                     "#{SmithyHttpServer}::routing::MultiProtocolRoutingService<$routeType>",
                     *codegenScope,

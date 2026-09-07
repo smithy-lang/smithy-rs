@@ -5,8 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
-import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.ByteShape
@@ -46,6 +44,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.eventStreamSerdeModule
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.EventStreamMarshallerGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.shapeModuleName
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticEventStreamUnionTrait
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
@@ -53,13 +52,11 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
-import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.shapeModuleName
 
 private fun schemaEventStreamTypeName(
     symbolProvider: RustSymbolProvider,
@@ -124,10 +121,12 @@ class ServerSchemaEventStreamMarshallerGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
     private val marker = protocol.markerStruct()
-    private val serverProtocol = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
-        .resolve("schema::protocol::StaticProtocol")
-    private val serverEventStreamProtocol = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
-        .resolve("schema::protocol::StaticEventStreamProtocol")
+    private val serverProtocol =
+        ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+            .resolve("schema::protocol::StaticProtocol")
+    private val serverEventStreamProtocol =
+        ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+            .resolve("schema::protocol::StaticEventStreamProtocol")
     private val union = unionShape
     private val typeName = schemaEventStreamTypeName(symbolProvider, union, marker, "SchemaMarshaller")
     private val codegenScope =
@@ -278,6 +277,7 @@ class ServerSchemaEventStreamMarshallerGenerator(
         target: Shape,
     ) {
         val optional = (member as? MemberShape)?.let { symbolProvider.toSymbol(it).isOptional() } ?: false
+
         fun some(input: String) {
             when (target) {
                 is BlobShape -> {
@@ -355,10 +355,12 @@ class ServerSchemaEventStreamErrorMarshallerGenerator(
             "Error" to RuntimeType.smithyEventStream(runtimeConfig).resolve("error::Error"),
             "ShapeSerializer" to RuntimeType.smithySchema(runtimeConfig).resolve("serde::ShapeSerializer"),
             "FinishSerializer" to RuntimeType.smithySchema(runtimeConfig).resolve("codec::FinishSerializer"),
-            "ServerProtocol" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
-                .resolve("schema::protocol::StaticProtocol"),
-            "ServerEventStreamProtocol" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
-                .resolve("schema::protocol::StaticEventStreamProtocol"),
+            "ServerProtocol" to
+                ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+                    .resolve("schema::protocol::StaticProtocol"),
+            "ServerEventStreamProtocol" to
+                ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+                    .resolve("schema::protocol::StaticEventStreamProtocol"),
             "Marker" to marker,
         )
 
@@ -483,8 +485,9 @@ class ServerSchemaEventStreamUnmarshallerGenerator(
             "Error" to RuntimeType.smithyEventStream(runtimeConfig).resolve("error::Error"),
             "UnmarshalledMessage" to RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::UnmarshalledMessage"),
             "UnmarshallMessage" to RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::UnmarshallMessage"),
-            "ServerProtocol" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
-                .resolve("schema::protocol::StaticProtocol"),
+            "ServerProtocol" to
+                ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+                    .resolve("schema::protocol::StaticProtocol"),
             "Marker" to marker,
         )
 

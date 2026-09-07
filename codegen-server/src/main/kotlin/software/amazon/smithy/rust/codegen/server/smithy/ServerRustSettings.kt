@@ -109,6 +109,7 @@ data class ServerRustSettings(
  *   (which was the only route the server registered before the fix for
  *   https://github.com/smithy-lang/smithy-rs/issues/4731).
  * [schemaSerde]: Enable experimental schema-driven server support.
+ * [staticSchemaSerde]: Enable experimental schema-driven server support with static protocol stacks.
  */
 data class ServerCodegenConfig(
     override val formatTimeoutSeconds: Int = DEFAULT_FORMAT_TIMEOUT_SECONDS,
@@ -144,6 +145,10 @@ data class ServerCodegenConfig(
      * When true, generate schema constants for server shapes so protocol code can use modeled shape metadata.
      */
     val schemaSerde: Boolean = DEFAULT_SCHEMA_SERDE,
+    /**
+     * When true, build schema-driven multi-protocol services with one statically upgraded stack per protocol.
+     */
+    val staticSchemaSerde: Boolean = DEFAULT_STATIC_SCHEMA_SERDE,
 ) : CoreCodegenConfig(
         formatTimeoutSeconds, debugMode,
     ) {
@@ -155,6 +160,7 @@ data class ServerCodegenConfig(
         private const val DEFAULT_ALLOW_MISSING_UNION_VARIANT = false
         const val DEFAULT_HTTP_1X = false
         const val DEFAULT_SCHEMA_SERDE = false
+        const val DEFAULT_STATIC_SCHEMA_SERDE = false
 
         /**
          * The default maximum size (in bytes) of a non-streaming request body that the generated
@@ -200,6 +206,9 @@ data class ServerCodegenConfig(
         /** Configuration key for the experimental schema-driven server serde opt-in. */
         const val SCHEMA_SERDE_CONFIG_KEY = "schemaSerde"
 
+        /** Configuration key for the experimental static schema-driven server serde opt-in. */
+        const val STATIC_SCHEMA_SERDE_CONFIG_KEY = "staticSchemaSerde"
+
         private val KNOWN_CONFIG_KEYS =
             setOf(
                 "formatTimeoutSeconds",
@@ -214,6 +223,7 @@ data class ServerCodegenConfig(
                 REQUEST_BODY_MAX_BYTES_CONFIG_KEY,
                 RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY,
                 SCHEMA_SERDE_CONFIG_KEY,
+                STATIC_SCHEMA_SERDE_CONFIG_KEY,
             )
 
         fun fromCodegenConfigAndNode(
@@ -281,9 +291,20 @@ data class ServerCodegenConfig(
                         SCHEMA_SERDE_CONFIG_KEY,
                         DEFAULT_SCHEMA_SERDE,
                     ),
+                staticSchemaSerde =
+                    node.get().getBooleanMemberOrDefault(
+                        STATIC_SCHEMA_SERDE_CONFIG_KEY,
+                        DEFAULT_STATIC_SCHEMA_SERDE,
+                    ),
             ).also {
                 require(it.requestBodyMaxBytes >= 0) {
                     "`$REQUEST_BODY_MAX_BYTES_CONFIG_KEY` must be non-negative, got ${it.requestBodyMaxBytes}"
+                }
+                require(!it.staticSchemaSerde || it.schemaSerde) {
+                    "`$STATIC_SCHEMA_SERDE_CONFIG_KEY` requires `$SCHEMA_SERDE_CONFIG_KEY` to be true"
+                }
+                require(!it.staticSchemaSerde || it.http1x) {
+                    "`$STATIC_SCHEMA_SERDE_CONFIG_KEY` requires `$HTTP_1X_CONFIG_KEY` to be true"
                 }
             }
         } else {

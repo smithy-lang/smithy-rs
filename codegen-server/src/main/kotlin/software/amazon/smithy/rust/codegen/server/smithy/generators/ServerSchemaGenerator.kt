@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
-
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.BigDecimalShape
 import software.amazon.smithy.model.shapes.BigIntegerShape
@@ -32,7 +31,6 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
-import software.amazon.smithy.model.traits.Trait as SmithyTrait
 import software.amazon.smithy.model.traits.XmlNamespaceTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -48,17 +46,14 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.RecursiveShapeClassifier
 import software.amazon.smithy.rust.codegen.core.smithy.generators.SchemaTraitExtension
 import software.amazon.smithy.rust.codegen.core.smithy.generators.SchemaTraitFilter
+import software.amazon.smithy.rust.codegen.core.smithy.generators.SyntheticSchemaMember
 import software.amazon.smithy.rust.codegen.core.smithy.generators.isAnnotationTrait
 import software.amazon.smithy.rust.codegen.core.smithy.generators.stringValue
-import software.amazon.smithy.rust.codegen.core.smithy.generators.SyntheticSchemaMember
-import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
-import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.dq
-import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 
 /**

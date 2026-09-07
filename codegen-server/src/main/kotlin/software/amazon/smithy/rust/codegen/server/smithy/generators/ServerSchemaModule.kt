@@ -28,8 +28,7 @@ enum class ServerSchemaShapeModule(val moduleName: String) {
 fun serverSchemaShapeModule(
     codegenContext: ServerCodegenContext,
     shape: Shape,
-): ServerSchemaShapeModule =
-    serverSchemaShapeModule(codegenContext.model, codegenContext.serviceShape, shape)
+): ServerSchemaShapeModule = serverSchemaShapeModule(codegenContext.model, codegenContext.serviceShape, shape)
 
 fun serverSchemaShapeModule(
     model: Model,
