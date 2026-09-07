@@ -1,0 +1,25 @@
+[package]
+name = "pokemon-service-protocols-service"
+version = "0.1.0"
+edition = "2021"
+publish = false
+rust-version = "1.94.1"
+
+[features]
+rest-json1 = ["dep:pokemon-service-protocols-rest-json1-server-sdk"]
+rest-xml = ["dep:pokemon-service-protocols-rest-xml-server-sdk"]
+aws-json-10 = ["dep:pokemon-service-protocols-aws-json-10-server-sdk"]
+aws-json-11 = ["dep:pokemon-service-protocols-aws-json-11-server-sdk"]
+rpcv2-cbor = ["dep:pokemon-service-protocols-rpcv2-cbor-server-sdk"]
+
+[dependencies]
+async-stream = "0.3"
+tokio = { version = "1.26.0", features = ["macros", "rt-multi-thread"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+pokemon-service-protocols-rest-json1-server-sdk = { path = "../rest-json1/server-sdk", optional = true }
+pokemon-service-protocols-rest-xml-server-sdk = { path = "../rest-xml/server-sdk", optional = true }
+pokemon-service-protocols-aws-json-10-server-sdk = { path = "../aws-json-10/server-sdk", optional = true }
+pokemon-service-protocols-aws-json-11-server-sdk = { path = "../aws-json-11/server-sdk", optional = true }
+pokemon-service-protocols-rpcv2-cbor-server-sdk = { path = "../rpcv2-cbor/server-sdk", optional = true }

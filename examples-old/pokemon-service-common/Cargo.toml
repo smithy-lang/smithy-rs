@@ -1,0 +1,30 @@
+[package]
+name = "pokemon-service-common"
+version = "0.1.0"
+edition = "2021"
+publish = false
+authors = ["Smithy-rs Server Team <smithy-rs-server@amazon.com>"]
+description = "A smithy Rust service to retrieve information about Pokémon."
+
+[dependencies]
+async-stream = "0.3"
+http = "1"
+rand = "0.8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3.16", features = ["env-filter", "json"] }
+tokio = { version = "1", default-features = false, features = ["time"] }
+tower = "0.4"
+metrique = "0.1.17"
+
+# Local paths
+aws-smithy-http-client = { path = "../../rust-runtime/aws-smithy-http-client", features = ["rustls-aws-lc"] }
+aws-smithy-runtime = { path = "../../rust-runtime/aws-smithy-runtime", features = ["client", "default-https-client"] }
+aws-smithy-http-server-metrics = { path = "../../rust-runtime/aws-smithy-http-server-metrics" }
+aws-smithy-runtime-api = { path = "../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
+pokemon-service-client = { path = "../pokemon-service-client/", features = [
+    "behavior-version-latest",
+] }
+pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk" }
+
+[dev-dependencies]
+aws-smithy-runtime = { path = "../../rust-runtime/aws-smithy-runtime", features = ["test-util"] }

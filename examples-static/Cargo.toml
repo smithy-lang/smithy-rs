@@ -1,0 +1,10 @@
+[workspace]
+resolver = "2"
+members = [
+    "benchmarks",
+    "dynamic-server-sdk",
+    "static-server-sdk",
+]
+
+[profile.release]
+lto = true

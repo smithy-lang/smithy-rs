@@ -1,0 +1,37 @@
+[package]
+name = "pokemon-service-benchmarks"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+aws-smithy-http-server = { path = "../../rust-runtime/aws-smithy-http-server" }
+aws-smithy-runtime-api = { path = "../../rust-runtime/aws-smithy-runtime-api", features = ["http-1x"] }
+aws-smithy-types = { path = "../../rust-runtime/aws-smithy-types", features = ["http-body-1-x"] }
+bytes = "1"
+http = "1"
+http-body-util = "0.1.3"
+tokio = { version = "1.26.0", features = ["macros", "rt-multi-thread", "sync"] }
+tower = { version = "0.4", features = ["util"] }
+
+dynamic_server = { package = "pokemon-service-dynamic-server-sdk", path = "../dynamic-server-sdk" }
+static_server = { package = "pokemon-service-static-server-sdk", path = "../static-server-sdk" }
+
+legacy_rest_json1_server = { package = "pokemon-service-protocols-rest-json1-server-sdk", path = "../../examples-old/pokemon-service-protocols/rest-json1/server-sdk" }
+legacy_rest_xml_server = { package = "pokemon-service-protocols-rest-xml-server-sdk", path = "../../examples-old/pokemon-service-protocols/rest-xml/server-sdk" }
+legacy_aws_json_10_server = { package = "pokemon-service-protocols-aws-json-10-server-sdk", path = "../../examples-old/pokemon-service-protocols/aws-json-10/server-sdk" }
+legacy_aws_json_11_server = { package = "pokemon-service-protocols-aws-json-11-server-sdk", path = "../../examples-old/pokemon-service-protocols/aws-json-11/server-sdk" }
+legacy_rpcv2_cbor_server = { package = "pokemon-service-protocols-rpcv2-cbor-server-sdk", path = "../../examples-old/pokemon-service-protocols/rpcv2-cbor/server-sdk" }
+
+rest_json1_client = { package = "pokemon-service-protocols-rest-json1-client-sdk", path = "../../examples-old/pokemon-service-protocols/rest-json1/client-sdk", features = ["behavior-version-latest"] }
+rest_xml_client = { package = "pokemon-service-protocols-rest-xml-client-sdk", path = "../../examples-old/pokemon-service-protocols/rest-xml/client-sdk", features = ["behavior-version-latest"] }
+aws_json_10_client = { package = "pokemon-service-protocols-aws-json-10-client-sdk", path = "../../examples-old/pokemon-service-protocols/aws-json-10/client-sdk", features = ["behavior-version-latest"] }
+aws_json_11_client = { package = "pokemon-service-protocols-aws-json-11-client-sdk", path = "../../examples-old/pokemon-service-protocols/aws-json-11/client-sdk", features = ["behavior-version-latest"] }
+rpcv2_cbor_client = { package = "pokemon-service-protocols-rpcv2-cbor-client-sdk", path = "../../examples-old/pokemon-service-protocols/rpcv2-cbor/client-sdk", features = ["behavior-version-latest"] }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["async_tokio"] }
+
+[[bench]]
+name = "get_server_statistics"
+harness = false

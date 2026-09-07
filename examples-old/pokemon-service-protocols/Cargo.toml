@@ -1,0 +1,19 @@
+[workspace]
+resolver = "2"
+members = [
+    "aws-json-10/client-sdk",
+    "aws-json-10/server-sdk",
+    "aws-json-11/client-sdk",
+    "aws-json-11/server-sdk",
+    "cli",
+    "rest-json1/client-sdk",
+    "rest-json1/server-sdk",
+    "rest-xml/client-sdk",
+    "rest-xml/server-sdk",
+    "rpcv2-cbor/client-sdk",
+    "rpcv2-cbor/server-sdk",
+    "service",
+]
+
+[profile.release]
+lto = true

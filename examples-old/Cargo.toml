@@ -1,0 +1,15 @@
+# Without this configuration, the workspace will be read from `rust-runtime`, causing the build to fail.
+[workspace]
+resolver = "2"
+members = [
+    "pokemon-service-common",
+    "pokemon-service",
+    "pokemon-service-tls",
+    "pokemon-service-lambda",
+    "pokemon-service-server-sdk",
+    "pokemon-service-client",
+    "pokemon-service-client-usage",
+]
+
+[profile.release]
+lto = true
