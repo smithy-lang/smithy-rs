@@ -124,8 +124,10 @@ mod schema {
     pub(crate) mod protocol;
     pub(crate) mod registry;
     pub(crate) mod serde;
+    pub(crate) mod service;
 }
 
+pub use schema::service::{OperationSchema, ServiceSchema};
 pub use schema::shape_id::ShapeId;
 pub use schema::shape_type::ShapeType;
 pub use schema::trait_map::TraitMap;
@@ -1075,6 +1077,15 @@ mod test {
         assert!(ShapeType::List.is_aggregate());
         assert!(ShapeType::Map.is_aggregate());
         assert!(!ShapeType::String.is_aggregate());
+    }
+
+    #[test]
+    fn test_shape_type_service() {
+        assert!(ShapeType::Service.is_service());
+        assert!(ShapeType::Operation.is_service());
+        assert!(!ShapeType::Service.is_simple());
+        assert!(!ShapeType::Operation.is_aggregate());
+        assert!(!ShapeType::Structure.is_service());
     }
 
     #[test]
