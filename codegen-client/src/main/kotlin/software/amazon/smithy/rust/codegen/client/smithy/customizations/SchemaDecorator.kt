@@ -45,23 +45,72 @@ import software.amazon.smithy.rust.codegen.core.util.expectTrait
 object SchemaSerdeAllowlist {
     /**
      * Protocols for which schema-based serde is the sole path (no fallback).
-     *
-     * Intentionally empty while preparing the branch for merge to main — keeps
-     * the schema-serde runtime and codegen infrastructure in place but opts
-     * every service back onto the legacy per-shape codegen path. Re-enable
-     * protocols incrementally in follow-up PRs by adding entries such as
-     * `RestJson1Trait.ID`, `AwsJson1_0Trait.ID`, or `AwsJson1_1Trait.ID`.
      */
-    private val allowedProtocols: Set<ShapeId> =
-        emptySet()
+    private val allowedProtocols: Set<ShapeId> = emptySet()
 
-    /** Individual services allowed regardless of protocol. */
-    private val allowedServices: Set<String> = setOf<String>()
+    /**
+     * Individual services allowed regardless of protocol.
+     *
+     * We should uncomment the test models as we enable protocols
+     */
+    private val allowedServices: Set<String> =
+        setOf(
+            // Test model names, listed explicitly until protocols are fully enabled
+            // restJson1
+            // "aws.protocoltests.restjson#RestJson",
+            // "aws.protocoltests.restjson#RestJsonExtras",
+            // "aws.protocoltests.misc#MiscService",
+            // "com.aws.example#PokemonService",
+            // "com.amazonaws.ebs#Ebs",
+            // awsJson1_0 / awsJson1_1
+            // "aws.protocoltests.json10#JsonRpc10",
+            // "aws.protocoltests.json#JsonProtocol",
+            // "aws.protocoltests.json#TestService",
+            // "aws.protocoltests.misc#QueryCompatService",
+            // "com.amazonaws.simple#SimpleService",
+            // "com.amazonaws.bignumbers#BigNumberService",
+            // restXml
+            // "aws.protocoltests.restxml#RestXml",
+            // "aws.protocoltests.restxml#RestXmlExtras",
+            // "aws.protocoltests.restxml.xmlns#RestXmlWithNamespace",
+            // "aws.protocoltests.restxmlunwrapped#RestXmlExtrasUnwrappedErrors",
+            // rpcv2Cbor
+            // "smithy.protocoltests.rpcv2Cbor#RpcV2Protocol",
+            // "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
+            // "aws.protocoltests.rpcv2cbor#QueryCompatibleRpcV2Protocol",
+            // "aws.protocoltests.rpcv2cbor#NonQueryCompatibleRpcV2Protocol",
+            // naming obstacle courses (protocol-independent codegen coverage)
+            // "crate#Config",
+            // "casing#ACRONYMInside_Service",
+            // "naming_obs_structs#NamingObstacleCourseStructs",
+        )
 
-    /** Returns true if schema-based serde should be used exclusively (no fallback). */
+    /**
+     * Returns true if schema-based serde should be used exclusively (no fallback).
+     *
+     * The `disableSchemaSerde` codegen setting overrides the allowlist in one direction only: a
+     * service can opt *out* of schema serde in its `smithy-build.json` even when its protocol is
+     * allowlisted, but it cannot opt in. See `ClientCodegenConfig.disableSchemaSerde`.
+     */
     fun usesSchemaSerdeExclusively(codegenContext: ClientCodegenContext): Boolean =
-        codegenContext.protocol in allowedProtocols ||
-            codegenContext.serviceShape.id.toString() in allowedServices
+        !codegenContext.settings.codegenConfig.disableSchemaSerde &&
+            (
+                codegenContext.protocol in allowedProtocols ||
+                    codegenContext.serviceShape.id.toString() in allowedServices
+            )
+
+    /**
+     * Returns true if schema-based serde is enabled for [protocol].
+     *
+     * Tests that exercise schema-serde-only generated APIs (e.g. the type/error
+     * registries or the schema-serde streaming deserializer) gate themselves on
+     * this so they run exactly when the corresponding protocol is enabled and are
+     * skipped otherwise, rather than being hard-disabled.
+     *
+     * This reports the allowlist state only; it does not account for the per-service
+     * `disableSchemaSerde` codegen setting, which needs a full codegen context to evaluate.
+     */
+    fun isProtocolEnabled(protocol: ShapeId): Boolean = protocol in allowedProtocols
 }
 
 /**
@@ -120,32 +169,82 @@ private class SchemaProtocolCustomization(
                     val smithySchema = RuntimeType.smithySchema(codegenContext.runtimeConfig)
                     val protocol = codegenContext.protocol
                     val serviceShapeName = codegenContext.serviceShape.id.name
+                    val serviceNamespace = codegenContext.serviceShape.id.namespace
+
+                    // Stored unconditionally, not just for the protocol this client was generated
+                    // for. Protocols whose wire format depends on model facts — rpcv2Cbor routes to
+                    // `/service/{service}/operation/{operation}`, awsJson prefixes `X-Amz-Target`
+                    // with the service shape name, awsQuery sends `Version=`, restXml applies the
+                    // service `@xmlNamespace` as the root xmlns, and the JSON protocols resolve
+                    // relative `__type` document discriminators against the service's shape-ID
+                    // namespace — need those facts at runtime, and
+                    // `Config::builder().protocol(..)` lets a customer plug in such a protocol
+                    // regardless of what the model declared. A customer cannot supply them because
+                    // only the model knows them.
+                    //
+                    // Kept as separate entries rather than one aggregate: `ConfigBag` is
+                    // `TypeId`-keyed, so each protocol loads exactly what it needs and no shared
+                    // struct accretes protocol-specific fields. They are service-scoped and stored
+                    // once per client here, unlike `Metadata`, which is operation-scoped and
+                    // re-emitted per operation.
+                    // See https://github.com/smithy-lang/smithy-rs/issues/4801.
+                    //
+                    // `ServiceShapeNamespace` is the namespace half of the service's shape ID and
+                    // is always present, so unlike `ServiceXmlNamespace` below it is unconditional.
+                    // The two are unrelated values: a service's shape-ID namespace is not derivable
+                    // from its `@xmlNamespace` URI or vice versa (CloudWatch Logs is
+                    // `com.amazonaws.cloudwatchlogs` but declares
+                    // `http://monitoring.amazonaws.com/doc/2014-03-28/`).
+                    rustTemplate(
+                        """
+                        ${section.newLayerName}.store_put(#{ServiceShapeName}::new(${serviceShapeName.dq()}));
+                        ${section.newLayerName}.store_put(#{ServiceShapeNamespace}::new(${serviceNamespace.dq()}));
+                        ${section.newLayerName}.store_put(#{ServiceVersion}::new(${codegenContext.serviceShape.version.dq()}));
+                        """,
+                        "ServiceShapeName" to smithySchema.resolve("protocol::ServiceShapeName"),
+                        "ServiceShapeNamespace" to smithySchema.resolve("protocol::ServiceShapeNamespace"),
+                        "ServiceVersion" to smithySchema.resolve("protocol::ServiceVersion"),
+                    )
+
+                    // `@xmlNamespace` is a prelude trait, so it is resolvable from any model rather
+                    // than only from a restXml one — but it is optional, so there is nothing to
+                    // store when the service does not declare it.
+                    codegenContext.serviceShape.getTrait(XmlNamespaceTrait::class.java).orElse(null)
+                        ?.let { ns ->
+                            val prefix =
+                                ns.prefix.orElse(null)?.let { "Some(${it.dq()}.into())" } ?: "None"
+                            rustTemplate(
+                                """
+                                ${section.newLayerName}.store_put(#{ServiceXmlNamespace}::new(${ns.uri.dq()}, $prefix));
+                                """,
+                                "ServiceXmlNamespace" to smithySchema.resolve("protocol::ServiceXmlNamespace"),
+                            )
+                        }
 
                     val (protocolType, constructor) =
                         when {
                             protocol == RestJson1Trait.ID ->
-                                smithyJson.resolve("protocol::aws_rest_json_1::AwsRestJsonProtocol") to "new()"
+                                smithyJson.resolve("protocol::aws_rest_json_1::AwsRestJsonProtocol") to
+                                    "new().with_default_namespace(${serviceNamespace.dq()})"
                             protocol == AwsJson1_0Trait.ID ->
-                                smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_0(${serviceShapeName.dq()})"
+                                smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to
+                                    "aws_json_1_0().with_default_namespace(${serviceNamespace.dq()})"
                             protocol == AwsJson1_1Trait.ID ->
-                                smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_1(${serviceShapeName.dq()})"
+                                smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to
+                                    "aws_json_1_1().with_default_namespace(${serviceNamespace.dq()})"
                             protocol == RestXmlTrait.ID -> {
                                 val smithyXml = RuntimeType.smithyXml(codegenContext.runtimeConfig)
                                 val noWrap = codegenContext.serviceShape.expectTrait<RestXmlTrait>().isNoErrorWrapping
-                                val serviceNs =
-                                    codegenContext.serviceShape.getTrait(XmlNamespaceTrait::class.java).orElse(null)
                                 val builderChain = StringBuilder("new()")
+                                // `noErrorWrapping` has no config-bag default and cannot have one:
+                                // it lives on the `@restXml` trait, which a non-restXml model does
+                                // not carry. The service `@xmlNamespace` is resolved from the bag.
                                 if (noWrap) builderChain.append(".with_no_error_wrapping(true)")
-                                if (serviceNs != null) {
-                                    val uri = serviceNs.uri.dq()
-                                    val prefix = serviceNs.prefix.orElse(null)?.let { "Some(${it.dq()}.to_owned())" } ?: "None"
-                                    builderChain.append(".with_service_xml_namespace($uri.to_owned(), $prefix)")
-                                }
                                 smithyXml.resolve("protocol::aws_rest_xml::AwsRestXmlProtocol") to builderChain.toString()
                             }
                             protocol == AwsQueryTrait.ID -> {
                                 val smithyQuery = RuntimeType.smithyQuery(codegenContext.runtimeConfig)
-                                smithyQuery.resolve("protocol::AwsQueryProtocol") to "new(${codegenContext.serviceShape.version.dq()})"
+                                smithyQuery.resolve("protocol::AwsQueryProtocol") to "new()"
                             }
                             protocol == Rpcv2CborTrait.ID ->
                                 smithyCbor.resolve("protocol::RpcV2CborProtocol") to "new()"
