@@ -134,7 +134,7 @@ impl H2GroupIndexState {
 #[derive(Clone, Debug)]
 pub(super) struct PreparedH2Route {
     pub(super) assignment: DemandAssignment,
-    /// Cell that owns the advertised connection.
+    /// Cell that owns the routed connection.
     pub(super) supplier: PartitionId,
     /// Exact accepting generation selected from retained supply.
     pub(super) generation: H2GenerationId,
@@ -165,7 +165,7 @@ struct H2RouteMatch {
     demand: DemandId,
     /// Peer connection cell selected from the supplier head.
     supplier: PartitionId,
-    /// Advertised generation in that connection cell.
+    /// Routed generation in that connection cell.
     generation: H2GenerationId,
     /// Eligibility group whose turn was selected.
     eligibility_group: EligibilityGroup,
@@ -467,10 +467,25 @@ impl H2SupplyIndex {
                 record.group_index.links().is_some(),
                 "H2 group index did not match routable supply"
             );
+            if record.group_index.links().is_some() {
+                assert!(
+                    self.suppliers_by_group
+                        .contains_key(&record.eligibility_group),
+                    "H2 supplier lost its eligibility-group order"
+                );
+            }
             assert_eq!(
                 record.idle() && excluded_reclaim != Some(*supplier),
                 record.reclaim_links.is_some(),
                 "H2 reclaim index did not match idle supply"
+            );
+            debug_assert_ne!(
+                record.reclaim_links.as_ref().and_then(|links| links.next),
+                Some(*supplier)
+            );
+            debug_assert_ne!(
+                record.group_index.links().and_then(|links| links.next),
+                Some(*supplier)
             );
         }
         for (group, order) in &self.suppliers_by_group {
@@ -536,7 +551,7 @@ impl H2Supply {
         self.index.has_route_ready_group()
     }
 
-    pub(super) fn apply_revision(
+    fn apply_revision(
         &mut self,
         supplier: PartitionId,
         eligibility_group: EligibilityGroup,
@@ -554,7 +569,7 @@ impl H2Supply {
         self.assert_consistent(demand);
     }
 
-    pub(super) fn remove_exact_generation(
+    fn remove_exact_generation(
         &mut self,
         supplier: &PartitionId,
         generation: H2GenerationId,
@@ -614,7 +629,7 @@ impl H2Supply {
         Some(prepared)
     }
 
-    pub(super) fn settle_reclaim(
+    fn settle_reclaim(
         &mut self,
         prepared: &PreparedH2Reclaim,
         revision: Option<SupplyRevision<H2SupplyStatus>>,
@@ -834,6 +849,54 @@ impl Drop for H2CapacityReclaim {
         OriginAdmission::run_action_chain(next);
     }
 }
+
+pub(super) fn apply_supply_revision(
+    admission: &Arc<OriginAdmission>,
+    supplier: PartitionId,
+    eligibility_group: EligibilityGroup,
+    revision: SupplyRevision<H2SupplyStatus>,
+) {
+    let action = {
+        let mut state = admission.state.lock();
+        let super::AdmissionState {
+            h2_supply, demand, ..
+        } = &mut *state;
+        h2_supply.apply_revision(supplier, eligibility_group, revision, demand);
+        OriginAdmission::prepare_action(admission, &mut state)
+    };
+    OriginAdmission::run_action_chain(action);
+}
+
+pub(super) fn settle_route(
+    admission: &Arc<OriginAdmission>,
+    prepared: &PreparedH2Route,
+    stale_generation: Option<H2GenerationId>,
+    outcome: DemandAssignmentOutcome,
+) -> Option<AdmissionAction> {
+    let mut state = admission.state.lock();
+    if let Some(generation) = stale_generation {
+        let super::AdmissionState {
+            h2_supply, demand, ..
+        } = &mut *state;
+        h2_supply.remove_exact_generation(&prepared.supplier, generation, demand);
+    }
+    state.settle_assignment(&prepared.assignment, outcome);
+    OriginAdmission::prepare_action(admission, &mut state)
+}
+
+pub(super) fn settle_reclaim(
+    admission: &Arc<OriginAdmission>,
+    prepared: &PreparedH2Reclaim,
+    revision: Option<SupplyRevision<H2SupplyStatus>>,
+) -> Option<AdmissionAction> {
+    let mut state = admission.state.lock();
+    let super::AdmissionState {
+        h2_supply, demand, ..
+    } = &mut *state;
+    h2_supply.settle_reclaim(prepared, revision, demand);
+    OriginAdmission::prepare_action(admission, &mut state)
+}
+
 #[cfg(all(test, not(smithy_http_client_loom)))]
 mod tests {
     use super::*;

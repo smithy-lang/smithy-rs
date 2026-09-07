@@ -64,7 +64,7 @@ pub(in crate::client::pool) struct H2Activation {
     /// Exact generation that owns the prospective count.
     generation: H2GenerationId,
     /// Partition issuing this request.
-    pub(super) request_partition: PartitionId,
+    request_partition: PartitionId,
     /// Mutually exclusive pre-dispatch resources or post-transfer identity.
     state: Option<H2ActivationState>,
     /// Shared accounting for the upload and response sides.
@@ -97,9 +97,9 @@ impl H2Activation {
         connection_cell: Arc<OriginCell>,
         generation: H2GenerationId,
         resources: H2ActivationResources,
+        request_partition: PartitionId,
         turn: Option<H2ActivationTurnGuard>,
     ) -> Self {
-        let request_partition = connection_cell.id().partition();
         let claim = Arc::new(H2RequestClaim {
             connection_cell: Weak::from_arc(&connection_cell),
             generation,
@@ -126,6 +126,10 @@ impl H2Activation {
     }
 
     /// Returns whether Hyper previously accepted a request on this generation.
+    ///
+    /// # Panics
+    ///
+    /// Panics if dispatch parts were already taken.
     pub(in crate::client::pool) fn is_reused(&self) -> bool {
         match self
             .state
@@ -140,6 +144,10 @@ impl H2Activation {
     }
 
     /// Returns the selected protocol-neutral connection.
+    ///
+    /// # Panics
+    ///
+    /// Panics if dispatch parts were already taken.
     pub(in crate::client::pool) fn connection(&self) -> &Arc<ConnectionState> {
         match self
             .state
@@ -330,7 +338,7 @@ enum H2RequestClaimState {
     },
     /// Hyper accepted the request and connection dispatch is retained.
     Accepted {
-        dispatch: Option<DispatchGuard>,
+        dispatch: DispatchGuard,
         upload_finished: bool,
         response_finished: bool,
     },
@@ -341,33 +349,35 @@ enum H2RequestClaimState {
 impl H2RequestClaim {
     /// Converts prospective request state to accepted state.
     fn accept(&self, dispatch: DispatchGuard) {
-        let mut dispatch = Some(dispatch);
-        let complete = {
+        let completed_dispatch = {
             let mut state = self.state.lock();
-            let (upload_finished, response_finished) = match &*state {
+            let previous = std::mem::replace(&mut *state, H2RequestClaimState::Complete);
+            let (upload_finished, response_finished) = match previous {
                 H2RequestClaimState::Prospective {
                     upload_finished,
                     response_finished,
-                } => (*upload_finished, *response_finished),
-                H2RequestClaimState::Accepted { .. } | H2RequestClaimState::Complete => {
+                } => (upload_finished, response_finished),
+                other @ (H2RequestClaimState::Accepted { .. } | H2RequestClaimState::Complete) => {
+                    *state = other;
                     drop(state);
                     panic!("HTTP/2 request claim accepted outside prospective state");
                 }
             };
             if upload_finished && response_finished {
-                *state = H2RequestClaimState::Complete;
-                true
+                Some(dispatch)
             } else {
                 *state = H2RequestClaimState::Accepted {
-                    dispatch: dispatch.take(),
+                    dispatch,
                     upload_finished,
                     response_finished,
                 };
-                false
+                None
             }
         };
-        drop(dispatch);
-        if complete {
+        if let Some(dispatch) = completed_dispatch {
+            // Dispatch completion takes the connection lifecycle lock. Keep it
+            // outside the claim lock so completion cannot nest pool locks.
+            drop(dispatch);
             self.release_generation();
         }
     }
@@ -390,35 +400,43 @@ impl H2RequestClaim {
 
     /// Marks one request side finished and releases the claim on the second.
     fn finish_side(&self, finish: impl FnOnce(&mut bool, &mut bool)) -> bool {
-        let dispatch = {
+        let completed_dispatch = {
             let mut state = self.state.lock();
-            match &mut *state {
+            let previous = std::mem::replace(&mut *state, H2RequestClaimState::Complete);
+            match previous {
                 H2RequestClaimState::Prospective {
-                    upload_finished,
-                    response_finished,
+                    mut upload_finished,
+                    mut response_finished,
                 } => {
-                    finish(upload_finished, response_finished);
+                    finish(&mut upload_finished, &mut response_finished);
+                    *state = H2RequestClaimState::Prospective {
+                        upload_finished,
+                        response_finished,
+                    };
                     None
                 }
                 H2RequestClaimState::Accepted {
                     dispatch,
-                    upload_finished,
-                    response_finished,
+                    mut upload_finished,
+                    mut response_finished,
                 } => {
-                    finish(upload_finished, response_finished);
-                    if *upload_finished && *response_finished {
-                        let dispatch = dispatch.take();
-                        *state = H2RequestClaimState::Complete;
-                        dispatch
+                    finish(&mut upload_finished, &mut response_finished);
+                    if upload_finished && response_finished {
+                        Some(dispatch)
                     } else {
+                        *state = H2RequestClaimState::Accepted {
+                            dispatch,
+                            upload_finished,
+                            response_finished,
+                        };
                         None
                     }
                 }
                 H2RequestClaimState::Complete => None,
             }
         };
-        let request_complete = dispatch.is_some();
-        if let Some(dispatch) = dispatch {
+        let request_complete = completed_dispatch.is_some();
+        if let Some(dispatch) = completed_dispatch {
             // Dispatch completion takes the connection lifecycle lock. Keep it
             // outside the claim lock so completion cannot nest pool locks.
             drop(dispatch);
@@ -564,7 +582,7 @@ impl Drop for H2ResponseGuard {
 
 fn trace_request_side(
     identity: Option<H2RequestIdentity>,
-    endpoint: &'static str,
+    request_side: &'static str,
     request_complete: bool,
 ) {
     if let Some(identity) = identity {
@@ -576,7 +594,7 @@ fn trace_request_side(
             origin_host = identity.connection.origin().host(),
             origin_port = ?identity.connection.origin().port(),
             h2_generation = ?identity.generation,
-            endpoint,
+            request_side,
             request_complete,
             "HTTP/2 request side finished"
         );
