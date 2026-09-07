@@ -474,7 +474,7 @@ impl H1SupplyIndex {
 }
 
 impl H1Supply {
-    pub(super) fn apply_revision(
+    fn apply_revision(
         &mut self,
         supplier: PartitionId,
         eligibility_group: EligibilityGroup,
@@ -1021,159 +1021,157 @@ fn h1_supply_outcome(
     }
 }
 
-impl OriginAdmission {
-    pub(in crate::client::pool) fn apply_h1_supply_revision(
-        admission: &Arc<Self>,
-        supplier: PartitionId,
-        eligibility_group: EligibilityGroup,
-        revision: SupplyRevision<H1SupplyStatus>,
-    ) {
-        let action = {
-            let mut state = admission.state.lock();
-            state
-                .h1_supply
-                .apply_revision(supplier, eligibility_group, revision);
-            Self::prepare_action(admission, &mut state)
-        };
-        Self::run_action_chain(action);
-    }
+pub(super) fn apply_supply_revision(
+    admission: &Arc<OriginAdmission>,
+    supplier: PartitionId,
+    eligibility_group: EligibilityGroup,
+    revision: SupplyRevision<H1SupplyStatus>,
+) {
+    let action = {
+        let mut state = admission.state.lock();
+        state
+            .h1_supply
+            .apply_revision(supplier, eligibility_group, revision);
+        OriginAdmission::prepare_action(admission, &mut state)
+    };
+    OriginAdmission::run_action_chain(action);
+}
 
-    pub(in crate::client::pool) fn reject_returned_h1_match(
-        admission: &Arc<Self>,
-        match_id: H1MatchId,
-        supplier: PartitionId,
-        revision: SupplyRevision<H1SupplyStatus>,
-    ) {
-        let action = Self::settle_h1_match(
+pub(super) fn reject_returned_match(
+    admission: &Arc<OriginAdmission>,
+    match_id: H1MatchId,
+    supplier: PartitionId,
+    revision: SupplyRevision<H1SupplyStatus>,
+) {
+    let action = settle_match(
+        admission,
+        match_id,
+        H1SupplyOutcome::supplier_live(supplier, revision),
+    );
+    OriginAdmission::run_action_chain(action);
+}
+
+pub(super) fn settle_reservation(
+    admission: &Arc<OriginAdmission>,
+    match_id: H1MatchId,
+    supplier: PartitionId,
+    decision: H1ReservationDecision<H1Candidate>,
+) -> Option<AdmissionAction> {
+    match decision {
+        H1ReservationDecision::Rejected(revision) => settle_match(
             admission,
             match_id,
             H1SupplyOutcome::supplier_live(supplier, revision),
-        );
-        Self::run_action_chain(action);
-    }
-
-    pub(in crate::client::pool) fn settle_h1_reservation(
-        admission: &Arc<Self>,
-        match_id: H1MatchId,
-        supplier: PartitionId,
-        decision: H1ReservationDecision<H1Candidate>,
-    ) -> Option<AdmissionAction> {
-        match decision {
-            H1ReservationDecision::Rejected(revision) => Self::settle_h1_match(
-                admission,
-                match_id,
-                H1SupplyOutcome::supplier_live(supplier, revision),
-            ),
-            H1ReservationDecision::Installed => {
+        ),
+        H1ReservationDecision::Installed => {
+            let mut state = admission.state.lock();
+            state.h1_supply.settle_reservation(match_id, false);
+            OriginAdmission::prepare_action(admission, &mut state)
+        }
+        H1ReservationDecision::Candidate(candidate) => {
+            {
                 let mut state = admission.state.lock();
-                state.h1_supply.settle_reservation(match_id, false);
-                Self::prepare_action(admission, &mut state)
-            }
-            H1ReservationDecision::Candidate(candidate) => {
-                {
-                    let mut state = admission.state.lock();
-                    if state.h1_supply.settle_reservation(match_id, true).is_none() {
-                        drop(state);
-                        return Self::reject_h1_candidate(admission, match_id, candidate);
-                    }
-                }
-                Self::resolve_h1_match(admission, match_id, candidate)
-            }
-        }
-    }
-
-    pub(in crate::client::pool) fn resolve_h1_match(
-        admission: &Arc<Self>,
-        match_id: H1MatchId,
-        candidate: H1Candidate,
-    ) -> Option<AdmissionAction> {
-        let mut state = admission.state.lock();
-        let Some(retained) = state.h1_supply.begin_resolution(match_id) else {
-            drop(state);
-            return Self::reject_h1_candidate(admission, match_id, candidate);
-        };
-        if retained.cancelled
-            || !state
-                .demand
-                .is_current_queued(&retained.requester, retained.demand)
-        {
-            drop(state);
-            return Self::reject_h1_candidate(admission, match_id, candidate);
-        }
-        match retained.kind {
-            H1MatchKind::BorrowSender => {
-                let assignment_id = state.take_assignment_id();
-                let old_group = state.demand.group_for(&retained.requester);
-                let Some(assignment) = state.demand.prepare_h1_assignment(
-                    &retained.requester,
-                    retained.demand,
-                    assignment_id,
-                ) else {
+                if state.h1_supply.settle_reservation(match_id, true).is_none() {
                     drop(state);
-                    return Self::reject_h1_candidate(admission, match_id, candidate);
-                };
-                state.reconcile_demand_indexes(&assignment.requester, old_group);
-                Some(AdmissionAction::Deliver(DeliveryGuard::borrowed_h1(
-                    admission.clone(),
-                    assignment,
-                    match_id,
-                    retained.supplier,
-                    candidate,
-                )))
+                    return reject_candidate(admission, match_id, candidate);
+                }
             }
-            H1MatchKind::ReclaimCapacity => Some(AdmissionAction::ReclaimCapacity(
-                super::CapacityReclaim::FromH1(H1CapacityReclaim::new(
-                    admission.clone(),
-                    retained.requester,
-                    match_id,
-                    candidate,
-                )),
+            resolve_match(admission, match_id, candidate)
+        }
+    }
+}
+
+pub(super) fn resolve_match(
+    admission: &Arc<OriginAdmission>,
+    match_id: H1MatchId,
+    candidate: H1Candidate,
+) -> Option<AdmissionAction> {
+    let mut state = admission.state.lock();
+    let Some(retained) = state.h1_supply.begin_resolution(match_id) else {
+        drop(state);
+        return reject_candidate(admission, match_id, candidate);
+    };
+    if retained.cancelled
+        || !state
+            .demand
+            .is_current_queued(&retained.requester, retained.demand)
+    {
+        drop(state);
+        return reject_candidate(admission, match_id, candidate);
+    }
+    match retained.kind {
+        H1MatchKind::BorrowSender => {
+            let assignment_id = state.take_assignment_id();
+            let old_group = state.demand.group_for(&retained.requester);
+            let Some(assignment) = state.demand.prepare_h1_assignment(
+                &retained.requester,
+                retained.demand,
+                assignment_id,
+            ) else {
+                drop(state);
+                return reject_candidate(admission, match_id, candidate);
+            };
+            state.reconcile_demand_indexes(&assignment.requester, old_group);
+            Some(AdmissionAction::Deliver(DeliveryGuard::borrowed_h1(
+                admission.clone(),
+                assignment,
+                match_id,
+                retained.supplier,
+                candidate,
+            )))
+        }
+        H1MatchKind::ReclaimCapacity => Some(AdmissionAction::ReclaimCapacity(
+            super::CapacityReclaim::FromH1(H1CapacityReclaim::new(
+                admission.clone(),
+                retained.requester,
+                match_id,
+                candidate,
             )),
-        }
+        )),
     }
+}
 
-    fn settle_h1_match(
-        admission: &Arc<Self>,
-        match_id: H1MatchId,
-        outcome: H1SupplyOutcome,
-    ) -> Option<AdmissionAction> {
-        let mut state = admission.state.lock();
-        state.h1_supply.settle_match(match_id, outcome);
-        Self::prepare_action(admission, &mut state)
-    }
+pub(super) fn settle_match(
+    admission: &Arc<OriginAdmission>,
+    match_id: H1MatchId,
+    outcome: H1SupplyOutcome,
+) -> Option<AdmissionAction> {
+    let mut state = admission.state.lock();
+    state.h1_supply.settle_match(match_id, outcome);
+    OriginAdmission::prepare_action(admission, &mut state)
+}
 
-    /// Returns a provisional sender and keeps successor work in the caller's
-    /// action chain instead of re-entering it through `H1Candidate::drop`.
-    fn reject_h1_candidate(
-        admission: &Arc<Self>,
-        match_id: H1MatchId,
-        candidate: H1Candidate,
-    ) -> Option<AdmissionAction> {
-        let outcome = candidate.reject();
-        Self::settle_h1_match(admission, match_id, outcome)
-    }
+/// Returns a provisional sender and keeps successor work in the caller's
+/// action chain instead of re-entering it through `H1Candidate::drop`.
+fn reject_candidate(
+    admission: &Arc<OriginAdmission>,
+    match_id: H1MatchId,
+    candidate: H1Candidate,
+) -> Option<AdmissionAction> {
+    let outcome = candidate.reject();
+    settle_match(admission, match_id, outcome)
+}
 
-    pub(super) fn settle_borrow_delivery(
-        admission: &Arc<Self>,
-        match_id: H1MatchId,
-        assignment: &super::DemandAssignment,
-        outcome: DemandAssignmentOutcome,
-        transferred_supplier: Option<PartitionId>,
-        refused_outcome: Option<H1SupplyOutcome>,
-    ) -> Option<AdmissionAction> {
-        let mut state = admission.state.lock();
-        state.settle_assignment(assignment, outcome);
-        if let Some(supplier) = transferred_supplier {
-            return Some(AdmissionAction::SettleH1Supplier(
-                H1SupplierSettlement::new(admission.clone(), match_id, supplier, true),
-            ));
-        }
-        state.h1_supply.settle_match(
-            match_id,
-            refused_outcome.expect("refused H1 borrow had no supplier outcome"),
-        );
-        Self::prepare_action(admission, &mut state)
+pub(super) fn settle_borrow_delivery(
+    admission: &Arc<OriginAdmission>,
+    match_id: H1MatchId,
+    assignment: &super::DemandAssignment,
+    outcome: DemandAssignmentOutcome,
+    transferred_supplier: Option<PartitionId>,
+    refused_outcome: Option<H1SupplyOutcome>,
+) -> Option<AdmissionAction> {
+    let mut state = admission.state.lock();
+    state.settle_assignment(assignment, outcome);
+    if let Some(supplier) = transferred_supplier {
+        return Some(AdmissionAction::SettleH1Supplier(
+            H1SupplierSettlement::new(admission.clone(), match_id, supplier, true),
+        ));
     }
+    state.h1_supply.settle_match(
+        match_id,
+        refused_outcome.expect("refused H1 borrow had no supplier outcome"),
+    );
+    OriginAdmission::prepare_action(admission, &mut state)
 }
 
 #[cfg(all(test, not(smithy_http_client_loom)))]
@@ -1299,6 +1297,41 @@ mod tests {
             .expect("peer connection cell was not selected");
         assert_eq!(peer, prepared.supplier);
         assert_ne!(requesting_partition, prepared.supplier);
+    }
+
+    #[test]
+    fn resolving_match_discards_its_lazy_cancellation_entry() {
+        let supplier = cell(1);
+        let requester = cell(2);
+        let group = EligibilityGroup::Pool;
+        let mut schedule = schedule(requester, group.clone());
+        let mut supply = H1Supply::default();
+        supply.apply_revision(supplier, group.clone(), supply_revision(1, true, false));
+        let prepared = supply
+            .prepare_match(&schedule)
+            .expect("supplier cell did not produce a retained match");
+        supply.settle_reservation(prepared.match_id, false);
+
+        schedule.apply_snapshot(
+            requester,
+            DemandSnapshot::inactive(DemandId::from_u64(1), SnapshotVersion::INITIAL.next()),
+        );
+        supply.reconcile_requester(&requester, &schedule);
+        assert_eq!(
+            H1MatchState::Cancelling,
+            supply.matches[&prepared.match_id].state
+        );
+
+        supply.begin_resolution(prepared.match_id);
+        assert_eq!(
+            H1MatchState::Resolving,
+            supply.matches[&prepared.match_id].state
+        );
+        assert!(
+            supply.prepare_cancellation().is_none(),
+            "resolving match produced stale cancellation work"
+        );
+        assert!(supply.cancellations.is_empty());
     }
 
     #[test]

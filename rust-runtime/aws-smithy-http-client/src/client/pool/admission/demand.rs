@@ -197,7 +197,7 @@ pub(super) struct QueuedDemand {
 #[derive(Debug)]
 struct DemandRecord {
     /// Newest complete snapshot observed for the cell.
-    pub(super) latest: DemandSnapshot,
+    latest: DemandSnapshot,
     /// Stable group retained while an inactive replacement crosses an assignment.
     eligibility_group: Option<EligibilityGroup>,
     /// Scheduling residence, including links while ordered.

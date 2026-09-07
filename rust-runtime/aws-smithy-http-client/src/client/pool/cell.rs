@@ -96,7 +96,7 @@ pub(in crate::client::pool) struct OriginCell {
 
 /// Mutable state protected by one partition-origin cell lock.
 ///
-/// Waiter outcomes and protocol residence share this lock. HTTP/1 returns,
+/// Waiter outcomes and protocol state share this lock. HTTP/1 returns,
 /// HTTP/2 activation gates, flight participants, and cancellation therefore
 /// commit against one acquisition order.
 #[derive(Debug)]
@@ -153,7 +153,7 @@ impl CellState {
             has_returnable_connection: self.h1.has_returnable(),
             peer_use_blocked: !self.h1.peer_reservation_available()
                 || self.h1.blocks_peer_selection(local_h1_demand)
-                || self.acquisitions.has_prior_h1_candidate(),
+                || self.acquisitions.has_prior_h1_waiter(),
         }
     }
 
@@ -243,7 +243,7 @@ impl CellState {
     ) -> H1ReservationDecision<OwnedH1Sender> {
         let local_h1_demand = self.acquisitions.has_h1_compatible_waiter();
         if self.h1.blocks_peer_selection(local_h1_demand)
-            || self.acquisitions.has_prior_h1_candidate()
+            || self.acquisitions.has_prior_h1_waiter()
             || !self.h1.peer_reservation_available()
         {
             let report = self.current_h1_supply_revision();
@@ -937,7 +937,10 @@ mod tests {
 
     fn unbounded_connection(
         id: u64,
-    ) -> (Arc<ConnectionState>, super::super::connection::RootIoGuard) {
+    ) -> (
+        Arc<ConnectionState>,
+        super::super::connection::PhysicalConnectionGuard,
+    ) {
         ConnectionState::unbounded(connection_info(id))
     }
 
@@ -1953,7 +1956,7 @@ mod tests {
     ) -> (
         h2::H2GenerationId,
         Arc<ConnectionState>,
-        super::super::connection::RootIoGuard,
+        super::super::connection::PhysicalConnectionGuard,
     ) {
         let lease = OriginAdmission::lease_for_test(admission);
         let (connection, physical) = ConnectionState::bounded(

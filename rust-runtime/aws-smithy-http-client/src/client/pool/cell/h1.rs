@@ -203,7 +203,7 @@ impl H1Reservation {
     }
 
     /// Completes an irreversible transfer and records any usable local turn.
-    pub(super) fn complete_transfer(&mut self, match_id: H1MatchId, local_h1_demand: bool) -> bool {
+    fn complete_transfer(&mut self, match_id: H1MatchId, local_h1_demand: bool) -> bool {
         if !matches!(self.state, H1ReservationState::Resolving(current) if current == match_id) {
             return false;
         }
@@ -264,7 +264,7 @@ impl H1Reservation {
     }
 
     #[cfg(test)]
-    pub(super) fn local_turn_owed(&self) -> bool {
+    fn local_turn_owed(&self) -> bool {
         self.local_turn_owed
     }
 }

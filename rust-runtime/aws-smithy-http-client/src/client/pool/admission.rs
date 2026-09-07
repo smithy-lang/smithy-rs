@@ -34,7 +34,7 @@
 //! held with the admission lock, and connection-owning and requesting cell
 //! locks are never held together.
 
-use super::cell::OriginCell;
+use super::cell::{H1ReservationDecision, OriginCell};
 use super::origin::OriginKey;
 use super::partition::{EligibilityGroup, PartitionId};
 use super::registry::AdmissionPolicy;
@@ -58,6 +58,7 @@ pub(in crate::client::pool) use self::demand::{
 };
 use self::h1::{
     H1CancellationAction, H1CapacityReclaim, H1ReservationAction, H1SupplierSettlement, H1Supply,
+    H1SupplyOutcome,
 };
 use self::h2::{H2CapacityReclaim, H2RouteGuard, H2Supply, PreparedH2Reclaim, PreparedH2Route};
 use self::order::{IntrusiveLinks, IntrusiveOrder};
@@ -179,8 +180,9 @@ impl OriginAdmission {
     /// Cancellation cleanup runs first, followed by available capacity,
     /// a compatible peer HTTP/2 route, HTTP/1 reuse, and idle-H2 reclaim. The
     /// returned action owns everything needed to run after releasing the
-    /// admission lock. Its completion prepares the next action, forming an
-    /// iterative pump without nesting admission and cell locks.
+    /// admission lock. Its completion may prepare a successor for the caller's
+    /// action chain. A guard dropped outside that chain may start another
+    /// chain, but admission and cell locks are never nested.
     fn prepare_action(origin: &Arc<Self>, state: &mut AdmissionState) -> Option<AdmissionAction> {
         if let Some(cancellation) = state.h1_supply.prepare_cancellation() {
             return Some(AdmissionAction::CancelH1Reservation(
@@ -228,7 +230,7 @@ impl OriginAdmission {
         cell.and_then(|cell| cell.upgrade())
     }
 
-    /// Runs detached actions until no completion prepares another action.
+    /// Runs one detached action chain until no completion prepares a successor.
     pub(in crate::client::pool) fn run_action_chain(mut action: Option<AdmissionAction>) {
         while let Some(current) = action {
             action = match current {
@@ -275,6 +277,73 @@ impl OriginAdmission {
         Self::prepare_action(admission, &mut state)
     }
 
+    /// Applies one cell's complete HTTP/1 supply revision.
+    pub(in crate::client::pool) fn apply_h1_supply_revision(
+        admission: &Arc<Self>,
+        supplier: PartitionId,
+        eligibility_group: EligibilityGroup,
+        revision: SupplyRevision<H1SupplyStatus>,
+    ) {
+        h1::apply_supply_revision(admission, supplier, eligibility_group, revision);
+    }
+
+    /// Rejects a returned sender whose retained match is no longer current.
+    pub(in crate::client::pool) fn reject_returned_h1_match(
+        admission: &Arc<Self>,
+        match_id: H1MatchId,
+        supplier: PartitionId,
+        revision: SupplyRevision<H1SupplyStatus>,
+    ) {
+        h1::reject_returned_match(admission, match_id, supplier, revision);
+    }
+
+    /// Settles installation of one supplier-cell reservation.
+    pub(in crate::client::pool) fn settle_h1_reservation(
+        admission: &Arc<Self>,
+        match_id: H1MatchId,
+        supplier: PartitionId,
+        decision: H1ReservationDecision<H1Candidate>,
+    ) -> Option<AdmissionAction> {
+        h1::settle_reservation(admission, match_id, supplier, decision)
+    }
+
+    /// Resolves a provisional sender against its retained match and demand.
+    pub(in crate::client::pool) fn resolve_h1_match(
+        admission: &Arc<Self>,
+        match_id: H1MatchId,
+        candidate: H1Candidate,
+    ) -> Option<AdmissionAction> {
+        h1::resolve_match(admission, match_id, candidate)
+    }
+
+    /// Removes one retained H1 match and applies its supplier outcome.
+    fn settle_h1_match(
+        admission: &Arc<Self>,
+        match_id: H1MatchId,
+        outcome: H1SupplyOutcome,
+    ) -> Option<AdmissionAction> {
+        h1::settle_match(admission, match_id, outcome)
+    }
+
+    /// Settles a borrowed-sender assignment and its retained H1 match.
+    fn settle_borrow_delivery(
+        admission: &Arc<Self>,
+        match_id: H1MatchId,
+        assignment: &DemandAssignment,
+        outcome: DemandAssignmentOutcome,
+        transferred_supplier: Option<PartitionId>,
+        refused_outcome: Option<H1SupplyOutcome>,
+    ) -> Option<AdmissionAction> {
+        h1::settle_borrow_delivery(
+            admission,
+            match_id,
+            assignment,
+            outcome,
+            transferred_supplier,
+            refused_outcome,
+        )
+    }
+
     /// Applies one cell's complete HTTP/2 supply revision.
     pub(in crate::client::pool) fn apply_h2_supply_revision(
         admission: &Arc<Self>,
@@ -282,15 +351,7 @@ impl OriginAdmission {
         eligibility_group: EligibilityGroup,
         revision: SupplyRevision<H2SupplyStatus>,
     ) {
-        let action = {
-            let mut state = admission.state.lock();
-            let AdmissionState {
-                h2_supply, demand, ..
-            } = &mut *state;
-            h2_supply.apply_revision(supplier, eligibility_group, revision, demand);
-            Self::prepare_action(admission, &mut state)
-        };
-        Self::run_action_chain(action);
+        h2::apply_supply_revision(admission, supplier, eligibility_group, revision);
     }
 
     /// Settles one H2 route assignment and repairs stale supply if needed.
@@ -300,15 +361,7 @@ impl OriginAdmission {
         stale_generation: Option<super::cell::h2::H2GenerationId>,
         outcome: DemandAssignmentOutcome,
     ) -> Option<AdmissionAction> {
-        let mut state = admission.state.lock();
-        if let Some(generation) = stale_generation {
-            let AdmissionState {
-                h2_supply, demand, ..
-            } = &mut *state;
-            h2_supply.remove_exact_generation(&prepared.supplier, generation, demand);
-        }
-        state.settle_assignment(&prepared.assignment, outcome);
-        Self::prepare_action(admission, &mut state)
+        h2::settle_route(admission, prepared, stale_generation, outcome)
     }
 
     /// Completes one exact idle-H2 reclaim crossing.
@@ -317,12 +370,7 @@ impl OriginAdmission {
         prepared: &PreparedH2Reclaim,
         revision: Option<SupplyRevision<H2SupplyStatus>>,
     ) -> Option<AdmissionAction> {
-        let mut state = admission.state.lock();
-        let AdmissionState {
-            h2_supply, demand, ..
-        } = &mut *state;
-        h2_supply.settle_reclaim(prepared, revision, demand);
-        Self::prepare_action(admission, &mut state)
+        h2::settle_reclaim(admission, prepared, revision)
     }
 
     #[cfg(test)]

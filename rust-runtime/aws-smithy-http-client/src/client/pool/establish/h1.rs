@@ -98,8 +98,8 @@ async fn run_h1_handshake(
         NegotiatedProtocol::Http1,
         connected,
     );
-    let (connection, root_io) = ConnectionState::pending_open(info);
-    let io = ConnectionIo::new(io, root_io);
+    let (connection, physical) = ConnectionState::pending_open(info);
+    let io = ConnectionIo::new(io, physical);
 
     let (sender, driver) = match hyper::client::conn::http1::Builder::new()
         .handshake::<_, SdkBody>(io)

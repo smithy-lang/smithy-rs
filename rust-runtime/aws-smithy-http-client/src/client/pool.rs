@@ -60,11 +60,11 @@
 //!             `-- H2 supply index and route/reclaim state
 //! ```
 //!
-//! One `OriginCell` lock owns local acquisition order and protocol residence.
+//! One `OriginCell` lock owns local acquisition order and protocol state.
 //! For a bounded origin, `OriginAdmission` separately owns the origin-wide
-//! connection limit and cross-cell matching. An H2 request-claim lock owns
-//! its two endpoint bits. `ConnectionState` owns logical connection lifetime,
-//! and partition maintenance owns its scheduler state.
+//! connection limit and cross-cell matching. An H2 request-claim lock records
+//! independent upload and response completion. `ConnectionState` owns logical
+//! connection lifetime, and partition maintenance owns its timer state.
 //!
 //! No two pool locks are held together. Demand snapshots and supply revisions
 //! move cell state into admission. Assignments and detached guards carry one
@@ -130,29 +130,30 @@
 //!
 //! H2Activation -- Hyper accepts request --> H2RequestClaim
 //! H2RequestClaim
-//!     |-- request body ends or drops -----> upload endpoint complete
-//!     `-- response body ends or drops ----> response endpoint complete
-//! both endpoints complete ----------------> release generation request count
+//!     |-- request body ends or drops -----> upload side complete
+//!     `-- response body ends or drops ----> response side complete
+//! both sides complete --------------------> release generation request count
 //! ```
 //!
 //! `H2Activation` reserves pool accounting for a prospective stream on one
 //! exact generation. It is not yet an HTTP/2 stream. Dropping it before Hyper
 //! accepts the request returns its generation-gate turn and request count.
-//! Acceptance creates two independent endpoints because an upload and response
+//! Acceptance creates two independent completion sides because upload and response
 //! can finish in either order. Logical close stops new activations and releases
 //! bounded capacity; accepted streams retain the draining generation until
-//! both endpoints end. Hyper remains responsible for stream identifiers,
+//! both sides end. Hyper remains responsible for stream identifiers,
 //! stream credit, and flow control.
 //!
 //! A peer route moves only generation identity. The socket, protocol driver,
 //! request handle, and capacity remain with the connection-owning partition.
 //!
 //! `ConnectionState` separates logical close, accepted-request accounting, and
-//! root-I/O ownership. Logical close rejects new dispatch and releases bounded
-//! capacity. `DispatchGuard` follows an accepted request, while
-//! `RootIoGuard` follows root I/O until the pool no longer owns
-//! that transport; neither describes the operating system TCP state. All
-//! connection-owned work runs through the partition [`DriverSpawner`].
+//! physical connection ownership. Logical close rejects new dispatch and
+//! releases bounded capacity. `DispatchGuard` follows an accepted request,
+//! while `PhysicalConnectionGuard` follows root I/O until the client releases
+//! its transport handle. The operating system may continue TCP teardown
+//! afterward. All connection-owned work runs through the partition
+//! [`DriverSpawner`].
 
 #![cfg_attr(
     smithy_http_client_loom,

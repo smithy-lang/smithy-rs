@@ -51,6 +51,16 @@ coordination and reads no other partition's state. An unbounded origin construct
 or cross-partition ordering machinery; cross-partition coordination begins only after local reuse misses on
 a bounded origin with no free capacity.
 
+### Coordination cost is bounded
+
+Pool locks are never nested. Admission selects from maintained origin or
+eligibility-group indexes rather than scanning partitions or connections, and
+each detached action performs bounded work before it either settles or produces
+one successor. Cross-partition H2 reuse moves generation identity, not transport
+ownership. Changes that claim to preserve local-path cost must show that they add
+no origin-wide coordination, partition-wide scan, or shared allocation to a
+steady local reuse hit.
+
 ### Pool behavior and state are observable
 
 The pool reports connection lifecycle events and per-partition statistics sufficient to diagnose
@@ -144,6 +154,21 @@ Client
 `Client` is what a caller holds and what implements the smithy runtime's `HttpClient`. It pairs the pool with
 one resolved partition, so a request never searches for its partition — the handle already names it.
 
+Each mutable authority has one lock domain:
+
+| Authority | Owns |
+| --- | --- |
+| Admission registry | One admission authority for each bounded canonical origin. |
+| Partition origin map | Stable cell identity for one partition and canonical origin. |
+| Origin admission | Available capacity, canonical demand, indexed H1/H2 supply, and retained H1 matches. |
+| Origin cell | Local acquisition order, H1 sender state, H2 flights and generations, and supply revisions. |
+| Connection lifecycle | Dispatch eligibility, accepted-dispatch count, bounded capacity, and physical connection completion. |
+| H2 request claim | Upload and response completion for one prospective or accepted request. |
+| Partition maintenance | Idle deadlines, wake publication, and shutdown. |
+
+No transition holds two pool locks at once. Values that cross lock domains own
+their rejection or drop fallback until the receiving authority commits them.
+
 An `OriginAdmission` exists only for a bounded origin. A local miss normally
 establishes on the requesting partition. When no permit is free, admission may
 use compatible peer protocol state or reclaim peer capacity for that demand.
@@ -151,7 +176,7 @@ An unbounded origin never needs cross-partition admission or peer indexes; its
 cells are independent. Reuse scope controls which peer protocol state is
 compatible, while reclaim may recover capacity across eligibility groups.
 
-Pool retention, request accounting, root-I/O ownership, and bounded capacity
+Pool retention, request accounting, physical connection ownership, and bounded capacity
 have different lifetimes.
 
 ```text
@@ -169,7 +194,7 @@ hold. Protocol-specific guards own the remaining cleanup:
 post-header protocol lifetime
 
 H1Exchange <------------------ response body or readiness task
-RootIoGuard <----------------- driver or upgraded root I/O
+PhysicalConnectionGuard <----- driver or upgraded root I/O
 
 H2 request claim
   |-- response guard <--------- response body or upgrade bridge
@@ -179,8 +204,9 @@ H2 request claim
 An H1 exchange owns Hyper's exclusive HTTP/1 request handle (`SendRequest`) and
 returns it only after a reusable message boundary. An
 H2 request claim releases only after both request sides finish. Root I/O
-may move from the driver into an upgrade while the same root-I/O guard tracks
-pool ownership. Bounded capacity has a separate owner path:
+may move from the driver into an upgrade while the same
+`PhysicalConnectionGuard` tracks client ownership. Bounded capacity has a
+separate owner path:
 
 ```text
 bounded connection capacity
@@ -195,6 +221,21 @@ OriginAdmission
 A bounded permit moves from admission to establishment and then to the
 installed `ConnectionState`. Logical close returns it. Dispatch handles,
 `DispatchGuard`, and H2 request claims never own a connection permit.
+
+HTTP/1 and HTTP/2 share admission but not connection semantics:
+
+| HTTP/1 | HTTP/2 |
+| --- | --- |
+| One request exclusively owns a sender. | Many requests may share one generation. |
+| Admission may retain an H1 match while a supplier-cell reservation crosses locks. | A route is detached identity-only work; admission retains no matching route lifecycle. |
+| Peer reuse transfers sender ownership to the requesting cell. | Peer reuse follows a route to the connection-owning generation. |
+| Borrow and reclaim serve the origin demand head; an incompatible head may deliberately block younger groups. | Route-ready eligibility groups rotate without consuming origin capacity. |
+| Reclaim closes a provisional H1 candidate or an idle H1 record. | Reclaim closes one exact idle generation. |
+| Reuse ends at one complete HTTP/1 exchange boundary. | An accepted request claim ends after both upload and response sides finish. |
+
+These differences are protocol properties, not parallel abstractions waiting to
+be commonized. Shared code owns only the capacity, demand, and detached-action
+mechanics that have the same authority in both protocols.
 
 #### Request path
 
@@ -224,7 +265,7 @@ selected protocol handle
 `-- commit against logical close -> Hyper
     |-- request completes ------------> return or release protocol state
     |-- protocol upgrade ------------> caller owns upgraded lifecycle
-    `-- connection-terminal failure -> logical close, then root-I/O ownership ends
+    `-- connection-terminal failure -> logical close, then physical connection ownership ends
 ```
 
 [Local connection selection](#local-connection-selection) defines local selection.
@@ -676,7 +717,9 @@ If the wrapper is dropped before completion, including when its owning runtime s
 `Drop` requests logical close with `OwnerRuntimeShutdown`. Either request races through the record's existing
 idempotent close transition, so a prior pool drop, poison, reclaim, or protocol close wins without releasing
 capacity twice. Because the handle does not retain the pool, driver tasks cannot form a lifetime cycle with
-the records they close. `RootIoGuard` remains the separate authority for the end of pool-owned root I/O.
+the records they close. `PhysicalConnectionGuard` remains the separate authority for the end of
+client-owned physical connection I/O. Dropping it releases the client's transport handle; the operating
+system may continue TCP teardown.
 
 This is capacity conservation on the create and driver paths: the permit has one
 owner at every step, and cancellation either drops the establishing lease or logically closes the record
@@ -1360,7 +1403,7 @@ demand.
 
 #### HTTP/2 peer routing
 
-An H2 route carries no `AcquisitionPayload`. The connection-owning generation continues to own the capacity
+An H2 route carries no sender or capacity payload. The connection-owning generation continues to own the capacity
 lease. The route names a connection-owning cell and generation from which compatible requests may take
 H2 request claims. Installing a new local generation first installs the accepting generation under
 the connection-owning cell lock, then makes that identity visible to compatible local waiters. They are woken
@@ -1703,9 +1746,9 @@ exposed: its sender cannot return to the pool, and bounded capacity is released 
 separate upgrade-pending pool residence.
 
 Hyper's upgrade-capable driver owns the subsequent transport transfer. It moves the wrapped transport and any
-bytes read past the HTTP message into the `Upgraded` object. The caller then owns that I/O; dropping it signals
-the end of pool-owned root I/O through the transport wrapper. If `OnUpgrade` is dropped or the transfer fails,
-Hyper closes the transport instead.
+bytes read past the HTTP message into the `Upgraded` object. The caller then owns that I/O; dropping it completes
+the client's physical connection ownership through the transport wrapper. If `OnUpgrade` is dropped or the
+transfer fails, Hyper closes the transport instead.
 
 Hyper may complete its HTTP/1 driver in the same poll that delivers the upgrading response head. The driver
 guard can therefore record `ProtocolClosed` before the request task observes the response. Once the response
@@ -1794,15 +1837,15 @@ request may select it. Every transition revalidates retirement
 state, so a body that finishes concurrently with poison, reclaim, driver failure, or pool shutdown cannot
 make a connection selectable after retirement.
 
-#### Logical close and root-I/O ownership
+#### Logical close and physical connection ownership
 
 A connection that leaves the pool has two independently tracked transitions. At
 **logical close** it stops accepting new work and releases its permit. At
-**root-I/O completion** the pool no longer owns the root transport, whether
-because a driver dropped it or an upgraded protocol finished with it. This does
-not assert that the peer, kernel, or TCP teardown has completed. The permit
-returns to admission at logical close, so a replacement can be admitted while
-the old transport is still draining or tearing down.
+**physical connection completion** the client releases its transport handle,
+whether because a driver dropped the root I/O or an upgraded protocol finished
+with it. This does not assert that the peer, kernel, or TCP teardown has
+completed. The permit returns to admission at logical close, so a replacement
+can be admitted while the old transport is still draining or tearing down.
 
 Releasing capacity at logical close is what keeps a slow teardown from stalling the pool. A connection's
 socket does not close instantly: TLS sends `close_notify`, TCP exchanges FIN, and the OS may linger the
@@ -1845,11 +1888,11 @@ logical close (once: remove reuse eligibility + release capacity lease)
   `-- H1 upgraded I/O transferred ------------------> caller owns wrapped transport
                                                         |
 transport root is dropped <-----------------------------+
-  `-- root-I/O ownership ends
+  `-- physical connection ownership ends
 ```
 
 The consequence is that live sockets can outnumber admitted connections: a
-replacement admitted at logical close can coexist with a victim whose root I/O
+replacement admitted at logical close can coexist with a victim whose transport
 or kernel socket has not ended. `max_connections_per_host` bounds admitted
 connections; **no finite general bound on live sockets follows from it.** How
 long a socket lingers after logical close depends on peer and OS behavior, and a
@@ -1942,12 +1985,12 @@ classification even when driver completion won the close race.
 observed connection-level termination; only later confirmation that the same H1 exchange upgraded may refine
 it. The close event carries the source error when one exists. Other concurrent signals still race through
 first-trigger-wins, but one initiating signal does not match both categories. Every reason ends at the same
-root-I/O ownership transition, so capacity and lifecycle accounting do not depend on what won the race.
+physical connection ownership transition, so capacity and lifecycle accounting do not depend on what won the race.
 
 #### Obligations
 
-* **Capacity on logical close** [safety] — a connection releases its permit at logical close, before root-I/O
-  ownership ends, and releases it exactly once.
+* **Capacity on logical close** [safety] — a connection releases its permit at logical close, before physical
+  connection ownership ends, and releases it exactly once.
 * **No dispatch after logical close** [safety] — dispatch commit and logical close race through mutually
   exclusive per-record or per-generation gates; a close that wins leaves the request locally owned, while a
   commit that wins is recorded as an in-flight dispatch and calls Hyper immediately without holding a pool
@@ -1964,8 +2007,9 @@ root-I/O ownership transition, so capacity and lifecycle accounting do not depen
   connection-owning cell before becoming visible; a sender awaiting admission remains owned by that cell and
   non-dispatchable in `ReservedForPeer`, so a late completion cannot reverse logical close or bypass return
   ordering.
-* **Root-I/O completion tracking** [safety] — root-I/O drop, not logical close or driver-future completion
-  alone, ends pool ownership of the root transport, including after H1 upgrade.
+* **Physical connection completion** [safety] — dropping the wrapped root I/O, not logical close or
+  driver-future completion alone, releases the client's physical connection handle, including after H1
+  upgrade. The operating system may continue TCP teardown afterward.
 
 ### Telemetry
 
@@ -2251,9 +2295,9 @@ connection-partition owner task owns handshake completion.
 connection state. Admission may install an H2 route in a requesting cell. The route names one exact
 connection-owning cell and generation but owns no sender, socket, driver, or capacity.
 
-**Logical close** — a connection stops accepting new work and releases its permit. **Root-I/O completion** —
-the pool no longer owns the root transport. It may follow logical close by an unbounded interval and does not
-assert that kernel socket teardown is complete, so live sockets can outnumber admitted connections;
+**Logical close** — a connection stops accepting new work and releases its permit. **Physical connection
+completion** — the client releases its transport handle. It may follow logical close by an unbounded interval
+and does not assert that kernel socket teardown is complete, so live sockets can outnumber admitted connections;
 `max_connections_per_host` bounds admitted connections, not file descriptors, and no finite bound on live
 sockets follows from it.
 
@@ -2327,7 +2371,7 @@ stream isolation, Full-stream lease, and Return revalidation.
 is committed to one eligible waiter or refunnelled. *Rules out:* a lost resource while an eligible waiter
 sleeps; a double delivery where one resource serves two waiters; a cancelled waiter retaining capacity.
 *Enforced by:* Bounded demand and Snapshot ordering identify the live generation; Single delivery retains its
-fence through acknowledgement; Refunnelling and Acknowledged progress give every rejection and drop a terminal
+assignment through settlement; Refunnelling and Acknowledged progress give every rejection and drop a terminal
 path. An H2 generation is not a one-to-one resource: its connection record retains capacity while generation
 identity is visible to compatible local waiters and announced to eligible peer cells in bounded turns.
 
@@ -2401,10 +2445,10 @@ than retaining a second connection-pool architecture behind deprecated entry poi
 
 That shim requires a field-by-field audit of connector settings, idle defaults and nested-option semantics,
 TCP and interface settings, proxy and TLS assembly, DNS overrides, runtime components, and custom connector
-entry points. The implementation-neutral suites from smithy-rs PR #4767 are the acceptance baseline. A legacy
-option that cannot be mapped exactly remains on the old path until an explicit compatibility decision is made;
-the shim must not silently approximate it. Once the surface is covered, the hyper-util legacy pool can be
-removed as an implementation dependency rather than kept alive solely by old builders.
+entry points. The implementation-neutral client behavior suites are the acceptance baseline. A legacy option
+that cannot be mapped exactly remains on the old path until an explicit compatibility decision is made; the
+shim must not silently approximate it. Once the surface is covered, the hyper-util legacy pool can be removed
+as an implementation dependency rather than kept alive solely by old builders.
 
 ---
 
@@ -2590,7 +2634,7 @@ aws-smithy-http-client/src/client/
       h1.rs            — HTTP/1 dispatch, non-acceptance, and response ownership
       h2.rs            — HTTP/2 dispatch and two-ended request completion
     maintenance.rs     — idle-deadline scheduling and partition task lifetime
-    connection.rs      — connection identity, logical close, dispatch, and root-I/O ownership
+    connection.rs      — connection identity, logical close, dispatch, and physical connection ownership
     events.rs          — listener and lifecycle event types
     stats.rs           — origin/partition snapshots and lifecycle gauges
 aws-smithy-http-client/src/
@@ -2612,57 +2656,22 @@ The transport-connector contract below the pool is unchanged: it is a `Service<U
 
 ## Appendix B: Validation
 
-Validation supplies implementation evidence for the contracts above; it does not redefine them. The
-implementation-neutral connection harness and existing-client behavior suites in smithy-rs
-[PR #4767](https://github.com/smithy-lang/smithy-rs/pull/4767) form the compatibility baseline. Pool-specific
-tests preserved on `archive/conn-pool-4708` are an additional inventory, not an acceptance target: applicable
-contracts may be retained or rewritten, implementation-specific assumptions may be obsolete, and the owned
-state machine requires coverage that prototype tests did not contain.
+Validation supplies evidence for the contracts above; it does not redefine
+them.
 
-The evidence levels have distinct jobs:
+| Concern | Required evidence |
+| --- | --- |
+| State and ownership | Focused transition tests and executable invariant checks. |
+| Concurrency | Loom models using the production synchronization-bearing state machines. |
+| Protocol behavior | Controlled-runtime and wire tests covering cancellation, close, reuse, multiplexing, upgrades, and failure. |
+| Client compatibility | Implementation-neutral differential tests for request behavior, metadata, timeout scope, and error classification. |
+| Performance and scaling | Allocation, contention, stress, and benchmark measurements under the relevant concurrency and partition topology. |
 
-* **Unit, property, and bounded transition tests** cover construction, canonicalization, indexing,
-  accounting, and explicit state-machine transitions. Where focused state-space enumeration is used, the test
-  identifies its operation alphabet and bound; ordinary transition tests are not described as exhaustive.
-* Focused **Loom kernels** compile the production synchronization-bearing code against Loom and exercise
-  concurrent cell publication, permit and H1 delivery, H1 selection and return, borrowed-H1 materialization,
-  reuse cancellation, logical close, maintenance publication or shutdown, HTTP/2 activation against close,
-  two-ended request completion against generation close, route installation against requesting-cell
-  cancellation, and peer routing against connection-cell close. They model these ownership boundaries
-  rather than sockets or the complete network client.
-* **Controlled-runtime tests** use injected time, sleep, connectors, and executors to force cancellation at
-  ownership-distinct cancellation boundaries, submitted-future drop, idle deadlines, independent-runtime
-  request movement, explicit placement checks, and connector or handshake failure.
-* The **wire harness** verifies HTTP/1.1 and HTTP/2 behavior against scripted peers, including reuse,
-  multiplexing, request-specific ALPN, GOAWAY before and after first-stream acceptance, stream reset,
-  incomplete bodies, upgrades, poisoning, and transport close.
-* **Differential tests** run the same implementation-neutral behavior contracts against the current
-  Hyper-util-backed client and this pool. Any difference in request behavior, metadata, timeout scope, or error
-  classification requires an explicit design decision rather than a rewritten oracle.
-* **Benchmarks and stress tests** establish that the optimization and liveness contracts remain true at
-  production concurrency and topology.
-
-The required evidence maps to the architecture as follows:
-
-| Mechanism                                                             | Primary evidence                                                                  | What it must establish                                                                                                                                                                                                                                         |
-| --------------------------------------------------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Construction, topology, origin identity, and stable cells             | unit/property; allocation instrumentation; controlled runtime; Loom cell creation | invalid configurations fail; equivalent URIs share one origin; canonical request hits allocate no host storage; each pair has one stable cell; the anonymous partition binds one runtime but moves across its workers; explicit placement follows its contract |
-| Smithy `HttpClient` boundary and operation policy                     | unit; controlled runtime; differential                                            | settings-specific facades share one pool and admission authority; request version does not split pool or admission identity; timeout scope, maintenance ownership, validation timing, and `hyper/1.x` metadata are preserved                                   |
-| Local reuse, establishment, ALPN convergence, and generation identity | unit/property; bounded transitions; controlled runtime; wire; differential        | local hits avoid origin-wide coordination; connector readiness and placement hold; one H2 flight/generation wins; losing transports, leases, and waiters terminate exactly once                                                                                |
-| Admission, demand generations, and origin/group ordering              | property; bounded transitions; Loom scheduling kernels; stress                    | the bound is never exceeded; stale demand snapshots and supply revisions cannot resurrect obsolete state; each resource uses the correct scheduling scope; eligible committed demand has bounded overtaking                                                |
-| Capacity delivery, H1 matches, and owning-cell turns                  | bounded transitions; Loom delivery/reuse kernels; controlled cancellation         | every permit and provisional H1 has one owner; candidate transfer revalidates owning-cell state; demand assignments settle; cancellation and task drop refunnel once; return interception cannot starve owning-cell demand                                  |
-| H2 peer routing and request claims                                    | bounded transitions; Loom route kernel; wire                                      | routes move no capacity; activation gates prioritize committed waiters; stale generations cannot dispatch; upload and response guards both finish before claim release                                                                                           |
-| Dispatch, retry, bodies, upgrades, and metadata                       | controlled runtime; wire; differential                                            | one selected sender commits and calls Hyper without an intermediate published state; only Hyper-certified unsent reuse retries; cancellation has a stage-local owner; H1 framing and H2 stream isolation hold; metadata and error behavior are preserved       |
-| Logical close, root-I/O ownership, maintenance, events, and statistics | unit/property; Loom close/guard/maintenance kernels; time/runtime; wire          | driver completion and cancellation request logical close; permit release occurs once; root-I/O drop ends pool transport ownership; idle deadlines and shutdown clean up; callbacks see committed state and gauges converge to lifecycle state                  |
-| Locality, liveness, topology scaling, and retained memory             | bounded transitions; repeated stress; benchmarks                                  | grant work is independent of partition count; no reachable resource remains idle behind demand; local reuse does not regress; topology scales without moving I/O; physical-socket and route-memory costs are measured                                          |
-
-Correctness acceptance requires every applicable unit, bounded-transition, Loom, controlled-runtime, wire,
-and differential suite to pass. A bounded state-space enumeration reports neither an invalid state nor a
-terminal accounting error and identifies the operation set and bound it actually explored; an ordinary
-bounded-transition test makes no exhaustiveness claim. Focused liveness tests must show that usable
-capacity or a compatible connection enables progress under the scheduling conditions they construct.
-Concurrency-sensitive suites run repeatedly in CI; a flaky failure is a correctness failure, not benchmark
-noise.
+A correctness claim requires the applicable state, concurrency, protocol, and
+compatibility evidence. A performance, bounded-work, or topology-scaling claim
+requires measurements that exercise the claimed workload and bound. Focused
+state-space enumeration identifies its operation alphabet and bound; an
+ordinary transition test does not claim exhaustiveness.
 
 ---
 

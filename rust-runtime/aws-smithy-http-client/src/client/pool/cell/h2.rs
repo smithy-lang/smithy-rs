@@ -195,12 +195,12 @@ impl H2Route {
         self.id
     }
 
-    /// Returns the partition that owns the advertised generation.
+    /// Returns the partition that owns the routed generation.
     pub(super) fn connection_partition(&self) -> PartitionId {
         self.id.connection_partition
     }
 
-    /// Returns the advertised generation identity.
+    /// Returns the routed generation identity.
     #[cfg(any(debug_assertions, test))]
     pub(in crate::client::pool) fn generation(&self) -> H2GenerationId {
         self.id.generation
@@ -209,9 +209,7 @@ impl H2Route {
     /// Attempts to reserve a prospective request claim for one requesting partition.
     pub(super) fn activate(&self, request_partition: PartitionId) -> Option<H2Activation> {
         let cell = self.connection_cell.upgrade()?;
-        let mut activation = OriginCell::activate_h2(&cell, self.id.generation)?;
-        activation.request_partition = request_partition;
-        Some(activation)
+        OriginCell::activate_h2(&cell, self.id.generation, request_partition)
     }
 }
 
@@ -298,7 +296,7 @@ struct PeerH2Route {
 
 /// Local priority state for one accepting generation.
 #[derive(Debug, Default)]
-pub(super) enum H2ActivationGate {
+enum H2ActivationGate {
     /// No accepting generation is visible.
     #[default]
     Closed,
@@ -317,7 +315,7 @@ pub(super) enum H2ActivationGate {
 
 /// One activation opportunity returned by a generation gate.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum H2ActivationTurn {
+enum H2ActivationTurn {
     /// The gate cannot issue another activation.
     Unavailable,
     /// Any oldest compatible acquisition may activate.
@@ -1033,7 +1031,7 @@ impl H2CellState {
                 Some(generation) => assert_eq!(
                     vec![generation],
                     accepting_records,
-                    "HTTP/2 accepting identity did not match generation residence"
+                    "HTTP/2 accepting identity did not match generation state"
                 ),
                 None => assert!(
                     accepting_records.is_empty(),
@@ -1057,7 +1055,7 @@ impl H2CellState {
                 assert_eq!(
                     Some(peer.route.generation()),
                     peer.activation_gate.generation(),
-                    "peer route gate did not name the advertised generation"
+                    "peer route gate did not name the routed generation"
                 );
             }
 
@@ -1076,9 +1074,17 @@ impl H2CellState {
         }
     }
 
-    /// Checks transferred waiter identities against the cell's acquisition state.
+    /// Checks flight and generation waiters against the cell's acquisition state.
     #[cfg(any(debug_assertions, test))]
     pub(super) fn assert_pending_waiters(&self, waiters: &AcquisitionQueue) {
+        if let Some(flight) = &self.flight {
+            for waiter in &flight.participants {
+                assert!(
+                    waiters.is_launching_h2_waiter(*waiter),
+                    "HTTP/2 flight retained a waiter that was no longer launchable"
+                );
+            }
+        }
         for record in self.generations.values() {
             for waiter in &record.pending_waiters {
                 assert!(
@@ -1117,6 +1123,7 @@ impl OriginCell {
     pub(in crate::client::pool) fn activate_h2(
         cell: &Arc<Self>,
         generation: H2GenerationId,
+        request_partition: PartitionId,
     ) -> Option<H2Activation> {
         let (parts, revision) = {
             let mut state = cell.state.lock();
@@ -1126,7 +1133,13 @@ impl OriginCell {
             (parts, revision)
         };
         Self::submit_h2_supply_update(cell, revision);
-        Some(H2Activation::new(cell.clone(), generation, parts, None))
+        Some(H2Activation::new(
+            cell.clone(),
+            generation,
+            parts,
+            request_partition,
+            None,
+        ))
     }
 
     /// Converts a prospective activation to an accepted request claim.
@@ -1207,6 +1220,7 @@ impl OriginCell {
                     cell.clone(),
                     generation,
                     parts,
+                    cell.id.partition(),
                     gated.then(|| H2ActivationTurnGuard::local(cell, generation, waiter)),
                 ))
             },
@@ -1501,7 +1515,13 @@ impl OriginCell {
         };
         if let Some((generation, parts, revision)) = local {
             Self::submit_h2_supply_update(cell, revision);
-            return Some(H2Activation::new(cell.clone(), generation, parts, None));
+            return Some(H2Activation::new(
+                cell.clone(),
+                generation,
+                parts,
+                cell.id.partition(),
+                None,
+            ));
         }
 
         let route = {
@@ -1795,7 +1815,7 @@ mod tests {
         id: u64,
     ) -> (
         Arc<ConnectionState>,
-        super::super::super::connection::RootIoGuard,
+        super::super::super::connection::PhysicalConnectionGuard,
     ) {
         ConnectionState::unbounded(ConnectionInfo::for_test(
             ConnectionId::new(id),
@@ -1822,7 +1842,7 @@ mod tests {
     ) -> (
         H2GenerationId,
         Arc<ConnectionState>,
-        super::super::super::connection::RootIoGuard,
+        super::super::super::connection::PhysicalConnectionGuard,
     ) {
         let waiter = begin_waiter(cell);
         let H2FlightDecision::RunFlight(flight) = cell.converge_h2_flight(waiter) else {
@@ -1871,6 +1891,25 @@ mod tests {
         records.cancel_flight_participant(second);
         assert_eq!(Some(vec![first]), records.fail_flight(flight));
         assert!(records.flight.is_none());
+    }
+
+    #[test]
+    #[should_panic(expected = "HTTP/2 flight retained a waiter that was no longer launchable")]
+    fn flight_participant_must_remain_launchable() {
+        let cell = cell();
+        let waiter = begin_waiter(&cell);
+        assert!(matches!(
+            cell.converge_h2_flight(waiter),
+            H2FlightDecision::RunFlight(_)
+        ));
+
+        let mut state = cell.state.lock();
+        let cancellation = state
+            .acquisitions
+            .cancel_waiter(waiter, &cell.eligibility_group)
+            .expect("launching waiter did not cancel");
+        drop(cancellation);
+        state.h2.assert_pending_waiters(&state.acquisitions);
     }
 
     #[test]
@@ -2564,7 +2603,7 @@ mod tests {
 
         let (second, second_connection, _second_physical) = open_test_generation(&cell, 2);
         assert_ne!(first, second);
-        assert!(OriginCell::activate_h2(&cell, first).is_none());
+        assert!(OriginCell::activate_h2(&cell, first, cell.id.partition()).is_none());
         assert!(!stale.close(CloseReason::Poisoned));
         assert_eq!(None, second_connection.probe().close_reason);
         assert_eq!(Some(second), cell.accepting_h2_generation());
@@ -2800,8 +2839,12 @@ mod tests {
             .expect("bounded HTTP/2 connection did not open");
         let generation =
             OriginCell::install_h2_for_test(&connection_cell, connection.clone(), 1, None);
-        let activation = OriginCell::activate_h2(&connection_cell, generation)
-            .expect("accepting HTTP/2 generation did not activate");
+        let activation = OriginCell::activate_h2(
+            &connection_cell,
+            generation,
+            requesting_cell.id().partition(),
+        )
+        .expect("accepting HTTP/2 generation did not activate");
 
         let waiter = OriginCell::register_waiter(&requesting_cell, ProtocolRequirement::H1Required);
         assert!(
@@ -2874,8 +2917,13 @@ mod loom_tests {
             let cell = cell();
             let (generation, connection) = open_test_generation(&cell);
             let activating_cell = cell.clone();
-            let activation =
-                loom::thread::spawn(move || OriginCell::activate_h2(&activating_cell, generation));
+            let activation = loom::thread::spawn(move || {
+                OriginCell::activate_h2(
+                    &activating_cell,
+                    generation,
+                    activating_cell.id().partition(),
+                )
+            });
             let closing_cell = cell.clone();
             let close = loom::thread::spawn(move || {
                 OriginCell::close_h2(&closing_cell, generation, CloseReason::Poisoned)
@@ -2893,8 +2941,8 @@ mod loom_tests {
         loom::model(|| {
             let cell = cell();
             let (generation, connection) = open_test_generation(&cell);
-            let mut activation =
-                OriginCell::activate_h2(&cell, generation).expect("generation did not activate");
+            let mut activation = OriginCell::activate_h2(&cell, generation, cell.id().partition())
+                .expect("generation did not activate");
             let H2DispatchParts {
                 sender: _sender,
                 upload,
@@ -2929,8 +2977,8 @@ mod loom_tests {
                 PartitionId::from_index(1),
             ));
             let generation = OriginCell::install_h2_for_test(&cell, connection.clone(), 1, None);
-            let mut activation =
-                OriginCell::activate_h2(&cell, generation).expect("generation did not activate");
+            let mut activation = OriginCell::activate_h2(&cell, generation, cell.id().partition())
+                .expect("generation did not activate");
             let H2DispatchParts {
                 sender: _sender,
                 upload,
