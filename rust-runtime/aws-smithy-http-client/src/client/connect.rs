@@ -5,14 +5,17 @@
 use crate::client::connect;
 use crate::proxy;
 use aws_smithy_runtime_api::box_error::BoxError;
-use http_1x::Uri;
+use http_1x::{Extensions, HeaderMap, HeaderValue, Uri};
 use hyper::rt::{Read, ReadBufCursor, Write};
 use hyper_util::client::legacy::connect::{Connected, Connection};
+use hyper_util::client::proxy::matcher::Matcher;
 use pin_project_lite::pin_project;
+use std::fmt;
 use std::future::Future;
 use std::io;
 use std::io::IoSlice;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 
 pub(crate) trait AsyncConn:
@@ -27,17 +30,96 @@ pub(crate) type BoxConn = Box<dyn AsyncConn>;
 // Future for connecting
 pub(crate) type Connecting = Pin<Box<dyn Future<Output = Result<Conn, BoxError>> + Send>>;
 
+/// Authorization selected for cleartext HTTP requests sent through a proxy.
+#[derive(Clone)]
+pub(crate) struct ProxyAuthorization(HeaderValue);
+
+impl fmt::Debug for ProxyAuthorization {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("ProxyAuthorization(** redacted **)")
+    }
+}
+
+impl ProxyAuthorization {
+    pub(crate) fn new(value: HeaderValue) -> Self {
+        Self(value)
+    }
+
+    /// Applies the selected authorization unless the caller supplied one.
+    pub(crate) fn apply(&self, headers: &mut HeaderMap) {
+        headers
+            .entry(http_1x::header::PROXY_AUTHORIZATION)
+            .or_insert_with(|| self.0.clone());
+    }
+}
+
+/// How an established transport reaches its origin.
+#[derive(Clone, Debug)]
+pub(crate) enum ConnectPath {
+    /// The transport reaches the origin without a proxy.
+    Direct,
+    /// HTTP/1 requests are sent to a forward proxy in absolute form.
+    ForwardProxy {
+        authorization: Option<ProxyAuthorization>,
+    },
+    /// The transport reaches the origin through an established CONNECT tunnel.
+    #[cfg(any(feature = "__rustls", feature = "s2n-tls"))]
+    ProxyTunnel,
+}
+
+impl ConnectPath {
+    pub(crate) fn forward_proxy(authorization: Option<HeaderValue>) -> Self {
+        Self::ForwardProxy {
+            authorization: authorization.map(ProxyAuthorization::new),
+        }
+    }
+
+    /// Recovers the full path when available and preserves custom connector behavior.
+    pub(crate) fn from_connected(connected: &Connected, extras: &Extensions) -> Self {
+        extras.get::<Self>().cloned().unwrap_or_else(|| {
+            if connected.is_proxied() {
+                Self::forward_proxy(None)
+            } else {
+                Self::Direct
+            }
+        })
+    }
+
+    /// Returns whether a proxy participates in the established transport.
+    pub(crate) fn is_proxied(&self) -> bool {
+        !matches!(self, Self::Direct)
+    }
+
+    /// Returns whether HTTP/1 requests require an absolute-form target.
+    pub(crate) fn uses_absolute_form(&self) -> bool {
+        matches!(self, Self::ForwardProxy { .. })
+    }
+
+    /// Applies forwarding credentials to an HTTP/1 request.
+    pub(crate) fn apply_proxy_authorization(&self, headers: &mut HeaderMap) {
+        if let Self::ForwardProxy {
+            authorization: Some(authorization),
+        } = self
+        {
+            authorization.apply(headers);
+        }
+    }
+}
+
 pin_project! {
     pub(crate) struct Conn {
         #[pin]
         pub(super)inner: BoxConn,
-        pub(super) is_proxy: bool,
+        pub(super) connect_path: ConnectPath,
     }
 }
 
 impl Connection for Conn {
     fn connected(&self) -> Connected {
-        self.inner.connected().proxy(self.is_proxy)
+        self.inner
+            .connected()
+            .proxy(self.connect_path.uses_absolute_form())
+            .extra(self.connect_path.clone())
     }
 }
 
@@ -93,14 +175,19 @@ impl Write for Conn {
 #[derive(Debug, Clone)]
 pub(crate) struct HttpProxyConnector<C> {
     inner: C,
-    proxy_config: proxy::ProxyConfig,
+    proxy_matcher: Option<Arc<Matcher>>,
 }
 
 impl<C> HttpProxyConnector<C> {
     pub(crate) fn new(inner: C, proxy_config: proxy::ProxyConfig) -> Self {
+        let proxy_matcher = if proxy_config.is_disabled() {
+            None
+        } else {
+            Some(Arc::new(proxy_config.into_hyper_util_matcher()))
+        };
         Self {
             inner,
-            proxy_config,
+            proxy_matcher,
         }
     }
 }
@@ -130,23 +217,21 @@ where
     }
 
     fn call(&mut self, dst: Uri) -> Self::Future {
-        // Check if this request should be proxied
-        let proxy_intercept = if !self.proxy_config.is_disabled() {
-            let matcher = self.proxy_config.clone().into_hyper_util_matcher();
-            matcher.intercept(&dst)
-        } else {
-            None
-        };
+        let proxy_intercept = self
+            .proxy_matcher
+            .as_ref()
+            .and_then(|matcher| matcher.intercept(&dst));
 
         if let Some(intercept) = proxy_intercept {
             // HTTP through proxy: Connect to proxy server
             let proxy_uri = intercept.uri().clone();
+            let connect_path = ConnectPath::forward_proxy(intercept.basic_auth().cloned());
             let fut = self.inner.call(proxy_uri);
             Box::pin(async move {
                 let conn = fut.await.map_err(Into::into)?;
                 Ok(connect::Conn {
                     inner: Box::new(conn),
-                    is_proxy: true,
+                    connect_path,
                 })
             })
         } else {
@@ -156,7 +241,7 @@ where
                 let conn = fut.await.map_err(Into::into)?;
                 Ok(connect::Conn {
                     inner: Box::new(conn),
-                    is_proxy: false,
+                    connect_path: ConnectPath::Direct,
                 })
             })
         }

@@ -7,8 +7,14 @@
 
 use aws_smithy_async::rt::sleep::{SharedAsyncSleep, TokioSleep};
 use aws_smithy_async::time::SystemTimeSource;
+use aws_smithy_http_client::pool::{Client as PoolClient, ConnectionPool};
+use aws_smithy_http_client::proxy::ProxyConfig;
+#[cfg(any(feature = "__rustls", feature = "s2n-tls"))]
+use aws_smithy_http_client::tls;
+use aws_smithy_http_client::{Builder, Connector};
 use aws_smithy_runtime_api::client::http::{
-    HttpClient, HttpConnector, HttpConnectorSettings, SharedHttpClient, SharedHttpConnector,
+    http_client_fn, HttpClient, HttpConnector, HttpConnectorSettings, SharedHttpClient,
+    SharedHttpConnector,
 };
 use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
 use aws_smithy_runtime_api::client::result::ConnectorError;
@@ -21,9 +27,11 @@ use std::time::Duration;
 /// Default timeout for test waits and deadline assertions.
 pub(crate) const WAIT: Duration = Duration::from_secs(5);
 
-#[derive(Clone, Copy, Debug, Default)]
+/// Settings applied uniformly by backend-neutral connection contracts.
+#[derive(Clone, Debug, Default)]
 pub(crate) struct BackendConfig {
     pub(crate) pool_idle_timeout: Option<Duration>,
+    pub(crate) proxy_config: Option<ProxyConfig>,
 }
 
 /// Hyper 1.x through `hyper_util::client::legacy::Client`.
@@ -31,6 +39,126 @@ pub(crate) struct BackendConfig {
 /// "Legacy" is Hyper Util's module name and does not refer to smithy-rs's `hyper-014` feature.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct HyperUtilLegacyPool;
+
+/// The partition-aware Smithy connection pool.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct PartitionedConnectionPool;
+
+/// Builds a cleartext client for one connection-pool implementation.
+#[allow(dead_code)]
+pub(crate) trait HttpClientBackend {
+    fn build(&self, config: BackendConfig) -> SharedHttpClient;
+}
+
+impl HttpClientBackend for HyperUtilLegacyPool {
+    fn build(&self, config: BackendConfig) -> SharedHttpClient {
+        let Some(proxy_config) = config.proxy_config else {
+            let mut builder = Builder::new();
+            if let Some(pool_idle_timeout) = config.pool_idle_timeout {
+                builder = builder.pool_idle_timeout(pool_idle_timeout);
+            }
+            return builder.build_http();
+        };
+
+        let pool_idle_timeout = config.pool_idle_timeout;
+        http_client_fn(move |settings, _| {
+            let mut builder = Connector::builder()
+                .connector_settings(settings.clone())
+                .proxy_config(proxy_config.clone());
+            if let Some(pool_idle_timeout) = pool_idle_timeout {
+                builder = builder.pool_idle_timeout(Some(pool_idle_timeout));
+            }
+            SharedHttpConnector::new(builder.build_http())
+        })
+    }
+}
+
+impl HttpClientBackend for PartitionedConnectionPool {
+    fn build(&self, config: BackendConfig) -> SharedHttpClient {
+        let mut builder = ConnectionPool::builder();
+        if let Some(pool_idle_timeout) = config.pool_idle_timeout {
+            builder = builder.idle_timeout(pool_idle_timeout);
+        }
+        if let Some(proxy_config) = config.proxy_config {
+            builder = builder.proxy_config(proxy_config);
+        }
+        let pool = builder.build_http().expect("valid connection-pool config");
+        SharedHttpClient::new(PoolClient::new(&pool).expect("anonymous partition exists"))
+    }
+}
+
+#[cfg(any(feature = "__rustls", feature = "s2n-tls"))]
+/// Builds a TLS client for one connection-pool implementation.
+#[allow(dead_code)]
+pub(crate) trait HttpsClientBackend {
+    fn build_https(
+        &self,
+        config: BackendConfig,
+        provider: tls::Provider,
+        tls_context: tls::TlsContext,
+    ) -> SharedHttpClient;
+}
+
+#[cfg(any(feature = "__rustls", feature = "s2n-tls"))]
+impl HttpsClientBackend for HyperUtilLegacyPool {
+    fn build_https(
+        &self,
+        config: BackendConfig,
+        provider: tls::Provider,
+        tls_context: tls::TlsContext,
+    ) -> SharedHttpClient {
+        let Some(proxy_config) = config.proxy_config else {
+            let mut builder = Builder::new();
+            if let Some(pool_idle_timeout) = config.pool_idle_timeout {
+                builder = builder.pool_idle_timeout(pool_idle_timeout);
+            }
+            return builder
+                .tls_provider(provider)
+                .tls_context(tls_context)
+                .build_https();
+        };
+
+        let pool_idle_timeout = config.pool_idle_timeout;
+        http_client_fn(move |settings, _| {
+            let mut builder = Connector::builder()
+                .connector_settings(settings.clone())
+                .proxy_config(proxy_config.clone());
+            if let Some(pool_idle_timeout) = pool_idle_timeout {
+                builder = builder.pool_idle_timeout(Some(pool_idle_timeout));
+            }
+            SharedHttpConnector::new(
+                builder
+                    .tls_provider(provider.clone())
+                    .tls_context(tls_context.clone())
+                    .build(),
+            )
+        })
+    }
+}
+
+#[cfg(any(feature = "__rustls", feature = "s2n-tls"))]
+impl HttpsClientBackend for PartitionedConnectionPool {
+    fn build_https(
+        &self,
+        config: BackendConfig,
+        provider: tls::Provider,
+        tls_context: tls::TlsContext,
+    ) -> SharedHttpClient {
+        let mut builder = ConnectionPool::builder();
+        if let Some(pool_idle_timeout) = config.pool_idle_timeout {
+            builder = builder.idle_timeout(pool_idle_timeout);
+        }
+        if let Some(proxy_config) = config.proxy_config {
+            builder = builder.proxy_config(proxy_config);
+        }
+        let pool = builder
+            .tls_provider(provider)
+            .tls_context(tls_context)
+            .build_https()
+            .expect("valid connection-pool config");
+        SharedHttpClient::new(PoolClient::new(&pool).expect("anonymous partition exists"))
+    }
+}
 
 pub(crate) fn runtime_components() -> RuntimeComponents {
     RuntimeComponentsBuilder::for_tests()

@@ -13,6 +13,7 @@ pub mod tls;
 
 pub(crate) mod connect;
 
+use self::connect::ConnectPath;
 use crate::cfg::cfg_tls;
 use crate::tls::TlsContext;
 use aws_smithy_async::future::timeout::TimedOutError;
@@ -516,8 +517,9 @@ fn extract_smithy_connection(capture_conn: &CaptureConnection) -> Option<Connect
         let mut extensions = Extensions::new();
         conn.get_extras(&mut extensions);
         let http_info = extensions.get::<HttpInfo>();
+        let connect_path = ConnectPath::from_connected(conn, &extensions);
         let mut builder = ConnectionMetadata::builder()
-            .proxied(conn.is_proxied())
+            .proxied(connect_path.is_proxied())
             .poison_fn(move || match capture_conn.connection_metadata().as_ref() {
                 Some(conn) => conn.poison(),
                 None => tracing::trace!("no connection existed to poison"),

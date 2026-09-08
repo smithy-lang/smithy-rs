@@ -44,6 +44,44 @@ fn connector(client: &SharedHttpClient) -> SharedHttpConnector {
 }
 
 #[tokio::test]
+async fn custom_dns_resolver_is_used_for_pool_connections() {
+    const HOST: &str = "pool-dns.test";
+
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            Http1Script::responses([Http1Response::ok().body("custom dns")]),
+        )
+        .dns(HOST, [IP1])
+        .build()
+        .await
+        .expect("harness should start");
+    let pool = ConnectionPool::builder()
+        .dns_resolver(harness.dns_resolver())
+        .build_http()
+        .expect("valid pool");
+    let client = SharedHttpClient::new(Client::new(&pool).expect("anonymous partition"));
+    let connector = connector(&client);
+    let url = format!("http://{HOST}:{}/custom-dns", harness.port());
+
+    let (status, body) = test_client::get_and_collect(&connector, &url).await;
+    assert_eq!((status, body.as_slice()), (200, b"custom dns".as_slice()));
+    assert_eq!(1, harness.dns_lookup_count());
+    assert_eq!(
+        vec![(
+            "/custom-dns".to_string(),
+            Some(format!("{HOST}:{}", harness.port()))
+        )],
+        harness.http_requests()
+    );
+
+    drop(connector);
+    drop(client);
+    drop(pool);
+    harness.shutdown().await.expect("clean harness shutdown");
+}
+
+#[tokio::test]
 async fn bounded_waiter_proceeds_after_the_active_h1_returns() {
     let body_gate = ManualGate::new();
     let harness = ConnectionTestHarness::builder()

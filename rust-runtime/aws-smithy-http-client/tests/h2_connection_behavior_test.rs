@@ -18,7 +18,6 @@ use aws_smithy_http_client::pool::{
 };
 use aws_smithy_http_client::test_util::wire::connection::{ConnectionCloseReason, ManualGate};
 use aws_smithy_http_client::tls;
-use aws_smithy_http_client::Builder;
 use aws_smithy_runtime_api::client::connection::{
     CaptureSmithyConnection, ConnectionMetadata as SmithyConnectionMetadata,
 };
@@ -26,7 +25,9 @@ use aws_smithy_runtime_api::client::http::{SharedHttpClient, SharedHttpConnector
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use bytes::Bytes;
 use common::client as test_client;
-use common::client::{BackendConfig, HyperUtilLegacyPool};
+use common::client::{
+    BackendConfig, HttpsClientBackend, HyperUtilLegacyPool, PartitionedConnectionPool,
+};
 use common::h2::{
     H2BodyPlan, H2ConnectionId, H2ConnectionPlan, H2ConnectionScript, H2Event, H2Response,
     H2StreamScript, H2TestServer,
@@ -35,56 +36,6 @@ use common::tls as test_tls;
 use h2::Reason;
 use http_body_util::BodyExt;
 use std::error::Error;
-
-trait HttpsClientBackend {
-    fn build_https(
-        &self,
-        config: BackendConfig,
-        provider: tls::Provider,
-        tls_context: tls::TlsContext,
-    ) -> SharedHttpClient;
-}
-
-impl HttpsClientBackend for HyperUtilLegacyPool {
-    fn build_https(
-        &self,
-        config: BackendConfig,
-        provider: tls::Provider,
-        tls_context: tls::TlsContext,
-    ) -> SharedHttpClient {
-        let mut builder = Builder::new();
-        if let Some(pool_idle_timeout) = config.pool_idle_timeout {
-            builder = builder.pool_idle_timeout(pool_idle_timeout);
-        }
-        builder
-            .tls_provider(provider)
-            .tls_context(tls_context)
-            .build_https()
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-struct PartitionedConnectionPool;
-
-impl HttpsClientBackend for PartitionedConnectionPool {
-    fn build_https(
-        &self,
-        config: BackendConfig,
-        provider: tls::Provider,
-        tls_context: tls::TlsContext,
-    ) -> SharedHttpClient {
-        let mut builder = ConnectionPool::builder().tls_provider(provider);
-        if let Some(pool_idle_timeout) = config.pool_idle_timeout {
-            builder = builder.idle_timeout(pool_idle_timeout);
-        }
-        let pool = builder
-            .tls_context(tls_context)
-            .build_https()
-            .expect("valid connection-pool config");
-        let client = PoolClient::new(&pool).expect("anonymous partition exists");
-        SharedHttpClient::new(client)
-    }
-}
 
 fn rustls_aws_lc() -> tls::Provider {
     tls::Provider::Rustls(tls::rustls_provider::CryptoMode::AwsLc)
@@ -798,6 +749,7 @@ mod idle_timeout {
         backend.build_https(
             BackendConfig {
                 pool_idle_timeout: Some(IDLE_TIMEOUT),
+                ..Default::default()
             },
             rustls_aws_lc(),
             test_tls::server_tls_context(),
