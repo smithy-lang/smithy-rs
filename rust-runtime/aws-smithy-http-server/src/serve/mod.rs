@@ -5,21 +5,18 @@
 
 //! Serve utilities for running HTTP servers.
 //!
-//! This module provides convenient [`bind`] and [`serve`] functions for easily
-//! serving Tower services with Hyper.
+//! This module provides a convenient [`serve`] function similar to `axum::serve`
+//! for easily serving Tower services with Hyper.
 //!
 //! ## When to Use This Module
 //!
-//! - Use [`bind`] when you want this crate to bind a TCP socket and serve it
-//! - Use [`serve`] when you already have a listener or need custom listener composition
+//! - Use [`serve`] when you need a simple, batteries-included HTTP server
 //! - For more control over the Hyper connection builder, use [`.configure_hyper()`](Serve::configure_hyper)
 //! - For Lambda environments, see the `aws-lambda` feature and `routing::lambda_handler`
 //!
 //! ## How It Works
 //!
-//! [`bind`] creates a TCP listener with recommended socket defaults, then
-//! delegates to [`serve`]. The `serve` function creates a connection acceptance
-//! loop that:
+//! The `serve` function creates a connection acceptance loop that:
 //!
 //! 1. **Accepts connections** via the [`Listener`] trait (e.g., [`TcpListener`](tokio::net::TcpListener))
 //! 2. **Creates per-connection services** by calling the `make_service` with [`IncomingStream`]
@@ -45,17 +42,15 @@
 //! You can customize this behavior with [`.configure_hyper()`](Serve::configure_hyper):
 //!
 //! ```rust,ignore
-//! use aws_smithy_http_server::serve::bind;
-//!
 //! // Force HTTP/2 only (skips upgrade negotiation)
-//! bind(("0.0.0.0", 3000), app.into_make_service())
+//! serve(listener, app.into_make_service())
 //!     .configure_hyper(|builder| {
 //!         builder.http2_only()
 //!     })
 //!     .await?;
 //!
 //! // Force HTTP/1 only with keep-alive
-//! bind(("0.0.0.0", 3000), app.into_make_service())
+//! serve(listener, app.into_make_service())
 //!     .configure_hyper(|builder| {
 //!         builder.http1().keep_alive(true)
 //!     })
@@ -72,9 +67,7 @@
 //! [`.with_graceful_shutdown(signal)`](Serve::with_graceful_shutdown) to enable it:
 //!
 //! ```ignore
-//! use aws_smithy_http_server::serve::bind;
-//!
-//! bind(("0.0.0.0", 3000), service)
+//! serve(listener, service)
 //!     .with_graceful_shutdown(async {
 //!         tokio::signal::ctrl_c().await.expect("failed to listen for Ctrl+C");
 //!     })
@@ -89,30 +82,17 @@
 //!
 //! ### Limiting Concurrent Connections
 //!
-//! `bind` and `serve` limit accepted connections to 8192 by default to prevent resource
-//! exhaustion. Use [`Serve::max_connections`] to configure this limit:
+//! Use [`ListenerExt::limit_connections`] to prevent resource exhaustion:
 //!
 //! ```rust,ignore
-//! use aws_smithy_http_server::serve::bind;
+//! use aws_smithy_http_server::serve::ListenerExt;
 //!
-//! bind(("0.0.0.0", 3000), app.into_make_service())
-//!     .max_connections(1000)
-//!     .await?;
+//! let listener = TcpListener::bind("0.0.0.0:3000")
+//!     .await?
+//!     .limit_connections(1000);  // Max 1000 concurrent connections
+//!
+//! serve(listener, app.into_make_service()).await?;
 //! ```
-//!
-//! Use [`Serve::disable_connection_limit`] to restore the previous unbounded
-//! behavior:
-//!
-//! ```rust,ignore
-//! use aws_smithy_http_server::serve::bind;
-//!
-//! bind(("0.0.0.0", 3000), app.into_make_service())
-//!     .disable_connection_limit()
-//!     .await?;
-//! ```
-//!
-//! [`ListenerExt::limit_connections`] is still available for custom accept loops
-//! and listener-level composition.
 //!
 //! ### Accessing Connection Information
 //!
@@ -122,7 +102,6 @@
 //! ```rust,ignore
 //! use std::net::SocketAddr;
 //! use aws_smithy_http_server::request::connect_info::ConnectInfo;
-//! use aws_smithy_http_server::serve::bind;
 //!
 //! // In your handler:
 //! async fn my_handler(ConnectInfo(addr): ConnectInfo<SocketAddr>) -> String {
@@ -130,16 +109,15 @@
 //! }
 //!
 //! // When serving:
-//! bind(
-//!     ("0.0.0.0", 3000),
+//! serve(
+//!     listener,
 //!     app.into_make_service_with_connect_info::<SocketAddr>()
 //! ).await?;
 //! ```
 //!
 //! ### Custom TCP Settings
 //!
-//! Use [`ListenerExt::tap_io`] with [`serve`] when you need to configure TCP
-//! options on accepted streams:
+//! Use [`ListenerExt::tap_io`] to configure TCP options:
 //!
 //! ```rust,ignore
 //! use aws_smithy_http_server::serve::ListenerExt;
@@ -185,9 +163,8 @@
 //!
 //! ### Connection Limiting vs Request Limiting
 //!
-//! **Connection limiting** (`.max_connections()` or `.limit_connections()`):
-//! Limits the number of TCP connections. Use this to prevent socket/file
-//! descriptor exhaustion.
+//! **Connection limiting** (`.limit_connections()`): Limits the number of TCP connections.
+//! Use this to prevent socket/file descriptor exhaustion.
 //!
 //! **Request limiting** (`ConcurrencyLimitLayer`): Limits in-flight requests.
 //! Use this to prevent work queue exhaustion. With HTTP/2, one connection can have multiple
@@ -231,26 +208,20 @@
 //!
 //! ### Connection Limit Not Applied
 //!
-//! Use [`Serve::max_connections`] to configure the accepted-connection limit on
-//! the server future:
+//! Remember that `.limit_connections()` applies to the listener **before** passing
+//! it to `serve()`:
 //!
 //! ```rust,ignore
-//! use aws_smithy_http_server::serve::bind;
-//!
-//! // Configure the built-in accepted-connection limit
-//! bind(("0.0.0.0", 3000), app.into_make_service())
-//!     .max_connections(100)
-//!     .await?;
-//! ```
-//!
-//! [`ListenerExt::limit_connections`] is also available, but it applies to the
-//! listener **before** passing it to `serve()`:
-//!
-//! ```rust,ignore
+//! // ✓ Correct
 //! let listener = TcpListener::bind("0.0.0.0:3000")
 //!     .await?
 //!     .limit_connections(100);
 //! serve(listener, app.into_make_service()).await?;
+//!
+//! // ✗ Wrong - limit_connections must be called on listener
+//! serve(TcpListener::bind("0.0.0.0:3000").await?, app.into_make_service())
+//!     .limit_connections(100)  // This method doesn't exist on Serve
+//!     .await?;
 //! ```
 //!
 //! ## Advanced: Custom Connection Handling
@@ -320,28 +291,11 @@ use hyper::body::Incoming;
 use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
 use hyper_util::server::conn::auto::Builder;
 use hyper_util::service::TowerToHyperService;
-use tokio::sync::OwnedSemaphorePermit;
 use tower::{Service, ServiceExt as _};
 
 mod listener;
-mod tcp;
 
-use self::listener::ConnectionLimit;
 pub use self::listener::{ConnLimiter, ConnLimiterIo, Listener, ListenerExt, TapIo};
-pub use self::tcp::{bind, Bind, BindWithGracefulShutdown, DEFAULT_SOCKET_LISTEN_BACKLOG};
-
-const DEFAULT_MAX_CONNECTIONS: usize = 8192;
-
-struct AcceptedConnection<L: Listener> {
-    io: L::Io,
-    remote_addr: L::Addr,
-    permit: Option<OwnedSemaphorePermit>,
-}
-
-struct ConnectionConfig<'a> {
-    hyper_builder: &'a Arc<Builder<TokioExecutor>>,
-    graceful: Option<&'a hyper_util::server::graceful::GracefulShutdown>,
-}
 
 // ============================================================================
 // Type Bounds Documentation
@@ -494,13 +448,8 @@ where
 
 /// Serve the service with the supplied listener.
 ///
-/// By default, this limits accepted connections to 8192. The default connection
-/// builder also applies a 30-second HTTP/1 header-read timeout and a 20-second
-/// HTTP/2 keep-alive ping interval.
-///
-/// If you want this crate to bind a TCP socket for you, prefer [`bind`].
-/// Use `serve` when you already have a listener or need to compose listener
-/// behavior before serving.
+/// The default connection builder applies a 30-second HTTP/1 header-read timeout
+/// and a 20-second HTTP/2 keep-alive ping interval.
 ///
 /// This implementation provides zero-cost abstraction for shutdown coordination.
 /// When graceful shutdown is not used, there is no runtime overhead - no watch channels
@@ -527,15 +476,7 @@ where
 ///
 /// # Examples
 ///
-/// Recommended TCP serving path:
-///
-/// ```rust,ignore
-/// aws_smithy_http_server::serve::bind(("0.0.0.0", 3000), app.into_make_service())
-///     .await
-///     .unwrap();
-/// ```
-///
-/// Serving a Smithy service with an existing TCP listener:
+/// Serving a Smithy service with a TCP listener:
 ///
 /// ```rust,ignore
 /// use tokio::net::TcpListener;
@@ -544,18 +485,10 @@ where
 /// aws_smithy_http_server::serve(listener, app.into_make_service()).await.unwrap();
 /// ```
 ///
-/// Serving with a custom accepted-connection limit:
-///
-/// ```rust,ignore
-/// aws_smithy_http_server::serve::bind(("0.0.0.0", 3000), app.into_make_service())
-///     .max_connections(100)
-///     .await
-///     .unwrap();
-/// ```
-///
 /// Serving with middleware applied:
 ///
 /// ```rust,ignore
+/// use tokio::net::TcpListener;
 /// use tower::Layer;
 /// use tower_http::timeout::TimeoutLayer;
 /// use http::StatusCode;
@@ -565,17 +498,18 @@ where
 /// let app = /* ... build service ... */;
 /// let app = TimeoutLayer::new(Duration::from_secs(30)).layer(app);
 ///
-/// aws_smithy_http_server::serve::bind(("0.0.0.0", 3000), IntoMakeService::new(app))
-///     .await
-///     .unwrap();
+/// let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
+/// aws_smithy_http_server::serve(listener, IntoMakeService::new(app)).await.unwrap();
 /// ```
 ///
 /// For graceful shutdown:
 ///
 /// ```rust,ignore
+/// use tokio::net::TcpListener;
 /// use tokio::signal;
 ///
-/// aws_smithy_http_server::serve::bind(("0.0.0.0", 3000), app.into_make_service())
+/// let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
+/// aws_smithy_http_server::serve(listener, app.into_make_service())
 ///     .with_graceful_shutdown(async {
 ///         signal::ctrl_c().await.expect("failed to listen for Ctrl+C");
 ///     })
@@ -586,10 +520,12 @@ where
 /// With connection info:
 ///
 /// ```rust,ignore
+/// use tokio::net::TcpListener;
 /// use std::net::SocketAddr;
 ///
-/// aws_smithy_http_server::serve::bind(
-///     ("0.0.0.0", 3000),
+/// let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
+/// aws_smithy_http_server::serve(
+///     listener,
 ///     app.into_make_service_with_connect_info::<SocketAddr>()
 /// )
 /// .await
@@ -622,7 +558,6 @@ where
 ///
 /// Before awaiting, you can configure it:
 /// - [`configure_hyper`](Self::configure_hyper) - Configure Hyper's connection builder
-/// - [`max_connections`](Self::max_connections) - Configure the accepted-connection limit
 /// - [`with_graceful_shutdown`](Self::with_graceful_shutdown) - Enable graceful shutdown
 /// - [`local_addr`](Self::local_addr) - Get the bound address
 ///
@@ -632,7 +567,6 @@ pub struct Serve<L, M, S, B> {
     listener: L,
     make_service: M,
     hyper_builder: Option<Arc<Builder<TokioExecutor>>>,
-    max_connections: Option<usize>,
     _marker: PhantomData<(S, B)>,
 }
 
@@ -644,7 +578,6 @@ where
         f.debug_struct("Serve")
             .field("listener", &self.listener)
             .field("has_hyper_config", &self.hyper_builder.is_some())
-            .field("max_connections", &self.max_connections)
             .finish_non_exhaustive()
     }
 }
@@ -658,7 +591,6 @@ where
             listener,
             make_service,
             hyper_builder: None,
-            max_connections: Some(DEFAULT_MAX_CONNECTIONS),
             _marker: PhantomData,
         }
     }
@@ -706,40 +638,12 @@ where
         self
     }
 
-    /// Set the maximum number of concurrent accepted connections.
-    ///
-    /// The default limit is 8192 connections. Once the limit is reached, `serve`
-    /// stops accepting new connections until an existing connection closes.
-    /// Listener implementations will typically continue to queue incoming
-    /// connections, up to an OS and implementation-specific listener backlog
-    /// limit.
-    pub fn max_connections(mut self, max: usize) -> Self {
-        self.max_connections = Some(max);
-        self
-    }
-
-    /// Disable the default accepted-connection limit.
-    ///
-    /// This restores the previous unbounded `serve` behavior. Most applications
-    /// should keep a finite connection limit to protect against socket and task
-    /// exhaustion.
-    pub fn disable_connection_limit(mut self) -> Self {
-        self.max_connections = None;
-        self
-    }
-
     /// Enable graceful shutdown for the server.
     pub fn with_graceful_shutdown<F>(self, signal: F) -> ServeWithGracefulShutdown<L, M, S, F, B>
     where
         F: Future<Output = ()> + Send + 'static,
     {
-        ServeWithGracefulShutdown::new(
-            self.listener,
-            self.make_service,
-            signal,
-            self.hyper_builder,
-            self.max_connections,
-        )
+        ServeWithGracefulShutdown::new(self.listener, self.make_service, signal, self.hyper_builder)
     }
 
     /// Returns the local address this server is bound to.
@@ -752,23 +656,11 @@ where
 ///
 /// Accepts connections in a loop and handles them with the connection handler.
 macro_rules! accept_loop {
-    ($listener:expr, $make_service:expr, $hyper_builder:expr, $connection_limiter:expr) => {
+    ($listener:expr, $make_service:expr, $hyper_builder:expr) => {
         loop {
-            let connection_permit = acquire_connection_permit($connection_limiter.as_ref()).await;
             let (io, remote_addr) = $listener.accept().await;
-            handle_connection::<L, M, S, B>(
-                &mut $make_service,
-                AcceptedConnection {
-                    io,
-                    remote_addr,
-                    permit: connection_permit,
-                },
-                ConnectionConfig {
-                    hyper_builder: &$hyper_builder,
-                    graceful: None,
-                },
-            )
-            .await;
+            handle_connection::<L, M, S, B>(&mut $make_service, io, remote_addr, $hyper_builder.as_ref(), true, None)
+                .await;
         }
     };
 }
@@ -779,30 +671,18 @@ macro_rules! accept_loop {
 /// Uses `tokio::select!` to race between accepting new connections and receiving the
 /// shutdown signal.
 macro_rules! accept_loop_with_shutdown {
-    ($listener:expr, $make_service:expr, $hyper_builder:expr, $connection_limiter:expr, $signal:expr, $graceful:expr) => {
+    ($listener:expr, $make_service:expr, $hyper_builder:expr, $signal:expr, $graceful:expr) => {
         loop {
-            let connection_permit = tokio::select! {
-                permit = acquire_connection_permit($connection_limiter.as_ref()) => permit,
-                _ = $signal.as_mut() => {
-                    tracing::trace!("received graceful shutdown signal, not accepting new connections");
-                    break;
-                }
-            };
-
             tokio::select! {
                 result = $listener.accept() => {
                     let (io, remote_addr) = result;
                     handle_connection::<L, M, S, B>(
                         &mut $make_service,
-                        AcceptedConnection {
-                            io,
-                            remote_addr,
-                            permit: connection_permit,
-                        },
-                        ConnectionConfig {
-                            hyper_builder: &$hyper_builder,
-                            graceful: Some(&$graceful),
-                        },
+                        io,
+                        remote_addr,
+                        $hyper_builder.as_ref(),
+                        true,
+                        Some(&$graceful),
                     )
                     .await;
                 }
@@ -840,13 +720,10 @@ where
                 mut listener,
                 mut make_service,
                 hyper_builder,
-                max_connections,
                 _marker,
             } = self;
-            let hyper_builder = hyper_builder.unwrap_or_else(default_hyper_builder);
-            let connection_limiter = connection_limiter(max_connections);
 
-            accept_loop!(listener, make_service, hyper_builder, connection_limiter)
+            accept_loop!(listener, make_service, hyper_builder)
         })
     }
 }
@@ -871,7 +748,6 @@ pub struct ServeWithGracefulShutdown<L, M, S, F, B> {
     signal: F,
     hyper_builder: Option<Arc<Builder<TokioExecutor>>>,
     shutdown_timeout: Option<Duration>,
-    max_connections: Option<usize>,
     _marker: PhantomData<(S, B)>,
 }
 
@@ -884,19 +760,12 @@ where
             .field("listener", &self.listener)
             .field("has_hyper_config", &self.hyper_builder.is_some())
             .field("shutdown_timeout", &self.shutdown_timeout)
-            .field("max_connections", &self.max_connections)
             .finish_non_exhaustive()
     }
 }
 
 impl<L: Listener, M, S, F, B> ServeWithGracefulShutdown<L, M, S, F, B> {
-    fn new(
-        listener: L,
-        make_service: M,
-        signal: F,
-        hyper_builder: Option<Arc<Builder<TokioExecutor>>>,
-        max_connections: Option<usize>,
-    ) -> Self
+    fn new(listener: L, make_service: M, signal: F, hyper_builder: Option<Arc<Builder<TokioExecutor>>>) -> Self
     where
         F: Future<Output = ()> + Send + 'static,
     {
@@ -906,7 +775,6 @@ impl<L: Listener, M, S, F, B> ServeWithGracefulShutdown<L, M, S, F, B> {
             signal,
             hyper_builder,
             shutdown_timeout: None,
-            max_connections,
             _marker: PhantomData,
         }
     }
@@ -929,28 +797,6 @@ impl<L: Listener, M, S, F, B> ServeWithGracefulShutdown<L, M, S, F, B> {
     /// ```
     pub fn with_shutdown_timeout(mut self, timeout: Duration) -> Self {
         self.shutdown_timeout = Some(timeout);
-        self
-    }
-
-    /// Set the maximum number of concurrent accepted connections.
-    ///
-    /// The default limit is 8192 connections. Once the limit is reached, `serve`
-    /// stops accepting new connections until an existing connection closes.
-    /// Listener implementations will typically continue to queue incoming
-    /// connections, up to an OS and implementation-specific listener backlog
-    /// limit.
-    pub fn max_connections(mut self, max: usize) -> Self {
-        self.max_connections = Some(max);
-        self
-    }
-
-    /// Disable the default accepted-connection limit.
-    ///
-    /// This restores the previous unbounded `serve` behavior. Most applications
-    /// should keep a finite connection limit to protect against socket and task
-    /// exhaustion.
-    pub fn disable_connection_limit(mut self) -> Self {
-        self.max_connections = None;
         self
     }
 
@@ -989,24 +835,14 @@ where
                 signal,
                 hyper_builder,
                 shutdown_timeout,
-                max_connections,
                 _marker,
             } = self;
-            let hyper_builder = hyper_builder.unwrap_or_else(default_hyper_builder);
-            let connection_limiter = connection_limiter(max_connections);
 
             // Initialize graceful shutdown
             let graceful = hyper_util::server::graceful::GracefulShutdown::new();
             let mut signal = std::pin::pin!(signal);
 
-            accept_loop_with_shutdown!(
-                listener,
-                make_service,
-                hyper_builder,
-                connection_limiter,
-                signal,
-                graceful
-            );
+            accept_loop_with_shutdown!(listener, make_service, hyper_builder, signal, graceful);
 
             drop(listener);
 
@@ -1038,11 +874,15 @@ where
 
 /// Connection handling function.
 ///
-/// Handles connections with optional graceful shutdown.
+/// Handles connections by using runtime branching on `use_upgrades` and optional
+/// `graceful` shutdown.
 async fn handle_connection<L, M, S, B>(
     make_service: &mut M,
-    accepted: AcceptedConnection<L>,
-    config: ConnectionConfig<'_>,
+    conn_io: <L as Listener>::Io,
+    remote_addr: <L as Listener>::Addr,
+    hyper_builder: Option<&Arc<Builder<TokioExecutor>>>,
+    use_upgrades: bool,
+    graceful: Option<&hyper_util::server::graceful::GracefulShutdown>,
 ) where
     L: Listener,
     L::Addr: Debug,
@@ -1057,16 +897,10 @@ async fn handle_connection<L, M, S, B>(
     M: for<'a> Service<IncomingStream<'a, L>, Error = Infallible, Response = S> + Send + 'static,
     for<'a> <M as Service<IncomingStream<'a, L>>>::Future: Send,
 {
-    let watcher = config.graceful.map(|g| g.watcher());
-    let builder = Arc::clone(config.hyper_builder);
-    let AcceptedConnection {
-        io,
-        remote_addr,
-        permit,
-    } = accepted;
-    let tokio_io = TokioIo::new(io);
+    let watcher = graceful.map(|g| g.watcher());
+    let tokio_io = TokioIo::new(conn_io);
 
-    tracing::trace!(?remote_addr, "connection accepted");
+    tracing::trace!("connection {remote_addr:?} accepted");
 
     make_service
         .ready()
@@ -1083,62 +917,42 @@ async fn handle_connection<L, M, S, B>(
 
     let hyper_service = TowerToHyperService::new(tower_service);
 
-    tokio::spawn(async move {
-        let _connection_permit = permit;
+    // Clone the Arc (cheap - just increments refcount) or create a default builder.
+    // A TokioTimer is required to activate hyper's header_read_timeout (default 30 s).
+    // HTTP/2 keep_alive_interval (20 s) detects idle connections; timeout defaults to 20 s.
+    let builder = hyper_builder.map(Arc::clone).unwrap_or_else(|| {
+        let mut b = Builder::new(TokioExecutor::new());
+        b.http1()
+            .timer(TokioTimer::new())
+            .header_read_timeout(Duration::from_secs(30));
+        b.http2()
+            .timer(TokioTimer::new())
+            .keep_alive_interval(Some(Duration::from_secs(20)))
+            .keep_alive_timeout(Duration::from_secs(20));
+        Arc::new(b)
+    });
 
-        // Auto-detect mode uses with_upgrades for HTTP/1 upgrade support.
-        let conn = builder.serve_connection_with_upgrades(tokio_io, hyper_service);
-        let result = if let Some(watcher) = watcher {
-            watcher.watch(conn).await
+    tokio::spawn(async move {
+        let result = if use_upgrades {
+            // Auto-detect mode - use with_upgrades for HTTP/1 upgrade support
+            let conn = builder.serve_connection_with_upgrades(tokio_io, hyper_service);
+            if let Some(watcher) = watcher {
+                watcher.watch(conn).await
+            } else {
+                conn.await
+            }
         } else {
-            conn.await
+            // Protocol is already decided (http1_only or http2_only) - skip preface reading
+            let conn = builder.serve_connection(tokio_io, hyper_service);
+            if let Some(watcher) = watcher {
+                watcher.watch(conn).await
+            } else {
+                conn.await
+            }
         };
 
         if let Err(err) = result {
             tracing::trace!(error = ?err, "failed to serve connection");
         }
     });
-}
-
-fn default_hyper_builder() -> Arc<Builder<TokioExecutor>> {
-    let mut builder = Builder::new(TokioExecutor::new());
-    builder
-        .http1()
-        .timer(TokioTimer::new())
-        .header_read_timeout(Duration::from_secs(30));
-    builder
-        .http2()
-        .timer(TokioTimer::new())
-        .keep_alive_interval(Some(Duration::from_secs(20)))
-        .keep_alive_timeout(Duration::from_secs(20));
-    Arc::new(builder)
-}
-
-fn connection_limiter(max_connections: Option<usize>) -> Option<Arc<ConnectionLimit>> {
-    match max_connections {
-        Some(max_connections) => {
-            tracing::debug!(max_connections, "connection limit enabled");
-            Some(Arc::new(ConnectionLimit::new(max_connections)))
-        }
-        None => {
-            tracing::debug!("connection limit disabled");
-            None
-        }
-    }
-}
-
-async fn acquire_connection_permit(connection_limiter: Option<&Arc<ConnectionLimit>>) -> Option<OwnedSemaphorePermit> {
-    match connection_limiter {
-        Some(limit) => {
-            if limit.available_permits() == 0 {
-                tracing::warn!(
-                    max_connections = limit.max(),
-                    "connection limit reached, waiting before accepting a new connection"
-                );
-            }
-
-            Some(limit.acquire().await)
-        }
-        None => None,
-    }
 }
