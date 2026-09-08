@@ -108,6 +108,8 @@ data class ServerRustSettings(
  *   compatibility with clients that were previously reaching the server via the capitalized URI
  *   (which was the only route the server registered before the fix for
  *   https://github.com/smithy-lang/smithy-rs/issues/4731).
+ * [schemaSerde]: When true, every generated structure, union and enum exposes its schema through a `SCHEMA`
+ *   constant, and the crate gains `schema::operations` and `schema::service` descriptors. Off by default.
  */
 data class ServerCodegenConfig(
     override val formatTimeoutSeconds: Int = DEFAULT_FORMAT_TIMEOUT_SECONDS,
@@ -139,6 +141,7 @@ data class ServerCodegenConfig(
      */
     val allowMissingUnionVariant: Boolean = DEFAULT_ALLOW_MISSING_UNION_VARIANT,
     val rpcV2CborAddCapitalizedRoute: Boolean = DEFAULT_RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE,
+    val schemaSerde: Boolean = DEFAULT_SCHEMA_SERDE,
 ) : CoreCodegenConfig(
         formatTimeoutSeconds, debugMode,
     ) {
@@ -168,6 +171,9 @@ data class ServerCodegenConfig(
          */
         const val DEFAULT_RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE = false
 
+        /** Default value for `schemaSerde`: schema descriptors are not generated. */
+        const val DEFAULT_SCHEMA_SERDE = false
+
         /**
          * Configuration key for the HTTP 1.x flag.
          *
@@ -191,6 +197,9 @@ data class ServerCodegenConfig(
         /** Configuration key for the RPCv2 CBOR opt-in flag that adds a legacy capitalized route alias. */
         const val RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY = "rpcV2CborAddCapitalizedRoute"
 
+        /** Configuration key for generating schema descriptors for the service, its operations and its shapes. */
+        const val SCHEMA_SERDE_CONFIG_KEY = "schemaSerde"
+
         private val KNOWN_CONFIG_KEYS =
             setOf(
                 "formatTimeoutSeconds",
@@ -204,6 +213,7 @@ data class ServerCodegenConfig(
                 HTTP_1X_CONFIG_KEY,
                 REQUEST_BODY_MAX_BYTES_CONFIG_KEY,
                 RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY,
+                SCHEMA_SERDE_CONFIG_KEY,
             )
 
         fun fromCodegenConfigAndNode(
@@ -265,6 +275,11 @@ data class ServerCodegenConfig(
                     node.get().getBooleanMemberOrDefault(
                         RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY,
                         DEFAULT_RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE,
+                    ),
+                schemaSerde =
+                    node.get().getBooleanMemberOrDefault(
+                        SCHEMA_SERDE_CONFIG_KEY,
+                        DEFAULT_SCHEMA_SERDE,
                     ),
             ).also {
                 require(it.requestBodyMaxBytes >= 0) {

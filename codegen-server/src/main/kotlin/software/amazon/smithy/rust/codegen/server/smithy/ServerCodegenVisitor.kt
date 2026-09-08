@@ -73,6 +73,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperat
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerRootGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerRuntimeTypesReExportsGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerSchemaConstantGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerStructureConstrainedTraitImpl
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServiceConfigGenerator
@@ -302,6 +303,21 @@ open class ServerCodegenVisitor(
     override fun getDefault(shape: Shape?) {}
 
     /**
+     * Emits the shape's schema statics and a `Type::SCHEMA` constant next to the generated type.
+     *
+     * Only renders when the `schemaSerde` codegen setting is on; [writer] must be the writer the type itself
+     * was rendered into so the constant lands in the same module.
+     */
+    protected fun renderSchemaConstant(
+        shape: Shape,
+        writer: RustWriter,
+    ) {
+        if (codegenContext.settings.codegenConfig.schemaSerde) {
+            ServerSchemaConstantGenerator(codegenContext, writer, shape).render()
+        }
+    }
+
+    /**
      * Structure Shape Visitor
      *
      * For each structure shape, generate:
@@ -321,6 +337,7 @@ open class ServerCodegenVisitor(
                 codegenDecorator.structureCustomizations(codegenContext, emptyList()),
                 structSettings = codegenContext.structSettings(),
             ).render()
+            renderSchemaConstant(shape, this)
 
             shape.getTrait<ErrorTrait>()?.also { errorTrait ->
                 ErrorImplGenerator(
@@ -563,6 +580,7 @@ open class ServerCodegenVisitor(
             rustCrate.useShapeWriterOrUseWithStructureBuilder(shape, codegenContext) {
                 enumShapeGeneratorFactory(codegenContext, shape).render(this)
                 ConstrainedTraitForEnumGenerator(model, codegenContext.symbolProvider, this, shape).render()
+                renderSchemaConstant(shape, this)
             }
         }
 
@@ -600,6 +618,7 @@ open class ServerCodegenVisitor(
         logger.info("[rust-server-codegen] Generating an union shape $shape")
         rustCrate.useShapeWriter(shape) {
             UnionGenerator(model, codegenContext.symbolProvider, this, shape, renderUnknownVariant = false).render()
+            renderSchemaConstant(shape, this)
         }
 
         if (shape.isReachableFromOperationInput() &&

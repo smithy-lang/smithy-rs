@@ -137,6 +137,12 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
             "pokemon-service-awsjson-server-sdk",
             imports = listOf("$commonModels/pokemon-awsjson.smithy", "$commonModels/pokemon-common.smithy"),
         ),
+        CodegenTest(
+            "com.aws.example#PokemonService",
+            "pokemon-service-schema-server-sdk",
+            imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy"),
+            extraCodegenConfig = """"schemaSerde": true""",
+        ),
     ).flatMap { it.bothHttpVersions() }
 }
 // When iterating on protocol tests use this to speed up codegen:
