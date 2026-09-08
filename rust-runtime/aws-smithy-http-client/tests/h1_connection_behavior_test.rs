@@ -28,7 +28,6 @@ mod common {
 }
 
 use aws_smithy_async::assert_elapsed;
-use aws_smithy_http_client::pool::{Client as PoolClient, ConnectionPool};
 use aws_smithy_http_client::test_util::wire::connection::{
     BodyPlan, ConnectionCloseReason, ConnectionEvent, ConnectionId, ConnectionScript,
     ConnectionTestHarness, EndpointPlan, HarnessError, Http1Response, Http1Script, ManualGate,
@@ -45,42 +44,15 @@ use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::retry::ErrorKind;
 use common::client as test_client;
-use common::client::{BackendConfig, HyperUtilLegacyPool};
+use common::client::{
+    BackendConfig, HttpClientBackend, HyperUtilLegacyPool, PartitionedConnectionPool,
+};
 use http_body_util::BodyExt;
 use std::collections::HashSet;
 use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
 
 const IP1: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
-
-trait HttpClientBackend {
-    fn build(&self, config: BackendConfig) -> SharedHttpClient;
-}
-
-impl HttpClientBackend for HyperUtilLegacyPool {
-    fn build(&self, config: BackendConfig) -> SharedHttpClient {
-        let mut builder = Builder::new();
-        if let Some(pool_idle_timeout) = config.pool_idle_timeout {
-            builder = builder.pool_idle_timeout(pool_idle_timeout);
-        }
-        builder.build_http()
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-struct PartitionedConnectionPool;
-
-impl HttpClientBackend for PartitionedConnectionPool {
-    fn build(&self, config: BackendConfig) -> SharedHttpClient {
-        let mut builder = ConnectionPool::builder();
-        if let Some(pool_idle_timeout) = config.pool_idle_timeout {
-            builder = builder.idle_timeout(pool_idle_timeout);
-        }
-        let pool = builder.build_http().expect("valid connection-pool config");
-        let client = PoolClient::new(&pool).expect("anonymous partition exists");
-        SharedHttpClient::new(client)
-    }
-}
 
 fn request_with_body(url: &str, body: &[u8]) -> HttpRequest {
     let mut request = HttpRequest::new(SdkBody::from(body.to_vec()));
@@ -257,6 +229,7 @@ mod reuse_and_lifecycle {
             .expect("harness should start");
         let client = backend.build(BackendConfig {
             pool_idle_timeout: Some(idle_timeout),
+            ..Default::default()
         });
         let connector = test_client::connector(&client);
 
@@ -325,6 +298,7 @@ mod reuse_and_lifecycle {
             .expect("harness should start");
         let client = backend.build(BackendConfig {
             pool_idle_timeout: Some(idle_timeout),
+            ..Default::default()
         });
         let connector = test_client::connector(&client);
 

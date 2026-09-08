@@ -71,7 +71,9 @@ pub(super) async fn dispatch(
 
     add_host_header(&mut request, &context.absolute_uri)
         .map_err(|error| ConnectorError::user(error.into()))?;
-    rewrite_h1_request_target(&mut request, connection.info().is_proxied());
+    let connect_path = connection.info().connect_path();
+    connect_path.apply_proxy_authorization(request.headers_mut());
+    rewrite_h1_request_target(&mut request, connect_path.uses_absolute_form());
 
     // Commit against logical close before transferring the request to
     // Hyper. A close that wins this race leaves the request untouched.
@@ -423,6 +425,7 @@ fn rewrite_h1_request_target(request: &mut Request<SdkBody>, is_proxied: bool) {
 #[cfg(all(test, not(smithy_http_client_loom), feature = "rt-tokio"))]
 mod tests {
     use super::*;
+    use crate::client::connect::ConnectPath;
     use crate::client::pool::cell::h1::H1Sender;
     use crate::client::pool::cell::OriginCell;
     use crate::client::pool::connection::ConnectionInfo;
@@ -824,6 +827,32 @@ mod tests {
                 "{name}"
             );
         }
+    }
+
+    #[test]
+    fn forward_proxy_authorization_preserves_a_caller_value() {
+        let connect_path =
+            ConnectPath::forward_proxy(Some(http_1x::HeaderValue::from_static("Basic connector")));
+        let caller_value = http_1x::HeaderValue::from_static("Basic caller");
+
+        let mut request = Request::get("http://example.com/")
+            .body(SdkBody::empty())
+            .unwrap();
+        connect_path.apply_proxy_authorization(request.headers_mut());
+        assert_eq!(
+            request.headers()[http_1x::header::PROXY_AUTHORIZATION],
+            "Basic connector"
+        );
+
+        let mut request = Request::get("http://example.com/")
+            .header(http_1x::header::PROXY_AUTHORIZATION, caller_value.clone())
+            .body(SdkBody::empty())
+            .unwrap();
+        connect_path.apply_proxy_authorization(request.headers_mut());
+        assert_eq!(
+            request.headers().get(http_1x::header::PROXY_AUTHORIZATION),
+            Some(&caller_value)
+        );
     }
 
     #[test]
