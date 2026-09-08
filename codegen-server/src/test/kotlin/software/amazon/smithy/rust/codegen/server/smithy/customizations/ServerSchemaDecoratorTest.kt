@@ -138,7 +138,6 @@ internal class ServerSchemaDecoratorTest {
                         assert_eq!(crate::model::Nested::SCHEMA.shape_type(), ShapeType::Structure);
                         assert_eq!(crate::model::Nested::SCHEMA.members().len(), 2);
                         assert_eq!(crate::model::Choice::SCHEMA.shape_type(), ShapeType::Union);
-                        assert_eq!(crate::model::Kind::SCHEMA.shape_type(), ShapeType::String);
                         assert_eq!(crate::error::BadThing::SCHEMA.shape_type(), ShapeType::Structure);
                         """,
                     )

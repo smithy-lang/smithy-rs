@@ -108,7 +108,7 @@ data class ServerRustSettings(
  *   compatibility with clients that were previously reaching the server via the capitalized URI
  *   (which was the only route the server registered before the fix for
  *   https://github.com/smithy-lang/smithy-rs/issues/4731).
- * [schemaSerde]: When true, every generated structure, union and enum exposes its schema through a `SCHEMA`
+ * [schemaSerde]: When true, every generated structure and union exposes its schema through a `SCHEMA`
  *   constant, and the crate gains `schema::operations` and `schema::service` descriptors. Off by default.
  */
 data class ServerCodegenConfig(

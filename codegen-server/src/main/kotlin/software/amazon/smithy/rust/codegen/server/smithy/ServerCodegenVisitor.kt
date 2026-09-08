@@ -303,7 +303,7 @@ open class ServerCodegenVisitor(
     override fun getDefault(shape: Shape?) {}
 
     /**
-     * Emits the shape's schema statics and a `Type::SCHEMA` constant next to the generated type.
+     * Emits a structure's or union's schema statics and a `Type::SCHEMA` constant next to the generated type.
      *
      * Only renders when the `schemaSerde` codegen setting is on; [writer] must be the writer the type itself
      * was rendered into so the constant lands in the same module.
@@ -580,7 +580,6 @@ open class ServerCodegenVisitor(
             rustCrate.useShapeWriterOrUseWithStructureBuilder(shape, codegenContext) {
                 enumShapeGeneratorFactory(codegenContext, shape).render(this)
                 ConstrainedTraitForEnumGenerator(model, codegenContext.symbolProvider, this, shape).render()
-                renderSchemaConstant(shape, this)
             }
         }
 
