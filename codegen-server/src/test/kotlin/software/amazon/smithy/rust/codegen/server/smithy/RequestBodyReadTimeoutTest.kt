@@ -55,7 +55,33 @@ internal class RequestBodyReadTimeoutTest {
                 @httpPayload
                 data: Blob
             }
+            output := {}
         }
+        """.asSmithyModel()
+
+    private val streamingModel =
+        """
+        ${'$'}version: "2.0"
+        namespace test
+
+        use aws.protocols#restJson1
+
+        @restJson1
+        service StreamingService {
+            operations: [StreamingUpload]
+        }
+
+        @http(uri: "/upload", method: "POST")
+        operation StreamingUpload {
+            input := {
+                @httpPayload
+                @required
+                data: StreamingBlob
+            }
+        }
+
+        @streaming
+        blob StreamingBlob
         """.asSmithyModel()
 
     @Test
@@ -129,7 +155,23 @@ internal class RequestBodyReadTimeoutTest {
                             message: input.message,
                         })
                     }
+
+                    async fn slow_echo(
+                        input: crate::input::EchoInput,
+                    ) -> Result<crate::output::EchoOutput, crate::error::EchoError> {
+                        #{Tokio}::time::sleep(std::time::Duration::from_millis(300)).await;
+                        Ok(crate::output::EchoOutput {
+                            message: input.message,
+                        })
+                    }
+
+                    async fn upload(
+                        _input: crate::input::UploadInput,
+                    ) -> crate::output::UploadOutput {
+                        crate::output::UploadOutput {}
+                    }
                     """,
+                    "Tokio" to RuntimeType.Tokio,
                 )
 
                 tokioTest("slow_request_body_returns_request_timeout_over_http") {
@@ -187,8 +229,156 @@ internal class RequestBodyReadTimeoutTest {
                         "Tokio" to RuntimeType.Tokio,
                     )
                 }
+
+                tokioTest("slow_http_payload_returns_request_timeout_over_http") {
+                    rustTemplate(
+                        """
+                        use #{Tokio}::io::{AsyncReadExt, AsyncWriteExt};
+
+                        let config = crate::TestServiceConfig::builder().build();
+                        let app = crate::TestService::builder(config)
+                            .upload(upload)
+                            .build_unchecked();
+
+                        let listener = #{Tokio}::net::TcpListener::bind("127.0.0.1:0")
+                            .await
+                            .expect("failed to bind listener");
+                        let addr = listener.local_addr().expect("failed to get local address");
+                        #{StartServer:W}
+
+                        let mut stream = #{Tokio}::net::TcpStream::connect(addr)
+                            .await
+                            .expect("failed to connect to server");
+                        stream
+                            .write_all(
+                                b"POST /upload HTTP/1.1\r\n\
+                                  Host: localhost\r\n\
+                                  Content-Type: application/octet-stream\r\n\
+                                  Content-Length: 100\r\n\
+                                  \r\n\
+                                  partial payload",
+                            )
+                            .await
+                            .expect("failed to write partial payload");
+
+                        let mut response = Vec::new();
+                        #{Tokio}::time::timeout(
+                            std::time::Duration::from_secs(2),
+                            stream.read_to_end(&mut response),
+                        )
+                        .await
+                        .expect("timed out waiting for response")
+                        .expect("failed to read response");
+                        server.abort();
+
+                        let response = String::from_utf8_lossy(&response);
+                        assert!(
+                            response.starts_with("HTTP/1.1 408 Request Timeout"),
+                            "unexpected payload response: {response:?}",
+                        );
+                        assert!(
+                            response.to_ascii_lowercase().contains("\r\nconnection: close\r\n"),
+                            "payload response missing connection close: {response:?}",
+                        );
+                        """,
+                        "StartServer" to startServer,
+                        "Tokio" to RuntimeType.Tokio,
+                    )
+                }
+
+                tokioTest("slow_handler_is_not_subject_to_request_body_read_timeout") {
+                    rustTemplate(
+                        """
+                        use #{Tokio}::io::{AsyncReadExt, AsyncWriteExt};
+
+                        let config = crate::TestServiceConfig::builder().build();
+                        let app = crate::TestService::builder(config)
+                            .echo(slow_echo)
+                            .build_unchecked();
+
+                        let listener = #{Tokio}::net::TcpListener::bind("127.0.0.1:0")
+                            .await
+                            .expect("failed to bind listener");
+                        let addr = listener.local_addr().expect("failed to get local address");
+                        #{StartServer:W}
+
+                        let mut stream = #{Tokio}::net::TcpStream::connect(addr)
+                            .await
+                            .expect("failed to connect to server");
+                        stream
+                            .write_all(
+                                b"POST /echo HTTP/1.1\r\n\
+                                  Host: localhost\r\n\
+                                  Content-Type: application/json\r\n\
+                                  Content-Length: 19\r\n\
+                                  Connection: close\r\n\
+                                  \r\n\
+                                  {\"message\":\"hello\"}",
+                            )
+                            .await
+                            .expect("failed to write request");
+
+                        let mut response = Vec::new();
+                        #{Tokio}::time::timeout(
+                            std::time::Duration::from_secs(2),
+                            stream.read_to_end(&mut response),
+                        )
+                        .await
+                        .expect("timed out waiting for response")
+                        .expect("failed to read response");
+                        server.abort();
+
+                        let response = String::from_utf8_lossy(&response);
+                        assert!(
+                            response.starts_with("HTTP/1.1 200 OK"),
+                            "handler was incorrectly subject to the request body read timeout: {response:?}",
+                        );
+                        """,
+                        "StartServer" to startServer,
+                        "Tokio" to RuntimeType.Tokio,
+                    )
+                }
             }
         }
+    }
+
+    @Test
+    fun `streaming operations do not receive default request body read timeouts`() {
+        val config =
+            RequestBodyReadTimeouts.fromCustomizationConfig(
+                streamingModel,
+                ShapeId.from("test#StreamingService"),
+                null,
+            )
+
+        check(config.timeoutMillisFor(ShapeId.from("test#StreamingUpload")) == null)
+    }
+
+    @Test
+    fun `explicit request body read timeout for streaming operation is rejected`() {
+        val customizationConfig =
+            objectNode(
+                """
+                {
+                    "requestBodyReadTimeouts": {
+                        "perOperation": {
+                            "test#StreamingUpload": "30m"
+                        }
+                    }
+                }
+                """,
+            )
+
+        val error =
+            assertThrows<CodegenException> {
+                RequestBodyReadTimeouts.fromCustomizationConfig(
+                    streamingModel,
+                    ShapeId.from("test#StreamingService"),
+                    customizationConfig,
+                )
+            }
+
+        check(error.message?.contains("are not supported for streaming inputs") == true)
     }
 
     @Test
@@ -211,9 +401,9 @@ internal class RequestBodyReadTimeoutTest {
             objectNode(
                 """
                 {
-                    "readTimeouts": {
-                        "defaultNonPayloadMillis": 15000,
-                        "defaultPayloadMillis": 300000
+                    "requestBodyReadTimeouts": {
+                        "defaultNonPayload": "15s",
+                        "defaultPayload": "5m"
                     }
                 }
                 """,
@@ -237,12 +427,12 @@ internal class RequestBodyReadTimeoutTest {
             objectNode(
                 """
                 {
-                    "readTimeouts": {
-                        "defaultNonPayloadMillis": "10 s",
-                        "defaultPayloadMillis": "60 min",
-                        "operationMillis": {
-                            "test#Echo": "300000",
-                            "test#Health": "5 min",
+                    "requestBodyReadTimeouts": {
+                        "defaultNonPayload": "10 s",
+                        "defaultPayload": "1h",
+                        "perOperation": {
+                            "test#Echo": "300000ms",
+                            "test#Health": "5m",
                             "test#Upload": "120s"
                         }
                     }
@@ -268,9 +458,9 @@ internal class RequestBodyReadTimeoutTest {
             objectNode(
                 """
                 {
-                    "readTimeouts": {
-                        "defaultNonPayloadMillis": 0,
-                        "defaultPayloadMillis": 0
+                    "requestBodyReadTimeouts": {
+                        "defaultNonPayload": 0,
+                        "defaultPayload": 0
                     }
                 }
                 """,
@@ -294,10 +484,10 @@ internal class RequestBodyReadTimeoutTest {
             objectNode(
                 """
                 {
-                    "readTimeouts": {
-                        "defaultNonPayloadMillis": 60000,
-                        "defaultPayloadMillis": 60000,
-                        "operationMillis": {
+                    "requestBodyReadTimeouts": {
+                        "defaultNonPayload": "1m",
+                        "defaultPayload": "1m",
+                        "perOperation": {
                             "test#Echo": 0
                         }
                     }
@@ -323,11 +513,11 @@ internal class RequestBodyReadTimeoutTest {
             objectNode(
                 """
                 {
-                    "readTimeouts": {
-                        "defaultNonPayloadMillis": 0,
-                        "defaultPayloadMillis": 0,
-                        "operationMillis": {
-                            "test#Echo": 300000
+                    "requestBodyReadTimeouts": {
+                        "defaultNonPayload": 0,
+                        "defaultPayload": 0,
+                        "perOperation": {
+                            "test#Echo": "5m"
                         }
                     }
                 }
@@ -352,9 +542,9 @@ internal class RequestBodyReadTimeoutTest {
             objectNode(
                 """
                 {
-                    "readTimeouts": {
-                        "operationMillis": {
-                            "test#Echo": 300000
+                    "requestBodyReadTimeouts": {
+                        "perOperation": {
+                            "test#Echo": "5m"
                         }
                     }
                 }
@@ -388,13 +578,57 @@ internal class RequestBodyReadTimeoutTest {
     }
 
     @Test
+    fun `positive numeric request read timeout is rejected`() {
+        val customizationConfig =
+            objectNode(
+                """
+                {
+                    "requestBodyReadTimeouts": {
+                        "defaultNonPayload": 3000
+                    }
+                }
+                """,
+            )
+
+        assertThrows<CodegenException> {
+            RequestBodyReadTimeouts.fromCustomizationConfig(
+                model,
+                ShapeId.from("test#TestService"),
+                customizationConfig,
+            )
+        }
+    }
+
+    @Test
+    fun `unitless string request read timeout is rejected`() {
+        val customizationConfig =
+            objectNode(
+                """
+                {
+                    "requestBodyReadTimeouts": {
+                        "defaultNonPayload": "3000"
+                    }
+                }
+                """,
+            )
+
+        assertThrows<CodegenException> {
+            RequestBodyReadTimeouts.fromCustomizationConfig(
+                model,
+                ShapeId.from("test#TestService"),
+                customizationConfig,
+            )
+        }
+    }
+
+    @Test
     fun `invalid request read timeout unit is rejected`() {
         val customizationConfig =
             objectNode(
                 """
                 {
-                    "readTimeouts": {
-                        "defaultNonPayloadMillis": "3m"
+                    "requestBodyReadTimeouts": {
+                        "defaultNonPayload": "3d"
                     }
                 }
                 """,
@@ -415,11 +649,11 @@ internal class RequestBodyReadTimeoutTest {
             objectNode(
                 """
                 {
-                    "readTimeouts": {
-                        "defaultNonPayloadMillis": 10000,
-                        "defaultPayloadMillis": 60000,
-                        "operationMillis": {
-                            "test#Missing": 30000
+                    "requestBodyReadTimeouts": {
+                        "defaultNonPayload": "10s",
+                        "defaultPayload": "1m",
+                        "perOperation": {
+                            "test#Missing": "30s"
                         }
                     }
                 }
@@ -440,13 +674,13 @@ internal class RequestBodyReadTimeoutTest {
             """
             {
                 "customizationConfig": {
-                    "readTimeouts": {
-                        "defaultNonPayloadMillis": 10000,
-                        "defaultPayloadMillis": 60000,
-                        "operationMillis": {
-                            "test#Echo": 300000,
-                            "test#Health": 30000,
-                            "test#Upload": 120000
+                    "requestBodyReadTimeouts": {
+                        "defaultNonPayload": "10s",
+                        "defaultPayload": "1m",
+                        "perOperation": {
+                            "test#Echo": "5m",
+                            "test#Health": "30s",
+                            "test#Upload": "2m"
                         }
                     }
                 }
@@ -459,9 +693,9 @@ internal class RequestBodyReadTimeoutTest {
             """
             {
                 "customizationConfig": {
-                    "readTimeouts": {
-                        "defaultNonPayloadMillis": 0,
-                        "defaultPayloadMillis": 0
+                    "requestBodyReadTimeouts": {
+                        "defaultNonPayload": 0,
+                        "defaultPayload": 0
                     }
                 }
             }
@@ -473,9 +707,12 @@ internal class RequestBodyReadTimeoutTest {
             """
             {
                 "customizationConfig": {
-                    "readTimeouts": {
-                        "defaultNonPayloadMillis": 100,
-                        "defaultPayloadMillis": 100
+                    "requestBodyReadTimeouts": {
+                        "defaultNonPayload": "2s",
+                        "defaultPayload": "100ms",
+                        "perOperation": {
+                            "test#Echo": "100ms"
+                        }
                     }
                 }
             }

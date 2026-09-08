@@ -107,6 +107,7 @@ fun serverTestRustSettings(
             RequestBodyReadTimeouts.DEFAULT_REQUEST_BODY_READ_TIMEOUT_MILLIS,
             emptyMap(),
             emptySet(),
+            emptySet(),
         ),
 ) = ServerRustSettings(
     service,
