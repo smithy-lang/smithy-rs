@@ -159,22 +159,6 @@ class ServerServiceGenerator(
                         ""
                     }
 
-                fun requestTimeoutServiceTy(
-                    inner: Writable,
-                    requestTimeoutMillis: Long?,
-                ): Writable =
-                    if (requestTimeoutMillis != null) {
-                        writable {
-                            rustTemplate(
-                                "#{SmithyHttpServer}::operation::RequestTimeout<#{Inner:W}>",
-                                "Inner" to inner,
-                                *codegenScope,
-                            )
-                        }
-                    } else {
-                        inner
-                    }
-
                 fun upgradeOutputTy(inputTy: Writable): Writable =
                     writable {
                         rustTemplate(
@@ -193,29 +177,31 @@ class ServerServiceGenerator(
                         )
                     }
 
-                val requestTimeoutMillis =
+                val requestBodyReadTimeoutMillis =
                     codegenContext.settings.requestBodyReadTimeouts.timeoutMillisFor(operationShape.id)
                 val operationId = operationShape.id.toString().replace("#", "##")
-                val httpPluginInputTy =
-                    requestTimeoutServiceTy(upgradeOutputTy(writable { rust("ModelPl::Output") }), requestTimeoutMillis)
-                val requestTimeoutLayer =
-                    if (requestTimeoutMillis != null) {
+                val httpPluginInputTy = upgradeOutputTy(writable { rust("ModelPl::Output") })
+                val upgradePlugin =
+                    if (requestBodyReadTimeoutMillis != null) {
                         writable {
                             rustTemplate(
                                 """
-                                let svc = #{Tower}::Layer::layer(
-                                    &#{SmithyHttpServer}::operation::RequestTimeoutLayer::new(
-                                        std::time::Duration::from_millis(${requestTimeoutMillis}u64),
+                                #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new()
+                                    .with_request_body_read_timeout(
+                                        std::time::Duration::from_millis(${requestBodyReadTimeoutMillis}u64),
                                         "$operationId",
-                                    ),
-                                    svc,
-                                );
+                                    )
                                 """,
                                 *codegenScope,
                             )
                         }
                     } else {
-                        writable { }
+                        writable {
+                            rustTemplate(
+                                "#{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new()",
+                                *codegenScope,
+                            )
+                        }
                     }
 
                 rustTemplate(
@@ -271,8 +257,7 @@ class ServerServiceGenerator(
                         use #{SmithyHttpServer}::plugin::Plugin;
                         let svc = crate::operation_shape::$structName::from_handler(handler);
                         let svc = self.model_plugin.apply(svc);
-                        let svc = #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new().apply(svc);
-                        #{RequestTimeoutLayer:W}
+                        let svc = #{UpgradePlugin:W}.apply(svc);
                         let svc = self.http_plugin.apply(svc);
                         self.${fieldName}_custom(svc)
                     }
@@ -329,8 +314,7 @@ class ServerServiceGenerator(
                         use #{SmithyHttpServer}::plugin::Plugin;
                         let svc = crate::operation_shape::$structName::from_service(service);
                         let svc = self.model_plugin.apply(svc);
-                        let svc = #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new().apply(svc);
-                        #{RequestTimeoutLayer:W}
+                        let svc = #{UpgradePlugin:W}.apply(svc);
                         let svc = self.http_plugin.apply(svc);
                         self.${fieldName}_custom(svc)
                     }
@@ -347,7 +331,7 @@ class ServerServiceGenerator(
                     }
                     """,
                     "HttpPluginInputTy" to httpPluginInputTy,
-                    "RequestTimeoutLayer" to requestTimeoutLayer,
+                    "UpgradePlugin" to upgradePlugin,
                     "Router" to protocol.routerType(),
                     "Protocol" to protocol.markerStruct(),
                     "Handler" to handler,

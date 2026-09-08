@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import java.util.Optional
 import java.util.logging.Logger
 
@@ -108,63 +109,70 @@ data class ServerRustSettings(
 data class RequestBodyReadTimeouts(
     val defaultNonPayloadMillis: Long,
     val defaultPayloadMillis: Long,
-    val operationMillis: Map<ShapeId, Long>,
+    val perOperationMillis: Map<ShapeId, Long>,
     val payloadOperationIds: Set<ShapeId>,
+    val streamingOperationIds: Set<ShapeId>,
 ) {
     fun timeoutMillisFor(operationId: ShapeId): Long? =
-        (
-            operationMillis[operationId]
-                ?: if (operationId in payloadOperationIds) defaultPayloadMillis else defaultNonPayloadMillis
-        )
-            .takeIf { it > 0 }
+        if (operationId in streamingOperationIds) {
+            null
+        } else {
+            (
+                perOperationMillis[operationId]
+                    ?: if (operationId in payloadOperationIds) defaultPayloadMillis else defaultNonPayloadMillis
+            )
+                .takeIf { it > 0 }
+        }
 
     companion object {
-        private const val CONFIG_KEY = "readTimeouts"
-        private const val DEFAULT_NON_PAYLOAD_MILLIS_KEY = "defaultNonPayloadMillis"
-        private const val DEFAULT_PAYLOAD_MILLIS_KEY = "defaultPayloadMillis"
-        private const val OPERATION_MILLIS_KEY = "operationMillis"
+        private const val CONFIG_KEY = "requestBodyReadTimeouts"
+        private const val DEFAULT_NON_PAYLOAD_KEY = "defaultNonPayload"
+        private const val DEFAULT_PAYLOAD_KEY = "defaultPayload"
+        private const val PER_OPERATION_KEY = "perOperation"
         const val DEFAULT_NON_PAYLOAD_REQUEST_BODY_READ_TIMEOUT_MILLIS = 60_000L
         const val DEFAULT_REQUEST_BODY_READ_TIMEOUT_MILLIS = 36_000_000L
-
 
         private fun parseTimeoutMillis(
             node: Node,
             configPath: String,
-        ): Long {
-            val timeoutMillis =
-                when {
-                    node.isNumberNode -> node.expectNumberNode().value.toLong()
-                    node.isStringNode -> parseTimeoutMillisString(node.expectStringNode().value, configPath)
-                    else ->
-                        throw CodegenException(
-                            "`$configPath` must be a non-negative millisecond number or a string like `3000`, `3s`, `3 s`, `5min`, `5 min`, `3000ms`, or `3000 ms`",
-                        )
-                }
-            if (timeoutMillis < 0) {
-                throw CodegenException("`$configPath` must be non-negative")
+        ): Long =
+            when {
+                node.isNumberNode && node.expectNumberNode().value.toDouble() == 0.0 -> 0
+                node.isStringNode -> parseTimeoutMillisString(node.expectStringNode().value, configPath)
+                else -> throw invalidTimeout(configPath)
             }
-            return timeoutMillis
-        }
 
         private fun parseTimeoutMillisString(
             value: String,
             configPath: String,
         ): Long {
             val trimmed = value.trim()
-            val match = TIMEOUT_VALUE_REGEX.matchEntire(trimmed)
-                ?: throw CodegenException(
-                    "`$configPath` must be a non-negative millisecond number or a string like `3000`, `3s`, `3 s`, `5min`, `5 min`, `3000ms`, or `3000 ms`",
-                )
-            val amount = match.groupValues[1].toLong()
-            return when (match.groupValues[2]) {
-                "", "ms" -> amount
-                "s" -> Math.multiplyExact(amount, 1000L)
-                "min" -> Math.multiplyExact(amount, 60_000L)
-                else -> throw CodegenException("`$configPath` has an unsupported timeout unit")
+            val match =
+                TIMEOUT_VALUE_REGEX.matchEntire(trimmed)
+                    ?: throw invalidTimeout(configPath)
+            return try {
+                val amount = match.groupValues[1].toLong()
+                when (match.groupValues[2]) {
+                    "ms" -> amount
+                    "s" -> Math.multiplyExact(amount, 1000L)
+                    "m" -> Math.multiplyExact(amount, 60_000L)
+                    "h" -> Math.multiplyExact(amount, 3_600_000L)
+                    else -> throw invalidTimeout(configPath)
+                }
+            } catch (_: ArithmeticException) {
+                throw CodegenException("`$configPath` exceeds the maximum supported duration")
+            } catch (_: NumberFormatException) {
+                throw CodegenException("`$configPath` exceeds the maximum supported duration")
             }
         }
 
-        private val TIMEOUT_VALUE_REGEX = Regex("^([0-9]+)\\s*(ms|s|min)?$")
+        private fun invalidTimeout(configPath: String) =
+            CodegenException(
+                "`$configPath` must be `0` to disable the timeout or a duration string with an explicit unit, " +
+                    "such as `1000ms`, `10s`, `30m`, or `1h`",
+            )
+
+        private val TIMEOUT_VALUE_REGEX = Regex("^([0-9]+)\\s*(ms|s|m|h)$")
 
         fun fromCustomizationConfig(
             model: Model,
@@ -174,14 +182,14 @@ data class RequestBodyReadTimeouts(
             val config = customizationConfig?.getObjectMember(CONFIG_KEY)?.orElse(null)
             val defaultNonPayloadMillis =
                 config
-                    ?.getMember(DEFAULT_NON_PAYLOAD_MILLIS_KEY)
-                    ?.map { parseTimeoutMillis(it, "customizationConfig.$CONFIG_KEY.$DEFAULT_NON_PAYLOAD_MILLIS_KEY") }
+                    ?.getMember(DEFAULT_NON_PAYLOAD_KEY)
+                    ?.map { parseTimeoutMillis(it, "customizationConfig.$CONFIG_KEY.$DEFAULT_NON_PAYLOAD_KEY") }
                     ?.orElse(null)
                     ?: DEFAULT_NON_PAYLOAD_REQUEST_BODY_READ_TIMEOUT_MILLIS
             val defaultPayloadMillis =
                 config
-                    ?.getMember(DEFAULT_PAYLOAD_MILLIS_KEY)
-                    ?.map { parseTimeoutMillis(it, "customizationConfig.$CONFIG_KEY.$DEFAULT_PAYLOAD_MILLIS_KEY") }
+                    ?.getMember(DEFAULT_PAYLOAD_KEY)
+                    ?.map { parseTimeoutMillis(it, "customizationConfig.$CONFIG_KEY.$DEFAULT_PAYLOAD_KEY") }
                     ?.orElse(null)
                     ?: DEFAULT_REQUEST_BODY_READ_TIMEOUT_MILLIS
 
@@ -191,36 +199,56 @@ data class RequestBodyReadTimeouts(
                 containedOperations
                     .map { it.id }
                     .toSet()
-            val payloadOperationIds =
+            val streamingOperationIds =
                 containedOperations
                     .filter { operation ->
                         operation.input
                             .map { inputId ->
                                 model.expectShape(inputId).members().any { member ->
-                                    member.hasTrait<HttpPayloadTrait>()
+                                    member.isStreaming(model)
                                 }
                             }
                             .orElse(false)
                     }
                     .map { it.id }
                     .toSet()
-            val operationMillis =
+            val payloadOperationIds =
+                containedOperations
+                    .filter { operation ->
+                        operation.id !in streamingOperationIds &&
+                            operation.input
+                                .map { inputId ->
+                                    model.expectShape(inputId).members().any { member ->
+                                        member.hasTrait<HttpPayloadTrait>()
+                                    }
+                                }
+                                .orElse(false)
+                    }
+                    .map { it.id }
+                    .toSet()
+            val perOperationMillis =
                 config
-                    ?.getObjectMember(OPERATION_MILLIS_KEY)
+                    ?.getObjectMember(PER_OPERATION_KEY)
                     ?.orElse(null)
                     ?.members
                     ?.map { (key, value) ->
                         val operationId = ShapeId.from(key.value)
                         if (operationId !in containedOperationIds) {
                             throw CodegenException(
-                                "`customizationConfig.$CONFIG_KEY.$OPERATION_MILLIS_KEY` contains `$operationId`, " +
+                                "`customizationConfig.$CONFIG_KEY.$PER_OPERATION_KEY` contains `$operationId`, " +
                                     "which is not an operation attached to service `$serviceId`",
+                            )
+                        }
+                        if (operationId in streamingOperationIds) {
+                            throw CodegenException(
+                                "`customizationConfig.$CONFIG_KEY.$PER_OPERATION_KEY` contains streaming operation " +
+                                    "`$operationId`, but request body read timeouts are not supported for streaming inputs",
                             )
                         }
                         operationId to
                             parseTimeoutMillis(
                                 value,
-                                "customizationConfig.$CONFIG_KEY.$OPERATION_MILLIS_KEY.$operationId",
+                                "customizationConfig.$CONFIG_KEY.$PER_OPERATION_KEY.$operationId",
                             )
                     }?.toMap()
                     ?: emptyMap()
@@ -228,8 +256,9 @@ data class RequestBodyReadTimeouts(
             return RequestBodyReadTimeouts(
                 defaultNonPayloadMillis,
                 defaultPayloadMillis,
-                operationMillis,
+                perOperationMillis,
                 payloadOperationIds,
+                streamingOperationIds,
             )
         }
     }

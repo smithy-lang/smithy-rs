@@ -9,9 +9,11 @@ use std::{
     marker::PhantomData,
     pin::Pin,
     task::{Context, Poll},
+    time::Duration,
 };
 
 use futures_util::ready;
+use http::{header, StatusCode, Version};
 use pin_project_lite::pin_project;
 use tower::{util::Oneshot, Service, ServiceExt};
 use tracing::error;
@@ -30,12 +32,14 @@ use super::OperationShape;
 #[derive(Debug, Clone)]
 pub struct UpgradePlugin<Extractors> {
     _extractors: PhantomData<Extractors>,
+    request_body_read_timeout: Option<RequestBodyReadTimeoutConfig>,
 }
 
 impl<Extractors> Default for UpgradePlugin<Extractors> {
     fn default() -> Self {
         Self {
             _extractors: PhantomData,
+            request_body_read_timeout: None,
         }
     }
 }
@@ -45,6 +49,21 @@ impl<Extractors> UpgradePlugin<Extractors> {
     pub fn new() -> Self {
         Self::default()
     }
+
+    /// Applies a deadline while the request body is read and the operation input is constructed.
+    ///
+    /// The deadline is removed before the operation handler is invoked.
+    #[doc(hidden)]
+    pub fn with_request_body_read_timeout(mut self, timeout: Duration, operation: &'static str) -> Self {
+        self.request_body_read_timeout = Some(RequestBodyReadTimeoutConfig { timeout, operation });
+        self
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct RequestBodyReadTimeoutConfig {
+    timeout: Duration,
+    operation: &'static str,
 }
 
 impl<Ser, Op, T, Extractors> Plugin<Ser, Op, T> for UpgradePlugin<Extractors>
@@ -59,6 +78,7 @@ where
             _protocol: PhantomData,
             _input: PhantomData,
             inner,
+            request_body_read_timeout: self.request_body_read_timeout,
         }
     }
 }
@@ -69,6 +89,7 @@ pub struct Upgrade<Protocol, Input, S> {
     _protocol: PhantomData<Protocol>,
     _input: PhantomData<Input>,
     inner: S,
+    request_body_read_timeout: Option<RequestBodyReadTimeoutConfig>,
 }
 
 impl<P, Input, S> Clone for Upgrade<P, Input, S>
@@ -80,8 +101,57 @@ where
             _protocol: PhantomData,
             _input: PhantomData,
             inner: self.inner.clone(),
+            request_body_read_timeout: self.request_body_read_timeout,
         }
     }
+}
+
+struct RequestBodyReadTimeoutState {
+    sleep: Pin<Box<tokio::time::Sleep>>,
+    timeout: Duration,
+    version: Version,
+    operation: &'static str,
+    #[cfg(feature = "request-id")]
+    request_id: Option<String>,
+}
+
+impl RequestBodyReadTimeoutState {
+    fn response(&self) -> http::Response<crate::body::BoxBody> {
+        #[cfg(feature = "request-id")]
+        if let Some(request_id) = self.request_id.as_deref() {
+            tracing::debug!(
+                operation = self.operation,
+                request_id,
+                timeout_millis = self.timeout.as_millis(),
+                "request body read timed out"
+            );
+        } else {
+            tracing::debug!(
+                operation = self.operation,
+                timeout_millis = self.timeout.as_millis(),
+                "request body read timed out"
+            );
+        }
+        #[cfg(not(feature = "request-id"))]
+        tracing::debug!(
+            operation = self.operation,
+            timeout_millis = self.timeout.as_millis(),
+            "request body read timed out"
+        );
+
+        let mut response = http::Response::builder().status(StatusCode::REQUEST_TIMEOUT);
+        if matches!(self.version, Version::HTTP_10 | Version::HTTP_11) {
+            response = response.header(header::CONNECTION, "close");
+        }
+        response.body(crate::body::empty()).expect("valid response")
+    }
+}
+
+#[cfg(feature = "request-id")]
+fn request_id<B>(req: &http::Request<B>) -> Option<String> {
+    req.extensions()
+        .get::<crate::request::request_id::ServerRequestId>()
+        .map(ToString::to_string)
 }
 
 pin_project! {
@@ -110,7 +180,8 @@ pin_project! {
     {
         service: Option<S>,
         #[pin]
-        inner: InnerAlias<Input, Protocol, B, S>
+        inner: InnerAlias<Input, Protocol, B, S>,
+        request_body_read_timeout: Option<RequestBodyReadTimeoutState>,
     }
 }
 
@@ -131,7 +202,18 @@ where
 
             let call = match this2 {
                 InnerProj::FromRequest { inner } => {
-                    let result = ready!(inner.poll(cx));
+                    let result = match inner.poll(cx) {
+                        Poll::Ready(result) => result,
+                        Poll::Pending => {
+                            if let Some(timeout) = this.request_body_read_timeout {
+                                if timeout.sleep.as_mut().poll(cx).is_ready() {
+                                    return Poll::Ready(Ok(timeout.response()));
+                                }
+                            }
+                            return Poll::Pending;
+                        }
+                    };
+                    *this.request_body_read_timeout = None;
                     match result {
                         Ok(ok) => this
                             .service
@@ -183,11 +265,22 @@ where
     fn call(&mut self, req: http::Request<B>) -> Self::Future {
         let clone = self.inner.clone();
         let service = std::mem::replace(&mut self.inner, clone);
+        let request_body_read_timeout = self
+            .request_body_read_timeout
+            .map(|config| RequestBodyReadTimeoutState {
+                sleep: Box::pin(tokio::time::sleep(config.timeout)),
+                timeout: config.timeout,
+                version: req.version(),
+                operation: config.operation,
+                #[cfg(feature = "request-id")]
+                request_id: request_id(&req),
+            });
         UpgradeFuture {
             service: Some(service),
             inner: Inner::FromRequest {
                 inner: <Input as FromRequest<P, B>>::from_request(req),
             },
+            request_body_read_timeout,
         }
     }
 }
