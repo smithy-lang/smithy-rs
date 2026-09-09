@@ -13,9 +13,22 @@ rust-version = "1.94.1"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+# Internal feature used to gate code that depends on aws-lc-rs being linked.
+# Users should not enable this directly; choose `aws-lc-rs` or `fips` instead.
+__aws-lc-rs = ["dep:aws-lc-rs"]
+# Route SHA-1 and SHA-256 checksum computation through `aws-lc-rs` (non-FIPS,
+# backed by `aws-lc-sys`) instead of the RustCrypto `sha1` / `sha2` crates.
+# CRC algorithms continue to use `crc-fast` because `aws-lc-rs` does not
+# implement them.
+aws-lc-rs = ["__aws-lc-rs", "aws-lc-rs?/aws-lc-sys"]
+# Same as `aws-lc-rs`, but backed by the FIPS-validated `aws-lc-fips-sys`.
+fips = ["__aws-lc-rs", "aws-lc-rs?/fips"]
+
 [dependencies]
 aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-1-x"]}
+aws-lc-rs = { version = "1", default-features = false, optional = true }
 bytes = "1.11.1"
 # FIXME(https://github.com/smithy-lang/smithy-rs/issues/3981): Keep pinned until we have more comprehensive testing in place
 crc-fast = "1.9.0"
@@ -36,7 +49,8 @@ tokio = { version = "1.49.0", features = ["macros", "rt"] }
 tracing-test = "0.2.1"
 
 [package.metadata.docs.rs]
-all-features = true
+all-features = false
+features = ["aws-lc-rs"]
 targets = ["x86_64-unknown-linux-gnu"]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 rustdoc-args = ["--cfg", "docsrs"]

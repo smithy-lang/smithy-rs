@@ -253,11 +253,13 @@ impl Checksum for Crc64Nvme {
     }
 }
 
+#[cfg(not(feature = "__aws-lc-rs"))]
 #[derive(Debug, Default)]
 struct Sha1 {
     hasher: sha1::Sha1,
 }
 
+#[cfg(not(feature = "__aws-lc-rs"))]
 impl Sha1 {
     fn update(&mut self, bytes: &[u8]) {
         use sha1::Digest;
@@ -276,6 +278,43 @@ impl Sha1 {
     }
 }
 
+#[cfg(feature = "__aws-lc-rs")]
+struct Sha1 {
+    ctx: aws_lc_rs::digest::Context,
+}
+
+#[cfg(feature = "__aws-lc-rs")]
+impl Debug for Sha1 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Sha1").finish_non_exhaustive()
+    }
+}
+
+#[cfg(feature = "__aws-lc-rs")]
+impl Default for Sha1 {
+    fn default() -> Self {
+        Self {
+            ctx: aws_lc_rs::digest::Context::new(&aws_lc_rs::digest::SHA1_FOR_LEGACY_USE_ONLY),
+        }
+    }
+}
+
+#[cfg(feature = "__aws-lc-rs")]
+impl Sha1 {
+    fn update(&mut self, bytes: &[u8]) {
+        self.ctx.update(bytes);
+    }
+
+    fn finalize(self) -> Bytes {
+        Bytes::copy_from_slice(self.ctx.finish().as_ref())
+    }
+
+    // Size of the checksum in bytes
+    fn size() -> u64 {
+        aws_lc_rs::digest::SHA1_FOR_LEGACY_USE_ONLY.output_len() as u64
+    }
+}
+
 impl Checksum for Sha1 {
     fn update(&mut self, bytes: &[u8]) {
         Self::update(self, bytes)
@@ -289,11 +328,13 @@ impl Checksum for Sha1 {
     }
 }
 
+#[cfg(not(feature = "__aws-lc-rs"))]
 #[derive(Debug, Default)]
 struct Sha256 {
     hasher: sha2::Sha256,
 }
 
+#[cfg(not(feature = "__aws-lc-rs"))]
 impl Sha256 {
     fn update(&mut self, bytes: &[u8]) {
         use sha2::Digest;
@@ -309,6 +350,43 @@ impl Sha256 {
     fn size() -> u64 {
         use sha2::Digest;
         sha2::Sha256::output_size() as u64
+    }
+}
+
+#[cfg(feature = "__aws-lc-rs")]
+struct Sha256 {
+    ctx: aws_lc_rs::digest::Context,
+}
+
+#[cfg(feature = "__aws-lc-rs")]
+impl Debug for Sha256 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Sha256").finish_non_exhaustive()
+    }
+}
+
+#[cfg(feature = "__aws-lc-rs")]
+impl Default for Sha256 {
+    fn default() -> Self {
+        Self {
+            ctx: aws_lc_rs::digest::Context::new(&aws_lc_rs::digest::SHA256),
+        }
+    }
+}
+
+#[cfg(feature = "__aws-lc-rs")]
+impl Sha256 {
+    fn update(&mut self, bytes: &[u8]) {
+        self.ctx.update(bytes);
+    }
+
+    fn finalize(self) -> Bytes {
+        Bytes::copy_from_slice(self.ctx.finish().as_ref())
+    }
+
+    // Size of the checksum in bytes
+    fn size() -> u64 {
+        aws_lc_rs::digest::SHA256.output_len() as u64
     }
 }
 
