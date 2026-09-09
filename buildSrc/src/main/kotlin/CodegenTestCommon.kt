@@ -375,7 +375,19 @@ fun Project.registerModifyMtimeTask() {
     }
 }
 
-fun Project.registerCargoCommandsTasks(outputDir: File) {
+/**
+ * Registers the `cargoCheck`, `cargoTest`, `cargoDoc`, and `cargoClippy` tasks that run against the generated crates.
+ *
+ * When [useNextest] is `true`, `cargoTest` runs the generated test suite with `cargo nextest run` (mirroring how the
+ * runtime crates are tested in CI), and a companion `cargoTestDoctests` task runs the doctests that nextest does not
+ * execute. This requires `cargo-nextest` to be installed. Crates whose test harnesses are incompatible with nextest —
+ * e.g. the `cdylib` Python/TypeScript servers, which use pyo3/napi harnesses — should leave [useNextest] as `false` and
+ * continue to run with `cargo test`.
+ */
+fun Project.registerCargoCommandsTasks(
+    outputDir: File,
+    useNextest: Boolean = false,
+) {
     val dependentTasks =
         listOfNotNull(
             "assemble",
@@ -389,10 +401,28 @@ fun Project.registerCargoCommandsTasks(outputDir: File) {
         commandLine("cargo", "check", "--lib", "--tests", "--benches", "--all-features")
     }
 
-    this.tasks.register<Exec>(Cargo.TEST.toString) {
-        dependsOn(dependentTasks)
-        workingDir(outputDir)
-        commandLine("cargo", "test", "--all-features", "--no-fail-fast")
+    val testTask =
+        this.tasks.register<Exec>(Cargo.TEST.toString) {
+            dependsOn(dependentTasks)
+            workingDir(outputDir)
+            if (useNextest) {
+                // `cargo nextest run` parallelizes test execution and matches how the runtime crates are tested in CI.
+                // `--no-tests=pass` tolerates generated crates that contain no tests.
+                commandLine("cargo", "nextest", "run", "--all-features", "--no-fail-fast", "--no-tests=pass")
+            } else {
+                commandLine("cargo", "test", "--all-features", "--no-fail-fast")
+            }
+        }
+
+    if (useNextest) {
+        // `cargo nextest run` does not run doctests, so run them separately to preserve coverage.
+        val doctestTask =
+            this.tasks.register<Exec>("cargoTestDoctests") {
+                dependsOn(dependentTasks)
+                workingDir(outputDir)
+                commandLine("cargo", "test", "--all-features", "--no-fail-fast", "--doc")
+            }
+        testTask.configure { finalizedBy(doctestTask) }
     }
 
     this.tasks.register<Exec>(Cargo.DOCS.toString) {
