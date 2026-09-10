@@ -384,7 +384,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-cbor"
-version = "0.62.1"
+version = "0.63.0"
 dependencies = [
  "aws-smithy-runtime-api 1.16.1",
  "aws-smithy-schema 0.3.0",
@@ -587,12 +587,12 @@ dependencies = [
 name = "aws-smithy-http-server"
 version = "0.67.1"
 dependencies = [
- "aws-smithy-cbor 0.62.1",
+ "aws-smithy-cbor 0.63.0",
  "aws-smithy-http 0.64.0",
  "aws-smithy-json 0.64.0",
  "aws-smithy-runtime-api 1.16.1",
  "aws-smithy-types 1.7.0",
- "aws-smithy-xml 0.62.1",
+ "aws-smithy-xml 0.63.0",
  "bytes",
  "futures-util",
  "http 1.5.0",
@@ -659,7 +659,7 @@ dependencies = [
  "aws-smithy-json 0.64.0",
  "aws-smithy-legacy-http-server",
  "aws-smithy-types 1.7.0",
- "aws-smithy-xml 0.62.1",
+ "aws-smithy-xml 0.63.0",
  "bytes",
  "futures",
  "futures-util",
@@ -739,12 +739,12 @@ dependencies = [
 name = "aws-smithy-legacy-http-server"
 version = "0.66.1"
 dependencies = [
- "aws-smithy-cbor 0.62.1",
+ "aws-smithy-cbor 0.63.0",
  "aws-smithy-json 0.64.0",
  "aws-smithy-legacy-http",
  "aws-smithy-runtime-api 1.16.1",
  "aws-smithy-types 1.7.0",
- "aws-smithy-xml 0.62.1",
+ "aws-smithy-xml 0.63.0",
  "bytes",
  "futures-util",
  "http 0.2.12",
@@ -821,12 +821,12 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-query"
-version = "0.62.1"
+version = "0.63.0"
 dependencies = [
  "aws-smithy-runtime-api 1.16.1",
  "aws-smithy-schema 0.3.0",
  "aws-smithy-types 1.7.0",
- "aws-smithy-xml 0.62.1",
+ "aws-smithy-xml 0.63.0",
  "criterion 0.5.1",
  "urlencoding",
 ]
@@ -1032,7 +1032,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-xml"
-version = "0.62.1"
+version = "0.63.0"
 dependencies = [
  "aws-smithy-protocol-test",
  "aws-smithy-runtime-api 1.16.1",
@@ -2566,7 +2566,7 @@ dependencies = [
 name = "inlineable"
 version = "0.1.0"
 dependencies = [
- "aws-smithy-cbor 0.62.1",
+ "aws-smithy-cbor 0.63.0",
  "aws-smithy-compression",
  "aws-smithy-http 0.64.0",
  "aws-smithy-json 0.64.0",
@@ -2574,7 +2574,7 @@ dependencies = [
  "aws-smithy-runtime-api 1.16.1",
  "aws-smithy-schema 0.3.0",
  "aws-smithy-types 1.7.0",
- "aws-smithy-xml 0.62.1",
+ "aws-smithy-xml 0.63.0",
  "bytes",
  "fastrand 2.5.0",
  "futures-util",
