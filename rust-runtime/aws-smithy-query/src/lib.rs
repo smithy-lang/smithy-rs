@@ -19,12 +19,13 @@
 pub mod codec;
 pub mod protocol;
 
+use crate::codec::serializer::PERCENT_ENCODE_SET;
 use aws_smithy_types::date_time::{DateTimeFormatError, Format};
 use aws_smithy_types::primitive::Encoder;
 use aws_smithy_types::{DateTime, Number};
+use percent_encoding::utf8_percent_encode;
 use std::borrow::Cow;
 use std::fmt::Write;
-use urlencoding::encode;
 
 pub struct QueryWriter<'a> {
     output: &'a mut String,
@@ -33,9 +34,9 @@ pub struct QueryWriter<'a> {
 impl<'a> QueryWriter<'a> {
     pub fn new(output: &'a mut String, action: &str, version: &str) -> Self {
         output.push_str("Action=");
-        output.push_str(&encode(action));
+        output.push_str(&utf8_percent_encode(action, PERCENT_ENCODE_SET).to_string());
         output.push_str("&Version=");
-        output.push_str(&encode(version));
+        output.push_str(&utf8_percent_encode(version, PERCENT_ENCODE_SET).to_string());
         QueryWriter { output }
     }
 
@@ -85,7 +86,7 @@ impl<'a> QueryMapWriter<'a> {
             entry,
             self.next_index,
             self.key_name,
-            encode(key)
+            utf8_percent_encode(key, PERCENT_ENCODE_SET)
         )
         // The `Write` implementation for `String` is infallible,
         // see https://doc.rust-lang.org/src/alloc/string.rs.html#2815
@@ -187,7 +188,8 @@ impl<'a> QueryValueWriter<'a> {
     /// Writes a string `value`.
     pub fn string(mut self, value: &str) {
         self.write_param_name();
-        self.output.push_str(&encode(value));
+        self.output
+            .push_str(&utf8_percent_encode(value, PERCENT_ENCODE_SET).to_string());
     }
 
     /// Writes a number `value`.
