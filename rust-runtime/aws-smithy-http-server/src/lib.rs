@@ -32,6 +32,7 @@ pub mod response;
 pub mod routing;
 #[doc(hidden)]
 pub mod runtime_error;
+pub mod schema;
 pub mod serve;
 pub mod service;
 pub mod shape_id;

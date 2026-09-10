@@ -13,5 +13,5 @@ mod response;
 
 pub use error::HttpError;
 pub use headers::{HeaderValue, Headers, HeadersIter};
-pub use request::{Request, RequestParts};
+pub use request::{Request, RequestParts, Uri};
 pub use response::{Response, StatusCode};
