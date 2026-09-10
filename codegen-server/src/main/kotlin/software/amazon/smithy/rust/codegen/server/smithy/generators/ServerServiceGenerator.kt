@@ -158,6 +158,52 @@ class ServerServiceGenerator(
                     } else {
                         ""
                     }
+
+                fun upgradeOutputTy(inputTy: Writable): Writable =
+                    writable {
+                        rustTemplate(
+                            """
+                            <
+                                #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>
+                                as #{SmithyHttpServer}::plugin::Plugin<
+                                    $serviceName<L>,
+                                    crate::operation_shape::$structName,
+                                    #{InputTy:W}
+                                >
+                            >::Output
+                            """,
+                            "InputTy" to inputTy,
+                            *codegenScope,
+                        )
+                    }
+
+                val requestBodyReadTimeoutMillis =
+                    codegenContext.settings.requestBodyReadTimeouts.timeoutMillisFor(operationShape.id)
+                val operationId = operationShape.id.toString().replace("#", "##")
+                val httpPluginInputTy = upgradeOutputTy(writable { rust("ModelPl::Output") })
+                val upgradePlugin =
+                    if (requestBodyReadTimeoutMillis != null) {
+                        writable {
+                            rustTemplate(
+                                """
+                                #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new()
+                                    .with_request_body_read_timeout(
+                                        std::time::Duration::from_millis(${requestBodyReadTimeoutMillis}u64),
+                                        "$operationId",
+                                    )
+                                """,
+                                *codegenScope,
+                            )
+                        }
+                    } else {
+                        writable {
+                            rustTemplate(
+                                "#{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new()",
+                                *codegenScope,
+                            )
+                        }
+                    }
+
                 rustTemplate(
                     """
                     /// Sets the [`$structName`](crate::operation_shape::$structName) operation.
@@ -200,14 +246,7 @@ class ServerServiceGenerator(
                         HttpPl: #{SmithyHttpServer}::plugin::Plugin<
                             $serviceName<L>,
                             crate::operation_shape::$structName,
-                            <
-                                #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>
-                                as #{SmithyHttpServer}::plugin::Plugin<
-                                    $serviceName<L>,
-                                    crate::operation_shape::$structName,
-                                    ModelPl::Output
-                                >
-                            >::Output
+                            #{HttpPluginInputTy:W}
                         >,
 
                         HttpPl::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
@@ -218,7 +257,7 @@ class ServerServiceGenerator(
                         use #{SmithyHttpServer}::plugin::Plugin;
                         let svc = crate::operation_shape::$structName::from_handler(handler);
                         let svc = self.model_plugin.apply(svc);
-                        let svc = #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new().apply(svc);
+                        let svc = #{UpgradePlugin:W}.apply(svc);
                         let svc = self.http_plugin.apply(svc);
                         self.${fieldName}_custom(svc)
                     }
@@ -264,14 +303,7 @@ class ServerServiceGenerator(
                         HttpPl: #{SmithyHttpServer}::plugin::Plugin<
                             $serviceName<L>,
                             crate::operation_shape::$structName,
-                            <
-                                #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>
-                                as #{SmithyHttpServer}::plugin::Plugin<
-                                    $serviceName<L>,
-                                    crate::operation_shape::$structName,
-                                    ModelPl::Output
-                                >
-                            >::Output
+                            #{HttpPluginInputTy:W}
                         >,
 
                         HttpPl::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
@@ -282,7 +314,7 @@ class ServerServiceGenerator(
                         use #{SmithyHttpServer}::plugin::Plugin;
                         let svc = crate::operation_shape::$structName::from_service(service);
                         let svc = self.model_plugin.apply(svc);
-                        let svc = #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new().apply(svc);
+                        let svc = #{UpgradePlugin:W}.apply(svc);
                         let svc = self.http_plugin.apply(svc);
                         self.${fieldName}_custom(svc)
                     }
@@ -298,6 +330,8 @@ class ServerServiceGenerator(
                         self
                     }
                     """,
+                    "HttpPluginInputTy" to httpPluginInputTy,
+                    "UpgradePlugin" to upgradePlugin,
                     "Router" to protocol.routerType(),
                     "Protocol" to protocol.markerStruct(),
                     "Handler" to handler,
