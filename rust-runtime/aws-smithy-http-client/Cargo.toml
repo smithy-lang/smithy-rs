@@ -2,7 +2,7 @@
 name = "aws-smithy-http-client"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "HTTP client abstractions for generated smithy clients"
-version = "1.4.0"
+version = "1.5.0"
 license = "Apache-2.0"
 edition = "2021"
 repository = "https://github.com/smithy-lang/smithy-rs"
@@ -72,6 +72,20 @@ legacy-test-util = [
     "aws-smithy-types/http-body-0-4-x",
 ]
 
+# Test-only support for the turmoil network simulator (enables `test_util::turmoil_client`).
+# Pick the feature matching the `turmoil` major version your test harness uses;
+# `turmoil-06` and `turmoil-07` are mutually exclusive.
+turmoil-06 = ["__turmoil", "dep:turmoil-0-6"]
+turmoil-07 = ["__turmoil", "dep:turmoil-0-7"]
+
+# Internal marker enabled by any `turmoil-*` feature. Not part of the public API;
+# gates the shared, version-agnostic turmoil transport code.
+__turmoil = [
+    "test-util",
+    "default-client",
+    "tokio/net",
+]
+
 legacy-rustls-ring = ["dep:legacy-hyper-rustls", "dep:legacy-rustls", "dep:rustls-native-certs", "hyper-014"]
 
 __rustls = ["dep:rustls", "dep:hyper-rustls", "dep:tokio-rustls", "default-client"]
@@ -124,6 +138,8 @@ indexmap = { version = "2.10.0", features = ["serde"], optional = true }
 http-body-util = { version = "0.1.3", optional = true }
 httparse = { version = "1.10.1", optional = true }
 socket2 = { version = "0.6", optional = true }
+turmoil-0-6 = { package = "turmoil", version = "0.6", optional = true }
+turmoil-0-7 = { package = "turmoil", version = "0.7", optional = true }
 # end test util stack
 
 [dev-dependencies]
@@ -160,8 +176,17 @@ name = "custom-dns"
 required-features = ["rustls-ring"]
 doc-scrape-examples = true
 
+[[test]]
+name = "turmoil_test"
+required-features = ["__turmoil"]
+
 [package.metadata.smithy-rs-release-tooling]
 stable = true
+
+# Under `--all-features` both turmoil features enable at once; `turmoil-07` then
+# wins and `turmoil-0-6` is left unused. It is used when `turmoil-06` is enabled alone.
+[package.metadata.cargo-udeps.ignore]
+normal = ["turmoil-0-6"]
 
 [package.metadata.docs.rs]
 all-features = false

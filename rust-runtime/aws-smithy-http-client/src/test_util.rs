@@ -65,3 +65,8 @@ pub use never::NeverTcpConnector;
 mod body;
 #[cfg(all(feature = "default-client", feature = "wire-mock"))]
 pub mod wire;
+
+#[cfg(feature = "__turmoil")]
+mod turmoil;
+#[cfg(feature = "__turmoil")]
+pub use turmoil::turmoil_client;
