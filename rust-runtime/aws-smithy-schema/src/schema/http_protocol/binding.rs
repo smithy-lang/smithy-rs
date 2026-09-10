@@ -98,13 +98,25 @@ impl<C: Codec> HttpBindingProtocol<C> {
         // Check if there's an @httpPayload member targeting a structure/union.
         // In that case, the payload member's own write_struct provides the body
         // framing, so we must not add top-level struct framing.
-        let has_struct_payload = input_schema.members().iter().any(|m| {
-            m.http_payload().is_some()
-                && matches!(
-                    m.shape_type(),
-                    crate::ShapeType::Structure | crate::ShapeType::Union
-                )
-        });
+        //
+        // Codegen records this on the schema so the common path is a single
+        // discriminant read. `PayloadHint::Unknown`, every hand-constructed or
+        // runtime-materialized schema, and every crate generated before codegen
+        // began recording the hint. It falls back to deriving it by scanning
+        // members, which is what this did unconditionally before. The two
+        // branches must stay in agreement: `PayloadHint` is an optimization, not
+        // a correctness input.
+        let has_struct_payload = match input_schema.payload_hint() {
+            crate::PayloadHint::StructPayload => true,
+            crate::PayloadHint::NoStructPayload => false,
+            _ => input_schema.members().iter().any(|m| {
+                m.http_payload().is_some()
+                    && matches!(
+                        m.shape_type(),
+                        crate::ShapeType::Structure | crate::ShapeType::Union
+                    )
+            }),
+        };
         // If the schema declares zero body members (every member is HTTP-bound,
         // and any `@httpPayload` is on a scalar that bypasses the codec),
         // we can skip body-codec invocation entirely. The wasted work would be:
@@ -2004,6 +2016,122 @@ mod tests {
         assert_eq!(request.headers().get("X-Header").unwrap(), "hello");
         // Sanity: the panic-on-write codec was never written to
         assert_eq!(WRITE_CALLS.load(Ordering::SeqCst), 0);
+    }
+
+    // -- PayloadHint must agree with the scan it replaces -----------------------------------------
+    //
+    // `PayloadHint` is an optimization, so the only property worth pinning is
+    // that a recorded hint and the derived scan produce byte-identical requests.
+    // The negative control below proves these are not vacuous by showing that a
+    // *wrong* hint does change the body — i.e. the hint really is consulted.
+
+    static STRUCT_PAYLOAD_MEMBER: Schema<'static> = Schema::new_member(
+        crate::shape_id!("test", "StructPayloadStruct"),
+        ShapeType::Structure,
+        "body",
+        0,
+    )
+    .with_http_payload();
+    static STRUCT_PAYLOAD_MEMBERS: &[&Schema<'_>] = &[&STRUCT_PAYLOAD_MEMBER];
+
+    /// No hint recorded — the runtime derives `has_struct_payload` by scanning.
+    static STRUCT_PAYLOAD_UNKNOWN: Schema<'static> = Schema::new_struct(
+        crate::shape_id!("test", "StructPayloadStruct"),
+        ShapeType::Structure,
+        STRUCT_PAYLOAD_MEMBERS,
+    );
+    /// Same schema, correct hint recorded.
+    static STRUCT_PAYLOAD_HINTED: Schema<'static> = Schema::new_struct(
+        crate::shape_id!("test", "StructPayloadStruct"),
+        ShapeType::Structure,
+        STRUCT_PAYLOAD_MEMBERS,
+    )
+    .with_payload_hint(crate::PayloadHint::StructPayload);
+    /// Same schema, deliberately *wrong* hint — negative control only.
+    static STRUCT_PAYLOAD_MIS_HINTED: Schema<'static> = Schema::new_struct(
+        crate::shape_id!("test", "StructPayloadStruct"),
+        ShapeType::Structure,
+        STRUCT_PAYLOAD_MEMBERS,
+    )
+    .with_payload_hint(crate::PayloadHint::NoStructPayload);
+
+    /// Writes an `@httpPayload` struct member. `TestSerializer::write_struct`
+    /// emits `{` .. `}`, so the framing is directly observable: one pair of
+    /// braces means only the payload member framed the body, two means the
+    /// codec wrapped it as well.
+    struct StructPayloadStruct;
+    impl SerializableStruct for StructPayloadStruct {
+        fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+            s.write_struct(&STRUCT_PAYLOAD_MEMBER, &NameStruct)
+        }
+    }
+
+    fn body_for(schema: &Schema<'_>, input: &dyn SerializableStruct) -> Vec<u8> {
+        make_protocol()
+            .serialize_request(input, schema, "https://example.com", &ConfigBag::base())
+            .unwrap()
+            .body()
+            .bytes()
+            .unwrap_or(&[])
+            .to_vec()
+    }
+
+    #[test]
+    fn struct_payload_hint_agrees_with_derived_scan() {
+        let derived = body_for(&STRUCT_PAYLOAD_UNKNOWN, &StructPayloadStruct);
+        let hinted = body_for(&STRUCT_PAYLOAD_HINTED, &StructPayloadStruct);
+
+        // Only the payload member frames the body.
+        assert_eq!(derived, b"{Alice}");
+        assert_eq!(hinted, derived);
+    }
+
+    #[test]
+    fn no_struct_payload_hint_agrees_with_derived_scan() {
+        static HINTED: Schema<'static> = Schema::new_struct(
+            crate::shape_id!("test", "TestStruct"),
+            ShapeType::Structure,
+            MEMBERS,
+        )
+        .with_payload_hint(crate::PayloadHint::NoStructPayload);
+
+        let derived = body_for(&STRUCT_WITH_MEMBER, &NameStruct);
+        let hinted = body_for(&HINTED, &NameStruct);
+
+        // Codec supplies the framing.
+        assert_eq!(derived, b"{Alice}");
+        assert_eq!(hinted, derived);
+    }
+
+    /// Negative control. Proves the hint is actually consulted, so the two
+    /// agreement tests above are not passing trivially.
+    ///
+    /// The observable effect is stronger than lost framing: `has_struct_payload`
+    /// feeds *two* decisions — whether the codec adds top-level framing, and
+    /// (at the `has_body_members` computation) whether the serialized body is
+    /// kept at all. A member carrying `@httpPayload` is excluded from the
+    /// "unbound member" scan, so once the hint wrongly says there is no struct
+    /// payload, nothing marks the struct as having body members and the payload
+    /// is discarded. This is why the hint's default has to mean "unknown"
+    /// rather than either boolean — a wrong value in *either* direction
+    /// corrupts the request.
+    #[test]
+    fn wrong_struct_payload_hint_changes_request() {
+        assert_eq!(
+            body_for(&STRUCT_PAYLOAD_MIS_HINTED, &StructPayloadStruct),
+            b"",
+            "a mis-recorded hint must be observable, otherwise the agreement \
+             tests above prove nothing"
+        );
+    }
+
+    #[test]
+    fn payload_hint_defaults_to_unknown() {
+        assert_eq!(
+            STRUCT_PAYLOAD_UNKNOWN.payload_hint(),
+            crate::PayloadHint::Unknown
+        );
+        assert_eq!(TEST_SCHEMA.payload_hint(), crate::PayloadHint::Unknown);
     }
 
     /// Inverse case: a struct WITHOUT `with_no_body_members()` (default

@@ -2203,6 +2203,52 @@ class SchemaGenerator(
     }
 
     /**
+     * For an operation input struct, records whether an `@httpPayload` member
+     * targets a `structure` or `union`, ex: whether that member supplies the
+     * body's framing, as a `PayloadHint` on the schema.
+     *
+     * This lets `HttpBindingProtocol::serialize_request` read a discriminant
+     * instead of scanning members on every request. Emitted for every
+     * operation input, including the common case with no payload at all, because
+     * `PayloadHint::Unknown` (the default) means "not recorded" and makes the
+     * runtime scan — so omitting the negative case would leave the common path
+     * unimproved.
+     *
+     * The classification must stay identical to the runtime's fallback scan in
+     * `HttpBindingProtocol::serialize_request`. A mismatch in either direction
+     * corrupts the request: `has_struct_payload` gates both top-level framing
+     * and whether the serialized body is retained, so a wrong hint can drop an
+     * `@httpPayload` body entirely. `wrong_struct_payload_hint_changes_request`
+     * in `binding.rs` pins that.
+     *
+     * Not emitted for non-input shapes: the runtime only ever consults this on
+     * an operation's input schema, and `PayloadHint::Unknown` there is correct
+     * (it just means nothing reads it).
+     */
+    private fun payloadHintChain(shape: Shape): String {
+        val operationIndex = software.amazon.smithy.model.knowledge.OperationIndex.of(model)
+        val isOperationInput =
+            model.operationShapes.any {
+                operationIndex.getInputShape(it).orElse(null)?.id == shape.id
+            }
+        if (!isOperationInput) return ""
+        if (shape !is software.amazon.smithy.model.shapes.StructureShape) return ""
+
+        val hasStructPayload =
+            shape.allMembers.values.any { member ->
+                if (!member.hasTrait(software.amazon.smithy.model.traits.HttpPayloadTrait::class.java)) {
+                    false
+                } else {
+                    val target = model.expectShape(member.target)
+                    target is software.amazon.smithy.model.shapes.StructureShape ||
+                        target is software.amazon.smithy.model.shapes.UnionShape
+                }
+            }
+        val variant = if (hasStructPayload) "StructPayload" else "NoStructPayload"
+        return "\n    .with_payload_hint(::aws_smithy_schema::PayloadHint::$variant)"
+    }
+
+    /**
      * If this shape carries `SyntheticInputTrait` or `SyntheticOutputTrait`
      * with a non-null `originalId`, returns a `.with_original_name(...)` call
      * that surfaces the original (pre-synthesis) shape name. REST XML reads
@@ -2407,6 +2453,7 @@ class SchemaGenerator(
                 val traitChain =
                     traitSetterChain(shape) + httpTraitChain(shape) +
                         s3UnwrappedXmlOutputChain(shape) + noBodyMembersChain(shape) +
+                        payloadHintChain(shape) +
                         originalNameChain(shape)
                 if (hasUnknownTraits(shape)) {
                     writer.rustTemplate(
