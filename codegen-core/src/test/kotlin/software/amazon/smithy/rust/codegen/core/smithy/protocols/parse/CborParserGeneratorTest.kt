@@ -9,7 +9,10 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.TestEnumType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpTraitHttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolContentTypes
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
@@ -65,6 +68,32 @@ class CborParserGeneratorTest {
         }
         """.asSmithyModel()
 
+    private val modelWithUnnamedEnum =
+        """
+        namespace test
+        use smithy.protocols#rpcv2Cbor
+
+        @rpcv2Cbor
+        service TestService {
+            version: "test",
+            operations: [TestOp]
+        }
+
+        @enum([
+            { value: "FOO" }
+        ])
+        string TestEnum
+
+        structure TestOutput {
+            value: TestEnum
+        }
+
+        @http(uri: "/test", method: "POST")
+        operation TestOp {
+            output: TestOutput
+        }
+        """.asSmithyModel()
+
     @Test
     fun `generates parser for BigInteger with CBOR`() {
         val model = OperationNormalizer.transform(modelWithBigInteger)
@@ -92,6 +121,42 @@ class CborParserGeneratorTest {
 
         model.lookup<OperationShape>("test#TestOp").outputShape(model).also { output ->
             output.renderWithModelBuilder(model, symbolProvider, project)
+        }
+        project.compileAndTest()
+    }
+
+    @Test
+    fun `generated parser for unnamed enum with CBOR compiles`() {
+        val model = OperationNormalizer.transform(modelWithUnnamedEnum)
+        val codegenContext = testCodegenContext(model)
+        val symbolProvider = codegenContext.symbolProvider
+        val parserGenerator =
+            CborParserGenerator(
+                codegenContext,
+                HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/cbor")),
+                handleNullForNonSparseCollection = { _ -> writable { } },
+            )
+        val operationParser = parserGenerator.operationParser(model.lookup("test#TestOp"))
+
+        val project = TestWorkspace.testProject(symbolProvider)
+
+        project.lib {
+            unitTest(
+                "cbor_unnamed_enum_parser",
+                """
+                let bytes: &[u8] = &[];
+                let _output = ${format(operationParser!!)};
+                """,
+            )
+        }
+
+        model.lookup<OperationShape>("test#TestOp").outputShape(model).also { output ->
+            output.renderWithModelBuilder(model, symbolProvider, project)
+        }
+        model.lookup<StringShape>("test#TestEnum").also { enum ->
+            project.moduleFor(enum) {
+                EnumGenerator(model, symbolProvider, enum, TestEnumType, emptyList()).render(this)
+            }
         }
         project.compileAndTest()
     }
