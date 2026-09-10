@@ -29,6 +29,9 @@ use aws_smithy_types::{BigDecimal, BigInteger, DateTime, Document};
 
 type CapturedHeaders = RefCell<Vec<(http::HeaderName, http::HeaderValue)>>;
 
+const DEFAULT_STRING_PAYLOAD_CONTENT_TYPE: &str = "text/plain";
+const DEFAULT_BLOB_PAYLOAD_CONTENT_TYPE: &str = "application/octet-stream";
+
 /// How the response body was produced, which determines the `Content-Type`.
 #[derive(Debug)]
 pub(crate) enum BodyKind {
@@ -88,24 +91,175 @@ pub(crate) fn serialize_response_parts<C: Codec>(
     apply_response_bindings: bool,
     value_kind: ResponseValueKind,
 ) -> Result<ResponseParts, SerdeError> {
-    serialize_response_parts_compiled(codec, schema, value, apply_response_bindings, value_kind, None, None)
+    let plan = CompiledResponsePlan::compile(schema, apply_response_bindings, value_kind);
+    serialize_response_parts_compiled(codec, schema, value, &plan)
+}
+
+/// The response serialization strategy selected once while compiling an operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ResponseStrategy {
+    Empty,
+    BindingsOnly,
+    CodecBody,
+    SplitBody,
+    Payload,
+}
+
+#[derive(Debug, Clone)]
+enum ResponseMemberPlan {
+    Body,
+    Header {
+        name: http::HeaderName,
+        media_type: bool,
+        timestamp_format: HeaderTimestampFormat,
+    },
+    PrefixHeaders {
+        prefix: String,
+    },
+    Status,
+    Payload {
+        content_type: PayloadContentType,
+    },
+}
+
+#[derive(Debug, Clone)]
+enum PayloadContentType {
+    Codec,
+    Raw(String),
+}
+
+#[derive(Debug, Clone, Copy)]
+enum HeaderTimestampFormat {
+    EpochSeconds,
+    DateTime,
+    HttpDate,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct CompiledResponsePlan {
+    strategy: ResponseStrategy,
+    members: Box<[ResponseMemberPlan]>,
+}
+
+impl CompiledResponsePlan {
+    #[cfg(test)]
+    pub(crate) fn empty() -> Self {
+        Self {
+            strategy: ResponseStrategy::Empty,
+            members: Box::new([]),
+        }
+    }
+
+    pub(crate) fn operation_output(schema: &Schema<'_>) -> Self {
+        Self::compile(schema, true, ResponseValueKind::OperationOutput)
+    }
+
+    fn compile(schema: &Schema<'_>, apply_response_bindings: bool, value_kind: ResponseValueKind) -> Self {
+        let has_bindings = apply_response_bindings && has_response_bound_members(schema);
+        let strategy = if matches!(value_kind, ResponseValueKind::OperationOutput)
+            && !has_output_body_members(schema, apply_response_bindings)
+        {
+            if has_bindings {
+                ResponseStrategy::BindingsOnly
+            } else {
+                ResponseStrategy::Empty
+            }
+        } else if !has_bindings {
+            ResponseStrategy::CodecBody
+        } else if schema.members().iter().any(|member| member.http_payload().is_some()) {
+            ResponseStrategy::Payload
+        } else {
+            ResponseStrategy::SplitBody
+        };
+        let members = if matches!(
+            strategy,
+            ResponseStrategy::BindingsOnly | ResponseStrategy::SplitBody | ResponseStrategy::Payload
+        ) {
+            let member_count = schema
+                .members()
+                .iter()
+                .filter_map(|member| member.member_index())
+                .max()
+                .map_or(0, |index| index + 1);
+            let mut members = vec![ResponseMemberPlan::Body; member_count];
+            for member in schema.members() {
+                if let Some(index) = member.member_index() {
+                    members[index] = compile_member_plan(member, apply_response_bindings);
+                }
+            }
+            members.into_boxed_slice()
+        } else {
+            Box::new([])
+        };
+        Self { strategy, members }
+    }
+
+    fn member(&self, schema: &Schema<'_>) -> &ResponseMemberPlan {
+        schema
+            .member_index()
+            .and_then(|index| self.members.get(index))
+            .unwrap_or(&ResponseMemberPlan::Body)
+    }
+}
+
+fn compile_member_plan(schema: &Schema<'_>, apply_response_bindings: bool) -> ResponseMemberPlan {
+    if !apply_response_bindings {
+        return ResponseMemberPlan::Body;
+    }
+    if schema.http_response_code().is_some() {
+        return ResponseMemberPlan::Status;
+    }
+    if let Some(header) = schema.http_header() {
+        let name = http::HeaderName::try_from(header.value()).unwrap_or_else(|err| {
+            panic!(
+                "invalid @httpHeader name `{}` in compiled response schema: {err}",
+                header.value()
+            )
+        });
+        let timestamp_format = match schema.timestamp_format().map(|value| value.format()) {
+            Some(aws_smithy_schema::traits::TimestampFormat::EpochSeconds) => HeaderTimestampFormat::EpochSeconds,
+            Some(aws_smithy_schema::traits::TimestampFormat::DateTime) => HeaderTimestampFormat::DateTime,
+            Some(aws_smithy_schema::traits::TimestampFormat::HttpDate) | None => HeaderTimestampFormat::HttpDate,
+        };
+        return ResponseMemberPlan::Header {
+            name,
+            media_type: schema.media_type().is_some(),
+            timestamp_format,
+        };
+    }
+    if let Some(prefix) = schema.http_prefix_headers() {
+        return ResponseMemberPlan::PrefixHeaders {
+            prefix: prefix.value().to_string(),
+        };
+    }
+    if schema.http_payload().is_some() {
+        let modeled = schema.media_type().map(|value| value.value());
+        let content_type = match schema.shape_type() {
+            aws_smithy_schema::ShapeType::String => {
+                PayloadContentType::Raw(modeled.unwrap_or(DEFAULT_STRING_PAYLOAD_CONTENT_TYPE).to_string())
+            }
+            aws_smithy_schema::ShapeType::Blob => {
+                PayloadContentType::Raw(modeled.unwrap_or(DEFAULT_BLOB_PAYLOAD_CONTENT_TYPE).to_string())
+            }
+            _ => PayloadContentType::Codec,
+        };
+        return ResponseMemberPlan::Payload { content_type };
+    }
+    ResponseMemberPlan::Body
 }
 
 pub(crate) fn serialize_response_parts_compiled<C: Codec>(
     codec: &C,
     schema: &Schema<'_>,
     value: &dyn SerializableStruct,
-    apply_response_bindings: bool,
-    value_kind: ResponseValueKind,
-    output_has_body: Option<bool>,
-    has_response_bindings: Option<bool>,
+    plan: &CompiledResponsePlan,
 ) -> Result<ResponseParts, SerdeError> {
-    if matches!(value_kind, ResponseValueKind::OperationOutput)
-        && !output_has_body.unwrap_or_else(|| has_output_body_members(schema, apply_response_bindings))
-    {
+    if matches!(plan.strategy, ResponseStrategy::Empty | ResponseStrategy::BindingsOnly) {
         let headers = CapturedHeaders::default();
+        // `SerializableStruct::serialize_members` receives `&self`. The splitter is reached through
+        // that shared reference, so captured response bindings require interior mutability.
         let status = Cell::new(None);
-        if apply_response_bindings {
+        if matches!(plan.strategy, ResponseStrategy::BindingsOnly) {
             let payload = RefCell::new(None);
             let mut sink = NoBodySerializer;
             let mut splitter = ResponseBindingSplitter {
@@ -115,6 +269,7 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
                 status: &status,
                 payload: &payload,
                 payload_mode: false,
+                plan,
             };
             value.serialize_members(&mut splitter)?;
         }
@@ -126,7 +281,7 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
         });
     }
 
-    if !apply_response_bindings || !has_response_bindings.unwrap_or_else(|| has_response_bound_members(schema)) {
+    if matches!(plan.strategy, ResponseStrategy::CodecBody) {
         let mut serializer = codec.create_serializer();
         serializer.write_struct(schema, value)?;
         return Ok(ResponseParts {
@@ -137,7 +292,7 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
         });
     }
 
-    let has_payload_member = schema.members().iter().any(|m| m.http_payload().is_some());
+    let has_payload_member = matches!(plan.strategy, ResponseStrategy::Payload);
     let headers = CapturedHeaders::default();
     let status = Cell::new(None);
     let payload = RefCell::new(None);
@@ -154,6 +309,7 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
             status: &status,
             payload: &payload,
             payload_mode: true,
+            plan,
         };
         value.serialize_members(&mut splitter)?;
         Vec::new()
@@ -166,6 +322,7 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
                 headers: &headers,
                 status: &status,
                 payload: &payload,
+                plan,
             };
             body_serializer.write_struct(schema, &wrapper)?;
         }
@@ -222,8 +379,11 @@ struct SplitBindings<'a, C> {
     inner: &'a dyn SerializableStruct,
     codec: &'a C,
     headers: &'a CapturedHeaders,
+    // The codec calls `serialize_members` through `&dyn SerializableStruct`; `Cell` lets that
+    // shared wrapper capture the optional status without allocation or mutable aliasing.
     status: &'a Cell<Option<u16>>,
     payload: &'a RefCell<Option<CapturedPayload>>,
+    plan: &'a CompiledResponsePlan,
 }
 
 impl<C: Codec> SerializableStruct for SplitBindings<'_, C> {
@@ -235,6 +395,7 @@ impl<C: Codec> SerializableStruct for SplitBindings<'_, C> {
             status: self.status,
             payload: self.payload,
             payload_mode: false,
+            plan: self.plan,
         };
         self.inner.serialize_members(&mut splitter)
     }
@@ -279,33 +440,27 @@ impl ShapeSerializer for NoBodySerializer {
     }
 }
 
-pub(crate) fn capture_header(sink: &CapturedHeaders, schema: &Schema<'_>, formatted: &str) -> Result<(), SerdeError> {
+fn capture_header(sink: &CapturedHeaders, name: &http::HeaderName, formatted: &str) -> Result<(), SerdeError> {
     // Mirror the generated `ser_*_headers` functions: empty string
     // values are skipped rather than sent as empty headers.
     if formatted.is_empty() {
         return Ok(());
     }
-    let header = schema
-        .http_header()
-        .expect("checked by caller: schema carries @httpHeader");
-    let name = http::HeaderName::try_from(header.value())
-        .map_err(|err| SerdeError::custom(format!("`{}` cannot be used as a header name: {}", header.value(), err)))?;
     let value = http::HeaderValue::try_from(formatted)
         .map_err(|err| SerdeError::custom(format!("`{formatted}` cannot be used as a header value: {err}")))?;
-    sink.borrow_mut().push((name, value));
+    sink.borrow_mut().push((name.clone(), value));
     Ok(())
 }
 
 /// Formats a timestamp for an HTTP header: `@timestampFormat` if present on
 /// the member schema, else `http-date` (the Smithy default for header-bound
 /// timestamps).
-pub(crate) fn format_header_timestamp(schema: &Schema<'_>, value: &DateTime) -> Result<String, SerdeError> {
-    use aws_smithy_schema::traits::TimestampFormat as SchemaFormat;
+fn format_header_timestamp(format: HeaderTimestampFormat, value: &DateTime) -> Result<String, SerdeError> {
     use aws_smithy_types::date_time::Format;
-    let format = match schema.timestamp_format().map(|t| t.format()) {
-        Some(SchemaFormat::EpochSeconds) => Format::EpochSeconds,
-        Some(SchemaFormat::DateTime) => Format::DateTimeWithOffset,
-        Some(SchemaFormat::HttpDate) | None => Format::HttpDate,
+    let format = match format {
+        HeaderTimestampFormat::EpochSeconds => Format::EpochSeconds,
+        HeaderTimestampFormat::DateTime => Format::DateTimeWithOffset,
+        HeaderTimestampFormat::HttpDate => Format::HttpDate,
     };
     value
         .fmt(format)
@@ -325,13 +480,10 @@ struct ResponseBindingSplitter<'a, C> {
     /// callers pass the payload member's TARGET schema, which carries the
     /// framing but not the member's binding traits.
     payload_mode: bool,
+    plan: &'a CompiledResponsePlan,
 }
 
 impl<C: Codec> ResponseBindingSplitter<'_, C> {
-    fn is_header(&self, schema: &Schema<'_>) -> bool {
-        schema.http_header().is_some()
-    }
-
     fn capture_status(&self, value: i64) -> Result<(), SerdeError> {
         let status = u16::try_from(value)
             .ok()
@@ -353,13 +505,13 @@ impl<C: Codec> ResponseBindingSplitter<'_, C> {
 macro_rules! split_int {
     ($fn_name:ident, $ty:ty) => {
         fn $fn_name(&mut self, schema: &Schema<'_>, value: $ty) -> Result<(), SerdeError> {
-            if schema.http_response_code().is_some() {
-                self.capture_status(value as i64)
-            } else if self.is_header(schema) {
-                let mut encoder = aws_smithy_types::primitive::Encoder::from(value);
-                capture_header(self.headers, schema, encoder.encode())
-            } else {
-                self.body.$fn_name(schema, value)
+            match self.plan.member(schema) {
+                ResponseMemberPlan::Status => self.capture_status(value as i64),
+                ResponseMemberPlan::Header { name, .. } => {
+                    let mut encoder = aws_smithy_types::primitive::Encoder::from(value);
+                    capture_header(self.headers, name, encoder.encode())
+                }
+                _ => self.body.$fn_name(schema, value),
             }
         }
     };
@@ -368,11 +520,12 @@ macro_rules! split_int {
 macro_rules! split_scalar {
     ($fn_name:ident, $ty:ty) => {
         fn $fn_name(&mut self, schema: &Schema<'_>, value: $ty) -> Result<(), SerdeError> {
-            if self.is_header(schema) {
-                let mut encoder = aws_smithy_types::primitive::Encoder::from(value);
-                capture_header(self.headers, schema, encoder.encode())
-            } else {
-                self.body.$fn_name(schema, value)
+            match self.plan.member(schema) {
+                ResponseMemberPlan::Header { name, .. } => {
+                    let mut encoder = aws_smithy_types::primitive::Encoder::from(value);
+                    capture_header(self.headers, name, encoder.encode())
+                }
+                _ => self.body.$fn_name(schema, value),
             }
         }
     };
@@ -380,7 +533,7 @@ macro_rules! split_scalar {
 
 impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
     fn write_struct(&mut self, schema: &Schema<'_>, value: &dyn SerializableStruct) -> Result<(), SerdeError> {
-        if self.payload_mode || schema.http_payload().is_some() {
+        if self.payload_mode {
             // Structure/union payload: the payload member's own framing IS
             // the body — serialize it standalone through the codec.
             let mut serializer = self.codec.create_serializer();
@@ -397,13 +550,17 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
         schema: &Schema<'_>,
         write_elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
-        if self.is_header(schema) {
+        if let ResponseMemberPlan::Header {
+            name, timestamp_format, ..
+        } = self.plan.member(schema)
+        {
             // Each element becomes its own header value under the same name;
             // the collector formats elements against the outer
             // (header-carrying) member schema.
             let mut collector = HeaderListCollector {
                 sink: self.headers,
-                outer: schema,
+                name,
+                timestamp_format: *timestamp_format,
             };
             write_elements(&mut collector)
         } else {
@@ -416,9 +573,9 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
         schema: &Schema<'_>,
         write_entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
-        if let Some(prefix) = schema.http_prefix_headers() {
+        if let ResponseMemberPlan::PrefixHeaders { prefix } = self.plan.member(schema) {
             let mut collector = PrefixHeaderCollector {
-                prefix: prefix.value(),
+                prefix,
                 sink: self.headers,
                 pending_key: None,
             };
@@ -437,67 +594,66 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
     split_scalar!(write_double, f64);
 
     fn write_big_integer(&mut self, schema: &Schema<'_>, value: &BigInteger) -> Result<(), SerdeError> {
-        if self.is_header(schema) {
-            capture_header(self.headers, schema, value.as_ref())
-        } else {
-            self.body.write_big_integer(schema, value)
+        match self.plan.member(schema) {
+            ResponseMemberPlan::Header { name, .. } => capture_header(self.headers, name, value.as_ref()),
+            _ => self.body.write_big_integer(schema, value),
         }
     }
 
     fn write_big_decimal(&mut self, schema: &Schema<'_>, value: &BigDecimal) -> Result<(), SerdeError> {
-        if self.is_header(schema) {
-            capture_header(self.headers, schema, value.as_ref())
-        } else {
-            self.body.write_big_decimal(schema, value)
+        match self.plan.member(schema) {
+            ResponseMemberPlan::Header { name, .. } => capture_header(self.headers, name, value.as_ref()),
+            _ => self.body.write_big_decimal(schema, value),
         }
     }
 
     fn write_string(&mut self, schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
-        if schema.http_payload().is_some() {
-            let content_type = schema
-                .media_type()
-                .map(|m| m.value().to_string())
-                .unwrap_or_else(|| "text/plain".to_string());
-            self.capture_payload(value.as_bytes().to_vec(), Some(content_type));
+        if let ResponseMemberPlan::Payload {
+            content_type: PayloadContentType::Raw(content_type),
+        } = self.plan.member(schema)
+        {
+            self.capture_payload(value.as_bytes().to_vec(), Some(content_type.clone()));
             return Ok(());
         }
-        if self.is_header(schema) {
+        if let ResponseMemberPlan::Header { name, media_type, .. } = self.plan.member(schema) {
             // `@mediaType` on a header-bound string: base64-encode.
-            if schema.media_type().is_some() {
+            if *media_type {
                 let encoded = aws_smithy_types::base64::encode(value.as_bytes());
-                return capture_header(self.headers, schema, &encoded);
+                return capture_header(self.headers, name, &encoded);
             }
-            return capture_header(self.headers, schema, value);
+            return capture_header(self.headers, name, value);
         }
         self.body.write_string(schema, value)
     }
 
     fn write_blob(&mut self, schema: &Schema<'_>, value: aws_smithy_types::Blob) -> Result<(), SerdeError> {
-        if schema.http_payload().is_some() {
-            let content_type = schema
-                .media_type()
-                .map(|m| m.value().to_string())
-                .unwrap_or_else(|| "application/octet-stream".to_string());
-            self.capture_payload(value.into_inner(), Some(content_type));
+        if let ResponseMemberPlan::Payload {
+            content_type: PayloadContentType::Raw(content_type),
+        } = self.plan.member(schema)
+        {
+            self.capture_payload(value.into_inner(), Some(content_type.clone()));
             return Ok(());
         }
-        if self.is_header(schema) {
-            return capture_header(self.headers, schema, &aws_smithy_types::base64::encode(value.as_ref()));
+        if let ResponseMemberPlan::Header { name, .. } = self.plan.member(schema) {
+            return capture_header(self.headers, name, &aws_smithy_types::base64::encode(value.as_ref()));
         }
         self.body.write_blob(schema, value)
     }
 
     fn write_timestamp(&mut self, schema: &Schema<'_>, value: &DateTime) -> Result<(), SerdeError> {
-        if self.is_header(schema) {
-            let formatted = format_header_timestamp(schema, value)?;
-            capture_header(self.headers, schema, &formatted)
-        } else {
-            self.body.write_timestamp(schema, value)
+        match self.plan.member(schema) {
+            ResponseMemberPlan::Header {
+                name, timestamp_format, ..
+            } => {
+                let formatted = format_header_timestamp(*timestamp_format, value)?;
+                capture_header(self.headers, name, &formatted)
+            }
+            _ => self.body.write_timestamp(schema, value),
         }
     }
 
     fn write_document(&mut self, schema: &Schema<'_>, value: &Document) -> Result<(), SerdeError> {
-        if self.payload_mode || schema.http_payload().is_some() {
+        if self.payload_mode {
             // The document VALUE is the body: serialize against the prelude
             // document schema, not the member schema — a member schema would
             // make the codec emit a `"memberName":` key fragment.
@@ -510,11 +666,7 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
     }
 
     fn write_null(&mut self, schema: &Schema<'_>) -> Result<(), SerdeError> {
-        if self.is_header(schema)
-            || schema.http_response_code().is_some()
-            || schema.http_payload().is_some()
-            || schema.http_prefix_headers().is_some()
-        {
+        if !matches!(self.plan.member(schema), ResponseMemberPlan::Body) {
             // A null bound member is simply not sent.
             Ok(())
         } else {
@@ -527,15 +679,15 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
 /// becomes its own header value under the member's header name.
 struct HeaderListCollector<'a> {
     sink: &'a CapturedHeaders,
-    /// The header-carrying member schema.
-    outer: &'a Schema<'a>,
+    name: &'a http::HeaderName,
+    timestamp_format: HeaderTimestampFormat,
 }
 
 macro_rules! collect_scalar {
     ($fn_name:ident, $ty:ty) => {
         fn $fn_name(&mut self, _schema: &Schema<'_>, value: $ty) -> Result<(), SerdeError> {
             let mut encoder = aws_smithy_types::primitive::Encoder::from(value);
-            capture_header(self.sink, self.outer, encoder.encode())
+            capture_header(self.sink, self.name, encoder.encode())
         }
     };
 }
@@ -574,11 +726,11 @@ impl ShapeSerializer for HeaderListCollector<'_> {
     collect_scalar!(write_double, f64);
 
     fn write_big_integer(&mut self, _schema: &Schema<'_>, value: &BigInteger) -> Result<(), SerdeError> {
-        capture_header(self.sink, self.outer, value.as_ref())
+        capture_header(self.sink, self.name, value.as_ref())
     }
 
     fn write_big_decimal(&mut self, _schema: &Schema<'_>, value: &BigDecimal) -> Result<(), SerdeError> {
-        capture_header(self.sink, self.outer, value.as_ref())
+        capture_header(self.sink, self.name, value.as_ref())
     }
 
     fn write_string(&mut self, _schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
@@ -586,16 +738,16 @@ impl ShapeSerializer for HeaderListCollector<'_> {
         // `"` (RFC 9110 list syntax) — mirroring the generated
         // serializers' `quote_header_value` usage.
         let quoted = aws_smithy_http::header::quote_header_value(value);
-        capture_header(self.sink, self.outer, quoted.as_ref())
+        capture_header(self.sink, self.name, quoted.as_ref())
     }
 
     fn write_blob(&mut self, _schema: &Schema<'_>, value: aws_smithy_types::Blob) -> Result<(), SerdeError> {
-        capture_header(self.sink, self.outer, &aws_smithy_types::base64::encode(value.as_ref()))
+        capture_header(self.sink, self.name, &aws_smithy_types::base64::encode(value.as_ref()))
     }
 
     fn write_timestamp(&mut self, _schema: &Schema<'_>, value: &DateTime) -> Result<(), SerdeError> {
-        let formatted = format_header_timestamp(self.outer, value)?;
-        capture_header(self.sink, self.outer, &formatted)
+        let formatted = format_header_timestamp(self.timestamp_format, value)?;
+        capture_header(self.sink, self.name, &formatted)
     }
 
     fn write_document(&mut self, _schema: &Schema<'_>, _value: &Document) -> Result<(), SerdeError> {
@@ -840,6 +992,63 @@ mod tests {
         .unwrap();
         assert!(matches!(split.kind, BodyKind::Codec));
         assert_eq!(String::from_utf8(split.body).unwrap(), "{}");
+    }
+
+    #[test]
+    fn response_plan_is_compiled_from_top_level_bindings() {
+        assert_eq!(
+            CompiledResponsePlan::operation_output(&EMPTY_OUT_SCHEMA).strategy,
+            ResponseStrategy::Empty
+        );
+        assert_eq!(
+            CompiledResponsePlan::operation_output(&OUT_SCHEMA).strategy,
+            ResponseStrategy::SplitBody
+        );
+        assert_eq!(
+            CompiledResponsePlan::operation_output(&BLOB_OUT_SCHEMA).strategy,
+            ResponseStrategy::Payload
+        );
+
+        static HEADER_MEMBERS: [&Schema<'static>; 1] = [&HDR_MEMBER];
+        static HEADER_ONLY: Schema<'static> = Schema::new_struct(
+            ShapeId::from_parts("test#HeaderOnly", "test", "HeaderOnly"),
+            ShapeType::Structure,
+            &HEADER_MEMBERS,
+        );
+        static BODY_MEMBERS: [&Schema<'static>; 1] = [&BODY_MEMBER];
+        static BODY_ONLY: Schema<'static> = Schema::new_struct(
+            ShapeId::from_parts("test#BodyOnly", "test", "BodyOnly"),
+            ShapeType::Structure,
+            &BODY_MEMBERS,
+        );
+        assert_eq!(
+            CompiledResponsePlan::operation_output(&HEADER_ONLY).strategy,
+            ResponseStrategy::BindingsOnly
+        );
+        assert_eq!(
+            CompiledResponsePlan::operation_output(&BODY_ONLY).strategy,
+            ResponseStrategy::CodecBody
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid @httpHeader name `not a header`")]
+    fn invalid_header_names_fail_during_response_plan_compilation() {
+        static INVALID_HEADER: Schema<'static> = Schema::new_member(
+            ShapeId::from_parts("test#InvalidHeader$value", "test", "InvalidHeader"),
+            ShapeType::String,
+            "value",
+            0,
+        )
+        .with_http_header("not a header");
+        static MEMBERS: [&Schema<'static>; 1] = [&INVALID_HEADER];
+        static OUTPUT: Schema<'static> = Schema::new_struct(
+            ShapeId::from_parts("test#InvalidHeader", "test", "InvalidHeader"),
+            ShapeType::Structure,
+            &MEMBERS,
+        );
+
+        let _ = CompiledResponsePlan::operation_output(&OUTPUT);
     }
 
     // ------------------------------------------------------------------

@@ -23,6 +23,7 @@
 
 use std::borrow::Cow;
 
+use crate::schema::protocol::RestOperationState;
 use aws_smithy_runtime_api::http::{Headers, Uri};
 use aws_smithy_schema::codec::Codec;
 use aws_smithy_schema::serde::{SerdeError, ShapeDeserializer};
@@ -874,8 +875,7 @@ pub(crate) struct RestRequestDeserializer<'a, C> {
     headers: &'a Headers,
     uri: &'a Uri,
     body: &'a [u8],
-    /// The operation's `@http` URI pattern, matched against the request path for `@httpLabel` members.
-    uri_template: Option<&'a str>,
+    state: &'a RestOperationState,
 }
 
 impl<'a, C: Codec> RestRequestDeserializer<'a, C> {
@@ -884,14 +884,14 @@ impl<'a, C: Codec> RestRequestDeserializer<'a, C> {
         uri: &'a Uri,
         headers: &'a Headers,
         body: &'a [u8],
-        uri_template: Option<&'a str>,
+        state: &'a RestOperationState,
     ) -> Self {
         Self {
             codec,
             headers,
             uri,
             body,
-            uri_template,
+            state,
         }
     }
 
@@ -909,9 +909,8 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
         consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         // Labels and query pairs are parsed once, up front.
-        let has_labels = schema.members().iter().any(|m| m.http_label().is_some());
-        let labels: Vec<(Cow<'_, str>, String)> = if has_labels {
-            let template = self.uri_template.ok_or_else(|| {
+        let labels: Vec<(Cow<'_, str>, String)> = if self.state.has_labels() {
+            let template = self.state.uri_template().ok_or_else(|| {
                 SerdeError::invalid_input("input has @httpLabel members but the operation has no @http trait")
             })?;
             extract_labels(template, self.uri.path())?
@@ -921,17 +920,12 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
         } else {
             Vec::new()
         };
-        let needs_query = schema
-            .members()
-            .iter()
-            .any(|m| m.http_query().is_some() || m.http_query_params().is_some());
-        let query_pairs: Vec<(String, String)> = if needs_query {
+        let query_pairs: Vec<(String, String)> = if self.state.needs_query() {
             parse_query_pairs(self.uri.query())
         } else {
             Vec::new()
         };
 
-        let mut has_unbound_members = false;
         for member in schema.members() {
             let member_name = member.member_name().unwrap_or_default();
             if member.http_label().is_some() {
@@ -997,7 +991,11 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
                     let mut deser = StringMapDeserializer::new(entries);
                     consumer(member, &mut deser)?;
                 }
-            } else if member.http_payload().is_some() {
+            } else if self
+                .state
+                .request_payload()
+                .is_some_and(|payload| std::ptr::eq(payload, *member))
+            {
                 match member.shape_type() {
                     ShapeType::Blob | ShapeType::String => {
                         // Matching `HttpBindingGenerator.kt`: an empty
@@ -1017,13 +1015,11 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
                         }
                     }
                 }
-            } else {
-                has_unbound_members = true;
             }
         }
 
         // Unbound members come from the codec body document, in wire order.
-        if has_unbound_members && !self.body.is_empty() {
+        if self.state.has_unbound_members() && !self.body.is_empty() {
             let mut body_deser = self.codec.create_deserializer(self.body);
             body_deser.read_struct(schema, consumer)?;
         }
@@ -1207,7 +1203,8 @@ mod tests {
 
     fn collect(uri: &Uri, headers: &Headers, body: &[u8]) -> Result<Collected, SerdeError> {
         let codec = json_codec();
-        let mut deser = RestRequestDeserializer::new(&codec, uri, headers, body, INPUT_SCHEMA.http().map(|h| h.uri()));
+        let state = RestOperationState::for_input_test(&INPUT_SCHEMA, INPUT_SCHEMA.http().map(|http| http.uri()));
+        let mut deser = RestRequestDeserializer::new(&codec, uri, headers, body, &state);
         let mut out = Collected::default();
         deser.read_struct(&INPUT_SCHEMA, &mut |member, d| {
             match member.member_index() {

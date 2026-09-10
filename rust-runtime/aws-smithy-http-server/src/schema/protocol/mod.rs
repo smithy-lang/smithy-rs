@@ -31,6 +31,7 @@ mod tests;
 use std::any::Any;
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
+use std::sync::Arc;
 use std::time::Duration;
 
 use aws_smithy_runtime_api::http::{Headers, Uri};
@@ -190,8 +191,8 @@ const OPERATION_TABLE_CUTOFF: usize = 8;
 /// A service-local protocol instance and its compiled interpretation of every operation.
 #[derive(Debug)]
 pub struct ProtocolRoutingTable<P: ServerProtocol> {
-    protocol: P,
-    operations: TinyMap<&'static str, CompiledOperation<P::OperationState>, OPERATION_TABLE_CUTOFF>,
+    protocol: Arc<P>,
+    operations: TinyMap<&'static str, Arc<CompiledOperation<P::OperationState>>, OPERATION_TABLE_CUTOFF>,
 }
 
 impl<P: ServerProtocol> ProtocolRoutingTable<P> {
@@ -200,19 +201,32 @@ impl<P: ServerProtocol> ProtocolRoutingTable<P> {
         let operations = service
             .operations()
             .iter()
-            .map(|schema| (schema.shape_id().as_str(), protocol.compile_operation(schema)))
+            .map(|schema| (schema.shape_id().as_str(), Arc::new(protocol.compile_operation(schema))))
             .collect();
-        Self { protocol, operations }
+        Self {
+            protocol: Arc::new(protocol),
+            operations,
+        }
     }
 
     /// Returns the service-local protocol instance.
     pub fn protocol(&self) -> &P {
-        &self.protocol
+        self.protocol.as_ref()
+    }
+
+    /// Returns a shared, erased protocol together with a shared compiled operation.
+    pub fn select(&self, shape_id: &ShapeId<'_>) -> Option<super::SelectedProtocolOperation> {
+        self.operations
+            .get(shape_id.as_str())
+            .map(|operation| super::SelectedProtocolOperation {
+                protocol: self.protocol.clone(),
+                operation: operation.clone(),
+            })
     }
 
     /// Returns the compiled operation identified by `shape_id`.
     pub fn operation(&self, shape_id: &ShapeId<'_>) -> Option<&CompiledOperation<P::OperationState>> {
-        self.operations.get(shape_id.as_str())
+        self.operations.get(shape_id.as_str()).map(Arc::as_ref)
     }
 }
 
@@ -308,6 +322,9 @@ pub trait DynServerProtocol: Send + Sync + 'static {
 
     /// Converts a request-deserialization failure into the protocol's response.
     fn serialize_rejection(&self, err: DeserializeError) -> Response;
+
+    /// Whether `operation` was compiled by this protocol implementation.
+    fn accepts_operation(&self, operation: &dyn ErasedCompiledOperation) -> bool;
 }
 
 impl<P: ServerProtocol> DynServerProtocol for P {
@@ -337,6 +354,10 @@ impl<P: ServerProtocol> DynServerProtocol for P {
 
     fn serialize_rejection(&self, err: DeserializeError) -> Response {
         ServerProtocol::serialize_rejection(self, err)
+    }
+
+    fn accepts_operation(&self, operation: &dyn ErasedCompiledOperation) -> bool {
+        operation.as_any().is::<CompiledOperation<P::OperationState>>()
     }
 }
 

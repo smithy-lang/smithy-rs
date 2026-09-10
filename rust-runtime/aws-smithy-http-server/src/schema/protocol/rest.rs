@@ -8,14 +8,14 @@ use aws_smithy_schema::serde::{SerializableStruct, ShapeDeserializer};
 use aws_smithy_schema::{OperationSchema, Schema};
 
 use crate::response::Response;
-use crate::schema::response_bindings::{has_output_body_members, has_response_bound_members};
+use crate::schema::response_bindings::CompiledResponsePlan;
 use crate::schema::DeserializeError;
 
 use super::request::{
     enforce_content_type, enforce_expected_accept, expected_request_content_type, expected_response_content_type,
     ExpectedContentType,
 };
-use super::response::{serialize_compiled_rest_operation_response, CompiledRestResponseFacts};
+use super::response::serialize_compiled_rest_operation_response;
 use super::{OperationState, RequestBodyHandling, ServerRequest};
 
 #[derive(Debug)]
@@ -45,13 +45,13 @@ impl<C: Codec> RestProtocol<C> {
         request: &'a ServerRequest,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, DeserializeError> {
         enforce_expected_accept(&request.headers, state.expected_response_type.as_ref())?;
-        enforce_content_type(&state.expected_request_content_type, &request.headers, &request.body)?;
+        enforce_content_type(&request.headers, &state.expected_request_content_type, &request.body)?;
         Ok(Box::new(crate::schema::request_bindings::RestRequestDeserializer::new(
             &self.codec,
             &request.uri,
             &request.headers,
             &request.body,
-            state.uri_template,
+            state,
         )))
     }
 
@@ -67,11 +67,8 @@ impl<C: Codec> RestProtocol<C> {
             output,
             self.content_type,
             None,
-            CompiledRestResponseFacts {
-                output_has_body: state.output_has_body,
-                has_response_bindings: state.has_response_bindings,
-                default_status: state.default_status,
-            },
+            &state.response,
+            state.default_status,
         )
     }
 }
@@ -88,9 +85,11 @@ pub struct RestOperationState {
     response_payload: Option<&'static Schema<'static>>,
     expected_request_content_type: ExpectedContentType,
     expected_response_type: Option<mime::Mime>,
-    output_has_body: bool,
-    has_response_bindings: bool,
+    response: CompiledResponsePlan,
     uri_template: Option<&'static str>,
+    has_labels: bool,
+    needs_query: bool,
+    has_unbound_members: bool,
     default_status: u16,
 }
 
@@ -122,9 +121,21 @@ impl RestOperationState {
             response_payload,
             expected_request_content_type: expected_request_content_type(input, content_type),
             expected_response_type: expected_response_content_type(output, content_type),
-            output_has_body: has_output_body_members(output, true),
-            has_response_bindings: has_response_bound_members(output),
+            response: CompiledResponsePlan::operation_output(output),
             uri_template: http.map(|http| http.uri()),
+            has_labels: input.members().iter().any(|member| member.http_label().is_some()),
+            needs_query: input
+                .members()
+                .iter()
+                .any(|member| member.http_query().is_some() || member.http_query_params().is_some()),
+            has_unbound_members: input.members().iter().any(|member| {
+                member.http_payload().is_none()
+                    && member.http_header().is_none()
+                    && member.http_query().is_none()
+                    && member.http_label().is_none()
+                    && member.http_prefix_headers().is_none()
+                    && member.http_query_params().is_none()
+            }),
             default_status: http.map(|http| http.code()).unwrap_or(200),
         }
     }
@@ -134,6 +145,51 @@ impl RestOperationState {
     }
     pub fn response_payload(&self) -> Option<&'static Schema<'static>> {
         self.response_payload
+    }
+
+    pub(crate) fn uri_template(&self) -> Option<&'static str> {
+        self.uri_template
+    }
+    pub(crate) fn has_labels(&self) -> bool {
+        self.has_labels
+    }
+    pub(crate) fn needs_query(&self) -> bool {
+        self.needs_query
+    }
+    pub(crate) fn has_unbound_members(&self) -> bool {
+        self.has_unbound_members
+    }
+
+    #[cfg(test)]
+    pub(crate) fn for_input_test(input: &'static Schema<'static>, uri_template: Option<&'static str>) -> Self {
+        let request_payload = input
+            .members()
+            .iter()
+            .copied()
+            .find(|member| member.http_payload().is_some());
+        Self {
+            request_body: RequestBodyHandling::Collected,
+            request_payload,
+            response_payload: None,
+            expected_request_content_type: expected_request_content_type(input, "application/json"),
+            expected_response_type: None,
+            response: CompiledResponsePlan::empty(),
+            uri_template,
+            has_labels: input.members().iter().any(|member| member.http_label().is_some()),
+            needs_query: input
+                .members()
+                .iter()
+                .any(|member| member.http_query().is_some() || member.http_query_params().is_some()),
+            has_unbound_members: input.members().iter().any(|member| {
+                member.http_payload().is_none()
+                    && member.http_header().is_none()
+                    && member.http_query().is_none()
+                    && member.http_label().is_none()
+                    && member.http_prefix_headers().is_none()
+                    && member.http_query_params().is_none()
+            }),
+            default_status: 200,
+        }
     }
 }
 

@@ -17,11 +17,20 @@ use tower::{util::Oneshot, Service, ServiceExt};
 use tracing::error;
 
 use crate::{
-    body::BoxBody, plugin::Plugin, request::FromRequest, response::IntoResponse,
-    runtime_error::InternalFailureException, service::ServiceShape,
+    body::{BoxBody, HttpBody},
+    plugin::Plugin,
+    request::{FromParts, FromRequest},
+    response::IntoResponse,
+    runtime_error::InternalFailureException,
+    schema::{
+        collect_request_body, DeserializableShape, DeserializeError, RequestBodyCollectionConfig, RequestBodyHandling,
+        SelectedProtocolOperation, ServerRequest,
+    },
+    service::ServiceShape,
 };
 
-use super::OperationShape;
+use super::{OperationShape, SchemaOperationShape};
+use aws_smithy_schema::serde::SerializableStruct;
 
 /// A [`Plugin`] responsible for taking an operation [`Service`], accepting and returning Smithy
 /// types and converting it into a [`Service`] taking and returning [`http`] types.
@@ -30,6 +39,169 @@ use super::OperationShape;
 #[derive(Debug, Clone)]
 pub struct UpgradePlugin<Extractors> {
     _extractors: PhantomData<Extractors>,
+}
+
+/// Protocol-neutral marker for request-part extractors used by [`DynUpgrade`].
+pub struct DynProtocol;
+
+/// Converts a generated operation error enum using the protocol selected by routing.
+pub trait IntoDynResponse {
+    fn into_dyn_response(self, protocol: &dyn crate::schema::DynServerProtocol) -> http::Response<BoxBody>;
+}
+
+impl IntoDynResponse for Infallible {
+    fn into_dyn_response(self, _protocol: &dyn crate::schema::DynServerProtocol) -> http::Response<BoxBody> {
+        match self {}
+    }
+}
+
+/// Schema-driven, protocol-neutral HTTP upgrade plugin.
+#[derive(Debug, Clone)]
+pub struct DynUpgradePlugin<Extractors> {
+    config: RequestBodyCollectionConfig,
+    _extractors: PhantomData<Extractors>,
+}
+
+impl<Extractors> DynUpgradePlugin<Extractors> {
+    pub fn new(config: RequestBodyCollectionConfig) -> Self {
+        Self {
+            config,
+            _extractors: PhantomData,
+        }
+    }
+}
+
+impl<Ser, Op, T, Extractors> Plugin<Ser, Op, T> for DynUpgradePlugin<Extractors>
+where
+    Ser: ServiceShape,
+    Op: SchemaOperationShape,
+{
+    type Output = DynUpgrade<Op, Extractors, T>;
+    fn apply(&self, inner: T) -> Self::Output {
+        DynUpgrade {
+            config: self.config,
+            _operation: PhantomData,
+            _extractors: PhantomData,
+            inner,
+        }
+    }
+}
+
+/// Upgrade service for a non-streaming schema operation.
+pub struct DynUpgrade<Op, Extractors, S> {
+    config: RequestBodyCollectionConfig,
+    _operation: PhantomData<Op>,
+    _extractors: PhantomData<Extractors>,
+    inner: S,
+}
+
+impl<Op, Extractors, S: Clone> Clone for DynUpgrade<Op, Extractors, S> {
+    fn clone(&self) -> Self {
+        Self {
+            config: self.config,
+            _operation: PhantomData,
+            _extractors: PhantomData,
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+impl<Op, Extractors, B, S> Service<http::Request<B>> for DynUpgrade<Op, Extractors, S>
+where
+    Op: SchemaOperationShape,
+    Op::Input: DeserializableShape + Send + 'static,
+    Op::Output: SerializableStruct + Send + 'static,
+    Extractors: FromParts<DynProtocol> + Send + 'static,
+    <Extractors as FromParts<DynProtocol>>::Rejection: std::fmt::Display,
+    B: HttpBody + Send + 'static,
+    B::Data: Send,
+    B::Error: std::error::Error + Send + Sync + 'static,
+    S: Service<(Op::Input, Extractors), Response = Op::Output> + Clone + Send + 'static,
+    S::Error: IntoDynResponse + Send + 'static,
+    S::Future: Send + 'static,
+{
+    type Response = http::Response<BoxBody>;
+    type Error = Infallible;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: http::Request<B>) -> Self::Future {
+        let clone = self.inner.clone();
+        let service = std::mem::replace(&mut self.inner, clone);
+        let config = self.config;
+        Box::pin(async move {
+            let (mut parts, body) = req.into_parts();
+            let Some(selected) = parts.extensions.get::<SelectedProtocolOperation>().cloned() else {
+                error!("selected protocol operation missing from request extensions");
+                return Ok(empty_internal_server_error());
+            };
+            if !std::ptr::eq(selected.operation().schema(), Op::SCHEMA)
+                || !selected.protocol().accepts_operation(&**selected.operation())
+            {
+                error!("selected protocol operation is incompatible with the routed operation");
+                return Ok(empty_internal_server_error());
+            }
+            let extractors = match Extractors::from_parts(&mut parts) {
+                Ok(value) => value,
+                Err(err) => return Ok(err.into_response()),
+            };
+            let bytes = match selected.operation().request_body() {
+                RequestBodyHandling::Unused => bytes::Bytes::new(),
+                RequestBodyHandling::Collected => match collect_request_body(body, &config).await {
+                    Ok(bytes) => bytes,
+                    Err(err) => {
+                        return Ok(selected.protocol().serialize_rejection(DeserializeError::Serde(
+                            aws_smithy_schema::serde::SerdeError::custom(err.to_string()),
+                        )))
+                    }
+                },
+                RequestBodyHandling::Streaming => {
+                    error!("streaming operation routed through DynUpgrade");
+                    return Ok(empty_internal_server_error());
+                }
+            };
+            let converted = match aws_smithy_runtime_api::http::Request::try_from(http::Request::from_parts(parts, ()))
+            {
+                Ok(request) => request.into_parts(),
+                Err(err) => {
+                    return Ok(selected.protocol().serialize_rejection(DeserializeError::Serde(
+                        aws_smithy_schema::serde::SerdeError::custom(err.to_string()),
+                    )))
+                }
+            };
+            let request = ServerRequest {
+                uri: converted.uri,
+                headers: converted.headers,
+                body: bytes,
+            };
+            let input = {
+                let mut deserializer = match selected
+                    .protocol()
+                    .deserialize_request(&**selected.operation(), &request)
+                {
+                    Ok(value) => value,
+                    Err(err) => return Ok(selected.protocol().serialize_rejection(err)),
+                };
+                match Op::Input::deserialize(&mut *deserializer) {
+                    Ok(value) => value,
+                    Err(err) => return Ok(selected.protocol().serialize_rejection(err)),
+                }
+            };
+            match service.oneshot((input, extractors)).await {
+                Ok(output) => Ok(selected.protocol().serialize_response(&**selected.operation(), &output)),
+                Err(err) => Ok(err.into_dyn_response(&**selected.protocol())),
+            }
+        })
+    }
+}
+
+fn empty_internal_server_error() -> http::Response<BoxBody> {
+    let mut response = http::Response::new(crate::body::empty());
+    *response.status_mut() = http::StatusCode::INTERNAL_SERVER_ERROR;
+    response
 }
 
 impl<Extractors> Default for UpgradePlugin<Extractors> {

@@ -13,7 +13,8 @@ use aws_smithy_schema::{OperationSchema, Schema};
 use crate::extension::{ModeledErrorExtension, RuntimeErrorExtension};
 use crate::response::Response;
 use crate::schema::response_bindings::{
-    serialize_response_parts, serialize_response_parts_compiled, BodyKind, ResponseParts, ResponseValueKind,
+    serialize_response_parts, serialize_response_parts_compiled, BodyKind, CompiledResponsePlan, ResponseParts,
+    ResponseValueKind,
 };
 
 /// The success status: a captured `@httpResponseCode`, else the operation's `@http` code, else `200`.
@@ -69,30 +70,17 @@ fn serialize_operation_response<C: Codec>(
     assemble_response(parts, status, codec_content_type, empty_content_type)
 }
 
-pub(super) struct CompiledRestResponseFacts {
-    pub(super) output_has_body: bool,
-    pub(super) has_response_bindings: bool,
-    pub(super) default_status: u16,
-}
-
 pub(super) fn serialize_compiled_rest_operation_response<C: Codec>(
     codec: &C,
     operation: &OperationSchema<'_>,
     output: &dyn SerializableStruct,
     codec_content_type: &'static str,
     empty_content_type: Option<&'static str>,
-    facts: CompiledRestResponseFacts,
+    plan: &CompiledResponsePlan,
+    default_status: u16,
 ) -> Result<Response, SerdeError> {
-    let parts = serialize_response_parts_compiled(
-        codec,
-        operation.output(),
-        output,
-        true,
-        ResponseValueKind::OperationOutput,
-        Some(facts.output_has_body),
-        Some(facts.has_response_bindings),
-    )?;
-    let status = parts.status.unwrap_or(facts.default_status);
+    let parts = serialize_response_parts_compiled(codec, operation.output(), output, plan)?;
+    let status = parts.status.unwrap_or(default_status);
     assemble_response(parts, status, codec_content_type, empty_content_type)
 }
 

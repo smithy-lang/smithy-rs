@@ -108,8 +108,8 @@ fn check_content_type(headers: &Headers, expected: Option<&str>) -> Result<(), D
 /// Enforces `expected`. An empty body is accepted without a header: the header is only checked
 /// when there are bytes to parse.
 pub(super) fn enforce_content_type(
-    expected: &ExpectedContentType,
     headers: &Headers,
+    expected: &ExpectedContentType,
     body: &[u8],
 ) -> Result<(), DeserializeError> {
     match expected {

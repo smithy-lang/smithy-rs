@@ -7,6 +7,7 @@ use std::marker::PhantomData;
 
 use super::{Handler, IntoService, Normalize, OperationService};
 use crate::shape_id::ShapeId;
+use aws_smithy_schema::OperationSchema;
 
 /// Models the [Smithy Operation shape].
 ///
@@ -22,6 +23,11 @@ pub trait OperationShape {
     /// The operation error. [`Infallible`](std::convert::Infallible) in the case where no error
     /// exists.
     type Error;
+}
+
+/// Associates a generated operation marker with its schema descriptor.
+pub trait SchemaOperationShape: OperationShape {
+    const SCHEMA: &'static OperationSchema<'static>;
 }
 
 /// An extension trait over [`OperationShape`].
