@@ -28,3 +28,4 @@ pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk" }
 
 [dev-dependencies]
 aws-smithy-runtime = { path = "../../rust-runtime/aws-smithy-runtime", features = ["test-util"] }
+aws-smithy-http-client = { path = "../../rust-runtime/aws-smithy-http-client", features = ["test-util"] }

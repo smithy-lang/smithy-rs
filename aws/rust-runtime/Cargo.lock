@@ -90,6 +90,7 @@ dependencies = [
  "aws-smithy-async",
  "aws-smithy-checksums",
  "aws-smithy-http",
+ "aws-smithy-http-client",
  "aws-smithy-observability",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
@@ -118,7 +119,7 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.9.2"
+version = "1.10.0"
 dependencies = [
  "arbitrary",
  "aws-credential-types",
@@ -160,7 +161,7 @@ version = "1.2.0"
 
 [[package]]
 name = "aws-sigv4"
-version = "1.5.1"
+version = "1.6.0"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-eventstream",
@@ -252,17 +253,24 @@ name = "aws-smithy-http-client"
 version = "1.4.0"
 dependencies = [
  "aws-smithy-async",
+ "aws-smithy-protocol-test",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
+ "bytes",
  "h2 0.3.27",
  "h2 0.4.16",
  "http 0.2.12",
+ "http 1.5.0",
  "http-body 0.4.6",
+ "http-body 1.1.0",
  "hyper",
  "hyper-rustls",
+ "indexmap",
  "pin-project-lite",
  "rustls",
  "rustls-native-certs",
+ "serde",
+ "serde_json",
  "tokio",
  "tracing",
 ]
@@ -293,7 +301,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.14.0"
+version = "1.15.0"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http",
@@ -304,9 +312,7 @@ dependencies = [
  "aws-smithy-types",
  "bytes",
  "fastrand",
- "http 0.2.12",
  "http 1.5.0",
- "http-body 0.4.6",
  "http-body 1.1.0",
  "http-body-util",
  "pin-project-lite",
@@ -1372,6 +1378,8 @@ checksum = "07aa2048142242915a31d35844fb311e0e53fcca590c3a0a40dcf1b841fa09eb"
 dependencies = [
  "equivalent",
  "hashbrown",
+ "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -2139,6 +2147,7 @@ version = "1.0.146"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "217ca874ae0207aac254aa02c957ded05585a90892cc8d87f9e5fa49669dadd8"
 dependencies = [
+ "indexmap",
  "itoa",
  "memchr",
  "ryu",

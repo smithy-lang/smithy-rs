@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.core.testutil
 
+import com.moandjiezana.toml.Toml
 import com.moandjiezana.toml.TomlWriter
 import org.intellij.lang.annotations.Language
 import software.amazon.smithy.build.FileManifest
@@ -41,9 +42,11 @@ import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.orNullIfEmpty
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import java.io.File
+import java.io.FileOutputStream
 import java.nio.file.Files
 import java.nio.file.Files.createTempDirectory
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import kotlin.io.path.Path
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.writeText
@@ -119,19 +122,55 @@ object TestWorkspace {
         baseDir.mkdirs()
     }
 
+    /**
+     * Rewrites the shared workspace manifest to include [subprojects].
+     *
+     * Gradle forks a JVM per `Test` task, and each JVM only knows about the subprojects it created
+     * itself. Blindly writing `members = subprojects` therefore drops the crates belonging to any
+     * other JVM that is testing concurrently, and a plain `writeText` truncates the file while
+     * other tests' `cargo` invocations may be reading it. Either one surfaces as
+     * "current package believes it's in a workspace when it's not".
+     *
+     * To avoid that, the members already on disk are merged with this JVM's, and the manifest is
+     * swapped in atomically, all while holding an inter-process lock. Members whose directory has
+     * gone away are dropped so that a pruned workspace doesn't break the remaining tests.
+     */
     private fun generate() {
         val cargoToml = baseDir.resolve("Cargo.toml")
-        val workspaceToml =
-            TomlWriter().write(
-                mapOf(
-                    "workspace" to
-                        mapOf(
-                            "resolver" to "2",
-                            "members" to subprojects,
-                        ),
-                ),
-            )
-        cargoToml.writeText(workspaceToml)
+        baseDir.resolve(".cargo-toml.lock").let { lockFile ->
+            lockFile.createNewFile()
+            FileOutputStream(lockFile).use { stream ->
+                stream.channel.lock().use {
+                    val existingMembers =
+                        if (cargoToml.exists()) {
+                            runCatching {
+                                Toml().read(cargoToml).getList<String>("workspace.members") ?: emptyList()
+                            }.getOrDefault(emptyList())
+                        } else {
+                            emptyList()
+                        }
+                    val members =
+                        (existingMembers + subprojects)
+                            .distinct()
+                            // A registered member always has a manifest written up front, so anything
+                            // missing one has been removed from disk and would break the workspace.
+                            .filter { baseDir.resolve(it).resolve("Cargo.toml").exists() }
+                    val workspaceToml =
+                        TomlWriter().write(
+                            mapOf(
+                                "workspace" to
+                                    mapOf(
+                                        "resolver" to "2",
+                                        "members" to members,
+                                    ),
+                            ),
+                        )
+                    val tmp = File.createTempFile("Cargo", ".toml", baseDir)
+                    tmp.writeText(workspaceToml)
+                    Files.move(tmp.toPath(), cargoToml.toPath(), StandardCopyOption.ATOMIC_MOVE)
+                }
+            }
+        }
         if (cargoLock.exists()) {
             cargoLock.copyTo(baseDir.resolve("Cargo.lock"), true)
         }
