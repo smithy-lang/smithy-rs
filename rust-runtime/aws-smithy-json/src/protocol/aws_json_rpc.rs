@@ -192,6 +192,41 @@ mod tests {
         );
     }
 
+    /// A quoted number for a double member must be rejected through the real response path.
+    /// This is the body of Smithy protocol test `RestJsonBodyDoubleMalformedValueRejected_case0`.
+    #[test]
+    fn quoted_number_for_double_member_is_rejected() {
+        use aws_smithy_runtime_api::http::Response;
+        use aws_smithy_types::body::SdkBody;
+
+        static DOUBLE: aws_smithy_schema::Schema = aws_smithy_schema::Schema::new_member(
+            shape_id!("test", "Output", "doubleInBody"),
+            ShapeType::Double,
+            "doubleInBody",
+            0,
+        );
+        static OUTPUT: aws_smithy_schema::Schema = aws_smithy_schema::Schema::new_struct(
+            shape_id!("test", "Output"),
+            ShapeType::Structure,
+            &[&DOUBLE],
+        );
+        let read = |body: &str| {
+            let response = Response::new(200u16.try_into().unwrap(), SdkBody::from(body));
+            let mut deser = AwsJsonRpcProtocol::aws_json_1_0("TestService")
+                .deserialize_response(&response, &OUTPUT, &ConfigBag::base())
+                .unwrap();
+            let mut value = None;
+            deser
+                .read_struct(&OUTPUT, &mut |member, d| {
+                    value = Some(d.read_double(member)?);
+                    Ok(())
+                })
+                .map(|()| value)
+        };
+        assert_eq!(read(r#"{ "doubleInBody" : 123 }"#).unwrap(), Some(123.0));
+        assert!(read(r#"{ "doubleInBody" : "123" }"#).is_err());
+    }
+
     #[test]
     fn json_1_0_protocol_id() {
         assert_eq!(
