@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-dns"
-version = "0.2.0"
+version = "0.2.1"
 authors = [
     "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
 ]
@@ -26,7 +26,7 @@ hickory-resolver = {version = "0.25.2", optional = true}
 
 
 [dev-dependencies]
-criterion = "0.5.1"
+criterion = "0.8.2"
 
 
 

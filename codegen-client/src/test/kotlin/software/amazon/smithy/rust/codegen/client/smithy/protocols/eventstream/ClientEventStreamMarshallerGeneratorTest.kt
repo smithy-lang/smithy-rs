@@ -385,9 +385,9 @@ fun eventStreamSerdeConstructExpr(
                 RestJson1Trait.ID ->
                     "::aws_smithy_json::protocol::aws_rest_json_1::AwsRestJsonProtocol::new()"
                 AwsJson1_0Trait.ID ->
-                    "::aws_smithy_json::protocol::aws_json_rpc::AwsJsonRpcProtocol::aws_json_1_0(\"TestService\")"
+                    "::aws_smithy_json::protocol::aws_json_rpc::AwsJsonRpcProtocol::aws_json_1_0().with_target_prefix(\"TestService\")"
                 AwsJson1_1Trait.ID ->
-                    "::aws_smithy_json::protocol::aws_json_rpc::AwsJsonRpcProtocol::aws_json_1_1(\"TestService\")"
+                    "::aws_smithy_json::protocol::aws_json_rpc::AwsJsonRpcProtocol::aws_json_1_1().with_target_prefix(\"TestService\")"
                 RestXmlTrait.ID ->
                     "::aws_smithy_xml::protocol::aws_rest_xml::AwsRestXmlProtocol::new()"
                 Rpcv2CborTrait.ID ->

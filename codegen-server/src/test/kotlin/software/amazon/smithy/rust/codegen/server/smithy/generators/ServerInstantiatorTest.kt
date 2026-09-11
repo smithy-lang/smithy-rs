@@ -172,6 +172,7 @@ class ServerInstantiatorTest {
                         """
                         use std::collections::HashMap;
                         use aws_smithy_types::{DateTime, Document};
+                        use aws_smithy_types::document::DocumentObject;
                         use super::*;
 
                         let expected = MyStructRequired {
@@ -190,7 +191,7 @@ class ServerInstantiatorTest {
                             },
                             list: Vec::new(),
                             map: HashMap::new(),
-                            doc: Document::Object(HashMap::new()),
+                            doc: Document::Object(DocumentObject::new()),
                         };
                         assert_eq!(result, expected);
                         """,

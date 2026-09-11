@@ -92,6 +92,11 @@ class ClientAdditionalSettings private constructor(settings: List<AdditionalSett
                 return this
             }
 
+            fun disableSchemaSerde(disabled: Boolean = true): Builder {
+                settings.add(DisableSchemaSerde(disabled))
+                return this
+            }
+
             override fun build(): ClientAdditionalSettings = ClientAdditionalSettings(settings)
         }
 
@@ -99,6 +104,13 @@ class ClientAdditionalSettings private constructor(settings: List<AdditionalSett
             override fun toObjectNode(): ObjectNode =
                 ObjectNode.builder()
                     .withMember("includeLegacyClient", enabled)
+                    .build()
+        }
+
+        private data class DisableSchemaSerde(val disabled: Boolean) : AdditionalSettings() {
+            override fun toObjectNode(): ObjectNode =
+                ObjectNode.builder()
+                    .withMember("disableSchemaSerde", disabled)
                     .build()
         }
 

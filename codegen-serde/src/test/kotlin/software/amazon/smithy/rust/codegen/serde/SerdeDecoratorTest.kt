@@ -407,6 +407,7 @@ class SerdeDecoratorTest {
                 float: Float
                 double: Double
                 defaulted: Integer = 7
+                doc: Document
             }
             """.asSmithyModel(smithyVersion = "2")
 
@@ -532,6 +533,42 @@ class SerdeDecoratorTest {
                             }).join().expect("child thread should not panic")
                         });
                         assert!(child_result.is_err());
+                        """,
+                        *codegenScope,
+                    )
+                }
+
+                unitTest("document_object_preserves_source_key_order") {
+                    rustTemplate(
+                        """
+                        use #{crate}::types::Payload;
+
+                        // Keys are deliberately neither alphabetical nor in an order a
+                        // `HashMap` would reproduce, so this fails if the generated
+                        // deserializer builds the object through an unordered map.
+                        // Note `DocumentObject`'s `PartialEq` ignores order, so asserting
+                        // on the document value alone would NOT catch a regression here.
+                        let value: Payload = #{serde_json}::from_str(
+                            r##"{"doc":{"zebra":1,"apple":2,"mango":3,"banana":4}}"##
+                        ).expect("failed to deserialize document");
+
+                        let doc = value.doc.expect("doc should be set");
+                        let obj = doc.as_object().expect("doc should be an object");
+                        let keys: Vec<&str> = obj.keys().map(|k| k.as_str()).collect();
+                        assert_eq!(keys, ["zebra", "apple", "mango", "banana"]);
+
+                        // Nested objects must preserve order too.
+                        let value: Payload = #{serde_json}::from_str(
+                            r##"{"doc":{"outer":{"gamma":1,"alpha":2,"beta":3}}}"##
+                        ).expect("failed to deserialize nested document");
+                        let doc = value.doc.expect("doc should be set");
+                        let inner = doc
+                            .as_object()
+                            .and_then(|o| o.get("outer"))
+                            .and_then(|d| d.as_object())
+                            .expect("nested object should be present");
+                        let keys: Vec<&str> = inner.keys().map(|k| k.as_str()).collect();
+                        assert_eq!(keys, ["gamma", "alpha", "beta"]);
                         """,
                         *codegenScope,
                     )

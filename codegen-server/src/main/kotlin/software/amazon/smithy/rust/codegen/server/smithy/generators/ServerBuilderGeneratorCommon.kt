@@ -183,6 +183,17 @@ private fun defaultValue(
         }
 
         is DocumentShape -> {
+            // Smithy's @default trait can carry only the JSON node types
+            // (null, bool, string, number, array, object), so the six
+            // arms below cover every value Smithy will ever pass us here.
+            //
+            // The unified `aws_smithy_types::Document` also carries Blob,
+            // Timestamp, BigInteger, and BigDecimal variants. Those are
+            // not currently emittable as `@default` values via this path
+            // (Smithy doesn't allow them as JSON-node defaults). If a
+            // future Smithy revision lifts that restriction, add new
+            // arms below — `Document` is `#[non_exhaustive]` so the
+            // existing arms remain valid without a fallback.
             when (node) {
                 is NullNode ->
                     rustTemplate(
@@ -228,9 +239,9 @@ private fun defaultValue(
                 is ObjectNode -> {
                     check(node.isEmpty)
                     rustTemplate(
-                        "#{SmithyTypes}::Document::Object(#{HashMap}::new())",
+                        "#{SmithyTypes}::Document::Object(#{DocumentObject}::new())",
                         "SmithyTypes" to types,
-                        "HashMap" to RuntimeType.HashMap,
+                        "DocumentObject" to RuntimeType.documentObject(runtimeConfig),
                     )
                 }
 

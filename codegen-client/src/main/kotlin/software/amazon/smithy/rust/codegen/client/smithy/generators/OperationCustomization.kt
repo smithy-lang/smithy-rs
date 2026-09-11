@@ -45,6 +45,8 @@ sealed class OperationSection(name: String) : Section(name) {
         val responseStatusName: String,
         /** Name of the response headers map (for referring to it in Rust code) */
         val responseHeadersName: String,
+        /** Name of the response body byte slice (for referring to it in Rust code) */
+        val responseBodyName: String,
     ) : OperationSection("PopulateErrorMetadataExtras")
 
     /**
