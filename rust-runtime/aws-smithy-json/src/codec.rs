@@ -82,6 +82,15 @@ pub struct JsonCodecSettings {
     field_mapper: JsonFieldMapper,
     default_timestamp_format: TimestampFormat,
     max_depth: u32,
+    /// When `true`, a timestamp must use exactly the wire form its resolved
+    /// `@timestampFormat` (or the codec default) prescribes: a JSON number for
+    /// `epoch-seconds`, an RFC 3339 string without a UTC offset for `date-time`,
+    /// and an IMF-fixdate string for `http-date`. Servers enable this so that
+    /// malformed requests are rejected. When `false` (default) the deserializer
+    /// is tolerant, as clients are: a number is always read as epoch seconds and
+    /// a string for a `date-time` or `epoch-seconds` member is parsed as an
+    /// offset-aware `date-time`.
+    strict_timestamp_formats: bool,
 }
 
 impl JsonCodecSettings {
@@ -100,6 +109,12 @@ impl JsonCodecSettings {
     /// and deeply-nested document payloads.
     pub fn max_depth(&self) -> u32 {
         self.max_depth
+    }
+
+    /// Whether timestamps must use exactly the wire form their format prescribes.
+    /// See [`JsonCodecSettingsBuilder::strict_timestamp_formats`].
+    pub fn strict_timestamp_formats(&self) -> bool {
+        self.strict_timestamp_formats
     }
 
     /// Returns the JSON wire name for a member schema.
@@ -123,6 +138,7 @@ impl Default for JsonCodecSettings {
             field_mapper: JsonFieldMapper::UseJsonName,
             default_timestamp_format: TimestampFormat::EpochSeconds,
             max_depth: crate::codec::deserializer::MAX_DESERIALIZE_DEPTH,
+            strict_timestamp_formats: false,
         }
     }
 }
@@ -133,6 +149,7 @@ pub struct JsonCodecSettingsBuilder {
     use_json_name: bool,
     default_timestamp_format: TimestampFormat,
     max_depth: u32,
+    strict_timestamp_formats: bool,
 }
 
 impl Default for JsonCodecSettingsBuilder {
@@ -141,6 +158,7 @@ impl Default for JsonCodecSettingsBuilder {
             use_json_name: true,
             default_timestamp_format: TimestampFormat::EpochSeconds,
             max_depth: crate::codec::deserializer::MAX_DESERIALIZE_DEPTH,
+            strict_timestamp_formats: false,
         }
     }
 }
@@ -165,6 +183,15 @@ impl JsonCodecSettingsBuilder {
         self
     }
 
+    /// Require timestamps to use exactly the wire form their resolved format
+    /// prescribes: a JSON number for `epoch-seconds`, an RFC 3339 string without
+    /// a UTC offset for `date-time`, an IMF-fixdate string for `http-date`.
+    /// Off by default; servers turn it on so malformed requests are rejected.
+    pub fn strict_timestamp_formats(mut self, value: bool) -> Self {
+        self.strict_timestamp_formats = value;
+        self
+    }
+
     /// Builds the settings.
     pub fn build(self) -> JsonCodecSettings {
         let field_mapper = if self.use_json_name {
@@ -176,6 +203,7 @@ impl JsonCodecSettingsBuilder {
             field_mapper,
             default_timestamp_format: self.default_timestamp_format,
             max_depth: self.max_depth,
+            strict_timestamp_formats: self.strict_timestamp_formats,
         }
     }
 }
