@@ -67,6 +67,11 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromO
  *
  * Only shapes reachable from an operation input get a walker; nothing deserializes outputs or errors on the
  * server. Structures with event-stream or streaming-blob members keep the legacy serde and get no walker.
+ *
+ * With the `allowMissingUnionVariant` codegen setting, a union walker returns `Option` and yields `None` for a
+ * union object that set no variant, exactly as the legacy JSON parser does: the enclosing structure member is
+ * absent, a sparse collection element is `None`, and a dense collection element or a union-valued union member
+ * is the same error the legacy parser raises.
  */
 class ServerSchemaDeserializeGenerator(
     private val codegenContext: ServerCodegenContext,
@@ -78,6 +83,8 @@ class ServerSchemaDeserializeGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val unconstrainedShapeSymbolProvider = codegenContext.unconstrainedShapeSymbolProvider
     private val smithySchema = RuntimeType.smithySchema(codegenContext.runtimeConfig)
+    private val serdeError = smithySchema.resolve("serde::SerdeError").fullyQualifiedName()
+    private val allowMissingUnionVariant = codegenContext.settings.codegenConfig.allowMissingUnionVariant
     private val codegenScope =
         arrayOf(
             "ShapeDeserializer" to smithySchema.resolve("serde::ShapeDeserializer"),
@@ -195,7 +202,12 @@ class ServerSchemaDeserializeGenerator(
                 writable {
                     members.forEachIndexed { index, member ->
                         val fieldName = symbolProvider.toMemberName(member)
-                        val assignment = "builder.$fieldName = Some(${memberValueExpr(member)});"
+                        val assignment =
+                            if (yieldsOption(member)) {
+                                "builder.$fieldName = ${memberValueExpr(member)};"
+                            } else {
+                                "builder.$fieldName = Some(${memberValueExpr(member)});"
+                            }
                         if (symbolProvider.toSymbol(member).isOptional()) {
                             rust("Some($index) => { if deser.is_null() { deser.read_null()?; } else { $assignment } }")
                         } else {
@@ -227,7 +239,7 @@ class ServerSchemaDeserializeGenerator(
                 ##[allow(dead_code, unused_variables, unused_mut, clippy::match_single_binding, clippy::single_match)]
                 pub(crate) fn $FUNCTION_NAME(
                     deserializer: &mut dyn #{ShapeDeserializer},
-                ) -> ::std::result::Result<#{Return}, #{SerdeError}> {
+                ) -> ::std::result::Result<#{WalkerReturn}, #{SerdeError}> {
                     let mut value: ::std::option::Option<#{Return}> = None;
                     deserializer.read_struct(Self::SCHEMA, &mut |member, deser| {
                         match member.member_index() {
@@ -236,12 +248,32 @@ class ServerSchemaDeserializeGenerator(
                         }
                         Ok(())
                     })?;
-                    value.ok_or_else(|| #{SerdeError}::custom("expected exactly one union variant to be set"))
+                    #{finish}
                 }
             }
             """,
             *codegenScope,
             "Return" to returnSymbol,
+            "WalkerReturn" to
+                writable {
+                    if (allowMissingUnionVariant) {
+                        rustTemplate("::std::option::Option<#{Return}>", "Return" to returnSymbol)
+                    } else {
+                        rustTemplate("#{Return}", "Return" to returnSymbol)
+                    }
+                },
+            "finish" to
+                writable {
+                    if (allowMissingUnionVariant) {
+                        // A union object that set no variant is `None`; the caller decides what that means.
+                        rust("Ok(value)")
+                    } else {
+                        rustTemplate(
+                            """value.ok_or_else(|| #{SerdeError}::custom("expected exactly one union variant to be set"))""",
+                            *codegenScope,
+                        )
+                    }
+                },
             "arms" to
                 writable {
                     members.forEachIndexed { index, member ->
@@ -255,6 +287,11 @@ class ServerSchemaDeserializeGenerator(
                         val returnType = returnSymbol.rustType().qualifiedName()
                         if (target.id == UNIT) {
                             rust("Some($index) => { deser.read_struct(member, &mut |_, _| Ok(()))?; value = Some($returnType::$variant); }")
+                        } else if (yieldsOption(member)) {
+                            val inner =
+                                "(${memberValueExpr(member)}).ok_or_else(|| " +
+                                    "$serdeError::custom(\"value for '${member.memberName}' cannot be null\"))?"
+                            rust("Some($index) => { value = Some($returnType::$variant($inner)); }")
                         } else {
                             rust("Some($index) => { value = Some($returnType::$variant(${memberValueExpr(member)})); }")
                         }
@@ -271,15 +308,28 @@ class ServerSchemaDeserializeGenerator(
      */
     private fun memberValueExpr(member: MemberShape): String {
         val target = model.expectShape(member.target)
-        var expr = readExpr(target, "member")
-        if (member.targetCanReachConstrainedShape(model, symbolProvider)) {
-            expr = "($expr).into()"
+        val expr = readExpr(target, "member")
+        val convert = member.targetCanReachConstrainedShape(model, symbolProvider)
+        val boxed = symbolProvider.toSymbol(member).isRustBoxed()
+
+        fun wrap(value: String): String {
+            var out = value
+            if (convert) out = "($out).into()"
+            if (boxed) out = "Box::new($out)"
+            return out
         }
-        if (symbolProvider.toSymbol(member).isRustBoxed()) {
-            expr = "Box::new($expr)"
+        return when {
+            !convert && !boxed -> expr
+            // The read is an `Option`; apply the conversions to the value inside it.
+            yieldsOption(member) -> "($expr).map(|v| ${wrap("v")})"
+            else -> wrap(expr)
         }
-        return expr
     }
+
+    /** Whether the read expression for [member] is an `Option`: a union target under `allowMissingUnionVariant`. */
+    private fun yieldsOption(member: MemberShape): Boolean = yieldsOption(model.expectShape(member.target))
+
+    private fun yieldsOption(target: Shape): Boolean = allowMissingUnionVariant && target is UnionShape
 
     /**
      * The read expression for a value of shape [target] whose schema is reachable as [schemaRef]. Collections
@@ -347,7 +397,7 @@ class ServerSchemaDeserializeGenerator(
         if (helper != null) {
             return helper
         }
-        val elementRead = sparseAware(sparse, readExpr(element, "element"))
+        val elementRead = sparseAware(sparse, readExpr(element, "element"), yieldsOption(element), "list")
         // Nested structures and unions read against their own `SCHEMA`; only scalars and nested
         // collections need the list's member schema.
         val bindElement =
@@ -372,7 +422,7 @@ class ServerSchemaDeserializeGenerator(
         }
         // Keys are always read as `String`: enum keys make the map constrained, so its unconstrained type
         // holds `String` keys and validation converts them.
-        val valueRead = sparseAware(sparse, readExpr(value, "value_schema"))
+        val valueRead = sparseAware(sparse, readExpr(value, "value_schema"), yieldsOption(value), "map")
         val bindValueSchema =
             if (valueRead.contains("value_schema")) {
                 "let value_schema = $schemaRef.member().unwrap_or(${preludeFallback(value)}); "
@@ -383,14 +433,23 @@ class ServerSchemaDeserializeGenerator(
             "deser.read_map($schemaRef, &mut |key, deser| { container.insert(key, $valueRead); Ok(()) })?; container }"
     }
 
+    /**
+     * Adapts an element read to its container. A sparse container stores `None` for a `null`; a dense one
+     * cannot hold one, so a read that already yields `Option` (see [yieldsOption]) turns `None` into the same
+     * error the legacy parser raises.
+     */
     private fun sparseAware(
         sparse: Boolean,
         readExpr: String,
+        yieldsOption: Boolean,
+        container: String,
     ): String =
-        if (sparse) {
-            "if deser.is_null() { deser.read_null()?; None } else { Some($readExpr) }"
-        } else {
-            readExpr
+        when {
+            sparse && yieldsOption -> "if deser.is_null() { deser.read_null()?; None } else { $readExpr }"
+            sparse -> "if deser.is_null() { deser.read_null()?; None } else { Some($readExpr) }"
+            yieldsOption ->
+                "($readExpr).ok_or_else(|| $serdeError::custom(\"dense $container cannot contain null values\"))?"
+            else -> readExpr
         }
 
     /** A prelude schema to read against if a generated collection schema ever lacks its member schema. */
