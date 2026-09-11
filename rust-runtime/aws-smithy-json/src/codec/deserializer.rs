@@ -543,33 +543,52 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
     }
 
     fn read_timestamp(&mut self, schema: &Schema) -> Result<DateTime, SerdeError> {
+        use aws_smithy_schema::traits::TimestampFormat;
+        use aws_smithy_types::date_time::Format;
+
         self.skip_whitespace();
-        let rem = self.remaining();
-        match rem.first() {
+        let strict = self.settings.strict_timestamp_formats();
+        // The wire form the member prescribes: its `@timestampFormat`, else the codec default.
+        let format = match schema.timestamp_format().map(|t| t.format()) {
+            Some(TimestampFormat::EpochSeconds) => Format::EpochSeconds,
+            Some(TimestampFormat::DateTime) => Format::DateTime,
+            Some(TimestampFormat::HttpDate) => Format::HttpDate,
+            None => self.settings.default_timestamp_format(),
+        };
+        match self.remaining().first() {
             Some(b'"') => {
-                let s = self.read_string(schema)?;
-                // Determine parse format from @timestampFormat trait or default
-                let format = if let Some(ts_trait) = schema.timestamp_format() {
-                    match ts_trait.format() {
-                        aws_smithy_schema::traits::TimestampFormat::HttpDate => {
-                            aws_smithy_types::date_time::Format::HttpDate
-                        }
-                        aws_smithy_schema::traits::TimestampFormat::EpochSeconds => {
-                            aws_smithy_types::date_time::Format::EpochSeconds
-                        }
-                        aws_smithy_schema::traits::TimestampFormat::DateTime => {
-                            aws_smithy_types::date_time::Format::DateTimeWithOffset
-                        }
+                let string_format = if strict {
+                    // Strict: the string must be in exactly the prescribed format, and
+                    // `epoch-seconds` is never a string. This mirrors the token-based
+                    // parser's `expect_timestamp_or_null`, which the legacy server uses.
+                    if matches!(format, Format::EpochSeconds) {
+                        return Err(SerdeError::TypeMismatch {
+                            message: "expected a JSON number for an epoch-seconds timestamp".into(),
+                        });
                     }
+                    format
                 } else {
-                    // Default: try date-time with offsets allowed
-                    aws_smithy_types::date_time::Format::DateTimeWithOffset
+                    // Lenient (unchanged behavior): an explicit `@timestampFormat` of
+                    // `http-date` or `epoch-seconds` is honored as written; `date-time` and
+                    // members without the trait parse as offset-aware `date-time`.
+                    match schema.timestamp_format().map(|t| t.format()) {
+                        Some(TimestampFormat::HttpDate) => Format::HttpDate,
+                        Some(TimestampFormat::EpochSeconds) => Format::EpochSeconds,
+                        _ => Format::DateTimeWithOffset,
+                    }
                 };
-                DateTime::from_str(&s, format)
+                let s = self.read_string(schema)?;
+                DateTime::from_str(&s, string_format)
                     .map_err(|e| SerdeError::custom(format!("invalid timestamp string: {e}")))
             }
             Some(b'-') | Some(b'0'..=b'9') => {
-                // Numeric timestamp — epoch seconds
+                if strict && !matches!(format, Format::EpochSeconds) {
+                    return Err(SerdeError::TypeMismatch {
+                        message: "expected a JSON string for a date-time or http-date timestamp"
+                            .into(),
+                    });
+                }
+                // Numeric timestamp: epoch seconds.
                 let start = self.position;
                 self.consume_number();
                 let num_str =
@@ -2537,6 +2556,149 @@ mod tests {
             assert_eq!(
                 read(br#"{"d": "-infinity"}"#).unwrap().1,
                 Some(f64::NEG_INFINITY)
+            );
+        }
+    }
+
+    mod timestamp_formats {
+        //! With `strict_timestamp_formats`, a timestamp must use exactly the wire form its
+        //! format prescribes, as the restJson1 `MalformedTimestampBody*` protocol tests require.
+        //! Without it the lenient client behavior is unchanged.
+        use super::*;
+        use aws_smithy_schema::traits::TimestampFormat;
+        use aws_smithy_schema::{shape_id, ShapeType};
+
+        static DEFAULT: Schema =
+            Schema::new_member(shape_id!("test", "T", "d"), ShapeType::Timestamp, "d", 0);
+        static DATE_TIME: Schema =
+            Schema::new_member(shape_id!("test", "T", "dt"), ShapeType::Timestamp, "dt", 1)
+                .with_timestamp_format(TimestampFormat::DateTime);
+        static HTTP_DATE: Schema =
+            Schema::new_member(shape_id!("test", "T", "hd"), ShapeType::Timestamp, "hd", 2)
+                .with_timestamp_format(TimestampFormat::HttpDate);
+        static EPOCH: Schema =
+            Schema::new_member(shape_id!("test", "T", "es"), ShapeType::Timestamp, "es", 3)
+                .with_timestamp_format(TimestampFormat::EpochSeconds);
+
+        /// 2018-01-09T20:51:21Z
+        const T: i64 = 1515531081;
+
+        fn read(strict: bool, schema: &Schema, input: &[u8]) -> Result<DateTime, SerdeError> {
+            let settings = JsonCodecSettings::builder()
+                .strict_timestamp_formats(strict)
+                .build();
+            JsonDeserializer::new(input, Arc::new(settings)).read_timestamp(schema)
+        }
+
+        fn assert_rejected(schema: &Schema, inputs: &[&[u8]]) {
+            for input in inputs {
+                assert!(
+                    read(true, schema, input).is_err(),
+                    "{} must be rejected",
+                    String::from_utf8_lossy(input)
+                );
+            }
+        }
+
+        #[test]
+        fn strict_epoch_seconds_default_requires_a_number() {
+            assert_eq!(
+                read(true, &DEFAULT, b"1515531081").unwrap(),
+                DateTime::from_secs(T)
+            );
+            assert_eq!(
+                read(true, &DEFAULT, b"1515531081.1234").unwrap(),
+                DateTime::from_secs_f64(1515531081.1234)
+            );
+            assert_rejected(
+                &DEFAULT,
+                &[
+                    br#""1985-04-12T23:20:50.52Z""#,
+                    br#""1985-04-12T23:20:50Z""#,
+                    br#""1996-12-19T16:39:57-08:00""#,
+                    br#""1515531081""#,
+                    br#""1515531081.1234""#,
+                    br#""Tue, 29 Apr 2014 18:30:38 GMT""#,
+                    br#""Infinity""#,
+                    br#""NaN""#,
+                    b"true",
+                ],
+            );
+        }
+
+        #[test]
+        fn strict_explicit_epoch_seconds_requires_a_number() {
+            assert_eq!(
+                read(true, &EPOCH, b"1515531081").unwrap(),
+                DateTime::from_secs(T)
+            );
+            assert_rejected(&EPOCH, &[br#""2018-01-09T20:51:21Z""#, br#""1515531081""#]);
+        }
+
+        #[test]
+        fn strict_date_time_requires_an_rfc3339_utc_string() {
+            assert_eq!(
+                read(true, &DATE_TIME, br#""2018-01-09T20:51:21Z""#).unwrap(),
+                DateTime::from_secs(T)
+            );
+            assert_rejected(
+                &DATE_TIME,
+                &[
+                    b"1515531081",
+                    b"1515531081.1234",
+                    br#""1996-12-19T16:39:57-08:00""#,
+                    br#""1996-12-19T16:39:57+00""#,
+                    br#""1996-12-19T16:39:57""#,
+                    br#""Tue, 29 Apr 2014 18:30:38 GMT""#,
+                ],
+            );
+        }
+
+        #[test]
+        fn strict_http_date_requires_an_imf_fixdate_string() {
+            assert_eq!(
+                read(true, &HTTP_DATE, br#""Tue, 09 Jan 2018 20:51:21 GMT""#).unwrap(),
+                DateTime::from_secs(T)
+            );
+            assert_rejected(
+                &HTTP_DATE,
+                &[
+                    b"1515531081",
+                    b"1515531081.1234",
+                    br#""1985-04-12T23:20:50.52Z""#,
+                    br#""1996-12-19T16:39:57-08:00""#,
+                ],
+            );
+        }
+
+        #[test]
+        fn lenient_default_keeps_the_client_behavior() {
+            // A number is epoch seconds whatever the format; a string for a `date-time`
+            // member or a member without the trait parses as offset-aware `date-time`;
+            // explicit `http-date` and `epoch-seconds` traits are honored for strings.
+            assert_eq!(
+                read(false, &DATE_TIME, b"1515531081").unwrap(),
+                DateTime::from_secs(T)
+            );
+            assert_eq!(
+                read(false, &HTTP_DATE, b"1515531081").unwrap(),
+                DateTime::from_secs(T)
+            );
+            assert_eq!(
+                read(false, &DEFAULT, br#""2018-01-09T20:51:21Z""#).unwrap(),
+                DateTime::from_secs(T)
+            );
+            assert_eq!(
+                read(false, &DATE_TIME, br#""2018-01-09T21:51:21+01:00""#).unwrap(),
+                DateTime::from_secs(T)
+            );
+            assert_eq!(
+                read(false, &HTTP_DATE, br#""Tue, 09 Jan 2018 20:51:21 GMT""#).unwrap(),
+                DateTime::from_secs(T)
+            );
+            assert_eq!(
+                read(false, &EPOCH, br#""1515531081""#).unwrap(),
+                DateTime::from_secs(T)
             );
         }
     }
