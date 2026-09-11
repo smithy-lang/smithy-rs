@@ -6,10 +6,6 @@
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::{Schema, ShapeId, ShapeType};
 
-// ============================================================================
-// Discriminator injection
-// ============================================================================
-
 /// Member schema for the synthetic `__type` discriminator member.
 ///
 /// The member index is irrelevant on the serialization path (codecs key off
@@ -22,40 +18,69 @@ static TYPE_MEMBER: Schema<'static> = Schema::new_member(
     usize::MAX,
 );
 
-/// Wrapper prepending a synthetic `__type` member before the inner shape's
-/// members (rpcv2Cbor: `__type` is the first map entry).
-pub(super) struct WithTypeFirst<'a> {
-    pub(super) type_value: &'a str,
-    pub(super) inner: &'a dyn SerializableStruct,
+/// Where the `__type` member sits relative to the error's own members.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum TypePosition {
+    /// The first map entry (rpcv2Cbor).
+    First,
+    /// After every modeled member (awsJson 1.0 and 1.1).
+    Last,
 }
 
-impl SerializableStruct for WithTypeFirst<'_> {
-    fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
-        serializer.write_string(&TYPE_MEMBER, self.type_value)?;
-        self.inner.serialize_members(serializer)
+/// What the `__type` member carries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum TypeValue {
+    /// The full `namespace#Name` shape ID (awsJson 1.0, rpcv2Cbor).
+    FullShapeId,
+    /// The shape name only (awsJson 1.1).
+    ShapeName,
+}
+
+impl TypeValue {
+    pub(super) fn of<'s>(self, schema: &'s Schema<'s>) -> &'s str {
+        match self {
+            Self::FullShapeId => schema.shape_id().as_str(),
+            Self::ShapeName => schema.shape_id().shape_name(),
+        }
     }
 }
 
-/// Wrapper appending a synthetic `__type` member after the inner shape's
-/// members (awsJson 1.0 / 1.1 write `__type` last).
-pub(super) struct WithTypeLast<'a> {
-    pub(super) type_value: &'a str,
-    pub(super) inner: &'a dyn SerializableStruct,
+/// How a protocol frames a modeled error's `__type` member in the body.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct BodyDiscriminator {
+    pub(super) position: TypePosition,
+    pub(super) value: TypeValue,
 }
 
-impl SerializableStruct for WithTypeLast<'_> {
-    fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
-        self.inner.serialize_members(serializer)?;
-        serializer.write_string(&TYPE_MEMBER, self.type_value)
+impl BodyDiscriminator {
+    /// Wraps `error` so that serializing it also writes the `__type` member.
+    pub(super) fn frame<'a>(self, schema: &'a Schema<'a>, error: &'a dyn SerializableStruct) -> WithType<'a> {
+        WithType {
+            position: self.position,
+            type_value: self.value.of(schema),
+            inner: error,
+        }
     }
 }
 
-/// awsJson 1.0 discriminator: the full `namespace#Name` shape ID.
-pub(super) fn full_shape_id<'s>(schema: &'s Schema<'s>) -> &'s str {
-    schema.shape_id().as_str()
+/// A shape with a synthetic `__type` member spliced into its members.
+pub(super) struct WithType<'a> {
+    position: TypePosition,
+    type_value: &'a str,
+    inner: &'a dyn SerializableStruct,
 }
 
-/// awsJson 1.1 discriminator: the shape name only.
-pub(super) fn shape_name_only<'s>(schema: &'s Schema<'s>) -> &'s str {
-    schema.shape_id().shape_name()
+impl SerializableStruct for WithType<'_> {
+    fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+        match self.position {
+            TypePosition::First => {
+                serializer.write_string(&TYPE_MEMBER, self.type_value)?;
+                self.inner.serialize_members(serializer)
+            }
+            TypePosition::Last => {
+                self.inner.serialize_members(serializer)?;
+                serializer.write_string(&TYPE_MEMBER, self.type_value)
+            }
+        }
+    }
 }

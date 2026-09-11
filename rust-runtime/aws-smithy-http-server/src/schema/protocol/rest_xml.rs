@@ -13,7 +13,9 @@ use crate::protocol::rest_xml::{RestXml, RestXmlProtocol};
 use crate::response::{IntoResponse, Response};
 use crate::schema::{DeserializeError, HttpModeledError};
 
-use super::response::{log_serialize_failure, serialize_rest_modeled_error_response, stamp_error_extension};
+use super::response::{
+    log_serialize_failure, serialize_modeled_error_response, stamp_error_extension, ResponseBindings,
+};
 use super::rest::RestProtocolProvider;
 use super::{CompiledOperation, RestOperationState, ServerProtocol, ServerRequest};
 
@@ -65,9 +67,16 @@ impl ServerProtocol for RestXmlProtocol {
     fn serialize_error(&self, error: &dyn HttpModeledError) -> Response {
         // restXml carries no discriminator: the error structure is the body.
         let schema = error.schema();
-        serialize_rest_modeled_error_response(self.codec(), schema, error, error.status_code(), CONTENT_TYPE)
-            .map(|response| stamp_error_extension(response, schema.shape_id().shape_name()))
-            .unwrap_or_else(serialization_failure)
+        serialize_modeled_error_response(
+            self.codec(),
+            schema,
+            error,
+            error.status_code(),
+            ResponseBindings::Rest,
+            CONTENT_TYPE,
+        )
+        .map(|response| stamp_error_extension(response, schema.shape_id().shape_name()))
+        .unwrap_or_else(serialization_failure)
     }
 
     /// restXml keeps 415 for `Content-Type` failures, but its `From<RequestRejection>` has no

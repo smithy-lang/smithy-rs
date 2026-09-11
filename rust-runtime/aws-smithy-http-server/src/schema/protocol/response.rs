@@ -17,6 +17,8 @@ use crate::schema::response_bindings::{
     ResponseValueKind,
 };
 
+pub(super) use crate::schema::response_bindings::ResponseBindings;
+
 /// The success status: a captured `@httpResponseCode`, else the operation's `@http` code, else `200`.
 pub(crate) fn resolve_status(captured: Option<u16>, http: Option<&HttpTrait<'_>>) -> u16 {
     captured.or_else(|| http.map(HttpTrait::code)).unwrap_or(200)
@@ -51,25 +53,6 @@ pub(super) fn assemble_response(
         .map_err(|err| SerdeError::custom(format!("failed to build response: {err}")))
 }
 
-fn serialize_operation_response<C: Codec>(
-    codec: &C,
-    operation: &OperationSchema<'_>,
-    output: &dyn SerializableStruct,
-    apply_http_bindings: bool,
-    codec_content_type: &'static str,
-    empty_content_type: Option<&'static str>,
-) -> Result<Response, SerdeError> {
-    let parts = serialize_response_parts(
-        codec,
-        operation.output(),
-        output,
-        apply_http_bindings,
-        ResponseValueKind::OperationOutput,
-    )?;
-    let status = resolve_status(parts.status, operation.schema().http());
-    assemble_response(parts, status, codec_content_type, empty_content_type)
-}
-
 pub(super) fn serialize_compiled_rest_operation_response<C: Codec>(
     codec: &C,
     operation: &OperationSchema<'_>,
@@ -92,47 +75,28 @@ pub(super) fn serialize_rpc_operation_response<C: Codec>(
     codec_content_type: &'static str,
     empty_content_type: Option<&'static str>,
 ) -> Result<Response, SerdeError> {
-    serialize_operation_response(codec, operation, output, false, codec_content_type, empty_content_type)
-}
-
-fn serialize_modeled_error_response<C: Codec>(
-    codec: &C,
-    schema: &Schema<'_>,
-    error: &dyn SerializableStruct,
-    status: u16,
-    apply_http_bindings: bool,
-    codec_content_type: &'static str,
-) -> Result<Response, SerdeError> {
     let parts = serialize_response_parts(
         codec,
-        schema,
-        error,
-        apply_http_bindings,
-        ResponseValueKind::ModeledError,
+        operation.output(),
+        output,
+        ResponseBindings::BodyOnly,
+        ResponseValueKind::OperationOutput,
     )?;
+    let status = resolve_status(parts.status, operation.schema().http());
+    assemble_response(parts, status, codec_content_type, empty_content_type)
+}
+
+/// Serializes a modeled error; `bindings` says whether its HTTP-bound members leave the body.
+pub(super) fn serialize_modeled_error_response<C: Codec>(
+    codec: &C,
+    schema: &Schema<'_>,
+    error: &dyn SerializableStruct,
+    status: u16,
+    bindings: ResponseBindings,
+    codec_content_type: &'static str,
+) -> Result<Response, SerdeError> {
+    let parts = serialize_response_parts(codec, schema, error, bindings, ResponseValueKind::ModeledError)?;
     assemble_response(parts, status, codec_content_type, None)
-}
-
-/// Serializes a REST modeled error, extracting its HTTP-bound members.
-pub(super) fn serialize_rest_modeled_error_response<C: Codec>(
-    codec: &C,
-    schema: &Schema<'_>,
-    error: &dyn SerializableStruct,
-    status: u16,
-    codec_content_type: &'static str,
-) -> Result<Response, SerdeError> {
-    serialize_modeled_error_response(codec, schema, error, status, true, codec_content_type)
-}
-
-/// Serializes an RPC modeled error entirely through its body codec.
-pub(super) fn serialize_rpc_modeled_error_response<C: Codec>(
-    codec: &C,
-    schema: &Schema<'_>,
-    error: &dyn SerializableStruct,
-    status: u16,
-    codec_content_type: &'static str,
-) -> Result<Response, SerdeError> {
-    serialize_modeled_error_response(codec, schema, error, status, false, codec_content_type)
 }
 
 /// Records the error's shape name in the response extensions for instrumentation.

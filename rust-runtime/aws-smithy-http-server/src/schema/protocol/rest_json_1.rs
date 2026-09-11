@@ -14,13 +14,15 @@ use crate::response::{IntoResponse, Response};
 use crate::schema::{DeserializeError, HttpModeledError};
 
 use super::response::{
-    log_serialize_failure, serialize_rest_modeled_error_response, stamp_error_extension, stamp_validation_extension,
+    log_serialize_failure, serialize_modeled_error_response, stamp_error_extension, stamp_validation_extension,
+    ResponseBindings,
 };
 use super::rest::RestProtocolProvider;
 use super::{CompiledOperation, RestOperationState, ServerProtocol, ServerRequest};
 
 static PROTOCOL_ID: ShapeId<'static> = shape_id!("aws.protocols", "restJson1");
 const CONTENT_TYPE: &str = "application/json";
+const ERROR_TYPE_HEADER: http::HeaderName = http::HeaderName::from_static("x-amzn-errortype");
 
 impl RestProtocolProvider for RestJson1Protocol {
     type RestCodec = JsonCodec;
@@ -67,15 +69,19 @@ impl ServerProtocol for RestJson1Protocol {
     fn serialize_error(&self, error: &dyn HttpModeledError) -> Response {
         let schema = error.schema();
         let name = schema.shape_id().shape_name();
-        let result =
-            serialize_rest_modeled_error_response(self.codec(), schema, error, error.status_code(), CONTENT_TYPE);
+        let result = serialize_modeled_error_response(
+            self.codec(),
+            schema,
+            error,
+            error.status_code(),
+            ResponseBindings::Rest,
+            CONTENT_TYPE,
+        );
         match result {
             Ok(mut response) => {
                 // The discriminator travels in the header, as the shape name only.
                 if let Ok(value) = http::HeaderValue::try_from(name) {
-                    response
-                        .headers_mut()
-                        .insert(http::HeaderName::from_static("x-amzn-errortype"), value);
+                    response.headers_mut().insert(ERROR_TYPE_HEADER, value);
                 }
                 stamp_error_extension(response, name)
             }

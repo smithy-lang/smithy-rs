@@ -8,7 +8,7 @@
 
 use aws_smithy_json::codec::JsonCodec;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
-use aws_smithy_schema::{shape_id, Schema, ShapeId};
+use aws_smithy_schema::{shape_id, ShapeId};
 
 use crate::protocol::aws_json::rejection::RequestRejection;
 use crate::protocol::aws_json::runtime_error::RuntimeError;
@@ -17,9 +17,10 @@ use crate::protocol::aws_json_11::{AwsJson1_1, AwsJson1_1Protocol};
 use crate::response::{IntoResponse, Response};
 use crate::schema::{DeserializeError, HttpModeledError};
 
-use super::discriminator::{full_shape_id, shape_name_only, WithTypeLast};
+use super::discriminator::{BodyDiscriminator, TypePosition, TypeValue};
 use super::response::{
-    log_serialize_failure, serialize_rpc_modeled_error_response, stamp_error_extension, stamp_validation_extension,
+    log_serialize_failure, serialize_modeled_error_response, stamp_error_extension, stamp_validation_extension,
+    ResponseBindings,
 };
 use super::rpc::RpcProtocolProvider;
 use super::{CompiledOperation, RpcOperationState, ServerProtocol, ServerRequest};
@@ -28,19 +29,23 @@ fn serialize_error<P>(
     codec: &JsonCodec,
     error: &dyn HttpModeledError,
     content_type: &'static str,
-    type_value: for<'s> fn(&'s Schema<'s>) -> &'s str,
+    discriminator: BodyDiscriminator,
 ) -> Response
 where
     RuntimeError: IntoResponse<P>,
 {
     let schema = error.schema();
-    let framed = WithTypeLast {
-        type_value: type_value(schema),
-        inner: error,
-    };
-    serialize_rpc_modeled_error_response(codec, schema, &framed, error.status_code(), content_type)
-        .map(|response| stamp_error_extension(response, schema.shape_id().shape_name()))
-        .unwrap_or_else(serialization_failure::<P>)
+    let framed = discriminator.frame(schema, error);
+    serialize_modeled_error_response(
+        codec,
+        schema,
+        &framed,
+        error.status_code(),
+        ResponseBindings::BodyOnly,
+        content_type,
+    )
+    .map(|response| stamp_error_extension(response, schema.shape_id().shape_name()))
+    .unwrap_or_else(serialization_failure::<P>)
 }
 
 fn serialization_failure<P>(err: SerdeError) -> Response
@@ -52,7 +57,7 @@ where
 }
 
 macro_rules! aws_json_protocol {
-    ($protocol:ty, $marker:ty, $protocol_id:expr, $content_type:literal, $type_value:ident) => {
+    ($protocol:ty, $marker:ty, $protocol_id:expr, $content_type:literal, $type_value:expr) => {
         impl RpcProtocolProvider for $protocol {
             type RpcCodec = JsonCodec;
 
@@ -98,7 +103,15 @@ macro_rules! aws_json_protocol {
             }
 
             fn serialize_error(&self, error: &dyn HttpModeledError) -> Response {
-                serialize_error::<$marker>(self.codec(), error, $content_type, $type_value)
+                serialize_error::<$marker>(
+                    self.codec(),
+                    error,
+                    $content_type,
+                    BodyDiscriminator {
+                        position: TypePosition::Last,
+                        value: $type_value,
+                    },
+                )
             }
 
             /// awsJson's `From<RequestRejection>` collapses every transport failure — `Accept`
@@ -130,12 +143,12 @@ aws_json_protocol!(
     AwsJson1_0,
     shape_id!("aws.protocols", "awsJson1_0"),
     "application/x-amz-json-1.0",
-    full_shape_id
+    TypeValue::FullShapeId
 );
 aws_json_protocol!(
     AwsJson1_1Protocol,
     AwsJson1_1,
     shape_id!("aws.protocols", "awsJson1_1"),
     "application/x-amz-json-1.1",
-    shape_name_only
+    TypeValue::ShapeName
 );

@@ -66,6 +66,16 @@ pub(crate) enum ResponseValueKind {
     ModeledError,
 }
 
+/// Whether `@http*` response bindings are interpreted or everything is codec body.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ResponseBindings {
+    /// `@httpHeader`, `@httpPrefixHeaders`, `@httpResponseCode` and `@httpPayload` divert
+    /// members out of the body (the REST protocols).
+    Rest,
+    /// Every member is serialized into the codec body (the RPC protocols).
+    BodyOnly,
+}
+
 /// Returns `true` if any top-level member of `schema` carries a response
 /// binding this module interprets.
 pub(crate) fn has_response_bound_members(schema: &Schema<'_>) -> bool {
@@ -78,20 +88,15 @@ pub(crate) fn has_response_bound_members(schema: &Schema<'_>) -> bool {
 }
 
 /// Serializes `value` against `schema` through `codec` into HTTP response
-/// parts.
-///
-/// When `apply_response_bindings` is true, REST response bindings such as
-/// `@httpHeader`, `@httpPayload`, and `@httpResponseCode` are interpreted.
-/// When false, the value is serialized as a plain codec body; RPC protocols use
-/// this path.
+/// parts, compiling the plan on the spot.
 pub(crate) fn serialize_response_parts<C: Codec>(
     codec: &C,
     schema: &Schema<'_>,
     value: &dyn SerializableStruct,
-    apply_response_bindings: bool,
+    bindings: ResponseBindings,
     value_kind: ResponseValueKind,
 ) -> Result<ResponseParts, SerdeError> {
-    let plan = CompiledResponsePlan::compile(schema, apply_response_bindings, value_kind);
+    let plan = CompiledResponsePlan::compile(schema, bindings, value_kind);
     serialize_response_parts_compiled(codec, schema, value, &plan)
 }
 
@@ -142,35 +147,26 @@ pub(crate) struct CompiledResponsePlan {
 }
 
 impl CompiledResponsePlan {
-    #[cfg(test)]
-    pub(crate) fn empty() -> Self {
-        Self {
-            strategy: ResponseStrategy::Empty,
-            members: Box::new([]),
-        }
-    }
-
     pub(crate) fn operation_output(schema: &Schema<'_>) -> Self {
-        Self::compile(schema, true, ResponseValueKind::OperationOutput)
+        Self::compile(schema, ResponseBindings::Rest, ResponseValueKind::OperationOutput)
     }
 
-    fn compile(schema: &Schema<'_>, apply_response_bindings: bool, value_kind: ResponseValueKind) -> Self {
-        let has_bindings = apply_response_bindings && has_response_bound_members(schema);
-        let strategy = if matches!(value_kind, ResponseValueKind::OperationOutput)
-            && !has_output_body_members(schema, apply_response_bindings)
-        {
-            if has_bindings {
-                ResponseStrategy::BindingsOnly
+    fn compile(schema: &Schema<'_>, bindings: ResponseBindings, value_kind: ResponseValueKind) -> Self {
+        let has_bindings = bindings == ResponseBindings::Rest && has_response_bound_members(schema);
+        let strategy =
+            if matches!(value_kind, ResponseValueKind::OperationOutput) && !has_output_body_members(schema, bindings) {
+                if has_bindings {
+                    ResponseStrategy::BindingsOnly
+                } else {
+                    ResponseStrategy::Empty
+                }
+            } else if !has_bindings {
+                ResponseStrategy::CodecBody
+            } else if schema.members().iter().any(|member| member.http_payload().is_some()) {
+                ResponseStrategy::Payload
             } else {
-                ResponseStrategy::Empty
-            }
-        } else if !has_bindings {
-            ResponseStrategy::CodecBody
-        } else if schema.members().iter().any(|member| member.http_payload().is_some()) {
-            ResponseStrategy::Payload
-        } else {
-            ResponseStrategy::SplitBody
-        };
+                ResponseStrategy::SplitBody
+            };
         let members = if matches!(
             strategy,
             ResponseStrategy::BindingsOnly | ResponseStrategy::SplitBody | ResponseStrategy::Payload
@@ -184,7 +180,7 @@ impl CompiledResponsePlan {
             let mut members = vec![ResponseMemberPlan::Body; member_count];
             for member in schema.members() {
                 if let Some(index) = member.member_index() {
-                    members[index] = compile_member_plan(member, apply_response_bindings);
+                    members[index] = compile_member_plan(member, bindings);
                 }
             }
             members.into_boxed_slice()
@@ -202,8 +198,8 @@ impl CompiledResponsePlan {
     }
 }
 
-fn compile_member_plan(schema: &Schema<'_>, apply_response_bindings: bool) -> ResponseMemberPlan {
-    if !apply_response_bindings {
+fn compile_member_plan(schema: &Schema<'_>, bindings: ResponseBindings) -> ResponseMemberPlan {
+    if bindings == ResponseBindings::BodyOnly {
         return ResponseMemberPlan::Body;
     }
     if schema.http_response_code().is_some() {
@@ -355,8 +351,8 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
     })
 }
 
-pub(crate) fn has_output_body_members(schema: &Schema<'_>, apply_response_bindings: bool) -> bool {
-    if !apply_response_bindings {
+pub(crate) fn has_output_body_members(schema: &Schema<'_>, bindings: ResponseBindings) -> bool {
+    if bindings == ResponseBindings::BodyOnly {
         return !schema.members().is_empty();
     }
     schema
@@ -908,7 +904,14 @@ mod tests {
         // @httpResponseCode is captured (never in the body), the rest is the
         // codec body.
         let codec = json_codec();
-        let split = serialize_response_parts(&codec, &OUT_SCHEMA, &Out, true, ResponseValueKind::ModeledError).unwrap();
+        let split = serialize_response_parts(
+            &codec,
+            &OUT_SCHEMA,
+            &Out,
+            ResponseBindings::Rest,
+            ResponseValueKind::ModeledError,
+        )
+        .unwrap();
         assert_eq!(split.status, Some(202));
         assert!(matches!(split.kind, BodyKind::Codec));
         assert_eq!(String::from_utf8(split.body.clone()).unwrap(), r#"{"msg":"hello"}"#);
@@ -928,10 +931,15 @@ mod tests {
             Schema::new(ShapeId::from_parts("test#Plain", "test", "Plain"), ShapeType::Structure);
         assert_eq!(resolve_status(None, PLAIN.http()), 200);
 
-        // RPC path (apply_response_bindings = false): everything, bound or
-        // not, goes to the body.
-        let split =
-            serialize_response_parts(&codec, &OUT_SCHEMA, &Out, false, ResponseValueKind::ModeledError).unwrap();
+        // RPC path: everything, bound or not, goes to the body.
+        let split = serialize_response_parts(
+            &codec,
+            &OUT_SCHEMA,
+            &Out,
+            ResponseBindings::BodyOnly,
+            ResponseValueKind::ModeledError,
+        )
+        .unwrap();
         assert_eq!(split.status, None);
         assert!(split.headers.is_empty());
         let body = String::from_utf8(split.body).unwrap();
@@ -962,7 +970,7 @@ mod tests {
             &codec,
             &EMPTY_OUT_SCHEMA,
             &EmptyOut,
-            true,
+            ResponseBindings::Rest,
             ResponseValueKind::OperationOutput,
         )
         .unwrap();
@@ -974,7 +982,7 @@ mod tests {
             &codec,
             &EMPTY_OUT_SCHEMA,
             &EmptyOut,
-            false,
+            ResponseBindings::BodyOnly,
             ResponseValueKind::OperationOutput,
         )
         .unwrap();
@@ -986,7 +994,7 @@ mod tests {
             &codec,
             &EMPTY_OUT_SCHEMA,
             &EmptyOut,
-            true,
+            ResponseBindings::Rest,
             ResponseValueKind::ModeledError,
         )
         .unwrap();
@@ -1088,7 +1096,7 @@ mod tests {
             &codec,
             &BLOB_OUT_SCHEMA,
             &BlobOut(Some(vec![1, 2, 3])),
-            true,
+            ResponseBindings::Rest,
             ResponseValueKind::ModeledError,
         )
         .unwrap();
@@ -1103,7 +1111,7 @@ mod tests {
             &codec,
             &BLOB_OUT_SCHEMA,
             &BlobOut(None),
-            true,
+            ResponseBindings::Rest,
             ResponseValueKind::ModeledError,
         )
         .unwrap();
@@ -1116,7 +1124,7 @@ mod tests {
             &codec,
             &STRUCT_OUT_SCHEMA,
             &StructOut,
-            true,
+            ResponseBindings::Rest,
             ResponseValueKind::ModeledError,
         )
         .unwrap();

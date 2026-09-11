@@ -29,6 +29,7 @@ pub(crate) enum RpcAccept {
 pub(crate) struct RpcProtocol<C> {
     codec: C,
     content_type: &'static str,
+    content_type_mime: mime::Mime,
     empty_response_content_type: Option<&'static str>,
     accept: RpcAccept,
 }
@@ -43,6 +44,9 @@ impl<C> RpcProtocol<C> {
         Self {
             codec,
             content_type,
+            content_type_mime: content_type
+                .parse()
+                .expect("protocol content type must be a valid MIME type"),
             empty_response_content_type,
             accept,
         }
@@ -65,7 +69,7 @@ impl<C: Codec> RpcProtocol<C> {
         request: &'a ServerRequest,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, DeserializeError> {
         if state.check_accept {
-            check_accept(&request.headers, self.content_type)?;
+            check_accept(&request.headers, &self.content_type_mime)?;
         }
         rpc_request_deserializer(&self.codec, self.content_type, input, request)
     }

@@ -69,8 +69,9 @@ pub(super) fn expected_request_content_type(
     }
 }
 
-/// `true` when `member` travels in the body rather than in the URI or headers.
-fn is_body_member(member: &Schema<'_>) -> bool {
+/// `true` when `member` travels in the body rather than in the URI or headers. An `@httpPayload`
+/// member counts: it *is* the body.
+pub(super) fn is_body_member(member: &Schema<'_>) -> bool {
     member.http_header().is_none()
         && member.http_query().is_none()
         && member.http_label().is_none()
@@ -151,17 +152,10 @@ fn accept_permits(headers: &Headers, content_type: &mime::Mime) -> bool {
 /// Rejects the request when its `Accept` header cannot accept `expected`.
 ///
 /// Runs before any deserialization. The RPC protocols call this with their fixed content type;
-/// the REST protocols compute the expectation from the output schema via [`check_rest_accept`].
-pub(super) fn check_accept(headers: &Headers, expected: &str) -> Result<(), DeserializeError> {
-    let Ok(mime) = expected.parse::<mime::Mime>() else {
-        // An unparseable expectation can only come from a malformed model; skip the check.
-        tracing::debug!(
-            content_type = expected,
-            "expected response content type is not a valid mime type"
-        );
-        return Ok(());
-    };
-    if accept_permits(headers, &mime) {
+/// the REST protocols compute the expectation from the output schema via
+/// [`expected_response_content_type`] and call [`enforce_expected_accept`].
+pub(super) fn check_accept(headers: &Headers, expected: &mime::Mime) -> Result<(), DeserializeError> {
+    if accept_permits(headers, expected) {
         Ok(())
     } else {
         Err(DeserializeError::NotAcceptable)

@@ -1074,9 +1074,11 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protocol::rest_json_1::RestJson1Protocol;
+    use crate::schema::ServerProtocol;
     use aws_smithy_json::codec::{JsonCodec, JsonCodecSettings};
     use aws_smithy_schema::traits::HttpTrait;
-    use aws_smithy_schema::ShapeId;
+    use aws_smithy_schema::{OperationSchema, ShapeId};
 
     #[test]
     fn uri_parsing() {
@@ -1179,8 +1181,19 @@ mod tests {
         ShapeId::from_parts("test#Input", "test", "Input"),
         ShapeType::Structure,
         &INPUT_MEMBERS,
+    );
+    static OUTPUT_SCHEMA: Schema<'static> = Schema::new_struct(
+        ShapeId::from_parts("test#Output", "test", "Output"),
+        ShapeType::Structure,
+        &[],
+    );
+    static OPERATION_SHAPE: Schema<'static> = Schema::new(
+        ShapeId::from_parts("test#Op", "test", "Op"),
+        ShapeType::Operation,
     )
     .with_http(HttpTrait::new("POST", "/pets/{name}", Some(200)));
+    static OPERATION: OperationSchema<'static> =
+        OperationSchema::new(&OPERATION_SHAPE, &INPUT_SCHEMA, &OUTPUT_SCHEMA, &[]);
 
     fn json_codec() -> JsonCodec {
         JsonCodec::new(
@@ -1203,8 +1216,8 @@ mod tests {
 
     fn collect(uri: &Uri, headers: &Headers, body: &[u8]) -> Result<Collected, SerdeError> {
         let codec = json_codec();
-        let state = RestOperationState::for_input_test(&INPUT_SCHEMA, INPUT_SCHEMA.http().map(|http| http.uri()));
-        let mut deser = RestRequestDeserializer::new(&codec, uri, headers, body, &state);
+        let operation = RestJson1Protocol::default().compile_operation(&OPERATION);
+        let mut deser = RestRequestDeserializer::new(&codec, uri, headers, body, operation.state());
         let mut out = Collected::default();
         deser.read_struct(&INPUT_SCHEMA, &mut |member, d| {
             match member.member_index() {

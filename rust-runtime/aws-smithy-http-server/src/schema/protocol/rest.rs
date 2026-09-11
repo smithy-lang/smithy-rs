@@ -13,7 +13,7 @@ use crate::schema::DeserializeError;
 
 use super::request::{
     enforce_content_type, enforce_expected_accept, expected_request_content_type, expected_response_content_type,
-    ExpectedContentType,
+    is_body_member, ExpectedContentType,
 };
 use super::response::serialize_compiled_rest_operation_response;
 use super::{OperationState, ServerRequest};
@@ -99,18 +99,14 @@ impl RestOperationState {
         let output = operation.output();
         let request_payload = input.members().iter().copied().find(|m| m.http_payload().is_some());
         let response_payload = output.members().iter().copied().find(|m| m.http_payload().is_some());
-        // The legacy REST deserializers never touch the body when nothing is bound to it.
-        let reads_body = input.members().iter().any(|m| {
-            m.http_payload().is_some()
-                || (m.http_header().is_none()
-                    && m.http_query().is_none()
-                    && m.http_label().is_none()
-                    && m.http_prefix_headers().is_none()
-                    && m.http_query_params().is_none())
-        });
+        let has_unbound_members = input
+            .members()
+            .iter()
+            .any(|m| m.http_payload().is_none() && is_body_member(m));
         let http = operation.schema().http();
         Self {
-            reads_body,
+            // The legacy REST deserializers never touch the body when nothing is bound to it.
+            reads_body: request_payload.is_some() || has_unbound_members,
             request_payload,
             response_payload,
             expected_request_content_type: expected_request_content_type(input, content_type),
@@ -122,14 +118,7 @@ impl RestOperationState {
                 .members()
                 .iter()
                 .any(|member| member.http_query().is_some() || member.http_query_params().is_some()),
-            has_unbound_members: input.members().iter().any(|member| {
-                member.http_payload().is_none()
-                    && member.http_header().is_none()
-                    && member.http_query().is_none()
-                    && member.http_label().is_none()
-                    && member.http_prefix_headers().is_none()
-                    && member.http_query_params().is_none()
-            }),
+            has_unbound_members,
             default_status: http.map(|http| http.code()).unwrap_or(200),
         }
     }
@@ -156,38 +145,6 @@ impl RestOperationState {
     }
     pub(crate) fn has_unbound_members(&self) -> bool {
         self.has_unbound_members
-    }
-
-    #[cfg(test)]
-    pub(crate) fn for_input_test(input: &'static Schema<'static>, uri_template: Option<&'static str>) -> Self {
-        let request_payload = input
-            .members()
-            .iter()
-            .copied()
-            .find(|member| member.http_payload().is_some());
-        Self {
-            reads_body: true,
-            request_payload,
-            response_payload: None,
-            expected_request_content_type: expected_request_content_type(input, "application/json"),
-            expected_response_type: None,
-            response: CompiledResponsePlan::empty(),
-            uri_template,
-            has_labels: input.members().iter().any(|member| member.http_label().is_some()),
-            needs_query: input
-                .members()
-                .iter()
-                .any(|member| member.http_query().is_some() || member.http_query_params().is_some()),
-            has_unbound_members: input.members().iter().any(|member| {
-                member.http_payload().is_none()
-                    && member.http_header().is_none()
-                    && member.http_query().is_none()
-                    && member.http_label().is_none()
-                    && member.http_prefix_headers().is_none()
-                    && member.http_query_params().is_none()
-            }),
-            default_status: 200,
-        }
     }
 }
 

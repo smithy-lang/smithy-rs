@@ -13,23 +13,29 @@ use crate::protocol::rpc_v2_cbor::{RpcV2Cbor, RpcV2CborProtocol};
 use crate::response::{IntoResponse, Response};
 use crate::schema::{DeserializeError, HttpModeledError};
 
-use super::discriminator::WithTypeFirst;
+use super::discriminator::{BodyDiscriminator, TypePosition, TypeValue};
 use super::response::{
-    log_serialize_failure, serialize_rpc_modeled_error_response, stamp_error_extension, stamp_validation_extension,
+    log_serialize_failure, serialize_modeled_error_response, stamp_error_extension, stamp_validation_extension,
+    ResponseBindings,
 };
 use super::rpc::RpcProtocolProvider;
 use super::{CompiledOperation, RpcOperationState, ServerProtocol, ServerRequest};
 
 static PROTOCOL_ID: ShapeId<'static> = shape_id!("smithy.protocols", "rpcv2Cbor");
 const CONTENT_TYPE: &str = "application/cbor";
+const DISCRIMINATOR: BodyDiscriminator = BodyDiscriminator {
+    position: TypePosition::First,
+    value: TypeValue::FullShapeId,
+};
+const SMITHY_PROTOCOL_HEADER: http::HeaderName = http::HeaderName::from_static("smithy-protocol");
+const SMITHY_PROTOCOL_VALUE: http::HeaderValue = http::HeaderValue::from_static("rpc-v2-cbor");
 
 /// The `smithy-protocol` and `Accept` request headers are validated by the router; responses
 /// carry `smithy-protocol: rpc-v2-cbor`.
 fn with_protocol_header(mut response: Response) -> Response {
-    response.headers_mut().insert(
-        http::HeaderName::from_static("smithy-protocol"),
-        http::HeaderValue::from_static("rpc-v2-cbor"),
-    );
+    response
+        .headers_mut()
+        .insert(SMITHY_PROTOCOL_HEADER, SMITHY_PROTOCOL_VALUE);
     response
 }
 
@@ -79,14 +85,18 @@ impl ServerProtocol for RpcV2CborProtocol {
 
     fn serialize_error(&self, error: &dyn HttpModeledError) -> Response {
         let schema = error.schema();
-        let framed = WithTypeFirst {
-            type_value: schema.shape_id().as_str(),
-            inner: error,
-        };
-        serialize_rpc_modeled_error_response(self.codec(), schema, &framed, error.status_code(), CONTENT_TYPE)
-            .map(with_protocol_header)
-            .map(|response| stamp_error_extension(response, schema.shape_id().shape_name()))
-            .unwrap_or_else(serialization_failure)
+        let framed = DISCRIMINATOR.frame(schema, error);
+        serialize_modeled_error_response(
+            self.codec(),
+            schema,
+            &framed,
+            error.status_code(),
+            ResponseBindings::BodyOnly,
+            CONTENT_TYPE,
+        )
+        .map(with_protocol_header)
+        .map(|response| stamp_error_extension(response, schema.shape_id().shape_name()))
+        .unwrap_or_else(serialization_failure)
     }
 
     /// rpcv2Cbor's `From<RequestRejection>` collapses every transport failure into a 400
@@ -108,14 +118,18 @@ impl ServerProtocol for RpcV2CborProtocol {
             }
             DeserializeError::ConstraintViolation(err) => {
                 let schema = err.schema();
-                let framed = WithTypeFirst {
-                    type_value: schema.shape_id().as_str(),
-                    inner: &*err,
-                };
-                serialize_rpc_modeled_error_response(self.codec(), schema, &framed, err.status_code(), CONTENT_TYPE)
-                    .map(|response| stamp_error_extension(response, schema.shape_id().shape_name()))
-                    .map(stamp_validation_extension)
-                    .unwrap_or_else(serialization_failure)
+                let framed = DISCRIMINATOR.frame(schema, &*err);
+                serialize_modeled_error_response(
+                    self.codec(),
+                    schema,
+                    &framed,
+                    err.status_code(),
+                    ResponseBindings::BodyOnly,
+                    CONTENT_TYPE,
+                )
+                .map(|response| stamp_error_extension(response, schema.shape_id().shape_name()))
+                .map(stamp_validation_extension)
+                .unwrap_or_else(serialization_failure)
             }
         }
     }
