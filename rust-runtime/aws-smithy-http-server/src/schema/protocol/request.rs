@@ -197,7 +197,9 @@ pub(super) fn expected_response_content_type(
             _ if payload.media_type().is_some() => payload
                 .media_type()
                 .map(|m| m.value().parse().expect("Smithy mediaType must be a MIME type")),
-            ShapeType::Blob => Some(mime::APPLICATION_OCTET_STREAM),
+            // An untyped blob payload accepts every response media type. The response defaults
+            // to `application/octet-stream`, but that default is not an Accept requirement.
+            ShapeType::Blob => None,
             ShapeType::String => Some(mime::TEXT_PLAIN),
             _ => None,
         };

@@ -29,6 +29,7 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerAwsJsonProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestJsonProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestXmlProtocol
@@ -64,7 +65,10 @@ class ServerServiceGenerator(
     private val builderName = "${serviceName}Builder"
     private val schemaRest =
         codegenContext.settings.codegenConfig.schemaSerde && runtimeConfig.httpVersion == HttpVersion.Http1x &&
-            (protocol is ServerRestJsonProtocol || protocol is ServerRestXmlProtocol)
+            (
+                protocol is ServerRestJsonProtocol || protocol is ServerRestXmlProtocol ||
+                    protocol is ServerAwsJsonProtocol || protocol is ServerRpcV2CborProtocol
+            )
 
     private fun usesDynUpgrade(operation: OperationShape): Boolean =
         schemaRest && operation.inputShape(model).findStreamingMember(model) == null &&
@@ -88,6 +92,15 @@ class ServerServiceGenerator(
         when (protocol) {
             is ServerRestJsonProtocol -> smithyHttpServer.resolve("protocol::rest_json_1::RestJson1Protocol")
             is ServerRestXmlProtocol -> smithyHttpServer.resolve("protocol::rest_xml::RestXmlProtocol")
+            is ServerAwsJsonProtocol ->
+                smithyHttpServer.resolve(
+                    if (protocol.protocolModulePath == "aws_json_10") {
+                        "protocol::aws_json_10::AwsJson1_0Protocol"
+                    } else {
+                        "protocol::aws_json_11::AwsJson1_1Protocol"
+                    },
+                )
+            is ServerRpcV2CborProtocol -> smithyHttpServer.resolve("protocol::rpc_v2_cbor::RpcV2CborProtocol")
             else -> protocol.markerStruct()
         }
 

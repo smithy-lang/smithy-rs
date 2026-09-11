@@ -8,3 +8,22 @@ pub mod router;
 /// [AWS JSON 1.1](https://smithy.io/2.0/aws/protocols/aws-json-1_1-protocol.html) protocol.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct AwsJson1_1;
+
+/// Stateful schema-driven AWS JSON 1.1 protocol implementation.
+#[derive(Debug)]
+pub struct AwsJson1_1Protocol {
+    pub(crate) inner: crate::schema::protocol::rpc::RpcProtocol<aws_smithy_json::codec::JsonCodec>,
+}
+
+impl Default for AwsJson1_1Protocol {
+    fn default() -> Self {
+        Self {
+            inner: crate::schema::protocol::rpc::RpcProtocol::new(
+                super::aws_json::schema_codec(),
+                "application/x-amz-json-1.1",
+                Some("application/x-amz-json-1.1"),
+                crate::schema::protocol::rpc::RpcAccept::Always,
+            ),
+        }
+    }
+}

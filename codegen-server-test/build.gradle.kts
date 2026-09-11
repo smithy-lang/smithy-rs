@@ -61,6 +61,11 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
             "rpcv2Cbor",
         ),
         CodegenTest(
+            "smithy.protocoltests.rpcv2Cbor#RpcV2Protocol",
+            "rpcv2Cbor_schema",
+            extraCodegenConfig = """"schemaSerde": true""",
+        ),
+        CodegenTest(
             "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
             "rpcv2Cbor_extras",
             imports = listOf("$commonModels/rpcv2Cbor-extras.smithy"),
@@ -138,8 +143,18 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
             "json_rpc10",
         ),
         CodegenTest(
+            "aws.protocoltests.json10#JsonRpc10",
+            "json_rpc10_schema",
+            extraCodegenConfig = """"schemaSerde": true""",
+        ),
+        CodegenTest(
             "aws.protocoltests.json#JsonProtocol",
             "json_rpc11",
+        ),
+        CodegenTest(
+            "aws.protocoltests.json#JsonProtocol",
+            "json_rpc11_schema",
+            extraCodegenConfig = """"schemaSerde": true""",
         ),
         CodegenTest(
             "aws.protocoltests.misc#MiscService",

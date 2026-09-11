@@ -115,6 +115,24 @@ where
     }
 }
 
+impl<E> pokemon_service_server_sdk::server::operation::IntoDynResponse for AuthorizeServiceError<E>
+where
+    E: pokemon_service_server_sdk::server::operation::IntoDynResponse,
+{
+    fn into_dyn_response(
+        self,
+        protocol: &dyn pokemon_service_server_sdk::server::schema::DynServerProtocol,
+    ) -> http::Response<BoxBody> {
+        match self {
+            AuthorizeServiceError::InnerServiceError(error) => error.into_dyn_response(protocol),
+            AuthorizeServiceError::AuthorizeError { message } => http::Response::builder()
+                .status(http::StatusCode::UNAUTHORIZED)
+                .body(pokemon_service_server_sdk::server::body::to_boxed(message))
+                .expect("attempted to build an invalid HTTP response; please file a bug report"),
+        }
+    }
+}
+
 macro_rules! impl_service {
     ($($var:ident),*) => {
         impl<S, Op, $($var,)*> Service<(Op::Input, ($($var,)*))> for AuthorizeService<Op, S>

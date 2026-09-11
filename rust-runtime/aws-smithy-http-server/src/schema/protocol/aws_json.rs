@@ -6,55 +6,26 @@
 //! awsJson1.0 and awsJson1.1 share a codec, a rejection type and a runtime error; they differ in
 //! the content type and in whether the `__type` discriminator is the full shape ID or the name.
 
-use std::sync::LazyLock;
-
-use aws_smithy_json::codec::{JsonCodec, JsonCodecSettings};
+use aws_smithy_json::codec::JsonCodec;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
-use aws_smithy_schema::{shape_id, OperationSchema, Schema, ShapeId};
+use aws_smithy_schema::{shape_id, Schema, ShapeId};
 
 use crate::protocol::aws_json::rejection::RequestRejection;
 use crate::protocol::aws_json::runtime_error::RuntimeError;
-use crate::protocol::aws_json_10::AwsJson1_0;
-use crate::protocol::aws_json_11::AwsJson1_1;
+use crate::protocol::aws_json_10::{AwsJson1_0, AwsJson1_0Protocol};
+use crate::protocol::aws_json_11::{AwsJson1_1, AwsJson1_1Protocol};
 use crate::response::{IntoResponse, Response};
 use crate::schema::{DeserializeError, HttpModeledError};
 
 use super::discriminator::{full_shape_id, shape_name_only, WithTypeLast};
-use super::request::{check_accept, rpc_request_deserializer};
 use super::response::{
-    log_serialize_failure, serialize_rpc_modeled_error_response, serialize_rpc_operation_response,
-    stamp_error_extension, stamp_validation_extension,
+    log_serialize_failure, serialize_rpc_modeled_error_response, stamp_error_extension, stamp_validation_extension,
 };
+use super::rpc::RpcProtocolProvider;
 use super::{CompiledOperation, RpcOperationState, ServerProtocol, ServerRequest};
 
-fn codec() -> &'static JsonCodec {
-    static CODEC: LazyLock<JsonCodec> = LazyLock::new(|| {
-        JsonCodec::new(
-            JsonCodecSettings::builder()
-                .use_json_name(false)
-                .default_timestamp_format(aws_smithy_types::date_time::Format::EpochSeconds)
-                .strict_timestamp_formats(true)
-                .reject_unknown_union_members(true)
-                .build(),
-        )
-    });
-    &CODEC
-}
-
-fn serialize_response<P>(
-    operation: &OperationSchema<'_>,
-    output: &dyn SerializableStruct,
-    content_type: &'static str,
-) -> Response
-where
-    RuntimeError: IntoResponse<P>,
-{
-    // awsJson stamps the content type even on an empty body.
-    serialize_rpc_operation_response(codec(), operation, output, content_type, Some(content_type))
-        .unwrap_or_else(serialization_failure::<P>)
-}
-
 fn serialize_error<P>(
+    codec: &JsonCodec,
     error: &dyn HttpModeledError,
     content_type: &'static str,
     type_value: for<'s> fn(&'s Schema<'s>) -> &'s str,
@@ -67,7 +38,7 @@ where
         type_value: type_value(schema),
         inner: error,
     };
-    serialize_rpc_modeled_error_response(codec(), schema, &framed, error.status_code(), content_type)
+    serialize_rpc_modeled_error_response(codec, schema, &framed, error.status_code(), content_type)
         .map(|response| stamp_error_extension(response, schema.shape_id().shape_name()))
         .unwrap_or_else(serialization_failure::<P>)
 }
@@ -81,8 +52,16 @@ where
 }
 
 macro_rules! aws_json_protocol {
-    ($marker:ty, $protocol_id:expr, $content_type:literal, $type_value:ident) => {
-        impl ServerProtocol for $marker {
+    ($protocol:ty, $marker:ty, $protocol_id:expr, $content_type:literal, $type_value:ident) => {
+        impl RpcProtocolProvider for $protocol {
+            type RpcCodec = JsonCodec;
+
+            fn rpc_protocol(&self) -> &super::rpc::RpcProtocol<JsonCodec> {
+                &self.inner
+            }
+        }
+
+        impl ServerProtocol for $protocol {
             type Codec = JsonCodec;
             type OperationState = RpcOperationState;
 
@@ -91,8 +70,8 @@ macro_rules! aws_json_protocol {
                 &PROTOCOL_ID
             }
 
-            fn codec(&self) -> &'static JsonCodec {
-                codec()
+            fn codec(&self) -> &JsonCodec {
+                self.inner.codec()
             }
 
             fn deserialize_request<'a>(
@@ -100,10 +79,8 @@ macro_rules! aws_json_protocol {
                 operation: &'a CompiledOperation<RpcOperationState>,
                 request: &'a ServerRequest,
             ) -> Result<Box<dyn ShapeDeserializer + 'a>, DeserializeError> {
-                // awsJson responses always carry the protocol content type, so every generated
-                // `FromRequest` runs the `Accept` gate against it.
-                check_accept(&request.headers, $content_type)?;
-                rpc_request_deserializer(self.codec(), $content_type, operation.schema().input(), request)
+                self.inner
+                    .deserialize_request(operation.state(), operation.schema().input(), request)
             }
 
             fn serialize_response(
@@ -111,11 +88,13 @@ macro_rules! aws_json_protocol {
                 operation: &CompiledOperation<RpcOperationState>,
                 output: &dyn SerializableStruct,
             ) -> Response {
-                serialize_response::<$marker>(operation.schema(), output, $content_type)
+                self.inner
+                    .serialize_response(operation.schema(), output)
+                    .unwrap_or_else(serialization_failure::<$marker>)
             }
 
             fn serialize_error(&self, error: &dyn HttpModeledError) -> Response {
-                serialize_error::<$marker>(error, $content_type, $type_value)
+                serialize_error::<$marker>(self.codec(), error, $content_type, $type_value)
             }
 
             /// awsJson's `From<RequestRejection>` collapses every transport failure — `Accept`
@@ -143,12 +122,14 @@ macro_rules! aws_json_protocol {
 }
 
 aws_json_protocol!(
+    AwsJson1_0Protocol,
     AwsJson1_0,
     shape_id!("aws.protocols", "awsJson1_0"),
     "application/x-amz-json-1.0",
     full_shape_id
 );
 aws_json_protocol!(
+    AwsJson1_1Protocol,
     AwsJson1_1,
     shape_id!("aws.protocols", "awsJson1_1"),
     "application/x-amz-json-1.1",

@@ -3,24 +3,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::sync::LazyLock;
-
-use aws_smithy_cbor::codec::{CborCodec, CborCodecSettings};
+use aws_smithy_cbor::codec::CborCodec;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
 use aws_smithy_schema::{shape_id, ShapeId};
 
 use crate::protocol::rpc_v2_cbor::rejection::RequestRejection;
 use crate::protocol::rpc_v2_cbor::runtime_error::RuntimeError;
-use crate::protocol::rpc_v2_cbor::RpcV2Cbor;
+use crate::protocol::rpc_v2_cbor::{RpcV2Cbor, RpcV2CborProtocol};
 use crate::response::{IntoResponse, Response};
 use crate::schema::{DeserializeError, HttpModeledError};
 
 use super::discriminator::WithTypeFirst;
-use super::request::{check_accept, rpc_request_deserializer};
 use super::response::{
-    log_serialize_failure, serialize_rpc_modeled_error_response, serialize_rpc_operation_response,
-    stamp_error_extension, stamp_validation_extension,
+    log_serialize_failure, serialize_rpc_modeled_error_response, stamp_error_extension, stamp_validation_extension,
 };
+use super::rpc::RpcProtocolProvider;
 use super::{CompiledOperation, RpcOperationState, ServerProtocol, ServerRequest};
 
 static PROTOCOL_ID: ShapeId<'static> = shape_id!("smithy.protocols", "rpcv2Cbor");
@@ -36,7 +33,15 @@ fn with_protocol_header(mut response: Response) -> Response {
     response
 }
 
-impl ServerProtocol for RpcV2Cbor {
+impl RpcProtocolProvider for RpcV2CborProtocol {
+    type RpcCodec = CborCodec;
+
+    fn rpc_protocol(&self) -> &super::rpc::RpcProtocol<CborCodec> {
+        &self.inner
+    }
+}
+
+impl ServerProtocol for RpcV2CborProtocol {
     type Codec = CborCodec;
     type OperationState = RpcOperationState;
 
@@ -44,9 +49,8 @@ impl ServerProtocol for RpcV2Cbor {
         &PROTOCOL_ID
     }
 
-    fn codec(&self) -> &'static CborCodec {
-        static CODEC: LazyLock<CborCodec> = LazyLock::new(|| CborCodec::new(CborCodecSettings::default()));
-        &CODEC
+    fn codec(&self) -> &CborCodec {
+        self.inner.codec()
     }
 
     fn deserialize_request<'a>(
@@ -54,13 +58,8 @@ impl ServerProtocol for RpcV2Cbor {
         operation: &'a CompiledOperation<RpcOperationState>,
         request: &'a ServerRequest,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, DeserializeError> {
-        // rpcv2Cbor responses only carry a content type for operations whose output the user
-        // modeled, so the generated `Accept` gate is only emitted for those — mirrored here via
-        // the output schema's original name.
-        if operation.schema().output().original_name().is_some() {
-            check_accept(&request.headers, CONTENT_TYPE)?;
-        }
-        rpc_request_deserializer(self.codec(), CONTENT_TYPE, operation.schema().input(), request)
+        self.inner
+            .deserialize_request(operation.state(), operation.schema().input(), request)
     }
 
     fn serialize_response(
@@ -68,7 +67,8 @@ impl ServerProtocol for RpcV2Cbor {
         operation: &CompiledOperation<RpcOperationState>,
         output: &dyn SerializableStruct,
     ) -> Response {
-        serialize_rpc_operation_response(self.codec(), operation.schema(), output, CONTENT_TYPE, None)
+        self.inner
+            .serialize_response(operation.schema(), output)
             .map(with_protocol_header)
             .unwrap_or_else(serialization_failure)
     }

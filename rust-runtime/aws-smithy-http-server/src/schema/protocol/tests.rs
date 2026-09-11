@@ -12,11 +12,11 @@ use std::num::NonZeroUsize;
 use std::sync::LazyLock;
 use std::time::Duration;
 
-use crate::protocol::aws_json_10::AwsJson1_0;
-use crate::protocol::aws_json_11::AwsJson1_1;
+use crate::protocol::aws_json_10::AwsJson1_0Protocol;
+use crate::protocol::aws_json_11::AwsJson1_1Protocol;
 use crate::protocol::rest_json_1::RestJson1Protocol;
 use crate::protocol::rest_xml::RestXmlProtocol;
-use crate::protocol::rpc_v2_cbor::RpcV2Cbor;
+use crate::protocol::rpc_v2_cbor::RpcV2CborProtocol;
 use crate::protocol::test_helpers::get_body_as_string;
 use crate::response::Response;
 use crate::schema::{
@@ -27,6 +27,9 @@ use crate::schema::{
 
 static REST_JSON: LazyLock<RestJson1Protocol> = LazyLock::new(RestJson1Protocol::default);
 static REST_XML: LazyLock<RestXmlProtocol> = LazyLock::new(RestXmlProtocol::default);
+static AWS_JSON_10: LazyLock<AwsJson1_0Protocol> = LazyLock::new(AwsJson1_0Protocol::default);
+static AWS_JSON_11: LazyLock<AwsJson1_1Protocol> = LazyLock::new(AwsJson1_1Protocol::default);
+static RPC_V2_CBOR: LazyLock<RpcV2CborProtocol> = LazyLock::new(RpcV2CborProtocol::default);
 
 // --- a REST operation: `POST /pets/{name}?age=..` with a body member, `201` on success ---
 
@@ -61,7 +64,7 @@ static RPC_OUT_SCHEMA: Schema<'static> =
 static RPC_SHAPE: Schema<'static> = Schema::new(shape_id!("test", "Rpc"), ShapeType::Operation);
 static RPC: OperationSchema<'static> = OperationSchema::new(&RPC_SHAPE, &RPC_IN_SCHEMA, &RPC_OUT_SCHEMA, &[]);
 static COMPILED_RPC: LazyLock<CompiledOperation<super::RpcOperationState>> =
-    LazyLock::new(|| RpcV2Cbor.compile_operation(&RPC));
+    LazyLock::new(|| RPC_V2_CBOR.compile_operation(&RPC));
 
 // --- a REST operation with no modeled input and an empty (synthetic) output ---
 
@@ -74,7 +77,7 @@ static EMPTY_SHAPE: Schema<'static> =
     Schema::new(shape_id!("test", "Empty"), ShapeType::Operation).with_http(HttpTrait::new("POST", "/empty", None));
 static EMPTY: OperationSchema<'static> = OperationSchema::new(&EMPTY_SHAPE, &EMPTY_IN_SCHEMA, &EMPTY_OUT_SCHEMA, &[]);
 static COMPILED_EMPTY: LazyLock<CompiledOperation<super::RpcOperationState>> =
-    LazyLock::new(|| RpcV2Cbor.compile_operation(&EMPTY));
+    LazyLock::new(|| RPC_V2_CBOR.compile_operation(&EMPTY));
 static REST_EMPTY: LazyLock<CompiledOperation<super::RestOperationState>> =
     LazyLock::new(|| REST_JSON.compile_operation(&EMPTY));
 
@@ -83,7 +86,7 @@ static REST_EMPTY: LazyLock<CompiledOperation<super::RestOperationState>> =
 static RPC_SYNTHETIC_OUT: OperationSchema<'static> =
     OperationSchema::new(&RPC_SHAPE, &RPC_IN_SCHEMA, &EMPTY_OUT_SCHEMA, &[]);
 static COMPILED_RPC_SYNTHETIC_OUT: LazyLock<CompiledOperation<super::RpcOperationState>> =
-    LazyLock::new(|| RpcV2Cbor.compile_operation(&RPC_SYNTHETIC_OUT));
+    LazyLock::new(|| RPC_V2_CBOR.compile_operation(&RPC_SYNTHETIC_OUT));
 
 static SERVICE_SHAPE: Schema<'static> = Schema::new(shape_id!("test", "Service"), ShapeType::Service);
 static SERVICE_PROTOCOLS: [aws_smithy_schema::ShapeId<'static>; 1] = [shape_id!("aws.protocols", "restJson1")];
@@ -245,7 +248,7 @@ fn rpc_request_round_trips_through_the_codec() {
             s.write_string(&RPC_NOTE_MEMBER, "hi")
         }
     }
-    let mut serializer = RpcV2Cbor.codec().create_serializer();
+    let mut serializer = RPC_V2_CBOR.codec().create_serializer();
     serializer.write_struct(&RPC_IN_SCHEMA, &Body).unwrap();
     let body = serializer.finish();
 
@@ -254,14 +257,14 @@ fn rpc_request_round_trips_through_the_codec() {
         &[("content-type", "application/cbor")],
         &body,
     );
-    let input: RpcTestInput = RpcV2Cbor.deserialize(&COMPILED_RPC, &req).unwrap();
+    let input: RpcTestInput = RPC_V2_CBOR.deserialize(&COMPILED_RPC, &req).unwrap();
     assert_eq!(input.0.note.as_deref(), Some("hi"));
 }
 
 #[test]
 fn rpc_request_with_an_empty_body_leaves_members_unset() {
     let req = request("/", &[("content-type", "application/x-amz-json-1.0")], b"");
-    let input: RpcTestInput = AwsJson1_0.deserialize(&COMPILED_RPC, &req).unwrap();
+    let input: RpcTestInput = AWS_JSON_10.deserialize(&COMPILED_RPC, &req).unwrap();
     assert_eq!(input.0, TestInput::default());
 }
 
@@ -292,16 +295,20 @@ fn accept_header_gates_every_protocol() {
 
     // awsJson: gated against the fixed protocol content type on every operation.
     let req = request("/", &[("accept", "application/x-amz-json-1.1")], b"");
-    assert!(AwsJson1_1.deserialize::<RpcTestInput>(&COMPILED_RPC, &req).is_ok());
+    assert!(AWS_JSON_11.deserialize::<RpcTestInput>(&COMPILED_RPC, &req).is_ok());
     let req = request("/", &[("accept", "application/x-amz-json-1.0")], b"");
-    let err = AwsJson1_1.deserialize::<RpcTestInput>(&COMPILED_RPC, &req).unwrap_err();
+    let err = AWS_JSON_11
+        .deserialize::<RpcTestInput>(&COMPILED_RPC, &req)
+        .unwrap_err();
     assert!(matches!(err, DeserializeError::NotAcceptable), "{err}");
 
     // rpcv2Cbor: gated only when the operation's output was modeled by the user.
     let req = request("/service/Svc/operation/Rpc", &[("accept", "text/plain")], b"");
-    let err = RpcV2Cbor.deserialize::<RpcTestInput>(&COMPILED_RPC, &req).unwrap_err();
+    let err = RPC_V2_CBOR
+        .deserialize::<RpcTestInput>(&COMPILED_RPC, &req)
+        .unwrap_err();
     assert!(matches!(err, DeserializeError::NotAcceptable), "{err}");
-    assert!(RpcV2Cbor
+    assert!(RPC_V2_CBOR
         .deserialize::<RpcTestInput>(&COMPILED_RPC_SYNTHETIC_OUT, &req)
         .is_ok());
 }
@@ -315,13 +322,12 @@ fn accept_expectation_follows_the_output_payload() {
         Schema::new_struct(shape_id!("test", "BlobOut"), ShapeType::Structure, &BLOB_OUT_MEMBERS);
     static BLOB_OP: OperationSchema<'static> = OperationSchema::new(&EMPTY_SHAPE, &EMPTY_IN_SCHEMA, &BLOB_OUT, &[]);
 
-    // A blob payload answers as `application/octet-stream`.
+    // An untyped blob response defaults to `application/octet-stream`, but accepts any media type.
     let req = request("/empty", &[("accept", "application/octet-stream")], b"");
     let operation = REST_JSON.compile_operation(&BLOB_OP);
     assert!(REST_JSON.deserialize::<EmptyInput>(&operation, &req).is_ok());
     let req = request("/empty", &[("accept", "application/json")], b"");
-    let err = REST_JSON.deserialize::<EmptyInput>(&operation, &req).unwrap_err();
-    assert!(matches!(err, DeserializeError::NotAcceptable), "{err}");
+    assert!(REST_JSON.deserialize::<EmptyInput>(&operation, &req).is_ok());
 }
 
 // --- body collection ---
@@ -332,7 +338,7 @@ async fn rest_protocols_skip_the_body_when_nothing_is_bound_to_it() {
     static BOUND_ONLY: Schema<'static> =
         Schema::new_struct(shape_id!("test", "BoundOnly"), ShapeType::Structure, &BOUND_MEMBERS);
     static BOUND_OPERATION: OperationSchema<'static> = OperationSchema::new(&PET_SHAPE, &BOUND_ONLY, &OUT_SCHEMA, &[]);
-    let compiled_bound = RpcV2Cbor.compile_operation(&BOUND_OPERATION);
+    let compiled_bound = RPC_V2_CBOR.compile_operation(&BOUND_OPERATION);
     let rest_json_bound = REST_JSON.compile_operation(&BOUND_OPERATION);
     let rest_xml_bound = REST_XML.compile_operation(&BOUND_OPERATION);
 
@@ -419,7 +425,7 @@ async fn responses_take_the_status_from_the_operation() {
     assert_eq!(response.headers().get("content-type").unwrap(), "application/json");
     assert_eq!(get_body_as_string(response.into_body()).await, r#"{"msg":"ok"}"#);
 
-    let response = RpcV2Cbor.serialize_response(&COMPILED_RPC, &TestOutput);
+    let response = RPC_V2_CBOR.serialize_response(&COMPILED_RPC, &TestOutput);
     assert_eq!(response.status(), http::StatusCode::OK);
     assert_eq!(response.headers().get("smithy-protocol").unwrap(), "rpc-v2-cbor");
     assert_eq!(response.headers().get("content-type").unwrap(), "application/cbor");
@@ -428,7 +434,7 @@ async fn responses_take_the_status_from_the_operation() {
 #[tokio::test]
 async fn aws_json_stamps_the_content_type_on_an_empty_body() {
     static OP: OperationSchema<'static> = OperationSchema::new(&RPC_SHAPE, &RPC_IN_SCHEMA, &EMPTY_OUT_SCHEMA, &[]);
-    let compiled_op = AwsJson1_1.compile_operation(&OP);
+    let compiled_op = AWS_JSON_11.compile_operation(&OP);
     struct Nothing;
     impl SerializableStruct for Nothing {
         fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
@@ -436,7 +442,7 @@ async fn aws_json_stamps_the_content_type_on_an_empty_body() {
         }
     }
 
-    let response = AwsJson1_1.serialize_response(&compiled_op, &Nothing);
+    let response = AWS_JSON_11.serialize_response(&compiled_op, &Nothing);
     assert_eq!(
         response.headers().get("content-type").unwrap(),
         "application/x-amz-json-1.1"
@@ -514,17 +520,17 @@ async fn rest_xml_frames_errors_without_a_discriminator() {
 #[tokio::test]
 async fn aws_json_frames_errors_with_a_trailing_type_member() {
     // RPC protocols do not split header-bound members out of the body.
-    let body = get_body_as_string(AwsJson1_0.serialize_error(&Boom).into_body()).await;
+    let body = get_body_as_string(AWS_JSON_10.serialize_error(&Boom).into_body()).await;
     assert!(body.contains(r#""tag":"tagged""#), "{body}");
     assert!(body.ends_with(r#""__type":"test#Boom"}"#), "{body}");
 
-    let body = get_body_as_string(AwsJson1_1.serialize_error(&Boom).into_body()).await;
+    let body = get_body_as_string(AWS_JSON_11.serialize_error(&Boom).into_body()).await;
     assert!(body.ends_with(r#""__type":"Boom"}"#), "{body}");
 }
 
 #[tokio::test]
 async fn rpc_v2_cbor_frames_errors_with_a_leading_type_member() {
-    let response = RpcV2Cbor.serialize_error(&Boom);
+    let response = RPC_V2_CBOR.serialize_error(&Boom);
     assert_eq!(response.headers().get("smithy-protocol").unwrap(), "rpc-v2-cbor");
     let bytes = body_bytes(response).await;
     let type_pos = bytes.windows(6).position(|w| w == b"__type").expect("__type present");
@@ -587,7 +593,7 @@ async fn rest_xml_rejections_collapse_not_acceptable_to_a_400() {
 #[tokio::test]
 async fn aws_json_rejections_collapse_everything_to_a_400() {
     for err in [serde_failure(), media_type_failure(), DeserializeError::NotAcceptable] {
-        let response = AwsJson1_0.serialize_rejection(err);
+        let response = AWS_JSON_10.serialize_rejection(err);
         assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
         assert_eq!(
             response.headers().get("content-type").unwrap(),
@@ -596,7 +602,7 @@ async fn aws_json_rejections_collapse_everything_to_a_400() {
         assert_eq!(get_body_as_string(response.into_body()).await, "{}");
     }
     for err in [serde_failure(), media_type_failure(), DeserializeError::NotAcceptable] {
-        let response = AwsJson1_1.serialize_rejection(err);
+        let response = AWS_JSON_11.serialize_rejection(err);
         assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
         assert_eq!(
             response.headers().get("content-type").unwrap(),
@@ -610,7 +616,7 @@ async fn aws_json_rejections_collapse_everything_to_a_400() {
 #[tokio::test]
 async fn rpc_v2_cbor_rejections_collapse_to_a_400_without_the_protocol_header() {
     for err in [serde_failure(), media_type_failure(), DeserializeError::NotAcceptable] {
-        let response = RpcV2Cbor.serialize_rejection(err);
+        let response = RPC_V2_CBOR.serialize_rejection(err);
         assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
         assert_eq!(response.headers().get("content-type").unwrap(), "application/cbor");
         // Legacy never sets `smithy-protocol` on the runtime-error path.
@@ -639,10 +645,10 @@ async fn constraint_violations_answer_with_the_modeled_error() {
 
     // awsJson validation bodies carry the `__type` discriminator, exactly as the generated
     // smuggled payloads do (full ID on 1.0, shape name on 1.1, both written last).
-    let response = AwsJson1_0.serialize_rejection(DeserializeError::ConstraintViolation(Box::new(Boom)));
+    let response = AWS_JSON_10.serialize_rejection(DeserializeError::ConstraintViolation(Box::new(Boom)));
     let body = get_body_as_string(response.into_body()).await;
     assert!(body.ends_with(r#""__type":"test#Boom"}"#), "{body}");
-    let response = AwsJson1_1.serialize_rejection(DeserializeError::ConstraintViolation(Box::new(Boom)));
+    let response = AWS_JSON_11.serialize_rejection(DeserializeError::ConstraintViolation(Box::new(Boom)));
     let body = get_body_as_string(response.into_body()).await;
     assert!(body.ends_with(r#""__type":"Boom"}"#), "{body}");
 }
@@ -653,7 +659,7 @@ async fn rpc_v2_cbor_constraint_violations_have_no_protocol_header() {
 
     // Modeled CBOR body with a leading `__type`, but — unlike handler-returned errors — no
     // `smithy-protocol` header: legacy's runtime-error path never sets it.
-    let response = RpcV2Cbor.serialize_rejection(DeserializeError::ConstraintViolation(Box::new(Boom)));
+    let response = RPC_V2_CBOR.serialize_rejection(DeserializeError::ConstraintViolation(Box::new(Boom)));
     assert_eq!(response.status(), http::StatusCode::UNPROCESSABLE_ENTITY);
     assert!(response.headers().get("smithy-protocol").is_none());
     assert_eq!(
@@ -686,9 +692,9 @@ async fn every_marker_erases_to_a_dyn_server_protocol() {
     let protocols: Vec<(&dyn crate::schema::DynServerProtocol, &str)> = vec![
         (&*REST_JSON, "aws.protocols#restJson1"),
         (&*REST_XML, "aws.protocols#restXml"),
-        (&AwsJson1_0, "aws.protocols#awsJson1_0"),
-        (&AwsJson1_1, "aws.protocols#awsJson1_1"),
-        (&RpcV2Cbor, "smithy.protocols#rpcv2Cbor"),
+        (&*AWS_JSON_10, "aws.protocols#awsJson1_0"),
+        (&*AWS_JSON_11, "aws.protocols#awsJson1_1"),
+        (&*RPC_V2_CBOR, "smithy.protocols#rpcv2Cbor"),
     ];
     for (protocol, id) in &protocols {
         assert_eq!(protocol.protocol_id().as_str(), *id);

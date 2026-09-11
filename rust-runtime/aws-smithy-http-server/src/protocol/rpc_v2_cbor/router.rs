@@ -126,6 +126,25 @@ impl<S> RpcV2CborRouter<S> {
     }
 }
 
+impl<B> RpcV2CborRouter<crate::routing::SchemaRoute<B>> {
+    /// Applies route middleware after schema selection while retaining erased route types.
+    pub fn layer_schema<L>(self, layer: &L) -> Self
+    where
+        L: Layer<crate::routing::Route<B>>,
+        L::Service:
+            Service<http::Request<B>, Response = http::Response<BoxBody>, Error = Infallible> + Clone + Send + 'static,
+        <L::Service as Service<http::Request<B>>>::Future: Send + 'static,
+    {
+        Self {
+            routes: self
+                .routes
+                .into_iter()
+                .map(|(key, route)| (key, route.layer(layer)))
+                .collect(),
+        }
+    }
+}
+
 // TODO(https://github.com/smithy-lang/smithy/issues/2348): We're probably non-compliant here, but
 // we have no tests to pin our implemenation against!
 impl IntoResponse<RpcV2Cbor> for Error {

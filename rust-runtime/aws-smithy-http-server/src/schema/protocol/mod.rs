@@ -24,6 +24,7 @@ pub(crate) mod response;
 pub(crate) mod rest;
 mod rest_json_1;
 mod rest_xml;
+pub(crate) mod rpc;
 mod rpc_v2_cbor;
 #[cfg(test)]
 mod tests;
@@ -47,6 +48,7 @@ use crate::routing::tiny_map::TinyMap;
 use super::{DeserializableShape, DeserializeError, HttpModeledError};
 
 pub use rest::RestOperationState;
+pub use rpc::RpcOperationState;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
@@ -58,49 +60,6 @@ pub enum RequestBodyHandling {
 
 pub trait OperationState: Send + Sync + 'static {
     fn request_body(&self) -> RequestBodyHandling;
-}
-
-#[doc(hidden)]
-#[derive(Debug)]
-pub struct RpcOperationState {
-    request_body: RequestBodyHandling,
-}
-
-impl RpcOperationState {
-    pub(crate) fn compile(schema: &'static OperationSchema<'static>) -> Self {
-        let request_body = if schema.input().members().iter().any(|member| member.streaming()) {
-            RequestBodyHandling::Streaming
-        } else if schema.input().members().is_empty() {
-            RequestBodyHandling::Unused
-        } else {
-            RequestBodyHandling::Collected
-        };
-        Self { request_body }
-    }
-}
-
-macro_rules! impl_rpc_operation_state {
-    ($($protocol:ty),+ $(,)?) => {
-        $(
-            impl CompileOperationState<$protocol> for RpcOperationState {
-                fn compile(_protocol: &$protocol, schema: &'static OperationSchema<'static>) -> Self {
-                    Self::compile(schema)
-                }
-            }
-        )+
-    };
-}
-
-impl_rpc_operation_state!(
-    crate::protocol::aws_json_10::AwsJson1_0,
-    crate::protocol::aws_json_11::AwsJson1_1,
-    crate::protocol::rpc_v2_cbor::RpcV2Cbor,
-);
-
-impl OperationState for RpcOperationState {
-    fn request_body(&self) -> RequestBodyHandling {
-        self.request_body
-    }
 }
 
 /// The canonical, transport-independent view of a collected request on the schema path.
@@ -158,6 +117,12 @@ pub trait CompileOperationState<P: ?Sized>: OperationState {
 impl<P: rest::RestProtocolProvider> CompileOperationState<P> for RestOperationState {
     fn compile(protocol: &P, schema: &'static OperationSchema<'static>) -> Self {
         protocol.rest_protocol().compile_operation(schema)
+    }
+}
+
+impl<P: rpc::RpcProtocolProvider> CompileOperationState<P> for RpcOperationState {
+    fn compile(protocol: &P, schema: &'static OperationSchema<'static>) -> Self {
+        protocol.rpc_protocol().compile_operation(schema)
     }
 }
 
