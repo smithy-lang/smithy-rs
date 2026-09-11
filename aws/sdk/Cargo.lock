@@ -1421,7 +1421,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-json"
-version = "0.63.0"
+version = "0.63.1"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-schema",
