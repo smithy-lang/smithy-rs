@@ -18,14 +18,20 @@ import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.util.findStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestJsonProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestXmlProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRpcV2CborProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Error as ErrorModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Input as InputModule
@@ -56,6 +62,34 @@ class ServerServiceGenerator(
     private val serviceId = service.id
     private val serviceName = serviceId.name.toPascalCase()
     private val builderName = "${serviceName}Builder"
+    private val schemaRest =
+        codegenContext.settings.codegenConfig.schemaSerde && runtimeConfig.httpVersion == HttpVersion.Http1x &&
+            (protocol is ServerRestJsonProtocol || protocol is ServerRestXmlProtocol)
+
+    private fun usesDynUpgrade(operation: OperationShape): Boolean =
+        schemaRest && operation.inputShape(model).findStreamingMember(model) == null &&
+            operation.outputShape(model).findStreamingMember(model) == null
+
+    private fun upgradePlugin(operation: OperationShape): RuntimeType =
+        smithyHttpServer.resolve(
+            if (usesDynUpgrade(operation)) "operation::DynUpgradePlugin" else "operation::UpgradePlugin",
+        )
+
+    private fun upgradeConstructor(operation: OperationShape): String =
+        if (usesDynUpgrade(operation)) {
+            val max = codegenContext.settings.codegenConfig.requestBodyMaxBytes
+            val maxExpr = if (max > 0) "::std::num::NonZeroUsize::new(${max}usize)" else "None"
+            "new(#{SmithyHttpServer}::schema::RequestBodyCollectionConfig { max_bytes: $maxExpr, read_timeout: None })"
+        } else {
+            "new()"
+        }
+
+    private fun schemaProtocol(): RuntimeType =
+        when (protocol) {
+            is ServerRestJsonProtocol -> smithyHttpServer.resolve("protocol::rest_json_1::RestJson1Protocol")
+            is ServerRestXmlProtocol -> smithyHttpServer.resolve("protocol::rest_xml::RestXmlProtocol")
+            else -> protocol.markerStruct()
+        }
 
     /** Calculate all `operationShape`s contained within the `ServiceShape`. */
     private val index = TopDownIndex.of(codegenContext.model)
@@ -180,7 +214,7 @@ class ServerServiceGenerator(
                     ///     /* Set other handlers */
                     ///     .build()
                     ///     .unwrap();
-                    /// ## let app: $serviceName<#{SmithyHttpServer}::routing::RoutingService<#{Router}<#{SmithyHttpServer}::routing::Route>, #{Protocol}>> = app;
+                    /// ## let app: $serviceName<#{SmithyHttpServer}::routing::${if (schemaRest) "SchemaRoutingService" else "RoutingService"}<#{Router}<#{SmithyHttpServer}::routing::${if (schemaRest) "SchemaRoute" else "Route"}>, #{Protocol}>> = app;
                     /// ```
                     ///
                     pub fn $fieldName<HandlerType, HandlerExtractors, UpgradeExtractors>(self, handler: HandlerType) -> Self
@@ -192,7 +226,7 @@ class ServerServiceGenerator(
                             crate::operation_shape::$structName,
                             #{SmithyHttpServer}::operation::IntoService<crate::operation_shape::$structName, HandlerType>
                         >,
-                        #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
+                        #{UpgradePlugin}::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
                             $serviceName<L>,
                             crate::operation_shape::$structName,
                             ModelPl::Output
@@ -201,7 +235,7 @@ class ServerServiceGenerator(
                             $serviceName<L>,
                             crate::operation_shape::$structName,
                             <
-                                #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>
+                                #{UpgradePlugin}::<UpgradeExtractors>
                                 as #{SmithyHttpServer}::plugin::Plugin<
                                     $serviceName<L>,
                                     crate::operation_shape::$structName,
@@ -218,7 +252,7 @@ class ServerServiceGenerator(
                         use #{SmithyHttpServer}::plugin::Plugin;
                         let svc = crate::operation_shape::$structName::from_handler(handler);
                         let svc = self.model_plugin.apply(svc);
-                        let svc = #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new().apply(svc);
+                        let svc = #{UpgradePlugin}::<UpgradeExtractors>::${upgradeConstructor(operationShape)}.apply(svc);
                         let svc = self.http_plugin.apply(svc);
                         self.${fieldName}_custom(svc)
                     }
@@ -244,7 +278,7 @@ class ServerServiceGenerator(
                     ///     /* Set other handlers */
                     ///     .build()
                     ///     .unwrap();
-                    /// ## let app: $serviceName<#{SmithyHttpServer}::routing::RoutingService<#{Router}<#{SmithyHttpServer}::routing::Route>, #{Protocol}>> = app;
+                    /// ## let app: $serviceName<#{SmithyHttpServer}::routing::${if (schemaRest) "SchemaRoutingService" else "RoutingService"}<#{Router}<#{SmithyHttpServer}::routing::${if (schemaRest) "SchemaRoute" else "Route"}>, #{Protocol}>> = app;
                     /// ```
                     ///
                     pub fn ${fieldName}_service<S, ServiceExtractors, UpgradeExtractors>(self, service: S) -> Self
@@ -256,7 +290,7 @@ class ServerServiceGenerator(
                             crate::operation_shape::$structName,
                             #{SmithyHttpServer}::operation::Normalize<crate::operation_shape::$structName, S>
                         >,
-                        #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
+                        #{UpgradePlugin}::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
                             $serviceName<L>,
                             crate::operation_shape::$structName,
                             ModelPl::Output
@@ -265,7 +299,7 @@ class ServerServiceGenerator(
                             $serviceName<L>,
                             crate::operation_shape::$structName,
                             <
-                                #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>
+                                #{UpgradePlugin}::<UpgradeExtractors>
                                 as #{SmithyHttpServer}::plugin::Plugin<
                                     $serviceName<L>,
                                     crate::operation_shape::$structName,
@@ -282,7 +316,7 @@ class ServerServiceGenerator(
                         use #{SmithyHttpServer}::plugin::Plugin;
                         let svc = crate::operation_shape::$structName::from_service(service);
                         let svc = self.model_plugin.apply(svc);
-                        let svc = #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new().apply(svc);
+                        let svc = #{UpgradePlugin}::<UpgradeExtractors>::${upgradeConstructor(operationShape)}.apply(svc);
                         let svc = self.http_plugin.apply(svc);
                         self.${fieldName}_custom(svc)
                     }
@@ -303,6 +337,7 @@ class ServerServiceGenerator(
                     "Handler" to handler,
                     "HandlerFixed" to handlerFixed,
                     "HandlerImports" to handlerImports(crateName, operations),
+                    "UpgradePlugin" to upgradePlugin(operationShape),
                     *codegenScope,
                 )
 
@@ -364,7 +399,12 @@ class ServerServiceGenerator(
                         val specFunctions = requestSpecMap.getValue(operationShape)
                         emitRouteEntries(specFunctions) { isClone ->
                             val accessor = if (isClone) "self.$fieldName.clone()" else "self.$fieldName"
+                            if (schemaRest) rustTemplate("#{SmithyHttpServer}::routing::SchemaRoute::new(", *codegenScope)
                             rust("$accessor.expect($expectMessageVariableName)")
+                            if (schemaRest) {
+                                val opName = operationStructNames.getValue(operationShape)
+                                rust(", protocol_table.select(<crate::operation_shape::$opName as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA.shape_id()).expect(\"operation is in service schema\"))")
+                            }
                         }
                     }
                 }
@@ -379,8 +419,8 @@ class ServerServiceGenerator(
                 /// unspecified route is requested.
                 pub fn build(self) -> #{Result}<
                     $serviceName<
-                        #{SmithyHttpServer}::routing::RoutingService<
-                            #{Router}<L::Service>,
+                        #{SmithyHttpServer}::routing::${if (schemaRest) "SchemaRoutingService" else "RoutingService"}<
+                            #{Router}<${if (schemaRest) "#{SmithyHttpServer}::routing::SchemaRoute<Body>" else "L::Service"}>,
                             #{Protocol},
                         >,
                     >,
@@ -388,6 +428,7 @@ class ServerServiceGenerator(
                 >
                 where
                     L: #{Tower}::Layer<#{SmithyHttpServer}::routing::Route<Body>>,
+                    ${if (schemaRest) "L::Service: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,\n<L::Service as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static," else ""}
                 {
                     let router = {
                         use #{SmithyHttpServer}::operation::OperationShape;
@@ -402,15 +443,18 @@ class ServerServiceGenerator(
 
                         #{PatternInitializations:W}
 
+                        ${if (schemaRest) "let protocol_table = #{SmithyHttpServer}::schema::ProtocolRoutingTable::new(#{SchemaProtocol}::default(), &crate::schema::service::${serviceId.name.toSnakeCase().uppercase()});" else ""}
+
                         #{Router}::from_iter([#{RoutesArrayElements:W}])
                     };
-                    let svc = #{SmithyHttpServer}::routing::RoutingService::new(router);
-                    let svc = svc.map(|s| s.layer(self.layer));
+                    let svc = #{SmithyHttpServer}::routing::${if (schemaRest) "SchemaRoutingService" else "RoutingService"}::new(router);
+                    let svc = svc.map(|s| ${if (schemaRest) "s.layer_schema(&self.layer)" else "s.layer(self.layer)"});
                     Ok($serviceName { svc })
                 }
                 """,
                 *codegenScope,
                 "Protocol" to protocol.markerStruct(),
+                "SchemaProtocol" to schemaProtocol(),
                 "Router" to protocol.routerType(),
                 "NullabilityChecks" to nullabilityChecks,
                 "RoutesArrayElements" to routesArrayElements,
@@ -453,6 +497,7 @@ class ServerServiceGenerator(
                         val specFunctions = requestSpecMap.getValue(operationShape)
                         emitRouteEntries(specFunctions) { isClone ->
                             val accessor = if (isClone) "self.$fieldName.clone()" else "self.$fieldName"
+                            if (schemaRest) rustTemplate("#{SmithyHttpServer}::routing::SchemaRoute::new(", *codegenScope)
                             rustTemplate(
                                 """
                                 $accessor.unwrap_or_else(|| {
@@ -463,6 +508,10 @@ class ServerServiceGenerator(
                                 "SmithyHttpServer" to smithyHttpServer,
                                 "Protocol" to protocol.markerStruct(),
                             )
+                            if (schemaRest) {
+                                val opName = operationStructNames.getValue(operationShape)
+                                rust(", protocol_table.select(<crate::operation_shape::$opName as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA.shape_id()).expect(\"operation is in service schema\"))")
+                            }
                         }
                     }
                 }
@@ -477,18 +526,20 @@ class ServerServiceGenerator(
                 where
                     Body: Send + 'static,
                     L: #{Tower}::Layer<
-                        #{SmithyHttpServer}::routing::RoutingService<#{Router}<#{SmithyHttpServer}::routing::Route<Body>>, #{Protocol}>
+                        #{SmithyHttpServer}::routing::${if (schemaRest) "SchemaRoutingService" else "RoutingService"}<#{Router}<#{SmithyHttpServer}::routing::${if (schemaRest) "SchemaRoute<Body>" else "Route<Body>"}>, #{Protocol}>
                     >
                 {
+                    ${if (schemaRest) "let protocol_table = #{SmithyHttpServer}::schema::ProtocolRoutingTable::new(#{SchemaProtocol}::default(), &crate::schema::service::${serviceId.name.toSnakeCase().uppercase()});" else ""}
                     let router = #{Router}::from_iter([#{Pairs:W}]);
                     let svc = self
                         .layer
-                        .layer(#{SmithyHttpServer}::routing::RoutingService::new(router));
+                        .layer(#{SmithyHttpServer}::routing::${if (schemaRest) "SchemaRoutingService" else "RoutingService"}::new(router));
                     $serviceName { svc }
                 }
                 """,
                 *codegenScope,
                 "Protocol" to protocol.markerStruct(),
+                "SchemaProtocol" to schemaProtocol(),
                 "Router" to protocol.routerType(),
                 "Pairs" to pairs,
             )
@@ -574,11 +625,9 @@ class ServerServiceGenerator(
                 /// See the [root](crate) documentation for more information.
                 ##[derive(Clone)]
                 pub struct $serviceName<
-                    S = #{SmithyHttpServer}::routing::RoutingService<
+                    S = #{SmithyHttpServer}::routing::${if (schemaRest) "SchemaRoutingService" else "RoutingService"}<
                         #{Router}<
-                            #{SmithyHttpServer}::routing::Route<
-                                #{SmithyHttpServer}::body::BoxBody
-                            >,
+                            #{SmithyHttpServer}::routing::${if (schemaRest) "SchemaRoute<#{SmithyHttpServer}::body::BoxBody>" else "Route<#{SmithyHttpServer}::body::BoxBody>"},
                         >,
                         #{Protocol},
                     >
@@ -667,7 +716,7 @@ class ServerServiceGenerator(
 
                 impl<S>
                     $serviceName<
-                        #{SmithyHttpServer}::routing::RoutingService<
+                        #{SmithyHttpServer}::routing::${if (schemaRest) "SchemaRoutingService" else "RoutingService"}<
                             #{Router}<S>,
                             #{Protocol},
                         >,
@@ -682,7 +731,7 @@ class ServerServiceGenerator(
                         self,
                         layer: &L,
                     ) -> $serviceName<
-                        #{SmithyHttpServer}::routing::RoutingService<
+                        #{SmithyHttpServer}::routing::${if (schemaRest) "SchemaRoutingService" else "RoutingService"}<
                             #{Router}<L::Service>,
                             #{Protocol},
                         >,
@@ -701,7 +750,7 @@ class ServerServiceGenerator(
                     pub fn boxed<B>(
                         self,
                     ) -> $serviceName<
-                        #{SmithyHttpServer}::routing::RoutingService<
+                            #{SmithyHttpServer}::routing::${if (schemaRest) "SchemaRoutingService" else "RoutingService"}<
                             #{Router}<
                                 #{SmithyHttpServer}::routing::Route<B>,
                             >,

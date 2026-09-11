@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
 import software.amazon.smithy.codegen.core.CodegenException
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.framework.rust.ValidationExceptionTrait
 import software.amazon.smithy.framework.rust.ValidationFieldListTrait
 import software.amazon.smithy.framework.rust.ValidationFieldMessageTrait
@@ -30,6 +31,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.shapeModuleName
@@ -223,9 +225,10 @@ class UserProvidedValidationExceptionConversionGenerator(
 
     override val shapeId: ShapeId = SHAPE_ID
 
+    override fun validationExceptionSymbol(): Symbol = codegenContext.symbolProvider.toSymbol(validationExceptionStructure)
+
     override fun renderImplFromConstraintViolationForRequestRejection(protocol: ServerProtocol): Writable =
         writable {
-            val validationMessageName = codegenContext.symbolProvider.toMemberName(validationMessageMember)
             // Generate the correct shape module name for the user provided validation exception
             val shapeModuleName =
                 codegenContext.symbolProvider.shapeModuleName(codegenContext.serviceShape, validationExceptionStructure)
@@ -235,12 +238,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                 """
                 impl #{From}<ConstraintViolation> for #{RequestRejection} {
                     fn from(constraint_violation: ConstraintViolation) -> Self {
-                        #{FieldCreation}
-                        let validation_exception = #{ValidationException} {
-                            $validationMessageName: #{ValidationMessage},
-                            #{FieldListAssignment}
-                            #{AdditionalFieldAssignments}
-                        };
+                        let validation_exception = #{ValidationException}::from(constraint_violation);
                         Self::ConstraintViolation(
                             crate::protocol_serde::$shapeModuleName::ser_${shapeFunctionName}_error(&validation_exception)
                                 .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
@@ -248,9 +246,31 @@ class UserProvidedValidationExceptionConversionGenerator(
                     }
                 }
                 """,
-                *preludeScope,
                 "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
-                "ValidationException" to codegenContext.symbolProvider.toSymbol(validationExceptionStructure),
+                "ValidationException" to validationExceptionSymbol(),
+                "From" to RuntimeType.From,
+            )
+        }
+
+    override fun renderImplFromConstraintViolationForValidationException(): Writable =
+        writable {
+            val validationMessageName = codegenContext.symbolProvider.toMemberName(validationMessageMember)
+
+            rustTemplate(
+                """
+                impl #{From}<ConstraintViolation> for #{ValidationException} {
+                    fn from(constraint_violation: ConstraintViolation) -> Self {
+                        #{FieldCreation}
+                        Self {
+                            $validationMessageName: #{ValidationMessage},
+                            #{FieldListAssignment}
+                            #{AdditionalFieldAssignments}
+                        }
+                    }
+                }
+                """,
+                *preludeScope,
+                "ValidationException" to validationExceptionSymbol(),
                 "FieldCreation" to
                     writable {
                         if (maybeValidationFieldList != null) {

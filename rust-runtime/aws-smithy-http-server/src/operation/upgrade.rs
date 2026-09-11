@@ -148,9 +148,18 @@ where
                 Ok(value) => value,
                 Err(err) => return Ok(err.into_response()),
             };
+            let converted =
+                match aws_smithy_runtime_api::http::Request::try_from(http::Request::from_parts(parts, body)) {
+                    Ok(request) => request.into_parts(),
+                    Err(err) => {
+                        return Ok(selected.protocol().serialize_rejection(DeserializeError::Serde(
+                            aws_smithy_schema::serde::SerdeError::custom(err.to_string()),
+                        )))
+                    }
+                };
             let bytes = match selected.operation().request_body() {
                 RequestBodyHandling::Unused => bytes::Bytes::new(),
-                RequestBodyHandling::Collected => match collect_request_body(body, &config).await {
+                RequestBodyHandling::Collected => match collect_request_body(converted.body, &config).await {
                     Ok(bytes) => bytes,
                     Err(err) => {
                         return Ok(selected.protocol().serialize_rejection(DeserializeError::Serde(
@@ -161,15 +170,6 @@ where
                 RequestBodyHandling::Streaming => {
                     error!("streaming operation routed through DynUpgrade");
                     return Ok(empty_internal_server_error());
-                }
-            };
-            let converted = match aws_smithy_runtime_api::http::Request::try_from(http::Request::from_parts(parts, ()))
-            {
-                Ok(request) => request.into_parts(),
-                Err(err) => {
-                    return Ok(selected.protocol().serialize_rejection(DeserializeError::Serde(
-                        aws_smithy_schema::serde::SerdeError::custom(err.to_string()),
-                    )))
                 }
             };
             let request = ServerRequest {

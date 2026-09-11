@@ -16,7 +16,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.smithy.generators.SchemaGenerator
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
@@ -28,8 +27,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
  * Renders a shape's schema statics next to its generated Rust type and exposes them as `Type::SCHEMA`.
  *
  * This mirrors the client's convention, so protocol code reaches a shape's schema through the type itself
- * rather than through a parallel module tree. Only the statics are rendered; serialization and
- * deserialization glue is generated separately.
+ * rather than through a parallel module tree.
  */
 class ServerSchemaConstantGenerator(
     private val codegenContext: ServerCodegenContext,
@@ -38,17 +36,7 @@ class ServerSchemaConstantGenerator(
 ) {
     fun render() {
         val symbol = codegenContext.symbolProvider.toSymbol(shape)
-        val schemaPrefix = symbol.name.uppercase()
-        SchemaGenerator(codegenContext, writer, shape, schemaPrefix = schemaPrefix).renderSchemaOnly()
-        writer.rustTemplate(
-            """
-            impl ${symbol.name} {
-                /// The schema for this shape.
-                pub const SCHEMA: &'static #{Schema}<'static> = &${schemaPrefix}_SCHEMA;
-            }
-            """,
-            "Schema" to RuntimeType.smithySchema(codegenContext.runtimeConfig).resolve("Schema"),
-        )
+        ServerSchemaGenerator(codegenContext, writer, shape, schemaPrefix = symbol.name.uppercase()).renderSerializeOnly()
     }
 }
 

@@ -97,6 +97,35 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
             "rest_json_extras",
             imports = listOf("$commonModels/rest-json-extras.smithy"),
         ),
+        // Schema-driven (runtime) request/response path for restJson1.
+        CodegenTest(
+            "com.amazonaws.constraints#ConstraintsService",
+            "constraints_schema",
+            imports = listOf("$commonModels/constraints.smithy"),
+            extraCodegenConfig = """"schemaSerde": true""",
+        ),
+        CodegenTest(
+            "com.amazonaws.constraints#ConstraintsService",
+            "constraints_without_public_constrained_types_schema",
+            imports = listOf("$commonModels/constraints.smithy"),
+            extraCodegenConfig = """"publicConstrainedTypes": false, "schemaSerde": true""",
+        ),
+        CodegenTest(
+            "aws.protocoltests.restjson#RestJson",
+            "rest_json_schema",
+            extraCodegenConfig = """"schemaSerde": true""",
+        ),
+        CodegenTest(
+            "aws.protocoltests.restjson#RestJsonExtras",
+            "rest_json_extras_schema",
+            imports = listOf("$commonModels/rest-json-extras.smithy"),
+            extraCodegenConfig = """"schemaSerde": true""",
+        ),
+        CodegenTest(
+            "aws.protocoltests.restjson.validation#RestJsonValidation",
+            "rest_json_validation_schema",
+            extraCodegenConfig = """"ignoreUnsupportedConstraints": true, "schemaSerde": true""",
+        ),
         CodegenTest(
             "aws.protocoltests.restjson.validation#RestJsonValidation",
             "rest_json_validation",
@@ -130,7 +159,7 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
             "com.aws.example#PokemonService",
             "pokemon-service-server-sdk",
             imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy"),
-            extraCodegenConfig = """"debugMode": true""",
+            extraCodegenConfig = """"debugMode": true, "schemaSerde": true""",
         ),
         CodegenTest(
             "com.aws.example#PokemonService",
@@ -143,7 +172,15 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
             imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy"),
             extraCodegenConfig = """"schemaSerde": true""",
         ),
-    ).flatMap { it.bothHttpVersions() }
+    ).flatMap { it.bothHttpVersions() } +
+        listOf(
+            CodegenTest(
+                "smithy.rust.server.protocoltests#RestXmlServerTests",
+                "rest_xml_schema",
+                imports = listOf("custom-test-models/rest-xml-server-tests.smithy"),
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
+            ),
+        )
 }
 // When iterating on protocol tests use this to speed up codegen:
 //    .filter { it.module == "rpcv2Cbor_extras" || it.module == "rpcv2Cbor_extras_no_initial_response" }

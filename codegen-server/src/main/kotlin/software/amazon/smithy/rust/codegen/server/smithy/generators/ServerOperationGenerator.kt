@@ -13,13 +13,16 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 
 class ServerOperationGenerator(
     private val operation: OperationShape,
-    codegenContext: CodegenContext,
+    private val codegenContext: CodegenContext,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope =
@@ -84,6 +87,17 @@ class ServerOperationGenerator(
             "ResponseType" to responseFmt.type,
             *codegenScope,
         )
+        if ((codegenContext as? software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext)?.settings?.codegenConfig?.schemaSerde == true && runtimeConfig.httpVersion == HttpVersion.Http1x) {
+            writer.rustTemplate(
+                """
+                impl #{SmithyHttpServer}::operation::SchemaOperationShape for $operationName {
+                    const SCHEMA: &'static #{OperationSchema}<'static> = &crate::schema::operations::${operationName.toSnakeCase().uppercase()};
+                }
+                """,
+                "OperationSchema" to RuntimeType.smithySchema(runtimeConfig).resolve("OperationSchema"),
+                *codegenScope,
+            )
+        }
         // Adds newline to end of render
         writer.rust("")
     }

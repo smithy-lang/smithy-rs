@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.Shape
@@ -22,6 +23,16 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
  */
 interface ValidationExceptionConversionGenerator {
     val shapeId: ShapeId
+
+    /** The symbol of the validation exception structure that constraint violations are converted into. */
+    fun validationExceptionSymbol(): Symbol
+
+    /**
+     * Convert from a top-level operation input's constraint violation into the validation exception structure
+     * (`impl From<ConstraintViolation> for <ValidationException>`). This is the single place where the exception's
+     * message and field list are built; every transport-specific conversion goes through it.
+     */
+    fun renderImplFromConstraintViolationForValidationException(): Writable
 
     /**
      * Convert from a top-level operation input's constraint violation into

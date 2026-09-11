@@ -34,6 +34,7 @@ open class ServerOperationErrorGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val operationOrEventStream: Shape,
+    private val schemaSerde: Boolean = false,
 ) {
     private val symbol = symbolProvider.toSymbol(operationOrEventStream)
 
@@ -101,6 +102,19 @@ open class ServerOperationErrorGenerator(
             rustBlock("fn source(&self) -> std::option::Option<&(dyn #T + 'static)>", RuntimeType.StdError) {
                 delegateToVariants(errors, errorSymbol) {
                     rust("Some(_inner)")
+                }
+            }
+        }
+
+        if (schemaSerde && operationOrEventStream is OperationShape) {
+            writer.rustBlock("impl ::aws_smithy_http_server::operation::IntoDynResponse for ${errorSymbol.name}") {
+                rustBlock("fn into_dyn_response(self, protocol: &dyn ::aws_smithy_http_server::schema::DynServerProtocol) -> ::aws_smithy_http_server::http::Response<::aws_smithy_http_server::body::BoxBody>") {
+                    rustBlock("match self") {
+                        errors.forEach {
+                            val variant = symbolProvider.toSymbol(it).name
+                            rust("${errorSymbol.name}::$variant(inner) => protocol.serialize_error(&inner),")
+                        }
+                    }
                 }
             }
         }

@@ -33,9 +33,12 @@ import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
+import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
@@ -74,6 +77,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperat
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerRootGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerRuntimeTypesReExportsGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerSchemaConstantGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerSchemaDeserializeGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerStructureConstrainedTraitImpl
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServiceConfigGenerator
@@ -338,6 +342,12 @@ open class ServerCodegenVisitor(
                 structSettings = codegenContext.structSettings(),
             ).render()
             renderSchemaConstant(shape, this)
+            if (codegenContext.settings.codegenConfig.schemaSerde && codegenContext.runtimeConfig.httpVersion == HttpVersion.Http1x) {
+                ServerSchemaDeserializeGenerator(codegenContext, this, shape, validationExceptionConversionGenerator).also {
+                    it.render()
+                    it.renderDeserializableShapeImpl()
+                }
+            }
 
             shape.getTrait<ErrorTrait>()?.also { errorTrait ->
                 ErrorImplGenerator(
@@ -348,6 +358,24 @@ open class ServerCodegenVisitor(
                     errorTrait,
                     codegenDecorator.errorImplCustomizations(codegenContext, emptyList()),
                 ).render(CodegenTarget.SERVER)
+                if (codegenContext.settings.codegenConfig.schemaSerde && codegenContext.runtimeConfig.httpVersion == HttpVersion.Http1x) {
+                    val status =
+                        shape.getTrait<software.amazon.smithy.model.traits.HttpErrorTrait>()?.code
+                            ?: if (errorTrait.isClientError) 400 else 500
+                    rustTemplate(
+                        """
+                        impl #{ModeledError} for ${codegenContext.symbolProvider.toSymbol(shape).name} {
+                            fn schema(&self) -> &#{Schema}<'_> { Self::SCHEMA }
+                        }
+                        impl #{HttpModeledError} for ${codegenContext.symbolProvider.toSymbol(shape).name} {
+                            fn status_code(&self) -> u16 { $status }
+                        }
+                        """,
+                        "ModeledError" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType().resolve("schema::ModeledError"),
+                        "HttpModeledError" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType().resolve("schema::HttpModeledError"),
+                        "Schema" to RuntimeType.smithySchema(codegenContext.runtimeConfig).resolve("Schema"),
+                    )
+                }
             }
 
             renderStructureShapeBuilder(shape, this)
@@ -618,6 +646,9 @@ open class ServerCodegenVisitor(
         rustCrate.useShapeWriter(shape) {
             UnionGenerator(model, codegenContext.symbolProvider, this, shape, renderUnknownVariant = false).render()
             renderSchemaConstant(shape, this)
+            if (codegenContext.settings.codegenConfig.schemaSerde && codegenContext.runtimeConfig.httpVersion == HttpVersion.Http1x) {
+                ServerSchemaDeserializeGenerator(codegenContext, this, shape, validationExceptionConversionGenerator).render()
+            }
         }
 
         if (shape.isReachableFromOperationInput() &&
@@ -719,7 +750,12 @@ open class ServerCodegenVisitor(
     override fun operationShape(shape: OperationShape) {
         // Generate errors.
         rustCrate.withModule(ServerRustModule.Error) {
-            ServerOperationErrorGenerator(model, codegenContext.symbolProvider, shape).render(this)
+            ServerOperationErrorGenerator(
+                model,
+                codegenContext.symbolProvider,
+                shape,
+                codegenContext.settings.codegenConfig.schemaSerde && codegenContext.runtimeConfig.httpVersion == HttpVersion.Http1x,
+            ).render(this)
         }
 
         // Generate operation shapes.

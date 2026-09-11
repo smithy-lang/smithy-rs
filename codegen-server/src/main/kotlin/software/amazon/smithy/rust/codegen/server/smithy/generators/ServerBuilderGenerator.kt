@@ -234,8 +234,11 @@ class ServerBuilderGenerator(
     private fun renderImplFromConstraintViolationForRequestRejection(writer: RustWriter) {
         writer.rustTemplate(
             """
+            #{ValidationExceptionConverter:W}
             #{Converter:W}
             """,
+            "ValidationExceptionConverter" to
+                customValidationExceptionWithReasonConversionGenerator.renderImplFromConstraintViolationForValidationException(),
             "Converter" to
                 customValidationExceptionWithReasonConversionGenerator.renderImplFromConstraintViolationForRequestRejection(protocol),
         )
