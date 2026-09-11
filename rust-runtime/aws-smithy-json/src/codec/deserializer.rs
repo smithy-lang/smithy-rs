@@ -1066,17 +1066,33 @@ impl<'a> JsonDeserializer<'a> {
     fn read_float_value(&mut self) -> Result<f64, SerdeError> {
         self.skip_whitespace();
         let rem = self.remaining();
-        // Handle string-encoded special float values: "NaN", "Infinity", "-Infinity"
+        // A string may only carry a non-finite value, which JSON cannot express as a number:
+        // `"NaN"`, `"Infinity"`, `"-Infinity"`. A quoted finite number such as `"123"` is a
+        // type mismatch; the restJson1 protocol tests
+        // `RestJsonBodyFloatMalformedValueRejected_case0` and
+        // `RestJsonBodyDoubleMalformedValueRejected_case0` require it to be rejected. This
+        // mirrors the token-based parser (`expect_number_or_null`), which parses the string
+        // with `aws_smithy_types::primitive::Parse` and then rejects finite values, so the
+        // spellings Rust's `f64::from_str` accepts for non-finite values (e.g. `"nan"`) are
+        // accepted here too.
         if rem.first() == Some(&b'"') {
             let s = self.read_string(&aws_smithy_schema::prelude::STRING)?;
-            return match s.as_str() {
-                "NaN" => Ok(f64::NAN),
-                "Infinity" => Ok(f64::INFINITY),
-                "-Infinity" => Ok(f64::NEG_INFINITY),
-                _ => s.parse::<f64>().map_err(|e| SerdeError::InvalidInput {
+            let value = match s.as_str() {
+                "NaN" => f64::NAN,
+                "Infinity" => f64::INFINITY,
+                "-Infinity" => f64::NEG_INFINITY,
+                other => other.parse::<f64>().map_err(|e| SerdeError::InvalidInput {
                     message: e.to_string(),
-                }),
+                })?,
             };
+            if value.is_finite() {
+                return Err(SerdeError::TypeMismatch {
+                    message: format!(
+                        "only `Infinity`, `-Infinity`, `NaN` can represent a float as a string but found `{s}`"
+                    ),
+                });
+            }
+            return Ok(value);
         }
         let mut len = 0;
         for &b in rem {
@@ -2449,6 +2465,79 @@ mod tests {
             assert!(deser(br#"{"a":1,}"#).read_document(&INT).is_err());
             assert!(deser(br#"[1,,2]"#).read_document(&INT).is_err());
             assert!(deser(br#"{,"a":1}"#).read_document(&INT).is_err());
+        }
+    }
+
+    mod float_strings {
+        //! A float or double member may carry a string only for a non-finite value
+        //! (`"NaN"`, `"Infinity"`, `"-Infinity"`). Smithy protocol tests
+        //! `RestJsonBodyFloatMalformedValueRejected_case0` and
+        //! `RestJsonBodyDoubleMalformedValueRejected_case0` (`"123"`) require quoted finite
+        //! numbers to be rejected.
+        use super::*;
+        use aws_smithy_schema::{shape_id, ShapeType};
+
+        static F: Schema =
+            Schema::new_member(shape_id!("test", "Input", "f"), ShapeType::Float, "f", 0);
+        static D: Schema =
+            Schema::new_member(shape_id!("test", "Input", "d"), ShapeType::Double, "d", 1);
+        static INPUT: Schema =
+            Schema::new_struct(shape_id!("test", "Input"), ShapeType::Structure, &[&F, &D]);
+
+        fn read(body: &[u8]) -> Result<(Option<f32>, Option<f64>), SerdeError> {
+            let mut deser = JsonDeserializer::new(body, Arc::new(JsonCodecSettings::default()));
+            let (mut f, mut d) = (None, None);
+            deser.read_struct(&INPUT, &mut |m, x| {
+                match m.member_index() {
+                    Some(0) => f = Some(x.read_float(m)?),
+                    Some(1) => d = Some(x.read_double(m)?),
+                    _ => {}
+                }
+                Ok(())
+            })?;
+            Ok((f, d))
+        }
+
+        #[test]
+        fn numbers_and_the_three_special_strings_are_read() {
+            assert_eq!(
+                read(br#"{"f": 1.5, "d": -2}"#).unwrap(),
+                (Some(1.5), Some(-2.0))
+            );
+            let (f, d) = read(br#"{"f": "NaN", "d": "-Infinity"}"#).unwrap();
+            assert!(f.unwrap().is_nan());
+            assert_eq!(d, Some(f64::NEG_INFINITY));
+            assert_eq!(
+                read(br#"{"f": "Infinity"}"#).unwrap().0,
+                Some(f32::INFINITY)
+            );
+        }
+
+        #[test]
+        fn quoted_finite_numbers_are_rejected() {
+            assert!(read(br#"{"f": "123"}"#).is_err());
+            assert!(read(br#"{"d": "123"}"#).is_err());
+            assert!(read(br#"{"d": "1.5e3"}"#).is_err());
+            assert!(read(br#"{"d": "-0"}"#).is_err());
+        }
+
+        #[test]
+        fn non_numeric_strings_are_rejected() {
+            assert!(read(br#"{"d": "abc"}"#).is_err());
+            assert!(read(br#"{"d": ""}"#).is_err());
+            assert!(read(br#"{"d": "1 2"}"#).is_err());
+        }
+
+        #[test]
+        fn alternative_non_finite_spellings_match_the_legacy_parser() {
+            // `aws_smithy_types::primitive::Parse` falls back to `f64::from_str`, which
+            // accepts these case-insensitively; only finite results are rejected.
+            assert!(read(br#"{"f": "nan"}"#).unwrap().0.unwrap().is_nan());
+            assert_eq!(read(br#"{"d": "inf"}"#).unwrap().1, Some(f64::INFINITY));
+            assert_eq!(
+                read(br#"{"d": "-infinity"}"#).unwrap().1,
+                Some(f64::NEG_INFINITY)
+            );
         }
     }
 }
