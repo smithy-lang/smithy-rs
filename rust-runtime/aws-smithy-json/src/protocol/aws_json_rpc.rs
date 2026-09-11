@@ -192,6 +192,35 @@ mod tests {
         );
     }
 
+    /// The body deserializer handed out by `deserialize_response` must reject malformed JSON
+    /// bodies end to end, not only inside containers. These are the bodies of Smithy protocol
+    /// tests `RestJsonInvalidJsonBody_case1` and `RestJsonInvalidJsonBody_case7`.
+    #[test]
+    fn malformed_response_bodies_are_rejected() {
+        use aws_smithy_runtime_api::http::Response;
+        use aws_smithy_types::body::SdkBody;
+
+        for body in [r#"{ "int": 10 }abc"#, r#"{"int": 10,}"#] {
+            let response = Response::new(200u16.try_into().unwrap(), SdkBody::from(body));
+            let mut deser = AwsJsonRpcProtocol::aws_json_1_0("TestService")
+                .deserialize_response(&response, &TEST_SCHEMA, &ConfigBag::base())
+                .unwrap();
+            let result = deser.read_struct(&TEST_SCHEMA, &mut |_, _| Ok(()));
+            assert!(result.is_err(), "body {body:?} must be rejected");
+        }
+
+        let response = Response::new(
+            200u16.try_into().unwrap(),
+            SdkBody::from(r#"{ "int": 10 }"#),
+        );
+        let mut deser = AwsJsonRpcProtocol::aws_json_1_0("TestService")
+            .deserialize_response(&response, &TEST_SCHEMA, &ConfigBag::base())
+            .unwrap();
+        deser
+            .read_struct(&TEST_SCHEMA, &mut |_, _| Ok(()))
+            .expect("well-formed body is accepted");
+    }
+
     /// A quoted number for a double member must be rejected through the real response path.
     /// This is the body of Smithy protocol test `RestJsonBodyDoubleMalformedValueRejected_case0`.
     #[test]
