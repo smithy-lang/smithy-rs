@@ -237,8 +237,19 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                 self.advance_by(4);
             } else if let Some(member_schema) = self.resolve_member(schema, &key_str) {
                 consumer(member_schema, self)?;
-            } else {
+            } else if &*key_str == "__type" {
+                // Protocol discriminator, never a member.
                 self.skip_value()?;
+            } else {
+                // Report the unknown key so a union consumer can act on it: the prelude
+                // `DOCUMENT` schema has no member index, so generated code lands in its
+                // fallthrough arm. The consumer may read the value (as a document); if it
+                // does not, the position is unchanged and the value is skipped here.
+                let start = self.position;
+                consumer(&aws_smithy_schema::prelude::DOCUMENT, self)?;
+                if self.position == start {
+                    self.skip_value()?;
+                }
             }
         }
 
@@ -3038,6 +3049,144 @@ mod union_deserialization_tests {
         assert_eq!(
             out.get("second"),
             Some(&OuterUnion::Mcp(InnerUnion::Lambda("b".to_string())))
+        );
+    }
+}
+
+/// `read_struct` reports keys that name no member: the consumer is called with the
+/// prelude `DOCUMENT` schema (no member index) positioned at the value. These tests
+/// pin down what is reported, what is not, and that the stream stays intact whether
+/// or not the consumer reads the value.
+#[cfg(test)]
+mod unknown_member_tests {
+    use super::*;
+    use aws_smithy_schema::{shape_id, ShapeType};
+
+    static A: Schema<'static> =
+        Schema::new_member(shape_id!("test", "S"), ShapeType::String, "a", 0);
+    static S: Schema<'static> =
+        Schema::new_struct(shape_id!("test", "S"), ShapeType::Structure, &[&A]);
+
+    static U_INT: Schema<'static> =
+        Schema::new_member(shape_id!("test", "U"), ShapeType::Integer, "int", 0);
+    static U_STR: Schema<'static> =
+        Schema::new_member(shape_id!("test", "U"), ShapeType::String, "string", 1);
+    static U: Schema<'static> =
+        Schema::new_struct(shape_id!("test", "U"), ShapeType::Union, &[&U_INT, &U_STR]);
+
+    fn deser(input: &[u8]) -> JsonDeserializer<'_> {
+        JsonDeserializer::new(input, Arc::new(JsonCodecSettings::default()))
+    }
+
+    /// Reads `S`, recording every unknown key (and its value when asked) and returning `a`.
+    fn read_s(input: &[u8], read_unknown_value: bool) -> (Option<String>, Vec<Option<Document>>) {
+        let mut a = None;
+        let mut unknown = Vec::new();
+        deser(input)
+            .read_struct(&S, &mut |member, d| {
+                match member.member_index() {
+                    Some(0) => a = Some(d.read_string(member)?),
+                    _ => {
+                        assert_eq!(member.shape_type(), ShapeType::Document);
+                        unknown.push(if read_unknown_value {
+                            Some(d.read_document(member)?)
+                        } else {
+                            None
+                        });
+                    }
+                }
+                Ok(())
+            })
+            .unwrap();
+        (a, unknown)
+    }
+
+    #[test]
+    fn unknown_key_is_reported_and_the_consumer_can_read_the_value() {
+        let (a, unknown) = read_s(br#"{"zzz":{"deep":[1,2]},"a":"x"}"#, true);
+        assert_eq!(a.as_deref(), Some("x"));
+        assert_eq!(unknown.len(), 1);
+        match &unknown[0] {
+            Some(Document::Object(map)) => assert!(map.contains_key("deep")),
+            other => panic!("expected the object value, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unknown_key_value_is_skipped_when_the_consumer_does_not_read_it() {
+        // Nested containers and a `}` inside a string must not confuse the skip.
+        let (a, unknown) = read_s(
+            br#"{"zzz":{"deep":[1,{"q":"}"}]},"a":"x","yyy":"tail"}"#,
+            false,
+        );
+        assert_eq!(a.as_deref(), Some("x"));
+        assert_eq!(unknown.len(), 2);
+    }
+
+    #[test]
+    fn type_discriminator_is_not_reported() {
+        let (a, unknown) = read_s(br#"{"__type":"ns#Foo","a":"x"}"#, false);
+        assert_eq!(a.as_deref(), Some("x"));
+        assert!(unknown.is_empty(), "`__type` must not be reported");
+    }
+
+    #[test]
+    fn null_valued_unknown_key_is_not_reported() {
+        let (a, unknown) = read_s(br#"{"zzz":null,"a":"x"}"#, false);
+        assert_eq!(a.as_deref(), Some("x"));
+        assert!(unknown.is_empty(), "a null value is an absent member");
+    }
+
+    #[test]
+    fn struct_consumer_that_ignores_unknown_keys_is_unaffected() {
+        let mut a = None;
+        deser(br#"{"zzz":[1,2,3],"a":"x"}"#)
+            .read_struct(&S, &mut |member, d| {
+                if member.member_index() == Some(0) {
+                    a = Some(d.read_string(member)?);
+                }
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(a.as_deref(), Some("x"));
+    }
+
+    /// The shape of a generated server union deserializer: a second key of any kind is
+    /// "mixed variants", and an unknown key is an error.
+    fn read_union(input: &[u8]) -> Result<String, SerdeError> {
+        let mut result: Option<String> = None;
+        deser(input).read_struct(&U, &mut |member, d| {
+            if result.is_some() {
+                return Err(SerdeError::invalid_input(
+                    "encountered mixed variants in union",
+                ));
+            }
+            result = Some(match member.member_index() {
+                Some(0) => format!("int={}", d.read_integer(member)?),
+                Some(1) => format!("string={}", d.read_string(member)?),
+                _ => return Err(SerdeError::invalid_input("unexpected union variant")),
+            });
+            Ok(())
+        })?;
+        result.ok_or_else(|| SerdeError::custom("expected a union variant"))
+    }
+
+    #[test]
+    fn union_consumer_sees_known_and_unknown_keys() {
+        assert_eq!(read_union(br#"{"int":2}"#).unwrap(), "int=2");
+        let err = read_union(br#"{"int":2,"string":"three"}"#).unwrap_err();
+        assert!(err.to_string().contains("mixed variants"), "{err}");
+        let err = read_union(br#"{"int":2,"unknownField":"three"}"#).unwrap_err();
+        assert!(err.to_string().contains("mixed variants"), "{err}");
+        let err = read_union(br#"{"unknownField":"three"}"#).unwrap_err();
+        assert!(
+            err.to_string().contains("unexpected union variant"),
+            "{err}"
+        );
+        // `__type` is a discriminator, not a variant.
+        assert_eq!(
+            read_union(br#"{"__type":"ns#U","int":2}"#).unwrap(),
+            "int=2"
         );
     }
 }
