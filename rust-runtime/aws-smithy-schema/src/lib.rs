@@ -109,6 +109,7 @@
 //! before any downstream code is affected.
 
 mod schema {
+    pub(crate) mod payload_hint;
     pub(crate) mod shape_id;
     pub(crate) mod shape_type;
     pub(crate) mod trait_map;
@@ -126,6 +127,7 @@ mod schema {
     pub(crate) mod serde;
 }
 
+pub use schema::payload_hint::PayloadHint;
 pub use schema::shape_id::ShapeId;
 pub use schema::shape_type::ShapeType;
 pub use schema::trait_map::TraitMap;
@@ -319,6 +321,13 @@ pub struct Schema<'a> {
     /// happens, and the body bytes are never collected (they'd be discarded
     /// anyway). Saves ~15-20% on header-heavy SER cases like S3 PutObject.
     has_body_members: bool,
+    /// Records whether an `@httpPayload` member supplies its own body framing,
+    /// so the HTTP binding protocol does not have to scan members to find out.
+    ///
+    /// Defaults to [`PayloadHint::Unknown`], which means "not recorded", the
+    /// runtime then derives the answer itself. See [`PayloadHint`] for why that
+    /// fallback is permanent rather than transitional.
+    payload_hint: PayloadHint,
     xml_namespace: Option<trait_types::XmlNamespaceTrait<'a>>,
     /// Deliberately pinned to `'static` while the other seven trait values
     /// carry `'a`. `Headers::insert` takes `impl AsHeaderComponent`, whose
@@ -454,6 +463,7 @@ impl<'a> Schema<'a> {
             xml_flattened: None,
             xml_unwrapped_output: false,
             has_body_members: true,
+            payload_hint: PayloadHint::Unknown,
             xml_namespace: None,
             http_header: None,
             http_label: None,
@@ -627,6 +637,16 @@ impl<'a> Schema<'a> {
         self.has_body_members
     }
 
+    /// Returns the recorded [`PayloadHint`], or [`PayloadHint::Unknown`] if none
+    /// was recorded.
+    ///
+    /// Callers MUST handle `Unknown` by deriving the answer themselves; it is
+    /// the default for every hand-constructed schema and for schemas generated
+    /// before codegen began recording it.
+    pub fn payload_hint(&self) -> PayloadHint {
+        self.payload_hint
+    }
+
     /// Returns `true` if this member schema has any HTTP response binding trait
     /// (`@httpHeader`, `@httpResponseCode`, `@httpPrefixHeaders`, or `@httpPayload`).
     pub fn has_http_response_binding(&self) -> bool {
@@ -792,6 +812,17 @@ impl<'a> Schema<'a> {
     /// See [`has_body_members`](Schema::has_body_members) for what this enables.
     pub const fn with_no_body_members(mut self) -> Self {
         self.has_body_members = false;
+        self
+    }
+
+    /// Records whether an `@httpPayload` member supplies its own body framing.
+    ///
+    /// Setting this lets the HTTP binding protocol skip a per-request scan of
+    /// this schema's members. It is an optimization only: leaving it at
+    /// [`PayloadHint::Unknown`] (the default) produces identical output. See
+    /// [`PayloadHint`] for why.
+    pub const fn with_payload_hint(mut self, hint: PayloadHint) -> Self {
+        self.payload_hint = hint;
         self
     }
 
