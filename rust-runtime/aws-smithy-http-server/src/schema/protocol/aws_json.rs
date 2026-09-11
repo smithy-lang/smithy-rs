@@ -74,6 +74,10 @@ macro_rules! aws_json_protocol {
                 self.inner.codec()
             }
 
+            fn reads_request_body(&self, operation: &CompiledOperation<RpcOperationState>) -> bool {
+                operation.state().reads_body()
+            }
+
             fn deserialize_request<'a>(
                 &'a self,
                 operation: &'a CompiledOperation<RpcOperationState>,

@@ -34,6 +34,6 @@ impl SelectedProtocolOperation {
 }
 pub use protocol::{
     collect_request_body, CompileOperationState, CompiledOperation, DynServerProtocol, ErasedCompiledOperation,
-    OperationState, ProtocolRoutingTable, RequestBodyCollectionConfig, RequestBodyCollectionError, RequestBodyHandling,
-    ServerProtocol, ServerRequest, ServiceRequestBodyConfig,
+    OperationState, ProtocolRoutingTable, RequestBodyCollectionConfig, RequestBodyCollectionError, ServerProtocol,
+    ServerRequest, ServiceRequestBodyConfig,
 };

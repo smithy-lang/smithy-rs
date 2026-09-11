@@ -42,6 +42,10 @@ impl ServerProtocol for RestJson1Protocol {
         self.inner.codec()
     }
 
+    fn reads_request_body(&self, operation: &CompiledOperation<RestOperationState>) -> bool {
+        operation.state().reads_body()
+    }
+
     fn deserialize_request<'a>(
         &'a self,
         operation: &'a CompiledOperation<RestOperationState>,

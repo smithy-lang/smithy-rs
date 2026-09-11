@@ -12,7 +12,7 @@ use crate::rejection::MissingContentTypeReason;
 ///
 /// This is the one protocol-independent failure enum on the schema path: every way a request can
 /// fail to become an operation input lands here, and each protocol turns the whole enum into its
-/// wire response through [`ServerProtocol::serialize_rejection`].
+/// wire response through [`ServerProtocol::serialize_rejection`](super::ServerProtocol::serialize_rejection).
 #[derive(Debug)]
 pub enum DeserializeError {
     /// The request could not be read as the input shape: a malformed document, a type mismatch,

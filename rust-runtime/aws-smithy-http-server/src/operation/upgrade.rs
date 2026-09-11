@@ -23,7 +23,7 @@ use crate::{
     response::IntoResponse,
     runtime_error::InternalFailureException,
     schema::{
-        collect_request_body, DeserializableShape, DeserializeError, RequestBodyCollectionConfig, RequestBodyHandling,
+        collect_request_body, DeserializableShape, DeserializeError, RequestBodyCollectionConfig,
         SelectedProtocolOperation, ServerRequest,
     },
     service::ServiceShape,
@@ -157,20 +157,21 @@ where
                         )))
                     }
                 };
-            let bytes = match selected.operation().request_body() {
-                RequestBodyHandling::Unused => bytes::Bytes::new(),
-                RequestBodyHandling::Collected => match collect_request_body(converted.body, &config).await {
+            if selected.operation().input_is_streaming() {
+                error!("streaming operation routed through DynUpgrade");
+                return Ok(empty_internal_server_error());
+            }
+            let bytes = if selected.protocol().reads_request_body(&**selected.operation()) {
+                match collect_request_body(converted.body, &config).await {
                     Ok(bytes) => bytes,
                     Err(err) => {
                         return Ok(selected.protocol().serialize_rejection(DeserializeError::Serde(
                             aws_smithy_schema::serde::SerdeError::custom(err.to_string()),
                         )))
                     }
-                },
-                RequestBodyHandling::Streaming => {
-                    error!("streaming operation routed through DynUpgrade");
-                    return Ok(empty_internal_server_error());
                 }
+            } else {
+                bytes::Bytes::new()
             };
             let request = ServerRequest {
                 uri: converted.uri,

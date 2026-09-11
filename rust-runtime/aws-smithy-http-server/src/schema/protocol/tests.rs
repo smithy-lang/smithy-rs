@@ -21,8 +21,7 @@ use crate::protocol::test_helpers::get_body_as_string;
 use crate::response::Response;
 use crate::schema::{
     collect_request_body, CompiledOperation, DeserializableShape, DeserializeError, ErasedCompiledOperation,
-    HttpModeledError, ModeledError, OperationState, ProtocolRoutingTable, RequestBodyCollectionConfig,
-    RequestBodyHandling, ServerProtocol, ServerRequest,
+    HttpModeledError, ModeledError, ProtocolRoutingTable, RequestBodyCollectionConfig, ServerProtocol, ServerRequest,
 };
 
 static REST_JSON: LazyLock<RestJson1Protocol> = LazyLock::new(RestJson1Protocol::default);
@@ -183,14 +182,8 @@ fn routing_table_compiles_and_indexes_protocol_operations() {
     assert_eq!(table.protocol().protocol_id().as_str(), "aws.protocols#restJson1");
     assert_eq!(table.operation(&pet).unwrap().schema().shape_id().as_str(), "test#Pet");
     assert!(table.operation(&missing).is_none());
-    assert_eq!(
-        table.operation(&pet).unwrap().request_body(),
-        super::RequestBodyHandling::Collected
-    );
-    assert_eq!(
-        table.operation(&empty).unwrap().request_body(),
-        super::RequestBodyHandling::Unused
-    );
+    assert!(table.protocol().reads_request_body(table.operation(&pet).unwrap()));
+    assert!(!table.protocol().reads_request_body(table.operation(&empty).unwrap()));
 }
 
 #[test]
@@ -342,10 +335,10 @@ async fn rest_protocols_skip_the_body_when_nothing_is_bound_to_it() {
     let rest_json_bound = REST_JSON.compile_operation(&BOUND_OPERATION);
     let rest_xml_bound = REST_XML.compile_operation(&BOUND_OPERATION);
 
-    assert_eq!(rest_json_bound.state().request_body(), RequestBodyHandling::Unused);
-    assert_eq!(rest_xml_bound.state().request_body(), RequestBodyHandling::Unused);
-    assert_eq!(REST_PET.state().request_body(), RequestBodyHandling::Collected);
-    assert_eq!(compiled_bound.state().request_body(), RequestBodyHandling::Collected);
+    assert!(!REST_JSON.reads_request_body(&rest_json_bound));
+    assert!(!REST_XML.reads_request_body(&rest_xml_bound));
+    assert!(REST_JSON.reads_request_body(&REST_PET));
+    assert!(RPC_V2_CBOR.reads_request_body(&compiled_bound));
 
     let body = http_body_util::Full::new(bytes::Bytes::from_static(b"read"));
     let collected = collect_request_body(body, &RequestBodyCollectionConfig::default())
@@ -357,9 +350,9 @@ async fn rest_protocols_skip_the_body_when_nothing_is_bound_to_it() {
 #[tokio::test]
 async fn rpc_body_handling_is_compiled_separately_from_mechanical_collection() {
     // The generated RPC deserializers never touch the body when the input has no members; the
-    // default `reads_request_body` mirrors that.
-    assert_eq!(COMPILED_EMPTY.state().request_body(), RequestBodyHandling::Unused);
-    assert_eq!(COMPILED_RPC.state().request_body(), RequestBodyHandling::Collected);
+    // RPC protocols override `reads_request_body` to mirror that.
+    assert!(!RPC_V2_CBOR.reads_request_body(&COMPILED_EMPTY));
+    assert!(RPC_V2_CBOR.reads_request_body(&COMPILED_RPC));
 
     let body = http_body_util::Full::new(bytes::Bytes::from_static(b"ignored"));
     let collected = collect_request_body(body, &RequestBodyCollectionConfig::default())
@@ -402,6 +395,53 @@ async fn collection_enforces_limits_timeouts_and_body_errors() {
 }
 
 #[test]
+fn protocols_without_operation_state_collect_the_body_by_default() {
+    #[derive(Debug, Default)]
+    struct Stateless {
+        codec: aws_smithy_json::codec::JsonCodec,
+    }
+
+    impl ServerProtocol for Stateless {
+        type Codec = aws_smithy_json::codec::JsonCodec;
+        type OperationState = ();
+
+        fn protocol_id(&self) -> &'static aws_smithy_schema::ShapeId<'static> {
+            static ID: aws_smithy_schema::ShapeId<'static> = shape_id!("test", "stateless");
+            &ID
+        }
+        fn codec(&self) -> &Self::Codec {
+            &self.codec
+        }
+        fn deserialize_request<'a>(
+            &'a self,
+            _operation: &'a CompiledOperation<()>,
+            request: &'a ServerRequest,
+        ) -> Result<Box<dyn aws_smithy_schema::serde::ShapeDeserializer + 'a>, DeserializeError> {
+            Ok(Box::new(self.codec().create_deserializer(&request.body)))
+        }
+        fn serialize_response(&self, _: &CompiledOperation<()>, _: &dyn SerializableStruct) -> Response {
+            unimplemented!()
+        }
+        fn serialize_error(&self, _: &dyn HttpModeledError) -> Response {
+            unimplemented!()
+        }
+        fn serialize_rejection(&self, _: DeserializeError) -> Response {
+            unimplemented!()
+        }
+    }
+
+    let protocol = Stateless::default();
+    let with_input = protocol.compile_operation(&RPC);
+    let without_input = protocol.compile_operation(&EMPTY);
+    assert!(protocol.reads_request_body(&with_input));
+    assert!(protocol.reads_request_body(&without_input));
+
+    let erased: &dyn super::DynServerProtocol = &protocol;
+    assert!(erased.reads_request_body(&without_input));
+    assert!(erased.accepts_operation(&without_input));
+}
+
+#[test]
 fn streaming_inputs_are_compiled_as_streaming() {
     static STREAM: Schema<'static> =
         Schema::new_member(shape_id!("test", "StreamingInput", "body"), ShapeType::Blob, "body", 0)
@@ -413,7 +453,9 @@ fn streaming_inputs_are_compiled_as_streaming() {
     static OP: OperationSchema<'static> = OperationSchema::new(&PET_SHAPE, &INPUT, &EMPTY_OUT_SCHEMA, &[]);
 
     let operation = REST_JSON.compile_operation(&OP);
-    assert_eq!(operation.state().request_body(), RequestBodyHandling::Streaming);
+    assert!(operation.input_is_streaming());
+    assert!(ErasedCompiledOperation::input_is_streaming(&operation));
+    assert!(!REST_PET.input_is_streaming());
 }
 
 // --- responses ---

@@ -50,17 +50,10 @@ use super::{DeserializableShape, DeserializeError, HttpModeledError};
 pub use rest::RestOperationState;
 pub use rpc::RpcOperationState;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum RequestBodyHandling {
-    Unused,
-    Collected,
-    Streaming,
-}
+/// State a protocol caches beside each operation schema. `()` when the protocol needs none.
+pub trait OperationState: Send + Sync + 'static {}
 
-pub trait OperationState: Send + Sync + 'static {
-    fn request_body(&self) -> RequestBodyHandling;
-}
+impl OperationState for () {}
 
 /// The canonical, transport-independent view of a collected request on the schema path.
 ///
@@ -79,8 +72,8 @@ pub struct ServerRequest {
     pub uri: Uri,
     /// The request headers. Values are valid UTF-8 by construction.
     pub headers: Headers,
-    /// The collected request body. Empty when the protocol reads no body for the operation's
-    /// input; see [`collect_request_body`].
+    /// The collected request body. Empty when the protocol answered `false` from
+    /// [`ServerProtocol::reads_request_body`].
     pub body: Bytes,
 }
 
@@ -89,12 +82,17 @@ pub struct ServerRequest {
 pub struct CompiledOperation<T> {
     schema: &'static OperationSchema<'static>,
     state: T,
+    input_is_streaming: bool,
 }
 
 impl<T> CompiledOperation<T> {
     /// Creates a compiled operation.
-    pub const fn new(schema: &'static OperationSchema<'static>, state: T) -> Self {
-        Self { schema, state }
+    pub fn new(schema: &'static OperationSchema<'static>, state: T) -> Self {
+        Self {
+            schema,
+            state,
+            input_is_streaming: schema.input().members().iter().any(|member| member.streaming()),
+        }
     }
 
     /// Returns the protocol-neutral operation schema.
@@ -106,12 +104,22 @@ impl<T> CompiledOperation<T> {
     pub fn state(&self) -> &T {
         &self.state
     }
+
+    /// `true` when the input has a `@streaming` member. Such a body is never collected, whatever
+    /// the protocol says in [`ServerProtocol::reads_request_body`].
+    pub fn input_is_streaming(&self) -> bool {
+        self.input_is_streaming
+    }
 }
 
 /// Builds the protocol-specific state stored beside an operation schema.
 pub trait CompileOperationState<P: ?Sized>: OperationState {
     /// Compiles state for `schema`, taking service-local protocol configuration into account.
     fn compile(protocol: &P, schema: &'static OperationSchema<'static>) -> Self;
+}
+
+impl<P: ?Sized> CompileOperationState<P> for () {
+    fn compile(_protocol: &P, _schema: &'static OperationSchema<'static>) -> Self {}
 }
 
 impl<P: rest::RestProtocolProvider> CompileOperationState<P> for RestOperationState {
@@ -131,7 +139,8 @@ pub trait ErasedCompiledOperation: Send + Sync + 'static {
     /// Returns the protocol-neutral operation schema.
     fn schema(&self) -> &'static OperationSchema<'static>;
 
-    fn request_body(&self) -> RequestBodyHandling;
+    /// `true` when the input has a `@streaming` member.
+    fn input_is_streaming(&self) -> bool;
 
     /// Returns this value for checked downcasting by the selected protocol.
     fn as_any(&self) -> &dyn Any;
@@ -142,8 +151,8 @@ impl<T: OperationState> ErasedCompiledOperation for CompiledOperation<T> {
         self.schema
     }
 
-    fn request_body(&self) -> RequestBodyHandling {
-        self.state.request_body()
+    fn input_is_streaming(&self) -> bool {
+        self.input_is_streaming
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -199,18 +208,30 @@ impl<P: ServerProtocol> ProtocolRoutingTable<P> {
 ///
 /// This is the typed surface that protocol authors implement and that single-protocol server
 /// code calls. It is not object-safe; [`DynServerProtocol`] is the erased view, derived from every
-/// implementation by a blanket impl. Deserialization is synchronous over an already collected body;
-/// [`collect_request_body`] decides whether a body needs collecting at all.
+/// implementation by a blanket impl. Deserialization is synchronous over an already collected body:
+/// the framework collects every non-streaming request body before calling in, unless the protocol
+/// opts out through [`Self::reads_request_body`].
 pub trait ServerProtocol: Send + Sync + 'static {
     /// The codec for request and response bodies.
     type Codec: Codec + Send + Sync + std::fmt::Debug + 'static;
 
     /// State derived once for each operation used with this protocol instance.
+    ///
+    /// Use `()` unless the protocol wants to precompute something from the operation schema.
     type OperationState: CompileOperationState<Self>;
 
     /// Compiles the protocol's interpretation of an operation.
     fn compile_operation(&self, schema: &'static OperationSchema<'static>) -> CompiledOperation<Self::OperationState> {
         CompiledOperation::new(schema, Self::OperationState::compile(self, schema))
+    }
+
+    /// Whether the collected body is needed to deserialize `operation`'s input.
+    ///
+    /// Defaults to `true`. A protocol that never reads the body for some inputs may answer `false`
+    /// to skip collection; [`ServerRequest::body`] is then empty. Streaming inputs never reach this
+    /// method: the framework keeps their body streaming based on the schema alone.
+    fn reads_request_body(&self, _operation: &CompiledOperation<Self::OperationState>) -> bool {
+        true
     }
 
     /// The protocol trait's shape ID, such as `aws.protocols#restJson1`.
@@ -272,6 +293,9 @@ pub trait DynServerProtocol: Send + Sync + 'static {
     /// The codec for request and response bodies.
     fn codec(&self) -> &dyn DynCodec;
 
+    /// Whether the collected body is needed to deserialize `operation`'s input.
+    fn reads_request_body(&self, operation: &dyn ErasedCompiledOperation) -> bool;
+
     /// Presents `request` as a deserializer for `operation`'s input.
     fn deserialize_request<'a>(
         &'a self,
@@ -299,6 +323,10 @@ impl<P: ServerProtocol> DynServerProtocol for P {
 
     fn codec(&self) -> &dyn DynCodec {
         ServerProtocol::codec(self)
+    }
+
+    fn reads_request_body(&self, operation: &dyn ErasedCompiledOperation) -> bool {
+        ServerProtocol::reads_request_body(self, downcast_operation::<P>(operation))
     }
 
     fn deserialize_request<'a>(

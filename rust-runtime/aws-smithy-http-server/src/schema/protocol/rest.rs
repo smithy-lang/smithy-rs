@@ -16,7 +16,7 @@ use super::request::{
     ExpectedContentType,
 };
 use super::response::serialize_compiled_rest_operation_response;
-use super::{OperationState, RequestBodyHandling, ServerRequest};
+use super::{OperationState, ServerRequest};
 
 #[derive(Debug)]
 pub(crate) struct RestProtocol<C> {
@@ -80,7 +80,7 @@ pub(crate) trait RestProtocolProvider {
 
 #[derive(Debug)]
 pub struct RestOperationState {
-    request_body: RequestBodyHandling,
+    reads_body: bool,
     request_payload: Option<&'static Schema<'static>>,
     response_payload: Option<&'static Schema<'static>>,
     expected_request_content_type: ExpectedContentType,
@@ -99,7 +99,8 @@ impl RestOperationState {
         let output = operation.output();
         let request_payload = input.members().iter().copied().find(|m| m.http_payload().is_some());
         let response_payload = output.members().iter().copied().find(|m| m.http_payload().is_some());
-        let has_body_binding = input.members().iter().any(|m| {
+        // The legacy REST deserializers never touch the body when nothing is bound to it.
+        let reads_body = input.members().iter().any(|m| {
             m.http_payload().is_some()
                 || (m.http_header().is_none()
                     && m.http_query().is_none()
@@ -107,16 +108,9 @@ impl RestOperationState {
                     && m.http_prefix_headers().is_none()
                     && m.http_query_params().is_none())
         });
-        let request_body = if input.members().iter().any(|m| m.streaming()) {
-            RequestBodyHandling::Streaming
-        } else if has_body_binding {
-            RequestBodyHandling::Collected
-        } else {
-            RequestBodyHandling::Unused
-        };
         let http = operation.schema().http();
         Self {
-            request_body,
+            reads_body,
             request_payload,
             response_payload,
             expected_request_content_type: expected_request_content_type(input, content_type),
@@ -138,6 +132,10 @@ impl RestOperationState {
             }),
             default_status: http.map(|http| http.code()).unwrap_or(200),
         }
+    }
+
+    pub(crate) fn reads_body(&self) -> bool {
+        self.reads_body
     }
 
     pub fn request_payload(&self) -> Option<&'static Schema<'static>> {
@@ -168,7 +166,7 @@ impl RestOperationState {
             .copied()
             .find(|member| member.http_payload().is_some());
         Self {
-            request_body: RequestBodyHandling::Collected,
+            reads_body: true,
             request_payload,
             response_payload: None,
             expected_request_content_type: expected_request_content_type(input, "application/json"),
@@ -193,8 +191,4 @@ impl RestOperationState {
     }
 }
 
-impl OperationState for RestOperationState {
-    fn request_body(&self) -> RequestBodyHandling {
-        self.request_body
-    }
-}
+impl OperationState for RestOperationState {}

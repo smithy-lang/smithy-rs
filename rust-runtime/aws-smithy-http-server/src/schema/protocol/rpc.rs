@@ -12,7 +12,7 @@ use crate::schema::DeserializeError;
 
 use super::request::{check_accept, rpc_request_deserializer};
 use super::response::serialize_rpc_operation_response;
-use super::{OperationState, RequestBodyHandling, ServerRequest};
+use super::{OperationState, ServerRequest};
 
 /// Determines which RPC operations advertise a response entity to the `Accept` gate.
 #[derive(Debug, Clone, Copy)]
@@ -93,32 +93,26 @@ pub(crate) trait RpcProtocolProvider {
 
 #[derive(Debug)]
 pub struct RpcOperationState {
-    request_body: RequestBodyHandling,
+    reads_body: bool,
     check_accept: bool,
 }
 
 impl RpcOperationState {
     fn compile(schema: &'static OperationSchema<'static>, accept: RpcAccept) -> Self {
-        let request_body = if schema.input().members().iter().any(|member| member.streaming()) {
-            RequestBodyHandling::Streaming
-        } else if schema.input().members().is_empty() {
-            RequestBodyHandling::Unused
-        } else {
-            RequestBodyHandling::Collected
-        };
         let check_accept = match accept {
             RpcAccept::Always => true,
             RpcAccept::ModeledOutput => schema.output().original_name().is_some(),
         };
         Self {
-            request_body,
+            // The legacy RPC deserializers never touch the body of a memberless input.
+            reads_body: !schema.input().members().is_empty(),
             check_accept,
         }
     }
-}
 
-impl OperationState for RpcOperationState {
-    fn request_body(&self) -> RequestBodyHandling {
-        self.request_body
+    pub(crate) fn reads_body(&self) -> bool {
+        self.reads_body
     }
 }
+
+impl OperationState for RpcOperationState {}
