@@ -49,40 +49,42 @@ object SchemaSerdeAllowlist {
     private val allowedProtocols: Set<ShapeId> = emptySet()
 
     /**
-     * Individual services allowed regardless of protocol.
+     * Service namespaces allowed regardless of protocol.
      *
-     * We should uncomment the test models as we enable protocols
+     * Keyed on namespace because AWS service shape names encode the API version and get bumped
+     * in place (`AWSDnsV20130401` -> `AWSDnsV20130527`). One service per AWS model file.
+     *
+     * We should uncomment the test namespaces as we enable protocols
      */
-    private val allowedServices: Set<String> =
+    private val allowedServiceNamespaces: Set<String> =
         setOf(
-            // Test model names, listed explicitly until protocols are fully enabled
+            // awsJson1_1 — first service on the schema path. Its model lives at
+            // `aws/sdk/aws-models/ssm.json` so CI generates and tests it.
+            "com.amazonaws.ssm",
+            // Test model namespaces, listed explicitly until protocols are fully enabled.
             // restJson1
-            // "aws.protocoltests.restjson#RestJson",
-            // "aws.protocoltests.restjson#RestJsonExtras",
-            // "aws.protocoltests.misc#MiscService",
-            // "com.aws.example#PokemonService",
-            // "com.amazonaws.ebs#Ebs",
+            // "aws.protocoltests.restjson",  // RestJson, RestJsonExtras
+            // "com.amazonaws.ebs",
+            // "com.amazonaws.simple",
+            // "com.amazonaws.bignumbers",
             // awsJson1_0 / awsJson1_1
-            // "aws.protocoltests.json10#JsonRpc10",
-            // "aws.protocoltests.json#JsonProtocol",
-            // "aws.protocoltests.json#TestService",
-            // "aws.protocoltests.misc#QueryCompatService",
-            // "com.amazonaws.simple#SimpleService",
-            // "com.amazonaws.bignumbers#BigNumberService",
+            "aws.protocoltests.json10",
             // restXml
-            // "aws.protocoltests.restxml#RestXml",
-            // "aws.protocoltests.restxml#RestXmlExtras",
-            // "aws.protocoltests.restxml.xmlns#RestXmlWithNamespace",
-            // "aws.protocoltests.restxmlunwrapped#RestXmlExtrasUnwrappedErrors",
+            // "aws.protocoltests.restxml",  // RestXml, RestXmlExtras
+            // "aws.protocoltests.restxml.xmlns",
+            // "aws.protocoltests.restxmlunwrapped",
             // rpcv2Cbor
-            // "smithy.protocoltests.rpcv2Cbor#RpcV2Protocol",
-            // "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
-            // "aws.protocoltests.rpcv2cbor#QueryCompatibleRpcV2Protocol",
-            // "aws.protocoltests.rpcv2cbor#NonQueryCompatibleRpcV2Protocol",
+            // "smithy.protocoltests.rpcv2Cbor",  // RpcV2Protocol, RpcV2CborService
+            // "aws.protocoltests.rpcv2cbor",  // Query- and NonQueryCompatibleRpcV2Protocol
             // naming obstacle courses (protocol-independent codegen coverage)
-            // "crate#Config",
-            // "casing#ACRONYMInside_Service",
-            // "naming_obs_structs#NamingObstacleCourseStructs",
+            // "crate",
+            // "casing",
+            // "naming_obs_structs",
+            // Namespaces holding services on more than one protocol — uncommenting enables all
+            // of them, not just the one being rolled out:
+            // "aws.protocoltests.misc",  // MiscService restJson1, QueryCompatService awsJson1_0
+            // "com.aws.example",  // two PokemonService shapes, restJson1 and awsJson1_0
+            // "aws.protocoltests.json",  // TestService awsJson1_1, RequiredValueJson awsJson1_0, RequiredValueXml restXml
         )
 
     /**
@@ -96,7 +98,7 @@ object SchemaSerdeAllowlist {
         !codegenContext.settings.codegenConfig.disableSchemaSerde &&
             (
                 codegenContext.protocol in allowedProtocols ||
-                    codegenContext.serviceShape.id.toString() in allowedServices
+                    codegenContext.serviceShape.id.namespace in allowedServiceNamespaces
             )
 
     /**
