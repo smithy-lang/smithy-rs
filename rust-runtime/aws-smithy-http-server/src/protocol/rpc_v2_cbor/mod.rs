@@ -22,7 +22,9 @@ impl Default for RpcV2CborProtocol {
     fn default() -> Self {
         Self {
             inner: crate::schema::protocol::rpc::RpcProtocol::new(
-                aws_smithy_cbor::codec::CborCodec::new(aws_smithy_cbor::codec::CborCodecSettings::default()),
+                aws_smithy_cbor::codec::CborCodec::new(
+                    aws_smithy_cbor::codec::CborCodecSettings::default().with_serialize_error_type(true),
+                ),
                 "application/cbor",
                 None,
                 crate::schema::protocol::rpc::RpcAccept::ModeledOutput,

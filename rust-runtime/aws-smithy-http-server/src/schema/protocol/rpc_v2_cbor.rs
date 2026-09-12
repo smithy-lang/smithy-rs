@@ -15,19 +15,14 @@ use crate::protocol::rpc_v2_cbor::{RpcV2Cbor, RpcV2CborProtocol};
 use crate::response::{IntoResponse, Response};
 use crate::schema::{DeserializeError, HttpModeledError};
 
-use super::discriminator::{BodyDiscriminator, TypePosition, TypeValue};
 use super::response::{
     log_serialize_failure, serialize_modeled_error_response, stamp_error_extension, stamp_validation_extension,
     ResponseBindings,
 };
-use super::{ServerProtocol, ServerRequest};
+use super::{ServerEventStreamProtocol, ServerProtocol, ServerRequest};
 
 static PROTOCOL_ID: ShapeId<'static> = shape_id!("smithy.protocols", "rpcv2Cbor");
 const CONTENT_TYPE: &str = "application/cbor";
-const DISCRIMINATOR: BodyDiscriminator = BodyDiscriminator {
-    position: TypePosition::First,
-    value: TypeValue::FullShapeId,
-};
 const SMITHY_PROTOCOL_HEADER: http::HeaderName = http::HeaderName::from_static("smithy-protocol");
 const SMITHY_PROTOCOL_VALUE: http::HeaderValue = http::HeaderValue::from_static("rpc-v2-cbor");
 
@@ -40,21 +35,27 @@ fn with_protocol_header(mut response: Response) -> Response {
     response
 }
 
+impl ServerEventStreamProtocol for RpcV2CborProtocol {
+    fn payload_codec(&self) -> &dyn DynCodec {
+        self.inner.codec()
+    }
+
+    fn event_stream_media_type(&self) -> &str {
+        CONTENT_TYPE
+    }
+
+    fn initial_messages_in_frames(&self) -> bool {
+        true
+    }
+}
+
 impl ServerProtocol for RpcV2CborProtocol {
     fn protocol_id(&self) -> &'static ShapeId<'static> {
         &PROTOCOL_ID
     }
 
-    fn payload_codec(&self) -> &dyn DynCodec {
-        self.inner.codec()
-    }
-
-    fn event_stream_media_type(&self) -> Option<&str> {
-        Some(CONTENT_TYPE)
-    }
-
-    fn initial_messages_in_frames(&self) -> bool {
-        true
+    fn event_stream(&self) -> Option<&dyn ServerEventStreamProtocol> {
+        Some(self)
     }
 
     fn check_accept(&self, output: &Schema<'_>, headers: &Headers) -> Result<(), DeserializeError> {
@@ -94,11 +95,10 @@ impl ServerProtocol for RpcV2CborProtocol {
 
     fn serialize_error(&self, error: &dyn HttpModeledError) -> Response {
         let schema = error.schema();
-        let framed = DISCRIMINATOR.frame(schema, error);
         serialize_modeled_error_response(
             self.inner.codec(),
             schema,
-            &framed,
+            error,
             error.status_code(),
             ResponseBindings::BodyOnly,
             CONTENT_TYPE,
@@ -127,11 +127,10 @@ impl ServerProtocol for RpcV2CborProtocol {
             }
             DeserializeError::ConstraintViolation(err) => {
                 let schema = err.schema();
-                let framed = DISCRIMINATOR.frame(schema, &*err);
                 serialize_modeled_error_response(
                     self.inner.codec(),
                     schema,
-                    &framed,
+                    &*err,
                     err.status_code(),
                     ResponseBindings::BodyOnly,
                     CONTENT_TYPE,

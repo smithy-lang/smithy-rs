@@ -66,17 +66,49 @@ pub struct ServerRequest {
     pub body: Bytes,
 }
 
+/// Shared, erased server protocol selected by routing.
+#[derive(Clone, Debug)]
+pub struct SharedServerProtocol(std::sync::Arc<dyn ServerProtocol>);
+
+impl SharedServerProtocol {
+    /// Wrap a concrete server protocol.
+    pub fn new(protocol: impl ServerProtocol) -> Self {
+        Self(std::sync::Arc::new(protocol))
+    }
+}
+
+impl std::ops::Deref for SharedServerProtocol {
+    type Target = dyn ServerProtocol;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.as_ref()
+    }
+}
+
+/// The event-frame capability of a server protocol.
+pub trait ServerEventStreamProtocol: Send + Sync + std::fmt::Debug {
+    /// Codec for structured event and initial-message payloads.
+    fn payload_codec(&self) -> &dyn DynCodec;
+    /// Media type of structured event payloads.
+    fn event_stream_media_type(&self) -> &str;
+    /// Whether non-stream members travel in initial-message frames.
+    fn initial_messages_in_frames(&self) -> bool;
+}
+
 /// Schema-driven serialization for one protocol, keyed on struct schemas.
 ///
 /// The request side takes the operation's input schema, the response side its output schema,
 /// mirroring the client's `ClientProtocolInner` with the two directions swapped. The trait is
-/// object-safe: routing stores an `Arc<dyn ServerProtocol>` in the request extensions and
+/// object-safe: routing stores a [`SharedServerProtocol`] in the request extensions and
 /// everything after routing works through that erased handle, so nothing downstream names a
 /// concrete protocol.
 ///
 /// Nothing is precomputed per operation. Bindings, media types, URI templates and status codes are
 /// derived from the schema on every call, so a struct serialized from middleware with a
 /// hand-written schema is framed exactly like an operation output with the same schema.
+///
+/// `Debug` is a supertrait, as on the client's protocol trait, so generated marshallers holding
+/// the handle can derive it.
 ///
 /// # Serializing from middleware
 ///
@@ -110,24 +142,13 @@ pub struct ServerRequest {
 ///     Some(response)
 /// }
 /// ```
-pub trait ServerProtocol: Send + Sync + 'static {
+pub trait ServerProtocol: Send + Sync + std::fmt::Debug + 'static {
     /// The protocol trait's shape ID, such as `aws.protocols#restJson1`.
     fn protocol_id(&self) -> &'static ShapeId<'static>;
 
-    /// The codec for bodies and structured event-frame payloads.
-    fn payload_codec(&self) -> &dyn DynCodec;
-
-    /// The `:content-type` of structured event-frame payloads, when the protocol defines one.
-    fn event_stream_media_type(&self) -> Option<&str> {
+    /// Event-frame support, when this protocol supports event streams.
+    fn event_stream(&self) -> Option<&dyn ServerEventStreamProtocol> {
         None
-    }
-
-    /// Whether the non-stream members of a streaming operation's input and output travel in
-    /// `initial-request` and `initial-response` event frames rather than in HTTP bindings.
-    ///
-    /// `true` on the RPC protocols, `false` on the REST protocols.
-    fn initial_messages_in_frames(&self) -> bool {
-        false
     }
 
     /// The `Accept` gate, keyed on the output the response will carry.
@@ -150,7 +171,7 @@ pub trait ServerProtocol: Send + Sync + 'static {
     /// Presents `request` as a deserializer for `input`.
     ///
     /// The `Content-Type` check happens here; the returned deserializer resolves `@http` bindings
-    /// from the request and hands body members to [`Self::payload_codec`]. Synchronous over an
+    /// from the request and hands body members to its internal codec. Synchronous over an
     /// already collected body.
     fn deserialize_request<'a>(
         &'a self,

@@ -29,8 +29,9 @@ use crate::{
     service::ServiceShape,
 };
 
-use super::{OperationShape, SchemaOperationShape};
+use super::{OperationShape, SchemaOperationShape, StreamingOperationShape};
 use aws_smithy_schema::serde::SerializableStruct;
+use aws_smithy_types::body::SdkBody;
 
 /// A [`Plugin`] responsible for taking an operation [`Service`], accepting and returning Smithy
 /// types and converting it into a [`Service`] taking and returning [`http`] types.
@@ -217,7 +218,168 @@ where
     }
 }
 
-pub(crate) fn empty_internal_server_error() -> http::Response<BoxBody> {
+/// Schema-driven, protocol-neutral HTTP upgrade plugin for operations with a streaming member.
+///
+/// The request body is never collected when the input streams; it is handed to the generated
+/// [`StreamingOperationShape`] glue as an [`SdkBody`]. That conversion needs the body to be
+/// `Sync`, so services with streaming operations run on a `Sync` body such as
+/// [`BoxBodySync`](crate::body::BoxBodySync) or hyper's incoming body.
+#[derive(Debug, Clone)]
+pub struct StreamingUpgradePlugin<Extractors> {
+    config: RequestBodyCollectionConfig,
+    _extractors: PhantomData<Extractors>,
+}
+
+impl<Extractors> StreamingUpgradePlugin<Extractors> {
+    pub fn new(config: RequestBodyCollectionConfig) -> Self {
+        Self {
+            config,
+            _extractors: PhantomData,
+        }
+    }
+}
+
+impl<Ser, Op, T, Extractors> Plugin<Ser, Op, T> for StreamingUpgradePlugin<Extractors>
+where
+    Ser: ServiceShape,
+    Op: StreamingOperationShape,
+{
+    type Output = StreamingUpgrade<Op, Extractors, T>;
+    fn apply(&self, inner: T) -> Self::Output {
+        StreamingUpgrade {
+            config: self.config,
+            _operation: PhantomData,
+            _extractors: PhantomData,
+            inner,
+        }
+    }
+}
+
+/// Upgrade service for a schema operation with a streaming input or output.
+///
+/// A streaming input reaches the protocol with an empty [`ServerRequest`] body, so the protocol
+/// reads URI and header bindings only; the live body goes to
+/// [`StreamingOperationShape::deserialize_streaming_input`]. A non-streaming input on such an
+/// operation is collected exactly as [`DynUpgrade`] collects it.
+pub struct StreamingUpgrade<Op, Extractors, S> {
+    config: RequestBodyCollectionConfig,
+    _operation: PhantomData<Op>,
+    _extractors: PhantomData<Extractors>,
+    inner: S,
+}
+
+impl<Op, Extractors, S: Clone> Clone for StreamingUpgrade<Op, Extractors, S> {
+    fn clone(&self) -> Self {
+        Self {
+            config: self.config,
+            _operation: PhantomData,
+            _extractors: PhantomData,
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+impl<Op, Extractors, B, S> Service<http::Request<B>> for StreamingUpgrade<Op, Extractors, S>
+where
+    Op: StreamingOperationShape,
+    Op::Input: Send + 'static,
+    Op::Output: Send + 'static,
+    Extractors: FromParts<DynProtocol> + Send + 'static,
+    <Extractors as FromParts<DynProtocol>>::Rejection: std::fmt::Display,
+    B: HttpBody<Data = bytes::Bytes> + Send + Sync + 'static,
+    B::Error: std::error::Error + Send + Sync + 'static,
+    S: Service<(Op::Input, Extractors), Response = Op::Output> + Clone + Send + 'static,
+    S::Error: IntoDynResponse + Send + 'static,
+    S::Future: Send + 'static,
+{
+    type Response = http::Response<BoxBody>;
+    type Error = Infallible;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: http::Request<B>) -> Self::Future {
+        let clone = self.inner.clone();
+        let service = std::mem::replace(&mut self.inner, clone);
+        let config = self.config;
+        Box::pin(async move {
+            let (mut parts, body) = req.into_parts();
+            let Some(selected) = selected_operation::<Op>(&parts.extensions) else {
+                return Ok(empty_internal_server_error());
+            };
+            let protocol = selected.protocol();
+            let operation = selected.operation();
+            let has_event_stream = [operation.input(), operation.output()].iter().any(|schema| {
+                schema
+                    .members()
+                    .iter()
+                    .any(|member| member.streaming() && member.shape_type() == aws_smithy_schema::ShapeType::Union)
+            });
+            if has_event_stream && protocol.event_stream().is_none() {
+                error!(operation = %operation.shape_id(), protocol = %protocol.protocol_id(),
+                    "selected protocol does not support event streams");
+                return Ok(empty_internal_server_error());
+            }
+
+            let extractors = match Extractors::from_parts(&mut parts) {
+                Ok(value) => value,
+                Err(err) => return Ok(err.into_response()),
+            };
+            let converted = match convert_request(parts, body) {
+                Ok(request) => request.into_parts(),
+                Err(err) => return Ok(protocol.serialize_rejection(err)),
+            };
+            if let Err(err) = protocol.check_accept(operation.output(), &converted.headers) {
+                return Ok(protocol.serialize_rejection(err));
+            }
+            let input_streams = operation.input().members().iter().any(|member| member.streaming());
+            let (bytes, body) = if input_streams {
+                (bytes::Bytes::new(), SdkBody::from_body_1_x(converted.body))
+            } else if protocol.reads_request_body(operation.input()) {
+                match collect_request_body(converted.body, &config).await {
+                    Ok(bytes) => (bytes, SdkBody::empty()),
+                    Err(err) => {
+                        return Ok(protocol.serialize_rejection(DeserializeError::Serde(
+                            aws_smithy_schema::serde::SerdeError::custom(err.to_string()),
+                        )))
+                    }
+                }
+            } else {
+                (bytes::Bytes::new(), SdkBody::empty())
+            };
+            let request = ServerRequest {
+                uri: converted.uri,
+                headers: converted.headers,
+                body: bytes,
+            };
+            // The deserializer borrows the request and is not `Send`; the walk over it happens
+            // inside `deserialize_streaming_input` before the future is returned, so it is dropped
+            // before the first await.
+            let future = {
+                let mut deserializer = match protocol.deserialize_request(operation.input(), &request) {
+                    Ok(value) => value,
+                    Err(err) => return Ok(protocol.serialize_rejection(err)),
+                };
+                Op::deserialize_streaming_input(&mut *deserializer, body, protocol.clone())
+            };
+            let input = match future.await {
+                Ok(value) => value,
+                Err(err) => return Ok(protocol.serialize_rejection(err)),
+            };
+            match service.oneshot((input, extractors)).await {
+                Ok(output) => Ok(Op::serialize_streaming_output(output, protocol)),
+                Err(err) => Ok(err.into_dyn_response(&**protocol)),
+            }
+        })
+    }
+}
+
+/// An empty `500 Internal Server Error`: the answer when generated glue cannot even build a
+/// response, such as a failure to serialize an `initial-response` frame.
+#[doc(hidden)]
+pub fn empty_internal_server_error() -> http::Response<BoxBody> {
     let mut response = http::Response::new(crate::body::empty());
     *response.status_mut() = http::StatusCode::INTERNAL_SERVER_ERROR;
     response
@@ -418,3 +580,6 @@ where
         std::future::ready(Ok(InternalFailureException.into_response()))
     }
 }
+
+#[cfg(test)]
+mod tests;

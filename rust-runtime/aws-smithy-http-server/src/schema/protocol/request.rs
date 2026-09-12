@@ -45,9 +45,9 @@ pub(super) fn payload_member<'s>(schema: &'s Schema<'s>) -> Option<&'s Schema<'s
     schema.members().iter().copied().find(|m| m.http_payload().is_some())
 }
 
-/// `true` when the `@httpPayload` member of `schema` is an event stream or a streaming blob.
+/// `true` when `schema` has an event stream or streaming blob (including RPC members without `@httpPayload`).
 pub(super) fn has_streaming_payload(schema: &Schema<'_>) -> bool {
-    payload_member(schema).is_some_and(|m| m.streaming())
+    schema.members().iter().any(|member| member.streaming())
 }
 
 /// The `Content-Type` rules for a REST request with this input.

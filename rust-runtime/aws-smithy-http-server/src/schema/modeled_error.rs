@@ -11,7 +11,7 @@ use aws_smithy_schema::Schema;
 /// [`SerializableStruct`] alone cannot say which shape it serializes; the schema supplies the
 /// members, the HTTP bindings and the shape ID that protocols use as the error discriminator.
 pub trait ModeledError: SerializableStruct {
-    /// The schema of this error shape.
+    /// The schema of this error shape, including its `smithy.api#error` trait.
     fn schema(&self) -> &Schema<'_>;
 }
 

@@ -18,19 +18,10 @@ static TYPE_MEMBER: Schema<'static> = Schema::new_member(
     usize::MAX,
 );
 
-/// Where the `__type` member sits relative to the error's own members.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum TypePosition {
-    /// The first map entry (rpcv2Cbor).
-    First,
-    /// After every modeled member (awsJson 1.0 and 1.1).
-    Last,
-}
-
 /// What the `__type` member carries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum TypeValue {
-    /// The full `namespace#Name` shape ID (awsJson 1.0, rpcv2Cbor).
+    /// The full `namespace#Name` shape ID (awsJson 1.0).
     FullShapeId,
     /// The shape name only (awsJson 1.1).
     ShapeName,
@@ -48,7 +39,6 @@ impl TypeValue {
 /// How a protocol frames a modeled error's `__type` member in the body.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct BodyDiscriminator {
-    pub(super) position: TypePosition,
     pub(super) value: TypeValue,
 }
 
@@ -56,7 +46,6 @@ impl BodyDiscriminator {
     /// Wraps `error` so that serializing it also writes the `__type` member.
     pub(super) fn frame<'a>(self, schema: &'a Schema<'a>, error: &'a dyn SerializableStruct) -> WithType<'a> {
         WithType {
-            position: self.position,
             type_value: self.value.of(schema),
             inner: error,
         }
@@ -65,22 +54,13 @@ impl BodyDiscriminator {
 
 /// A shape with a synthetic `__type` member spliced into its members.
 pub(super) struct WithType<'a> {
-    position: TypePosition,
     type_value: &'a str,
     inner: &'a dyn SerializableStruct,
 }
 
 impl SerializableStruct for WithType<'_> {
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
-        match self.position {
-            TypePosition::First => {
-                serializer.write_string(&TYPE_MEMBER, self.type_value)?;
-                self.inner.serialize_members(serializer)
-            }
-            TypePosition::Last => {
-                self.inner.serialize_members(serializer)?;
-                serializer.write_string(&TYPE_MEMBER, self.type_value)
-            }
-        }
+        self.inner.serialize_members(serializer)?;
+        serializer.write_string(&TYPE_MEMBER, self.type_value)
     }
 }

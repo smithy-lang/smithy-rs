@@ -12,11 +12,9 @@ pub(crate) mod response_bindings;
 pub use deserialize::{DeserializableShape, DeserializeError};
 pub use modeled_error::{HttpModeledError, ModeledError};
 pub use protocol::{
-    collect_request_body, RequestBodyCollectionConfig, RequestBodyCollectionError, ServerProtocol, ServerRequest,
-    ServiceRequestBodyConfig,
+    collect_request_body, RequestBodyCollectionConfig, RequestBodyCollectionError, ServerEventStreamProtocol,
+    ServerProtocol, ServerRequest, ServiceRequestBodyConfig, SharedServerProtocol,
 };
-
-use std::sync::Arc;
 
 use aws_smithy_schema::OperationSchema;
 
@@ -26,17 +24,17 @@ use aws_smithy_schema::OperationSchema;
 /// service can select a different protocol per request without anything downstream knowing.
 #[derive(Clone)]
 pub struct SelectedProtocolOperation {
-    protocol: Arc<dyn ServerProtocol>,
+    protocol: SharedServerProtocol,
     operation: &'static OperationSchema<'static>,
 }
 
 impl SelectedProtocolOperation {
-    pub fn new(protocol: Arc<dyn ServerProtocol>, operation: &'static OperationSchema<'static>) -> Self {
+    pub fn new(protocol: SharedServerProtocol, operation: &'static OperationSchema<'static>) -> Self {
         Self { protocol, operation }
     }
 
     /// The selected protocol.
-    pub fn protocol(&self) -> &Arc<dyn ServerProtocol> {
+    pub fn protocol(&self) -> &SharedServerProtocol {
         &self.protocol
     }
 

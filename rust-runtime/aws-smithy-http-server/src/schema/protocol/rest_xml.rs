@@ -19,7 +19,7 @@ use super::response::{
     log_serialize_failure, serialize_modeled_error_response, stamp_error_extension, ResponseBindings,
 };
 use super::rest::RestPolicy;
-use super::{ServerProtocol, ServerRequest};
+use super::{ServerEventStreamProtocol, ServerProtocol, ServerRequest};
 
 static PROTOCOL_ID: ShapeId<'static> = shape_id!("aws.protocols", "restXml");
 const CONTENT_TYPE: &str = "application/xml";
@@ -34,17 +34,27 @@ pub(crate) const POLICY: RestPolicy = RestPolicy {
     empty_document: false,
 };
 
+impl ServerEventStreamProtocol for RestXmlProtocol {
+    fn payload_codec(&self) -> &dyn DynCodec {
+        self.inner.codec()
+    }
+
+    fn event_stream_media_type(&self) -> &str {
+        CONTENT_TYPE
+    }
+
+    fn initial_messages_in_frames(&self) -> bool {
+        false
+    }
+}
+
 impl ServerProtocol for RestXmlProtocol {
     fn protocol_id(&self) -> &'static ShapeId<'static> {
         &PROTOCOL_ID
     }
 
-    fn payload_codec(&self) -> &dyn DynCodec {
-        self.inner.codec()
-    }
-
-    fn event_stream_media_type(&self) -> Option<&str> {
-        Some(CONTENT_TYPE)
+    fn event_stream(&self) -> Option<&dyn ServerEventStreamProtocol> {
+        Some(self)
     }
 
     fn check_accept(&self, output: &Schema<'_>, headers: &Headers) -> Result<(), DeserializeError> {

@@ -3,12 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use super::SharedServerProtocol;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer};
 use aws_smithy_schema::traits::HttpTrait;
 use aws_smithy_schema::{shape_id, Schema, ShapeType};
 use http_body_util::BodyExt;
 use std::num::NonZeroUsize;
-use std::sync::{Arc, LazyLock};
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use crate::protocol::aws_json_10::AwsJson1_0Protocol;
@@ -228,7 +229,7 @@ fn rpc_request_round_trips_through_the_codec() {
             s.write_string(&RPC_NOTE_MEMBER, "hi")
         }
     }
-    let mut serializer = RPC_V2_CBOR.payload_codec().create_serializer();
+    let mut serializer = RPC_V2_CBOR.event_stream().unwrap().payload_codec().create_serializer();
     serializer.write_struct(&RPC_IN_SCHEMA, &Body).unwrap();
     let body = serializer.finish_boxed();
 
@@ -516,9 +517,6 @@ fn provided_methods_collect_the_body_and_gate_nothing() {
             static ID: aws_smithy_schema::ShapeId<'static> = shape_id!("test", "minimal");
             &ID
         }
-        fn payload_codec(&self) -> &dyn aws_smithy_schema::codec::DynCodec {
-            &self.codec
-        }
         fn deserialize_request<'a>(
             &'a self,
             _input: &Schema<'_>,
@@ -551,11 +549,10 @@ fn provided_methods_collect_the_body_and_gate_nothing() {
     let protocol = Minimal::default();
     assert!(protocol.reads_request_body(&RPC_IN_SCHEMA));
     assert!(protocol.reads_request_body(&EMPTY_IN_SCHEMA));
-    assert!(!protocol.initial_messages_in_frames());
-    assert!(protocol.event_stream_media_type().is_none());
+    assert!(protocol.event_stream().is_none());
 
     let req = request("/", &[("accept", "text/xml")], b"");
-    let erased: Arc<dyn ServerProtocol> = Arc::new(protocol);
+    let erased: SharedServerProtocol = SharedServerProtocol::new(protocol);
     assert!(erased.check_accept(&OUT_SCHEMA, &req.headers).is_ok());
     assert!(erased.reads_request_body(&EMPTY_IN_SCHEMA));
 }
@@ -676,8 +673,16 @@ static BOOM_MSG_MEMBER: Schema<'static> =
 static BOOM_HDR_MEMBER: Schema<'static> =
     Schema::new_member(shape_id!("test", "Boom", "tag"), ShapeType::String, "tag", 1).with_http_header("x-boom-tag");
 static BOOM_MEMBERS: [&Schema<'static>; 2] = [&BOOM_MSG_MEMBER, &BOOM_HDR_MEMBER];
+static ERROR_TRAITS: std::sync::LazyLock<aws_smithy_schema::TraitMap> = std::sync::LazyLock::new(|| {
+    let mut traits = aws_smithy_schema::TraitMap::new();
+    traits.insert(Box::new(aws_smithy_schema::StringTrait::new(
+        shape_id!("smithy.api", "error"),
+        "client",
+    )));
+    traits
+});
 static BOOM_SCHEMA: Schema<'static> =
-    Schema::new_struct(shape_id!("test", "Boom"), ShapeType::Structure, &BOOM_MEMBERS);
+    Schema::new_struct(shape_id!("test", "Boom"), ShapeType::Structure, &BOOM_MEMBERS).with_traits(&ERROR_TRAITS);
 
 #[derive(Debug)]
 struct Boom;
@@ -906,32 +911,47 @@ async fn rest_xml_constraint_violations_reproduce_the_legacy_empty_body() {
 
 #[test]
 fn every_protocol_erases_to_a_dyn_server_protocol() {
-    let protocols: Vec<(Arc<dyn ServerProtocol>, &str, bool)> = vec![
-        (Arc::new(RestJson1Protocol::default()), "aws.protocols#restJson1", false),
-        (Arc::new(RestXmlProtocol::default()), "aws.protocols#restXml", false),
+    let protocols: Vec<(SharedServerProtocol, &str, bool)> = vec![
         (
-            Arc::new(AwsJson1_0Protocol::default()),
+            SharedServerProtocol::new(RestJson1Protocol::default()),
+            "aws.protocols#restJson1",
+            false,
+        ),
+        (
+            SharedServerProtocol::new(RestXmlProtocol::default()),
+            "aws.protocols#restXml",
+            false,
+        ),
+        (
+            SharedServerProtocol::new(AwsJson1_0Protocol::default()),
             "aws.protocols#awsJson1_0",
             true,
         ),
         (
-            Arc::new(AwsJson1_1Protocol::default()),
+            SharedServerProtocol::new(AwsJson1_1Protocol::default()),
             "aws.protocols#awsJson1_1",
             true,
         ),
         (
-            Arc::new(RpcV2CborProtocol::default()),
+            SharedServerProtocol::new(RpcV2CborProtocol::default()),
             "smithy.protocols#rpcv2Cbor",
             true,
         ),
     ];
     for (protocol, id, frames) in &protocols {
         assert_eq!(protocol.protocol_id().as_str(), *id);
-        assert_eq!(protocol.initial_messages_in_frames(), *frames, "{id}");
-        assert!(protocol.event_stream_media_type().is_some(), "{id}");
+        assert_eq!(
+            protocol.event_stream().unwrap().initial_messages_in_frames(),
+            *frames,
+            "{id}"
+        );
+        assert!(
+            !protocol.event_stream().unwrap().event_stream_media_type().is_empty(),
+            "{id}"
+        );
     }
 
-    let erased: Arc<dyn ServerProtocol> = Arc::new(RestJson1Protocol::default());
+    let erased: SharedServerProtocol = SharedServerProtocol::new(RestJson1Protocol::default());
     let req = request(
         "/pets/rex?age=7",
         &[("content-type", "application/json")],
@@ -948,7 +968,7 @@ fn every_protocol_erases_to_a_dyn_server_protocol() {
     let response = erased.serialize_rejection(err);
     assert_eq!(response.status(), http::StatusCode::UNSUPPORTED_MEDIA_TYPE);
 
-    let mut serializer = erased.payload_codec().create_serializer();
+    let mut serializer = erased.event_stream().unwrap().payload_codec().create_serializer();
     serializer.write_struct(&OUT_SCHEMA, &TestOutput).unwrap();
     assert_eq!(serializer.finish_boxed(), br#"{"msg":"ok"}"#);
 }
@@ -975,12 +995,12 @@ async fn middleware_structs_are_framed_like_operation_outputs() {
         }
     }
 
-    let protocols: Vec<Arc<dyn ServerProtocol>> = vec![
-        Arc::new(RestJson1Protocol::default()),
-        Arc::new(RestXmlProtocol::default()),
-        Arc::new(AwsJson1_0Protocol::default()),
-        Arc::new(AwsJson1_1Protocol::default()),
-        Arc::new(RpcV2CborProtocol::default()),
+    let protocols: Vec<SharedServerProtocol> = vec![
+        SharedServerProtocol::new(RestJson1Protocol::default()),
+        SharedServerProtocol::new(RestXmlProtocol::default()),
+        SharedServerProtocol::new(AwsJson1_0Protocol::default()),
+        SharedServerProtocol::new(AwsJson1_1Protocol::default()),
+        SharedServerProtocol::new(RpcV2CborProtocol::default()),
     ];
     for protocol in protocols {
         let id = protocol.protocol_id().as_str();

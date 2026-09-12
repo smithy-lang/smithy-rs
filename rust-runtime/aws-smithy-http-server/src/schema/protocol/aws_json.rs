@@ -20,12 +20,12 @@ use crate::protocol::aws_json_11::{AwsJson1_1, AwsJson1_1Protocol};
 use crate::response::{IntoResponse, Response};
 use crate::schema::{DeserializeError, HttpModeledError};
 
-use super::discriminator::{BodyDiscriminator, TypePosition, TypeValue};
+use super::discriminator::{BodyDiscriminator, TypeValue};
 use super::response::{
     log_serialize_failure, serialize_modeled_error_response, stamp_error_extension, stamp_validation_extension,
     ResponseBindings,
 };
-use super::{ServerProtocol, ServerRequest};
+use super::{ServerEventStreamProtocol, ServerProtocol, ServerRequest};
 
 fn serialize_error<P>(
     codec: &JsonCodec,
@@ -60,22 +60,28 @@ where
 
 macro_rules! aws_json_protocol {
     ($protocol:ty, $marker:ty, $protocol_id:expr, $content_type:literal, $type_value:expr) => {
+        impl ServerEventStreamProtocol for $protocol {
+            fn payload_codec(&self) -> &dyn DynCodec {
+                self.inner.codec()
+            }
+
+            fn event_stream_media_type(&self) -> &str {
+                "application/json"
+            }
+
+            fn initial_messages_in_frames(&self) -> bool {
+                true
+            }
+        }
+
         impl ServerProtocol for $protocol {
             fn protocol_id(&self) -> &'static ShapeId<'static> {
                 static PROTOCOL_ID: ShapeId<'static> = $protocol_id;
                 &PROTOCOL_ID
             }
 
-            fn payload_codec(&self) -> &dyn DynCodec {
-                self.inner.codec()
-            }
-
-            fn event_stream_media_type(&self) -> Option<&str> {
-                Some("application/json")
-            }
-
-            fn initial_messages_in_frames(&self) -> bool {
-                true
+            fn event_stream(&self) -> Option<&dyn ServerEventStreamProtocol> {
+                Some(self)
             }
 
             fn check_accept(&self, output: &Schema<'_>, headers: &Headers) -> Result<(), DeserializeError> {
@@ -116,10 +122,7 @@ macro_rules! aws_json_protocol {
                     self.inner.codec(),
                     error,
                     $content_type,
-                    BodyDiscriminator {
-                        position: TypePosition::Last,
-                        value: $type_value,
-                    },
+                    BodyDiscriminator { value: $type_value },
                 )
             }
 
