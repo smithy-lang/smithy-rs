@@ -239,8 +239,6 @@ pub trait ShapeSerializer {
 ///
 /// ```ignore
 /// impl SerializableStruct for MyStruct {
-///     fn schema(&self) -> &Schema<'_> { Self::SCHEMA }
-///
 ///     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
 ///         serializer.write_string(&NAME_SCHEMA, &self.name)?;
 ///         serializer.write_integer(&AGE_SCHEMA, self.age)?;
@@ -249,19 +247,11 @@ pub trait ShapeSerializer {
 /// }
 /// ```
 pub trait SerializableStruct {
-    /// Returns this value's structure or union schema, independently of any member
-    /// schema used to bind the value within its parent.
-    fn schema(&self) -> &Schema<'_>;
-
     /// Serializes this structure's members using the provided serializer.
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError>;
 }
 
 impl<T: SerializableStruct + ?Sized> SerializableStruct for Box<T> {
-    fn schema(&self) -> &Schema<'_> {
-        (**self).schema()
-    }
-
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         (**self).serialize_members(serializer)
     }

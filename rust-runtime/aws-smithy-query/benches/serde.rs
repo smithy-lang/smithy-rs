@@ -42,10 +42,6 @@ struct Tag {
 }
 
 impl SerializableStruct for Tag {
-    fn schema(&self) -> &aws_smithy_schema::Schema<'_> {
-        &TAG_STRUCT
-    }
-
     fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         s.write_string(&TAG_KEY, self.key)?;
         s.write_string(&TAG_VAL, self.val)

@@ -131,8 +131,6 @@ pub trait ServerEventStreamProtocol: Send + Sync + std::fmt::Debug {
 /// struct Teapot;
 ///
 /// impl SerializableStruct for Teapot {
-///     fn schema(&self) -> &Schema<'_> { &TEAPOT }
-///
 ///     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
 ///         serializer.write_string(&MESSAGE, "short and stout")
 ///     }

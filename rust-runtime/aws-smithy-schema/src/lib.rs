@@ -272,6 +272,8 @@ pub struct Schema<'a> {
     member_name: Option<&'a str>,
     /// Member index for position-based lookup in generated code.
     member_index: Option<usize>,
+    /// Lazily resolves the target shape without static initialization cycles.
+    target: Option<fn() -> &'static Schema<'static>>,
     /// Shape-type-specific member data.
     members: SchemaMembers<'a>,
 
@@ -446,6 +448,7 @@ impl<'a> Schema<'a> {
             shape_type: ShapeType::Boolean,
             member_name: None,
             member_index: None,
+            target: None,
             members: SchemaMembers::None,
             original_name: None,
             sensitive: None,
@@ -472,6 +475,17 @@ impl<'a> Schema<'a> {
             media_type: None,
             traits: None,
         }
+    }
+
+    /// Sets a lazy target shape reference, including for recursive structure and union members.
+    pub const fn with_target(mut self, target: fn() -> &'static Schema<'static>) -> Self {
+        self.target = Some(target);
+        self
+    }
+
+    /// Resolves the target shape, when this schema carries target metadata.
+    pub fn target(&self) -> Option<&'static Schema<'static>> {
+        self.target.map(|target| target())
     }
 
     /// Creates a schema for a simple type (no members).

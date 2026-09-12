@@ -367,7 +367,9 @@ open class ServerCodegenVisitor(
                             ?: if (errorTrait.isClientError) 400 else 500
                     rustTemplate(
                         """
-                        impl #{ModeledError} for ${codegenContext.symbolProvider.toSymbol(shape).name} {}
+                        impl #{ModeledError} for ${codegenContext.symbolProvider.toSymbol(shape).name} {
+                            fn schema(&self) -> &#{Schema}<'_> { Self::SCHEMA }
+                        }
                         impl #{HttpModeledError} for ${codegenContext.symbolProvider.toSymbol(shape).name} {
                             fn status_code(&self) -> u16 { $status }
                         }

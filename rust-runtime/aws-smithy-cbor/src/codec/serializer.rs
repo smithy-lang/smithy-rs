@@ -321,10 +321,6 @@ mod tests {
 
         struct TestStruct;
         impl SerializableStruct for TestStruct {
-            fn schema(&self) -> &aws_smithy_schema::Schema<'_> {
-                &STRUCT_SCHEMA
-            }
-
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&NAME_MEMBER, "Alice")?;
                 s.write_integer(&AGE_MEMBER, 30)?;
@@ -438,10 +434,6 @@ mod tests {
             name: String,
         }
         impl SerializableStruct for EndpointConfig {
-            fn schema(&self) -> &aws_smithy_schema::Schema<'_> {
-                &ENDPOINT_CONFIG_SCHEMA
-            }
-
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&EC_NAME, &self.name)
             }
@@ -453,10 +445,6 @@ mod tests {
             Config(EndpointConfig),
         }
         impl SerializableStruct for Endpoint {
-            fn schema(&self) -> &aws_smithy_schema::Schema<'_> {
-                &ENDPOINT_SCHEMA
-            }
-
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 // Exactly the active variant is written (mirrors renderSerializableUnion).
                 match self {
@@ -472,10 +460,6 @@ mod tests {
             remote_account: Endpoint,
         }
         impl SerializableStruct for CreateConnectionInput {
-            fn schema(&self) -> &aws_smithy_schema::Schema<'_> {
-                &CREATE_CONNECTION_SCHEMA
-            }
-
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_struct(&CC_ATTACH, &self.attach_point)?;
                 s.write_struct(&CC_REMOTE, &self.remote_account)

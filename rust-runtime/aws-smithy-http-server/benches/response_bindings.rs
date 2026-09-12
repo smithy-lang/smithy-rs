@@ -127,10 +127,6 @@ static PREFIX_OUTPUT: Schema<'static> = Schema::new_struct(
 struct HeaderOutput;
 
 impl SerializableStruct for HeaderOutput {
-    fn schema(&self) -> &aws_smithy_schema::Schema<'_> {
-        &HEADER_OUTPUT
-    }
-
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         serializer.write_integer(&STATUS, 202)?;
         serializer.write_string(&REQUEST_ID, "req-0123456789")?;
@@ -144,10 +140,6 @@ impl SerializableStruct for HeaderOutput {
 struct MixedOutput;
 
 impl SerializableStruct for MixedOutput {
-    fn schema(&self) -> &aws_smithy_schema::Schema<'_> {
-        &MIXED_OUTPUT
-    }
-
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         serializer.write_string(&TRACE_ID, "trace-abcdef")?;
         serializer.write_integer(&REVISION, 17)?;
@@ -158,10 +150,6 @@ impl SerializableStruct for MixedOutput {
 struct BodyOutput;
 
 impl SerializableStruct for BodyOutput {
-    fn schema(&self) -> &aws_smithy_schema::Schema<'_> {
-        &BODY_OUTPUT
-    }
-
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         write_body(serializer)
     }
@@ -176,10 +164,6 @@ fn write_body(serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
 struct PrefixOutput;
 
 impl SerializableStruct for PrefixOutput {
-    fn schema(&self) -> &aws_smithy_schema::Schema<'_> {
-        &PREFIX_OUTPUT
-    }
-
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         serializer.write_map(&METADATA, &|serializer| {
             serializer.write_string(&aws_smithy_schema::prelude::STRING, "color")?;

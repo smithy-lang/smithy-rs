@@ -67,10 +67,6 @@ struct Members<'a> {
 }
 
 impl SerializableStruct for Members<'_> {
-    fn schema(&self) -> &Schema<'_> {
-        self.value.schema()
-    }
-
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         if let Some(type_id) = self.type_id {
             serializer.write_string(&TYPE_MEMBER, type_id)?;
@@ -81,7 +77,7 @@ impl SerializableStruct for Members<'_> {
 
 impl<S: SerializerStorage> ShapeSerializer for RpcV2CborSerializer<S> {
     fn write_struct(&mut self, schema: &Schema<'_>, value: &dyn SerializableStruct) -> Result<(), SerdeError> {
-        let target = value.schema();
+        let target = schema.target().unwrap_or(schema);
         let type_id = target
             .traits()
             .is_some_and(|traits| traits.contains_fqn("smithy.api#error"))
@@ -186,25 +182,18 @@ mod tests {
         static ERROR: Schema<'static> =
             Schema::new_struct(shape_id!("test", "Failure"), ShapeType::Structure, &[&MESSAGE]).with_traits(&TRAITS);
         static MEMBER: Schema<'static> =
-            Schema::new_member(shape_id!("test", "Output", "error"), ShapeType::Structure, "error", 0);
+            Schema::new_member(shape_id!("test", "Output", "error"), ShapeType::Structure, "error", 0)
+                .with_target(|| &ERROR);
         static OUTPUT: Schema<'static> =
             Schema::new_struct(shape_id!("test", "Output"), ShapeType::Structure, &[&MEMBER]);
         struct Error;
         impl SerializableStruct for Error {
-            fn schema(&self) -> &aws_smithy_schema::Schema<'_> {
-                &ERROR
-            }
-
             fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 ser.write_string(&MESSAGE, "failed")
             }
         }
         struct Output;
         impl SerializableStruct for Output {
-            fn schema(&self) -> &aws_smithy_schema::Schema<'_> {
-                &OUTPUT
-            }
-
             fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 ser.write_struct(&MEMBER, &Error)
             }

@@ -401,10 +401,6 @@ mod tests {
 
     struct TestInput;
     impl SerializableStruct for TestInput {
-        fn schema(&self) -> &aws_smithy_schema::Schema<'_> {
-            &OP_SCHEMA
-        }
-
         fn serialize_members(
             &self,
             ser: &mut dyn ShapeSerializer,

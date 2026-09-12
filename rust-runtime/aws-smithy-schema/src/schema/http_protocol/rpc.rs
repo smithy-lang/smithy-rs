@@ -365,10 +365,6 @@ mod tests {
 
     struct EmptyStruct;
     impl SerializableStruct for EmptyStruct {
-        fn schema(&self) -> &crate::Schema<'_> {
-            &TEST_SCHEMA
-        }
-
         fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             Ok(())
         }
@@ -389,10 +385,6 @@ mod tests {
 
     struct NameStruct;
     impl SerializableStruct for NameStruct {
-        fn schema(&self) -> &crate::Schema<'_> {
-            &STRUCT_WITH_MEMBER
-        }
-
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_string(&NAME_MEMBER, "Alice")
         }

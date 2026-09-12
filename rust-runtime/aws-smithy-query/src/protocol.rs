@@ -211,10 +211,6 @@ mod tests {
 
     struct EmptyInput;
     impl SerializableStruct for EmptyInput {
-        fn schema(&self) -> &aws_smithy_schema::Schema<'_> {
-            &SCHEMA
-        }
-
         fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             Ok(())
         }

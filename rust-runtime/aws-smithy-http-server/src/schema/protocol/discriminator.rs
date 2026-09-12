@@ -59,10 +59,6 @@ pub(super) struct WithType<'a> {
 }
 
 impl SerializableStruct for WithType<'_> {
-    fn schema(&self) -> &Schema<'_> {
-        self.inner.schema()
-    }
-
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         self.inner.serialize_members(serializer)?;
         serializer.write_string(&TYPE_MEMBER, self.type_value)

@@ -685,10 +685,6 @@ struct Proxy<'p, 'a> {
 }
 
 impl<'p, 'a> SerializableStruct for Proxy<'p, 'a> {
-    fn schema(&self) -> &Schema<'_> {
-        self.value.schema()
-    }
-
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         // Returning an error rather than panicking: this is unreachable with
         // every codec in this repo, because a codec that nests
@@ -1656,10 +1652,6 @@ mod tests {
 
     struct EmptyStruct;
     impl SerializableStruct for EmptyStruct {
-        fn schema(&self) -> &crate::Schema<'_> {
-            &TEST_SCHEMA
-        }
-
         fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             Ok(())
         }
@@ -1680,10 +1672,6 @@ mod tests {
 
     struct NameStruct;
     impl SerializableStruct for NameStruct {
-        fn schema(&self) -> &crate::Schema<'_> {
-            &STRUCT_WITH_MEMBER
-        }
-
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_string(&NAME_MEMBER, "Alice")
         }
@@ -1991,10 +1979,6 @@ mod tests {
 
         struct HeaderOnlyStruct;
         impl SerializableStruct for HeaderOnlyStruct {
-            fn schema(&self) -> &crate::Schema<'_> {
-                &HEADER_ONLY_SCHEMA
-            }
-
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&HEADER_MEMBER, "hello")
             }
@@ -2112,10 +2096,6 @@ mod tests {
     }
 
     impl SerializableStruct for LocallyComputedPayload {
-        fn schema(&self) -> &crate::Schema<'_> {
-            &BLOB_PAYLOAD_STRUCT
-        }
-
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             if self.blob {
                 // Heap-allocated here and freed at the end of this scope.
@@ -2177,10 +2157,6 @@ mod tests {
     fn blob_payload_reaches_the_body_without_copying() {
         struct OwnedBlobPayload(aws_smithy_types::Blob);
         impl SerializableStruct for OwnedBlobPayload {
-            fn schema(&self) -> &crate::Schema<'_> {
-                &BLOB_PAYLOAD_STRUCT
-            }
-
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_blob(&BLOB_PAYLOAD_MEMBER, self.0.clone())
             }
@@ -2279,10 +2255,6 @@ mod tests {
 
     struct HeaderStruct;
     impl SerializableStruct for HeaderStruct {
-        fn schema(&self) -> &crate::Schema<'_> {
-            &HEADER_SCHEMA
-        }
-
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_string(&HEADER_MEMBER, "my-token-value")
         }
@@ -2341,12 +2313,8 @@ mod tests {
             &members,
         );
 
-        struct RuntimeStruct<'a>(&'a Schema<'a>, &'a str, &'a Schema<'a>);
+        struct RuntimeStruct<'a>(&'a Schema<'a>, &'a str);
         impl SerializableStruct for RuntimeStruct<'_> {
-            fn schema(&self) -> &crate::Schema<'_> {
-                self.2
-            }
-
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(self.0, self.1)
             }
@@ -2354,7 +2322,7 @@ mod tests {
 
         let request = make_protocol()
             .serialize_request(
-                &RuntimeStruct(&member, &arena[1], &schema),
+                &RuntimeStruct(&member, &arena[1]),
                 &schema,
                 "https://example.com",
                 &ConfigBag::base(),
@@ -2383,10 +2351,6 @@ mod tests {
 
     struct IntHeaderStruct;
     impl SerializableStruct for IntHeaderStruct {
-        fn schema(&self) -> &crate::Schema<'_> {
-            &INT_HEADER_SCHEMA
-        }
-
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_integer(&INT_HEADER_MEMBER, 3)
         }
@@ -2421,10 +2385,6 @@ mod tests {
 
     struct BoolHeaderStruct;
     impl SerializableStruct for BoolHeaderStruct {
-        fn schema(&self) -> &crate::Schema<'_> {
-            &BOOL_HEADER_SCHEMA
-        }
-
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_boolean(&BOOL_HEADER_MEMBER, true)
         }
@@ -2457,10 +2417,6 @@ mod tests {
 
     struct QueryStruct;
     impl SerializableStruct for QueryStruct {
-        fn schema(&self) -> &crate::Schema<'_> {
-            &QUERY_SCHEMA
-        }
-
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_string(&QUERY_MEMBER, "blue")
         }
@@ -2491,10 +2447,6 @@ mod tests {
 
     struct IntQueryStruct;
     impl SerializableStruct for IntQueryStruct {
-        fn schema(&self) -> &crate::Schema<'_> {
-            &INT_QUERY_SCHEMA
-        }
-
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_integer(&INT_QUERY_MEMBER, 42)
         }
@@ -2529,10 +2481,6 @@ mod tests {
 
     struct MultiQueryStruct;
     impl SerializableStruct for MultiQueryStruct {
-        fn schema(&self) -> &crate::Schema<'_> {
-            &MULTI_QUERY_SCHEMA
-        }
-
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_string(&Q1, "x")?;
             s.write_string(&Q2, "y")
@@ -2558,10 +2506,6 @@ mod tests {
     fn http_query_percent_encodes_values() {
         struct SpaceQueryStruct;
         impl SerializableStruct for SpaceQueryStruct {
-            fn schema(&self) -> &crate::Schema<'_> {
-                &MULTI_QUERY_SCHEMA
-            }
-
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&QUERY_MEMBER, "hello world")
             }
@@ -2595,10 +2539,6 @@ mod tests {
 
     struct LabelStruct;
     impl SerializableStruct for LabelStruct {
-        fn schema(&self) -> &crate::Schema<'_> {
-            &LABEL_SCHEMA
-        }
-
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_string(&LABEL_MEMBER, "my-bucket")
         }
@@ -2621,10 +2561,6 @@ mod tests {
     fn http_label_percent_encodes() {
         struct SpecialLabelStruct;
         impl SerializableStruct for SpecialLabelStruct {
-            fn schema(&self) -> &crate::Schema<'_> {
-                &LABEL_SCHEMA
-            }
-
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&LABEL_MEMBER, "my bucket/name")
             }
@@ -2656,10 +2592,6 @@ mod tests {
 
     struct IntLabelStruct;
     impl SerializableStruct for IntLabelStruct {
-        fn schema(&self) -> &crate::Schema<'_> {
-            &INT_LABEL_SCHEMA
-        }
-
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_integer(&INT_LABEL_MEMBER, 123)
         }
@@ -2708,10 +2640,6 @@ mod tests {
 
     struct CombinedStruct;
     impl SerializableStruct for CombinedStruct {
-        fn schema(&self) -> &crate::Schema<'_> {
-            &COMBINED_SCHEMA
-        }
-
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_string(&COMBINED_LABEL, "item-42")?;
             s.write_string(&COMBINED_HEADER, "secret")?;
@@ -2757,10 +2685,6 @@ mod tests {
 
     struct PrefixHeaderStruct;
     impl SerializableStruct for PrefixHeaderStruct {
-        fn schema(&self) -> &crate::Schema<'_> {
-            &PREFIX_SCHEMA
-        }
-
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_map(&PREFIX_MEMBER, &|s| {
                 s.write_string(&STRING, "Color")?;
@@ -2800,10 +2724,6 @@ mod tests {
 
     struct QueryParamsStruct;
     impl SerializableStruct for QueryParamsStruct {
-        fn schema(&self) -> &crate::Schema<'_> {
-            &QUERY_PARAMS_SCHEMA
-        }
-
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_map(&QUERY_PARAMS_MEMBER, &|s| {
                 s.write_string(&STRING, "page")?;
@@ -2846,10 +2766,6 @@ mod tests {
 
     struct TimestampHeaderStruct;
     impl SerializableStruct for TimestampHeaderStruct {
-        fn schema(&self) -> &crate::Schema<'_> {
-            &TS_HEADER_SCHEMA
-        }
-
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_timestamp(&TS_HEADER_MEMBER, &aws_smithy_types::DateTime::from_secs(0))
         }
@@ -2888,10 +2804,6 @@ mod tests {
 
     struct TimestampQueryStruct;
     impl SerializableStruct for TimestampQueryStruct {
-        fn schema(&self) -> &crate::Schema<'_> {
-            &TS_QUERY_SCHEMA
-        }
-
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_timestamp(&TS_QUERY_MEMBER, &aws_smithy_types::DateTime::from_secs(0))
         }
@@ -2936,10 +2848,6 @@ mod tests {
 
     struct MixedStruct;
     impl SerializableStruct for MixedStruct {
-        fn schema(&self) -> &crate::Schema<'_> {
-            &MIXED_SCHEMA
-        }
-
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_string(&BOUND_MEMBER, "in-header")?;
             s.write_string(&UNBOUND_MEMBER, "in-body")

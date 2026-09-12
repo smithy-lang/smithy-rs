@@ -28,6 +28,7 @@ internal class ServerSchemaCborErrorsTest {
             ${'$'}version: "2"
             namespace test.errors
             use smithy.protocols#rpcv2Cbor
+            use smithy.framework#ValidationException
             @rpcv2Cbor
             service Errors { version: "1", operations: [Get] }
             operation Get {
@@ -39,7 +40,8 @@ internal class ServerSchemaCborErrorsTest {
             structure Failure { message: String }
             @error("client")
             structure OuterFailure { direct: Failure, envelope: Envelope }
-            structure Envelope { failure: Failure }
+            structure Envelope { failure: Failure, next: Envelope, children: Envelopes, validation: ValidationException }
+            list Envelopes { member: Envelope }
             list Failures { member: Failure }
             map FailureMap { key: String, value: Failure }
             union Choice { failure: Failure }
@@ -118,7 +120,7 @@ internal class ServerSchemaCborErrorsTest {
 
                         let outer = crate::error::OuterFailure {
                             direct: #{Some}(failure()),
-                            envelope: #{Some}(crate::model::Envelope { failure: #{Some}(failure()) }),
+                            envelope: #{Some}(crate::model::Envelope { next: #{None}, children: #{None}, validation: #{None}, failure: #{Some}(failure()) }),
                         };
                         let response = protocol.serialize_error(&outer);
                         assert_eq!(response.status().as_u16(), 400);
@@ -146,6 +148,35 @@ internal class ServerSchemaCborErrorsTest {
                         assert_eq!(decoder.position(), bytes.len());
                         members.sort();
                         assert_eq!(members, ["direct", "envelope"]);
+
+                        let validation = || crate::error::ValidationException {
+                            message: "invalid".into(), field_list: #{None},
+                        };
+                        fn validation_error(decoder: &mut #{Cbor}::Decoder<'_>) {
+                            assert_eq!(decoder.map().unwrap(), #{None});
+                            assert_eq!(decoder.str().unwrap(), "__type");
+                            assert_eq!(decoder.str().unwrap(), "smithy.framework##ValidationException");
+                            assert_eq!(decoder.str().unwrap(), "message");
+                            assert_eq!(decoder.str().unwrap(), "invalid");
+                            end(decoder);
+                        }
+                        let response = protocol.serialize_error(&validation());
+                        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+                        let mut decoder = #{Cbor}::Decoder::new(&bytes);
+                        validation_error(&mut decoder);
+                        assert_eq!(decoder.position(), bytes.len());
+
+                        let envelope = crate::model::Envelope {
+                            failure: #{None}, next: #{None}, children: #{None}, validation: #{Some}(validation()),
+                        };
+                        let response = protocol.serialize_response(crate::model::Envelope::SCHEMA, &envelope);
+                        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+                        let mut decoder = #{Cbor}::Decoder::new(&bytes);
+                        assert_eq!(decoder.map().unwrap(), #{None});
+                        assert_eq!(decoder.str().unwrap(), "validation");
+                        validation_error(&mut decoder);
+                        end(&mut decoder);
+                        assert_eq!(decoder.position(), bytes.len());
                         """,
                             *preludeScope,
                             "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),

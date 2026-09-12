@@ -196,10 +196,6 @@ mod tests {
 
         struct X;
         impl SerializableStruct for X {
-            fn schema(&self) -> &aws_smithy_schema::Schema<'_> {
-                &X_SCHEMA
-            }
-
             fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 ser.write_string(&NAME, "hello")
             }

@@ -513,10 +513,6 @@ mod tests {
 
     struct SimpleInput;
     impl SerializableStruct for SimpleInput {
-        fn schema(&self) -> &aws_smithy_schema::Schema<'_> {
-            &INPUT_SCHEMA
-        }
-
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_string(&NAME_MEMBER, "Alice")?;
             s.write_integer(&AGE_MEMBER, 30)
@@ -571,15 +567,6 @@ mod tests {
 
         struct Inner;
         impl SerializableStruct for Inner {
-            fn schema(&self) -> &aws_smithy_schema::Schema<'_> {
-                static SCHEMA: Schema<'static> = Schema::new_struct(
-                    shape_id!("test", "Inner"),
-                    ShapeType::Structure,
-                    &[&INNER_FIELD],
-                );
-                &SCHEMA
-            }
-
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&INNER_FIELD, "hello")
             }
@@ -758,10 +745,6 @@ mod cross_validation {
             Schema::new_struct(shape_id!("test", "I"), ShapeType::Structure, &[&NAME, &AGE]);
         struct Input;
         impl SerializableStruct for Input {
-            fn schema(&self) -> &aws_smithy_schema::Schema<'_> {
-                &SCHEMA
-            }
-
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&NAME, "Alice")?;
                 s.write_integer(&AGE, 30)
@@ -855,15 +838,6 @@ mod cross_validation {
 
         struct Inner;
         impl SerializableStruct for Inner {
-            fn schema(&self) -> &aws_smithy_schema::Schema<'_> {
-                static SCHEMA: Schema<'static> = Schema::new_struct(
-                    shape_id!("test", "Inner"),
-                    ShapeType::Structure,
-                    &[&SECOND],
-                );
-                &SCHEMA
-            }
-
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&SECOND, "val")
             }
@@ -1136,24 +1110,12 @@ mod edge_cases {
 
         struct CStruct;
         impl SerializableStruct for CStruct {
-            fn schema(&self) -> &aws_smithy_schema::Schema<'_> {
-                static SCHEMA: Schema<'static> =
-                    Schema::new_struct(shape_id!("test", "C"), ShapeType::Structure, &[&C_FIELD]);
-                &SCHEMA
-            }
-
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&C_FIELD, "deep")
             }
         }
         struct BStruct;
         impl SerializableStruct for BStruct {
-            fn schema(&self) -> &aws_smithy_schema::Schema<'_> {
-                static SCHEMA: Schema<'static> =
-                    Schema::new_struct(shape_id!("test", "B"), ShapeType::Structure, &[&B_MEMBER]);
-                &SCHEMA
-            }
-
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_struct(&B_MEMBER, &CStruct)
             }
@@ -1182,12 +1144,6 @@ mod edge_cases {
 
         struct Inner;
         impl SerializableStruct for Inner {
-            fn schema(&self) -> &aws_smithy_schema::Schema<'_> {
-                static SCHEMA: Schema<'static> =
-                    Schema::new_struct(shape_id!("test", "S"), ShapeType::Structure, &[&ITEMS]);
-                &SCHEMA
-            }
-
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_list(&ITEMS, &|s| {
                     s.write_string(&aws_smithy_schema::prelude::STRING, "x")?;
@@ -1229,10 +1185,6 @@ mod edge_cases {
 
         struct Input;
         impl SerializableStruct for Input {
-            fn schema(&self) -> &aws_smithy_schema::Schema<'_> {
-                &SCHEMA
-            }
-
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&NAME, "Alice")?;
                 s.write_list(&TAGS, &|s| {
@@ -1259,10 +1211,6 @@ mod edge_cases {
 
         struct Item(&'static str);
         impl SerializableStruct for Item {
-            fn schema(&self) -> &aws_smithy_schema::Schema<'_> {
-                &ITEM_SCHEMA
-            }
-
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&NAME, self.0)
             }
@@ -1322,10 +1270,6 @@ mod edge_cases {
 
         struct Val(&'static str);
         impl SerializableStruct for Val {
-            fn schema(&self) -> &aws_smithy_schema::Schema<'_> {
-                &VAL_SCHEMA
-            }
-
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&NAME, self.0)
             }

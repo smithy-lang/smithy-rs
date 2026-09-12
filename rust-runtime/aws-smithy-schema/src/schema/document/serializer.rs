@@ -449,10 +449,6 @@ mod tests {
     }
 
     impl SerializableStruct for Person {
-        fn schema(&self) -> &crate::Schema<'_> {
-            &PERSON_SCHEMA
-        }
-
         fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             ser.write_string(&PERSON_NAME_MEMBER, &self.name)?;
             ser.write_integer(&PERSON_AGE_MEMBER, self.age)?;
