@@ -106,8 +106,20 @@ impl ShapeDeserializer for CborDeserializer<'_> {
             let key = self.decoder.str().map_err(deser_err)?;
             if let Some(member_schema) = schema.member_schema(&key) {
                 consumer(member_schema, self)?;
-            } else {
+            } else if &*key == "__type" || self.is_null() {
+                // A protocol discriminator is never a member, and a `null` value is an
+                // absent member. Neither is reported.
                 self.decoder.skip().map_err(deser_err)?;
+            } else {
+                // Report the unknown key so a union consumer can act on it: the prelude
+                // `DOCUMENT` schema has no member index, so generated code lands in its
+                // fallthrough arm. The consumer may read the value with a typed read; if
+                // it does not, the position is unchanged and the value is skipped here.
+                let start = self.decoder.position();
+                consumer(&aws_smithy_schema::prelude::DOCUMENT, self)?;
+                if self.decoder.position() == start {
+                    self.decoder.skip().map_err(deser_err)?;
+                }
             }
             i += 1;
         }
@@ -923,18 +935,15 @@ mod tests {
     }
 
     #[test]
-    fn union_with_only_unknown_member_yields_clean_error() {
-        // A union map whose sole key matches no member is skipped; no variant
-        // is set, so a clean error results (no panic).
+    fn union_with_only_unknown_member_is_reported_to_the_consumer() {
+        // A union map whose sole key matches no member is reported to the
+        // consumer as an unknown member; this consumer maps it to `Unknown`
+        // (as a client would) and the value is skipped for it.
         let mut e = crate::Encoder::new(Vec::new());
         e.map(1).str("zzz").str("ignored");
         let bytes = e.into_writer();
         let mut de = CborDeserializer::new(&bytes, 128);
-        let err = deser_inner_union(&mut de).unwrap_err();
-        assert!(
-            err.to_string().contains("expected a union variant"),
-            "unknown-only union must be a clean error, got {err:?}"
-        );
+        assert_eq!(deser_inner_union(&mut de).unwrap(), InnerUnion::Unknown);
     }
 
     #[test]
@@ -1071,5 +1080,100 @@ mod tests {
             Some(false),
             "required value-type enabled=false must be serialized, not dropped"
         );
+    }
+}
+
+/// `read_struct` reports keys that name no member: the consumer is called with the
+/// prelude `DOCUMENT` schema (no member index) positioned at the value. See the JSON
+/// codec's `unknown_member_tests` for the full contract; these cover the CBOR specifics
+/// (definite and indefinite maps, `null` values, `__type`).
+#[cfg(test)]
+mod unknown_member_tests {
+    use super::*;
+    use aws_smithy_schema::{shape_id, ShapeType};
+
+    static A: Schema<'static> =
+        Schema::new_member(shape_id!("test", "S"), ShapeType::String, "a", 0);
+    static S: Schema<'static> =
+        Schema::new_struct(shape_id!("test", "S"), ShapeType::Structure, &[&A]);
+
+    /// CBOR has no document type, so a consumer that wants an unknown value reads it with
+    /// a typed read. This one reads it as a string when asked.
+    fn read_s(bytes: &[u8], read_unknown_value: bool) -> (Option<String>, Vec<Option<String>>) {
+        let mut a = None;
+        let mut unknown = Vec::new();
+        CborDeserializer::new(bytes, 128)
+            .read_struct(&S, &mut |member, d| {
+                match member.member_index() {
+                    Some(0) => a = Some(d.read_string(member)?),
+                    _ => {
+                        assert_eq!(member.shape_type(), ShapeType::Document);
+                        unknown.push(if read_unknown_value {
+                            Some(d.read_string(member)?)
+                        } else {
+                            None
+                        });
+                    }
+                }
+                Ok(())
+            })
+            .unwrap();
+        (a, unknown)
+    }
+
+    #[test]
+    fn unknown_key_is_reported_and_the_consumer_can_read_the_value() {
+        let mut e = crate::Encoder::new(Vec::new());
+        e.map(2).str("zzz").str("value").str("a").str("x");
+        let (a, unknown) = read_s(&e.into_writer(), true);
+        assert_eq!(a.as_deref(), Some("x"));
+        assert_eq!(unknown, [Some("value".to_string())]);
+    }
+
+    #[test]
+    fn unknown_key_value_is_skipped_when_not_read_in_definite_and_indefinite_maps() {
+        let mut e = crate::Encoder::new(Vec::new());
+        e.map(3)
+            .str("zzz")
+            .map(1)
+            .str("deep")
+            .array(2)
+            .integer(1)
+            .integer(2)
+            .str("a")
+            .str("x")
+            .str("yyy")
+            .str("tail");
+        let (a, unknown) = read_s(&e.into_writer(), false);
+        assert_eq!(a.as_deref(), Some("x"));
+        assert_eq!(unknown.len(), 2);
+
+        let mut e = crate::Encoder::new(Vec::new());
+        e.begin_map()
+            .str("zzz")
+            .array(2)
+            .integer(1)
+            .integer(2)
+            .str("a")
+            .str("x")
+            .end();
+        let (a, unknown) = read_s(&e.into_writer(), false);
+        assert_eq!(a.as_deref(), Some("x"));
+        assert_eq!(unknown.len(), 1);
+    }
+
+    #[test]
+    fn type_discriminator_and_null_values_are_not_reported() {
+        let mut e = crate::Encoder::new(Vec::new());
+        e.map(3)
+            .str("__type")
+            .str("ns#Foo")
+            .str("zzz")
+            .null()
+            .str("a")
+            .str("x");
+        let (a, unknown) = read_s(&e.into_writer(), false);
+        assert_eq!(a.as_deref(), Some("x"));
+        assert!(unknown.is_empty());
     }
 }

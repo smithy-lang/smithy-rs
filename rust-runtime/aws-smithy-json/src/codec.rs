@@ -148,6 +148,15 @@ pub struct JsonCodecSettings {
     /// `None` (default) preserves the prior behavior where relative
     /// names are left in the resulting map as plain string entries.
     default_namespace: Option<String>,
+    /// When `true`, a timestamp must use exactly the wire form its resolved
+    /// `@timestampFormat` (or the codec default) prescribes: a JSON number for
+    /// `epoch-seconds`, an RFC 3339 string without a UTC offset for `date-time`,
+    /// and an IMF-fixdate string for `http-date`. Servers enable this so that
+    /// malformed requests are rejected. When `false` (default) the deserializer
+    /// is tolerant, as clients are: a number is always read as epoch seconds and
+    /// a string for a `date-time` or `epoch-seconds` member is parsed as an
+    /// offset-aware `date-time`.
+    strict_timestamp_formats: bool,
 }
 
 impl JsonCodecSettings {
@@ -206,7 +215,14 @@ impl JsonCodecSettings {
             protocol_id: self.protocol_id.clone(),
             use_string_for_arbitrary_precision: self.use_string_for_arbitrary_precision,
             default_namespace: self.default_namespace.clone(),
+            strict_timestamp_formats: self.strict_timestamp_formats,
         }
+    }
+
+    /// Whether timestamps must use exactly the wire form their format prescribes.
+    /// See [`JsonCodecSettingsBuilder::strict_timestamp_formats`].
+    pub fn strict_timestamp_formats(&self) -> bool {
+        self.strict_timestamp_formats
     }
 
     /// Returns the JSON wire name for a member schema.
@@ -233,6 +249,7 @@ impl Default for JsonCodecSettings {
             protocol_id: DEFAULT_JSON_CODEC_ID,
             use_string_for_arbitrary_precision: false,
             default_namespace: None,
+            strict_timestamp_formats: false,
         }
     }
 }
@@ -270,6 +287,7 @@ pub struct JsonCodecSettingsBuilder {
     protocol_id: ShapeId<'static>,
     use_string_for_arbitrary_precision: bool,
     default_namespace: Option<String>,
+    strict_timestamp_formats: bool,
 }
 
 impl Default for JsonCodecSettingsBuilder {
@@ -281,6 +299,7 @@ impl Default for JsonCodecSettingsBuilder {
             protocol_id: DEFAULT_JSON_CODEC_ID,
             use_string_for_arbitrary_precision: false,
             default_namespace: None,
+            strict_timestamp_formats: false,
         }
     }
 }
@@ -339,6 +358,15 @@ impl JsonCodecSettingsBuilder {
         self
     }
 
+    /// Require timestamps to use exactly the wire form their resolved format
+    /// prescribes: a JSON number for `epoch-seconds`, an RFC 3339 string without
+    /// a UTC offset for `date-time`, an IMF-fixdate string for `http-date`.
+    /// Off by default; servers turn it on so malformed requests are rejected.
+    pub fn strict_timestamp_formats(mut self, value: bool) -> Self {
+        self.strict_timestamp_formats = value;
+        self
+    }
+
     /// Builds the settings.
     pub fn build(self) -> JsonCodecSettings {
         let field_mapper = if self.use_json_name {
@@ -353,6 +381,7 @@ impl JsonCodecSettingsBuilder {
             protocol_id: self.protocol_id,
             use_string_for_arbitrary_precision: self.use_string_for_arbitrary_precision,
             default_namespace: self.default_namespace,
+            strict_timestamp_formats: self.strict_timestamp_formats,
         }
     }
 }
