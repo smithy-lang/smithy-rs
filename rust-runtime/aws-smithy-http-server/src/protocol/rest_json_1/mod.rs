@@ -29,7 +29,7 @@ impl Default for RestJson1Protocol {
                         .reject_unknown_union_members(true)
                         .build(),
                 ),
-                "application/json",
+                crate::schema::protocol::rest_json_1::POLICY,
             ),
         }
     }

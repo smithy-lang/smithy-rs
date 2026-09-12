@@ -82,7 +82,7 @@ pub struct RoutingService<R, Protocol> {
     _protocol: PhantomData<Protocol>,
 }
 
-/// A route together with the schema protocol and compiled operation that selected it.
+/// A route together with the erased protocol and the operation schema that selected it.
 pub struct SchemaRoute<B = hyper::body::Incoming> {
     route: Route<B>,
     selection: SelectedProtocolOperation,

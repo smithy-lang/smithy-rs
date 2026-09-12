@@ -22,7 +22,7 @@ impl Default for RestXmlProtocol {
         Self {
             inner: crate::schema::protocol::rest::RestProtocol::new(
                 aws_smithy_xml::codec::XmlCodec::new(aws_smithy_xml::codec::XmlCodecSettings::default()),
-                "application/xml",
+                crate::schema::protocol::rest_xml::POLICY,
             ),
         }
     }

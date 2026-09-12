@@ -108,7 +108,7 @@ open class ServerOperationErrorGenerator(
 
         if (schemaSerde && operationOrEventStream is OperationShape) {
             writer.rustBlock("impl ::aws_smithy_http_server::operation::IntoDynResponse for ${errorSymbol.name}") {
-                rustBlock("fn into_dyn_response(self, protocol: &dyn ::aws_smithy_http_server::schema::DynServerProtocol) -> ::aws_smithy_http_server::http::Response<::aws_smithy_http_server::body::BoxBody>") {
+                rustBlock("fn into_dyn_response(self, protocol: &dyn ::aws_smithy_http_server::schema::ServerProtocol) -> ::aws_smithy_http_server::http::Response<::aws_smithy_http_server::body::BoxBody>") {
                     rustBlock("match self") {
                         errors.forEach {
                             val variant = symbolProvider.toSymbol(it).name

@@ -22,38 +22,27 @@ mod discriminator;
 mod request;
 pub(crate) mod response;
 pub(crate) mod rest;
-mod rest_json_1;
-mod rest_xml;
+pub(crate) mod rest_json_1;
+pub(crate) mod rest_xml;
 pub(crate) mod rpc;
 mod rpc_v2_cbor;
 #[cfg(test)]
 mod tests;
 
-use std::any::Any;
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
-use std::sync::Arc;
 use std::time::Duration;
 
 use aws_smithy_runtime_api::http::{Headers, Uri};
-use aws_smithy_schema::codec::{Codec, DynCodec};
+use aws_smithy_schema::codec::DynCodec;
 use aws_smithy_schema::serde::{SerializableStruct, ShapeDeserializer};
-use aws_smithy_schema::{OperationSchema, ServiceSchema, ShapeId};
+use aws_smithy_schema::{Schema, ShapeId};
 use bytes::Bytes;
 
-use crate::body::{collect_body_limited, CollectBodyError, HttpBody};
+use crate::body::{collect_body_limited, BoxBody, CollectBodyError, HttpBody};
 use crate::response::Response;
-use crate::routing::tiny_map::TinyMap;
 
-use super::{DeserializableShape, DeserializeError, HttpModeledError};
-
-pub use rest::RestOperationState;
-pub use rpc::RpcOperationState;
-
-/// State a protocol caches beside each operation schema. `()` when the protocol needs none.
-pub trait OperationState: Send + Sync + 'static {}
-
-impl OperationState for () {}
+use super::{DeserializeError, HttpModeledError};
 
 /// The canonical, transport-independent view of a collected request on the schema path.
 ///
@@ -63,9 +52,9 @@ impl OperationState for () {}
 /// of these; a future transport synthesizes the same fields from its own messages. The fields are
 /// public precisely so such upgrade layers can construct it.
 ///
-/// Event-stream operations never construct a `ServerRequest`: their body must stay streaming, so
-/// they will enter through a separate streaming entry point rather than
-/// [`ServerProtocol::deserialize_request`].
+/// A streaming request (event stream or streaming blob input) reaches
+/// [`ServerProtocol::deserialize_request`] with an empty `body`: the protocol reads the URI and
+/// header bindings, and the generated streaming glue attaches the live body afterwards.
 #[derive(Debug)]
 pub struct ServerRequest {
     /// The request URI.
@@ -73,202 +62,120 @@ pub struct ServerRequest {
     /// The request headers. Values are valid UTF-8 by construction.
     pub headers: Headers,
     /// The collected request body. Empty when the protocol answered `false` from
-    /// [`ServerProtocol::reads_request_body`].
+    /// [`ServerProtocol::reads_request_body`] or when the input is streaming.
     pub body: Bytes,
 }
 
-/// A model operation paired with the state derived for one protocol instance.
-#[derive(Debug)]
-pub struct CompiledOperation<T> {
-    schema: &'static OperationSchema<'static>,
-    state: T,
-    input_is_streaming: bool,
-}
-
-impl<T> CompiledOperation<T> {
-    /// Creates a compiled operation.
-    pub fn new(schema: &'static OperationSchema<'static>, state: T) -> Self {
-        Self {
-            schema,
-            state,
-            input_is_streaming: schema.input().members().iter().any(|member| member.streaming()),
-        }
-    }
-
-    /// Returns the protocol-neutral operation schema.
-    pub fn schema(&self) -> &'static OperationSchema<'static> {
-        self.schema
-    }
-
-    /// Returns the state derived by the protocol for this operation.
-    pub fn state(&self) -> &T {
-        &self.state
-    }
-
-    /// `true` when the input has a `@streaming` member. Such a body is never collected, whatever
-    /// the protocol says in [`ServerProtocol::reads_request_body`].
-    pub fn input_is_streaming(&self) -> bool {
-        self.input_is_streaming
-    }
-}
-
-/// Builds the protocol-specific state stored beside an operation schema.
-pub trait CompileOperationState<P: ?Sized>: OperationState {
-    /// Compiles state for `schema`, taking service-local protocol configuration into account.
-    fn compile(protocol: &P, schema: &'static OperationSchema<'static>) -> Self;
-}
-
-impl<P: ?Sized> CompileOperationState<P> for () {
-    fn compile(_protocol: &P, _schema: &'static OperationSchema<'static>) -> Self {}
-}
-
-impl<P: rest::RestProtocolProvider> CompileOperationState<P> for RestOperationState {
-    fn compile(protocol: &P, schema: &'static OperationSchema<'static>) -> Self {
-        protocol.rest_protocol().compile_operation(schema)
-    }
-}
-
-impl<P: rpc::RpcProtocolProvider> CompileOperationState<P> for RpcOperationState {
-    fn compile(protocol: &P, schema: &'static OperationSchema<'static>) -> Self {
-        protocol.rpc_protocol().compile_operation(schema)
-    }
-}
-
-/// The object-safe view of a protocol-specific compiled operation.
-pub trait ErasedCompiledOperation: Send + Sync + 'static {
-    /// Returns the protocol-neutral operation schema.
-    fn schema(&self) -> &'static OperationSchema<'static>;
-
-    /// `true` when the input has a `@streaming` member.
-    fn input_is_streaming(&self) -> bool;
-
-    /// Returns this value for checked downcasting by the selected protocol.
-    fn as_any(&self) -> &dyn Any;
-}
-
-impl<T: OperationState> ErasedCompiledOperation for CompiledOperation<T> {
-    fn schema(&self) -> &'static OperationSchema<'static> {
-        self.schema
-    }
-
-    fn input_is_streaming(&self) -> bool {
-        self.input_is_streaming
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
-const OPERATION_TABLE_CUTOFF: usize = 8;
-
-/// A service-local protocol instance and its compiled interpretation of every operation.
-#[derive(Debug)]
-pub struct ProtocolRoutingTable<P: ServerProtocol> {
-    protocol: Arc<P>,
-    operations: TinyMap<&'static str, Arc<CompiledOperation<P::OperationState>>, OPERATION_TABLE_CUTOFF>,
-}
-
-impl<P: ServerProtocol> ProtocolRoutingTable<P> {
-    /// Compiles every operation in `service` for `protocol`.
-    pub fn new(protocol: P, service: &'static ServiceSchema<'static>) -> Self {
-        let operations = service
-            .operations()
-            .iter()
-            .map(|schema| (schema.shape_id().as_str(), Arc::new(protocol.compile_operation(schema))))
-            .collect();
-        Self {
-            protocol: Arc::new(protocol),
-            operations,
-        }
-    }
-
-    /// Returns the service-local protocol instance.
-    pub fn protocol(&self) -> &P {
-        self.protocol.as_ref()
-    }
-
-    /// Returns a shared, erased protocol together with a shared compiled operation.
-    pub fn select(&self, shape_id: &ShapeId<'_>) -> Option<super::SelectedProtocolOperation> {
-        self.operations
-            .get(shape_id.as_str())
-            .map(|operation| super::SelectedProtocolOperation {
-                protocol: self.protocol.clone(),
-                operation: operation.clone(),
-            })
-    }
-
-    /// Returns the compiled operation identified by `shape_id`.
-    pub fn operation(&self, shape_id: &ShapeId<'_>) -> Option<&CompiledOperation<P::OperationState>> {
-        self.operations.get(shape_id.as_str()).map(Arc::as_ref)
-    }
-}
-
-/// Schema-driven serialization for one protocol, implemented on its marker type.
+/// Schema-driven serialization for one protocol, keyed on struct schemas.
 ///
-/// This is the typed surface that protocol authors implement and that single-protocol server
-/// code calls. It is not object-safe; [`DynServerProtocol`] is the erased view, derived from every
-/// implementation by a blanket impl. Deserialization is synchronous over an already collected body:
-/// the framework collects every non-streaming request body before calling in, unless the protocol
-/// opts out through [`Self::reads_request_body`].
+/// The request side takes the operation's input schema, the response side its output schema,
+/// mirroring the client's `ClientProtocolInner` with the two directions swapped. The trait is
+/// object-safe: routing stores an `Arc<dyn ServerProtocol>` in the request extensions and
+/// everything after routing works through that erased handle, so nothing downstream names a
+/// concrete protocol.
+///
+/// Nothing is precomputed per operation. Bindings, media types, URI templates and status codes are
+/// derived from the schema on every call, so a struct serialized from middleware with a
+/// hand-written schema is framed exactly like an operation output with the same schema.
+///
+/// # Serializing from middleware
+///
+/// After routing, an HTTP plugin can read the selected protocol from the request extensions and
+/// serialize any [`SerializableStruct`] whose schema it holds:
+///
+/// ```no_run
+/// use aws_smithy_http_server::schema::SelectedProtocolOperation;
+/// use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
+/// use aws_smithy_schema::{shape_id, Schema, ShapeType};
+///
+/// static MESSAGE: Schema<'static> =
+///     Schema::new_member(shape_id!("example", "Teapot", "message"), ShapeType::String, "message", 0);
+/// static MEMBERS: [&Schema<'static>; 1] = [&MESSAGE];
+/// static TEAPOT: Schema<'static> =
+///     Schema::new_struct(shape_id!("example", "Teapot"), ShapeType::Structure, &MEMBERS)
+///         .with_original_name("Teapot");
+///
+/// struct Teapot;
+///
+/// impl SerializableStruct for Teapot {
+///     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+///         serializer.write_string(&MESSAGE, "short and stout")
+///     }
+/// }
+///
+/// fn short_circuit(request: &http::Request<()>) -> Option<http::Response<aws_smithy_http_server::body::BoxBody>> {
+///     let selected = request.extensions().get::<SelectedProtocolOperation>()?;
+///     let mut response = selected.protocol().serialize_response(&TEAPOT, &Teapot);
+///     *response.status_mut() = http::StatusCode::IM_A_TEAPOT;
+///     Some(response)
+/// }
+/// ```
 pub trait ServerProtocol: Send + Sync + 'static {
-    /// The codec for request and response bodies.
-    type Codec: Codec + Send + Sync + std::fmt::Debug + 'static;
-
-    /// State derived once for each operation used with this protocol instance.
-    ///
-    /// Use `()` unless the protocol wants to precompute something from the operation schema.
-    type OperationState: CompileOperationState<Self>;
-
-    /// Compiles the protocol's interpretation of an operation.
-    fn compile_operation(&self, schema: &'static OperationSchema<'static>) -> CompiledOperation<Self::OperationState> {
-        CompiledOperation::new(schema, Self::OperationState::compile(self, schema))
-    }
-
-    /// Whether the collected body is needed to deserialize `operation`'s input.
-    ///
-    /// Defaults to `true`. A protocol that never reads the body for some inputs may answer `false`
-    /// to skip collection; [`ServerRequest::body`] is then empty. Streaming inputs never reach this
-    /// method: the framework keeps their body streaming based on the schema alone.
-    fn reads_request_body(&self, _operation: &CompiledOperation<Self::OperationState>) -> bool {
-        true
-    }
-
     /// The protocol trait's shape ID, such as `aws.protocols#restJson1`.
     fn protocol_id(&self) -> &'static ShapeId<'static>;
 
-    /// The codec for request and response bodies.
-    fn codec(&self) -> &Self::Codec;
+    /// The codec for bodies and structured event-frame payloads.
+    fn payload_codec(&self) -> &dyn DynCodec;
 
-    /// Presents `request` as a deserializer for `operation`'s input.
+    /// The `:content-type` of structured event-frame payloads, when the protocol defines one.
+    fn event_stream_media_type(&self) -> Option<&str> {
+        None
+    }
+
+    /// Whether the non-stream members of a streaming operation's input and output travel in
+    /// `initial-request` and `initial-response` event frames rather than in HTTP bindings.
     ///
-    /// `Accept` and `Content-Type` checks happen here; the returned deserializer resolves `@http`
-    /// bindings from the request and hands body members to [`Self::Codec`].
+    /// `true` on the RPC protocols, `false` on the REST protocols.
+    fn initial_messages_in_frames(&self) -> bool {
+        false
+    }
+
+    /// The `Accept` gate, keyed on the output the response will carry.
+    ///
+    /// Runs before [`Self::deserialize_request`], so a protocol that keeps `406` and `415`
+    /// distinct answers `406` first. Provided: no policy.
+    fn check_accept(&self, _output: &Schema<'_>, _headers: &Headers) -> Result<(), DeserializeError> {
+        Ok(())
+    }
+
+    /// Whether the collected body is needed to read `input`.
+    ///
+    /// Defaults to `true`. A protocol that never reads the body for some inputs may answer `false`
+    /// to skip collection; [`ServerRequest::body`] is then empty. Streaming inputs are never
+    /// collected, whatever this method answers.
+    fn reads_request_body(&self, _input: &Schema<'_>) -> bool {
+        true
+    }
+
+    /// Presents `request` as a deserializer for `input`.
+    ///
+    /// The `Content-Type` check happens here; the returned deserializer resolves `@http` bindings
+    /// from the request and hands body members to [`Self::payload_codec`]. Synchronous over an
+    /// already collected body.
     fn deserialize_request<'a>(
         &'a self,
-        operation: &'a CompiledOperation<Self::OperationState>,
+        input: &Schema<'_>,
         request: &'a ServerRequest,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, DeserializeError>;
 
-    /// Reads `operation`'s input as `T`.
-    fn deserialize<'a, T: DeserializableShape>(
-        &'a self,
-        operation: &'a CompiledOperation<Self::OperationState>,
-        request: &'a ServerRequest,
-    ) -> Result<T, DeserializeError> {
-        let mut deserializer = self.deserialize_request(operation, request)?;
-        T::deserialize(&mut *deserializer)
-    }
-
-    /// Serializes a successful `operation` output.
+    /// Serializes `value` as a complete in-memory response for `output`.
     ///
-    /// The status is the `@httpResponseCode` member when bound and set, else the operation's
-    /// `@http` code, else `200`. A serialization failure is logged and answered with the protocol's
-    /// `RuntimeError::Serialization` response.
-    fn serialize_response(
+    /// The status is the `@httpResponseCode` member when bound and set, else the output schema's
+    /// `@http` code, else `200`; a caller wanting another status mutates the returned response. A
+    /// serialization failure is logged and answered with the protocol's `RuntimeError::Serialization`
+    /// response, so this never fails outward.
+    fn serialize_response(&self, output: &Schema<'_>, value: &dyn SerializableStruct) -> Response;
+
+    /// Serializes the head of a streaming response for `output` around a caller-supplied `body`.
+    ///
+    /// Status, `@httpHeader`-bound members and the content type come from `output` and `value`;
+    /// no body member is written. The generated streaming glue builds `body` from the event
+    /// stream or streaming blob member.
+    fn serialize_streaming_response(
         &self,
-        operation: &CompiledOperation<Self::OperationState>,
-        output: &dyn SerializableStruct,
+        output: &Schema<'_>,
+        value: &dyn SerializableStruct,
+        body: BoxBody,
     ) -> Response;
 
     /// Serializes a modeled error with the protocol's discriminator framing.
@@ -276,91 +183,10 @@ pub trait ServerProtocol: Send + Sync + 'static {
 
     /// Converts a request-deserialization failure into the protocol's response.
     ///
-    /// Each protocol answers with its `RuntimeError` responses — quirks included, such as awsJson
+    /// Each protocol answers with its `RuntimeError` responses, quirks included, such as awsJson
     /// and rpcv2Cbor collapsing `Accept` and `Content-Type` failures into a plain 400. These
     /// responses are the protocol's wire contract and must not change shape.
     fn serialize_rejection(&self, err: DeserializeError) -> Response;
-}
-
-/// The erased view of a [`ServerProtocol`], usable as `dyn DynServerProtocol`.
-///
-/// It has no associated types: the codec is exposed as [`DynCodec`]. Every [`ServerProtocol`]
-/// implements it through the blanket impl below; protocol authors never implement it directly.
-pub trait DynServerProtocol: Send + Sync + 'static {
-    /// The protocol trait's shape ID.
-    fn protocol_id(&self) -> &'static ShapeId<'static>;
-
-    /// The codec for request and response bodies.
-    fn codec(&self) -> &dyn DynCodec;
-
-    /// Whether the collected body is needed to deserialize `operation`'s input.
-    fn reads_request_body(&self, operation: &dyn ErasedCompiledOperation) -> bool;
-
-    /// Presents `request` as a deserializer for `operation`'s input.
-    fn deserialize_request<'a>(
-        &'a self,
-        operation: &'a dyn ErasedCompiledOperation,
-        request: &'a ServerRequest,
-    ) -> Result<Box<dyn ShapeDeserializer + 'a>, DeserializeError>;
-
-    /// Serializes a successful `operation` output.
-    fn serialize_response(&self, operation: &dyn ErasedCompiledOperation, output: &dyn SerializableStruct) -> Response;
-
-    /// Serializes a modeled error with the protocol's discriminator framing.
-    fn serialize_error(&self, error: &dyn HttpModeledError) -> Response;
-
-    /// Converts a request-deserialization failure into the protocol's response.
-    fn serialize_rejection(&self, err: DeserializeError) -> Response;
-
-    /// Whether `operation` was compiled by this protocol implementation.
-    fn accepts_operation(&self, operation: &dyn ErasedCompiledOperation) -> bool;
-}
-
-impl<P: ServerProtocol> DynServerProtocol for P {
-    fn protocol_id(&self) -> &'static ShapeId<'static> {
-        ServerProtocol::protocol_id(self)
-    }
-
-    fn codec(&self) -> &dyn DynCodec {
-        ServerProtocol::codec(self)
-    }
-
-    fn reads_request_body(&self, operation: &dyn ErasedCompiledOperation) -> bool {
-        ServerProtocol::reads_request_body(self, downcast_operation::<P>(operation))
-    }
-
-    fn deserialize_request<'a>(
-        &'a self,
-        operation: &'a dyn ErasedCompiledOperation,
-        request: &'a ServerRequest,
-    ) -> Result<Box<dyn ShapeDeserializer + 'a>, DeserializeError> {
-        ServerProtocol::deserialize_request(self, downcast_operation::<P>(operation), request)
-    }
-
-    fn serialize_response(&self, operation: &dyn ErasedCompiledOperation, output: &dyn SerializableStruct) -> Response {
-        ServerProtocol::serialize_response(self, downcast_operation::<P>(operation), output)
-    }
-
-    fn serialize_error(&self, error: &dyn HttpModeledError) -> Response {
-        ServerProtocol::serialize_error(self, error)
-    }
-
-    fn serialize_rejection(&self, err: DeserializeError) -> Response {
-        ServerProtocol::serialize_rejection(self, err)
-    }
-
-    fn accepts_operation(&self, operation: &dyn ErasedCompiledOperation) -> bool {
-        operation.as_any().is::<CompiledOperation<P::OperationState>>()
-    }
-}
-
-fn downcast_operation<P: ServerProtocol>(
-    operation: &dyn ErasedCompiledOperation,
-) -> &CompiledOperation<P::OperationState> {
-    operation
-        .as_any()
-        .downcast_ref()
-        .expect("compiled operation must belong to the selected server protocol")
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]

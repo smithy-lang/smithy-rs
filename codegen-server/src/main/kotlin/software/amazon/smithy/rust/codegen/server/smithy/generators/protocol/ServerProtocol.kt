@@ -5,11 +5,17 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators.protocol
 
+import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
+import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
+import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
+import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -52,6 +58,23 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.http.RestReq
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerAwsJsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerRestJsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
+
+/**
+ * The runtime `ServerProtocol` implementation the schema path uses for [protocol], or `null` when
+ * the protocol has none. Generated services build one of these once and pair it with each route.
+ */
+fun schemaProtocolStruct(
+    protocol: ShapeId,
+    runtimeConfig: RuntimeConfig,
+): RuntimeType? =
+    when (protocol) {
+        RestJson1Trait.ID -> ServerRuntimeType.protocol("RestJson1Protocol", "rest_json_1", runtimeConfig)
+        RestXmlTrait.ID -> ServerRuntimeType.protocol("RestXmlProtocol", "rest_xml", runtimeConfig)
+        AwsJson1_0Trait.ID -> ServerRuntimeType.protocol("AwsJson1_0Protocol", "aws_json_10", runtimeConfig)
+        AwsJson1_1Trait.ID -> ServerRuntimeType.protocol("AwsJson1_1Protocol", "aws_json_11", runtimeConfig)
+        Rpcv2CborTrait.ID -> ServerRuntimeType.protocol("RpcV2CborProtocol", "rpc_v2_cbor", runtimeConfig)
+        else -> null
+    }
 
 interface ServerProtocol : Protocol {
     /** The path such that `aws_smithy_http_server::protocol::$path` points to the protocol's module. */

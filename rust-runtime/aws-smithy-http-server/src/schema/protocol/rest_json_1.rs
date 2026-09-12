@@ -3,10 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_json::codec::JsonCodec;
+use aws_smithy_runtime_api::http::Headers;
+use aws_smithy_schema::codec::DynCodec;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
-use aws_smithy_schema::{shape_id, ShapeId};
+use aws_smithy_schema::{shape_id, Schema, ShapeId};
 
+use crate::body::BoxBody;
 use crate::protocol::rest_json_1::rejection::RequestRejection;
 use crate::protocol::rest_json_1::runtime_error::RuntimeError;
 use crate::protocol::rest_json_1::{RestJson1, RestJson1Protocol};
@@ -17,52 +19,65 @@ use super::response::{
     log_serialize_failure, serialize_modeled_error_response, stamp_error_extension, stamp_validation_extension,
     ResponseBindings,
 };
-use super::rest::RestProtocolProvider;
-use super::{CompiledOperation, RestOperationState, ServerProtocol, ServerRequest};
+use super::rest::RestPolicy;
+use super::{ServerProtocol, ServerRequest};
 
 static PROTOCOL_ID: ShapeId<'static> = shape_id!("aws.protocols", "restJson1");
 const CONTENT_TYPE: &str = "application/json";
 const ERROR_TYPE_HEADER: http::HeaderName = http::HeaderName::from_static("x-amzn-errortype");
 
-impl RestProtocolProvider for RestJson1Protocol {
-    type RestCodec = JsonCodec;
-
-    fn rest_protocol(&self) -> &super::rest::RestProtocol<JsonCodec> {
-        &self.inner
-    }
-}
+/// restJson1 stamps `application/json` on every response nothing else labels, sets no content
+/// type on an untyped blob payload, and answers a user-modeled empty output with `{}`.
+pub(crate) const POLICY: RestPolicy = RestPolicy {
+    codec_content_type: CONTENT_TYPE,
+    default_response_content_type: Some(CONTENT_TYPE),
+    untyped_blob_payload_content_type: None,
+    empty_document: true,
+};
 
 impl ServerProtocol for RestJson1Protocol {
-    type Codec = JsonCodec;
-    type OperationState = RestOperationState;
-
     fn protocol_id(&self) -> &'static ShapeId<'static> {
         &PROTOCOL_ID
     }
 
-    fn codec(&self) -> &JsonCodec {
+    fn payload_codec(&self) -> &dyn DynCodec {
         self.inner.codec()
     }
 
-    fn reads_request_body(&self, operation: &CompiledOperation<RestOperationState>) -> bool {
-        operation.state().reads_body()
+    fn event_stream_media_type(&self) -> Option<&str> {
+        Some(CONTENT_TYPE)
+    }
+
+    fn check_accept(&self, output: &Schema<'_>, headers: &Headers) -> Result<(), DeserializeError> {
+        self.inner.check_accept(output, headers)
+    }
+
+    fn reads_request_body(&self, input: &Schema<'_>) -> bool {
+        self.inner.reads_request_body(input)
     }
 
     fn deserialize_request<'a>(
         &'a self,
-        operation: &'a CompiledOperation<RestOperationState>,
+        input: &Schema<'_>,
         request: &'a ServerRequest,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, DeserializeError> {
-        self.inner.deserialize_request(operation.state(), request)
+        self.inner.deserialize_request(input, request)
     }
 
-    fn serialize_response(
+    fn serialize_response(&self, output: &Schema<'_>, value: &dyn SerializableStruct) -> Response {
+        self.inner
+            .serialize_response(output, value)
+            .unwrap_or_else(serialization_failure)
+    }
+
+    fn serialize_streaming_response(
         &self,
-        operation: &CompiledOperation<RestOperationState>,
-        output: &dyn SerializableStruct,
+        output: &Schema<'_>,
+        value: &dyn SerializableStruct,
+        body: BoxBody,
     ) -> Response {
         self.inner
-            .serialize_response(operation.schema(), operation.state(), output)
+            .serialize_streaming_response(output, value, body)
             .unwrap_or_else(serialization_failure)
     }
 
@@ -70,7 +85,7 @@ impl ServerProtocol for RestJson1Protocol {
         let schema = error.schema();
         let name = schema.shape_id().shape_name();
         let result = serialize_modeled_error_response(
-            self.codec(),
+            self.inner.codec(),
             schema,
             error,
             error.status_code(),

@@ -26,6 +26,7 @@ impl Default for RpcV2CborProtocol {
                 "application/cbor",
                 None,
                 crate::schema::protocol::rpc::RpcAccept::ModeledOutput,
+                crate::schema::protocol::rpc::RpcStreaming::EventStreamContentType,
             ),
         }
     }

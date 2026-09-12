@@ -54,6 +54,7 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerInstantiator
 import java.util.logging.Logger
 
@@ -65,6 +66,11 @@ class ServerProtocolTestGenerator(
     override val protocolSupport: ProtocolSupport,
     override val operationShape: OperationShape,
 ) : ProtocolTestGenerator() {
+    /** Whether the generated service runs the schema-driven request and response path. */
+    private val schemaSerde =
+        (codegenContext as? ServerCodegenContext)?.settings?.codegenConfig?.schemaSerde == true &&
+            codegenContext.runtimeConfig.httpVersion == HttpVersion.Http1x
+
     companion object {
         private val ExpectFail: Set<FailingTest> =
             setOf(
@@ -396,13 +402,45 @@ class ServerProtocolTestGenerator(
             val variant = symbolProvider.toSymbol(shape).name
             rust("let output = $operationErrorName::$variant(output);")
         }
-        rustTemplate(
-            """
-            use #{SmithyHttpServer}::response::IntoResponse;
-            let http_response = output.into_response();
-            """,
-            *codegenScope,
-        )
+        val schemaProtocol = schemaProtocolStruct(codegenContext.protocol, codegenContext.runtimeConfig)
+        val outputIsStreaming = operationShape.outputShape(model).hasStreamingMember(model)
+        if (schemaSerde && schemaProtocol != null && !outputIsStreaming) {
+            // The schema path: the response travels through the erased protocol handle the service
+            // selects at routing, exactly as `DynUpgrade` serializes a handler's output or error.
+            val serialize =
+                if (shape.hasTrait<ErrorTrait>()) {
+                    writable {
+                        rustTemplate(
+                            "{ use #{SmithyHttpServer}::operation::IntoDynResponse; output.into_dyn_response(&*protocol) }",
+                            *codegenScope,
+                        )
+                    }
+                } else {
+                    writable {
+                        rustTemplate(
+                            "protocol.serialize_response(<crate::operation_shape::${operationSymbol.name} as #{SmithyHttpServer}::operation::SchemaOperationShape>::SCHEMA.output(), &output)",
+                            *codegenScope,
+                        )
+                    }
+                }
+            rustTemplate(
+                """
+                let protocol: ::std::sync::Arc<dyn #{SmithyHttpServer}::schema::ServerProtocol> = ::std::sync::Arc::new(#{SchemaProtocol}::default());
+                let http_response = #{Serialize:W};
+                """,
+                *codegenScope,
+                "SchemaProtocol" to schemaProtocol,
+                "Serialize" to serialize,
+            )
+        } else {
+            rustTemplate(
+                """
+                use #{SmithyHttpServer}::response::IntoResponse;
+                let http_response = output.into_response();
+                """,
+                *codegenScope,
+            )
+        }
         checkResponse(this, testCase)
     }
 

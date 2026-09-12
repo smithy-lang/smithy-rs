@@ -13,12 +13,12 @@
 //! - `@httpPrefixHeaders` — map entries become `prefix + key` headers.
 //! - `@httpResponseCode` — captured as the response status; never written to
 //!   the body.
-//! - `@httpPayload` — the body IS that member: blob/string raw (content type
-//!   from `@mediaType`, else `application/octet-stream` / `text/plain`),
+//! - `@httpPayload` — the body IS that member: blob/string raw,
 //!   structure/union/document through the codec.
 //! - everything else — forwarded to the codec body serializer.
 //!
-//! Non-REST protocols never enter this module: they serialize body-only.
+//! The response `Content-Type` is not decided here: it is the protocol's policy, derived from
+//! the schema alone. Non-REST protocols serialize body-only through the same entry point.
 
 use std::cell::{Cell, RefCell};
 
@@ -29,27 +29,10 @@ use aws_smithy_types::{BigDecimal, BigInteger, DateTime, Document};
 
 type CapturedHeaders = RefCell<Vec<(http::HeaderName, http::HeaderValue)>>;
 
-const DEFAULT_STRING_PAYLOAD_CONTENT_TYPE: &str = "text/plain";
-const DEFAULT_BLOB_PAYLOAD_CONTENT_TYPE: &str = "application/octet-stream";
-
-/// How the response body was produced, which determines the `Content-Type`.
-#[derive(Debug)]
-pub(crate) enum BodyKind {
-    /// Codec-framed document body: the protocol's content type applies.
-    /// (Structure/union/document `@httpPayload` bodies are codec-framed too.)
-    Codec,
-    /// Raw `@httpPayload` bytes with a payload-derived content type.
-    Raw { content_type: String },
-    /// An `@httpPayload` member was modeled but unset: empty body, no
-    /// content type.
-    Empty,
-}
-
 /// The pieces of a serialized response body, before assembly.
 #[derive(Debug)]
 pub(crate) struct ResponseParts {
     pub(crate) body: Vec<u8>,
-    pub(crate) kind: BodyKind,
     pub(crate) headers: Vec<(http::HeaderName, http::HeaderValue)>,
     /// Captured `@httpResponseCode` member value, if bound and set.
     pub(crate) status: Option<u16>,
@@ -58,9 +41,14 @@ pub(crate) struct ResponseParts {
 /// The kind of value being serialized into a response.
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum ResponseValueKind {
-    /// Successful operation output. If the shape has no body members, the HTTP
-    /// body is empty.
-    OperationOutput,
+    /// Successful operation output. With no body members the HTTP body is empty, unless
+    /// `empty_document` is set and the schema was modeled by the user (it then carries an
+    /// original name): the JSON and CBOR protocols write an empty document, `{}` or `bf ff`, for
+    /// such outputs, exactly as the legacy generated serializers do. The same flag makes an unset
+    /// structure `@httpPayload` an empty document rather than an empty body.
+    OperationOutput { empty_document: bool },
+    /// The head of a streaming output: bound members only, nothing is written to the body.
+    StreamingOutput,
     /// Modeled error. Even an empty error structure is serialized through the
     /// protocol codec, for example `{}` on restJson1.
     ModeledError,
@@ -88,7 +76,7 @@ pub(crate) fn has_response_bound_members(schema: &Schema<'_>) -> bool {
 }
 
 /// Serializes `value` against `schema` through `codec` into HTTP response
-/// parts, compiling the plan on the spot.
+/// parts, deriving the plan from the schema on the spot.
 pub(crate) fn serialize_response_parts<C: Codec>(
     codec: &C,
     schema: &Schema<'_>,
@@ -100,7 +88,7 @@ pub(crate) fn serialize_response_parts<C: Codec>(
     serialize_response_parts_compiled(codec, schema, value, &plan)
 }
 
-/// The response serialization strategy selected once while compiling an operation.
+/// The response serialization strategy, derived from the schema for each response.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ResponseStrategy {
     Empty,
@@ -123,14 +111,10 @@ enum ResponseMemberPlan {
     },
     Status,
     Payload {
-        content_type: PayloadContentType,
+        /// Blob and string payloads are captured as raw bytes; structure, union and document
+        /// payloads are codec documents.
+        raw: bool,
     },
-}
-
-#[derive(Debug, Clone)]
-enum PayloadContentType {
-    Codec,
-    Raw(String),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -144,29 +128,35 @@ enum HeaderTimestampFormat {
 pub(crate) struct CompiledResponsePlan {
     strategy: ResponseStrategy,
     members: Box<[ResponseMemberPlan]>,
+    /// An unset structure `@httpPayload` is written as the codec's empty document.
+    unset_structure_payload_is_document: bool,
 }
 
 impl CompiledResponsePlan {
-    pub(crate) fn operation_output(schema: &Schema<'_>) -> Self {
-        Self::compile(schema, ResponseBindings::Rest, ResponseValueKind::OperationOutput)
-    }
-
     fn compile(schema: &Schema<'_>, bindings: ResponseBindings, value_kind: ResponseValueKind) -> Self {
         let has_bindings = bindings == ResponseBindings::Rest && has_response_bound_members(schema);
-        let strategy =
-            if matches!(value_kind, ResponseValueKind::OperationOutput) && !has_output_body_members(schema, bindings) {
-                if has_bindings {
-                    ResponseStrategy::BindingsOnly
-                } else {
-                    ResponseStrategy::Empty
-                }
-            } else if !has_bindings {
-                ResponseStrategy::CodecBody
-            } else if schema.members().iter().any(|member| member.http_payload().is_some()) {
-                ResponseStrategy::Payload
+        let writes_body = match value_kind {
+            ResponseValueKind::ModeledError => true,
+            ResponseValueKind::StreamingOutput => false,
+            ResponseValueKind::OperationOutput { empty_document } => {
+                has_output_body_members(schema, bindings) || (empty_document && schema.original_name().is_some())
+            }
+        };
+        let unset_structure_payload_is_document =
+            matches!(value_kind, ResponseValueKind::OperationOutput { empty_document: true });
+        let strategy = if !writes_body {
+            if has_bindings {
+                ResponseStrategy::BindingsOnly
             } else {
-                ResponseStrategy::SplitBody
-            };
+                ResponseStrategy::Empty
+            }
+        } else if !has_bindings {
+            ResponseStrategy::CodecBody
+        } else if schema.members().iter().any(|member| member.http_payload().is_some()) {
+            ResponseStrategy::Payload
+        } else {
+            ResponseStrategy::SplitBody
+        };
         let members = if matches!(
             strategy,
             ResponseStrategy::BindingsOnly | ResponseStrategy::SplitBody | ResponseStrategy::Payload
@@ -187,7 +177,11 @@ impl CompiledResponsePlan {
         } else {
             Box::new([])
         };
-        Self { strategy, members }
+        Self {
+            strategy,
+            members,
+            unset_structure_payload_is_document,
+        }
     }
 
     fn member(&self, schema: &Schema<'_>) -> &ResponseMemberPlan {
@@ -229,17 +223,11 @@ fn compile_member_plan(schema: &Schema<'_>, bindings: ResponseBindings) -> Respo
         };
     }
     if schema.http_payload().is_some() {
-        let modeled = schema.media_type().map(|value| value.value());
-        let content_type = match schema.shape_type() {
-            aws_smithy_schema::ShapeType::String => {
-                PayloadContentType::Raw(modeled.unwrap_or(DEFAULT_STRING_PAYLOAD_CONTENT_TYPE).to_string())
-            }
-            aws_smithy_schema::ShapeType::Blob => {
-                PayloadContentType::Raw(modeled.unwrap_or(DEFAULT_BLOB_PAYLOAD_CONTENT_TYPE).to_string())
-            }
-            _ => PayloadContentType::Codec,
-        };
-        return ResponseMemberPlan::Payload { content_type };
+        let raw = matches!(
+            schema.shape_type(),
+            aws_smithy_schema::ShapeType::String | aws_smithy_schema::ShapeType::Blob
+        );
+        return ResponseMemberPlan::Payload { raw };
     }
     ResponseMemberPlan::Body
 }
@@ -271,7 +259,6 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
         }
         return Ok(ResponseParts {
             body: Vec::new(),
-            kind: BodyKind::Empty,
             headers: headers.into_inner(),
             status: status.get(),
         });
@@ -282,7 +269,6 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
         serializer.write_struct(schema, value)?;
         return Ok(ResponseParts {
             body: serializer.finish(),
-            kind: BodyKind::Codec,
             headers: Vec::new(),
             status: None,
         });
@@ -325,27 +311,28 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
         body_serializer.finish()
     };
 
-    let (body, kind) = if has_payload_member {
+    // An unset payload member is an empty body, except an unset structure payload on the protocols
+    // whose legacy serializers write the codec's empty document for it (`{}` on restJson1).
+    let body = if has_payload_member {
         match payload.into_inner() {
-            // A payload-derived content type means raw bytes; `None` means
-            // the payload was codec-serialized (structure/union/document).
-            Some(CapturedPayload {
-                bytes,
-                content_type: Some(content_type),
-            }) => (bytes, BodyKind::Raw { content_type }),
-            Some(CapturedPayload {
-                bytes,
-                content_type: None,
-            }) => (bytes, BodyKind::Codec),
-            None => (Vec::new(), BodyKind::Empty),
+            Some(payload) => payload.bytes,
+            None if plan.unset_structure_payload_is_document
+                && schema.members().iter().any(|m| {
+                    m.http_payload().is_some() && m.shape_type() == aws_smithy_schema::ShapeType::Structure
+                }) =>
+            {
+                let mut serializer = codec.create_serializer();
+                serializer.write_struct(schema, &EmptyDocument)?;
+                serializer.finish()
+            }
+            None => Vec::new(),
         }
     } else {
-        (body, BodyKind::Codec)
+        body
     };
 
     Ok(ResponseParts {
         body,
-        kind,
         headers: headers.into_inner(),
         status: status.get(),
     })
@@ -361,12 +348,18 @@ pub(crate) fn has_output_body_members(schema: &Schema<'_>, bindings: ResponseBin
         .any(|m| m.http_header().is_none() && m.http_prefix_headers().is_none() && m.http_response_code().is_none())
 }
 
+/// Writes no members: the codec's empty document.
+struct EmptyDocument;
+
+impl SerializableStruct for EmptyDocument {
+    fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+        Ok(())
+    }
+}
+
 /// A captured `@httpPayload` member value.
 struct CapturedPayload {
     bytes: Vec<u8>,
-    /// `Some` = payload-derived content type; `None` = the protocol's codec
-    /// content type applies (structure/union/document payloads).
-    content_type: Option<String>,
 }
 
 /// Wrapper diverting bound top-level members into their sinks while
@@ -493,8 +486,8 @@ impl<C: Codec> ResponseBindingSplitter<'_, C> {
         Ok(())
     }
 
-    fn capture_payload(&self, bytes: Vec<u8>, content_type: Option<String>) {
-        *self.payload.borrow_mut() = Some(CapturedPayload { bytes, content_type });
+    fn capture_payload(&self, bytes: Vec<u8>) {
+        *self.payload.borrow_mut() = Some(CapturedPayload { bytes });
     }
 }
 
@@ -534,7 +527,7 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
             // the body — serialize it standalone through the codec.
             let mut serializer = self.codec.create_serializer();
             serializer.write_struct(schema, value)?;
-            self.capture_payload(serializer.finish(), None);
+            self.capture_payload(serializer.finish());
             return Ok(());
         }
         // `@httpHeader` / `@httpResponseCode` cannot target structures.
@@ -604,11 +597,8 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
     }
 
     fn write_string(&mut self, schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
-        if let ResponseMemberPlan::Payload {
-            content_type: PayloadContentType::Raw(content_type),
-        } = self.plan.member(schema)
-        {
-            self.capture_payload(value.as_bytes().to_vec(), Some(content_type.clone()));
+        if let ResponseMemberPlan::Payload { raw: true } = self.plan.member(schema) {
+            self.capture_payload(value.as_bytes().to_vec());
             return Ok(());
         }
         if let ResponseMemberPlan::Header { name, media_type, .. } = self.plan.member(schema) {
@@ -623,11 +613,8 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
     }
 
     fn write_blob(&mut self, schema: &Schema<'_>, value: aws_smithy_types::Blob) -> Result<(), SerdeError> {
-        if let ResponseMemberPlan::Payload {
-            content_type: PayloadContentType::Raw(content_type),
-        } = self.plan.member(schema)
-        {
-            self.capture_payload(value.into_inner(), Some(content_type.clone()));
+        if let ResponseMemberPlan::Payload { raw: true } = self.plan.member(schema) {
+            self.capture_payload(value.into_inner());
             return Ok(());
         }
         if let ResponseMemberPlan::Header { name, .. } = self.plan.member(schema) {
@@ -655,7 +642,7 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
             // make the codec emit a `"memberName":` key fragment.
             let mut serializer = self.codec.create_serializer();
             serializer.write_document(&aws_smithy_schema::prelude::DOCUMENT, value)?;
-            self.capture_payload(serializer.finish(), None);
+            self.capture_payload(serializer.finish());
             return Ok(());
         }
         self.body.write_document(schema, value)
@@ -913,7 +900,6 @@ mod tests {
         )
         .unwrap();
         assert_eq!(split.status, Some(202));
-        assert!(matches!(split.kind, BodyKind::Codec));
         assert_eq!(String::from_utf8(split.body.clone()).unwrap(), r#"{"msg":"hello"}"#);
         let headers: Vec<(String, String)> = split
             .headers
@@ -962,32 +948,48 @@ mod tests {
         }
     }
 
+    static MODELED_EMPTY_OUT_SCHEMA: Schema<'static> = Schema::new_struct(
+        ShapeId::from_parts("test#ModeledEmptyOut", "test", "ModeledEmptyOut"),
+        ShapeType::Structure,
+        &[],
+    )
+    .with_original_name("ModeledEmptyOut");
+
+    const OUTPUT: ResponseValueKind = ResponseValueKind::OperationOutput { empty_document: true };
+
+    fn output_plan(schema: &Schema<'_>) -> CompiledResponsePlan {
+        CompiledResponsePlan::compile(schema, ResponseBindings::Rest, OUTPUT)
+    }
+
     #[test]
     fn empty_success_outputs_are_not_codec_serialized() {
         let codec = json_codec();
 
-        let split = serialize_response_parts(
-            &codec,
-            &EMPTY_OUT_SCHEMA,
-            &EmptyOut,
-            ResponseBindings::Rest,
-            ResponseValueKind::OperationOutput,
-        )
-        .unwrap();
+        let split =
+            serialize_response_parts(&codec, &EMPTY_OUT_SCHEMA, &EmptyOut, ResponseBindings::Rest, OUTPUT).unwrap();
         assert!(split.body.is_empty());
-        assert!(matches!(split.kind, BodyKind::Empty));
         assert_eq!(resolve_status(split.status, EMPTY_OUT_SCHEMA.http()), 204);
 
+        let split =
+            serialize_response_parts(&codec, &EMPTY_OUT_SCHEMA, &EmptyOut, ResponseBindings::BodyOnly, OUTPUT).unwrap();
+        assert!(split.body.is_empty());
+
+        // A user-modeled empty output is an empty document when the protocol asks for one, on
+        // both binding styles, and an empty body when it does not (restXml).
+        for bindings in [ResponseBindings::Rest, ResponseBindings::BodyOnly] {
+            let split =
+                serialize_response_parts(&codec, &MODELED_EMPTY_OUT_SCHEMA, &EmptyOut, bindings, OUTPUT).unwrap();
+            assert_eq!(String::from_utf8(split.body).unwrap(), "{}");
+        }
         let split = serialize_response_parts(
             &codec,
-            &EMPTY_OUT_SCHEMA,
+            &MODELED_EMPTY_OUT_SCHEMA,
             &EmptyOut,
-            ResponseBindings::BodyOnly,
-            ResponseValueKind::OperationOutput,
+            ResponseBindings::Rest,
+            ResponseValueKind::OperationOutput { empty_document: false },
         )
         .unwrap();
         assert!(split.body.is_empty());
-        assert!(matches!(split.kind, BodyKind::Empty));
 
         // Empty modeled errors still go through the normal codec path.
         let split = serialize_response_parts(
@@ -998,24 +1000,70 @@ mod tests {
             ResponseValueKind::ModeledError,
         )
         .unwrap();
-        assert!(matches!(split.kind, BodyKind::Codec));
         assert_eq!(String::from_utf8(split.body).unwrap(), "{}");
+    }
+
+    static EVENTS_MEMBER: Schema<'static> = Schema::new_member(
+        ShapeId::from_parts("test#StreamOut$events", "test", "StreamOut"),
+        ShapeType::Union,
+        "events",
+        0,
+    )
+    .with_http_payload()
+    .with_streaming();
+    static STREAM_MEMBERS: [&Schema<'static>; 3] = [&EVENTS_MEMBER, &CODE_MEMBER, &HDR_MEMBER];
+    static STREAM_OUT_SCHEMA: Schema<'static> = Schema::new_struct(
+        ShapeId::from_parts("test#StreamOut", "test", "StreamOut"),
+        ShapeType::Structure,
+        &STREAM_MEMBERS,
+    );
+
+    struct StreamOut;
+    impl SerializableStruct for StreamOut {
+        fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+            // Generated outputs skip their streaming member.
+            s.write_integer(&CODE_MEMBER, 202)?;
+            s.write_string(&HDR_MEMBER, "hval")
+        }
+    }
+
+    #[test]
+    fn streaming_outputs_write_bindings_only() {
+        let codec = json_codec();
+        let split = serialize_response_parts(
+            &codec,
+            &STREAM_OUT_SCHEMA,
+            &StreamOut,
+            ResponseBindings::Rest,
+            ResponseValueKind::StreamingOutput,
+        )
+        .unwrap();
+        assert!(split.body.is_empty());
+        assert_eq!(split.status, Some(202));
+        assert!(split.headers.iter().any(|(name, _)| name == "x-hdr"));
+
+        // Body-only protocols write nothing at all for the head.
+        let split = serialize_response_parts(
+            &codec,
+            &STREAM_OUT_SCHEMA,
+            &StreamOut,
+            ResponseBindings::BodyOnly,
+            ResponseValueKind::StreamingOutput,
+        )
+        .unwrap();
+        assert!(split.body.is_empty());
+        assert!(split.headers.is_empty());
     }
 
     #[test]
     fn response_plan_is_compiled_from_top_level_bindings() {
+        assert_eq!(output_plan(&EMPTY_OUT_SCHEMA).strategy, ResponseStrategy::Empty);
         assert_eq!(
-            CompiledResponsePlan::operation_output(&EMPTY_OUT_SCHEMA).strategy,
-            ResponseStrategy::Empty
+            output_plan(&MODELED_EMPTY_OUT_SCHEMA).strategy,
+            ResponseStrategy::CodecBody
         );
-        assert_eq!(
-            CompiledResponsePlan::operation_output(&OUT_SCHEMA).strategy,
-            ResponseStrategy::SplitBody
-        );
-        assert_eq!(
-            CompiledResponsePlan::operation_output(&BLOB_OUT_SCHEMA).strategy,
-            ResponseStrategy::Payload
-        );
+        assert_eq!(output_plan(&OUT_SCHEMA).strategy, ResponseStrategy::SplitBody);
+        assert_eq!(output_plan(&BLOB_OUT_SCHEMA).strategy, ResponseStrategy::Payload);
 
         static HEADER_MEMBERS: [&Schema<'static>; 1] = [&HDR_MEMBER];
         static HEADER_ONLY: Schema<'static> = Schema::new_struct(
@@ -1029,14 +1077,8 @@ mod tests {
             ShapeType::Structure,
             &BODY_MEMBERS,
         );
-        assert_eq!(
-            CompiledResponsePlan::operation_output(&HEADER_ONLY).strategy,
-            ResponseStrategy::BindingsOnly
-        );
-        assert_eq!(
-            CompiledResponsePlan::operation_output(&BODY_ONLY).strategy,
-            ResponseStrategy::CodecBody
-        );
+        assert_eq!(output_plan(&HEADER_ONLY).strategy, ResponseStrategy::BindingsOnly);
+        assert_eq!(output_plan(&BODY_ONLY).strategy, ResponseStrategy::CodecBody);
     }
 
     #[test]
@@ -1056,7 +1098,7 @@ mod tests {
             &MEMBERS,
         );
 
-        let _ = CompiledResponsePlan::operation_output(&OUTPUT);
+        let _ = output_plan(&OUTPUT);
     }
 
     // ------------------------------------------------------------------
@@ -1090,7 +1132,7 @@ mod tests {
 
     #[test]
     fn payload_bodies() {
-        // Blob payload: raw bytes, content type from @mediaType.
+        // Blob payload: raw bytes.
         let codec = json_codec();
         let split = serialize_response_parts(
             &codec,
@@ -1101,12 +1143,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(split.body, vec![1, 2, 3]);
-        match split.kind {
-            BodyKind::Raw { content_type } => assert_eq!(content_type, "image/png"),
-            other => panic!("expected raw body, got {other:?}"),
-        }
 
-        // Unset payload member: empty body, no content type.
+        // Unset payload member: empty body.
         let split = serialize_response_parts(
             &codec,
             &BLOB_OUT_SCHEMA,
@@ -1116,7 +1154,27 @@ mod tests {
         )
         .unwrap();
         assert!(split.body.is_empty());
-        assert!(matches!(split.kind, BodyKind::Empty));
+
+        // An unset structure payload is the codec's empty document where the protocol asks for
+        // one (restJson1's legacy serializer writes `{}`), an empty body elsewhere.
+        struct Unset;
+        impl SerializableStruct for Unset {
+            fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                Ok(())
+            }
+        }
+        let split =
+            serialize_response_parts(&codec, &STRUCT_OUT_SCHEMA, &Unset, ResponseBindings::Rest, OUTPUT).unwrap();
+        assert_eq!(String::from_utf8(split.body).unwrap(), "{}");
+        let split = serialize_response_parts(
+            &codec,
+            &STRUCT_OUT_SCHEMA,
+            &Unset,
+            ResponseBindings::Rest,
+            ResponseValueKind::OperationOutput { empty_document: false },
+        )
+        .unwrap();
+        assert!(split.body.is_empty());
 
         // Structure payload (written against its TARGET schema, the codegen
         // convention): the body is the codec document of that member alone.
@@ -1128,7 +1186,6 @@ mod tests {
             ResponseValueKind::ModeledError,
         )
         .unwrap();
-        assert!(matches!(split.kind, BodyKind::Codec));
         assert_eq!(String::from_utf8(split.body).unwrap(), r#"{"f":"v"}"#);
     }
 

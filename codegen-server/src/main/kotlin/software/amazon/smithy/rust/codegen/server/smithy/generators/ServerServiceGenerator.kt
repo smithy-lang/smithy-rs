@@ -34,6 +34,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestJsonProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestXmlProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRpcV2CborProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.schemaProtocolStruct
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Error as ErrorModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Input as InputModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Output as OutputModule
@@ -89,20 +90,27 @@ class ServerServiceGenerator(
         }
 
     private fun schemaProtocol(): RuntimeType =
-        when (protocol) {
-            is ServerRestJsonProtocol -> smithyHttpServer.resolve("protocol::rest_json_1::RestJson1Protocol")
-            is ServerRestXmlProtocol -> smithyHttpServer.resolve("protocol::rest_xml::RestXmlProtocol")
-            is ServerAwsJsonProtocol ->
-                smithyHttpServer.resolve(
-                    if (protocol.protocolModulePath == "aws_json_10") {
-                        "protocol::aws_json_10::AwsJson1_0Protocol"
-                    } else {
-                        "protocol::aws_json_11::AwsJson1_1Protocol"
-                    },
-                )
-            is ServerRpcV2CborProtocol -> smithyHttpServer.resolve("protocol::rpc_v2_cbor::RpcV2CborProtocol")
-            else -> protocol.markerStruct()
+        schemaProtocolStruct(codegenContext.protocol, runtimeConfig) ?: protocol.markerStruct()
+
+    /**
+     * Builds the erased protocol handle once per service; every `SchemaRoute` pairs a clone of it with
+     * the routed operation's schema.
+     */
+    private fun schemaProtocolHandle(): String =
+        if (schemaRest) {
+            "let protocol: ::std::sync::Arc<dyn #{SmithyHttpServer}::schema::ServerProtocol> = ::std::sync::Arc::new(#{SchemaProtocol}::default());"
+        } else {
+            ""
         }
+
+    /** The `SelectedProtocolOperation` a `SchemaRoute` records for [operationShape]. */
+    private fun RustWriter.renderSchemaRouteSelection(operationShape: OperationShape) {
+        val opName = operationStructNames.getValue(operationShape)
+        rustTemplate(
+            ", #{SmithyHttpServer}::schema::SelectedProtocolOperation::new(protocol.clone(), <crate::operation_shape::$opName as #{SmithyHttpServer}::operation::SchemaOperationShape>::SCHEMA))",
+            *codegenScope,
+        )
+    }
 
     /** Calculate all `operationShape`s contained within the `ServiceShape`. */
     private val index = TopDownIndex.of(codegenContext.model)
@@ -415,8 +423,7 @@ class ServerServiceGenerator(
                             if (schemaRest) rustTemplate("#{SmithyHttpServer}::routing::SchemaRoute::new(", *codegenScope)
                             rust("$accessor.expect($expectMessageVariableName)")
                             if (schemaRest) {
-                                val opName = operationStructNames.getValue(operationShape)
-                                rust(", protocol_table.select(<crate::operation_shape::$opName as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA.shape_id()).expect(\"operation is in service schema\"))")
+                                renderSchemaRouteSelection(operationShape)
                             }
                         }
                     }
@@ -456,7 +463,7 @@ class ServerServiceGenerator(
 
                         #{PatternInitializations:W}
 
-                        ${if (schemaRest) "let protocol_table = #{SmithyHttpServer}::schema::ProtocolRoutingTable::new(#{SchemaProtocol}::default(), &crate::schema::service::${serviceId.name.toSnakeCase().uppercase()});" else ""}
+                        ${schemaProtocolHandle()}
 
                         #{Router}::from_iter([#{RoutesArrayElements:W}])
                     };
@@ -522,8 +529,7 @@ class ServerServiceGenerator(
                                 "Protocol" to protocol.markerStruct(),
                             )
                             if (schemaRest) {
-                                val opName = operationStructNames.getValue(operationShape)
-                                rust(", protocol_table.select(<crate::operation_shape::$opName as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA.shape_id()).expect(\"operation is in service schema\"))")
+                                renderSchemaRouteSelection(operationShape)
                             }
                         }
                     }
@@ -542,7 +548,7 @@ class ServerServiceGenerator(
                         #{SmithyHttpServer}::routing::${if (schemaRest) "SchemaRoutingService" else "RoutingService"}<#{Router}<#{SmithyHttpServer}::routing::${if (schemaRest) "SchemaRoute<Body>" else "Route<Body>"}>, #{Protocol}>
                     >
                 {
-                    ${if (schemaRest) "let protocol_table = #{SmithyHttpServer}::schema::ProtocolRoutingTable::new(#{SchemaProtocol}::default(), &crate::schema::service::${serviceId.name.toSnakeCase().uppercase()});" else ""}
+                    ${schemaProtocolHandle()}
                     let router = #{Router}::from_iter([#{Pairs:W}]);
                     let svc = self
                         .layer

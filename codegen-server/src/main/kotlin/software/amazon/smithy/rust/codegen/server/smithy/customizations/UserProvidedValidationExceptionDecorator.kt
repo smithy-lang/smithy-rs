@@ -225,7 +225,8 @@ class UserProvidedValidationExceptionConversionGenerator(
 
     override val shapeId: ShapeId = SHAPE_ID
 
-    override fun validationExceptionSymbol(): Symbol = codegenContext.symbolProvider.toSymbol(validationExceptionStructure)
+    override fun validationExceptionSymbol(): Symbol =
+        codegenContext.symbolProvider.toSymbol(validationExceptionStructure)
 
     override fun renderImplFromConstraintViolationForRequestRejection(protocol: ServerProtocol): Writable =
         writable {

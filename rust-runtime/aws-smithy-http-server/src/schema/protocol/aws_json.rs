@@ -7,9 +7,12 @@
 //! the content type and in whether the `__type` discriminator is the full shape ID or the name.
 
 use aws_smithy_json::codec::JsonCodec;
+use aws_smithy_runtime_api::http::Headers;
+use aws_smithy_schema::codec::DynCodec;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
-use aws_smithy_schema::{shape_id, ShapeId};
+use aws_smithy_schema::{shape_id, Schema, ShapeId};
 
+use crate::body::BoxBody;
 use crate::protocol::aws_json::rejection::RequestRejection;
 use crate::protocol::aws_json::runtime_error::RuntimeError;
 use crate::protocol::aws_json_10::{AwsJson1_0, AwsJson1_0Protocol};
@@ -22,8 +25,7 @@ use super::response::{
     log_serialize_failure, serialize_modeled_error_response, stamp_error_extension, stamp_validation_extension,
     ResponseBindings,
 };
-use super::rpc::RpcProtocolProvider;
-use super::{CompiledOperation, RpcOperationState, ServerProtocol, ServerRequest};
+use super::{ServerProtocol, ServerRequest};
 
 fn serialize_error<P>(
     codec: &JsonCodec,
@@ -58,53 +60,60 @@ where
 
 macro_rules! aws_json_protocol {
     ($protocol:ty, $marker:ty, $protocol_id:expr, $content_type:literal, $type_value:expr) => {
-        impl RpcProtocolProvider for $protocol {
-            type RpcCodec = JsonCodec;
-
-            fn rpc_protocol(&self) -> &super::rpc::RpcProtocol<JsonCodec> {
-                &self.inner
-            }
-        }
-
         impl ServerProtocol for $protocol {
-            type Codec = JsonCodec;
-            type OperationState = RpcOperationState;
-
             fn protocol_id(&self) -> &'static ShapeId<'static> {
                 static PROTOCOL_ID: ShapeId<'static> = $protocol_id;
                 &PROTOCOL_ID
             }
 
-            fn codec(&self) -> &JsonCodec {
+            fn payload_codec(&self) -> &dyn DynCodec {
                 self.inner.codec()
             }
 
-            fn reads_request_body(&self, operation: &CompiledOperation<RpcOperationState>) -> bool {
-                operation.state().reads_body()
+            fn event_stream_media_type(&self) -> Option<&str> {
+                Some("application/json")
+            }
+
+            fn initial_messages_in_frames(&self) -> bool {
+                true
+            }
+
+            fn check_accept(&self, output: &Schema<'_>, headers: &Headers) -> Result<(), DeserializeError> {
+                self.inner.check_accept(output, headers)
+            }
+
+            fn reads_request_body(&self, input: &Schema<'_>) -> bool {
+                self.inner.reads_request_body(input)
             }
 
             fn deserialize_request<'a>(
                 &'a self,
-                operation: &'a CompiledOperation<RpcOperationState>,
+                input: &Schema<'_>,
                 request: &'a ServerRequest,
             ) -> Result<Box<dyn ShapeDeserializer + 'a>, DeserializeError> {
-                self.inner
-                    .deserialize_request(operation.state(), operation.schema().input(), request)
+                self.inner.deserialize_request(input, request)
             }
 
-            fn serialize_response(
+            fn serialize_response(&self, output: &Schema<'_>, value: &dyn SerializableStruct) -> Response {
+                self.inner
+                    .serialize_response(output, value)
+                    .unwrap_or_else(serialization_failure::<$marker>)
+            }
+
+            fn serialize_streaming_response(
                 &self,
-                operation: &CompiledOperation<RpcOperationState>,
-                output: &dyn SerializableStruct,
+                output: &Schema<'_>,
+                value: &dyn SerializableStruct,
+                body: BoxBody,
             ) -> Response {
                 self.inner
-                    .serialize_response(operation.schema(), output)
+                    .serialize_streaming_response(output, value, body)
                     .unwrap_or_else(serialization_failure::<$marker>)
             }
 
             fn serialize_error(&self, error: &dyn HttpModeledError) -> Response {
                 serialize_error::<$marker>(
-                    self.codec(),
+                    self.inner.codec(),
                     error,
                     $content_type,
                     BodyDiscriminator {
@@ -114,8 +123,8 @@ macro_rules! aws_json_protocol {
                 )
             }
 
-            /// awsJson's `From<RequestRejection>` collapses every transport failure — `Accept`
-            /// and `Content-Type` mismatches included — into a 400 `Serialization`; routing
+            /// awsJson's `From<RequestRejection>` collapses every transport failure, `Accept`
+            /// and `Content-Type` mismatches included, into a 400 `Serialization`; routing
             /// through that same `From` preserves the collapse. A constraint violation answers
             /// with the modeled validation error.
             fn serialize_rejection(&self, err: DeserializeError) -> Response {

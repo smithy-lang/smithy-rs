@@ -24,7 +24,7 @@ use crate::{
     runtime_error::InternalFailureException,
     schema::{
         collect_request_body, DeserializableShape, DeserializeError, RequestBodyCollectionConfig,
-        SelectedProtocolOperation, ServerRequest,
+        SelectedProtocolOperation, ServerProtocol, ServerRequest,
     },
     service::ServiceShape,
 };
@@ -46,16 +46,16 @@ pub struct DynProtocol;
 
 /// Converts a generated operation error enum using the protocol selected by routing.
 pub trait IntoDynResponse {
-    fn into_dyn_response(self, protocol: &dyn crate::schema::DynServerProtocol) -> http::Response<BoxBody>;
+    fn into_dyn_response(self, protocol: &dyn ServerProtocol) -> http::Response<BoxBody>;
 }
 
 impl IntoDynResponse for Infallible {
-    fn into_dyn_response(self, _protocol: &dyn crate::schema::DynServerProtocol) -> http::Response<BoxBody> {
+    fn into_dyn_response(self, _protocol: &dyn ServerProtocol) -> http::Response<BoxBody> {
         match self {}
     }
 }
 
-/// Schema-driven, protocol-neutral HTTP upgrade plugin.
+/// Schema-driven, protocol-neutral HTTP upgrade plugin for operations without streaming members.
 #[derive(Debug, Clone)]
 pub struct DynUpgradePlugin<Extractors> {
     config: RequestBodyCollectionConfig,
@@ -88,6 +88,10 @@ where
 }
 
 /// Upgrade service for a non-streaming schema operation.
+///
+/// The body is collected under the operation's [`RequestBodyCollectionConfig`] when the selected
+/// protocol asks for it, the input is read through the erased protocol handle from the request
+/// extensions, and the output or error is serialized through the same handle.
 pub struct DynUpgrade<Op, Extractors, S> {
     config: RequestBodyCollectionConfig,
     _operation: PhantomData<Op>,
@@ -104,6 +108,30 @@ impl<Op, Extractors, S: Clone> Clone for DynUpgrade<Op, Extractors, S> {
             inner: self.inner.clone(),
         }
     }
+}
+
+/// Reads the routed operation out of the request extensions and checks it is `Op`.
+pub(crate) fn selected_operation<Op: SchemaOperationShape>(
+    extensions: &http::Extensions,
+) -> Option<SelectedProtocolOperation> {
+    let Some(selected) = extensions.get::<SelectedProtocolOperation>().cloned() else {
+        error!("selected protocol operation missing from request extensions");
+        return None;
+    };
+    if !std::ptr::eq(selected.operation(), Op::SCHEMA) {
+        error!("selected protocol operation is incompatible with the routed operation");
+        return None;
+    }
+    Some(selected)
+}
+
+/// Converts the HTTP parts and body into the runtime-api request the protocols read.
+pub(crate) fn convert_request<B>(
+    parts: http::request::Parts,
+    body: B,
+) -> Result<aws_smithy_runtime_api::http::Request<B>, DeserializeError> {
+    aws_smithy_runtime_api::http::Request::try_from(http::Request::from_parts(parts, body))
+        .map_err(|err| DeserializeError::Serde(aws_smithy_schema::serde::SerdeError::custom(err.to_string())))
 }
 
 impl<Op, Extractors, B, S> Service<http::Request<B>> for DynUpgrade<Op, Extractors, S>
@@ -134,38 +162,31 @@ where
         let config = self.config;
         Box::pin(async move {
             let (mut parts, body) = req.into_parts();
-            let Some(selected) = parts.extensions.get::<SelectedProtocolOperation>().cloned() else {
-                error!("selected protocol operation missing from request extensions");
+            let Some(selected) = selected_operation::<Op>(&parts.extensions) else {
                 return Ok(empty_internal_server_error());
             };
-            if !std::ptr::eq(selected.operation().schema(), Op::SCHEMA)
-                || !selected.protocol().accepts_operation(&**selected.operation())
-            {
-                error!("selected protocol operation is incompatible with the routed operation");
+            let protocol = selected.protocol();
+            let operation = selected.operation();
+            if operation.input().members().iter().any(|member| member.streaming()) {
+                error!("streaming operation routed through DynUpgrade");
                 return Ok(empty_internal_server_error());
             }
             let extractors = match Extractors::from_parts(&mut parts) {
                 Ok(value) => value,
                 Err(err) => return Ok(err.into_response()),
             };
-            let converted =
-                match aws_smithy_runtime_api::http::Request::try_from(http::Request::from_parts(parts, body)) {
-                    Ok(request) => request.into_parts(),
-                    Err(err) => {
-                        return Ok(selected.protocol().serialize_rejection(DeserializeError::Serde(
-                            aws_smithy_schema::serde::SerdeError::custom(err.to_string()),
-                        )))
-                    }
-                };
-            if selected.operation().input_is_streaming() {
-                error!("streaming operation routed through DynUpgrade");
-                return Ok(empty_internal_server_error());
+            let converted = match convert_request(parts, body) {
+                Ok(request) => request.into_parts(),
+                Err(err) => return Ok(protocol.serialize_rejection(err)),
+            };
+            if let Err(err) = protocol.check_accept(operation.output(), &converted.headers) {
+                return Ok(protocol.serialize_rejection(err));
             }
-            let bytes = if selected.protocol().reads_request_body(&**selected.operation()) {
+            let bytes = if protocol.reads_request_body(operation.input()) {
                 match collect_request_body(converted.body, &config).await {
                     Ok(bytes) => bytes,
                     Err(err) => {
-                        return Ok(selected.protocol().serialize_rejection(DeserializeError::Serde(
+                        return Ok(protocol.serialize_rejection(DeserializeError::Serde(
                             aws_smithy_schema::serde::SerdeError::custom(err.to_string()),
                         )))
                     }
@@ -179,27 +200,24 @@ where
                 body: bytes,
             };
             let input = {
-                let mut deserializer = match selected
-                    .protocol()
-                    .deserialize_request(&**selected.operation(), &request)
-                {
+                let mut deserializer = match protocol.deserialize_request(operation.input(), &request) {
                     Ok(value) => value,
-                    Err(err) => return Ok(selected.protocol().serialize_rejection(err)),
+                    Err(err) => return Ok(protocol.serialize_rejection(err)),
                 };
                 match Op::Input::deserialize(&mut *deserializer) {
                     Ok(value) => value,
-                    Err(err) => return Ok(selected.protocol().serialize_rejection(err)),
+                    Err(err) => return Ok(protocol.serialize_rejection(err)),
                 }
             };
             match service.oneshot((input, extractors)).await {
-                Ok(output) => Ok(selected.protocol().serialize_response(&**selected.operation(), &output)),
-                Err(err) => Ok(err.into_dyn_response(&**selected.protocol())),
+                Ok(output) => Ok(protocol.serialize_response(operation.output(), &output)),
+                Err(err) => Ok(err.into_dyn_response(&**protocol)),
             }
         })
     }
 }
 
-fn empty_internal_server_error() -> http::Response<BoxBody> {
+pub(crate) fn empty_internal_server_error() -> http::Response<BoxBody> {
     let mut response = http::Response::new(crate::body::empty());
     *response.status_mut() = http::StatusCode::INTERNAL_SERVER_ERROR;
     response

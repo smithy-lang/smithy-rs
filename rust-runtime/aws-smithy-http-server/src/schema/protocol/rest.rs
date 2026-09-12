@@ -3,149 +3,144 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_schema::codec::Codec;
-use aws_smithy_schema::serde::{SerializableStruct, ShapeDeserializer};
-use aws_smithy_schema::{OperationSchema, Schema};
+//! The HTTP-binding engine shared by the REST protocols. Everything is derived from the input or
+//! output schema on each call; the protocol holds only its codec and its media-type policy.
 
+use aws_smithy_runtime_api::http::Headers;
+use aws_smithy_schema::codec::Codec;
+use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
+use aws_smithy_schema::{Schema, ShapeType};
+
+use crate::body::BoxBody;
 use crate::response::Response;
-use crate::schema::response_bindings::CompiledResponsePlan;
+use crate::schema::request_bindings::RestRequestDeserializer;
+use crate::schema::response_bindings::{serialize_response_parts, ResponseBindings, ResponseValueKind};
 use crate::schema::DeserializeError;
 
 use super::request::{
-    enforce_content_type, enforce_expected_accept, expected_request_content_type, expected_response_content_type,
-    is_body_member, ExpectedContentType,
+    enforce_content_type, enforce_expected_accept, expected_request_content_type, is_body_member, payload_member,
+    EVENT_STREAM_CONTENT_TYPE, OCTET_STREAM_CONTENT_TYPE,
 };
-use super::response::serialize_compiled_rest_operation_response;
-use super::{OperationState, ServerRequest};
+use super::response::{assemble_response, assemble_streaming_response, resolve_status};
+use super::ServerRequest;
+
+/// How a REST protocol labels its responses. These are the rules the legacy generated servers
+/// follow, so the schema path stays byte-identical to them.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct RestPolicy {
+    /// The codec's media type: codec-framed bodies and structured payloads.
+    pub(crate) codec_content_type: &'static str,
+    /// The response media type when nothing in the output schema determines one. restJson1
+    /// stamps `application/json` on every such response, restXml stamps nothing.
+    pub(crate) default_response_content_type: Option<&'static str>,
+    /// The response media type of a non-streaming `@httpPayload` blob without `@mediaType`.
+    /// restJson1 sets none, restXml `application/octet-stream`.
+    pub(crate) untyped_blob_payload_content_type: Option<&'static str>,
+    /// Whether the codec's empty document (`{}` on restJson1) stands in for a missing body: a
+    /// user-modeled output with no body members, or an unset structure `@httpPayload`. restXml
+    /// sends an empty body in both cases.
+    pub(crate) empty_document: bool,
+}
 
 #[derive(Debug)]
 pub(crate) struct RestProtocol<C> {
     codec: C,
-    content_type: &'static str,
+    policy: RestPolicy,
 }
 
 impl<C> RestProtocol<C> {
-    pub(crate) fn new(codec: C, content_type: &'static str) -> Self {
-        Self { codec, content_type }
+    pub(crate) fn new(codec: C, policy: RestPolicy) -> Self {
+        Self { codec, policy }
     }
 
     pub(crate) fn codec(&self) -> &C {
         &self.codec
     }
 
-    pub(crate) fn compile_operation(&self, schema: &'static OperationSchema<'static>) -> RestOperationState {
-        RestOperationState::compile(schema, self.content_type)
+    /// The `Content-Type` a response for `output` carries, if any: the runtime mirror of the
+    /// legacy `HttpBindingResolver.responseContentType`. It depends on the schema alone, never on
+    /// which members are set.
+    pub(crate) fn response_content_type<'s>(&self, output: &'s Schema<'s>) -> Option<&'s str> {
+        if let Some(payload) = payload_member(output) {
+            return match payload.shape_type() {
+                ShapeType::Union if payload.streaming() => Some(EVENT_STREAM_CONTENT_TYPE),
+                ShapeType::Structure | ShapeType::Union | ShapeType::Document => Some(self.policy.codec_content_type),
+                _ if payload.media_type().is_some() => payload.media_type().map(|m| m.value()),
+                ShapeType::Blob if payload.streaming() => Some(OCTET_STREAM_CONTENT_TYPE),
+                ShapeType::Blob => self.policy.untyped_blob_payload_content_type,
+                ShapeType::String => Some("text/plain"),
+                _ => Some(self.policy.codec_content_type),
+            };
+        }
+        if output.members().iter().any(|m| is_body_member(m)) {
+            Some(self.policy.codec_content_type)
+        } else {
+            self.policy.default_response_content_type
+        }
+    }
+
+    /// The legacy REST deserializers never touch the body when nothing is bound to it.
+    pub(crate) fn reads_request_body(&self, input: &Schema<'_>) -> bool {
+        input.members().iter().any(|m| is_body_member(m) && !m.streaming())
+    }
+
+    /// The `Accept` gate is driven by the same media type the response will carry.
+    pub(crate) fn check_accept(&self, output: &Schema<'_>, headers: &Headers) -> Result<(), DeserializeError> {
+        enforce_expected_accept(headers, self.response_content_type(output))
     }
 }
 
 impl<C: Codec> RestProtocol<C> {
     pub(crate) fn deserialize_request<'a>(
         &'a self,
-        state: &'a RestOperationState,
+        input: &Schema<'_>,
         request: &'a ServerRequest,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, DeserializeError> {
-        enforce_expected_accept(&request.headers, state.expected_response_type.as_ref())?;
-        enforce_content_type(&request.headers, &state.expected_request_content_type, &request.body)?;
-        Ok(Box::new(crate::schema::request_bindings::RestRequestDeserializer::new(
+        enforce_content_type(
+            &request.headers,
+            &expected_request_content_type(input, self.policy.codec_content_type),
+            &request.body,
+        )?;
+        Ok(Box::new(RestRequestDeserializer::new(
             &self.codec,
             &request.uri,
             &request.headers,
             &request.body,
-            state,
         )))
     }
 
     pub(crate) fn serialize_response(
         &self,
-        operation: &OperationSchema<'_>,
-        state: &RestOperationState,
-        output: &dyn SerializableStruct,
-    ) -> Result<Response, aws_smithy_schema::serde::SerdeError> {
-        serialize_compiled_rest_operation_response(
+        output: &Schema<'_>,
+        value: &dyn SerializableStruct,
+    ) -> Result<Response, SerdeError> {
+        let parts = serialize_response_parts(
             &self.codec,
-            operation,
             output,
-            self.content_type,
-            None,
-            &state.response,
-            state.default_status,
-        )
+            value,
+            ResponseBindings::Rest,
+            ResponseValueKind::OperationOutput {
+                empty_document: self.policy.empty_document,
+            },
+        )?;
+        let status = parts.status.unwrap_or_else(|| resolve_status(None, output.http()));
+        assemble_response(parts, status, self.response_content_type(output))
+    }
+
+    pub(crate) fn serialize_streaming_response(
+        &self,
+        output: &Schema<'_>,
+        value: &dyn SerializableStruct,
+        body: BoxBody,
+    ) -> Result<Response, SerdeError> {
+        let parts = serialize_response_parts(
+            &self.codec,
+            output,
+            value,
+            ResponseBindings::Rest,
+            ResponseValueKind::StreamingOutput,
+        )?;
+        let status = parts.status.unwrap_or_else(|| resolve_status(None, output.http()));
+        assemble_streaming_response(parts, status, self.response_content_type(output), body)
     }
 }
-
-pub(crate) trait RestProtocolProvider {
-    type RestCodec: Codec + Send + Sync + std::fmt::Debug + 'static;
-    fn rest_protocol(&self) -> &RestProtocol<Self::RestCodec>;
-}
-
-#[derive(Debug)]
-pub struct RestOperationState {
-    reads_body: bool,
-    request_payload: Option<&'static Schema<'static>>,
-    response_payload: Option<&'static Schema<'static>>,
-    expected_request_content_type: ExpectedContentType,
-    expected_response_type: Option<mime::Mime>,
-    response: CompiledResponsePlan,
-    uri_template: Option<&'static str>,
-    has_labels: bool,
-    needs_query: bool,
-    has_unbound_members: bool,
-    default_status: u16,
-}
-
-impl RestOperationState {
-    fn compile(operation: &'static OperationSchema<'static>, content_type: &'static str) -> Self {
-        let input = operation.input();
-        let output = operation.output();
-        let request_payload = input.members().iter().copied().find(|m| m.http_payload().is_some());
-        let response_payload = output.members().iter().copied().find(|m| m.http_payload().is_some());
-        let has_unbound_members = input
-            .members()
-            .iter()
-            .any(|m| m.http_payload().is_none() && is_body_member(m));
-        let http = operation.schema().http();
-        Self {
-            // The legacy REST deserializers never touch the body when nothing is bound to it.
-            reads_body: request_payload.is_some() || has_unbound_members,
-            request_payload,
-            response_payload,
-            expected_request_content_type: expected_request_content_type(input, content_type),
-            expected_response_type: expected_response_content_type(output, content_type),
-            response: CompiledResponsePlan::operation_output(output),
-            uri_template: http.map(|http| http.uri()),
-            has_labels: input.members().iter().any(|member| member.http_label().is_some()),
-            needs_query: input
-                .members()
-                .iter()
-                .any(|member| member.http_query().is_some() || member.http_query_params().is_some()),
-            has_unbound_members,
-            default_status: http.map(|http| http.code()).unwrap_or(200),
-        }
-    }
-
-    pub(crate) fn reads_body(&self) -> bool {
-        self.reads_body
-    }
-
-    pub fn request_payload(&self) -> Option<&'static Schema<'static>> {
-        self.request_payload
-    }
-    pub fn response_payload(&self) -> Option<&'static Schema<'static>> {
-        self.response_payload
-    }
-
-    pub(crate) fn uri_template(&self) -> Option<&'static str> {
-        self.uri_template
-    }
-    pub(crate) fn has_labels(&self) -> bool {
-        self.has_labels
-    }
-    pub(crate) fn needs_query(&self) -> bool {
-        self.needs_query
-    }
-    pub(crate) fn has_unbound_members(&self) -> bool {
-        self.has_unbound_members
-    }
-}
-
-impl OperationState for RestOperationState {}

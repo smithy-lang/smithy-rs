@@ -6,18 +6,16 @@
 use aws_smithy_http_server::protocol::rest_json_1::RestJson1Protocol;
 use aws_smithy_http_server::protocol::rest_xml::RestXmlProtocol;
 use aws_smithy_http_server::response::Response;
-use aws_smithy_http_server::schema::protocol::RestOperationState;
 use aws_smithy_http_server::schema::ServerProtocol;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::traits::HttpTrait;
-use aws_smithy_schema::{shape_id, OperationSchema, Schema, ShapeType};
+use aws_smithy_schema::{shape_id, Schema, ShapeType};
 use criterion::{criterion_group, criterion_main, Criterion};
 use http_body_util::BodyExt;
 use std::hint::black_box;
 
-static EMPTY_MEMBERS: [&Schema<'static>; 0] = [];
-static EMPTY_INPUT: Schema<'static> =
-    Schema::new_struct(shape_id!("bench", "Input"), ShapeType::Structure, &EMPTY_MEMBERS);
+// The operation's `@http` trait is transcribed onto the output schemas by codegen.
+const HTTP: HttpTrait<'static> = HttpTrait::new("GET", "/benchmark", Some(200));
 
 static STATUS: Schema<'static> = Schema::new_member(
     shape_id!("bench", "HeaderOutput", "status"),
@@ -63,7 +61,8 @@ static HEADER_OUTPUT: Schema<'static> = Schema::new_struct(
     ShapeType::Structure,
     &HEADER_MEMBERS,
 )
-.with_no_body_members();
+.with_no_body_members()
+.with_http(HTTP);
 
 static TRACE_ID: Schema<'static> = Schema::new_member(
     shape_id!("bench", "MixedOutput", "traceId"),
@@ -100,12 +99,14 @@ static ENABLED: Schema<'static> = Schema::new_member(
 static MIXED_MEMBERS: [&Schema<'static>; 5] = [&TRACE_ID, &REVISION, &MESSAGE, &COUNT, &ENABLED];
 static MIXED_OUTPUT: Schema<'static> =
     Schema::new_struct(shape_id!("bench", "MixedOutput"), ShapeType::Structure, &MIXED_MEMBERS)
-        .with_original_name("MixedOutput");
+        .with_original_name("MixedOutput")
+        .with_http(HTTP);
 
 static BODY_MEMBERS: [&Schema<'static>; 3] = [&MESSAGE, &COUNT, &ENABLED];
 static BODY_OUTPUT: Schema<'static> =
     Schema::new_struct(shape_id!("bench", "BodyOutput"), ShapeType::Structure, &BODY_MEMBERS)
-        .with_original_name("BodyOutput");
+        .with_original_name("BodyOutput")
+        .with_http(HTTP);
 
 static METADATA: Schema<'static> = Schema::new_member(
     shape_id!("bench", "PrefixOutput", "metadata"),
@@ -120,14 +121,8 @@ static PREFIX_OUTPUT: Schema<'static> = Schema::new_struct(
     ShapeType::Structure,
     &PREFIX_MEMBERS,
 )
-.with_no_body_members();
-
-static OP_SHAPE: Schema<'static> = Schema::new(shape_id!("bench", "Operation"), ShapeType::Operation)
-    .with_http(HttpTrait::new("GET", "/benchmark", Some(200)));
-static HEADER_OPERATION: OperationSchema<'static> = OperationSchema::new(&OP_SHAPE, &EMPTY_INPUT, &HEADER_OUTPUT, &[]);
-static MIXED_OPERATION: OperationSchema<'static> = OperationSchema::new(&OP_SHAPE, &EMPTY_INPUT, &MIXED_OUTPUT, &[]);
-static BODY_OPERATION: OperationSchema<'static> = OperationSchema::new(&OP_SHAPE, &EMPTY_INPUT, &BODY_OUTPUT, &[]);
-static PREFIX_OPERATION: OperationSchema<'static> = OperationSchema::new(&OP_SHAPE, &EMPTY_INPUT, &PREFIX_OUTPUT, &[]);
+.with_no_body_members()
+.with_http(HTTP);
 
 struct HeaderOutput;
 
@@ -135,7 +130,7 @@ impl SerializableStruct for HeaderOutput {
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         serializer.write_integer(&STATUS, 202)?;
         serializer.write_string(&REQUEST_ID, "req-0123456789")?;
-        serializer.write_string(&ETAG, "\"fable-v1\"")?;
+        serializer.write_string(&ETAG, "\"v1\"")?;
         serializer.write_string(&CACHE_CONTROL, "public, max-age=60")?;
         serializer.write_string(&REGION, "us-west-2")?;
         serializer.write_string(&VERSION, "2026-09-10")
@@ -205,16 +200,13 @@ fn validate(response: Response, expected: Expected<'_>) {
     assert_eq!(body.as_ref(), expected.body.as_bytes());
 }
 
-fn bench_protocol<P: ServerProtocol<OperationState = RestOperationState>>(
-    criterion: &mut Criterion,
-    protocol_name: &str,
-    protocol: P,
-) {
-    let header_operation = protocol.compile_operation(&HEADER_OPERATION);
-    let mixed_operation = protocol.compile_operation(&MIXED_OPERATION);
-    let body_operation = protocol.compile_operation(&BODY_OPERATION);
-    let prefix_operation = protocol.compile_operation(&PREFIX_OPERATION);
-
+fn bench_protocol<P: ServerProtocol>(criterion: &mut Criterion, protocol_name: &str, protocol: P) {
+    // restJson1 labels every response `application/json`, restXml only codec bodies.
+    let empty_content_type = match protocol_name {
+        "rest_json_1" => Some("application/json"),
+        "rest_xml" => None,
+        _ => unreachable!(),
+    };
     let content_type = match protocol_name {
         "rest_json_1" => "application/json",
         "rest_xml" => "application/xml",
@@ -232,22 +224,22 @@ fn bench_protocol<P: ServerProtocol<OperationState = RestOperationState>>(
     };
 
     validate(
-        protocol.serialize_response(&header_operation, &HeaderOutput),
+        protocol.serialize_response(&HEADER_OUTPUT, &HeaderOutput),
         Expected {
             status: 202,
             headers: &[
                 ("x-request-id", "req-0123456789"),
-                ("etag", "\"fable-v1\""),
+                ("etag", "\"v1\""),
                 ("cache-control", "public, max-age=60"),
                 ("x-region", "us-west-2"),
                 ("x-version", "2026-09-10"),
             ],
-            content_type: None,
+            content_type: empty_content_type,
             body: "",
         },
     );
     validate(
-        protocol.serialize_response(&mixed_operation, &MixedOutput),
+        protocol.serialize_response(&MIXED_OUTPUT, &MixedOutput),
         Expected {
             status: 200,
             headers: &[("x-trace-id", "trace-abcdef"), ("x-revision", "17")],
@@ -256,7 +248,7 @@ fn bench_protocol<P: ServerProtocol<OperationState = RestOperationState>>(
         },
     );
     validate(
-        protocol.serialize_response(&body_operation, &BodyOutput),
+        protocol.serialize_response(&BODY_OUTPUT, &BodyOutput),
         Expected {
             status: 200,
             headers: &[],
@@ -265,7 +257,7 @@ fn bench_protocol<P: ServerProtocol<OperationState = RestOperationState>>(
         },
     );
     validate(
-        protocol.serialize_response(&prefix_operation, &PrefixOutput),
+        protocol.serialize_response(&PREFIX_OUTPUT, &PrefixOutput),
         Expected {
             status: 200,
             headers: &[
@@ -273,7 +265,7 @@ fn bench_protocol<P: ServerProtocol<OperationState = RestOperationState>>(
                 ("x-meta-build", "release"),
                 ("x-meta-owner", "smithy"),
             ],
-            content_type: None,
+            content_type: empty_content_type,
             body: "",
         },
     );
@@ -281,28 +273,25 @@ fn bench_protocol<P: ServerProtocol<OperationState = RestOperationState>>(
     let mut group = criterion.benchmark_group(protocol_name);
     group.bench_function("five_headers_and_status", |bencher| {
         bencher.iter(|| {
-            let response =
-                black_box(&protocol).serialize_response(black_box(&header_operation), black_box(&HeaderOutput));
+            let response = black_box(&protocol).serialize_response(black_box(&HEADER_OUTPUT), black_box(&HeaderOutput));
             black_box(response)
         });
     });
     group.bench_function("mixed_headers_and_codec_body", |bencher| {
         bencher.iter(|| {
-            let response =
-                black_box(&protocol).serialize_response(black_box(&mixed_operation), black_box(&MixedOutput));
+            let response = black_box(&protocol).serialize_response(black_box(&MIXED_OUTPUT), black_box(&MixedOutput));
             black_box(response)
         });
     });
     group.bench_function("codec_body_only", |bencher| {
         bencher.iter(|| {
-            let response = black_box(&protocol).serialize_response(black_box(&body_operation), black_box(&BodyOutput));
+            let response = black_box(&protocol).serialize_response(black_box(&BODY_OUTPUT), black_box(&BodyOutput));
             black_box(response)
         });
     });
     group.bench_function("dynamic_prefix_headers", |bencher| {
         bencher.iter(|| {
-            let response =
-                black_box(&protocol).serialize_response(black_box(&prefix_operation), black_box(&PrefixOutput));
+            let response = black_box(&protocol).serialize_response(black_box(&PREFIX_OUTPUT), black_box(&PrefixOutput));
             black_box(response)
         });
     });

@@ -11,29 +11,46 @@ pub(crate) mod response_bindings;
 
 pub use deserialize::{DeserializableShape, DeserializeError};
 pub use modeled_error::{HttpModeledError, ModeledError};
+pub use protocol::{
+    collect_request_body, RequestBodyCollectionConfig, RequestBodyCollectionError, ServerProtocol, ServerRequest,
+    ServiceRequestBodyConfig,
+};
+
 use std::sync::Arc;
 
-/// The protocol and protocol-specific operation state selected by routing.
+use aws_smithy_schema::OperationSchema;
+
+/// The protocol and the operation selected by routing, stored in the request extensions.
+///
+/// The protocol is erased: everything after routing works through `dyn ServerProtocol`, so a
+/// service can select a different protocol per request without anything downstream knowing.
 #[derive(Clone)]
 pub struct SelectedProtocolOperation {
-    pub(crate) protocol: Arc<dyn DynServerProtocol>,
-    pub(crate) operation: Arc<dyn ErasedCompiledOperation>,
+    protocol: Arc<dyn ServerProtocol>,
+    operation: &'static OperationSchema<'static>,
 }
 
 impl SelectedProtocolOperation {
-    pub fn new(protocol: Arc<dyn DynServerProtocol>, operation: Arc<dyn ErasedCompiledOperation>) -> Self {
+    pub fn new(protocol: Arc<dyn ServerProtocol>, operation: &'static OperationSchema<'static>) -> Self {
         Self { protocol, operation }
     }
 
-    pub fn protocol(&self) -> &Arc<dyn DynServerProtocol> {
+    /// The selected protocol.
+    pub fn protocol(&self) -> &Arc<dyn ServerProtocol> {
         &self.protocol
     }
-    pub fn operation(&self) -> &Arc<dyn ErasedCompiledOperation> {
-        &self.operation
+
+    /// The routed operation.
+    pub fn operation(&self) -> &'static OperationSchema<'static> {
+        self.operation
     }
 }
-pub use protocol::{
-    collect_request_body, CompileOperationState, CompiledOperation, DynServerProtocol, ErasedCompiledOperation,
-    OperationState, ProtocolRoutingTable, RequestBodyCollectionConfig, RequestBodyCollectionError, ServerProtocol,
-    ServerRequest, ServiceRequestBodyConfig,
-};
+
+impl std::fmt::Debug for SelectedProtocolOperation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SelectedProtocolOperation")
+            .field("protocol", &self.protocol.protocol_id())
+            .field("operation", &self.operation.shape_id())
+            .finish()
+    }
+}

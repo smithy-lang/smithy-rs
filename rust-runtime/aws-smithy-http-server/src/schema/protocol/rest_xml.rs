@@ -3,10 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_smithy_runtime_api::http::Headers;
+use aws_smithy_schema::codec::DynCodec;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
-use aws_smithy_schema::{shape_id, ShapeId};
-use aws_smithy_xml::codec::XmlCodec;
+use aws_smithy_schema::{shape_id, Schema, ShapeId};
 
+use crate::body::BoxBody;
 use crate::protocol::rest_xml::rejection::RequestRejection;
 use crate::protocol::rest_xml::runtime_error::RuntimeError;
 use crate::protocol::rest_xml::{RestXml, RestXmlProtocol};
@@ -16,51 +18,65 @@ use crate::schema::{DeserializeError, HttpModeledError};
 use super::response::{
     log_serialize_failure, serialize_modeled_error_response, stamp_error_extension, ResponseBindings,
 };
-use super::rest::RestProtocolProvider;
-use super::{CompiledOperation, RestOperationState, ServerProtocol, ServerRequest};
+use super::rest::RestPolicy;
+use super::{ServerProtocol, ServerRequest};
 
 static PROTOCOL_ID: ShapeId<'static> = shape_id!("aws.protocols", "restXml");
 const CONTENT_TYPE: &str = "application/xml";
 
-impl RestProtocolProvider for RestXmlProtocol {
-    type RestCodec = XmlCodec;
-
-    fn rest_protocol(&self) -> &super::rest::RestProtocol<XmlCodec> {
-        &self.inner
-    }
-}
+/// restXml labels a response only when the output schema binds something to the body, gives an
+/// untyped blob payload `application/octet-stream`, and sends an empty body for an output with
+/// no body members whether or not the user modeled it.
+pub(crate) const POLICY: RestPolicy = RestPolicy {
+    codec_content_type: CONTENT_TYPE,
+    default_response_content_type: None,
+    untyped_blob_payload_content_type: Some("application/octet-stream"),
+    empty_document: false,
+};
 
 impl ServerProtocol for RestXmlProtocol {
-    type Codec = XmlCodec;
-    type OperationState = RestOperationState;
-
     fn protocol_id(&self) -> &'static ShapeId<'static> {
         &PROTOCOL_ID
     }
 
-    fn codec(&self) -> &XmlCodec {
+    fn payload_codec(&self) -> &dyn DynCodec {
         self.inner.codec()
     }
 
-    fn reads_request_body(&self, operation: &CompiledOperation<RestOperationState>) -> bool {
-        operation.state().reads_body()
+    fn event_stream_media_type(&self) -> Option<&str> {
+        Some(CONTENT_TYPE)
+    }
+
+    fn check_accept(&self, output: &Schema<'_>, headers: &Headers) -> Result<(), DeserializeError> {
+        self.inner.check_accept(output, headers)
+    }
+
+    fn reads_request_body(&self, input: &Schema<'_>) -> bool {
+        self.inner.reads_request_body(input)
     }
 
     fn deserialize_request<'a>(
         &'a self,
-        operation: &'a CompiledOperation<RestOperationState>,
+        input: &Schema<'_>,
         request: &'a ServerRequest,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, DeserializeError> {
-        self.inner.deserialize_request(operation.state(), request)
+        self.inner.deserialize_request(input, request)
     }
 
-    fn serialize_response(
+    fn serialize_response(&self, output: &Schema<'_>, value: &dyn SerializableStruct) -> Response {
+        self.inner
+            .serialize_response(output, value)
+            .unwrap_or_else(serialization_failure)
+    }
+
+    fn serialize_streaming_response(
         &self,
-        operation: &CompiledOperation<RestOperationState>,
-        output: &dyn SerializableStruct,
+        output: &Schema<'_>,
+        value: &dyn SerializableStruct,
+        body: BoxBody,
     ) -> Response {
         self.inner
-            .serialize_response(operation.schema(), operation.state(), output)
+            .serialize_streaming_response(output, value, body)
             .unwrap_or_else(serialization_failure)
     }
 
@@ -68,7 +84,7 @@ impl ServerProtocol for RestXmlProtocol {
         // restXml carries no discriminator: the error structure is the body.
         let schema = error.schema();
         serialize_modeled_error_response(
-            self.codec(),
+            self.inner.codec(),
             schema,
             error,
             error.status_code(),
@@ -80,7 +96,7 @@ impl ServerProtocol for RestXmlProtocol {
     }
 
     /// restXml keeps 415 for `Content-Type` failures, but its `From<RequestRejection>` has no
-    /// `NotAcceptable` arm, so an `Accept` mismatch falls through to a 400 `Serialization` — NOT
+    /// `NotAcceptable` arm, so an `Accept` mismatch falls through to a 400 `Serialization`, NOT
     /// a 406. And its `RuntimeError` response drops the validation body entirely: every runtime
     /// error, constraint violations included, answers with the literal `{}` body, so a constraint
     /// violation must NOT serialize the modeled error here. Both are the protocol's wire contract.

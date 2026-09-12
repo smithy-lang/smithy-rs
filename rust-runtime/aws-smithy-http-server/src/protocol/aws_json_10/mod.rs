@@ -23,6 +23,7 @@ impl Default for AwsJson1_0Protocol {
                 "application/x-amz-json-1.0",
                 Some("application/x-amz-json-1.0"),
                 crate::schema::protocol::rpc::RpcAccept::Always,
+                crate::schema::protocol::rpc::RpcStreaming::CodecContentType,
             ),
         }
     }
