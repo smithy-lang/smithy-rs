@@ -657,7 +657,6 @@ version = "0.68.2"
 dependencies = [
  "aws-smithy-http 0.64.0",
  "aws-smithy-json 0.64.0",
- "aws-smithy-json 0.64.0",
  "aws-smithy-legacy-http-server",
  "aws-smithy-types 1.7.0",
  "aws-smithy-xml 0.63.0",
@@ -703,7 +702,6 @@ dependencies = [
 [[package]]
 name = "aws-smithy-json"
 version = "0.64.0"
-version = "0.64.0"
 dependencies = [
  "aws-smithy-runtime-api 1.16.1",
  "aws-smithy-schema 0.3.0",
@@ -741,7 +739,7 @@ dependencies = [
 name = "aws-smithy-legacy-http-server"
 version = "0.66.1"
 dependencies = [
- "aws-smithy-cbor 0.62.1",
+ "aws-smithy-cbor 0.63.0",
  "aws-smithy-json 0.64.0",
  "aws-smithy-legacy-http",
  "aws-smithy-runtime-api 1.16.1",
@@ -4465,9 +4463,9 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
 name = "smallvec"
-version = "1.16.0"
+version = "1.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9be42f50aa861c555654aa3a37f52f4b1074bacf4e48fe0ef7fa584e80f1f0f"
+checksum = "ba467056f1b547ed52077911161fc86985becbc60e8e1857c8a144dab0def891"
 
 [[package]]
 name = "socket2"
@@ -4881,9 +4879,9 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "1.1.5+spec-1.1.0"
+version = "1.1.6+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12c0ba9680044b4ce98d391a62094047eada0d64860b80166c39f4a6b5640785"
+checksum = "920602543f0911ab71da12c50d59701da54c196d1a2bf5cb4b75667f137a406a"
 dependencies = [
  "indexmap 2.14.2",
  "serde_core",
