@@ -10,6 +10,9 @@ import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
@@ -92,11 +95,12 @@ internal class ServerSchemaDecoratorTest {
 
     @Test
     fun `descriptors expose the service, its operations and their shapes`() {
-        serverIntegrationTest(model, schemaSerdeParams) { _, rustCrate ->
-            rustCrate.testModule {
-                unitTest("operation_descriptor_reports_the_modeled_http_binding") {
-                    rust(
-                        """
+        val servers =
+            serverIntegrationTest(model, schemaSerdeParams) { context, rustCrate ->
+                rustCrate.testModule {
+                    unitTest("operation_descriptor_reports_the_modeled_http_binding") {
+                        rust(
+                            """
                         let echo = &crate::schema::operations::ECHO;
                         assert_eq!(echo.shape_id().as_str(), "com.aws.example.schema##Echo");
                         let http = echo.schema().http().expect("`@http` on the operation shape");
@@ -110,11 +114,11 @@ internal class ServerSchemaDecoratorTest {
                         assert!(std::ptr::eq(echo.errors()[0], crate::error::BadThing::SCHEMA));
                         assert!(std::ptr::eq(echo.errors()[1], crate::error::ValidationException::SCHEMA));
                         """,
-                    )
-                }
-                unitTest("service_descriptor_lists_protocols_and_operations") {
-                    rust(
-                        """
+                        )
+                    }
+                    unitTest("service_descriptor_lists_protocols_and_operations") {
+                        rust(
+                            """
                         let service = &crate::schema::service::SCHEMA_SERVICE;
                         assert_eq!(service.shape_id().as_str(), "com.aws.example.schema##SchemaService");
                         assert_eq!(service.version(), Some("2024-08-29"));
@@ -127,20 +131,41 @@ internal class ServerSchemaDecoratorTest {
                         assert_eq!(ping.schema().http().map(|http| http.uri()), Some("/ping"));
                         assert!(ping.errors().is_empty());
                         """,
-                    )
-                }
-                unitTest("shape_schemas_sit_next_to_their_types") {
-                    rust(
-                        """
-                        use ::aws_smithy_schema::ShapeType;
+                        )
+                    }
+                    unitTest("shape_schemas_sit_next_to_their_types") {
+                        rustTemplate(
+                            """
+                        use #{ShapeType};
                         // Operation inputs and outputs are synthetic shapes, so they carry the synthetic namespace.
                         assert_eq!(crate::input::EchoInput::SCHEMA.shape_id().as_str(), "com.aws.example.schema.synthetic##EchoInput");
                         assert_eq!(crate::model::Nested::SCHEMA.shape_type(), ShapeType::Structure);
                         assert_eq!(crate::model::Nested::SCHEMA.members().len(), 2);
                         assert_eq!(crate::model::Choice::SCHEMA.shape_type(), ShapeType::Union);
                         assert_eq!(crate::error::BadThing::SCHEMA.shape_type(), ShapeType::Structure);
+                        assert!(crate::error::BadThing::SCHEMA.traits().unwrap().contains_fqn("smithy.api##error"));
+                        let nested = crate::model::Nested::builder().build();
+                        let value: &dyn #{SerializableStruct} = &nested;
+                        assert!(std::ptr::eq(value.schema(), crate::model::Nested::SCHEMA));
+                        let choice = crate::model::Choice::Nested(nested);
+                        let value: &dyn #{SerializableStruct} = &choice;
+                        assert!(std::ptr::eq(value.schema(), crate::model::Choice::SCHEMA));
+                        let boxed: #{Box}<dyn #{SerializableStruct}> = #{Box}::new(choice);
+                        assert!(std::ptr::eq(boxed.schema(), crate::model::Choice::SCHEMA));
                         """,
-                    )
+                            *preludeScope,
+                            "ShapeType" to RuntimeType.smithySchema(context.runtimeConfig).resolve("ShapeType"),
+                            "SerializableStruct" to RuntimeType.smithySchema(context.runtimeConfig).resolve("serde::SerializableStruct"),
+                        )
+                    }
+                }
+            }
+        servers.forEach { server ->
+            val src = server.path.resolve("src")
+            src.resolve("protocol_serde").toFile().exists() shouldBe (server.httpVersion == HttpTestVersion.HTTP_0_X)
+            if (server.httpVersion == HttpTestVersion.HTTP_1_X) {
+                src.toFile().walkTopDown().filter { it.isFile }.forEach {
+                    it.readText() shouldNotContain "protocol_serde"
                 }
             }
         }
@@ -152,6 +177,7 @@ internal class ServerSchemaDecoratorTest {
         servers.forEach { server ->
             val src = server.path.resolve("src")
             src.resolve("schema").toFile().exists() shouldBe false
+            src.resolve("protocol_serde").toFile().exists() shouldBe true
             src.resolve("input.rs").readText() shouldNotContain "SCHEMA"
         }
     }

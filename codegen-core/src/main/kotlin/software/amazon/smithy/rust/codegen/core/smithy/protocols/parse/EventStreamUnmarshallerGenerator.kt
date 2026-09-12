@@ -38,6 +38,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.EventStreamSerdeCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticEventStreamUnionTrait
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
@@ -55,6 +56,7 @@ class EventStreamUnmarshallerGenerator(
     private val operationShape: OperationShape,
     private val unionShape: UnionShape,
     private val useSchemaSerde: Boolean = false,
+    private val serdeCustomization: EventStreamSerdeCustomization? = null,
 ) {
     private val model = codegenContext.model
     private val builderInstantiator = codegenContext.builderInstantiator()
@@ -85,7 +87,7 @@ class EventStreamUnmarshallerGenerator(
             "tracing" to RuntimeType.Tracing,
             "UnmarshalledMessage" to smithyEventStream.resolve("frame::UnmarshalledMessage"),
             "UnmarshallMessage" to smithyEventStream.resolve("frame::UnmarshallMessage"),
-            "SharedClientProtocol" to RuntimeType.smithySchema(runtimeConfig).resolve("protocol::SharedClientProtocol"),
+            "SerdeContext" to (serdeCustomization?.contextType ?: RuntimeType.smithySchema(runtimeConfig).resolve("protocol::SharedClientProtocol")),
             "SerdeError" to RuntimeType.smithySchema(runtimeConfig).resolve("serde::SerdeError"),
         )
 
@@ -101,7 +103,7 @@ class EventStreamUnmarshallerGenerator(
         unionSymbol: Symbol,
     ) {
         val unmarshallerTypeName = unmarshallerType.name
-        if (useSchemaSerde) {
+        if (useSchemaSerde || serdeCustomization != null) {
             rustTemplate(
                 """
                 ##[derive(Debug)]
@@ -111,11 +113,11 @@ class EventStreamUnmarshallerGenerator(
                     // `@eventPayload`), the field is unused but still kept for API uniformity across
                     // operations.
                     ##[allow(dead_code)]
-                    protocol: #{SharedClientProtocol},
+                    protocol: #{SerdeContext},
                 }
 
                 impl $unmarshallerTypeName {
-                    pub fn new(protocol: #{SharedClientProtocol}) -> Self {
+                    pub fn new(protocol: #{SerdeContext}) -> Self {
                         $unmarshallerTypeName { protocol }
                     }
                 }
@@ -154,6 +156,9 @@ class EventStreamUnmarshallerGenerator(
                 """,
                 *codegenScope,
             ) {
+                if (serdeCustomization != null) {
+                    rustTemplate("let _ = #{mediaType};", "mediaType" to serdeCustomization.mediaType(unmarshalling = true))
+                }
                 rustTemplate("let response_headers = #{expect_fns}::parse_response_headers(message)?;", *codegenScope)
                 rustBlock("match response_headers.message_type.as_str()") {
                     rustBlock("\"event\" => ") {
@@ -241,8 +246,9 @@ class EventStreamUnmarshallerGenerator(
                 }
                 // When the payload structure transitively reaches an enum shape, the server payload parser
                 // returns a builder. For payloads with no enum-reachable members the parser already
-                // returns the constrained struct, and calling `.build()` would be a type error.
-                if (codegenTarget == CodegenTarget.SERVER && payloadReachesEnumTrait(unionStruct)) {
+                // returns the constrained struct, and calling `.build()` would be a type error. The
+                // schema walker builds inside `renderParseProtocolPayload`.
+                if (codegenTarget == CodegenTarget.SERVER && serdeCustomization == null && payloadReachesEnumTrait(unionStruct)) {
                     rustTemplate(
                         """
                         let parsed = parsed.build()
@@ -293,20 +299,39 @@ class EventStreamUnmarshallerGenerator(
                         !it.hasTrait<EventPayloadTrait>() && !it.hasTrait<EventHeaderTrait>()
                     }
                 if (implicitMembers.isNotEmpty() && payloadMember == null) {
-                    val parser = protocol.structuredDataParser().errorParser(unionStruct)
-                    if (parser != null) {
+                    if (serdeCustomization != null) {
                         rustTemplate(
-                            """
-                            builder = #{parser}(&message.payload()[..], builder)
-                                .map_err(|err| #{Error}::unmarshalling(format!("failed to unmarshall: {err}")))?;
-                            """,
-                            "parser" to parser,
-                            *codegenScope,
+                            "let parsed = #{payload};",
+                            "payload" to serdeCustomization.deserialize(unionStruct, false),
                         )
+                        for (member in implicitMembers) {
+                            val name = symbolProvider.toMemberName(member)
+                            // Keep the modeled headers already decoded into the builder. The
+                            // customization returns completed fields, so use their typed setters.
+                            rust("builder = builder.$name(parsed.$name);")
+                        }
+                    } else {
+                        val parser = protocol.structuredDataParser().errorParser(unionStruct)
+                        if (parser != null) {
+                            rustTemplate(
+                                """
+                                builder = #{parser}(&message.payload()[..], builder)
+                                    .map_err(|err| #{Error}::unmarshalling(format!("failed to unmarshall: {err}")))?;
+                                """,
+                                "parser" to parser,
+                                *codegenScope,
+                            )
+                        }
                     }
                 }
+                val finish =
+                    if (codegenTarget == CodegenTarget.SERVER && payloadReachesEnumTrait(unionStruct)) {
+                        """builder.build().map_err(|err| #{Error}::unmarshalling(format!("failed to unmarshall event due to constraint violation: {err}")))?"""
+                    } else {
+                        "builder.build()"
+                    }
                 rustTemplate(
-                    "Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName(builder.build())))",
+                    "Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName($finish)))",
                     "Output" to unionSymbol,
                     *codegenScope,
                 )
@@ -338,6 +363,15 @@ class EventStreamUnmarshallerGenerator(
 
     private fun RustWriter.renderUnmarshallEventPayload(member: MemberShape) {
         val target = model.expectShape(member.target)
+        if (serdeCustomization != null && (target is StructureShape || target is UnionShape)) {
+            // A customization returns a completed payload; use the public typed setter.
+            withBlock("builder = builder.${symbolProvider.toMemberName(member)}(", ");") {
+                conditionalBlock("Some(", ")", member.isOptional) {
+                    renderParseProtocolPayload(member)
+                }
+            }
+            return
+        }
         expectedContentType(target)?.also { contentType ->
             rustTemplate(
                 """
@@ -379,7 +413,9 @@ class EventStreamUnmarshallerGenerator(
 
     private fun RustWriter.renderParseProtocolPayload(member: MemberShape) {
         val memberName = symbolProvider.toMemberName(member)
-        if (useSchemaSerde) {
+        if (serdeCustomization != null) {
+            rustTemplate("#{payload}", "payload" to serdeCustomization.deserialize(model.expectShape(member.target), false))
+        } else if (useSchemaSerde) {
             val target = model.expectShape(member.target)
             rustTemplate(
                 """
@@ -550,36 +586,50 @@ class EventStreamUnmarshallerGenerator(
 
                         CodegenTarget.SERVER -> {
                             val target = model.expectShape(member.target, StructureShape::class.java)
-                            val parser = protocol.structuredDataParser().errorParser(target)
-                            val mut =
-                                if (parser != null) {
-                                    " mut"
-                                } else {
-                                    ""
+                            if (serdeCustomization != null) {
+                                withBlock("let err = ", ";") {
+                                    rustTemplate("#{payload}", "payload" to serdeCustomization.deserialize(target, true))
                                 }
-                            rust("let$mut builder = #T::default();", symbolProvider.symbolForBuilder(target))
-                            if (parser != null) {
                                 rustTemplate(
                                     """
-                                    builder = #{parser}(&message.payload()[..], builder)
-                                        .map_err(|err| {
-                                            #{Error}::unmarshalling(format!("failed to unmarshall ${member.memberName}: {err}"))
-                                        })?;
+                                    return Ok(#{UnmarshalledMessage}::Error(
+                                        #{OpError}::${member.target.name}(err)
+                                    ))
                                     """,
-                                    "parser" to parser,
+                                    *codegenScope,
+                                )
+                            } else {
+                                val parser = protocol.structuredDataParser().errorParser(target)
+                                val mut =
+                                    if (parser != null) {
+                                        " mut"
+                                    } else {
+                                        ""
+                                    }
+                                rust("let$mut builder = #T::default();", symbolProvider.symbolForBuilder(target))
+                                if (parser != null) {
+                                    rustTemplate(
+                                        """
+                                        builder = #{parser}(&message.payload()[..], builder)
+                                            .map_err(|err| {
+                                                #{Error}::unmarshalling(format!("failed to unmarshall ${member.memberName}: {err}"))
+                                            })?;
+                                        """,
+                                        "parser" to parser,
+                                        *codegenScope,
+                                    )
+                                }
+                                rustTemplate(
+                                    """
+                                    return Ok(#{UnmarshalledMessage}::Error(
+                                        #{OpError}::${member.target.name}(
+                                            builder.build()
+                                        )
+                                    ))
+                                    """,
                                     *codegenScope,
                                 )
                             }
-                            rustTemplate(
-                                """
-                                return Ok(#{UnmarshalledMessage}::Error(
-                                    #{OpError}::${member.target.name}(
-                                        builder.build()
-                                    )
-                                ))
-                                """,
-                                *codegenScope,
-                            )
                         }
                     }
                 }

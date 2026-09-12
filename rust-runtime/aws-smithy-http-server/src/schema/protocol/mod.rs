@@ -26,6 +26,7 @@ pub(crate) mod rest_json_1;
 pub(crate) mod rest_xml;
 pub(crate) mod rpc;
 mod rpc_v2_cbor;
+pub(crate) mod rpc_v2_cbor_serde;
 #[cfg(test)]
 mod tests;
 
@@ -130,6 +131,8 @@ pub trait ServerEventStreamProtocol: Send + Sync + std::fmt::Debug {
 /// struct Teapot;
 ///
 /// impl SerializableStruct for Teapot {
+///     fn schema(&self) -> &Schema<'_> { &TEAPOT }
+///
 ///     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
 ///         serializer.write_string(&MESSAGE, "short and stout")
 ///     }

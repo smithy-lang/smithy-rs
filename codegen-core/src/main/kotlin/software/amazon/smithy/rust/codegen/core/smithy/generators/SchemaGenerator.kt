@@ -194,6 +194,7 @@ class SchemaGenerator(
         val codegenScope =
             arrayOf(
                 "SerializableStruct" to smithySchema.resolve("serde::SerializableStruct"),
+                "Schema" to smithySchema.resolve("Schema"),
                 "ShapeSerializer" to smithySchema.resolve("serde::ShapeSerializer"),
                 "SerdeError" to smithySchema.resolve("serde::SerdeError"),
             )
@@ -234,6 +235,8 @@ class SchemaGenerator(
         writer.rustTemplate(
             """
             impl #{SerializableStruct} for $structName {
+                fn schema(&self) -> &#{Schema}<'_> { Self::SCHEMA }
+
                 ##[allow(unused_variables, clippy::diverging_sub_expression)]
                 fn serialize_members(&self, ser: &mut dyn #{ShapeSerializer}) -> ::std::result::Result<(), #{SerdeError}> {
                     #{memberWrites}
@@ -254,6 +257,7 @@ class SchemaGenerator(
         val codegenScope =
             arrayOf(
                 "SerializableStruct" to smithySchema.resolve("serde::SerializableStruct"),
+                "Schema" to smithySchema.resolve("Schema"),
                 "ShapeSerializer" to smithySchema.resolve("serde::ShapeSerializer"),
                 "SerdeError" to smithySchema.resolve("serde::SerdeError"),
             )
@@ -270,16 +274,20 @@ class SchemaGenerator(
 
                     if (member.isTargetUnit()) {
                         // Unit variants serialize as empty objects {} in JSON, not null
-                        rust(
+                        rustTemplate(
                             """
                             Self::$variantName => {
                                 struct Empty;
-                                impl ::aws_smithy_schema::serde::SerializableStruct for Empty {
-                                    fn serialize_members(&self, _ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer) -> ::std::result::Result<(), ::aws_smithy_schema::serde::SerdeError> { Ok(()) }
+                                impl #{SerializableStruct} for Empty {
+                                    fn schema(&self) -> &#{Schema}<'_> { &#{UnitSchema} }
+                                    fn serialize_members(&self, _ser: &mut dyn #{ShapeSerializer}) -> #{Result}<(), #{SerdeError}> { #{Ok}(()) }
                                 }
                                 ser.write_struct(&$memberSchemaRef, &Empty)?;
                             },
                             """,
+                            *codegenScope,
+                            *RuntimeType.preludeScope,
+                            "UnitSchema" to smithySchema.resolve("prelude::UNIT"),
                         )
                     } else {
                         val writeExpr = unionVariantWriteExpr(target, memberSchemaRef, "val")
@@ -292,6 +300,8 @@ class SchemaGenerator(
         writer.rustTemplate(
             """
             impl #{SerializableStruct} for $unionName {
+                fn schema(&self) -> &#{Schema}<'_> { Self::SCHEMA }
+
                 ##[allow(unused_variables, clippy::diverging_sub_expression)]
                 fn serialize_members(&self, ser: &mut dyn #{ShapeSerializer}) -> ::std::result::Result<(), #{SerdeError}> {
                     match self {

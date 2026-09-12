@@ -170,6 +170,10 @@ struct Nested {
 }
 
 impl SerializableStruct for OmniWidget {
+    fn schema(&self) -> &aws_smithy_schema::Schema<'_> {
+        &OMNI_WIDGET_SCHEMA
+    }
+
     fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         if let Some(v) = &self.value_string {
             ser.write_string(&M_VALUE_STRING, v)?;
@@ -219,6 +223,10 @@ impl SerializableStruct for OmniWidget {
 }
 
 impl SerializableStruct for Nested {
+    fn schema(&self) -> &aws_smithy_schema::Schema<'_> {
+        &NESTED_SCHEMA
+    }
+
     fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         if let Some(v) = &self.inner_string {
             ser.write_string(&M_INNER_STRING, v)?;
@@ -788,6 +796,10 @@ struct AliasHolder {
 }
 
 impl SerializableStruct for AliasHolder {
+    fn schema(&self) -> &aws_smithy_schema::Schema<'_> {
+        &ALIAS_HOLDER_SCHEMA
+    }
+
     fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         if let Some(v) = &self.alternate_name {
             ser.write_string(&M_ALTERNATE_NAME, v)?;

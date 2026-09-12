@@ -66,7 +66,9 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromO
  * legacy path.
  *
  * Only shapes reachable from an operation input get a walker; nothing deserializes outputs or errors on the
- * server. Structures with event-stream or streaming-blob members keep the legacy serde and get no walker.
+ * server. An operation input with an event-stream or streaming-blob member gets a walker into an existing
+ * builder ([INTO_FUNCTION_NAME]) that skips the streaming member; the operation's streaming glue attaches
+ * that member and builds.
  *
  * With the `allowMissingUnionVariant` codegen setting, a union walker returns `Option` and yields `None` for a
  * union object that set no variant, exactly as the legacy JSON parser does: the enclosing structure member is
@@ -100,6 +102,8 @@ class ServerSchemaDeserializeGenerator(
             is StructureShape ->
                 if (shape.isReachableFromOperationInput() && !hasStreamingMember(shape)) {
                     renderStructure(shape)
+                } else if (shape.isReachableFromOperationInput() && isOperationInput(shape)) {
+                    renderStructureInto(shape)
                 }
             is UnionShape ->
                 if (shape.isReachableFromOperationInput() && !shape.hasTrait<StreamingTrait>()) {
@@ -109,13 +113,14 @@ class ServerSchemaDeserializeGenerator(
         }
     }
 
+    private fun isOperationInput(shape: StructureShape): Boolean =
+        TopDownIndex.of(model).getContainedOperations(codegenContext.serviceShape)
+            .any { it.inputShape(model).id == shape.id }
+
     /** Implements the runtime entry point on non-streaming operation input structures. */
     fun renderDeserializableShapeImpl() {
         if (shape !is StructureShape || hasStreamingMember(shape)) return
-        val isOperationInput =
-            TopDownIndex.of(model).getContainedOperations(codegenContext.serviceShape)
-                .any { it.inputShape(model).id == shape.id }
-        if (!isOperationInput) return
+        if (!isOperationInput(shape)) return
         val symbol = symbolProvider.toSymbol(shape)
         val constrained = shape.canReachConstrainedShape(model, symbolProvider)
         writer.rustTemplate(
@@ -221,6 +226,62 @@ class ServerSchemaDeserializeGenerator(
                         rust("Ok(builder)")
                     } else {
                         rust("Ok(builder.build())")
+                    }
+                },
+        )
+    }
+
+    /**
+     * The walker of a streaming operation input: reads every non-streaming member into `builder`. The
+     * streaming member has no wire representation a [ShapeDeserializer] could hand over, so the operation's
+     * streaming glue attaches it and calls `build()`.
+     */
+    private fun renderStructureInto(shape: StructureShape) {
+        val symbol = symbolProvider.toSymbol(shape)
+        val members = shape.allMembers.values.toList()
+        val builderSymbol = shape.serverBuilderSymbol(codegenContext)
+
+        writer.rustTemplate(
+            """
+            impl ${symbol.name} {
+                /// Reads the non-streaming members of this shape from a [`ShapeDeserializer`](#{ShapeDeserializer})
+                /// guided by [`Self::SCHEMA`] into `builder`.
+                ##[allow(dead_code, unused_variables, unused_mut, clippy::match_single_binding, clippy::single_match)]
+                pub(crate) fn $INTO_FUNCTION_NAME(
+                    builder: &mut #{Builder},
+                    deserializer: &mut dyn #{ShapeDeserializer},
+                ) -> ::std::result::Result<(), #{SerdeError}> {
+                    deserializer.read_struct(Self::SCHEMA, &mut |member, deser| {
+                        match member.member_index() {
+                            #{arms}
+                            _ => {}
+                        }
+                        Ok(())
+                    })?;
+                    Ok(())
+                }
+            }
+            """,
+            *codegenScope,
+            "Builder" to builderSymbol,
+            "arms" to
+                writable {
+                    members.forEachIndexed { index, member ->
+                        if (member.isEventStream(model) || model.expectShape(member.target).hasTrait<StreamingTrait>()) {
+                            return@forEachIndexed
+                        }
+                        val fieldName = symbolProvider.toMemberName(member)
+                        val assignment =
+                            if (yieldsOption(member)) {
+                                "builder.$fieldName = ${memberValueExpr(member)};"
+                            } else {
+                                "builder.$fieldName = Some(${memberValueExpr(member)});"
+                            }
+                        if (symbolProvider.toSymbol(member).isOptional()) {
+                            rust("Some($index) => { if deser.is_null() { deser.read_null()?; } else { $assignment } }")
+                        } else {
+                            rust("Some($index) => { $assignment }")
+                        }
                     }
                 },
         )
@@ -479,6 +540,9 @@ class ServerSchemaDeserializeGenerator(
     companion object {
         /** The name of the generated walker method on structures and unions. */
         const val FUNCTION_NAME = "deserialize_schema"
+
+        /** The walker of a streaming operation input; see [renderStructureInto]. */
+        const val INTO_FUNCTION_NAME = "deserialize_schema_into"
         private val UNIT: ShapeId = ShapeId.from("smithy.api#Unit")
     }
 }

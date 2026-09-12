@@ -13,8 +13,10 @@ import software.amazon.smithy.framework.rust.ValidationFieldListTrait
 import software.amazon.smithy.framework.rust.ValidationFieldNameTrait
 import software.amazon.smithy.framework.rust.ValidationMessageTrait
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
@@ -311,6 +313,19 @@ internal class UserProvidedValidationExceptionDecoratorTest {
     @Test
     fun `code compiles with custom validation exception`() {
         serverIntegrationTest(completeTestModel, testCoverage = HttpTestType.Default)
+    }
+
+    @Test
+    fun `schema serde omits legacy custom validation rejection serializers`() {
+        val servers =
+            serverIntegrationTest(
+                completeTestModel,
+                IntegrationTestParams(
+                    additionalSettings = Node.parse("""{"codegen":{"schemaSerde":true,"http-1x":true}}""").expectObjectNode(),
+                ),
+                testCoverage = HttpTestType.Default,
+            )
+        servers.forEach { check(!it.path.resolve("src/protocol_serde").toFile().exists()) }
     }
 
     private val completeTestModelWithOptionals =

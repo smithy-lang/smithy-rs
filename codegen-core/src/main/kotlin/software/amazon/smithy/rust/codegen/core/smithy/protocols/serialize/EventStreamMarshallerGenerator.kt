@@ -40,6 +40,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.unknownVariantError
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.EventStreamSerdeCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.eventStreamSerdeModule
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -56,6 +57,7 @@ open class EventStreamMarshallerGenerator(
     private val serializerGenerator: StructuredDataSerializerGenerator,
     private val payloadContentType: String,
     private val useSchemaSerde: Boolean = false,
+    protected val serdeCustomization: EventStreamSerdeCustomization? = null,
 ) {
     private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)
     private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
@@ -72,7 +74,7 @@ open class EventStreamMarshallerGenerator(
             "HeaderValue" to smithyTypes.resolve("event_stream::HeaderValue"),
             "Error" to smithyEventStream.resolve("error::Error"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
-            "SharedClientProtocol" to smithySchema.resolve("protocol::SharedClientProtocol"),
+            "SerdeContext" to (serdeCustomization?.contextType ?: smithySchema.resolve("protocol::SharedClientProtocol")),
             "PayloadSerializer" to smithySchema.resolve("codec::PayloadSerializer"),
             "SerializableStruct" to smithySchema.resolve("serde::SerializableStruct"),
         )
@@ -93,7 +95,7 @@ open class EventStreamMarshallerGenerator(
             // to come from that same protocol for the same reason it does for each event
             // frame. The protocol is therefore threaded in as a parameter; the legacy path
             // keeps the literal and the original one-argument signature.
-            val protocolParam = if (useSchemaSerde) ",\n                    protocol: &#{SharedClientProtocol}," else ""
+            val protocolParam = if (useSchemaSerde) ",\n                    protocol: &#{SerdeContext}," else ""
             rustBlockTemplate(
                 """
                 pub(crate) fn initial_message_from_body(
@@ -159,7 +161,7 @@ open class EventStreamMarshallerGenerator(
         marshallerType: RuntimeType,
         unionSymbol: Symbol,
     ) {
-        if (useSchemaSerde) {
+        if (useSchemaSerde || serdeCustomization != null) {
             rustTemplate(
                 """
                 ##[non_exhaustive]
@@ -170,11 +172,11 @@ open class EventStreamMarshallerGenerator(
                     // `@eventPayload`), the field is unused but still kept for API uniformity across
                     // operations.
                     ##[allow(dead_code)]
-                    protocol: #{SharedClientProtocol},
+                    protocol: #{SerdeContext},
                 }
 
                 impl ${marshallerType.name} {
-                    pub fn new(protocol: #{SharedClientProtocol}) -> Self {
+                    pub fn new(protocol: #{SerdeContext}) -> Self {
                         Self { protocol }
                     }
                 }
@@ -207,6 +209,9 @@ open class EventStreamMarshallerGenerator(
                 "fn marshall(&self, input: Self::Input) -> std::result::Result<#{Message}, #{Error}>",
                 *codegenScope,
             ) {
+                if (serdeCustomization != null) {
+                    rustTemplate("let _structured_media_type = #{mediaType};", "mediaType" to serdeCustomization.mediaType())
+                }
                 rust("let mut headers = Vec::new();")
                 addStringHeader(":message-type", "\"event\".into()")
                 rustBlock("let payload = match input") {
@@ -349,6 +354,18 @@ open class EventStreamMarshallerGenerator(
                 { rustTemplate("#{Bytes}::new()", *codegenScope) },
             )
         } else {
+            if (serdeCustomization != null) {
+                rustTemplate(
+                    "headers.push(#{Header}::new(\":content-type\", #{HeaderValue}::String(_structured_media_type.to_string().into())));",
+                    *codegenScope,
+                )
+                handleOptional(
+                    optional, inputExpr, "inner_payload",
+                    { input -> rustTemplate("#{payload}", "payload" to serdeCustomization.serialize(target, input)) },
+                    { rustTemplate("#{Bytes}::new()", *codegenScope) },
+                )
+                return
+            }
             if (useSchemaSerde) {
                 // The payload immediately below is encoded by whichever protocol is
                 // selected at runtime, so `:content-type` has to be resolved from that

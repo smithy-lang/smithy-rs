@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
@@ -87,7 +86,7 @@ class ServerOperationGenerator(
             "ResponseType" to responseFmt.type,
             *codegenScope,
         )
-        if ((codegenContext as? software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext)?.settings?.codegenConfig?.schemaSerde == true && runtimeConfig.httpVersion == HttpVersion.Http1x) {
+        if ((codegenContext as? software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext)?.usesSchemaHttpSerde == true) {
             writer.rustTemplate(
                 """
                 impl #{SmithyHttpServer}::operation::SchemaOperationShape for $operationName {

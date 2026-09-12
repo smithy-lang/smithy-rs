@@ -4,16 +4,12 @@
  */
 
 use aws_smithy_schema::serde::SerializableStruct;
-use aws_smithy_schema::Schema;
 
 /// A modeled `@error` shape that carries its own schema.
 ///
-/// [`SerializableStruct`] alone cannot say which shape it serializes; the schema supplies the
-/// members, the HTTP bindings and the shape ID that protocols use as the error discriminator.
-pub trait ModeledError: SerializableStruct {
-    /// The schema of this error shape, including its `smithy.api#error` trait.
-    fn schema(&self) -> &Schema<'_>;
-}
+/// The schema returned by [`SerializableStruct::schema`] must carry the Smithy `@error`
+/// trait. It supplies the members, HTTP bindings, and shape ID used by server protocols.
+pub trait ModeledError: SerializableStruct {}
 
 /// A modeled error that a [`ServerProtocol`](super::ServerProtocol) can turn into an HTTP response.
 pub trait HttpModeledError: ModeledError + std::error::Error + Send + Sync + 'static {

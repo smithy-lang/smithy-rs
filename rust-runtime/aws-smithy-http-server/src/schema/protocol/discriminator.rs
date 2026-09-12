@@ -11,7 +11,7 @@ use aws_smithy_schema::{Schema, ShapeId, ShapeType};
 /// The member index is irrelevant on the serialization path (codecs key off
 /// `member_name`); `usize::MAX` guards against accidental use for
 /// deserialization-side member lookup.
-static TYPE_MEMBER: Schema<'static> = Schema::new_member(
+pub(super) static TYPE_MEMBER: Schema<'static> = Schema::new_member(
     ShapeId::from_parts("smithy.api#String", "smithy.api", "String"),
     ShapeType::String,
     "__type",
@@ -59,6 +59,10 @@ pub(super) struct WithType<'a> {
 }
 
 impl SerializableStruct for WithType<'_> {
+    fn schema(&self) -> &Schema<'_> {
+        self.inner.schema()
+    }
+
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         self.inner.serialize_members(serializer)?;
         serializer.write_string(&TYPE_MEMBER, self.type_value)

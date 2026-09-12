@@ -167,6 +167,10 @@ struct AllTypes {
 }
 
 impl SerializableStruct for AllTypes {
+    fn schema(&self) -> &crate::Schema<'_> {
+        &ALL_TYPES_SCHEMA
+    }
+
     fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         if let Some(v) = self.a_byte {
             ser.write_byte(&M_BYTE, v)?;
@@ -333,6 +337,10 @@ struct SparseListHolder {
 }
 
 impl SerializableStruct for SparseListHolder {
+    fn schema(&self) -> &crate::Schema<'_> {
+        &SPARSE_LIST_HOLDER_SCHEMA
+    }
+
     fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         ser.write_list(&M_SPARSE_LIST, &|inner| {
             for v in &self.values {
@@ -410,6 +418,10 @@ struct Item {
 }
 
 impl SerializableStruct for Item {
+    fn schema(&self) -> &crate::Schema<'_> {
+        &ITEM_SCHEMA
+    }
+
     fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         ser.write_string(&M_ITEM_ID, &self.id)?;
         ser.write_integer(&M_ITEM_COUNT, self.count)?;
@@ -456,6 +468,10 @@ struct ItemBag {
 }
 
 impl SerializableStruct for ItemBag {
+    fn schema(&self) -> &crate::Schema<'_> {
+        &ITEM_BAG_SCHEMA
+    }
+
     fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         ser.write_list(&M_ITEM_LIST, &|inner| {
             for item in &self.items {
@@ -573,6 +589,10 @@ struct Tree {
 }
 
 impl SerializableStruct for Tree {
+    fn schema(&self) -> &crate::Schema<'_> {
+        &TREE_SCHEMA
+    }
+
     fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         ser.write_integer(&M_TREE_VALUE, self.value)?;
         if let Some(left) = &self.left {
@@ -656,6 +676,10 @@ struct MatrixHolder {
 }
 
 impl SerializableStruct for MatrixHolder {
+    fn schema(&self) -> &crate::Schema<'_> {
+        &MATRIX_HOLDER_SCHEMA
+    }
+
     fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         ser.write_list(&M_MATRIX, &|outer| {
             for row in &self.matrix {

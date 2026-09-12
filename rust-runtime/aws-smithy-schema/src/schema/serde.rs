@@ -309,6 +309,15 @@ mod test {
         // A simple struct that serializes two fields
         struct TestStruct;
         impl SerializableStruct for TestStruct {
+            fn schema(&self) -> &crate::Schema<'_> {
+                static SCHEMA: crate::Schema<'static> = crate::Schema::new_struct(
+                    crate::shape_id!("test", "TestStruct"),
+                    crate::ShapeType::Structure,
+                    &[&STRING, &INTEGER],
+                );
+                &SCHEMA
+            }
+
             fn serialize_members(
                 &self,
                 serializer: &mut dyn ShapeSerializer,
@@ -320,13 +329,13 @@ mod test {
         }
 
         let mut ser = MockSerializer { output: Vec::new() };
-        ser.write_struct(&STRING, &TestStruct).unwrap();
+        ser.write_struct(TestStruct.schema(), &TestStruct).unwrap();
 
         let output = ser.finish();
         assert_eq!(
             output,
             vec![
-                "struct(smithy.api#String)",
+                "struct(test#TestStruct)",
                 "string(field1)",
                 "int(123)",
                 "end_struct"

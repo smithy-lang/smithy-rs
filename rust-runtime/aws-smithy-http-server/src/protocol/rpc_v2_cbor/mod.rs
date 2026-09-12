@@ -15,16 +15,15 @@ pub struct RpcV2Cbor;
 /// Stateful schema-driven Smithy RPC v2 CBOR protocol implementation.
 #[derive(Debug)]
 pub struct RpcV2CborProtocol {
-    pub(crate) inner: crate::schema::protocol::rpc::RpcProtocol<aws_smithy_cbor::codec::CborCodec>,
+    pub(crate) inner:
+        crate::schema::protocol::rpc::RpcProtocol<crate::schema::protocol::rpc_v2_cbor_serde::RpcV2CborSerde>,
 }
 
 impl Default for RpcV2CborProtocol {
     fn default() -> Self {
         Self {
             inner: crate::schema::protocol::rpc::RpcProtocol::new(
-                aws_smithy_cbor::codec::CborCodec::new(
-                    aws_smithy_cbor::codec::CborCodecSettings::default().with_serialize_error_type(true),
-                ),
+                crate::schema::protocol::rpc_v2_cbor_serde::RpcV2CborSerde::default(),
                 "application/cbor",
                 None,
                 crate::schema::protocol::rpc::RpcAccept::ModeledOutput,

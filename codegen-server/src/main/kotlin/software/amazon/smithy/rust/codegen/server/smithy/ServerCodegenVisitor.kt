@@ -37,7 +37,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
-import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
@@ -53,8 +52,11 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveSha
 import software.amazon.smithy.rust.codegen.core.util.CommandError
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamMember
+import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
+import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.CollectionConstraintViolationGenerator
@@ -79,6 +81,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerRuntim
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerSchemaConstantGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerSchemaDeserializeGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerStreamingOperationGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerStructureConstrainedTraitImpl
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServiceConfigGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedCollectionGenerator
@@ -342,7 +345,7 @@ open class ServerCodegenVisitor(
                 structSettings = codegenContext.structSettings(),
             ).render()
             renderSchemaConstant(shape, this)
-            if (codegenContext.settings.codegenConfig.schemaSerde && codegenContext.runtimeConfig.httpVersion == HttpVersion.Http1x) {
+            if (codegenContext.usesSchemaHttpSerde) {
                 ServerSchemaDeserializeGenerator(codegenContext, this, shape, validationExceptionConversionGenerator).also {
                     it.render()
                     it.renderDeserializableShapeImpl()
@@ -358,15 +361,13 @@ open class ServerCodegenVisitor(
                     errorTrait,
                     codegenDecorator.errorImplCustomizations(codegenContext, emptyList()),
                 ).render(CodegenTarget.SERVER)
-                if (codegenContext.settings.codegenConfig.schemaSerde && codegenContext.runtimeConfig.httpVersion == HttpVersion.Http1x) {
+                if (codegenContext.usesSchemaHttpSerde) {
                     val status =
                         shape.getTrait<software.amazon.smithy.model.traits.HttpErrorTrait>()?.code
                             ?: if (errorTrait.isClientError) 400 else 500
                     rustTemplate(
                         """
-                        impl #{ModeledError} for ${codegenContext.symbolProvider.toSymbol(shape).name} {
-                            fn schema(&self) -> &#{Schema}<'_> { Self::SCHEMA }
-                        }
+                        impl #{ModeledError} for ${codegenContext.symbolProvider.toSymbol(shape).name} {}
                         impl #{HttpModeledError} for ${codegenContext.symbolProvider.toSymbol(shape).name} {
                             fn status_code(&self) -> u16 { $status }
                         }
@@ -646,7 +647,7 @@ open class ServerCodegenVisitor(
         rustCrate.useShapeWriter(shape) {
             UnionGenerator(model, codegenContext.symbolProvider, this, shape, renderUnknownVariant = false).render()
             renderSchemaConstant(shape, this)
-            if (codegenContext.settings.codegenConfig.schemaSerde && codegenContext.runtimeConfig.httpVersion == HttpVersion.Http1x) {
+            if (codegenContext.usesSchemaHttpSerde) {
                 ServerSchemaDeserializeGenerator(codegenContext, this, shape, validationExceptionConversionGenerator).render()
             }
         }
@@ -754,18 +755,34 @@ open class ServerCodegenVisitor(
                 model,
                 codegenContext.symbolProvider,
                 shape,
-                codegenContext.settings.codegenConfig.schemaSerde && codegenContext.runtimeConfig.httpVersion == HttpVersion.Http1x,
+                codegenContext.usesSchemaHttpSerde,
             ).render(this)
         }
+
+        // Under `schemaSerde`, a streaming operation runs on the schema path end to end: its
+        // `StreamingOperationShape` glue replaces the legacy `FromRequest`/`IntoResponse` pair.
+        val schemaStreaming =
+            codegenContext.usesSchemaHttpSerde &&
+                (shape.inputShape(model).hasStreamingMember(model) || shape.outputShape(model).hasStreamingMember(model))
 
         // Generate operation shapes.
         rustCrate.withModule(ServerRustModule.OperationShape) {
             ServerOperationGenerator(shape, codegenContext).render(this)
+            if (schemaStreaming) {
+                ServerStreamingOperationGenerator(
+                    codegenContext,
+                    protocolGenerator.protocol,
+                    shape,
+                    validationExceptionConversionGenerator,
+                ).render(this)
+            }
         }
 
-        // Generate operations ser/de.
-        rustCrate.withModule(ServerRustModule.Operation) {
-            protocolGenerator.renderOperation(this, shape)
+        // Schema operations use runtime HTTP serde, so they need no legacy FromRequest/IntoResponse glue.
+        if (!codegenContext.usesSchemaHttpSerde) {
+            rustCrate.withModule(ServerRustModule.Operation) {
+                protocolGenerator.renderOperation(this, shape)
+            }
         }
 
         codegenDecorator.postprocessOperationGenerateAdditionalStructures(shape)

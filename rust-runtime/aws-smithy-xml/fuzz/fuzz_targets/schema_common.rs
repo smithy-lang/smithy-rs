@@ -517,6 +517,10 @@ pub fn default_codec() -> XmlCodec {
 struct FuzzValueAsStruct<'a>(&'a FuzzValue);
 
 impl aws_smithy_schema::serde::SerializableStruct for FuzzValueAsStruct<'_> {
+    fn schema(&self) -> &Schema<'_> {
+        wrapper_schema_for(self.0)
+    }
+
     fn serialize_members(
         &self,
         ser: &mut dyn ShapeSerializer,

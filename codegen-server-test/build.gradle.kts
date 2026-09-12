@@ -76,6 +76,13 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
             "rpcv2Cbor_extras_no_initial_response",
             imports = listOf("$commonModels/rpcv2Cbor-extras.smithy"),
         ),
+        // Schema-driven path with event streams and initial messages on rpcv2Cbor.
+        CodegenTest(
+            "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
+            "rpcv2Cbor_extras_schema",
+            imports = listOf("$commonModels/rpcv2Cbor-extras.smithy"),
+            extraCodegenConfig = """"alwaysSendEventStreamInitialResponse": true, "schemaSerde": true""",
+        ),
         CodegenTest(
             "com.amazonaws.constraints#ConstraintsService",
             "constraints_without_public_constrained_types",

@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
+import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.Node
@@ -97,18 +98,24 @@ internal class CustomValidationExceptionWithReasonDecoratorTest {
         var model = File("../codegen-core/common-test-models/constraints.smithy").readText().asSmithyModel()
         model = swapOutSmithyValidationExceptionForCustomOne(model)
 
-        serverIntegrationTest(
-            model,
-            IntegrationTestParams(
-                additionalSettings =
-                    Node.objectNodeBuilder().withMember(
-                        "codegen",
-                        Node.objectNodeBuilder()
-                            .withMember("experimentalCustomValidationExceptionWithReasonPleaseDoNotUse", "com.amazonaws.constraints#ValidationException")
-                            .build(),
-                    ).build(),
-            ),
-            testCoverage = HttpTestType.Default,
-        )
+        for (schemaSerde in listOf(false, true)) {
+            val servers =
+                serverIntegrationTest(
+                    model,
+                    IntegrationTestParams(
+                        additionalSettings =
+                            Node.objectNodeBuilder().withMember(
+                                "codegen",
+                                Node.objectNodeBuilder()
+                                    .withMember("schemaSerde", schemaSerde)
+                                    .withMember("http-1x", schemaSerde)
+                                    .withMember("experimentalCustomValidationExceptionWithReasonPleaseDoNotUse", "com.amazonaws.constraints#ValidationException")
+                                    .build(),
+                            ).build(),
+                    ),
+                    testCoverage = HttpTestType.Default,
+                )
+            servers.forEach { it.path.resolve("src/protocol_serde").toFile().exists() shouldBe !schemaSerde }
+        }
     }
 }

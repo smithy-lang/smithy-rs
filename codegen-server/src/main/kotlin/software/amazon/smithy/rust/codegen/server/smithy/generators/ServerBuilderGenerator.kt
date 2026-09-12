@@ -28,6 +28,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
@@ -240,7 +241,11 @@ class ServerBuilderGenerator(
             "ValidationExceptionConverter" to
                 customValidationExceptionWithReasonConversionGenerator.renderImplFromConstraintViolationForValidationException(),
             "Converter" to
-                customValidationExceptionWithReasonConversionGenerator.renderImplFromConstraintViolationForRequestRejection(protocol),
+                if (codegenContext.usesSchemaHttpSerde) {
+                    writable {}
+                } else {
+                    customValidationExceptionWithReasonConversionGenerator.renderImplFromConstraintViolationForRequestRejection(protocol)
+                },
         )
     }
 
@@ -428,6 +433,11 @@ class ServerBuilderGenerator(
         val memberName = symbolProvider.toMemberName(member)
 
         writer.documentShape(member, model)
+        // The legacy deserializers call these setters. Under `schemaSerde` the schema walkers write the
+        // fields directly, leaving these setters unused on the schema HTTP path.
+        if (codegenContext.settings.codegenConfig.schemaSerde) {
+            Attribute.AllowDeadCode.render(writer)
+        }
         // Setter names will never hit a reserved word and therefore never need escaping.
         writer.rustBlock("pub(crate) fn set_${member.memberName.toSnakeCase()}(mut self, input: $inputType) -> Self") {
             rust(

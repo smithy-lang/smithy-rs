@@ -18,7 +18,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.findStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -29,10 +28,7 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerAwsJsonProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestJsonProtocol
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestXmlProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRpcV2CborProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.schemaProtocolStruct
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Error as ErrorModule
@@ -64,24 +60,24 @@ class ServerServiceGenerator(
     private val serviceId = service.id
     private val serviceName = serviceId.name.toPascalCase()
     private val builderName = "${serviceName}Builder"
-    private val schemaRest =
-        codegenContext.settings.codegenConfig.schemaSerde && runtimeConfig.httpVersion == HttpVersion.Http1x &&
-            (
-                protocol is ServerRestJsonProtocol || protocol is ServerRestXmlProtocol ||
-                    protocol is ServerAwsJsonProtocol || protocol is ServerRpcV2CborProtocol
-            )
+    private val schemaRest = codegenContext.usesSchemaHttpSerde
 
-    private fun usesDynUpgrade(operation: OperationShape): Boolean =
-        schemaRest && operation.inputShape(model).findStreamingMember(model) == null &&
-            operation.outputShape(model).findStreamingMember(model) == null
+    private fun streams(operation: OperationShape): Boolean =
+        operation.inputShape(model).findStreamingMember(model) != null ||
+            operation.outputShape(model).findStreamingMember(model) != null
 
+    /** On the schema path every operation runs on one of the two schema plugins; nothing uses the legacy upgrade. */
     private fun upgradePlugin(operation: OperationShape): RuntimeType =
         smithyHttpServer.resolve(
-            if (usesDynUpgrade(operation)) "operation::DynUpgradePlugin" else "operation::UpgradePlugin",
+            when {
+                !schemaRest -> "operation::UpgradePlugin"
+                streams(operation) -> "operation::StreamingUpgradePlugin"
+                else -> "operation::DynUpgradePlugin"
+            },
         )
 
     private fun upgradeConstructor(operation: OperationShape): String =
-        if (usesDynUpgrade(operation)) {
+        if (schemaRest) {
             val max = codegenContext.settings.codegenConfig.requestBodyMaxBytes
             val maxExpr = if (max > 0) "::std::num::NonZeroUsize::new(${max}usize)" else "None"
             "new(#{SmithyHttpServer}::schema::RequestBodyCollectionConfig { max_bytes: $maxExpr, read_timeout: None })"
@@ -98,7 +94,7 @@ class ServerServiceGenerator(
      */
     private fun schemaProtocolHandle(): String =
         if (schemaRest) {
-            "let protocol: ::std::sync::Arc<dyn #{SmithyHttpServer}::schema::ServerProtocol> = ::std::sync::Arc::new(#{SchemaProtocol}::default());"
+            "let protocol = #{SmithyHttpServer}::schema::SharedServerProtocol::new(#{SchemaProtocol}::default());"
         } else {
             ""
         }

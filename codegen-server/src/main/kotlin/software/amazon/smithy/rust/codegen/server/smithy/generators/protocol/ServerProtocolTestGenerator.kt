@@ -68,8 +68,7 @@ class ServerProtocolTestGenerator(
 ) : ProtocolTestGenerator() {
     /** Whether the generated service runs the schema-driven request and response path. */
     private val schemaSerde =
-        (codegenContext as? ServerCodegenContext)?.settings?.codegenConfig?.schemaSerde == true &&
-            codegenContext.runtimeConfig.httpVersion == HttpVersion.Http1x
+        (codegenContext as? ServerCodegenContext)?.usesSchemaHttpSerde == true
 
     companion object {
         private val ExpectFail: Set<FailingTest> =
@@ -404,14 +403,21 @@ class ServerProtocolTestGenerator(
         }
         val schemaProtocol = schemaProtocolStruct(codegenContext.protocol, codegenContext.runtimeConfig)
         val outputIsStreaming = operationShape.outputShape(model).hasStreamingMember(model)
-        if (schemaSerde && schemaProtocol != null && !outputIsStreaming) {
+        if (schemaSerde && schemaProtocol != null) {
             // The schema path: the response travels through the erased protocol handle the service
-            // selects at routing, exactly as `DynUpgrade` serializes a handler's output or error.
+            // selects at routing, exactly as the schema upgrades serialize a handler's output or error.
             val serialize =
                 if (shape.hasTrait<ErrorTrait>()) {
                     writable {
                         rustTemplate(
                             "{ use #{SmithyHttpServer}::operation::IntoDynResponse; output.into_dyn_response(&*protocol) }",
+                            *codegenScope,
+                        )
+                    }
+                } else if (outputIsStreaming) {
+                    writable {
+                        rustTemplate(
+                            "<crate::operation_shape::${operationSymbol.name} as #{SmithyHttpServer}::operation::StreamingOperationShape>::serialize_streaming_output(output, &protocol)",
                             *codegenScope,
                         )
                     }
@@ -425,7 +431,7 @@ class ServerProtocolTestGenerator(
                 }
             rustTemplate(
                 """
-                let protocol: ::std::sync::Arc<dyn #{SmithyHttpServer}::schema::ServerProtocol> = ::std::sync::Arc::new(#{SchemaProtocol}::default());
+                let protocol = #{SmithyHttpServer}::schema::SharedServerProtocol::new(#{SchemaProtocol}::default());
                 let http_response = #{Serialize:W};
                 """,
                 *codegenScope,
@@ -638,7 +644,10 @@ class ServerProtocolTestGenerator(
         val operationName = RustReservedWords.escapeIfNeeded(operationSymbol.name.toSnakeCase())
 
         val inputShape = operationShape.inputShape(model)
-        val needsSync = inputShape.hasStreamingMember(model)
+        // The schema streaming upgrade hands the body to `SdkBody`, which needs `Sync`, on both sides.
+        val needsSync =
+            inputShape.hasStreamingMember(model) ||
+                (schemaSerde && operationShape.outputShape(model).hasStreamingMember(model))
 
         rustWriter.rustTemplate(
             """

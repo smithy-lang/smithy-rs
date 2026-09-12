@@ -57,6 +57,13 @@ pub static TIMESTAMP: Schema<'static> =
 pub static DOCUMENT: Schema<'static> =
     Schema::new(shape_id!("smithy.api", "Document"), ShapeType::Document);
 
+/// The Smithy unit structure, with no members.
+pub static UNIT: Schema<'static> = Schema::new_struct(
+    crate::shape_id!("smithy.api", "Unit"),
+    ShapeType::Structure,
+    &[],
+);
+
 #[cfg(test)]
 mod tests {
     use super::*;

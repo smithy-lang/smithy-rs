@@ -28,6 +28,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
@@ -80,7 +81,8 @@ class ServerSchemaGenerator(
     private val codegenContext: CodegenContext,
     private val writer: RustWriter,
     private val shape: Shape,
-    private val traitFilter: SchemaTraitFilter = SchemaTraitFilter(codegenContext.model),
+    private val traitFilter: SchemaTraitFilter =
+        SchemaTraitFilter(codegenContext.model, additionalTraits = setOf(ErrorTrait.ID)),
     private val traitExtension: SchemaTraitExtension = SchemaTraitExtension(),
     private val syntheticMembers: List<SyntheticSchemaMember> = emptyList(),
     /** Override the prefix used for generated static names. Defaults to the symbol name uppercased. */
@@ -246,6 +248,7 @@ class ServerSchemaGenerator(
         val codegenScope =
             arrayOf(
                 "SerializableStruct" to smithySchema.resolve("serde::SerializableStruct"),
+                "Schema" to smithySchema.resolve("Schema"),
                 "ShapeSerializer" to smithySchema.resolve("serde::ShapeSerializer"),
                 "SerdeError" to smithySchema.resolve("serde::SerdeError"),
             )
@@ -286,6 +289,8 @@ class ServerSchemaGenerator(
         writer.rustTemplate(
             """
             impl #{SerializableStruct} for $structName {
+                fn schema(&self) -> &#{Schema}<'_> { Self::SCHEMA }
+
                 ##[allow(unused_variables, clippy::diverging_sub_expression)]
                 fn serialize_members(&self, ser: &mut dyn #{ShapeSerializer}) -> ::std::result::Result<(), #{SerdeError}> {
                     #{memberWrites}
@@ -306,6 +311,7 @@ class ServerSchemaGenerator(
         val codegenScope =
             arrayOf(
                 "SerializableStruct" to smithySchema.resolve("serde::SerializableStruct"),
+                "Schema" to smithySchema.resolve("Schema"),
                 "ShapeSerializer" to smithySchema.resolve("serde::ShapeSerializer"),
                 "SerdeError" to smithySchema.resolve("serde::SerdeError"),
             )
@@ -322,16 +328,20 @@ class ServerSchemaGenerator(
 
                     if (member.isTargetUnit()) {
                         // Unit variants serialize as empty objects {} in JSON, not null
-                        rust(
+                        rustTemplate(
                             """
                             Self::$variantName => {
                                 struct Empty;
-                                impl ::aws_smithy_schema::serde::SerializableStruct for Empty {
-                                    fn serialize_members(&self, _ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer) -> ::std::result::Result<(), ::aws_smithy_schema::serde::SerdeError> { Ok(()) }
+                                impl #{SerializableStruct} for Empty {
+                                    fn schema(&self) -> &#{Schema}<'_> { &#{UnitSchema} }
+                                    fn serialize_members(&self, _ser: &mut dyn #{ShapeSerializer}) -> #{Result}<(), #{SerdeError}> { #{Ok}(()) }
                                 }
                                 ser.write_struct(&$memberSchemaRef, &Empty)?;
                             },
                             """,
+                            *codegenScope,
+                            *RuntimeType.preludeScope,
+                            "UnitSchema" to smithySchema.resolve("prelude::UNIT"),
                         )
                     } else {
                         val writeExpr = unionVariantWriteExpr(target, memberSchemaRef, "val", member)
@@ -345,6 +355,8 @@ class ServerSchemaGenerator(
         writer.rustTemplate(
             """
             impl #{SerializableStruct} for $unionName {
+                fn schema(&self) -> &#{Schema}<'_> { Self::SCHEMA }
+
                 ##[allow(unused_variables, clippy::diverging_sub_expression)]
                 fn serialize_members(&self, ser: &mut dyn #{ShapeSerializer}) -> ::std::result::Result<(), #{SerdeError}> {
                     match self {
@@ -879,6 +891,7 @@ class ServerSchemaGenerator(
             val traits = traitFilter.traitsFor(shape)
             val codegenScope =
                 arrayOf(
+                    *RuntimeType.preludeScope,
                     "AnnotationTrait" to smithySchema.resolve("AnnotationTrait"),
                     "StringTrait" to smithySchema.resolve("StringTrait"),
                     "DocumentTrait" to smithySchema.resolve("DocumentTrait"),
@@ -908,12 +921,12 @@ class ServerSchemaGenerator(
                 val stringValue = trait.stringValue()
                 if (trait.isAnnotationTrait()) {
                     rustTemplate(
-                        """map.insert(Box::new(#{AnnotationTrait}::new(#{ShapeId}::from_parts("$traitNs##$traitName", "$traitNs", "$traitName"))));""",
+                        """map.insert(#{Box}::new(#{AnnotationTrait}::new(#{ShapeId}::from_parts("$traitNs##$traitName", "$traitNs", "$traitName"))));""",
                         *codegenScope,
                     )
                 } else if (stringValue != null) {
                     rustTemplate(
-                        """map.insert(Box::new(#{StringTrait}::new(#{ShapeId}::from_parts("$traitNs##$traitName", "$traitNs", "$traitName"), ${stringValue.dq()})));""",
+                        """map.insert(#{Box}::new(#{StringTrait}::new(#{ShapeId}::from_parts("$traitNs##$traitName", "$traitNs", "$traitName"), ${stringValue.dq()})));""",
                         *codegenScope,
                     )
                 } else {
@@ -925,7 +938,7 @@ class ServerSchemaGenerator(
                     // unknown trait values "should be represented with a document data
                     // type").
                     rustTemplate(
-                        """map.insert(Box::new(#{DocumentTrait}::new(#{ShapeId}::from_parts("$traitNs##$traitName", "$traitNs", "$traitName"), #{docValue})));""",
+                        """map.insert(#{Box}::new(#{DocumentTrait}::new(#{ShapeId}::from_parts("$traitNs##$traitName", "$traitNs", "$traitName"), #{docValue})));""",
                         *codegenScope,
                         "docValue" to nodeToDocument(trait.toNode()),
                     )
@@ -1050,7 +1063,15 @@ class ServerSchemaGenerator(
             } else {
                 ""
             }
-        return baseChain + targetTimestampFormat + targetMediaType
+        // `@streaming` sits on the target union or blob; the member schema carries it so the runtime
+        // can tell a streaming payload from a collected one.
+        val targetStreaming =
+            if (!member.hasTrait(StreamingTrait::class.java) && target.hasTrait(StreamingTrait::class.java)) {
+                "\n    .with_streaming()"
+            } else {
+                ""
+            }
+        return baseChain + targetTimestampFormat + targetMediaType + targetStreaming
     }
 
     /**
@@ -1195,7 +1216,7 @@ class ServerSchemaGenerator(
      *
      * Termination invariant: this recursion descends only through aggregate
      * members (list element, map key/value) and stops at structure/union targets
-     * (the `else -> ""` arm) and scalars. A structure/union carries its own
+     * and scalars. A structure/union carries its own
      * top-level `::SCHEMA` constant, so the descent never crosses that boundary.
      * Combined with the Smithy guarantee that a recursive list/map/set is valid
      * only if its cycle passes through a structure or union, the descent is

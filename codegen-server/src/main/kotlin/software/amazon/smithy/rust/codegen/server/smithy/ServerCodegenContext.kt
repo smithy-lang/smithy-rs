@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderInstantiator
@@ -39,6 +40,16 @@ data class ServerCodegenContext(
 ) : CodegenContext(
         model, symbolProvider, moduleDocProvider, serviceShape, protocol, settings, CodegenTarget.SERVER,
     ) {
+    /** Whether operations use the schema runtime instead of legacy HTTP serde. */
+    val usesSchemaHttpSerde: Boolean
+        get() =
+            settings.codegenConfig.schemaSerde && runtimeConfig.httpVersion == HttpVersion.Http1x &&
+                protocol.toString() in
+                setOf(
+                    "aws.protocols#restJson1", "aws.protocols#restXml",
+                    "aws.protocols#awsJson1_0", "aws.protocols#awsJson1_1", "smithy.protocols#rpcv2Cbor",
+                )
+
     override fun builderInstantiator(): BuilderInstantiator {
         return ServerBuilderInstantiator(symbolProvider, returnSymbolToParseFn(this))
     }
