@@ -59,23 +59,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerAwsJson
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerRestJsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
 
-/**
- * The runtime `ServerProtocol` implementation the schema path uses for [protocol], or `null` when
- * the protocol has none. Generated services build one of these once and pair it with each route.
- */
-fun schemaProtocolStruct(
-    protocol: ShapeId,
-    runtimeConfig: RuntimeConfig,
-): RuntimeType? =
-    when (protocol) {
-        RestJson1Trait.ID -> ServerRuntimeType.protocol("RestJson1Protocol", "rest_json_1", runtimeConfig)
-        RestXmlTrait.ID -> ServerRuntimeType.protocol("RestXmlProtocol", "rest_xml", runtimeConfig)
-        AwsJson1_0Trait.ID -> ServerRuntimeType.protocol("AwsJson1_0Protocol", "aws_json_10", runtimeConfig)
-        AwsJson1_1Trait.ID -> ServerRuntimeType.protocol("AwsJson1_1Protocol", "aws_json_11", runtimeConfig)
-        Rpcv2CborTrait.ID -> ServerRuntimeType.protocol("RpcV2CborProtocol", "rpc_v2_cbor", runtimeConfig)
-        else -> null
-    }
-
 interface ServerProtocol : Protocol {
     /** The path such that `aws_smithy_http_server::protocol::$path` points to the protocol's module. */
     val protocolModulePath: String

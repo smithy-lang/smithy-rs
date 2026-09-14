@@ -732,6 +732,7 @@ open class ServerCodegenVisitor(
                 codegenContext,
                 serverProtocol,
                 isConfigBuilderFallible,
+                codegenDecorator.additionalProtocolRegistrations(codegenContext),
             ).render(this)
 
             ServiceConfigGenerator(codegenContext, configMethods).render(this)

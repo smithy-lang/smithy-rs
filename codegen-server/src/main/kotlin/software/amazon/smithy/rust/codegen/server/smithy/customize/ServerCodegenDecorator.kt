@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CombinedCoreCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CoreCodegenDecorator
@@ -77,6 +78,14 @@ interface ServerCodegenDecorator : CoreCodegenDecorator<ServerCodegenContext, Se
      * pre-applied layers and plugins.
      */
     fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> = emptyList()
+
+    /**
+     * Additional protocol registrations for the schema-serde path. Each writable renders an
+     * `aws_smithy_http_server::schema::ProtocolRegistration` expression; the generated service
+     * builder registers them ahead of the built-in protocols before resolving the service's
+     * protocol from its `ServiceSchema`.
+     */
+    fun additionalProtocolRegistrations(codegenContext: ServerCodegenContext): List<Writable> = emptyList()
 }
 
 /**
@@ -138,6 +147,9 @@ class CombinedServerCodegenDecorator(decorators: List<ServerCodegenDecorator>) :
 
     override fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> =
         orderedDecorators.flatMap { it.configMethods(codegenContext) }
+
+    override fun additionalProtocolRegistrations(codegenContext: ServerCodegenContext): List<Writable> =
+        orderedDecorators.flatMap { it.additionalProtocolRegistrations(codegenContext) }
 
     companion object {
         fun fromClasspath(

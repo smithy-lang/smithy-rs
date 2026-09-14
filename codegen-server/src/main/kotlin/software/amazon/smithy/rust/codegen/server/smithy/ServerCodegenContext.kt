@@ -40,15 +40,14 @@ data class ServerCodegenContext(
 ) : CodegenContext(
         model, symbolProvider, moduleDocProvider, serviceShape, protocol, settings, CodegenTarget.SERVER,
     ) {
-    /** Whether operations use the schema runtime instead of legacy HTTP serde. */
+    /**
+     * Whether operations use the schema runtime instead of legacy HTTP serde.
+     *
+     * The protocol itself is resolved at runtime through the service builder's
+     * `ProtocolRegistry`; a service whose protocol has no registration fails loudly in `build()`.
+     */
     val usesSchemaHttpSerde: Boolean
-        get() =
-            settings.codegenConfig.schemaSerde && runtimeConfig.httpVersion == HttpVersion.Http1x &&
-                protocol.toString() in
-                setOf(
-                    "aws.protocols#restJson1", "aws.protocols#restXml",
-                    "aws.protocols#awsJson1_0", "aws.protocols#awsJson1_1", "smithy.protocols#rpcv2Cbor",
-                )
+        get() = settings.codegenConfig.schemaSerde && runtimeConfig.httpVersion == HttpVersion.Http1x
 
     override fun builderInstantiator(): BuilderInstantiator {
         return ServerBuilderInstantiator(symbolProvider, returnSymbolToParseFn(this))

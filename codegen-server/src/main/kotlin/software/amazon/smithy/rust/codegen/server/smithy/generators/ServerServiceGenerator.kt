@@ -30,7 +30,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRpcV2CborProtocol
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.schemaProtocolStruct
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Error as ErrorModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Input as InputModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Output as OutputModule
@@ -39,6 +38,7 @@ class ServerServiceGenerator(
     private val codegenContext: ServerCodegenContext,
     private val protocol: ServerProtocol,
     private val isConfigBuilderFallible: Boolean,
+    private val additionalProtocolRegistrations: List<Writable> = emptyList(),
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val smithyHttpServer = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
@@ -85,18 +85,34 @@ class ServerServiceGenerator(
             "new()"
         }
 
-    private fun schemaProtocol(): RuntimeType =
-        schemaProtocolStruct(codegenContext.protocol, runtimeConfig) ?: protocol.markerStruct()
-
     /**
      * Builds the erased protocol handle once per service; every `SchemaRoute` pairs a clone of it with
      * the routed operation's schema.
+     *
+     * The handle comes out of a `ProtocolRegistry`: the built-in protocols plus any registrations the
+     * decorators contributed, resolved against the generated `ServiceSchema`. Registrations from
+     * decorators take precedence over the built-ins.
      */
-    private fun schemaProtocolHandle(): String =
-        if (schemaRest) {
-            "let protocol = #{SmithyHttpServer}::schema::SharedServerProtocol::new(#{SchemaProtocol}::default());"
-        } else {
-            ""
+    private fun schemaProtocolHandle(): Writable =
+        writable {
+            if (!schemaRest) {
+                return@writable
+            }
+            val registrations =
+                additionalProtocolRegistrations.map { registration ->
+                    writable { rustTemplate(".register(#{Registration})", "Registration" to registration) }
+                }.join("")
+            val serviceSchema =
+                "crate::schema::service::${ServerServiceSchemaGenerator.serviceSchemaConstName(codegenContext.serviceShape)}"
+            rustTemplate(
+                """
+                let protocol = #{SmithyHttpServer}::schema::ProtocolRegistry::builtin()#{Registrations}
+                    .resolve(&$serviceSchema)
+                    .expect("no protocol registered for the service's protocol traits; the schema-serde path requires a `ProtocolRegistration` for the protocol");
+                """,
+                *codegenScope,
+                "Registrations" to registrations,
+            )
         }
 
     /** The `SelectedProtocolOperation` a `SchemaRoute` records for [operationShape]. */
@@ -459,7 +475,7 @@ class ServerServiceGenerator(
 
                         #{PatternInitializations:W}
 
-                        ${schemaProtocolHandle()}
+                        #{SchemaProtocolHandle:W}
 
                         #{Router}::from_iter([#{RoutesArrayElements:W}])
                     };
@@ -470,7 +486,7 @@ class ServerServiceGenerator(
                 """,
                 *codegenScope,
                 "Protocol" to protocol.markerStruct(),
-                "SchemaProtocol" to schemaProtocol(),
+                "SchemaProtocolHandle" to schemaProtocolHandle(),
                 "Router" to protocol.routerType(),
                 "NullabilityChecks" to nullabilityChecks,
                 "RoutesArrayElements" to routesArrayElements,
@@ -544,7 +560,7 @@ class ServerServiceGenerator(
                         #{SmithyHttpServer}::routing::${if (schemaRest) "SchemaRoutingService" else "RoutingService"}<#{Router}<#{SmithyHttpServer}::routing::${if (schemaRest) "SchemaRoute<Body>" else "Route<Body>"}>, #{Protocol}>
                     >
                 {
-                    ${schemaProtocolHandle()}
+                    #{SchemaProtocolHandle:W}
                     let router = #{Router}::from_iter([#{Pairs:W}]);
                     let svc = self
                         .layer
@@ -554,7 +570,7 @@ class ServerServiceGenerator(
                 """,
                 *codegenScope,
                 "Protocol" to protocol.markerStruct(),
-                "SchemaProtocol" to schemaProtocol(),
+                "SchemaProtocolHandle" to schemaProtocolHandle(),
                 "Router" to protocol.routerType(),
                 "Pairs" to pairs,
             )

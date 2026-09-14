@@ -56,6 +56,7 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerInstantiator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceSchemaGenerator
 import java.util.logging.Logger
 
 /**
@@ -401,9 +402,8 @@ class ServerProtocolTestGenerator(
             val variant = symbolProvider.toSymbol(shape).name
             rust("let output = $operationErrorName::$variant(output);")
         }
-        val schemaProtocol = schemaProtocolStruct(codegenContext.protocol, codegenContext.runtimeConfig)
         val outputIsStreaming = operationShape.outputShape(model).hasStreamingMember(model)
-        if (schemaSerde && schemaProtocol != null) {
+        if (schemaSerde) {
             // The schema path: the response travels through the erased protocol handle the service
             // selects at routing, exactly as the schema upgrades serialize a handler's output or error.
             val serialize =
@@ -429,13 +429,16 @@ class ServerProtocolTestGenerator(
                         )
                     }
                 }
+            val serviceSchema =
+                "crate::schema::service::${ServerServiceSchemaGenerator.serviceSchemaConstName(codegenContext.serviceShape)}"
             rustTemplate(
                 """
-                let protocol = #{SmithyHttpServer}::schema::SharedServerProtocol::new(#{SchemaProtocol}::default());
+                let protocol = #{SmithyHttpServer}::schema::ProtocolRegistry::builtin()
+                    .resolve(&$serviceSchema)
+                    .expect("no protocol registered for the service's protocol traits");
                 let http_response = #{Serialize:W};
                 """,
                 *codegenScope,
-                "SchemaProtocol" to schemaProtocol,
                 "Serialize" to serialize,
             )
         } else {

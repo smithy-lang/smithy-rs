@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.HttpTrait
@@ -68,7 +69,7 @@ class ServerServiceSchemaGenerator(
             "ShapeType" to smithySchema.resolve("ShapeType"),
         )
     private val operations = TopDownIndex.of(model).getContainedOperations(service).sortedBy { it.id }
-    private val serviceConstName = service.id.name.toSnakeCase().uppercase()
+    private val serviceConstName = serviceSchemaConstName(service)
 
     fun render(rustCrate: RustCrate) {
         rustCrate.withModule(OperationsModule) {
@@ -160,5 +161,8 @@ class ServerServiceSchemaGenerator(
 
         /** `crate::schema::service`: the `ServiceSchema` for the generated service. */
         val ServiceModule = RustModule.pubCrate("service", parent = SchemaModule)
+
+        /** The name of the `ServiceSchema` static in `crate::schema::service`. */
+        fun serviceSchemaConstName(service: ServiceShape): String = service.id.name.toSnakeCase().uppercase()
     }
 }
