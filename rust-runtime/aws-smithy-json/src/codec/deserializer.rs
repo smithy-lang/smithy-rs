@@ -81,6 +81,9 @@ impl<'a> JsonDeserializer<'a> {
                     has_escapes = true;
                     i += 2;
                 }
+                0..=31 if self.settings.enforce_strictness => {
+                    return Err(SerdeError::invalid_input("raw control character in string"));
+                }
                 _ => i += 1,
             }
         }
@@ -190,6 +193,9 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         // Expect opening brace
         self.skip_whitespace();
         if self.remaining().is_empty() {
+            if self.settings.enforce_strictness && (!self.input.is_empty() || self.depth != 1) {
+                return Err(SerdeError::invalid_input("expected object"));
+            }
             // Treat empty input as an empty object (e.g., empty HTTP response body)
             self.depth -= 1;
             return Ok(());
@@ -367,7 +373,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         match self.remaining().first() {
             Some(b'-') | Some(b'0'..=b'9') => {
                 let start = self.position;
-                self.consume_number();
+                self.consume_number()?;
                 let num_str = std::str::from_utf8(&self.input[start..self.position])
                     .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
                 BigInteger::from_str(num_str).map_err(|e| SerdeError::invalid_input(e.to_string()))
@@ -391,7 +397,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         match self.remaining().first() {
             Some(b'-') | Some(b'0'..=b'9') => {
                 let start = self.position;
-                self.consume_number();
+                self.consume_number()?;
                 let num_str = std::str::from_utf8(&self.input[start..self.position])
                     .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
                 BigDecimal::from_str(num_str).map_err(|e| SerdeError::invalid_input(e.to_string()))
@@ -436,6 +442,9 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                     .map(|s| s.into_owned())
                     .map_err(|e| SerdeError::invalid_input(e.to_string()));
             } else {
+                if self.settings.enforce_strictness && rem[i] < 32 {
+                    return Err(SerdeError::invalid_input("raw control character in string"));
+                }
                 i += 1;
             }
         }
@@ -633,13 +642,25 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                 }
                 // Numeric timestamp: epoch seconds.
                 let start = self.position;
-                self.consume_number();
+                self.consume_number()?;
                 let num_str = std::str::from_utf8(&self.input[start..self.position])
                     .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
                 if num_str.contains('.') || num_str.contains('e') || num_str.contains('E') {
                     let f: f64 = num_str.parse().map_err(|e: std::num::ParseFloatError| {
                         SerdeError::invalid_input(e.to_string())
                     })?;
+                    // The i64 range as f64. `i64::MAX as f64` rounds up to 2^63, which is
+                    // why the range is half-open: 2^63 itself overflows `floor() as i64`
+                    // and would saturate silently in `DateTime::from_secs_f64`.
+                    const I64_MIN_F64: f64 = i64::MIN as f64;
+                    const I64_MAX_F64: f64 = i64::MAX as f64;
+                    if self.settings.enforce_strictness
+                        && (!f.is_finite() || !(I64_MIN_F64..I64_MAX_F64).contains(&f))
+                    {
+                        return Err(SerdeError::invalid_input(
+                            "epoch-seconds value out of range",
+                        ));
+                    }
                     Ok(DateTime::from_secs_f64(f))
                 } else if num_str.starts_with('-') {
                     let n: i64 = num_str.parse().map_err(|e: std::num::ParseIntError| {
@@ -722,6 +743,11 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                 // Parse a JSON number into [`Document::Number`].
                 // Range determines which `Number` variant carries it
                 // (PosInt / NegInt / Float).
+                if self.settings.enforce_strictness {
+                    let start = self.position;
+                    self.consume_number()?;
+                    self.position = start;
+                }
                 let rem = self.remaining();
                 let mut len = 0;
                 let mut is_float = false;
@@ -1070,6 +1096,9 @@ impl<'a> JsonDeserializer<'a> {
 
     /// Skips a JSON string, accepting exactly the escape sequences `read_string` accepts.
     fn skip_string(&mut self) -> Result<(), SerdeError> {
+        if self.settings.enforce_strictness {
+            return self.parse_key().map(|_| ());
+        }
         let rem = self.remaining();
         debug_assert_eq!(rem.first(), Some(&b'"'));
         let mut i = 1;
@@ -1102,7 +1131,19 @@ impl<'a> JsonDeserializer<'a> {
         Ok(())
     }
 
-    fn consume_number(&mut self) {
+    fn consume_number(&mut self) -> Result<(), SerdeError> {
+        if self.settings.enforce_strictness {
+            self.skip_number()?;
+            // Allow whitespace, JSON delimiters, or end of input after the number.
+            if self
+                .remaining()
+                .first()
+                .is_some_and(|b| !matches!(b, b' ' | b'\t' | b'\r' | b'\n' | b',' | b']' | b'}'))
+            {
+                return Err(SerdeError::invalid_input("invalid number boundary"));
+            }
+            return Ok(());
+        }
         let mut len = 0;
         for &b in self.remaining() {
             if b.is_ascii_digit() || b == b'-' || b == b'.' || b == b'e' || b == b'E' || b == b'+' {
@@ -1112,11 +1153,12 @@ impl<'a> JsonDeserializer<'a> {
             }
         }
         self.advance_by(len);
+        Ok(())
     }
 
     /// Skips one JSON value, validating its syntax as it goes so that an unknown member
     /// cannot smuggle malformed JSON past the deserializer. Like `read_string`, raw control
-    /// characters inside strings are not rejected.
+    /// characters inside strings are rejected only when strictness is enabled.
     fn skip_value(&mut self) -> Result<(), SerdeError> {
         self.skip_whitespace();
         match self.remaining().first().copied() {
@@ -1180,6 +1222,25 @@ impl<'a> JsonDeserializer<'a> {
 
     fn read_integer_value(&mut self) -> Result<i64, SerdeError> {
         self.skip_whitespace();
+        if self.settings.enforce_strictness || self.settings.allow_integral_float_numbers {
+            let start = self.position;
+            self.skip_number()?;
+            if self
+                .remaining()
+                .first()
+                .is_some_and(|b| !matches!(b, b' ' | b'\t' | b'\r' | b'\n' | b',' | b']' | b'}'))
+            {
+                return Err(SerdeError::invalid_input("invalid number boundary"));
+            }
+            let text = std::str::from_utf8(&self.input[start..self.position])
+                .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
+            if self.settings.allow_integral_float_numbers && text.contains(['.', 'e', 'E']) {
+                return parse_integral_decimal(text);
+            }
+            return text
+                .parse()
+                .map_err(|e: std::num::ParseIntError| SerdeError::invalid_input(e.to_string()));
+        }
         let rem = self.remaining();
         let mut len = 0;
         for &b in rem {
@@ -1240,6 +1301,14 @@ impl<'a> JsonDeserializer<'a> {
             }
             return Ok(value);
         }
+        if self.settings.enforce_strictness {
+            let start = self.position;
+            self.consume_number()?;
+            return std::str::from_utf8(&self.input[start..self.position])
+                .map_err(|e| SerdeError::invalid_input(e.to_string()))?
+                .parse()
+                .map_err(|e: std::num::ParseFloatError| SerdeError::invalid_input(e.to_string()));
+        }
         let mut len = 0;
         for &b in rem {
             if b.is_ascii_digit() || b == b'-' || b == b'+' || b == b'.' || b == b'e' || b == b'E' {
@@ -1259,6 +1328,64 @@ impl<'a> JsonDeserializer<'a> {
         self.advance_by(len);
         Ok(n)
     }
+}
+
+/// Converts a JSON number written with a fraction or exponent (`1.0`, `1e3`,
+/// `1.50E1`) to an `i64`, exactly, or fails if it is not a whole number in range.
+///
+/// The number is treated as `digits × 10^shift`, where `digits` is the mantissa
+/// with the `.` removed and `shift = exponent − (digits after the '.')`. For
+/// `1.50E1`: digits `150`, shift `1 − 2 = −1`, value `150 × 10^-1 = 15`. The
+/// integer keeps the first `kept = significant digits + shift` of them; any it
+/// drops must be zeros, and it can have at most the 19 digits an `i64` holds.
+///
+/// The arithmetic never goes through `f64`: an `f64` has a 53-bit significand,
+/// so not every integer above 2^53 is representable. `9007199254740993.0`
+/// (2^53 + 1) parses to the nearest `f64`, which is 2^53, and would come out
+/// as `9007199254740992` with no error. Accumulating into an `i128` instead
+/// cannot overflow for 19 digits, and `i64::try_from` does the range check.
+///
+/// `text` has already passed `skip_number`, so it is a well-formed JSON number.
+/// An exponent that does not fit an `i64` is rejected even when the digits are
+/// all zero.
+fn parse_integral_decimal(text: &str) -> Result<i64, SerdeError> {
+    let invalid = || SerdeError::invalid_input("number is fractional or outside integer range");
+    let negative = text.starts_with('-');
+    let unsigned = text.strip_prefix('-').unwrap_or(text);
+    let (mantissa, exponent) = unsigned.split_once(['e', 'E']).unwrap_or((unsigned, "0"));
+    let (int_part, frac_part) = mantissa.split_once('.').unwrap_or((mantissa, ""));
+    let exponent: i64 = exponent.parse().map_err(|_| invalid())?;
+
+    let all_digits = int_part.bytes().chain(frac_part.bytes());
+    let leading_zeros = all_digits.clone().take_while(|b| *b == b'0').count();
+    let digits = all_digits.skip(leading_zeros).map(|b| (b - b'0') as i128);
+    let significant = (int_part.len() + frac_part.len() - leading_zeros) as i64;
+    if significant == 0 {
+        return Ok(0);
+    }
+    let shift = exponent
+        .checked_sub(frac_part.len() as i64)
+        .ok_or_else(invalid)?;
+
+    // Fewer than 1 kept digit means the value is a fraction; more than 19
+    // cannot fit an i64.
+    let kept = significant.checked_add(shift).ok_or_else(invalid)?;
+    if !(1..=19).contains(&kept) {
+        return Err(invalid());
+    }
+    let take = kept.min(significant) as usize;
+    let mut acc: i128 = 0;
+    for (i, d) in digits.enumerate() {
+        if i < take {
+            acc = acc * 10 + d; // at most 19 digits: cannot overflow i128
+        } else if d != 0 {
+            return Err(invalid()); // a dropped digit was not zero: fractional
+        }
+    }
+    if shift > 0 {
+        acc *= 10_i128.pow(shift as u32); // kept <= 19 keeps this below 10^19
+    }
+    i64::try_from(if negative { -acc } else { acc }).map_err(|_| invalid())
 }
 
 #[cfg(test)]
@@ -3718,5 +3845,240 @@ mod unknown_member_tests {
                 DateTime::from_secs(T)
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod strictness_tests {
+    use super::*;
+
+    #[test]
+    fn strict_strings_and_client_defaults() {
+        for input in [b"\"raw\ncontrol\"".as_slice(), b"\"raw\x00control\""] {
+            let mut client = JsonDeserializer::new(input, Arc::new(JsonCodecSettings::default()));
+            assert!(client.read_string(dummy_schema()).is_ok());
+            for key in [false, true] {
+                let mut server = JsonDeserializer::new(
+                    input,
+                    Arc::new(
+                        JsonCodecSettings::builder()
+                            .enforce_strictness(true)
+                            .build(),
+                    ),
+                );
+                assert!(if key {
+                    server.parse_key().map(|_| ())
+                } else {
+                    server.read_string(dummy_schema()).map(|_| ())
+                }
+                .is_err());
+                let mut server = JsonDeserializer::new(
+                    input,
+                    Arc::new(
+                        JsonCodecSettings::builder()
+                            .enforce_strictness(true)
+                            .build(),
+                    ),
+                );
+                assert!(server.skip_string().is_err());
+            }
+        }
+        for input in [b"\"ok\\n\\u0041\"".as_slice(), "\"hello 世界\"".as_bytes()] {
+            let mut server = JsonDeserializer::new(
+                input,
+                Arc::new(
+                    JsonCodecSettings::builder()
+                        .enforce_strictness(true)
+                        .build(),
+                ),
+            );
+            assert!(server.skip_string().is_ok());
+        }
+        for strict in [false, true] {
+            let settings = Arc::new(
+                JsonCodecSettings::builder()
+                    .enforce_strictness(strict)
+                    .build(),
+            );
+            for input in [b"\"\xff\"".as_slice(), b"\"\xc0\x80\""] {
+                assert!(JsonDeserializer::new(input, settings.clone())
+                    .read_string(dummy_schema())
+                    .is_err());
+                assert!(JsonDeserializer::new(input, settings.clone())
+                    .parse_key()
+                    .is_err());
+            }
+        }
+        let bad = b"\"\xff\"";
+        assert!(
+            JsonDeserializer::new(bad, Arc::new(JsonCodecSettings::default()))
+                .skip_string()
+                .is_ok()
+        );
+        assert!(JsonDeserializer::new(
+            bad,
+            Arc::new(
+                JsonCodecSettings::builder()
+                    .enforce_strictness(true)
+                    .build()
+            )
+        )
+        .skip_string()
+        .is_err());
+    }
+
+    #[test]
+    fn parse_integral_decimal_exact_cases() {
+        for (input, expected) in [
+            ("1.0", Some(1)),
+            ("1e3", Some(1000)),
+            ("12.0", Some(12)),
+            ("100E0", Some(100)),
+            ("1.50E1", Some(15)),
+            ("1234567890.000", Some(1234567890)),
+            ("0.5e1", Some(5)),
+            ("0.05e2", Some(5)),
+            ("100e-2", Some(1)),
+            ("12300e-2", Some(123)),
+            ("1.23e2", Some(123)),
+            ("0.0", Some(0)),
+            ("-0e5", Some(0)),
+            ("0e-5", Some(0)),
+            ("0e400", Some(0)),
+            ("-123456789012345e3", Some(-123456789012345000)),
+            ("9007199254740993.0", Some(9007199254740993)),
+            ("9223372036854775807e0", Some(i64::MAX)),
+            ("-9223372036854775808.0", Some(i64::MIN)),
+            ("1.5", None),
+            ("2.5e0", None),
+            ("123e-2", None),
+            ("1e-5", None),
+            ("1e-400", None),
+            ("1e19", None),
+            ("1e30", None),
+            ("9223372036854775808.0", None),
+            ("-9223372036854775809e0", None),
+            ("0e999999999999999999999", None),
+        ] {
+            assert_eq!(parse_integral_decimal(input).ok(), expected, "{input}");
+        }
+    }
+
+    #[test]
+    fn exact_integral_numbers_and_strict_grammar() {
+        let settings = Arc::new(
+            JsonCodecSettings::builder()
+                .enforce_strictness(true)
+                .allow_integral_float_numbers(true)
+                .build(),
+        );
+        for (input, expected) in [
+            ("1.0", 1),
+            ("1e3", 1000),
+            ("1.20e1", 12),
+            ("9007199254740993", 9007199254740993),
+            ("9223372036854775807.0", i64::MAX),
+            ("-9223372036854775808e0", i64::MIN),
+        ] {
+            assert_eq!(
+                JsonDeserializer::new(input.as_bytes(), settings.clone())
+                    .read_long(dummy_schema())
+                    .unwrap(),
+                expected,
+                "{input}"
+            );
+        }
+        for input in [
+            "0e999999999999999999999",
+            "1.01",
+            "1e-3",
+            "9223372036854775808.0",
+            "-9223372036854775809.0",
+            "1e10000",
+            "12.",
+            "01",
+            "+1",
+            "1e",
+            "--1",
+            "1e+",
+            "1.0.0",
+        ] {
+            assert!(
+                JsonDeserializer::new(input.as_bytes(), settings.clone())
+                    .read_long(dummy_schema())
+                    .is_err(),
+                "{input}"
+            );
+        }
+        for input in ["12.", "01", "+1", "1e", "1e+", "--1", "1.0.0"] {
+            assert!(
+                JsonDeserializer::new(input.as_bytes(), settings.clone())
+                    .read_double(dummy_schema())
+                    .is_err(),
+                "{input}"
+            );
+        }
+        // With defaults, neither opt-in path is taken. Note the default for an
+        // *integer* member is stricter on this branch than the truncating
+        // behavior #4851 was written against: a floating-point value is now a
+        // clean `TypeMismatch` rather than reading `1` and leaving `.0` in the
+        // stream to surface as a confusing downstream parse error. See
+        // `test_read_integer_rejects_float`. This still discriminates the
+        // opt-in path, which returns `Ok(1)` for the same input.
+        assert!(matches!(
+            JsonDeserializer::new(b"1.0", Arc::new(JsonCodecSettings::default()))
+                .read_long(dummy_schema()),
+            Err(SerdeError::TypeMismatch { .. })
+        ));
+        // `read_double` is unaffected: a trailing-dot double still parses by default.
+        assert_eq!(
+            JsonDeserializer::new(b"12.", Arc::new(JsonCodecSettings::default()))
+                .read_double(dummy_schema())
+                .unwrap(),
+            12.0
+        );
+        for strict in [false, true] {
+            let settings = Arc::new(
+                JsonCodecSettings::builder()
+                    .enforce_strictness(strict)
+                    .allow_integral_float_numbers(true)
+                    .build(),
+            );
+            assert_eq!(
+                JsonDeserializer::new(b"127.0", settings.clone())
+                    .read_byte(dummy_schema())
+                    .unwrap(),
+                127
+            );
+            assert!(JsonDeserializer::new(b"128.0", settings.clone())
+                .read_byte(dummy_schema())
+                .is_err());
+            assert!(JsonDeserializer::new(b"32768e0", settings.clone())
+                .read_short(dummy_schema())
+                .is_err());
+            assert!(JsonDeserializer::new(b"2147483648.0", settings.clone())
+                .read_integer(dummy_schema())
+                .is_err());
+            assert!(JsonDeserializer::new(b"12.", settings)
+                .read_long(dummy_schema())
+                .is_err());
+        }
+        for input in ["1e999", "-1e999", "9223372036854775808.0"] {
+            assert!(JsonDeserializer::new(input.as_bytes(), settings.clone())
+                .read_timestamp(dummy_schema())
+                .is_err());
+        }
+        for (input, valid) in [(b"".as_slice(), true), (b" \n", false), (b"{}", true)] {
+            assert_eq!(
+                JsonDeserializer::new(input, settings.clone())
+                    .read_struct(dummy_schema(), &mut |_, _| Ok(()))
+                    .is_ok(),
+                valid
+            );
+        }
+    }
+
+    fn dummy_schema() -> &'static Schema<'static> {
+        &aws_smithy_schema::prelude::STRING
     }
 }

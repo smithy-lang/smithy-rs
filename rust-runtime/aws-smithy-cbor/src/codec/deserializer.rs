@@ -6,7 +6,7 @@
 //! CBOR deserializer implementation.
 
 use aws_smithy_schema::serde::{capped_container_size, SerdeError, ShapeDeserializer};
-use aws_smithy_schema::Schema;
+use aws_smithy_schema::{Schema, ShapeType};
 use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
 
 use crate::data::Type;
@@ -21,6 +21,7 @@ pub struct CborDeserializer<'a> {
     input_len: usize,
     depth: u32,
     max_depth: u32,
+    enforce_strictness: bool,
 }
 
 impl<'a> CborDeserializer<'a> {
@@ -30,7 +31,21 @@ impl<'a> CborDeserializer<'a> {
             input_len: input.len(),
             depth: 0,
             max_depth,
+            enforce_strictness: false,
         }
+    }
+
+    pub(crate) fn with_strictness(mut self, value: bool) -> Self {
+        self.enforce_strictness = value;
+        self
+    }
+
+    fn leave_container(&mut self) -> Result<(), SerdeError> {
+        self.depth -= 1;
+        if self.enforce_strictness && self.depth == 0 && self.decoder.position() != self.input_len {
+            return Err(SerdeError::invalid_input("trailing bytes after CBOR value"));
+        }
+        Ok(())
     }
 
     fn check_depth(&mut self) -> Result<(), SerdeError> {
@@ -74,7 +89,7 @@ impl<'a> CborDeserializer<'a> {
             out.push(read_element(&mut self.decoder)?);
             i += 1;
         }
-        self.depth -= 1;
+        self.leave_container()?;
         Ok(out)
     }
 }
@@ -87,6 +102,9 @@ impl ShapeDeserializer for CborDeserializer<'_> {
     ) -> Result<(), SerdeError> {
         // Empty input (e.g., empty HTTP response body) is treated as an empty struct
         if self.decoder.position() >= self.input_len {
+            if self.enforce_strictness && self.depth != 0 {
+                return Err(SerdeError::invalid_input("truncated CBOR structure"));
+            }
             return Ok(());
         }
         self.check_depth()?;
@@ -94,6 +112,7 @@ impl ShapeDeserializer for CborDeserializer<'_> {
         let is_indefinite = len.is_none();
         let count = len.unwrap_or(0) as usize;
 
+        let is_union = schema.shape_type() == ShapeType::Union;
         let mut i = 0;
         loop {
             if !is_indefinite && i >= count {
@@ -104,7 +123,13 @@ impl ShapeDeserializer for CborDeserializer<'_> {
                 break;
             }
             let key = self.decoder.str().map_err(deser_err)?;
-            if let Some(member_schema) = schema.member_schema(&key) {
+            if self.enforce_strictness && !is_union && self.is_null() {
+                // A null structure member means the member is absent; the consumer
+                // never sees it, so builder defaults stay untouched. Unions are
+                // excluded: a null variant value must reach the consumer to be
+                // rejected there.
+                self.read_null()?;
+            } else if let Some(member_schema) = schema.member_schema(&key) {
                 consumer(member_schema, self)?;
             } else if &*key == "__type" || self.is_null() {
                 // A protocol discriminator is never a member, and a `null` value is an
@@ -123,7 +148,7 @@ impl ShapeDeserializer for CborDeserializer<'_> {
             }
             i += 1;
         }
-        self.depth -= 1;
+        self.leave_container()?;
         Ok(())
     }
 
@@ -149,7 +174,7 @@ impl ShapeDeserializer for CborDeserializer<'_> {
             consumer(self)?;
             i += 1;
         }
-        self.depth -= 1;
+        self.leave_container()?;
         Ok(())
     }
 
@@ -176,7 +201,7 @@ impl ShapeDeserializer for CborDeserializer<'_> {
             consumer(key, self)?;
             i += 1;
         }
-        self.depth -= 1;
+        self.leave_container()?;
         Ok(())
     }
 
@@ -309,7 +334,7 @@ impl ShapeDeserializer for CborDeserializer<'_> {
             out.insert(key, val);
             i += 1;
         }
-        self.depth -= 1;
+        self.leave_container()?;
         Ok(out)
     }
 }
@@ -326,7 +351,7 @@ mod tests {
     use aws_smithy_schema::serde::{SerializableStruct, ShapeSerializer};
     use aws_smithy_schema::{shape_id, ShapeType};
 
-    use crate::codec::CborCodec;
+    use crate::codec::{CborCodec, CborCodecSettings};
 
     /// Helper: serialize with CborSerializer, then deserialize with CborDeserializer.
     fn make_deser(f: impl FnOnce(&mut crate::codec::CborSerializer)) -> Vec<u8> {
@@ -335,6 +360,48 @@ mod tests {
         let mut ser = codec.create_serializer();
         f(&mut ser);
         ser.finish()
+    }
+
+    #[test]
+    fn strict_null_struct_members_are_skipped_as_absent() {
+        static X: Schema =
+            Schema::new_member(shape_id!("test", "S", "x"), ShapeType::Integer, "x", 0);
+        static S: Schema = Schema::new_struct(shape_id!("test", "S"), ShapeType::Structure, &[&X]);
+        for strict in [false, true] {
+            let codec = CborCodec::new(CborCodecSettings::default().enforce_strictness(strict));
+            // Strict: the codec consumes the null itself, the consumer never runs
+            // and defaults stay untouched. Lenient: the consumer sees the null and
+            // fails here by requiring an integer.
+            let mut visited = false;
+            let result = codec.create_deserializer(b"\xa1\x61x\xf6").read_struct(
+                &S,
+                &mut |member, deser| {
+                    visited = true;
+                    deser.read_integer(member).map(|_| ())
+                },
+            );
+            assert_eq!(result.is_ok(), strict);
+            assert_eq!(visited, !strict);
+        }
+    }
+
+    #[test]
+    fn strict_top_level_containers() {
+        for input in [
+            vec![0xa0],
+            vec![0xbf, 0xff],
+            vec![0xa1, 0x61, b'x', 0x81, 0xa0],
+            vec![0xbf, 0x61, b'x', 0x9f, 0xbf, 0xff, 0xff, 0xff],
+        ] {
+            for strict in [false, true] {
+                let mut de = CborDeserializer::new(&input, 128).with_strictness(strict);
+                de.read_struct(&STRING, &mut |_, _| Ok(())).unwrap();
+                let mut trailing = input.clone();
+                trailing.push(0);
+                let mut de = CborDeserializer::new(&trailing, 128).with_strictness(strict);
+                assert_eq!(de.read_struct(&STRING, &mut |_, _| Ok(())).is_err(), strict);
+            }
+        }
     }
 
     #[test]

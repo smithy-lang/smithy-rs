@@ -8,6 +8,7 @@
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::Schema;
 use aws_smithy_types::date_time::Format as TimestampFormat;
+use aws_smithy_types::primitive::Encoder;
 use aws_smithy_types::{BigDecimal, BigInteger, DateTime, DiscriminatedDocument, Document};
 
 use crate::codec::JsonCodecSettings;
@@ -391,7 +392,6 @@ impl ShapeSerializer for JsonSerializer {
     }
 
     fn write_float(&mut self, schema: &Schema<'_>, value: f32) -> Result<(), SerdeError> {
-        use std::fmt::Write;
         self.prefix(schema);
         if value.is_nan() {
             self.output.push_str("\"NaN\"");
@@ -404,13 +404,12 @@ impl ShapeSerializer for JsonSerializer {
             }
             Ok(())
         } else {
-            write!(&mut self.output, "{}", value)
-                .map_err(|e| SerdeError::write_failed(e.to_string()))
+            self.output.push_str(Encoder::from(value).encode());
+            Ok(())
         }
     }
 
     fn write_double(&mut self, schema: &Schema<'_>, value: f64) -> Result<(), SerdeError> {
-        use std::fmt::Write;
         self.prefix(schema);
         if value.is_nan() {
             self.output.push_str("\"NaN\"");
@@ -423,8 +422,8 @@ impl ShapeSerializer for JsonSerializer {
             }
             Ok(())
         } else {
-            write!(&mut self.output, "{}", value)
-                .map_err(|e| SerdeError::write_failed(e.to_string()))
+            self.output.push_str(Encoder::from(value).encode());
+            Ok(())
         }
     }
 
@@ -547,6 +546,40 @@ mod tests {
         ser.write_integer(&INTEGER, 42).unwrap();
         let output = ser.finish();
         assert_eq!(String::from_utf8(output).unwrap(), "42");
+    }
+
+    #[test]
+    fn floats_preserve_decimal_points_and_original_precision() {
+        let list_schema = Schema::new(
+            aws_smithy_schema::shape_id!("test", "Floats"),
+            ShapeType::List,
+        );
+        let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
+        ser.write_list(&list_schema, &|s| {
+            s.write_float(&FLOAT, 1.0)?;
+            s.write_double(&DOUBLE, 1.0)?;
+            s.write_float(&FLOAT, 0.0)?;
+            s.write_double(&DOUBLE, 0.0)?;
+            s.write_float(&FLOAT, -0.0)?;
+            s.write_double(&DOUBLE, -0.0)?;
+            s.write_float(&FLOAT, 1.01)?;
+            s.write_double(&DOUBLE, 1.01)?;
+            s.write_float(&FLOAT, 3.15)?;
+            s.write_double(&DOUBLE, 3.15)?;
+            s.write_float(&FLOAT, f32::NAN)?;
+            s.write_double(&DOUBLE, f64::NAN)?;
+            s.write_float(&FLOAT, f32::INFINITY)?;
+            s.write_double(&DOUBLE, f64::INFINITY)?;
+            s.write_float(&FLOAT, f32::NEG_INFINITY)?;
+            s.write_double(&DOUBLE, f64::NEG_INFINITY)?;
+            Ok(())
+        })
+        .unwrap();
+        // Compare wire bytes: parsing JSON would hide the missing decimal points.
+        assert_eq!(
+            String::from_utf8(ser.finish()).unwrap(),
+            r#"[1.0,1.0,0.0,0.0,-0.0,-0.0,1.01,1.01,3.15,3.15,"NaN","NaN","Infinity","Infinity","-Infinity","-Infinity"]"#
+        );
     }
 
     #[test]

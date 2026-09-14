@@ -148,6 +148,8 @@ pub struct JsonCodecSettings {
     /// `None` (default) preserves the prior behavior where relative
     /// names are left in the resulting map as plain string entries.
     default_namespace: Option<String>,
+    enforce_strictness: bool,
+    allow_integral_float_numbers: bool,
     /// When `true`, a timestamp must use exactly the wire form its resolved
     /// `@timestampFormat` (or the codec default) prescribes: a JSON number for
     /// `epoch-seconds`, an RFC 3339 string without a UTC offset for `date-time`,
@@ -215,6 +217,8 @@ impl JsonCodecSettings {
             protocol_id: self.protocol_id.clone(),
             use_string_for_arbitrary_precision: self.use_string_for_arbitrary_precision,
             default_namespace: self.default_namespace.clone(),
+            enforce_strictness: self.enforce_strictness,
+            allow_integral_float_numbers: self.allow_integral_float_numbers,
             strict_timestamp_formats: self.strict_timestamp_formats,
         }
     }
@@ -249,6 +253,8 @@ impl Default for JsonCodecSettings {
             protocol_id: DEFAULT_JSON_CODEC_ID,
             use_string_for_arbitrary_precision: false,
             default_namespace: None,
+            enforce_strictness: false,
+            allow_integral_float_numbers: false,
             strict_timestamp_formats: false,
         }
     }
@@ -287,6 +293,8 @@ pub struct JsonCodecSettingsBuilder {
     protocol_id: ShapeId<'static>,
     use_string_for_arbitrary_precision: bool,
     default_namespace: Option<String>,
+    enforce_strictness: bool,
+    allow_integral_float_numbers: bool,
     strict_timestamp_formats: bool,
 }
 
@@ -299,12 +307,30 @@ impl Default for JsonCodecSettingsBuilder {
             protocol_id: DEFAULT_JSON_CODEC_ID,
             use_string_for_arbitrary_precision: false,
             default_namespace: None,
+            enforce_strictness: false,
+            allow_integral_float_numbers: false,
             strict_timestamp_formats: false,
         }
     }
 }
 
 impl JsonCodecSettingsBuilder {
+    /// Validates string contents and number syntax, rejects whitespace-only structure
+    /// bodies, and checks the range of floating-point epoch timestamps.
+    /// Disabled by default. Timestamp wire formats are controlled separately by
+    /// [`Self::strict_timestamp_formats`].
+    pub fn enforce_strictness(mut self, value: bool) -> Self {
+        self.enforce_strictness = value;
+        self
+    }
+
+    /// Accepts exactly integral JSON decimal/exponent numbers for integer members.
+    /// Disabled by default; ordinary integer spellings retain exact parsing.
+    pub fn allow_integral_float_numbers(mut self, value: bool) -> Self {
+        self.allow_integral_float_numbers = value;
+        self
+    }
+
     /// Whether to use the `@jsonName` trait for member names.
     pub fn use_json_name(mut self, value: bool) -> Self {
         self.use_json_name = value;
@@ -381,6 +407,8 @@ impl JsonCodecSettingsBuilder {
             protocol_id: self.protocol_id,
             use_string_for_arbitrary_precision: self.use_string_for_arbitrary_precision,
             default_namespace: self.default_namespace,
+            enforce_strictness: self.enforce_strictness,
+            allow_integral_float_numbers: self.allow_integral_float_numbers,
             strict_timestamp_formats: self.strict_timestamp_formats,
         }
     }
@@ -525,6 +553,48 @@ impl Codec for JsonCodec {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn to_builder_round_trips_every_setting() {
+        // Regression guard: `to_builder` names each field explicitly, so a
+        // setting added later is silently reset to its default here while still
+        // compiling. That is how a codec rebuilt by a protocol wrapper (see
+        // `protocol::codec_with_bag_namespace`, which overrides only
+        // `default_namespace`) can lose strictness. Every setting below is set
+        // to the OPPOSITE of its default so a dropped field fails this test.
+        let original = JsonCodecSettings::builder()
+            .use_json_name(false)
+            .default_timestamp_format(TimestampFormat::HttpDate)
+            .max_depth(7)
+            .protocol_id(shape_id!("aws.protocols", "restJson1"))
+            .use_string_for_arbitrary_precision(true)
+            .default_namespace("com.example")
+            .enforce_strictness(true)
+            .allow_integral_float_numbers(true)
+            .strict_timestamp_formats(true)
+            .build();
+
+        let round_tripped = original.to_builder().build();
+
+        assert!(matches!(
+            round_tripped.field_mapper,
+            JsonFieldMapper::UseMemberName
+        ));
+        assert_eq!(
+            round_tripped.default_timestamp_format(),
+            TimestampFormat::HttpDate
+        );
+        assert_eq!(round_tripped.max_depth(), 7);
+        assert_eq!(
+            DocumentSettings::protocol_id(&round_tripped),
+            "aws.protocols#restJson1"
+        );
+        assert!(round_tripped.use_string_for_arbitrary_precision());
+        assert_eq!(round_tripped.default_namespace(), Some("com.example"));
+        assert!(round_tripped.enforce_strictness);
+        assert!(round_tripped.allow_integral_float_numbers);
+        assert!(round_tripped.strict_timestamp_formats());
+    }
 
     #[test]
     fn test_default_settings() {
