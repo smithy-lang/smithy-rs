@@ -643,8 +643,13 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                     let f: f64 = num_str.parse().map_err(|e: std::num::ParseFloatError| {
                         SerdeError::invalid_input(e.to_string())
                     })?;
+                    // The i64 range as f64. `i64::MAX as f64` rounds up to 2^63, which is
+                    // why the range is half-open: 2^63 itself overflows `floor() as i64`
+                    // and would saturate silently in `DateTime::from_secs_f64`.
+                    const I64_MIN_F64: f64 = i64::MIN as f64;
+                    const I64_MAX_F64: f64 = i64::MAX as f64;
                     if self.settings.enforce_strictness
-                        && (!f.is_finite() || f < i64::MIN as f64 || f >= -(i64::MIN as f64))
+                        && (!f.is_finite() || !(I64_MIN_F64..I64_MAX_F64).contains(&f))
                     {
                         return Err(SerdeError::invalid_input(
                             "epoch-seconds value out of range",
@@ -1134,6 +1139,7 @@ impl<'a> JsonDeserializer<'a> {
     fn consume_number(&mut self) -> Result<(), SerdeError> {
         if self.settings.enforce_strictness {
             self.skip_number()?;
+            // Allow whitespace, JSON delimiters, or end of input after the number.
             if self
                 .remaining()
                 .first()
