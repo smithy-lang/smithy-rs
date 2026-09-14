@@ -79,13 +79,14 @@ internal class ExprGeneratorTest {
             rust("""assert_eq!("helloworld: rust", #W);""", gen.generate(Expression.of("{extra}: rust")))
             rustTemplate(
                 """
-                let mut expected = std::collections::HashMap::new();
+                let mut expected = #{DocumentObject}::new();
                 expected.insert("a".to_string(), #{Document}::Bool(true));
                 expected.insert("b".to_string(), #{Document}::String("hello".to_string()));
                 expected.insert("c".to_string(), #{Document}::Array(vec![true.into()]));
                 assert_eq!(expected, #{actual:W});
                 """,
                 "Document" to RuntimeType.document(TestRuntimeConfig),
+                "DocumentObject" to RuntimeType.documentObject(TestRuntimeConfig),
                 "actual" to
                     gen.generate(
                         Literal.fromNode(
