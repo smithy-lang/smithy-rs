@@ -1324,39 +1324,62 @@ impl<'a> JsonDeserializer<'a> {
     }
 }
 
-// Expand only the at-most-19 significant integer digits, never through f64.
+/// Converts a JSON number written with a fraction or exponent (`1.0`, `1e3`,
+/// `1.50E1`) to an `i64`, exactly, or fails if it is not a whole number in range.
+///
+/// The number is treated as `digits × 10^shift`, where `digits` is the mantissa
+/// with the `.` removed and `shift = exponent − (digits after the '.')`. For
+/// `1.50E1`: digits `150`, shift `1 − 2 = −1`, value `150 × 10^-1 = 15`. The
+/// integer keeps the first `kept = significant digits + shift` of them; any it
+/// drops must be zeros, and it can have at most the 19 digits an `i64` holds.
+///
+/// The arithmetic never goes through `f64`: an `f64` has a 53-bit significand,
+/// so not every integer above 2^53 is representable. `9007199254740993.0`
+/// (2^53 + 1) parses to the nearest `f64`, which is 2^53, and would come out
+/// as `9007199254740992` with no error. Accumulating into an `i128` instead
+/// cannot overflow for 19 digits, and `i64::try_from` does the range check.
+///
+/// `text` has already passed `skip_number`, so it is a well-formed JSON number.
+/// An exponent that does not fit an `i64` is rejected even when the digits are
+/// all zero.
 fn parse_integral_decimal(text: &str) -> Result<i64, SerdeError> {
     let invalid = || SerdeError::invalid_input("number is fractional or outside integer range");
-    text.parse::<BigDecimal>().map_err(|_| invalid())?;
     let negative = text.starts_with('-');
     let unsigned = text.strip_prefix('-').unwrap_or(text);
     let (mantissa, exponent) = unsigned.split_once(['e', 'E']).unwrap_or((unsigned, "0"));
-    let digits: String = mantissa.chars().filter(|c| *c != '.').collect();
-    let digits = digits.trim_start_matches('0');
-    if digits.is_empty() {
+    let (int_part, frac_part) = mantissa.split_once('.').unwrap_or((mantissa, ""));
+    let exponent: i64 = exponent.parse().map_err(|_| invalid())?;
+
+    let all_digits = int_part.bytes().chain(frac_part.bytes());
+    let leading_zeros = all_digits.clone().take_while(|b| *b == b'0').count();
+    let digits = all_digits.skip(leading_zeros).map(|b| (b - b'0') as i128);
+    let significant = (int_part.len() + frac_part.len() - leading_zeros) as i64;
+    if significant == 0 {
         return Ok(0);
     }
-    let exponent: i64 = exponent.parse().map_err(|_| invalid())?;
-    let fraction = mantissa.split_once('.').map_or(0, |(_, f)| f.len()) as i64;
-    let shift = exponent.checked_sub(fraction).ok_or_else(invalid)?;
-    let mut integer = if shift < 0 {
-        let cut = usize::try_from(shift.unsigned_abs()).map_err(|_| invalid())?;
-        if cut >= digits.len() || !digits[digits.len() - cut..].bytes().all(|b| b == b'0') {
-            return Err(invalid());
-        }
-        digits[..digits.len() - cut].to_owned()
-    } else {
-        if shift > 19 || digits.len() + shift as usize > 19 {
-            return Err(invalid());
-        }
-        let mut result = digits.to_owned();
-        result.extend(std::iter::repeat_n('0', shift as usize));
-        result
-    };
-    if negative {
-        integer.insert(0, '-');
+    let shift = exponent
+        .checked_sub(frac_part.len() as i64)
+        .ok_or_else(invalid)?;
+
+    // Fewer than 1 kept digit means the value is a fraction; more than 19
+    // cannot fit an i64.
+    let kept = significant.checked_add(shift).ok_or_else(invalid)?;
+    if !(1..=19).contains(&kept) {
+        return Err(invalid());
     }
-    integer.parse().map_err(|_| invalid())
+    let take = kept.min(significant) as usize;
+    let mut acc: i128 = 0;
+    for (i, d) in digits.enumerate() {
+        if i < take {
+            acc = acc * 10 + d; // at most 19 digits: cannot overflow i128
+        } else if d != 0 {
+            return Err(invalid()); // a dropped digit was not zero: fractional
+        }
+    }
+    if shift > 0 {
+        acc *= 10_i128.pow(shift as u32); // kept <= 19 keeps this below 10^19
+    }
+    i64::try_from(if negative { -acc } else { acc }).map_err(|_| invalid())
 }
 
 #[cfg(test)]
@@ -1439,6 +1462,43 @@ mod tests {
     }
 
     #[test]
+    fn parse_integral_decimal_exact_cases() {
+        for (input, expected) in [
+            ("1.0", Some(1)),
+            ("1e3", Some(1000)),
+            ("12.0", Some(12)),
+            ("100E0", Some(100)),
+            ("1.50E1", Some(15)),
+            ("1234567890.000", Some(1234567890)),
+            ("0.5e1", Some(5)),
+            ("0.05e2", Some(5)),
+            ("100e-2", Some(1)),
+            ("12300e-2", Some(123)),
+            ("1.23e2", Some(123)),
+            ("0.0", Some(0)),
+            ("-0e5", Some(0)),
+            ("0e-5", Some(0)),
+            ("0e400", Some(0)),
+            ("-123456789012345e3", Some(-123456789012345000)),
+            ("9007199254740993.0", Some(9007199254740993)),
+            ("9223372036854775807e0", Some(i64::MAX)),
+            ("-9223372036854775808.0", Some(i64::MIN)),
+            ("1.5", None),
+            ("2.5e0", None),
+            ("123e-2", None),
+            ("1e-5", None),
+            ("1e-400", None),
+            ("1e19", None),
+            ("1e30", None),
+            ("9223372036854775808.0", None),
+            ("-9223372036854775809e0", None),
+            ("0e999999999999999999999", None),
+        ] {
+            assert_eq!(parse_integral_decimal(input).ok(), expected, "{input}");
+        }
+    }
+
+    #[test]
     fn exact_integral_numbers_and_strict_grammar() {
         let settings = Arc::new(
             JsonCodecSettings::builder()
@@ -1453,7 +1513,6 @@ mod tests {
             ("9007199254740993", 9007199254740993),
             ("9223372036854775807.0", i64::MAX),
             ("-9223372036854775808e0", i64::MIN),
-            ("0e999999999999999999999", 0),
         ] {
             assert_eq!(
                 JsonDeserializer::new(input.as_bytes(), settings.clone())
@@ -1464,6 +1523,7 @@ mod tests {
             );
         }
         for input in [
+            "0e999999999999999999999",
             "1.01",
             "1e-3",
             "9223372036854775808.0",
