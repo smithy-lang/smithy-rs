@@ -20,8 +20,12 @@ use aws_smithy_schema::OperationSchema;
 
 /// The protocol and the operation selected by routing, stored in the request extensions.
 ///
-/// The protocol is erased: everything after routing works through `dyn ServerProtocol`, so a
-/// service can select a different protocol per request without anything downstream knowing.
+/// The protocol is erased: everything after routing works through `dyn ServerProtocol`.
+///
+/// The operation schema is stored for consumers that are not generic over the operation:
+/// middleware and [`FromParts`](crate::request::FromParts) extractors read this extension to
+/// learn which operation was selected — for logging, auth, or metrics — without naming an `Op`
+/// type. See the middleware example on [`ServerProtocol`].
 #[derive(Clone)]
 pub struct SelectedProtocolOperation {
     protocol: SharedServerProtocol,
@@ -38,7 +42,7 @@ impl SelectedProtocolOperation {
         &self.protocol
     }
 
-    /// The routed operation.
+    /// The routed operation's schema, for code that cannot name the operation type.
     pub fn operation(&self) -> &'static OperationSchema<'static> {
         self.operation
     }
