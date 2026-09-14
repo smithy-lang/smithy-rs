@@ -18,10 +18,12 @@ mod common {
     pub(crate) mod tls;
 }
 
+use aws_smithy_http_client::pool::{Client as PoolClient, ConnectionPool};
 use aws_smithy_http_client::proxy::ProxyConfig;
 #[cfg(any(feature = "rustls-ring", feature = "s2n-tls"))]
 use aws_smithy_http_client::tls;
 use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::dns::{DnsFuture, ResolveDns};
 use aws_smithy_runtime_api::client::http::{HttpConnector, SharedHttpClient, SharedHttpConnector};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 #[cfg(any(feature = "rustls-ring", feature = "s2n-tls"))]
@@ -38,6 +40,8 @@ use common::tls as test_tls;
 use http_1x::{Response, StatusCode};
 use http_body_util::BodyExt;
 use std::future::Future;
+use std::net::IpAddr;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 struct TestClient {
@@ -45,6 +49,34 @@ struct TestClient {
     connector: SharedHttpConnector,
 }
 
+#[derive(Clone, Debug)]
+struct RecordingResolver {
+    address: IpAddr,
+    names: Arc<Mutex<Vec<String>>>,
+}
+
+impl RecordingResolver {
+    fn new(address: IpAddr) -> Self {
+        Self {
+            address,
+            names: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    fn names(&self) -> Vec<String> {
+        self.names.lock().expect("DNS log is not poisoned").clone()
+    }
+}
+
+impl ResolveDns for RecordingResolver {
+    fn resolve_dns<'a>(&'a self, name: &'a str) -> DnsFuture<'a> {
+        self.names
+            .lock()
+            .expect("DNS log is not poisoned")
+            .push(name.to_string());
+        DnsFuture::ready(Ok(vec![self.address]))
+    }
+}
 fn http_client(
     backend: &dyn HttpClientBackend,
     proxy_config: ProxyConfig,
@@ -157,6 +189,38 @@ async fn test_http_forward_proxy_uses_absolute_form_with_hyper_util_legacy_pool(
 #[tokio::test]
 async fn test_http_forward_proxy_uses_absolute_form_with_partitioned_connection_pool() {
     http_forward_proxy_uses_absolute_form(&PartitionedConnectionPool).await;
+}
+
+#[tokio::test]
+async fn test_custom_dns_resolver_is_used_for_proxy_connections() {
+    const PROXY_HOST: &str = "pool-proxy.test";
+
+    let proxy = MockHttpServer::with_response(StatusCode::OK, "proxied through custom DNS").await;
+    let resolver = RecordingResolver::new(proxy.addr().ip());
+    let proxy_config = ProxyConfig::http(format!("http://{PROXY_HOST}:{}", proxy.addr().port()))
+        .expect("valid proxy URI");
+    let pool = ConnectionPool::builder()
+        .proxy_config(proxy_config)
+        .dns_resolver(resolver.clone())
+        .build_http()
+        .expect("valid pool");
+    let client = SharedHttpClient::new(PoolClient::new(&pool).expect("anonymous partition"));
+    let client = TestClient {
+        connector: test_client::connector(&client),
+        _client: client,
+    };
+
+    assert_eq!(
+        (StatusCode::OK, "proxied through custom DNS".to_string()),
+        get(&client, "http://origin.test/custom-dns-proxy")
+            .await
+            .expect("proxy request succeeds")
+    );
+    assert_eq!(vec![PROXY_HOST.to_string()], resolver.names());
+    assert_eq!(
+        "http://origin.test/custom-dns-proxy",
+        proxy.requests()[0].uri
+    );
 }
 
 async fn configured_proxy_authentication_is_applied(backend: &dyn HttpClientBackend) {

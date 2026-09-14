@@ -501,6 +501,15 @@ impl Builder<TlsUnset> {
 }
 
 impl<Tls> Builder<Tls> {
+    /// Builds a pool with a transport supplied by a pool-internal test.
+    #[cfg(test)]
+    pub(super) fn build_with_transport_for_test(
+        self,
+        transport: std::sync::Arc<dyn TransportFactory>,
+    ) -> Result<ConnectionPool, BuildError> {
+        self.build_with_transport(transport)
+    }
+
     /// Validates pool policy and installs the type-erased transport factory.
     fn build_with_transport(
         self,
