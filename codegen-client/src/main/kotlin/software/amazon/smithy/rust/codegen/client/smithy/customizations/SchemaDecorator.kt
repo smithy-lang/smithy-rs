@@ -68,7 +68,7 @@ object SchemaSerdeAllowlist {
             // "com.amazonaws.simple",
             // "com.amazonaws.bignumbers",
             // awsJson1_0 / awsJson1_1
-            "aws.protocoltests.json10",
+            // "aws.protocoltests.json10",
             // restXml
             // "aws.protocoltests.restxml",  // RestXml, RestXmlExtras
             // "aws.protocoltests.restxml.xmlns",
