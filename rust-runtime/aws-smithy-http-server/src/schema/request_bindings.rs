@@ -195,8 +195,11 @@ fn resolve_timestamp_format(read_schema: &Schema<'_>, member: &Schema<'_>, locat
     }
 }
 
+/// Parses a primitive from its wire text as-is. Header values arrive already
+/// trimmed by the header tokenizer; label and query values are parsed untrimmed,
+/// matching the legacy `parse_smithy_primitive(&value)` on the decoded segment.
 fn parse_primitive<T: aws_smithy_types::primitive::Parse>(value: &str, what: &str) -> Result<T, SerdeError> {
-    T::parse_smithy_primitive(value.trim()).map_err(|err| SerdeError::invalid_input(format!("invalid {what}: {err}")))
+    T::parse_smithy_primitive(value).map_err(|err| SerdeError::invalid_input(format!("invalid {what}: {err}")))
 }
 
 macro_rules! unsupported_reads {
@@ -323,13 +326,13 @@ impl ShapeDeserializer for DecodedValuesDeserializer<'_> {
     fn read_big_integer(&mut self, _schema: &Schema<'_>) -> Result<BigInteger, SerdeError> {
         use std::str::FromStr;
         let v = self.current()?;
-        BigInteger::from_str(v.trim()).map_err(|_| SerdeError::invalid_input(format!("invalid big integer: {v}")))
+        BigInteger::from_str(v).map_err(|_| SerdeError::invalid_input(format!("invalid big integer: {v}")))
     }
 
     fn read_big_decimal(&mut self, _schema: &Schema<'_>) -> Result<BigDecimal, SerdeError> {
         use std::str::FromStr;
         let v = self.current()?;
-        BigDecimal::from_str(v.trim()).map_err(|_| SerdeError::invalid_input(format!("invalid big decimal: {v}")))
+        BigDecimal::from_str(v).map_err(|_| SerdeError::invalid_input(format!("invalid big decimal: {v}")))
     }
 
     fn read_string(&mut self, _schema: &Schema<'_>) -> Result<String, SerdeError> {
@@ -1430,6 +1433,41 @@ mod tests {
         let out = collect(&uri, &headers, b"").unwrap();
         assert_eq!(out.age, Some(1));
         assert_eq!(out.token.as_deref(), Some(""));
+    }
+
+    #[test]
+    fn label_and_query_primitives_are_not_trimmed() {
+        // Legacy parses the percent-decoded segment as-is: " 1" is an error, not 1.
+        for location in [BindingLocation::Label, BindingLocation::Query] {
+            for value in [" 1", "1 ", "\t1"] {
+                let mut deser = DecodedValuesDeserializer::new(vec![value.into()], &AGE_MEMBER, location);
+                assert!(deser.read_integer(&AGE_MEMBER).is_err(), "{location:?} {value:?}");
+            }
+            let mut deser = DecodedValuesDeserializer::new(vec!["1".into()], &AGE_MEMBER, location);
+            assert_eq!(deser.read_integer(&AGE_MEMBER).unwrap(), 1);
+        }
+    }
+
+    #[test]
+    fn header_primitives_are_still_trimmed() {
+        // Headers keep legacy `read_many` semantics: surrounding whitespace is ignored.
+        for values in [vec![" 7 "], vec!["\t7"], vec![" 7, 8 "]] {
+            let mut deser = HeaderValuesDeserializer::new(values, &TAGS_MEMBER);
+            let mut seen = vec![];
+            deser
+                .read_list(&TAGS_MEMBER, &mut |element| {
+                    seen.push(element.read_integer(&AGE_MEMBER)?);
+                    Ok(())
+                })
+                .unwrap();
+            assert!(seen.iter().all(|n| *n == 7 || *n == 8), "{seen:?}");
+        }
+        assert_eq!(
+            HeaderValuesDeserializer::new(vec![" 7 "], &AGE_MEMBER)
+                .read_integer(&AGE_MEMBER)
+                .unwrap(),
+            7
+        );
     }
 
     #[test]

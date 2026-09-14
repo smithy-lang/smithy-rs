@@ -6,7 +6,7 @@
 //! CBOR deserializer implementation.
 
 use aws_smithy_schema::serde::{capped_container_size, SerdeError, ShapeDeserializer};
-use aws_smithy_schema::{Schema, ShapeType};
+use aws_smithy_schema::Schema;
 use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
 
 use crate::data::Type;
@@ -112,7 +112,6 @@ impl ShapeDeserializer for CborDeserializer<'_> {
         let is_indefinite = len.is_none();
         let count = len.unwrap_or(0) as usize;
 
-        let is_union = schema.shape_type() == ShapeType::Union;
         let mut i = 0;
         loop {
             if !is_indefinite && i >= count {
@@ -123,9 +122,7 @@ impl ShapeDeserializer for CborDeserializer<'_> {
                 break;
             }
             let key = self.decoder.str().map_err(deser_err)?;
-            if self.enforce_strictness && !is_union && self.is_null() {
-                self.read_null()?;
-            } else if let Some(member_schema) = schema.member_schema(&key) {
+            if let Some(member_schema) = schema.member_schema(&key) {
                 consumer(member_schema, self)?;
             } else if &*key == "__type" || self.is_null() {
                 self.decoder.skip().map_err(deser_err)?;
@@ -343,7 +340,7 @@ mod tests {
     use aws_smithy_schema::serde::{SerializableStruct, ShapeSerializer};
     use aws_smithy_schema::{shape_id, ShapeType};
 
-    use crate::codec::CborCodec;
+    use crate::codec::{CborCodec, CborCodecSettings};
 
     /// Helper: serialize with CborSerializer, then deserialize with CborDeserializer.
     fn make_deser(f: impl FnOnce(&mut crate::codec::CborSerializer)) -> Vec<u8> {
@@ -443,20 +440,31 @@ mod tests {
     }
 
     #[test]
-    fn server_null_struct_members_leave_defaults_untouched() {
+    fn null_struct_members_are_reported_to_the_consumer() {
         static X: Schema =
             Schema::new_member(shape_id!("test", "S", "x"), ShapeType::Integer, "x", 0);
         static S: Schema = Schema::new_struct(shape_id!("test", "S"), ShapeType::Structure, &[&X]);
         for strict in [false, true] {
-            let mut value = 42;
-            let result = CborDeserializer::new(b"\xa1\x61x\xf6", 128)
-                .with_strictness(strict)
-                .read_struct(&S, &mut |m, d| {
-                    value = d.read_integer(m)?;
-                    Ok(())
-                });
-            assert_eq!(result.is_ok(), strict);
-            assert_eq!(value, 42);
+            let codec = CborCodec::new(CborCodecSettings::default().enforce_strictness(strict));
+            let mut visited = false;
+            codec
+                .create_deserializer(b"\xa1\x61x\xf6")
+                .read_struct(&S, &mut |member, deser| {
+                    assert_eq!(member.member_index(), Some(0));
+                    assert!(deser.is_null());
+                    visited = true;
+                    deser.read_null()
+                })
+                .unwrap();
+            assert!(visited);
+
+            // A consumer can instead reject null by requiring an integer.
+            assert!(codec
+                .create_deserializer(b"\xa1\x61x\xf6")
+                .read_struct(&S, &mut |member, deser| {
+                    deser.read_integer(member).map(|_| ())
+                })
+                .is_err());
         }
     }
 

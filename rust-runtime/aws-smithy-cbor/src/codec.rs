@@ -21,8 +21,7 @@ pub struct CborCodecSettings {
 }
 
 impl CborCodecSettings {
-    /// Enables server request validation: reject trailing bytes,
-    /// and treat null structure members as absent so modeled defaults apply.
+    /// Rejects trailing bytes after top-level containers and truncated nested structures.
     /// Disabled by default to preserve client deserialization behavior.
     pub fn enforce_strictness(mut self, value: bool) -> Self {
         self.enforce_strictness = value;
