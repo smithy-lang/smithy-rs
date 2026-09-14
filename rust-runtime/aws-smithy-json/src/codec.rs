@@ -82,6 +82,8 @@ pub struct JsonCodecSettings {
     field_mapper: JsonFieldMapper,
     default_timestamp_format: TimestampFormat,
     max_depth: u32,
+    enforce_strictness: bool,
+    allow_integral_float_numbers: bool,
     /// When `true`, a timestamp must use exactly the wire form its resolved
     /// `@timestampFormat` (or the codec default) prescribes: a JSON number for
     /// `epoch-seconds`, an RFC 3339 string without a UTC offset for `date-time`,
@@ -138,6 +140,8 @@ impl Default for JsonCodecSettings {
             field_mapper: JsonFieldMapper::UseJsonName,
             default_timestamp_format: TimestampFormat::EpochSeconds,
             max_depth: crate::codec::deserializer::MAX_DESERIALIZE_DEPTH,
+            enforce_strictness: false,
+            allow_integral_float_numbers: false,
             strict_timestamp_formats: false,
         }
     }
@@ -149,6 +153,8 @@ pub struct JsonCodecSettingsBuilder {
     use_json_name: bool,
     default_timestamp_format: TimestampFormat,
     max_depth: u32,
+    enforce_strictness: bool,
+    allow_integral_float_numbers: bool,
     strict_timestamp_formats: bool,
 }
 
@@ -158,12 +164,30 @@ impl Default for JsonCodecSettingsBuilder {
             use_json_name: true,
             default_timestamp_format: TimestampFormat::EpochSeconds,
             max_depth: crate::codec::deserializer::MAX_DESERIALIZE_DEPTH,
+            enforce_strictness: false,
+            allow_integral_float_numbers: false,
             strict_timestamp_formats: false,
         }
     }
 }
 
 impl JsonCodecSettingsBuilder {
+    /// Validates string contents and number syntax, rejects whitespace-only structure
+    /// bodies, and checks the range of floating-point epoch timestamps.
+    /// Disabled by default. Timestamp wire formats are controlled separately by
+    /// [`Self::strict_timestamp_formats`].
+    pub fn enforce_strictness(mut self, value: bool) -> Self {
+        self.enforce_strictness = value;
+        self
+    }
+
+    /// Accepts exactly integral JSON decimal/exponent numbers for integer members.
+    /// Disabled by default; ordinary integer spellings retain exact parsing.
+    pub fn allow_integral_float_numbers(mut self, value: bool) -> Self {
+        self.allow_integral_float_numbers = value;
+        self
+    }
+
     /// Whether to use the `@jsonName` trait for member names.
     pub fn use_json_name(mut self, value: bool) -> Self {
         self.use_json_name = value;
@@ -203,6 +227,8 @@ impl JsonCodecSettingsBuilder {
             field_mapper,
             default_timestamp_format: self.default_timestamp_format,
             max_depth: self.max_depth,
+            enforce_strictness: self.enforce_strictness,
+            allow_integral_float_numbers: self.allow_integral_float_numbers,
             strict_timestamp_formats: self.strict_timestamp_formats,
         }
     }
