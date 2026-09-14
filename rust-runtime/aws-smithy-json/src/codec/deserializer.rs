@@ -7,7 +7,7 @@
 
 use aws_smithy_schema::serde::SerdeError;
 use aws_smithy_schema::serde::ShapeDeserializer;
-use aws_smithy_schema::{Schema, ShapeType};
+use aws_smithy_schema::Schema;
 use aws_smithy_types::{
     BigDecimal, BigInteger, Blob, DateTime, DiscriminatedDocument, Document, DocumentSettings,
     Number,
@@ -80,6 +80,9 @@ impl<'a> JsonDeserializer<'a> {
                 b'\\' => {
                     has_escapes = true;
                     i += 2;
+                }
+                0..=31 if self.settings.enforce_strictness => {
+                    return Err(SerdeError::invalid_input("raw control character in string"));
                 }
                 _ => i += 1,
             }
@@ -190,6 +193,9 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         // Expect opening brace
         self.skip_whitespace();
         if self.remaining().is_empty() {
+            if self.settings.enforce_strictness && (!self.input.is_empty() || self.depth != 1) {
+                return Err(SerdeError::invalid_input("expected object"));
+            }
             // Treat empty input as an empty object (e.g., empty HTTP response body)
             self.depth -= 1;
             return Ok(());
@@ -199,12 +205,6 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         }
         self.advance_by(1);
 
-        // A union holds exactly one member. Every key that names a member counts as a
-        // variant, so a second one is an error, as in the token-based parser
-        // ("encountered mixed variants in union"). `null` values are absent members and
-        // do not count; `__type` is a discriminator, never a member.
-        let is_union = matches!(schema.shape_type(), ShapeType::Union);
-        let mut variant_seen = false;
         let mut first = true;
         loop {
             // Stop at the end of the object; otherwise the next key/value pair starts here.
@@ -232,22 +232,18 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             if rem.starts_with(b"null") && !rem.get(4).is_some_and(|b| b.is_ascii_alphanumeric()) {
                 self.advance_by(4);
             } else if let Some(member_schema) = self.resolve_member(schema, &key_str) {
-                if is_union {
-                    if variant_seen {
-                        return Err(SerdeError::invalid_input(
-                            "encountered mixed variants in union",
-                        ));
-                    }
-                    variant_seen = true;
-                }
                 consumer(member_schema, self)?;
-            } else if is_union
-                && &*key_str != "__type"
-                && self.settings.reject_unknown_union_members()
-            {
-                return Err(SerdeError::unknown_member(key_str.into_owned()));
-            } else {
+            } else if &*key_str == "__type" {
+                // Protocol discriminator, never a member.
                 self.skip_value()?;
+            } else {
+                // Let the consumer decide how to handle an unknown member. If it
+                // leaves the value unread, validate and skip it here.
+                let start = self.position;
+                consumer(&aws_smithy_schema::prelude::DOCUMENT, self)?;
+                if self.position == start {
+                    self.skip_value()?;
+                }
             }
         }
 
@@ -375,7 +371,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         match self.remaining().first() {
             Some(b'-') | Some(b'0'..=b'9') => {
                 let start = self.position;
-                self.consume_number();
+                self.consume_number()?;
                 let num_str = std::str::from_utf8(&self.input[start..self.position])
                     .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
                 BigInteger::from_str(num_str).map_err(|e| SerdeError::invalid_input(e.to_string()))
@@ -399,7 +395,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         match self.remaining().first() {
             Some(b'-') | Some(b'0'..=b'9') => {
                 let start = self.position;
-                self.consume_number();
+                self.consume_number()?;
                 let num_str = std::str::from_utf8(&self.input[start..self.position])
                     .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
                 BigDecimal::from_str(num_str).map_err(|e| SerdeError::invalid_input(e.to_string()))
@@ -444,6 +440,9 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                     .map(|s| s.into_owned())
                     .map_err(|e| SerdeError::invalid_input(e.to_string()));
             } else {
+                if self.settings.enforce_strictness && rem[i] < 32 {
+                    return Err(SerdeError::invalid_input("raw control character in string"));
+                }
                 i += 1;
             }
         }
@@ -637,13 +636,20 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                 }
                 // Numeric timestamp: epoch seconds.
                 let start = self.position;
-                self.consume_number();
+                self.consume_number()?;
                 let num_str = std::str::from_utf8(&self.input[start..self.position])
                     .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
                 if num_str.contains('.') || num_str.contains('e') || num_str.contains('E') {
                     let f: f64 = num_str.parse().map_err(|e: std::num::ParseFloatError| {
                         SerdeError::invalid_input(e.to_string())
                     })?;
+                    if self.settings.enforce_strictness
+                        && (!f.is_finite() || f < i64::MIN as f64 || f >= -(i64::MIN as f64))
+                    {
+                        return Err(SerdeError::invalid_input(
+                            "epoch-seconds value out of range",
+                        ));
+                    }
                     Ok(DateTime::from_secs_f64(f))
                 } else if num_str.starts_with('-') {
                     let n: i64 = num_str.parse().map_err(|e: std::num::ParseIntError| {
@@ -726,6 +732,11 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                 // Parse a JSON number into [`Document::Number`].
                 // Range determines which `Number` variant carries it
                 // (PosInt / NegInt / Float).
+                if self.settings.enforce_strictness {
+                    let start = self.position;
+                    self.consume_number()?;
+                    self.position = start;
+                }
                 let rem = self.remaining();
                 let mut len = 0;
                 let mut is_float = false;
@@ -1074,6 +1085,9 @@ impl<'a> JsonDeserializer<'a> {
 
     /// Skips a JSON string, accepting exactly the escape sequences `read_string` accepts.
     fn skip_string(&mut self) -> Result<(), SerdeError> {
+        if self.settings.enforce_strictness {
+            return self.parse_key().map(|_| ());
+        }
         let rem = self.remaining();
         debug_assert_eq!(rem.first(), Some(&b'"'));
         let mut i = 1;
@@ -1117,7 +1131,18 @@ impl<'a> JsonDeserializer<'a> {
         Ok(())
     }
 
-    fn consume_number(&mut self) {
+    fn consume_number(&mut self) -> Result<(), SerdeError> {
+        if self.settings.enforce_strictness {
+            self.skip_number()?;
+            if self
+                .remaining()
+                .first()
+                .is_some_and(|b| !matches!(b, b' ' | b'\t' | b'\r' | b'\n' | b',' | b']' | b'}'))
+            {
+                return Err(SerdeError::invalid_input("invalid number boundary"));
+            }
+            return Ok(());
+        }
         let mut len = 0;
         for &b in self.remaining() {
             if b.is_ascii_digit() || b == b'-' || b == b'.' || b == b'e' || b == b'E' || b == b'+' {
@@ -1127,6 +1152,7 @@ impl<'a> JsonDeserializer<'a> {
             }
         }
         self.advance_by(len);
+        Ok(())
     }
 
     /// Skips one JSON value, validating its syntax as it goes so that an unknown member
@@ -1184,6 +1210,25 @@ impl<'a> JsonDeserializer<'a> {
 
     fn read_integer_value(&mut self) -> Result<i64, SerdeError> {
         self.skip_whitespace();
+        if self.settings.enforce_strictness || self.settings.allow_integral_float_numbers {
+            let start = self.position;
+            self.skip_number()?;
+            if self
+                .remaining()
+                .first()
+                .is_some_and(|b| !matches!(b, b' ' | b'\t' | b'\r' | b'\n' | b',' | b']' | b'}'))
+            {
+                return Err(SerdeError::invalid_input("invalid number boundary"));
+            }
+            let text = std::str::from_utf8(&self.input[start..self.position])
+                .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
+            if self.settings.allow_integral_float_numbers && text.contains(['.', 'e', 'E']) {
+                return parse_integral_decimal(text);
+            }
+            return text
+                .parse()
+                .map_err(|e: std::num::ParseIntError| SerdeError::invalid_input(e.to_string()));
+        }
         let rem = self.remaining();
         let mut len = 0;
         for &b in rem {
@@ -1244,6 +1289,14 @@ impl<'a> JsonDeserializer<'a> {
             }
             return Ok(value);
         }
+        if self.settings.enforce_strictness {
+            let start = self.position;
+            self.consume_number()?;
+            return std::str::from_utf8(&self.input[start..self.position])
+                .map_err(|e| SerdeError::invalid_input(e.to_string()))?
+                .parse()
+                .map_err(|e: std::num::ParseFloatError| SerdeError::invalid_input(e.to_string()));
+        }
         let mut len = 0;
         for &b in rem {
             if b.is_ascii_digit() || b == b'-' || b == b'+' || b == b'.' || b == b'e' || b == b'E' {
@@ -1265,9 +1318,225 @@ impl<'a> JsonDeserializer<'a> {
     }
 }
 
+// Expand only the at-most-19 significant integer digits, never through f64.
+fn parse_integral_decimal(text: &str) -> Result<i64, SerdeError> {
+    let invalid = || SerdeError::invalid_input("number is fractional or outside integer range");
+    text.parse::<BigDecimal>().map_err(|_| invalid())?;
+    let negative = text.starts_with('-');
+    let unsigned = text.strip_prefix('-').unwrap_or(text);
+    let (mantissa, exponent) = unsigned.split_once(['e', 'E']).unwrap_or((unsigned, "0"));
+    let digits: String = mantissa.chars().filter(|c| *c != '.').collect();
+    let digits = digits.trim_start_matches('0');
+    if digits.is_empty() {
+        return Ok(0);
+    }
+    let exponent: i64 = exponent.parse().map_err(|_| invalid())?;
+    let fraction = mantissa.split_once('.').map_or(0, |(_, f)| f.len()) as i64;
+    let shift = exponent.checked_sub(fraction).ok_or_else(invalid)?;
+    let mut integer = if shift < 0 {
+        let cut = usize::try_from(shift.unsigned_abs()).map_err(|_| invalid())?;
+        if cut >= digits.len() || !digits[digits.len() - cut..].bytes().all(|b| b == b'0') {
+            return Err(invalid());
+        }
+        digits[..digits.len() - cut].to_owned()
+    } else {
+        if shift > 19 || digits.len() + shift as usize > 19 {
+            return Err(invalid());
+        }
+        let mut result = digits.to_owned();
+        result.extend(std::iter::repeat_n('0', shift as usize));
+        result
+    };
+    if negative {
+        integer.insert(0, '-');
+    }
+    integer.parse().map_err(|_| invalid())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn strict_strings_and_client_defaults() {
+        for input in [b"\"raw\ncontrol\"".as_slice(), b"\"raw\x00control\""] {
+            let mut client = JsonDeserializer::new(input, Arc::new(JsonCodecSettings::default()));
+            assert!(client.read_string(dummy_schema()).is_ok());
+            for key in [false, true] {
+                let mut server = JsonDeserializer::new(
+                    input,
+                    Arc::new(
+                        JsonCodecSettings::builder()
+                            .enforce_strictness(true)
+                            .build(),
+                    ),
+                );
+                assert!(if key {
+                    server.parse_key().map(|_| ())
+                } else {
+                    server.read_string(dummy_schema()).map(|_| ())
+                }
+                .is_err());
+                let mut server = JsonDeserializer::new(
+                    input,
+                    Arc::new(
+                        JsonCodecSettings::builder()
+                            .enforce_strictness(true)
+                            .build(),
+                    ),
+                );
+                assert!(server.skip_string().is_err());
+            }
+        }
+        for input in [b"\"ok\\n\\u0041\"".as_slice(), "\"hello 世界\"".as_bytes()] {
+            let mut server = JsonDeserializer::new(
+                input,
+                Arc::new(
+                    JsonCodecSettings::builder()
+                        .enforce_strictness(true)
+                        .build(),
+                ),
+            );
+            assert!(server.skip_string().is_ok());
+        }
+        for strict in [false, true] {
+            let settings = Arc::new(
+                JsonCodecSettings::builder()
+                    .enforce_strictness(strict)
+                    .build(),
+            );
+            for input in [b"\"\xff\"".as_slice(), b"\"\xc0\x80\""] {
+                assert!(JsonDeserializer::new(input, settings.clone())
+                    .read_string(dummy_schema())
+                    .is_err());
+                assert!(JsonDeserializer::new(input, settings.clone())
+                    .parse_key()
+                    .is_err());
+            }
+        }
+        let bad = b"\"\xff\"";
+        assert!(
+            JsonDeserializer::new(bad, Arc::new(JsonCodecSettings::default()))
+                .skip_string()
+                .is_ok()
+        );
+        assert!(JsonDeserializer::new(
+            bad,
+            Arc::new(
+                JsonCodecSettings::builder()
+                    .enforce_strictness(true)
+                    .build()
+            )
+        )
+        .skip_string()
+        .is_err());
+    }
+
+    #[test]
+    fn exact_integral_numbers_and_strict_grammar() {
+        let settings = Arc::new(
+            JsonCodecSettings::builder()
+                .enforce_strictness(true)
+                .allow_integral_float_numbers(true)
+                .build(),
+        );
+        for (input, expected) in [
+            ("1.0", 1),
+            ("1e3", 1000),
+            ("1.20e1", 12),
+            ("9007199254740993", 9007199254740993),
+            ("9223372036854775807.0", i64::MAX),
+            ("-9223372036854775808e0", i64::MIN),
+            ("0e999999999999999999999", 0),
+        ] {
+            assert_eq!(
+                JsonDeserializer::new(input.as_bytes(), settings.clone())
+                    .read_long(dummy_schema())
+                    .unwrap(),
+                expected,
+                "{input}"
+            );
+        }
+        for input in [
+            "1.01",
+            "1e-3",
+            "9223372036854775808.0",
+            "-9223372036854775809.0",
+            "1e10000",
+            "12.",
+            "01",
+            "+1",
+            "1e",
+            "--1",
+            "1e+",
+            "1.0.0",
+        ] {
+            assert!(
+                JsonDeserializer::new(input.as_bytes(), settings.clone())
+                    .read_long(dummy_schema())
+                    .is_err(),
+                "{input}"
+            );
+        }
+        for input in ["12.", "01", "+1", "1e", "1e+", "--1", "1.0.0"] {
+            assert!(
+                JsonDeserializer::new(input.as_bytes(), settings.clone())
+                    .read_double(dummy_schema())
+                    .is_err(),
+                "{input}"
+            );
+        }
+        assert!(
+            JsonDeserializer::new(b"1.0", Arc::new(JsonCodecSettings::default()))
+                .read_long(dummy_schema())
+                .is_err()
+        );
+        assert_eq!(
+            JsonDeserializer::new(b"12.", Arc::new(JsonCodecSettings::default()))
+                .read_double(dummy_schema())
+                .unwrap(),
+            12.0
+        );
+        for strict in [false, true] {
+            let settings = Arc::new(
+                JsonCodecSettings::builder()
+                    .enforce_strictness(strict)
+                    .allow_integral_float_numbers(true)
+                    .build(),
+            );
+            assert_eq!(
+                JsonDeserializer::new(b"127.0", settings.clone())
+                    .read_byte(dummy_schema())
+                    .unwrap(),
+                127
+            );
+            assert!(JsonDeserializer::new(b"128.0", settings.clone())
+                .read_byte(dummy_schema())
+                .is_err());
+            assert!(JsonDeserializer::new(b"32768e0", settings.clone())
+                .read_short(dummy_schema())
+                .is_err());
+            assert!(JsonDeserializer::new(b"2147483648.0", settings.clone())
+                .read_integer(dummy_schema())
+                .is_err());
+            assert!(JsonDeserializer::new(b"12.", settings)
+                .read_long(dummy_schema())
+                .is_err());
+        }
+        for input in ["1e999", "-1e999", "9223372036854775808.0"] {
+            assert!(JsonDeserializer::new(input.as_bytes(), settings.clone())
+                .read_timestamp(dummy_schema())
+                .is_err());
+        }
+        for (input, valid) in [(b"".as_slice(), true), (b" \n", false), (b"{}", true)] {
+            assert_eq!(
+                JsonDeserializer::new(input, settings.clone())
+                    .read_struct(dummy_schema(), &mut |_, _| Ok(()))
+                    .is_ok(),
+                valid
+            );
+        }
+    }
 
     fn dummy_schema() -> &'static aws_smithy_schema::Schema<'static> {
         &aws_smithy_schema::prelude::STRING
@@ -3584,111 +3853,142 @@ mod union_deserialization_tests {
             );
         }
     }
+}
 
-    mod union_members {
-        //! A union body holds exactly one member. Mixed variants are always an error; an
-        //! unknown key is an error only with `reject_unknown_union_members`, which servers
-        //! enable for the restJson1 `RestJsonMalformedUnion*` protocol tests.
-        use super::*;
-        use aws_smithy_schema::shape_id;
+/// `read_struct` reports keys that name no member: the consumer is called with the
+/// prelude `DOCUMENT` schema (no member index) positioned at the value. These tests
+/// pin down what is reported, what is not, and that the stream stays intact whether
+/// or not the consumer reads the value.
+#[cfg(test)]
+mod unknown_member_tests {
+    use super::*;
+    use aws_smithy_schema::{shape_id, ShapeType};
 
-        static INT: Schema<'static> =
-            Schema::new_member(shape_id!("test", "U", "int"), ShapeType::Integer, "int", 0);
-        static STRING: Schema<'static> = Schema::new_member(
-            shape_id!("test", "U", "string"),
-            ShapeType::String,
-            "string",
-            1,
-        );
-        static UNION: Schema<'static> =
-            Schema::new_struct(shape_id!("test", "U"), ShapeType::Union, &[&INT, &STRING]);
-        static FIELD: Schema<'static> = Schema::new_member(
-            shape_id!("test", "S", "field"),
-            ShapeType::Integer,
-            "field",
-            0,
-        );
-        static STRUCT: Schema<'static> =
-            Schema::new_struct(shape_id!("test", "S"), ShapeType::Structure, &[&FIELD]);
+    static A: Schema<'static> =
+        Schema::new_member(shape_id!("test", "S"), ShapeType::String, "a", 0);
+    static S: Schema<'static> =
+        Schema::new_struct(shape_id!("test", "S"), ShapeType::Structure, &[&A]);
 
-        #[derive(Debug, PartialEq)]
-        enum Variant {
-            Int(i32),
-            String(String),
-        }
+    static U_INT: Schema<'static> =
+        Schema::new_member(shape_id!("test", "U"), ShapeType::Integer, "int", 0);
+    static U_STR: Schema<'static> =
+        Schema::new_member(shape_id!("test", "U"), ShapeType::String, "string", 1);
+    static U: Schema<'static> =
+        Schema::new_struct(shape_id!("test", "U"), ShapeType::Union, &[&U_INT, &U_STR]);
 
-        fn read(strict: bool, body: &[u8]) -> Result<Option<Variant>, SerdeError> {
-            let settings = JsonCodecSettings::builder()
-                .reject_unknown_union_members(strict)
-                .build();
-            let mut deser = JsonDeserializer::new(body, Arc::new(settings));
-            let mut value = None;
-            deser.read_struct(&UNION, &mut |member, d| {
-                value = Some(match member.member_index() {
-                    Some(0) => Variant::Int(d.read_integer(member)?),
-                    _ => Variant::String(d.read_string(member)?),
-                });
+    fn deser(input: &[u8]) -> JsonDeserializer<'_> {
+        JsonDeserializer::new(input, Arc::new(JsonCodecSettings::default()))
+    }
+
+    /// Reads `S`, recording every unknown key (and its value when asked) and returning `a`.
+    fn read_s(input: &[u8], read_unknown_value: bool) -> (Option<String>, Vec<Option<Document>>) {
+        let mut a = None;
+        let mut unknown = Vec::new();
+        deser(input)
+            .read_struct(&S, &mut |member, d| {
+                match member.member_index() {
+                    Some(0) => a = Some(d.read_string(member)?),
+                    _ => {
+                        assert_eq!(member.shape_type(), ShapeType::Document);
+                        unknown.push(if read_unknown_value {
+                            Some(d.read_document(member)?)
+                        } else {
+                            None
+                        });
+                    }
+                }
                 Ok(())
-            })?;
-            Ok(value)
-        }
+            })
+            .unwrap();
+        (a, unknown)
+    }
 
-        #[test]
-        fn a_single_member_is_read() {
-            for strict in [false, true] {
-                assert_eq!(
-                    read(strict, br#"{"int": 2}"#).unwrap(),
-                    Some(Variant::Int(2))
-                );
-                assert_eq!(
-                    read(strict, br#"{"int": null, "string": "x"}"#).unwrap(),
-                    Some(Variant::String("x".into()))
-                );
-                assert_eq!(
-                    read(strict, br#"{"__type": "test#U", "int": 2}"#).unwrap(),
-                    Some(Variant::Int(2))
-                );
-                assert_eq!(read(strict, br#"{}"#).unwrap(), None);
-                assert_eq!(read(strict, br#"{"int": null}"#).unwrap(), None);
+    #[test]
+    fn unknown_key_is_reported_and_the_consumer_can_read_the_value() {
+        let (a, unknown) = read_s(br#"{"zzz":{"deep":[1,2]},"a":"x"}"#, true);
+        assert_eq!(a.as_deref(), Some("x"));
+        assert_eq!(unknown.len(), 1);
+        match &unknown[0] {
+            Some(Document::Object(map)) => assert!(map.contains_key("deep")),
+            other => panic!("expected the object value, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unknown_key_value_is_skipped_when_the_consumer_does_not_read_it() {
+        // Nested containers and a `}` inside a string must not confuse the skip.
+        let (a, unknown) = read_s(
+            br#"{"zzz":{"deep":[1,{"q":"}"}]},"a":"x","yyy":"tail"}"#,
+            false,
+        );
+        assert_eq!(a.as_deref(), Some("x"));
+        assert_eq!(unknown.len(), 2);
+    }
+
+    #[test]
+    fn type_discriminator_is_not_reported() {
+        let (a, unknown) = read_s(br#"{"__type":"ns#Foo","a":"x"}"#, false);
+        assert_eq!(a.as_deref(), Some("x"));
+        assert!(unknown.is_empty(), "`__type` must not be reported");
+    }
+
+    #[test]
+    fn null_valued_unknown_key_is_not_reported() {
+        let (a, unknown) = read_s(br#"{"zzz":null,"a":"x"}"#, false);
+        assert_eq!(a.as_deref(), Some("x"));
+        assert!(unknown.is_empty(), "a null value is an absent member");
+    }
+
+    #[test]
+    fn struct_consumer_that_ignores_unknown_keys_is_unaffected() {
+        let mut a = None;
+        deser(br#"{"zzz":[1,2,3],"a":"x"}"#)
+            .read_struct(&S, &mut |member, d| {
+                if member.member_index() == Some(0) {
+                    a = Some(d.read_string(member)?);
+                }
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(a.as_deref(), Some("x"));
+    }
+
+    /// The shape of a generated server union deserializer: a second key of any kind is
+    /// "mixed variants", and an unknown key is an error.
+    fn read_union(input: &[u8]) -> Result<String, SerdeError> {
+        let mut result: Option<String> = None;
+        deser(input).read_struct(&U, &mut |member, d| {
+            if result.is_some() {
+                return Err(SerdeError::invalid_input(
+                    "encountered mixed variants in union",
+                ));
             }
-        }
+            result = Some(match member.member_index() {
+                Some(0) => format!("int={}", d.read_integer(member)?),
+                Some(1) => format!("string={}", d.read_string(member)?),
+                _ => return Err(SerdeError::invalid_input("unexpected union variant")),
+            });
+            Ok(())
+        })?;
+        result.ok_or_else(|| SerdeError::custom("expected a union variant"))
+    }
 
-        /// RestJsonMalformedUnionMultipleFieldsSet
-        #[test]
-        fn mixed_variants_are_rejected() {
-            for strict in [false, true] {
-                assert!(read(strict, br#"{"int": 2, "string": "three"}"#).is_err());
-                assert!(read(strict, br#"{"int": 2, "int": 3}"#).is_err());
-            }
-        }
-
-        /// RestJsonMalformedUnionKnownAndUnknownFieldsSet, RestJsonMalformedUnionUnknownMember
-        #[test]
-        fn unknown_members_are_rejected_only_when_configured() {
-            assert_eq!(
-                read(false, br#"{"int": 2, "unknownField": "three"}"#).unwrap(),
-                Some(Variant::Int(2))
-            );
-            assert_eq!(read(false, br#"{"unknown": "hello"}"#).unwrap(), None);
-            assert!(read(true, br#"{"int": 2, "unknownField": "three"}"#).is_err());
-            assert!(read(true, br#"{"unknown": "hello"}"#).is_err());
-        }
-
-        #[test]
-        fn structures_still_skip_unknown_members_when_configured() {
-            let settings = JsonCodecSettings::builder()
-                .reject_unknown_union_members(true)
-                .build();
-            let mut deser =
-                JsonDeserializer::new(br#"{"unknown": {"a": 1}, "field": 5}"#, Arc::new(settings));
-            let mut field = None;
-            deser
-                .read_struct(&STRUCT, &mut |member, d| {
-                    field = Some(d.read_integer(member)?);
-                    Ok(())
-                })
-                .unwrap();
-            assert_eq!(field, Some(5));
-        }
+    #[test]
+    fn union_consumer_sees_known_and_unknown_keys() {
+        assert_eq!(read_union(br#"{"int":2}"#).unwrap(), "int=2");
+        let err = read_union(br#"{"int":2,"string":"three"}"#).unwrap_err();
+        assert!(err.to_string().contains("mixed variants"), "{err}");
+        let err = read_union(br#"{"int":2,"unknownField":"three"}"#).unwrap_err();
+        assert!(err.to_string().contains("mixed variants"), "{err}");
+        let err = read_union(br#"{"unknownField":"three"}"#).unwrap_err();
+        assert!(
+            err.to_string().contains("unexpected union variant"),
+            "{err}"
+        );
+        // `__type` is a discriminator, not a variant.
+        assert_eq!(
+            read_union(br#"{"__type":"ns#U","int":2}"#).unwrap(),
+            "int=2"
+        );
     }
 }

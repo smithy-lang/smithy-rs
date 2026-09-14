@@ -18,8 +18,16 @@ use super::discriminator::TYPE_MEMBER;
 
 /// Supplies the server serializer to both HTTP responses and event-stream payloads.
 /// Deserialization and byte encoding remain the underlying codec's responsibility.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct RpcV2CborSerde(CborCodec);
+
+impl Default for RpcV2CborSerde {
+    fn default() -> Self {
+        Self(CborCodec::new(
+            aws_smithy_cbor::codec::CborCodecSettings::default().enforce_strictness(true),
+        ))
+    }
+}
 
 impl Codec for RpcV2CborSerde {
     type Serializer = RpcV2CborSerializer<CborSerializer>;

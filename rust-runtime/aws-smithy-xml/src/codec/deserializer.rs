@@ -348,6 +348,20 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                 .root_element()
                 .map_err(|e| SerdeError::custom(e.to_string()))?;
 
+            if self.settings.enforce_strictness && self.depth == 1 {
+                let expected = schema
+                    .xml_name()
+                    .map(|t| t.value())
+                    .or_else(|| schema.original_name())
+                    .or_else(|| schema.member_name())
+                    .unwrap_or_else(|| schema.shape_id().shape_name());
+                if !root.start_el().matches(expected) {
+                    return Err(SerdeError::invalid_input(format!(
+                        "expected XML root {expected}"
+                    )));
+                }
+            }
+
             // Unwrapped XML output (e.g. S3 `GetBucketLocation` whose body is
             // `<LocationConstraint>...</LocationConstraint>` rather than
             // `<GetBucketLocationOutput><LocationConstraint>...`). The body's
@@ -931,6 +945,51 @@ mod tests {
             .unwrap();
 
         assert_eq!(name, "Bob");
+    }
+
+    #[test]
+    fn strict_roots_only_validate_document_boundary() {
+        static CHILD: Schema<'static> = Schema::new_struct(
+            aws_smithy_schema::shape_id!("test", "Child"),
+            aws_smithy_schema::ShapeType::Structure,
+            &[],
+        );
+        static RENAMED: Schema<'static> = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Root", "child"),
+            aws_smithy_schema::ShapeType::Structure,
+            "child",
+            0,
+        )
+        .with_xml_name("Renamed");
+        static ROOT: Schema<'static> = Schema::new_struct(
+            aws_smithy_schema::shape_id!("test", "Synthetic"),
+            aws_smithy_schema::ShapeType::Structure,
+            &[&RENAMED],
+        )
+        .with_original_name("Original")
+        .with_xml_name("WireRoot");
+        for strict in [false, true] {
+            let settings = Arc::new(
+                XmlCodecSettings::builder()
+                    .enforce_strictness(strict)
+                    .build(),
+            );
+            for (input, matches) in [
+                (b"<WireRoot><Renamed/></WireRoot>".as_slice(), true),
+                (b"<Wrong><Renamed/></Wrong>", false),
+            ] {
+                let mut visited = false;
+                let result = XmlDeserializer::new(input, settings.clone()).read_struct(
+                    &ROOT,
+                    &mut |_, d| {
+                        visited = true;
+                        d.read_struct(&CHILD, &mut |_, _| Ok(()))
+                    },
+                );
+                assert_eq!(result.is_ok(), !strict || matches);
+                assert_eq!(visited, !strict || matches);
+            }
+        }
     }
 
     #[test]

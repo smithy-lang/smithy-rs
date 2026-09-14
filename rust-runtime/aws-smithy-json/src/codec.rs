@@ -126,13 +126,8 @@ pub struct JsonCodecSettings {
     /// a string for a `date-time` or `epoch-seconds` member is parsed as an
     /// offset-aware `date-time`.
     strict_timestamp_formats: bool,
-    /// When `true`, a JSON key inside a union that names no member of the union
-    /// is an error (`SerdeError::UnknownMember`). Servers enable this: a request
-    /// carrying an unknown union member is malformed. When `false` (default) the
-    /// key is skipped, which is what clients need so that an unknown variant
-    /// sent by a newer service does not fail the whole response. `__type` is
-    /// never treated as a member.
-    reject_unknown_union_members: bool,
+    enforce_strictness: bool,
+    allow_integral_float_numbers: bool,
     /// Identifies the protocol that produced this codec — used by
     /// `DocumentSettings` for diagnostics on coercion failures.
     /// Default: `aws.smithy.json#JsonCodec`. AWS protocols (awsJson1_0,
@@ -190,12 +185,6 @@ impl JsonCodecSettings {
         self.strict_timestamp_formats
     }
 
-    /// Whether a JSON key inside a union that names no member is an error.
-    /// See [`JsonCodecSettingsBuilder::reject_unknown_union_members`].
-    pub fn reject_unknown_union_members(&self) -> bool {
-        self.reject_unknown_union_members
-    }
-
     /// Whether [`Document::BigInteger`](aws_smithy_types::Document::BigInteger)
     /// and [`Document::BigDecimal`](aws_smithy_types::Document::BigDecimal)
     /// emit as JSON strings (when `true`) or as raw JSON numbers
@@ -231,8 +220,9 @@ impl JsonCodecSettings {
             use_json_name: matches!(self.field_mapper, JsonFieldMapper::UseJsonName),
             default_timestamp_format: self.default_timestamp_format,
             max_depth: self.max_depth,
+            enforce_strictness: self.enforce_strictness,
+            allow_integral_float_numbers: self.allow_integral_float_numbers,
             strict_timestamp_formats: self.strict_timestamp_formats,
-            reject_unknown_union_members: self.reject_unknown_union_members,
             protocol_id: self.protocol_id.clone(),
             use_string_for_arbitrary_precision: self.use_string_for_arbitrary_precision,
             default_namespace: self.default_namespace.clone(),
@@ -260,8 +250,9 @@ impl Default for JsonCodecSettings {
             field_mapper: JsonFieldMapper::UseJsonName,
             default_timestamp_format: TimestampFormat::EpochSeconds,
             max_depth: crate::codec::deserializer::MAX_DESERIALIZE_DEPTH,
+            enforce_strictness: false,
+            allow_integral_float_numbers: false,
             strict_timestamp_formats: false,
-            reject_unknown_union_members: false,
             protocol_id: DEFAULT_JSON_CODEC_ID,
             use_string_for_arbitrary_precision: false,
             default_namespace: None,
@@ -300,7 +291,8 @@ pub struct JsonCodecSettingsBuilder {
     default_timestamp_format: TimestampFormat,
     max_depth: u32,
     strict_timestamp_formats: bool,
-    reject_unknown_union_members: bool,
+    enforce_strictness: bool,
+    allow_integral_float_numbers: bool,
     protocol_id: ShapeId<'static>,
     use_string_for_arbitrary_precision: bool,
     default_namespace: Option<String>,
@@ -312,8 +304,9 @@ impl Default for JsonCodecSettingsBuilder {
             use_json_name: true,
             default_timestamp_format: TimestampFormat::EpochSeconds,
             max_depth: crate::codec::deserializer::MAX_DESERIALIZE_DEPTH,
+            enforce_strictness: false,
+            allow_integral_float_numbers: false,
             strict_timestamp_formats: false,
-            reject_unknown_union_members: false,
             protocol_id: DEFAULT_JSON_CODEC_ID,
             use_string_for_arbitrary_precision: false,
             default_namespace: None,
@@ -322,6 +315,19 @@ impl Default for JsonCodecSettingsBuilder {
 }
 
 impl JsonCodecSettingsBuilder {
+    /// Enforces JSON grammar and request document validity. Disabled by default.
+    pub fn enforce_strictness(mut self, value: bool) -> Self {
+        self.enforce_strictness = value;
+        self
+    }
+
+    /// Accepts exactly integral JSON decimal/exponent numbers for integer members.
+    /// Disabled by default; ordinary integer spellings retain exact parsing.
+    pub fn allow_integral_float_numbers(mut self, value: bool) -> Self {
+        self.allow_integral_float_numbers = value;
+        self
+    }
+
     /// Whether to use the `@jsonName` trait for member names.
     pub fn use_json_name(mut self, value: bool) -> Self {
         self.use_json_name = value;
@@ -347,14 +353,6 @@ impl JsonCodecSettingsBuilder {
     /// Off by default; servers turn it on so malformed requests are rejected.
     pub fn strict_timestamp_formats(mut self, value: bool) -> Self {
         self.strict_timestamp_formats = value;
-        self
-    }
-
-    /// Treat a JSON key inside a union that names no member of the union as an
-    /// error instead of skipping it. Off by default; servers turn it on so
-    /// malformed requests are rejected.
-    pub fn reject_unknown_union_members(mut self, value: bool) -> Self {
-        self.reject_unknown_union_members = value;
         self
     }
 
@@ -403,8 +401,9 @@ impl JsonCodecSettingsBuilder {
             field_mapper,
             default_timestamp_format: self.default_timestamp_format,
             max_depth: self.max_depth,
+            enforce_strictness: self.enforce_strictness,
+            allow_integral_float_numbers: self.allow_integral_float_numbers,
             strict_timestamp_formats: self.strict_timestamp_formats,
-            reject_unknown_union_members: self.reject_unknown_union_members,
             protocol_id: self.protocol_id,
             use_string_for_arbitrary_precision: self.use_string_for_arbitrary_precision,
             default_namespace: self.default_namespace,

@@ -84,8 +84,9 @@ pub(crate) fn extract_labels<'t>(template: &'t str, path: &str) -> Result<Vec<(&
 
     let template_path = template.split('?').next().unwrap_or(template);
     let template_segs: Vec<Seg<'t>> = template_path
+        .strip_prefix('/')
+        .unwrap_or(template_path)
         .split('/')
-        .filter(|s| !s.is_empty())
         .map(|s| {
             if let Some(inner) = s.strip_prefix('{').and_then(|s| s.strip_suffix('}')) {
                 match inner.strip_suffix('+') {
@@ -97,7 +98,7 @@ pub(crate) fn extract_labels<'t>(template: &'t str, path: &str) -> Result<Vec<(&
             }
         })
         .collect();
-    let path_segs: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+    let path_segs: Vec<&str> = path.strip_prefix('/').unwrap_or(path).split('/').collect();
 
     let mut labels = Vec::new();
     let mismatch = || SerdeError::invalid_input("request URI does not match `@http` URI pattern");
@@ -415,9 +416,17 @@ impl<'a> HeaderValuesDeserializer<'a> {
         }
     }
 
-    /// The single raw value for a scalar read. Mirrors
-    /// `aws_smithy_http::header::one_or_none`: more than one header instance
-    /// is an error.
+    /// Tokenizes scalar primitives just as legacy `read_many_primitive` does.
+    fn primitive_value<T: aws_smithy_types::primitive::Parse>(&self) -> Result<T, SerdeError> {
+        let mut values = aws_smithy_http::header::read_many_primitive::<T>(self.values.iter().copied())
+            .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
+        if values.len() != 1 {
+            return Err(SerdeError::invalid_input("expected one primitive header value"));
+        }
+        Ok(values.remove(0))
+    }
+
+    /// The single raw value for a scalar string, matching `one_or_none`.
     fn single_value(&self) -> Result<&'a str, SerdeError> {
         if self.values.len() > 1 {
             return Err(SerdeError::invalid_input(
@@ -483,49 +492,49 @@ impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
     fn read_boolean(&mut self, _schema: &Schema<'_>) -> Result<bool, SerdeError> {
         match self.cursor {
             Some(_) => parse_primitive::<bool>(&self.next_text()?, "boolean"),
-            None => parse_primitive::<bool>(self.single_value()?, "boolean"),
+            None => self.primitive_value::<bool>(),
         }
     }
 
     fn read_byte(&mut self, _schema: &Schema<'_>) -> Result<i8, SerdeError> {
         match self.cursor {
             Some(_) => parse_primitive::<i8>(&self.next_text()?, "byte"),
-            None => parse_primitive::<i8>(self.single_value()?, "byte"),
+            None => self.primitive_value::<i8>(),
         }
     }
 
     fn read_short(&mut self, _schema: &Schema<'_>) -> Result<i16, SerdeError> {
         match self.cursor {
             Some(_) => parse_primitive::<i16>(&self.next_text()?, "short"),
-            None => parse_primitive::<i16>(self.single_value()?, "short"),
+            None => self.primitive_value::<i16>(),
         }
     }
 
     fn read_integer(&mut self, _schema: &Schema<'_>) -> Result<i32, SerdeError> {
         match self.cursor {
             Some(_) => parse_primitive::<i32>(&self.next_text()?, "integer"),
-            None => parse_primitive::<i32>(self.single_value()?, "integer"),
+            None => self.primitive_value::<i32>(),
         }
     }
 
     fn read_long(&mut self, _schema: &Schema<'_>) -> Result<i64, SerdeError> {
         match self.cursor {
             Some(_) => parse_primitive::<i64>(&self.next_text()?, "long"),
-            None => parse_primitive::<i64>(self.single_value()?, "long"),
+            None => self.primitive_value::<i64>(),
         }
     }
 
     fn read_float(&mut self, _schema: &Schema<'_>) -> Result<f32, SerdeError> {
         match self.cursor {
             Some(_) => parse_primitive::<f32>(&self.next_text()?, "float"),
-            None => parse_primitive::<f32>(self.single_value()?, "float"),
+            None => self.primitive_value::<f32>(),
         }
     }
 
     fn read_double(&mut self, _schema: &Schema<'_>) -> Result<f64, SerdeError> {
         match self.cursor {
             Some(_) => parse_primitive::<f64>(&self.next_text()?, "double"),
-            None => parse_primitive::<f64>(self.single_value()?, "double"),
+            None => self.primitive_value::<f64>(),
         }
     }
 
@@ -809,6 +818,67 @@ impl ShapeDeserializer for PayloadBytesDeserializer<'_> {
     }
 }
 
+// Preserve a payload member's XML name when generated deserialization switches to
+// the target shape's schema. Only the document root is aliased; child schemas and
+// the underlying codec are passed directly to the consumer.
+struct StructuredPayloadDeserializer<'a> {
+    inner: &'a mut dyn ShapeDeserializer,
+    xml_name: &'a str,
+}
+
+impl ShapeDeserializer for StructuredPayloadDeserializer<'_> {
+    fn read_struct(
+        &mut self,
+        schema: &Schema<'_>,
+        consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        let root = Schema::new_struct(schema.shape_id().clone(), schema.shape_type(), schema.members())
+            .with_xml_name(self.xml_name);
+        self.inner.read_struct(&root, consumer)
+    }
+
+    fn read_list(
+        &mut self,
+        schema: &Schema<'_>,
+        consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        self.inner.read_list(schema, consumer)
+    }
+
+    fn read_map(
+        &mut self,
+        schema: &Schema<'_>,
+        consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        self.inner.read_map(schema, consumer)
+    }
+
+    unsupported_reads! {
+        "expected a structured payload";
+        read_boolean -> bool,
+        read_byte -> i8,
+        read_short -> i16,
+        read_integer -> i32,
+        read_long -> i64,
+        read_float -> f32,
+        read_double -> f64,
+        read_big_integer -> BigInteger,
+        read_big_decimal -> BigDecimal,
+        read_blob -> Blob,
+        read_timestamp -> DateTime,
+        read_string -> String,
+    }
+    fn read_document(&mut self, schema: &Schema<'_>) -> Result<Document, SerdeError> {
+        self.inner.read_document(schema)
+    }
+    fn is_null(&self) -> bool {
+        self.inner.is_null()
+    }
+    fn container_size(&self) -> Option<usize> {
+        self.inner.container_size()
+    }
+}
+
 // ============================================================================
 // Empty struct (empty request bodies on the RPC protocols)
 // ============================================================================
@@ -971,6 +1041,31 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
             } else if let Some(header) = member.http_header() {
                 let values = self.header_values(header.value());
                 if !values.is_empty() {
+                    if matches!(
+                        member.shape_type(),
+                        ShapeType::Boolean
+                            | ShapeType::Byte
+                            | ShapeType::Short
+                            | ShapeType::Integer
+                            | ShapeType::Long
+                            | ShapeType::Float
+                            | ShapeType::Double
+                    ) {
+                        let tokens = aws_smithy_http::header::read_many_from_str::<String>(values.iter().copied())
+                            .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
+                        if tokens.is_empty() {
+                            continue;
+                        }
+                    }
+                    if member.shape_type() == ShapeType::Timestamp {
+                        let format = resolve_timestamp_format(member, member, BindingLocation::Header);
+                        if aws_smithy_http::header::many_dates(values.iter().copied(), format)
+                            .map_err(|e| SerdeError::invalid_input(e.to_string()))?
+                            .is_empty()
+                        {
+                            continue;
+                        }
+                    }
                     let mut deser = HeaderValuesDeserializer::new(values, member);
                     consumer(member, &mut deser)?;
                 }
@@ -991,6 +1086,11 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
                         .into_iter()
                         .map(|v| v.to_string())
                         .collect();
+                    if values.len() > 1 && !member.member().is_some_and(|v| v.shape_type() == ShapeType::List) {
+                        return Err(SerdeError::invalid_input(
+                            "expected a single prefix header value but found multiple",
+                        ));
+                    }
                     if !values.is_empty() {
                         entries.push((suffix.to_string(), values));
                     }
@@ -1020,7 +1120,15 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
                         // the member unset.
                         if !self.body.is_empty() {
                             let mut deser = self.codec.create_deserializer(self.body);
-                            consumer(member, &mut deser)?;
+                            if let Some(name) = member.xml_name() {
+                                let mut payload = StructuredPayloadDeserializer {
+                                    inner: &mut deser,
+                                    xml_name: name.value(),
+                                };
+                                consumer(member, &mut payload)?;
+                            } else {
+                                consumer(member, &mut deser)?;
+                            }
                         }
                     }
                 }
@@ -1034,7 +1142,22 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
             .any(|m| m.http_payload().is_none() && is_body_member(m));
         if has_unbound_members && !self.body.is_empty() {
             let mut body_deser = self.codec.create_deserializer(self.body);
-            body_deser.read_struct(schema, consumer)?;
+            // Resolve only document members. Passing the full input schema lets a body key
+            // overwrite a trusted header/label/query binding, or fail parsing its ignored type.
+            let members: Vec<_> = schema
+                .members()
+                .iter()
+                .copied()
+                .filter(|m| m.http_payload().is_none() && is_body_member(m))
+                .collect();
+            let mut body_schema = Schema::new_struct(schema.shape_id().clone(), schema.shape_type(), &members);
+            if let Some(name) = schema.original_name() {
+                body_schema = body_schema.with_original_name(name);
+            }
+            if let Some(name) = schema.xml_name() {
+                body_schema = body_schema.with_xml_name(name.value());
+            }
+            body_deser.read_struct(&body_schema, consumer)?;
         }
         Ok(())
     }
@@ -1298,5 +1421,76 @@ mod tests {
         // Unparseable bound values are wire-level errors.
         let (uri, headers) = request_parts("/pets/rex?age=notanumber", &[]);
         assert!(collect(&uri, &headers, b"").is_err());
+    }
+    #[test]
+    fn prefix_repeats_reject_but_scalar_query_keeps_first() {
+        let (uri, headers) = request_parts("/pets/rex", &[("x-meta-color", "red"), ("x-meta-color", "blue")]);
+        assert!(collect(&uri, &headers, b"").is_err());
+        let (uri, headers) = request_parts("/pets/rex?age=1&age=2", &[("x-token", "")]);
+        let out = collect(&uri, &headers, b"").unwrap();
+        assert_eq!(out.age, Some(1));
+        assert_eq!(out.token.as_deref(), Some(""));
+    }
+
+    #[test]
+    fn primitive_header_tokenization() {
+        for values in [vec!["7,"], vec!["", "7"], vec!["\"7\""]] {
+            assert_eq!(
+                HeaderValuesDeserializer::new(values, &AGE_MEMBER)
+                    .read_integer(&AGE_MEMBER)
+                    .unwrap(),
+                7
+            );
+        }
+        for values in [vec!["7", "8"], vec!["7,8"], vec![" "], vec![r#"" 7 ""#]] {
+            assert!(HeaderValuesDeserializer::new(values, &AGE_MEMBER)
+                .read_integer(&AGE_MEMBER)
+                .is_err());
+        }
+        let mut list = HeaderValuesDeserializer::new(vec!["7,8", "9"], &TAGS_MEMBER);
+        let mut seen = Vec::new();
+        list.read_list(&TAGS_MEMBER, &mut |d| {
+            seen.push(d.read_integer(&AGE_MEMBER)?);
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(seen, [7, 8, 9]);
+    }
+    #[test]
+    fn body_cannot_override_http_bindings_or_parse_their_types() {
+        let (uri, headers) = request_parts(
+            "/pets/rex?age=7&tag=real",
+            &[("x-token", "trusted"), ("x-meta-color", "red")],
+        );
+        for body in [
+            br#"{"name":"evil","age":99,"tags":["evil"],"token":"evil","meta":{"color":"evil"},"note":"body"}"#
+                .as_slice(),
+            br#"{"name":false,"age":{},"tags":true,"token":12,"meta":[],"note":"body"}"#,
+        ] {
+            let out = collect(&uri, &headers, body).unwrap();
+            assert_eq!(out.name.as_deref(), Some("rex"));
+            assert_eq!(out.age, Some(7));
+            assert_eq!(out.tags, ["real"]);
+            assert_eq!(out.token.as_deref(), Some("trusted"));
+            assert_eq!(out.meta, [("color".to_owned(), "red".to_owned())]);
+            assert_eq!(out.note.as_deref(), Some("body"));
+        }
+        // Excluded bindings are still parsed as unknown values, validating JSON syntax.
+        assert!(collect(&uri, &headers, br#"{"token":[1,]}"#).is_err());
+    }
+
+    #[test]
+    fn greedy_labels_preserve_empty_segments() {
+        for (path, expected) in [("/data/", ""), ("/data/a//b", "a//b"), ("/data//a/", "/a/")] {
+            assert_eq!(
+                extract_labels("/data/{key+}", path).unwrap(),
+                [("key", expected.to_owned())]
+            );
+        }
+        assert_eq!(
+            extract_labels("/data/{key+}/meta", "/data//meta").unwrap(),
+            [("key", "".to_owned())]
+        );
+        assert!(extract_labels("/data/{key+}", "/data").is_err());
     }
 }
