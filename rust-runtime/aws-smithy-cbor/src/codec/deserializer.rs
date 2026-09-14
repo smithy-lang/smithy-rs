@@ -367,12 +367,13 @@ mod tests {
             // and defaults stay untouched. Lenient: the consumer sees the null and
             // fails here by requiring an integer.
             let mut visited = false;
-            let result = codec
-                .create_deserializer(b"\xa1\x61x\xf6")
-                .read_struct(&S, &mut |member, deser| {
+            let result = codec.create_deserializer(b"\xa1\x61x\xf6").read_struct(
+                &S,
+                &mut |member, deser| {
                     visited = true;
                     deser.read_integer(member).map(|_| ())
-                });
+                },
+            );
             assert_eq!(result.is_ok(), strict);
             assert_eq!(visited, !strict);
         }
