@@ -6,7 +6,7 @@
 //! CBOR deserializer implementation.
 
 use aws_smithy_schema::serde::{capped_container_size, SerdeError, ShapeDeserializer};
-use aws_smithy_schema::Schema;
+use aws_smithy_schema::{Schema, ShapeType};
 use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
 
 use crate::data::Type;
@@ -116,6 +116,7 @@ impl ShapeDeserializer for CborDeserializer<'_> {
         let is_indefinite = len.is_none();
         let count = len.unwrap_or(0) as usize;
 
+        let is_union = schema.shape_type() == ShapeType::Union;
         let mut i = 0;
         loop {
             if !is_indefinite && i >= count {
@@ -126,7 +127,13 @@ impl ShapeDeserializer for CborDeserializer<'_> {
                 break;
             }
             let key = self.decoder.str().map_err(deser_err)?;
-            if let Some(member_schema) = schema.member_schema(&key) {
+            if self.enforce_strictness && !is_union && self.is_null() {
+                // A null structure member means the member is absent; the consumer
+                // never sees it, so builder defaults stay untouched. Unions are
+                // excluded: a null variant value must reach the consumer to be
+                // rejected there.
+                self.read_null()?;
+            } else if let Some(member_schema) = schema.member_schema(&key) {
                 consumer(member_schema, self)?;
             } else {
                 self.decoder.skip().map_err(deser_err)?;
@@ -350,31 +357,24 @@ mod tests {
     }
 
     #[test]
-    fn null_struct_members_are_reported_to_the_consumer() {
+    fn strict_null_struct_members_are_skipped_as_absent() {
         static X: Schema =
             Schema::new_member(shape_id!("test", "S", "x"), ShapeType::Integer, "x", 0);
         static S: Schema = Schema::new_struct(shape_id!("test", "S"), ShapeType::Structure, &[&X]);
         for strict in [false, true] {
             let codec = CborCodec::new(CborCodecSettings::default().enforce_strictness(strict));
+            // Strict: the codec consumes the null itself, the consumer never runs
+            // and defaults stay untouched. Lenient: the consumer sees the null and
+            // fails here by requiring an integer.
             let mut visited = false;
-            codec
+            let result = codec
                 .create_deserializer(b"\xa1\x61x\xf6")
                 .read_struct(&S, &mut |member, deser| {
-                    assert_eq!(member.member_index(), Some(0));
-                    assert!(deser.is_null());
                     visited = true;
-                    deser.read_null()
-                })
-                .unwrap();
-            assert!(visited);
-
-            // A consumer can instead reject null by requiring an integer.
-            assert!(codec
-                .create_deserializer(b"\xa1\x61x\xf6")
-                .read_struct(&S, &mut |member, deser| {
                     deser.read_integer(member).map(|_| ())
-                })
-                .is_err());
+                });
+            assert_eq!(result.is_ok(), strict);
+            assert_eq!(visited, !strict);
         }
     }
 
