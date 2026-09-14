@@ -56,7 +56,7 @@ pub(crate) enum ResponseValueKind {
 
 /// Whether `@http*` response bindings are interpreted or everything is codec body.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ResponseBindings {
+pub enum ResponseBindings {
     /// `@httpHeader`, `@httpPrefixHeaders`, `@httpResponseCode` and `@httpPayload` divert
     /// members out of the body (the REST protocols).
     Rest,

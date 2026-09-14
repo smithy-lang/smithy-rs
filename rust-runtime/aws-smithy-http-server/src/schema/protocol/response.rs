@@ -15,7 +15,7 @@ use crate::extension::{ModeledErrorExtension, RuntimeErrorExtension};
 use crate::response::Response;
 use crate::schema::response_bindings::{serialize_response_parts, ResponseParts, ResponseValueKind};
 
-pub(super) use crate::schema::response_bindings::ResponseBindings;
+pub use crate::schema::response_bindings::ResponseBindings;
 
 /// The success status: a captured `@httpResponseCode`, else the output's `@http` code, else `200`.
 pub(crate) fn resolve_status(captured: Option<u16>, http: Option<&HttpTrait<'_>>) -> u16 {
@@ -64,7 +64,7 @@ pub(super) fn assemble_streaming_response(
 }
 
 /// Serializes a modeled error; `bindings` says whether its HTTP-bound members leave the body.
-pub(super) fn serialize_modeled_error_response<C: Codec>(
+pub fn serialize_modeled_error_response<C: Codec>(
     codec: &C,
     schema: &Schema<'_>,
     error: &dyn SerializableStruct,
@@ -77,7 +77,7 @@ pub(super) fn serialize_modeled_error_response<C: Codec>(
 }
 
 /// Records the error's shape name in the response extensions for instrumentation.
-pub(super) fn stamp_error_extension(mut response: Response, error_name: &str) -> Response {
+pub fn stamp_error_extension(mut response: Response, error_name: &str) -> Response {
     response
         .extensions_mut()
         .insert(ModeledErrorExtension::new(aws_smithy_schema::intern_header_name(
@@ -88,13 +88,13 @@ pub(super) fn stamp_error_extension(mut response: Response, error_name: &str) ->
 
 /// Marks a modeled validation response with the same `RuntimeErrorExtension` that
 /// `RuntimeError::Validation` responses carry, so instrumentation sees one shape.
-pub(super) fn stamp_validation_extension(mut response: Response) -> Response {
+pub fn stamp_validation_extension(mut response: Response) -> Response {
     response
         .extensions_mut()
         .insert(RuntimeErrorExtension::new("ValidationException".to_string()));
     response
 }
 
-pub(super) fn log_serialize_failure(err: &SerdeError) {
+pub fn log_serialize_failure(err: &SerdeError) {
     tracing::error!(error = %err, "failed to serialize response");
 }

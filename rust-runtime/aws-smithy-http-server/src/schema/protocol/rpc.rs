@@ -24,14 +24,14 @@ use super::ServerRequest;
 
 /// Determines which RPC operations advertise a response entity to the `Accept` gate.
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum RpcAccept {
+pub enum RpcAccept {
     Always,
     ModeledOutput,
 }
 
 /// How an RPC protocol labels event stream responses.
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum RpcStreaming {
+pub enum RpcStreaming {
     /// The protocol's own content type, on the response and in the `Accept` gate (awsJson).
     CodecContentType,
     /// `application/vnd.amazon.eventstream` on the response; the `Accept` gate takes either that
@@ -45,7 +45,7 @@ pub(crate) enum RpcStreaming {
 /// Error discrimination and rejection responses deliberately remain on the concrete protocol:
 /// those are wire policy, not codec mechanics.
 #[derive(Debug)]
-pub(crate) struct RpcProtocol<C> {
+pub struct RpcProtocol<C> {
     codec: C,
     content_type: &'static str,
     content_type_mime: mime::Mime,
@@ -57,7 +57,7 @@ pub(crate) struct RpcProtocol<C> {
 }
 
 impl<C> RpcProtocol<C> {
-    pub(crate) fn new(
+    pub fn new(
         codec: C,
         content_type: &'static str,
         empty_response_content_type: Option<&'static str>,
@@ -76,16 +76,16 @@ impl<C> RpcProtocol<C> {
         }
     }
 
-    pub(crate) fn codec(&self) -> &C {
+    pub fn codec(&self) -> &C {
         &self.codec
     }
 
     /// The legacy RPC deserializers never touch the body of a memberless input.
-    pub(crate) fn reads_request_body(&self, input: &Schema<'_>) -> bool {
+    pub fn reads_request_body(&self, input: &Schema<'_>) -> bool {
         !input.members().is_empty()
     }
 
-    pub(crate) fn check_accept(&self, output: &Schema<'_>, headers: &Headers) -> Result<(), DeserializeError> {
+    pub fn check_accept(&self, output: &Schema<'_>, headers: &Headers) -> Result<(), DeserializeError> {
         let gated = match self.accept {
             RpcAccept::Always => true,
             RpcAccept::ModeledOutput => output.original_name().is_some(),
@@ -115,7 +115,7 @@ impl<C> RpcProtocol<C> {
 }
 
 impl<C: Codec> RpcProtocol<C> {
-    pub(crate) fn deserialize_request<'a>(
+    pub fn deserialize_request<'a>(
         &'a self,
         input: &Schema<'_>,
         request: &'a ServerRequest,
@@ -125,7 +125,7 @@ impl<C: Codec> RpcProtocol<C> {
 
     /// A user-modeled output is always a codec document, `{}` or `bf ff` when nothing is set; a
     /// synthetic output is an empty body.
-    pub(crate) fn serialize_response(
+    pub fn serialize_response(
         &self,
         output: &Schema<'_>,
         value: &dyn SerializableStruct,
@@ -146,7 +146,7 @@ impl<C: Codec> RpcProtocol<C> {
         assemble_response(parts, status, content_type)
     }
 
-    pub(crate) fn serialize_streaming_response(
+    pub fn serialize_streaming_response(
         &self,
         output: &Schema<'_>,
         value: &dyn SerializableStruct,

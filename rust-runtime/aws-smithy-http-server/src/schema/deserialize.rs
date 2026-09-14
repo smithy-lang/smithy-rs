@@ -83,6 +83,13 @@ impl From<MissingContentTypeReason> for DeserializeError {
 
 /// An operation input that can be read from a [`ShapeDeserializer`].
 ///
+/// The runtime deserializes inputs generically: [`DynUpgrade`](crate::operation::DynUpgrade) and
+/// its streaming counterpart are written once over `Op::Input: DeserializableShape`, so every
+/// generated input implements this trait. It returns [`DeserializeError`] so a builder's typed
+/// constraint violation reaches the protocol renderer as
+/// [`DeserializeError::ConstraintViolation`] and becomes the modeled validation response instead
+/// of collapsing into a generic parse failure.
+///
 /// Generated inputs walk their schema into the internal builder and then `build()`, so constraint
 /// validation keeps happening in one place.
 pub trait DeserializableShape: Sized {

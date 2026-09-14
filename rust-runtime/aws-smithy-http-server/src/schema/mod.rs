@@ -12,8 +12,9 @@ pub(crate) mod response_bindings;
 pub use deserialize::{DeserializableShape, DeserializeError};
 pub use modeled_error::{HttpModeledError, ModeledError};
 pub use protocol::{
-    collect_request_body, RequestBodyCollectionConfig, RequestBodyCollectionError, ServerEventStreamProtocol,
-    ServerProtocol, ServerRequest, ServiceRequestBodyConfig, SharedServerProtocol,
+    collect_request_body, ProtocolRegistration, ProtocolRegistry, RequestBodyCollectionConfig,
+    RequestBodyCollectionError, ServerEventStreamProtocol, ServerProtocol, ServerRequest, ServiceRequestBodyConfig,
+    SharedServerProtocol,
 };
 
 use aws_smithy_schema::OperationSchema;

@@ -340,10 +340,9 @@ impl ShapeDeserializer for DecodedValuesDeserializer<'_> {
     }
 
     fn read_blob(&mut self, _schema: &Schema<'_>) -> Result<Blob, SerdeError> {
-        let v = self.current()?.to_string();
-        let decoded = aws_smithy_types::base64::decode(&v)
-            .map_err(|err| SerdeError::invalid_input(format!("invalid base64: {err}")))?;
-        Ok(Blob::new(decoded))
+        Err(SerdeError::unsupported(
+            "blobs cannot be bound to labels or query strings",
+        ))
     }
 
     fn read_timestamp(&mut self, schema: &Schema<'_>) -> Result<DateTime, SerdeError> {
@@ -579,13 +578,7 @@ impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
     }
 
     fn read_blob(&mut self, _schema: &Schema<'_>) -> Result<Blob, SerdeError> {
-        let v = match self.cursor {
-            Some(_) => self.next_text()?,
-            None => self.single_value()?.trim().to_string(),
-        };
-        let decoded = aws_smithy_types::base64::decode(&v)
-            .map_err(|err| SerdeError::invalid_input(format!("invalid base64: {err}")))?;
-        Ok(Blob::new(decoded))
+        Err(SerdeError::unsupported("blobs cannot be bound to headers"))
     }
 
     fn read_timestamp(&mut self, schema: &Schema<'_>) -> Result<DateTime, SerdeError> {

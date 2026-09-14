@@ -18,13 +18,20 @@
 //! `@httpHeader`-bound error members are split out of the body on the REST protocols.
 
 mod aws_json;
-mod discriminator;
+// The `discriminator`, `response` and `rpc` modules are `#[doc(hidden)]` seams for
+// `ServerProtocol` implementations living outside this crate. They are not part of the crate's
+// stable API: no semver guarantee, subject to change with the in-tree protocols that share them.
+#[doc(hidden)]
+pub mod discriminator;
+mod registry;
 mod request;
-pub(crate) mod response;
+#[doc(hidden)]
+pub mod response;
 pub(crate) mod rest;
 pub(crate) mod rest_json_1;
 pub(crate) mod rest_xml;
-pub(crate) mod rpc;
+#[doc(hidden)]
+pub mod rpc;
 mod rpc_v2_cbor;
 pub(crate) mod rpc_v2_cbor_serde;
 #[cfg(test)]
@@ -42,6 +49,8 @@ use bytes::Bytes;
 
 use crate::body::{collect_body_limited, BoxBody, CollectBodyError, HttpBody};
 use crate::response::Response;
+
+pub use registry::{ProtocolRegistration, ProtocolRegistry};
 
 use super::{DeserializeError, HttpModeledError};
 
