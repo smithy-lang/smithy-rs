@@ -12,13 +12,17 @@ use crate::client::downcast_error;
 use crate::client::timeout::{self, TimeoutKind};
 use crate::sync::Arc;
 use aws_smithy_async::rt::sleep::{default_async_sleep, SharedAsyncSleep};
+use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::connector_metadata::ConnectorMetadata;
 use aws_smithy_runtime_api::client::http::{
     HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpConnector,
 };
 use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
 use aws_smithy_runtime_api::client::result::ConnectorError;
-use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+use aws_smithy_runtime_api::client::runtime_components::{
+    RuntimeComponents, RuntimeComponentsBuilder,
+};
+use aws_smithy_types::config_bag::ConfigBag;
 use std::borrow::Cow;
 use std::error::Error;
 use std::fmt;
@@ -83,6 +87,17 @@ impl fmt::Debug for Client {
 }
 
 impl HttpClient for Client {
+    fn validate_base_client_config(
+        &self,
+        _: &RuntimeComponentsBuilder,
+        _: &ConfigBag,
+    ) -> Result<(), BoxError> {
+        self.pool
+            .inner
+            .transport
+            .initialize_for_partition(&self.partition)
+    }
+
     fn http_connector(
         &self,
         settings: &HttpConnectorSettings,

@@ -12,8 +12,9 @@
 //! attempt is enforceable before admission may reclaim an idle H2 connection.
 //!
 //! Cached factories retain configured connector services, not connections or
-//! DNS results. Network I/O begins only when [`TransportFactory::connect`] is
-//! called.
+//! DNS results. Base client validation initializes those services for the
+//! selected partition without network I/O. Network I/O begins only when
+//! [`TransportFactory::connect`] is called.
 
 use super::super::admission::ProtocolRequirement;
 use super::super::registry::PartitionState;
@@ -101,6 +102,16 @@ type TransportFuture = Pin<Box<dyn Future<Output = Result<BoxConn, BoxError>> + 
 pub(in crate::client::pool) trait TransportFactory:
     Send + Sync + 'static
 {
+    /// Initializes connector services used by one partition.
+    ///
+    /// Initialization must be idempotent and must not perform DNS resolution
+    /// or network I/O. Factories without retained initialization state may use
+    /// the default no-op implementation.
+    fn initialize_for_partition(&self, partition: &PartitionState) -> Result<(), BoxError> {
+        let _ = partition;
+        Ok(())
+    }
+
     /// Returns whether an H1-required attempt is guaranteed to negotiate H1.
     fn can_guarantee_http1(&self) -> bool;
 
@@ -207,11 +218,119 @@ where
     })
 }
 
+/// Identifies one configured connector service in the TLS transport cache.
+///
+/// Partition identity is deliberately absent. Partitions with equal interface
+/// bindings use the same connector configuration and therefore share entries.
+#[cfg(any(feature = "__rustls", feature = "s2n-tls"))]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct ConnectorCacheKey {
+    /// Network-interface binding applied before connect.
+    interface: Option<StdArc<str>>,
+    /// Protocol offer installed in the TLS connector.
+    alpn_protocols: AlpnProtocols,
+}
+
+#[cfg(any(feature = "__rustls", feature = "s2n-tls"))]
+impl ConnectorCacheKey {
+    /// Derives the connector configuration used by one partition and offer.
+    fn for_partition(partition: &PartitionState, alpn_protocols: AlpnProtocols) -> Self {
+        Self {
+            interface: partition.interface().cloned(),
+            alpn_protocols,
+        }
+    }
+
+    /// Returns the borrowed interface name expected by connector builders.
+    fn interface(&self) -> Option<&str> {
+        self.interface.as_deref()
+    }
+}
+
+/// Retains configured TLS connector services by placement and ALPN offer.
+#[cfg(any(feature = "__rustls", feature = "s2n-tls"))]
+struct CachedTransportFactory<F, C> {
+    /// Constructs a connector service for one exact cache key.
+    factory: F,
+    /// Whether every H1-required connection is guaranteed to negotiate H1.
+    can_guarantee_http1: bool,
+    /// Connector services constructed during client validation or first use.
+    connectors: crate::sync::Mutex<std::collections::HashMap<ConnectorCacheKey, C>>,
+}
+
+#[cfg(any(feature = "__rustls", feature = "s2n-tls"))]
+impl<F, C> CachedTransportFactory<F, C>
+where
+    F: Fn(Option<&str>, AlpnProtocols) -> C,
+    C: Clone,
+{
+    /// Returns the retained connector for one partition and protocol offer.
+    fn connector(&self, partition: &PartitionState, alpn_protocols: AlpnProtocols) -> C {
+        let key = ConnectorCacheKey::for_partition(partition, alpn_protocols);
+        match self.connectors.lock().entry(key) {
+            std::collections::hash_map::Entry::Occupied(entry) => entry.get().clone(),
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                let connector = (self.factory)(entry.key().interface(), entry.key().alpn_protocols);
+                entry.insert(connector).clone()
+            }
+        }
+    }
+
+    /// Materializes every connector variant this partition may select.
+    fn initialize_connectors_for_partition(&self, partition: &PartitionState) {
+        drop(self.connector(partition, HTTP_ALPN_PROTOCOLS));
+        drop(self.connector(partition, HTTP1_ALPN_PROTOCOLS));
+    }
+}
+
+#[cfg(any(feature = "__rustls", feature = "s2n-tls"))]
+impl<F, C, IO> TransportFactory for CachedTransportFactory<F, C>
+where
+    F: Fn(Option<&str>, AlpnProtocols) -> C + Send + Sync + 'static,
+    C: Service<Uri, Response = IO> + Clone + Send + Sync + 'static,
+    C::Error: Into<BoxError>,
+    C::Future: Send + 'static,
+    IO: AsyncConn,
+{
+    fn initialize_for_partition(&self, partition: &PartitionState) -> Result<(), BoxError> {
+        self.initialize_connectors_for_partition(partition);
+        Ok(())
+    }
+
+    fn can_guarantee_http1(&self) -> bool {
+        self.can_guarantee_http1
+    }
+
+    fn connect(&self, context: TransportConnectContext<'_>) -> TransportFuture {
+        let TransportConnectContext {
+            partition,
+            uri,
+            timeout,
+            alpn_protocols,
+        } = context;
+        let mut connector = self.connector(partition, alpn_protocols);
+        Box::pin(async move {
+            poll_fn(|cx| connector.poll_ready(cx))
+                .await
+                .map_err(Into::into)?;
+            let connect = connector.call(uri);
+            let io = timeout::maybe_timeout_future(
+                connect,
+                timeout.as_ref().map(|timeout| timeout.duration),
+                timeout.as_ref().map(|timeout| &timeout.sleep),
+                TimeoutKind::Connect,
+            )
+            .await?;
+            Ok(Box::new(io) as BoxConn)
+        })
+    }
+}
+
 /// Erases and caches configured TLS connector services.
 ///
-/// Interface placement is immutable for a partition. The first request for
-/// each `(interface, ALPN offer)` constructs its connector while holding the
-/// cache lock; later requests clone that retained connector. Provider
+/// Interface placement is immutable for a partition. Client validation
+/// constructs both ALPN variants for the selected partition while holding the
+/// cache lock; later requests clone the retained connector. Provider
 /// configuration and certificate loading therefore occur at most once for
 /// each placement and offer rather than once per connection.
 #[cfg(any(feature = "__rustls", feature = "s2n-tls"))]
@@ -226,56 +345,6 @@ where
     C::Future: Send + 'static,
     IO: AsyncConn,
 {
-    struct CachedTransportFactory<F, C> {
-        factory: F,
-        can_guarantee_http1: bool,
-        connectors:
-            crate::sync::Mutex<std::collections::HashMap<(Option<String>, AlpnProtocols), C>>,
-    }
-
-    impl<F, C, IO> TransportFactory for CachedTransportFactory<F, C>
-    where
-        F: Fn(Option<&str>, AlpnProtocols) -> C + Send + Sync + 'static,
-        C: Service<Uri, Response = IO> + Clone + Send + Sync + 'static,
-        C::Error: Into<BoxError>,
-        C::Future: Send + 'static,
-        IO: AsyncConn,
-    {
-        fn can_guarantee_http1(&self) -> bool {
-            self.can_guarantee_http1
-        }
-
-        fn connect(&self, context: TransportConnectContext<'_>) -> TransportFuture {
-            let TransportConnectContext {
-                partition,
-                uri,
-                timeout,
-                alpn_protocols,
-            } = context;
-            let interface = partition.interface().map(|value| value.to_string());
-            let mut connector = self
-                .connectors
-                .lock()
-                .entry((interface.clone(), alpn_protocols))
-                .or_insert_with(|| (self.factory)(interface.as_deref(), alpn_protocols))
-                .clone();
-            Box::pin(async move {
-                poll_fn(|cx| connector.poll_ready(cx))
-                    .await
-                    .map_err(Into::into)?;
-                let connect = connector.call(uri);
-                let io = timeout::maybe_timeout_future(
-                    connect,
-                    timeout.as_ref().map(|timeout| timeout.duration),
-                    timeout.as_ref().map(|timeout| &timeout.sleep),
-                    TimeoutKind::Connect,
-                )
-                .await?;
-                Ok(Box::new(io) as BoxConn)
-            })
-        }
-    }
-
     StdArc::new(CachedTransportFactory {
         factory: connector_for_interface,
         can_guarantee_http1,
@@ -288,5 +357,205 @@ fn alpn_protocols(requirement: ProtocolRequirement) -> AlpnProtocols {
     match requirement {
         ProtocolRequirement::H1Required => HTTP1_ALPN_PROTOCOLS,
         ProtocolRequirement::H1Compatible | ProtocolRequirement::H2Required => HTTP_ALPN_PROTOCOLS,
+    }
+}
+
+#[cfg(all(
+    test,
+    any(feature = "__rustls", feature = "s2n-tls"),
+    any(
+        target_os = "android",
+        target_os = "fuchsia",
+        target_os = "illumos",
+        target_os = "ios",
+        target_os = "linux",
+        target_os = "macos",
+        target_os = "solaris",
+        target_os = "tvos",
+        target_os = "visionos",
+        target_os = "watchos",
+    )
+))]
+mod tests {
+    use super::*;
+    use crate::client::pool::maintenance::MaintenanceConfig;
+    use crate::client::pool::partition::{
+        ConnectionReuseScope, DriverSpawner, Partition, PartitionId,
+    };
+    use crate::client::pool::registry::PartitionRegistry;
+    use aws_smithy_runtime_api::client::http::HttpClient;
+    use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
+    use aws_smithy_types::config_bag::ConfigBag;
+
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Debug)]
+    struct TestSpawner;
+
+    impl DriverSpawner for TestSpawner {
+        fn spawn(&self, _: Pin<Box<dyn Future<Output = ()> + Send + 'static>>) {}
+    }
+
+    struct InitializationRecorder {
+        partitions: Arc<Mutex<Vec<PartitionId>>>,
+    }
+
+    impl TransportFactory for InitializationRecorder {
+        fn initialize_for_partition(&self, partition: &PartitionState) -> Result<(), BoxError> {
+            self.partitions
+                .lock()
+                .expect("initialization log is not poisoned")
+                .push(partition.id());
+            Ok(())
+        }
+
+        fn can_guarantee_http1(&self) -> bool {
+            true
+        }
+
+        fn connect(&self, _: TransportConnectContext<'_>) -> TransportFuture {
+            Box::pin(async { panic!("client validation must not start a connection") })
+        }
+    }
+
+    type Construction = (Option<String>, AlpnProtocols);
+
+    struct CachedFactoryFixture<F> {
+        factory: CachedTransportFactory<F, usize>,
+        constructions: Arc<Mutex<Vec<Construction>>>,
+    }
+
+    fn recording_factory() -> CachedFactoryFixture<impl Fn(Option<&str>, AlpnProtocols) -> usize> {
+        let constructions = Arc::new(Mutex::new(Vec::new()));
+        let observed = constructions.clone();
+        let factory = move |interface: Option<&str>, alpn_protocols: AlpnProtocols| {
+            let mut constructions = observed.lock().expect("construction log is not poisoned");
+            constructions.push((interface.map(str::to_owned), alpn_protocols));
+            constructions.len()
+        };
+        CachedFactoryFixture {
+            factory: CachedTransportFactory {
+                factory,
+                can_guarantee_http1: true,
+                connectors: crate::sync::Mutex::new(std::collections::HashMap::new()),
+            },
+            constructions,
+        }
+    }
+
+    fn registry(partitions: Option<Vec<Partition>>) -> PartitionRegistry {
+        PartitionRegistry::new(
+            partitions,
+            ConnectionReuseScope::Partition,
+            None,
+            MaintenanceConfig::default(),
+        )
+        .expect("valid partition registry")
+    }
+
+    #[test]
+    fn client_validation_initializes_its_selected_partition() {
+        let selected = PartitionId::from_index(7);
+        let initialized = Arc::new(Mutex::new(Vec::new()));
+        let pool = crate::client::pool::builder::Builder::default()
+            .partitions([Partition::new(selected, TestSpawner)])
+            .build_with_transport_for_test(Arc::new(InitializationRecorder {
+                partitions: initialized.clone(),
+            }))
+            .expect("valid test pool");
+        let client = crate::client::pool::Client::from_partition(&pool, selected)
+            .expect("selected partition exists");
+
+        client
+            .validate_base_client_config(&RuntimeComponentsBuilder::for_tests(), &ConfigBag::base())
+            .expect("transport initialization succeeds");
+
+        assert_eq!(
+            vec![selected],
+            *initialized
+                .lock()
+                .expect("initialization log is not poisoned")
+        );
+    }
+
+    #[test]
+    fn initialization_constructs_each_alpn_variant_once() {
+        let partition = registry(None)
+            .partition(PartitionId::ANONYMOUS)
+            .expect("anonymous partition exists");
+        let fixture = recording_factory();
+
+        fixture
+            .factory
+            .initialize_connectors_for_partition(&partition);
+        fixture
+            .factory
+            .initialize_connectors_for_partition(&partition);
+
+        let constructions = fixture
+            .constructions
+            .lock()
+            .expect("construction log is not poisoned");
+        assert_eq!(2, constructions.len());
+        assert_eq!(None, constructions[0].0);
+        assert_eq!(HTTP_ALPN_PROTOCOLS, constructions[0].1);
+        assert_eq!(HTTP1_ALPN_PROTOCOLS, constructions[1].1);
+        assert_eq!(2, fixture.factory.connectors.lock().len());
+    }
+
+    #[test]
+    fn equal_interface_bindings_share_connector_entries() {
+        let first = PartitionId::from_index(1);
+        let second = PartitionId::from_index(2);
+        let registry = registry(Some(vec![
+            Partition::new(first, TestSpawner).interface("interface-a"),
+            Partition::new(second, TestSpawner).interface("interface-a"),
+        ]));
+        let fixture = recording_factory();
+
+        fixture.factory.initialize_connectors_for_partition(
+            &registry.partition(first).expect("first partition exists"),
+        );
+        fixture.factory.initialize_connectors_for_partition(
+            &registry.partition(second).expect("second partition exists"),
+        );
+
+        assert_eq!(
+            2,
+            fixture
+                .constructions
+                .lock()
+                .expect("construction log is not poisoned")
+                .len()
+        );
+        assert_eq!(2, fixture.factory.connectors.lock().len());
+    }
+
+    #[test]
+    fn distinct_interface_bindings_use_distinct_connector_entries() {
+        let first = PartitionId::from_index(1);
+        let second = PartitionId::from_index(2);
+        let registry = registry(Some(vec![
+            Partition::new(first, TestSpawner).interface("interface-a"),
+            Partition::new(second, TestSpawner).interface("interface-b"),
+        ]));
+        let fixture = recording_factory();
+
+        fixture.factory.initialize_connectors_for_partition(
+            &registry.partition(first).expect("first partition exists"),
+        );
+        fixture.factory.initialize_connectors_for_partition(
+            &registry.partition(second).expect("second partition exists"),
+        );
+
+        assert_eq!(
+            4,
+            fixture
+                .constructions
+                .lock()
+                .expect("construction log is not poisoned")
+                .len()
+        );
+        assert_eq!(4, fixture.factory.connectors.lock().len());
     }
 }
