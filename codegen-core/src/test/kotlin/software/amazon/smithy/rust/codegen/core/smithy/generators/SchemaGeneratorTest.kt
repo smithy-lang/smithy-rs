@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
@@ -385,6 +386,77 @@ class SchemaGeneratorTest {
                 let mut deser = codec.create_deserializer(&bytes);
                 let result = MyUnion::deserialize(&mut deser).expect("deserialization");
                 assert!(matches!(result, MyUnion::StringVariant(ref s) if s == "round-trip"));
+                """,
+            )
+        }
+        project.compileAndTest()
+    }
+
+    @Test
+    fun `client union deserialize rejects mixed variants and keeps unknown keys as the unknown variant`() {
+        val project = TestWorkspace.testProject(provider)
+        val shape = model.lookup<UnionShape>("test#MyUnion")
+        project.useShapeWriter(shape) {
+            UnionGenerator(model, provider, this, shape).render()
+            SchemaGenerator(codegenContext, this, shape).render()
+            rustTemplate(
+                "use #{JsonCodec};",
+                "JsonCodec" to RuntimeType.smithyJson(codegenContext.runtimeConfig).resolve("codec::JsonCodec"),
+            )
+            unitTest(
+                "client_union_unknown_and_mixed",
+                """
+                use aws_smithy_json::codec::{JsonCodec, JsonCodecSettings};
+                use aws_smithy_schema::codec::Codec;
+
+                let codec = JsonCodec::new(JsonCodecSettings::default());
+                let read = |json: &[u8]| MyUnion::deserialize(&mut codec.create_deserializer(json));
+
+                // An unknown key is the unknown variant; its value is skipped.
+                assert!(matches!(read(br#"{"zzz":{"nested":[1,2]}}"#).unwrap(), MyUnion::Unknown));
+                // `__type` is a discriminator, not a variant.
+                assert!(matches!(read(br#"{"__type":"test#MyUnion","intVariant":42}"#).unwrap(), MyUnion::IntVariant(42)));
+                // A second key of any kind is an error.
+                let err = read(br#"{"stringVariant":"hello","intVariant":1}"#).unwrap_err();
+                assert!(err.to_string().contains("mixed variants"), "{err}");
+                let err = read(br#"{"intVariant":1,"zzz":true}"#).unwrap_err();
+                assert!(err.to_string().contains("mixed variants"), "{err}");
+                """,
+            )
+        }
+        project.compileAndTest()
+    }
+
+    @Test
+    fun `server union deserialize rejects unknown keys and mixed variants`() {
+        val serverContext = testCodegenContext(model, codegenTarget = CodegenTarget.SERVER)
+        val project = TestWorkspace.testProject(provider)
+        val shape = model.lookup<UnionShape>("test#MyUnion")
+        project.useShapeWriter(shape) {
+            UnionGenerator(model, provider, this, shape, renderUnknownVariant = false).render()
+            SchemaGenerator(serverContext, this, shape).render()
+            rustTemplate(
+                "use #{JsonCodec};",
+                "JsonCodec" to RuntimeType.smithyJson(serverContext.runtimeConfig).resolve("codec::JsonCodec"),
+            )
+            unitTest(
+                "server_union_unknown_and_mixed",
+                """
+                use aws_smithy_json::codec::{JsonCodec, JsonCodecSettings};
+                use aws_smithy_schema::codec::Codec;
+
+                let codec = JsonCodec::new(JsonCodecSettings::default());
+                let read = |json: &[u8]| MyUnion::deserialize(&mut codec.create_deserializer(json));
+
+                assert!(matches!(read(br#"{"intVariant":42}"#).unwrap(), MyUnion::IntVariant(42)));
+                // An unknown key is an error; its value is skipped.
+                let err = read(br#"{"zzz":{"nested":[1,2]}}"#).unwrap_err();
+                assert!(err.to_string().contains("unexpected union variant"), "{err}");
+                // Known plus unknown, and two known members, are both mixed variants.
+                let err = read(br#"{"intVariant":1,"zzz":true}"#).unwrap_err();
+                assert!(err.to_string().contains("mixed variants"), "{err}");
+                let err = read(br#"{"stringVariant":"hello","intVariant":1}"#).unwrap_err();
+                assert!(err.to_string().contains("mixed variants"), "{err}");
                 """,
             )
         }

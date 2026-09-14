@@ -40,6 +40,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
@@ -286,7 +287,10 @@ class SchemaGenerator(
                         rust("Self::$variantName(val) => { $writeExpr },")
                     }
                 }
-                rustTemplate("Self::${UnionGenerator.UNKNOWN_VARIANT_NAME} => return Err(#{SerdeError}::custom(\"cannot serialize unknown union variant\")),", *codegenScope)
+                // Only client unions carry the unknown variant.
+                if (codegenContext.target == CodegenTarget.CLIENT) {
+                    rustTemplate("Self::${UnionGenerator.UNKNOWN_VARIANT_NAME} => return Err(#{SerdeError}::custom(\"cannot serialize unknown union variant\")),", *codegenScope)
+                }
             }
 
         writer.rustTemplate(
@@ -449,7 +453,17 @@ class SchemaGenerator(
                         rust("Some($idx) => Self::$variantName($wrapped),")
                     }
                 }
-                rust("_ => Self::${UnionGenerator.UNKNOWN_VARIANT_NAME},")
+                // The deserializer reports a key that names no member with a schema whose
+                // `member_index()` is `None`. A client keeps it as the unknown variant so a newer
+                // service can add members; a server rejects it, as the token-based parser does.
+                when (codegenContext.target) {
+                    CodegenTarget.CLIENT -> rust("_ => Self::${UnionGenerator.UNKNOWN_VARIANT_NAME},")
+                    CodegenTarget.SERVER ->
+                        rustTemplate(
+                            """_ => return Err(#{SerdeError}::invalid_input("unexpected union variant")),""",
+                            *codegenScope,
+                        )
+                }
             }
 
         writer.rustTemplate(
@@ -460,6 +474,11 @@ class SchemaGenerator(
                     let mut result: ::std::option::Option<Self> = ::std::option::Option::None;
                     ##[allow(unused_variables, unreachable_code, clippy::single_match, clippy::match_single_binding)]
                     deserializer.read_struct(&${schemaPrefix}_SCHEMA, &mut |member, deser| {
+                        // A union holds exactly one member; the deserializer reports every key
+                        // (known or not), so a second one is an error whatever it names.
+                        if result.is_some() {
+                            return Err(#{SerdeError}::invalid_input("encountered mixed variants in union"));
+                        }
                         result = ::std::option::Option::Some(match member.member_index() {
                             #{variantArms}
                         });
