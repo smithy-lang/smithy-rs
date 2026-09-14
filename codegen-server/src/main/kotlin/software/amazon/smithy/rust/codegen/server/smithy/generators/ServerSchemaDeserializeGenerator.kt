@@ -303,9 +303,12 @@ class ServerSchemaDeserializeGenerator(
                 ) -> ::std::result::Result<#{WalkerReturn}, #{SerdeError}> {
                     let mut value: ::std::option::Option<#{Return}> = None;
                     deserializer.read_struct(Self::SCHEMA, &mut |member, deser| {
+                        if value.is_some() {
+                            return Err(#{SerdeError}::invalid_input("encountered mixed variants in union"));
+                        }
                         match member.member_index() {
                             #{arms}
-                            _ => {}
+                            _ => return Err(#{SerdeError}::invalid_input("unexpected union variant")),
                         }
                         Ok(())
                     })?;
