@@ -385,7 +385,7 @@ dependencies = [
 
 [[package]]
 name = "aws-types"
-version = "1.6.0"
+version = "1.6.1"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-async",
