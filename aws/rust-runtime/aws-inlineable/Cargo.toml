@@ -53,7 +53,7 @@ aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api"
 tempfile = "3.16.0"
 tokio = { version = "1.49.0", features = ["macros", "rt", "io-util"] }
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
-tracing-test = { version = "0.2", features = ["no-env-filter"] }
+tracing-test = { version = "0.2.5", features = ["no-env-filter"] }
 
 [package.metadata.docs.rs]
 all-features = true
