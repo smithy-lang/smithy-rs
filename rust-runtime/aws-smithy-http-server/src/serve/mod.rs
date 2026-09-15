@@ -298,7 +298,8 @@ mod listener;
 use self::listener::ConnectionLimit;
 pub use self::listener::{ConnLimiter, ConnLimiterIo, Listener, ListenerExt, TapIo};
 
-const DEFAULT_MAX_CONNECTIONS: usize = 8192;
+/// Default maximum number of concurrently accepted TCP connections.
+pub const DEFAULT_MAX_CONNECTIONS: usize = 8192;
 
 // ============================================================================
 // Type Bounds Documentation
