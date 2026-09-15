@@ -25,7 +25,10 @@
 //! curl -X POST -d "Hello from client!" http://localhost:3000/slow
 //! ```
 
-use aws_smithy_http_server::{routing::IntoMakeService, serve::IncomingStream};
+use aws_smithy_http_server::{
+    routing::IntoMakeService,
+    serve::{ConnLimiter, IncomingStream, Listener, ListenerExt, DEFAULT_MAX_CONNECTIONS},
+};
 use http::{Request, Response, StatusCode};
 use http_body_util::{BodyExt, Full};
 use hyper::body::{Bytes, Incoming};
@@ -34,8 +37,8 @@ use hyper_util::{
     server::conn::auto::Builder,
     service::TowerToHyperService,
 };
-use std::{convert::Infallible, sync::Arc, time::Duration};
-use tokio::{net::TcpListener, sync::Semaphore};
+use std::{convert::Infallible, time::Duration};
+use tokio::net::TcpListener;
 use tower::{service_fn, ServiceBuilder, ServiceExt};
 use tower_http::timeout::TimeoutLayer;
 use tracing::{info, warn};
@@ -81,7 +84,9 @@ async fn router(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infalli
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
-    let listener = TcpListener::bind("0.0.0.0:3000").await?;
+    let mut listener = TcpListener::bind("0.0.0.0:3000")
+        .await?
+        .limit_connections(DEFAULT_MAX_CONNECTIONS);
     let local_addr = listener.local_addr()?;
 
     info!("Server listening on http://{}", local_addr);
@@ -89,11 +94,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("  - Header read timeout: 10 seconds");
     info!("  - Request timeout: 30 seconds");
     info!("  - Connection duration limit: 5 minutes");
-    info!("  - Max concurrent connections: 1000");
+    info!("  - Max concurrent connections: {}", DEFAULT_MAX_CONNECTIONS);
     info!("  - HTTP/2 keep-alive: 60s interval, 20s timeout");
-
-    // Connection limiting with semaphore
-    let connection_semaphore = Arc::new(Semaphore::new(1000));
 
     // Build the service with request timeout layer
     let base_service = ServiceBuilder::new()
@@ -106,38 +108,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let make_service = IntoMakeService::new(base_service);
 
     loop {
-        // Accept new connection
-        let (stream, remote_addr) = listener.accept().await?;
-
-        // Try to acquire connection permit
-        let permit = match connection_semaphore.clone().try_acquire_owned() {
-            Ok(permit) => permit,
-            Err(_) => {
-                warn!("connection limit reached, rejecting connection from {}", remote_addr);
-                drop(stream);
-                continue;
-            }
-        };
+        // The limited listener waits for capacity before accepting. The returned
+        // stream owns the permit until the connection IO is dropped.
+        let (stream, remote_addr) = listener.accept().await;
 
         info!("accepted connection from {}", remote_addr);
 
         let make_service = make_service.clone();
 
         tokio::spawn(async move {
-            // The permit will be dropped when this task ends, freeing up a connection slot
-            let _permit = permit;
-
             let io = TokioIo::new(stream);
 
             // Create service for this connection
-            let tower_service =
-                match ServiceExt::oneshot(make_service, IncomingStream::<TcpListener> { io: &io, remote_addr }).await {
-                    Ok(svc) => svc,
-                    Err(_) => {
-                        warn!("failed to create service for connection from {}", remote_addr);
-                        return;
-                    }
-                };
+            let tower_service = match ServiceExt::oneshot(
+                make_service,
+                IncomingStream::<ConnLimiter<TcpListener>> { io: &io, remote_addr },
+            )
+            .await
+            {
+                Ok(svc) => svc,
+                Err(_) => {
+                    warn!("failed to create service for connection from {}", remote_addr);
+                    return;
+                }
+            };
 
             let hyper_service = TowerToHyperService::new(tower_service);
 
