@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 use super::*;
+use crate::body::Body;
 use crate::error::Error;
 use crate::schema::{
     DeserializeError, HttpModeledError, RequestBodyCollectionConfig, ServerProtocol, ServerRequest,
@@ -79,13 +80,13 @@ async fn rejection_message(response: Response<BoxBody>) -> String {
     String::from_utf8(bytes.to_vec()).unwrap()
 }
 impl AsyncProtocolRouter for BodyRouter {
-    fn route(self: Arc<Self>, request: Request<Body>) -> ProtocolRouteFuture {
+    fn route(self: Arc<Self>, request: Request<BoxBody>) -> ProtocolRouteFuture {
         Box::pin(async move {
             let (parts, body) = request.into_parts();
-            let (bytes, body) = crate::schema::collect_for_routing(body, &self.config)
+            let collected = crate::schema::collect_for_routing(body, &self.config)
                 .await
                 .map_err(|error| rejection(StatusCode::BAD_REQUEST, error.to_string()))?;
-            let first_line = bytes.split(|byte| *byte == b'\n').next().unwrap_or_default();
+            let first_line = collected.bytes.split(|byte| *byte == b'\n').next().unwrap_or_default();
             let name = std::str::from_utf8(first_line)
                 .map_err(|_| rejection(StatusCode::BAD_REQUEST, "invalid operation name"))?;
             let selected = self
@@ -94,7 +95,7 @@ impl AsyncProtocolRouter for BodyRouter {
                 .find(|target| target.operation().shape_id().shape_name() == name)
                 .copied()
                 .ok_or_else(|| rejection(StatusCode::NOT_FOUND, "unknown operation"))?;
-            Ok((selected, Request::from_parts(parts, body)))
+            Ok((selected, Request::from_parts(parts, collected)))
         })
     }
 }
@@ -410,9 +411,9 @@ async fn all_builtins_route_without_polling_body_and_preserve_fallback_errors() 
         if let Some(target) = target {
             req = req.header("x-amz-target", target);
         }
-        let body = http_body_util::StreamBody::new(futures_util::stream::poll_fn(
+        let body = Body::new(http_body_util::StreamBody::new(futures_util::stream::poll_fn(
             |_| -> Poll<Option<Result<Frame<Bytes>, Error>>> { panic!("metadata routing or fallback polled the body") },
-        ));
+        )));
         let actual = app.oneshot(req.body(body).unwrap()).await.unwrap();
         assert_eq!(actual.status(), expected.status());
         assert_eq!(actual.headers(), expected.headers());
@@ -500,7 +501,7 @@ async fn cancelling_body_routing_drops_the_pending_stream() {
     }
     let dropped = Arc::new(AtomicBool::new(false));
     let mut service = service(SchemaRoutingOptions::default());
-    let mut future = Box::pin(service.call(Request::new(PendingBody(dropped.clone()))));
+    let mut future = Box::pin(service.call(Request::new(Body::new(PendingBody(dropped.clone())))));
     let waker = futures_util::task::noop_waker();
     assert!(future.as_mut().poll(&mut Context::from_waker(&waker)).is_pending());
     assert!(!dropped.load(Ordering::SeqCst));
@@ -525,17 +526,9 @@ async fn immediate_routing_uses_ready_future_and_rejects_unknown_routes() {
     let RouterKind::Metadata(router) = &router.0 else {
         panic!("REST routing selects from metadata");
     };
-    let req = Request::builder()
-        .method("POST")
-        .uri("/first")
-        .body(Body::empty())
-        .unwrap();
+    let req = Request::builder().method("POST").uri("/first").body(()).unwrap();
     assert_eq!(router.route(&req).unwrap().index(), 0);
-    let req = Request::builder()
-        .method("GET")
-        .uri("/first")
-        .body(Body::empty())
-        .unwrap();
+    let req = Request::builder().method("GET").uri("/first").body(()).unwrap();
     assert_eq!(
         router.route(&req).unwrap_err().status(),
         StatusCode::METHOD_NOT_ALLOWED
@@ -549,7 +542,7 @@ async fn inconsistent_operation_identity_is_detected_before_handler_dispatch() {
     #[derive(Debug)]
     struct IncorrectRouter;
     impl ProtocolRouter for IncorrectRouter {
-        fn route(&self, _: &Request<Body>) -> Result<OperationIndex, Response<BoxBody>> {
+        fn route(&self, _: &Request<()>) -> Result<OperationIndex, Response<BoxBody>> {
             // This test is in the defining module; external routers cannot construct arbitrary indices.
             Ok(OperationIndex {
                 index: 0,

@@ -20,7 +20,7 @@ mod route;
 pub(crate) mod schema;
 
 pub use schema::{
-    AsyncProtocolRouter, OperationHandlerBinding, OperationIndex, ProtocolRouteFuture, ProtocolRouter,
+    AsyncProtocolRouter, CollectedBody, OperationHandlerBinding, OperationIndex, ProtocolRouteFuture, ProtocolRouter,
     RouterBuildError, SchemaRoutingFuture, SchemaRoutingOptions, SchemaRoutingService, SharedProtocolRouter,
 };
 

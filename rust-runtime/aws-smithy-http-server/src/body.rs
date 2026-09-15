@@ -32,24 +32,33 @@ pub type BoxBody = http_body_util::combinators::UnsyncBoxBody<Bytes, Error>;
 /// that need thread safety guarantees.
 pub type BoxBodySync = http_body_util::combinators::BoxBody<Bytes, Error>;
 
-/// A transport-independent request body. Construction does not read the stream.
+/// A request body on the schema-routing pipeline, generic over the transport body `B`.
 ///
-/// Its representation is private so buffering and transport-specific optimizations can evolve.
+/// A request entering through the transport keeps its concrete body — hyper's
+/// [`Incoming`](hyper::body::Incoming) by default — inside the `Passthrough` state, unerased and
+/// monomorphized. A body-first protocol router replaces it with the `Buffered` state after
+/// collection. Sources that are not the transport body (tests, upgrade layers, Lambda events)
+/// enter through [`SchemaBody::new`], which erases into a boxed state.
 ///
-/// `Body` is `Send + Sync`. The `Sync` bound is required so a request body can be handed
-/// to [`SdkBody::from_body_1_x`] when an operation input has a streaming member; `SdkBody`
-/// only accepts `Sync` bodies. Non-`Sync` sources can be admitted through a stream-based
-/// constructor (`Stream` has no `&self` methods, so a `SyncWrapper` is sound there),
-/// should the need arise.
+/// The states are private so buffering and transport-specific optimizations can evolve.
+///
+/// `SchemaBody<B>` is `Send`, and `Sync` whenever `B` is. The `Sync` bound is required so a
+/// request body can be handed to [`SdkBody::from_body_1_x`] when an operation input has a
+/// streaming member; `SdkBody` only accepts `Sync` bodies.
 ///
 /// [`SdkBody::from_body_1_x`]: aws_smithy_types::body::SdkBody::from_body_1_x
 #[derive(Debug)]
-pub struct Body(BodyInner);
+pub struct SchemaBody<B = hyper::body::Incoming>(BodyInner<B>);
+
+/// The default request body: the schema pipeline over hyper's transport body.
+pub type Body = SchemaBody<hyper::body::Incoming>;
 
 #[derive(Debug)]
-enum BodyInner {
-    /// A stream not yet pulled into memory. May have been partially polled.
-    Unbuffered(BoxBodySync),
+enum BodyInner<B> {
+    /// The transport's own body, untouched. May have been partially polled.
+    Passthrough(B),
+    /// An erased body from a non-transport source. May have been partially polled.
+    Boxed(BoxBodySync),
     /// Content held in memory, replayed as a data frame then an optional trailers frame.
     Buffered {
         bytes: Option<Bytes>,
@@ -57,14 +66,23 @@ enum BodyInner {
     },
 }
 
-impl Body {
-    /// Wraps any compatible HTTP body without polling it.
-    pub fn new<B>(body: B) -> Self
+impl<B> SchemaBody<B> {
+    /// Wraps any compatible HTTP body without polling it, erasing its type.
+    ///
+    /// The transport's own body should use [`SchemaBody::passthrough`] instead, which keeps it
+    /// unerased.
+    pub fn new<T>(body: T) -> Self
     where
-        B: http_body::Body<Data = Bytes> + Send + Sync + 'static,
-        B::Error: Into<BoxError>,
+        B: 'static,
+        T: http_body::Body<Data = Bytes> + Send + Sync + 'static,
+        T::Error: Into<BoxError>,
     {
-        try_downcast(body).unwrap_or_else(|body| Self(BodyInner::Unbuffered(boxed_sync(body))))
+        try_downcast(body).unwrap_or_else(|body| Self(BodyInner::Boxed(boxed_sync(body))))
+    }
+
+    /// Wraps the transport body without erasing or polling it.
+    pub fn passthrough(body: B) -> Self {
+        Self(BodyInner::Passthrough(body))
     }
 
     /// Builds an already-buffered body, preserving any trailers read with the content.
@@ -79,13 +97,16 @@ impl Body {
     pub(crate) fn buffered_content(&self) -> Option<&Bytes> {
         match &self.0 {
             BodyInner::Buffered { bytes, .. } => bytes.as_ref(),
-            BodyInner::Unbuffered(_) => None,
+            BodyInner::Passthrough(_) | BodyInner::Boxed(_) => None,
         }
     }
 
     /// Creates an empty request body.
     pub fn empty() -> Self {
-        Self::new(http_body_util::Empty::<Bytes>::new())
+        Self(BodyInner::Buffered {
+            bytes: None,
+            trailers: None,
+        })
     }
 
     /// Creates a request body containing buffered bytes.
@@ -97,43 +118,47 @@ impl Body {
     }
 }
 
-impl Default for Body {
+impl<B> Default for SchemaBody<B> {
     fn default() -> Self {
         Self::empty()
     }
 }
 
-impl From<Bytes> for Body {
+impl<B> From<Bytes> for SchemaBody<B> {
     fn from(bytes: Bytes) -> Self {
         Self::from_bytes(bytes)
     }
 }
 
-impl From<Vec<u8>> for Body {
+impl<B> From<Vec<u8>> for SchemaBody<B> {
     fn from(bytes: Vec<u8>) -> Self {
         Self::from_bytes(bytes.into())
     }
 }
 
-impl From<&'static [u8]> for Body {
+impl<B> From<&'static [u8]> for SchemaBody<B> {
     fn from(bytes: &'static [u8]) -> Self {
         Self::from_bytes(Bytes::from_static(bytes))
     }
 }
 
-impl From<String> for Body {
+impl<B> From<String> for SchemaBody<B> {
     fn from(string: String) -> Self {
         Self::from_bytes(string.into())
     }
 }
 
-impl From<&'static str> for Body {
+impl<B> From<&'static str> for SchemaBody<B> {
     fn from(string: &'static str) -> Self {
         Self::from_bytes(Bytes::from_static(string.as_bytes()))
     }
 }
 
-impl http_body::Body for Body {
+impl<B> http_body::Body for SchemaBody<B>
+where
+    B: http_body::Body<Data = Bytes> + Unpin,
+    B::Error: Into<BoxError>,
+{
     type Data = Bytes;
     type Error = Error;
 
@@ -142,7 +167,10 @@ impl http_body::Body for Body {
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Result<http_body::Frame<Bytes>, Error>>> {
         match &mut self.0 {
-            BodyInner::Unbuffered(body) => std::pin::Pin::new(body).poll_frame(cx),
+            BodyInner::Passthrough(body) => std::pin::Pin::new(body)
+                .poll_frame(cx)
+                .map(|frame| frame.map(|result| result.map_err(Error::new))),
+            BodyInner::Boxed(body) => std::pin::Pin::new(body).poll_frame(cx),
             BodyInner::Buffered { bytes, trailers } => std::task::Poll::Ready(
                 bytes
                     .take()
@@ -156,7 +184,8 @@ impl http_body::Body for Body {
 
     fn is_end_stream(&self) -> bool {
         match &self.0 {
-            BodyInner::Unbuffered(body) => body.is_end_stream(),
+            BodyInner::Passthrough(body) => body.is_end_stream(),
+            BodyInner::Boxed(body) => body.is_end_stream(),
             BodyInner::Buffered { bytes, trailers } => {
                 bytes.as_ref().is_none_or(|bytes| bytes.is_empty()) && trailers.is_none()
             }
@@ -164,7 +193,8 @@ impl http_body::Body for Body {
     }
     fn size_hint(&self) -> http_body::SizeHint {
         match &self.0 {
-            BodyInner::Unbuffered(body) => body.size_hint(),
+            BodyInner::Passthrough(body) => body.size_hint(),
+            BodyInner::Boxed(body) => body.size_hint(),
             BodyInner::Buffered { bytes, .. } => {
                 http_body::SizeHint::with_exact(bytes.as_ref().map_or(0, |bytes| bytes.len() as u64))
             }

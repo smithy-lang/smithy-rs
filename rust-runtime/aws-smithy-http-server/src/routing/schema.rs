@@ -7,7 +7,7 @@
 
 use super::Route;
 use crate::{
-    body::{Body, BoxBody},
+    body::BoxBody,
     error::BoxError,
     schema::{
         ProtocolRegistration, ProtocolRegistry, SelectedProtocolOperation, ServiceRequestBodyConfig,
@@ -46,14 +46,14 @@ impl OperationIndex {
     }
 }
 
-/// A protocol-independent operation and its HTTP handler.
-pub struct OperationHandlerBinding<B = Body> {
+/// A protocol-independent operation and its HTTP handler, generic over the transport body `B`.
+pub struct OperationHandlerBinding<B = hyper::body::Incoming> {
     operation: &'static OperationSchema<'static>,
-    route: Route<B>,
+    route: Route<crate::body::SchemaBody<B>>,
 }
 impl<B> OperationHandlerBinding<B> {
     /// Binds an operation to a handler, without assigning any protocol-specific routing rule.
-    pub fn new(operation: &'static OperationSchema<'static>, route: Route<B>) -> Self {
+    pub fn new(operation: &'static OperationSchema<'static>, route: Route<crate::body::SchemaBody<B>>) -> Self {
         Self { operation, route }
     }
 }
@@ -101,25 +101,42 @@ pub enum RouterBuildError {
 
 /// Selects an operation within an already-selected protocol from request metadata alone.
 /// All rejections are terminal.
+///
+/// The request carries no body: metadata routing never reads one, and keeping the trait
+/// body-free keeps it usable behind `dyn` for every transport body type.
 pub trait ProtocolRouter: Send + Sync + fmt::Debug {
-    /// Selects from the request URI, method and headers. The body is never polled.
+    /// Selects from the request URI, method and headers.
     #[allow(clippy::result_large_err)] // Keep immediate protocol responses allocation-free.
-    fn route(&self, request: &Request<Body>) -> Result<OperationIndex, Response<BoxBody>>;
+    fn route(&self, request: &Request<()>) -> Result<OperationIndex, Response<BoxBody>>;
+}
+
+/// The body a body-first router collected while routing.
+///
+/// The routing service rebuilds the dispatched request around this content, so the selected
+/// handler replays exactly the bytes routing read.
+#[derive(Debug)]
+pub struct CollectedBody {
+    /// The collected content.
+    pub bytes: Bytes,
+    /// Trailers read with the content, when the transport delivered any.
+    pub trailers: Option<http::HeaderMap>,
 }
 
 /// The future returned by [`AsyncProtocolRouter::route`].
 pub type ProtocolRouteFuture =
-    Pin<Box<dyn Future<Output = Result<(OperationIndex, Request<Body>), Response<BoxBody>>> + Send>>;
+    Pin<Box<dyn Future<Output = Result<(OperationIndex, Request<CollectedBody>), Response<BoxBody>>> + Send>>;
 
 /// Selects an operation for protocols that read the request body to route.
 ///
-/// The router owns the request while routing: it collects the body under the allowance it was
-/// built with (see [`collect_for_routing`](crate::schema::collect_for_routing)) and returns the
-/// request rebuilt around the collected content, so the selected handler replays the same bytes.
-/// All rejections are terminal and the protocol frames them itself.
+/// The router owns the request while routing: it collects the erased body under the allowance
+/// it was built with (see [`collect_for_routing`](crate::schema::collect_for_routing)) and
+/// returns the request with the [`CollectedBody`]. A body-first protocol always buffers before
+/// selecting, so its output is the buffered content, never the transport body — which is what
+/// keeps this trait `dyn`-safe and free of the transport body type. All rejections are terminal
+/// and the protocol frames them itself.
 pub trait AsyncProtocolRouter: Send + Sync + fmt::Debug {
     /// Selects an operation, returning the request for dispatch to its handler.
-    fn route(self: Arc<Self>, request: Request<Body>) -> ProtocolRouteFuture;
+    fn route(self: Arc<Self>, request: Request<BoxBody>) -> ProtocolRouteFuture;
 }
 
 /// Shared, erased operation router built by a server protocol.
@@ -149,28 +166,82 @@ impl SharedProtocolRouter {
     }
 }
 
-#[derive(Clone, Debug)]
-struct BoundHandler {
+struct BoundHandler<B> {
     operation: &'static OperationSchema<'static>,
-    route: Route<Body>,
+    route: Route<crate::body::SchemaBody<B>>,
+}
+impl<B> Clone for BoundHandler<B> {
+    fn clone(&self) -> Self {
+        Self {
+            operation: self.operation,
+            route: self.route.clone(),
+        }
+    }
+}
+impl<B> fmt::Debug for BoundHandler<B> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("BoundHandler")
+            .field("operation", &self.operation.shape_id())
+            .finish()
+    }
 }
 
-#[derive(Clone, Debug)]
-struct Dispatch {
+struct Dispatch<B> {
     router: SharedProtocolRouter,
     protocol: SharedServerProtocol,
-    bindings: Vec<BoundHandler>,
+    bindings: Vec<BoundHandler<B>>,
+}
+impl<B> Clone for Dispatch<B> {
+    fn clone(&self) -> Self {
+        Self {
+            router: self.router.clone(),
+            protocol: self.protocol.clone(),
+            bindings: self.bindings.clone(),
+        }
+    }
+}
+impl<B> fmt::Debug for Dispatch<B> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Dispatch")
+            .field("router", &self.router)
+            .field("protocol", &self.protocol)
+            .field("bindings", &self.bindings)
+            .finish()
+    }
 }
 
 /// A service routing normalized requests using one protocol and an owned handler collection.
-#[derive(Clone, Debug)]
-pub struct SchemaRoutingService {
-    inner: Dispatch,
+///
+/// Generic over the transport body `B`: requests entering with the transport's own body flow to
+/// handlers unerased. The default is hyper's body; anything else — tests, upgrade layers, other
+/// transports — enters through [`SchemaBody::new`](crate::body::SchemaBody::new)-built bodies.
+pub struct SchemaRoutingService<B = hyper::body::Incoming> {
+    inner: Dispatch<B>,
+}
+impl<B> Clone for SchemaRoutingService<B> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
+    }
+}
+impl<B> fmt::Debug for SchemaRoutingService<B> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SchemaRoutingService").field("inner", &self.inner).finish()
+    }
 }
 
-impl Dispatch {
+impl<B> Dispatch<B>
+where
+    B: http_body::Body<Data = Bytes> + Send + Sync + Unpin + 'static,
+    B::Error: Into<BoxError>,
+{
     /// Hands the routed request to its handler, recording the selection for downstream consumers.
-    fn handle(&mut self, selected: OperationIndex, mut request: Request<Body>) -> super::route::RouteFuture<Body> {
+    fn handle(
+        &mut self,
+        selected: OperationIndex,
+        mut request: Request<crate::body::SchemaBody<B>>,
+    ) -> super::route::RouteFuture<crate::body::SchemaBody<B>> {
         let binding = &mut self.bindings[selected.index];
         debug_assert!(
             std::ptr::eq(binding.operation, selected.operation),
@@ -182,18 +253,29 @@ impl Dispatch {
         binding.route.call(request)
     }
 
-    fn call(&mut self, request: Request<Body>) -> SchemaRoutingFuture {
+    fn call(&mut self, request: Request<crate::body::SchemaBody<B>>) -> SchemaRoutingFuture<B> {
         let state = match &self.router.0 {
-            RouterKind::Metadata(router) => match router.route(&request) {
-                Ok(selected) => State::Handling {
-                    future: self.handle(selected, request),
-                },
-                Err(response) => State::Rejected {
-                    response: Some(response),
-                },
-            },
+            RouterKind::Metadata(router) => {
+                // Probe with the head only: the parts move over and back, nothing is cloned,
+                // and the router stays free of the transport body type.
+                let (parts, body) = request.into_parts();
+                let probe = Request::from_parts(parts, ());
+                match router.route(&probe) {
+                    Ok(selected) => {
+                        let (parts, ()) = probe.into_parts();
+                        State::Handling {
+                            future: self.handle(selected, Request::from_parts(parts, body)),
+                        }
+                    }
+                    Err(response) => State::Rejected {
+                        response: Some(response),
+                    },
+                }
+            }
+            // A body-first protocol buffers everything before selecting, so erasing the body
+            // here costs one box on a path that allocates the full content anyway.
             RouterKind::Body(router) => State::Routing {
-                future: router.clone().route(request),
+                future: router.clone().route(request.map(crate::body::boxed)),
                 dispatch: Some(self.clone()),
             },
         };
@@ -203,16 +285,16 @@ impl Dispatch {
 
 pin_project_lite::pin_project! {
     #[project = StateProj]
-    enum State {
+    enum State<B> {
         // The routing future owns the request; the dispatch clone owns the handlers. Nothing is
         // borrowed across the await, so `Route` needs `Clone + Send` but never `Sync`.
         Routing {
             future: ProtocolRouteFuture,
-            dispatch: Option<Dispatch>,
+            dispatch: Option<Dispatch<B>>,
         },
         Handling {
             #[pin]
-            future: super::route::RouteFuture<Body>,
+            future: super::route::RouteFuture<crate::body::SchemaBody<B>>,
         },
         Rejected {
             response: Option<Response<BoxBody>>,
@@ -222,12 +304,16 @@ pin_project_lite::pin_project! {
 
 pin_project_lite::pin_project! {
     /// Response future for schema routing.
-    pub struct SchemaRoutingFuture {
+    pub struct SchemaRoutingFuture<B = hyper::body::Incoming> {
         #[pin]
-        inner: State,
+        inner: State<B>,
     }
 }
-impl Future for SchemaRoutingFuture {
+impl<B> Future for SchemaRoutingFuture<B>
+where
+    B: http_body::Body<Data = Bytes> + Send + Sync + Unpin + 'static,
+    B::Error: Into<BoxError>,
+{
     type Output = Result<Response<BoxBody>, Infallible>;
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let mut this = self.project();
@@ -236,6 +322,8 @@ impl Future for SchemaRoutingFuture {
                 StateProj::Routing { future, dispatch } => match future.as_mut().poll(cx) {
                     Poll::Ready(Ok((selected, request))) => {
                         let mut dispatch = dispatch.take().expect("routing resolves once");
+                        let request =
+                            request.map(|collected| crate::body::SchemaBody::buffered(collected.bytes, collected.trailers));
                         let future = dispatch.handle(selected, request);
                         this.inner.set(State::Handling { future });
                     }
@@ -250,11 +338,11 @@ impl Future for SchemaRoutingFuture {
         }
     }
 }
-impl SchemaRoutingService {
+impl<B> SchemaRoutingService<B> {
     pub fn from_operation_handler_bindings(
         service: &'static ServiceSchema<'static>,
         registrations: impl IntoIterator<Item = ProtocolRegistration>,
-        bindings: impl IntoIterator<Item = OperationHandlerBinding>,
+        bindings: impl IntoIterator<Item = OperationHandlerBinding<B>>,
     ) -> Result<Self, RouterBuildError> {
         Self::from_operation_handler_bindings_with_options(
             service,
@@ -267,7 +355,7 @@ impl SchemaRoutingService {
     pub fn from_operation_handler_bindings_with_options(
         service: &'static ServiceSchema<'static>,
         registrations: impl IntoIterator<Item = ProtocolRegistration>,
-        bindings: impl IntoIterator<Item = OperationHandlerBinding>,
+        bindings: impl IntoIterator<Item = OperationHandlerBinding<B>>,
         options: SchemaRoutingOptions,
     ) -> Result<Self, RouterBuildError> {
         if service.protocols().len() != 1 {
@@ -350,9 +438,12 @@ impl SchemaRoutingService {
     /// Applies middleware after routing, uniformly to all bound handlers.
     pub fn layer<L>(mut self, layer: &L) -> Self
     where
-        L: tower::Layer<Route<Body>>,
-        L::Service: Service<Request<Body>, Response = Response<BoxBody>, Error = Infallible> + Clone + Send + 'static,
-        <L::Service as Service<Request<Body>>>::Future: Send + 'static,
+        L: tower::Layer<Route<crate::body::SchemaBody<B>>>,
+        L::Service: Service<Request<crate::body::SchemaBody<B>>, Response = Response<BoxBody>, Error = Infallible>
+            + Clone
+            + Send
+            + 'static,
+        <L::Service as Service<Request<crate::body::SchemaBody<B>>>>::Future: Send + 'static,
     {
         let dispatch = &mut self.inner;
         dispatch.bindings = std::mem::take(&mut dispatch.bindings)
@@ -365,19 +456,38 @@ impl SchemaRoutingService {
         self
     }
 }
-impl<B> Service<Request<B>> for SchemaRoutingService
+/// The transport door: the transport's own body enters unerased.
+impl<B> Service<Request<B>> for SchemaRoutingService<B>
 where
-    B: http_body::Body<Data = Bytes> + Send + Sync + 'static,
+    B: http_body::Body<Data = Bytes> + Send + Sync + Unpin + 'static,
     B::Error: Into<BoxError>,
 {
     type Response = Response<BoxBody>;
     type Error = Infallible;
-    type Future = SchemaRoutingFuture;
+    type Future = SchemaRoutingFuture<B>;
     fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Infallible>> {
         Poll::Ready(Ok(()))
     }
     fn call(&mut self, request: Request<B>) -> Self::Future {
-        self.inner.call(request.map(Body::new))
+        self.inner.call(request.map(crate::body::SchemaBody::passthrough))
+    }
+}
+
+/// The pipeline door: an already-normalized body — buffered, erased, or rebuilt — enters as-is.
+/// Coherent with the transport door because `B` can never equal `SchemaBody<B>`.
+impl<B> Service<Request<crate::body::SchemaBody<B>>> for SchemaRoutingService<B>
+where
+    B: http_body::Body<Data = Bytes> + Send + Sync + Unpin + 'static,
+    B::Error: Into<BoxError>,
+{
+    type Response = Response<BoxBody>;
+    type Error = Infallible;
+    type Future = SchemaRoutingFuture<B>;
+    fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Infallible>> {
+        Poll::Ready(Ok(()))
+    }
+    fn call(&mut self, request: Request<crate::body::SchemaBody<B>>) -> Self::Future {
+        self.inner.call(request)
     }
 }
 
@@ -389,11 +499,11 @@ struct ExistingRouter<R, P> {
 }
 impl<R, P> ProtocolRouter for ExistingRouter<R, P>
 where
-    R: super::Router<Body, Service = OperationIndex> + Send + Sync + fmt::Debug,
+    R: super::Router<(), Service = OperationIndex> + Send + Sync + fmt::Debug,
     R::Error: crate::response::IntoResponse<P>,
     P: fmt::Debug,
 {
-    fn route(&self, request: &Request<Body>) -> Result<OperationIndex, Response<BoxBody>> {
+    fn route(&self, request: &Request<()>) -> Result<OperationIndex, Response<BoxBody>> {
         use crate::response::IntoResponse;
         self.router.match_route(request).map_err(|error| error.into_response())
     }

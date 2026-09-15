@@ -315,31 +315,23 @@ impl<E: std::fmt::Display> std::fmt::Display for RequestBodyCollectionError<E> {
 
 impl<E: std::error::Error + 'static> std::error::Error for RequestBodyCollectionError<E> {}
 
-/// Collects a request body for body-first routing, returning the routing bytes and a
-/// replacement body that replays the same content, trailers included.
+/// Collects a request body for body-first routing, returning the content routing selects from,
+/// trailers included.
 ///
 /// This is the collection step of an [`AsyncProtocolRouter`]: the router selects an operation
-/// from the returned bytes and rebuilds the request around the returned body, so the handler
-/// reads exactly what routing read. An unpolled, already-buffered body is reused without
-/// copying. The allowance in `config` is enforced during collection — protocols derive it from
+/// from the returned bytes and hands the [`CollectedBody`] back with its selection; the routing
+/// service rebuilds the dispatched request around it, so the handler reads exactly what routing
+/// read. The allowance in `config` is enforced during collection — protocols derive it from
 /// [`SchemaRoutingOptions::request_body`] with [`ServiceRequestBodyConfig::for_routing`] when
 /// building their router — and a failure is framed by the protocol itself.
 ///
 /// [`AsyncProtocolRouter`]: crate::routing::AsyncProtocolRouter
+/// [`CollectedBody`]: crate::routing::CollectedBody
 /// [`SchemaRoutingOptions::request_body`]: crate::routing::SchemaRoutingOptions
 pub async fn collect_for_routing(
-    body: crate::body::Body,
+    body: BoxBody,
     config: &RequestBodyCollectionConfig,
-) -> Result<(Bytes, crate::body::Body), RequestBodyCollectionError<crate::Error>> {
-    if let Some(bytes) = body.buffered_content() {
-        if let Some(limit) = config.max_bytes.filter(|limit| bytes.len() > limit.get()) {
-            return Err(RequestBodyCollectionError::TooLarge(crate::body::BodyLimitExceeded {
-                limit: limit.get(),
-            }));
-        }
-        let bytes = bytes.clone();
-        return Ok((bytes, body));
-    }
+) -> Result<crate::routing::CollectedBody, RequestBodyCollectionError<crate::Error>> {
     let collect = collect_frames(body, config);
     let (bytes, trailers) = match config.read_timeout {
         Some(timeout) => tokio::time::timeout(timeout, collect)
@@ -347,12 +339,12 @@ pub async fn collect_for_routing(
             .map_err(|_| RequestBodyCollectionError::Timeout { timeout })??,
         None => collect.await?,
     };
-    Ok((bytes.clone(), crate::body::Body::buffered(bytes, trailers)))
+    Ok(crate::routing::CollectedBody { bytes, trailers })
 }
 
 /// Collects data frames under the size allowance, retaining trailers.
 async fn collect_frames(
-    body: crate::body::Body,
+    body: BoxBody,
     config: &RequestBodyCollectionConfig,
 ) -> Result<(Bytes, Option<http::HeaderMap>), RequestBodyCollectionError<crate::Error>> {
     let mut body = std::pin::pin!(body);
