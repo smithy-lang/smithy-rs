@@ -613,7 +613,7 @@ dependencies = [
  "serde_urlencoded",
  "thiserror 2.0.20",
  "tokio",
- "tower 0.4.13",
+ "tower 0.5.3",
  "tower-http 0.6.11",
  "tracing",
  "tracing-subscriber",
@@ -641,7 +641,7 @@ dependencies = [
  "metrique-writer-format-emf",
  "pin-project-lite",
  "thiserror 2.0.20",
- "tower 0.4.13",
+ "tower 0.5.3",
  "tracing",
  "tracing-appender",
 ]
@@ -687,7 +687,7 @@ dependencies = [
  "tokio-rustls 0.24.1",
  "tokio-stream",
  "tokio-test",
- "tower 0.4.13",
+ "tower 0.5.3",
  "tower-test",
  "tracing",
  "tracing-appender",
@@ -4886,7 +4886,6 @@ dependencies = [
  "pin-project",
  "pin-project-lite",
  "tokio",
- "tokio-util",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -4902,8 +4901,11 @@ dependencies = [
  "futures-util",
  "pin-project-lite",
  "sync_wrapper",
+ "tokio",
+ "tokio-util",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
