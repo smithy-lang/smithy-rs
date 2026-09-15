@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenConfig
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.util.orNull
 import java.util.Optional
 import java.util.logging.Logger
 
@@ -56,7 +57,63 @@ data class ServerRustSettings(
         minimumSupportedRustVersion,
         customizationConfig,
     ) {
+    /**
+     * The per-protocol settings under `customizationConfig.protocols`, keyed by protocol shape ID,
+     * with the legacy `codegen.rpcV2CborAddCapitalizedRoute` flag folded in.
+     *
+     * Each section is passed through to the generated `RoutingOptions` verbatim: the protocol it
+     * names parses it when building its router, so protocol authors add settings without codegen
+     * changes. Codegen only requires each section to be a JSON object.
+     */
+    fun protocolSettings(): Map<String, ObjectNode> {
+        val sections =
+            customizationConfig
+                ?.getObjectMember(PROTOCOLS_CUSTOMIZATION_KEY)?.orNull()
+                ?.members
+                ?.entries
+                ?.associate { (key, value) ->
+                    key.value to
+                        value.expectObjectNode(
+                            "`$CUSTOMIZATION_CONFIG_KEY.$PROTOCOLS_CUSTOMIZATION_KEY.${key.value}` must be a JSON object",
+                        )
+                }.orEmpty()
+        if (!codegenConfig.rpcV2CborAddCapitalizedRoute) {
+            return sections
+        }
+        val cborSection = sections[RPC_V2_CBOR_PROTOCOL_ID]
+        if (cborSection?.containsMember(CAPITALIZE_ROUTES_KEY) == true) {
+            Logger.getLogger("ServerRustSettings").warning(
+                "Both `codegen.${ServerCodegenConfig.RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY}` and " +
+                    "`$CUSTOMIZATION_CONFIG_KEY.$PROTOCOLS_CUSTOMIZATION_KEY.$RPC_V2_CBOR_PROTOCOL_ID.$CAPITALIZE_ROUTES_KEY` " +
+                    "are set; using the `$CUSTOMIZATION_CONFIG_KEY` value.",
+            )
+            return sections
+        }
+        val folded =
+            (cborSection ?: ObjectNode.objectNode())
+                .withMember(CAPITALIZE_ROUTES_KEY, true)
+        return sections + (RPC_V2_CBOR_PROTOCOL_ID to folded)
+    }
+
+    /**
+     * The effective RPCv2 CBOR capitalized-route-alias value, honored by both the legacy router
+     * codegen and, through [protocolSettings], the schema routing path.
+     */
+    fun rpcV2CborCapitalizeRoutes(): Boolean =
+        protocolSettings()[RPC_V2_CBOR_PROTOCOL_ID]
+            ?.getBooleanMemberOrDefault(CAPITALIZE_ROUTES_KEY, false)
+            ?: false
+
     companion object {
+        /** Key under `customizationConfig` holding the per-protocol settings sections. */
+        const val PROTOCOLS_CUSTOMIZATION_KEY = "protocols"
+
+        /** The `customizationConfig` key in smithy-build.json, for diagnostics. */
+        const val CUSTOMIZATION_CONFIG_KEY = "customizationConfig"
+
+        const val RPC_V2_CBOR_PROTOCOL_ID = "smithy.protocols#rpcv2Cbor"
+        const val CAPITALIZE_ROUTES_KEY = "capitalizeRoutes"
+
         fun from(
             model: Model,
             config: ObjectNode,

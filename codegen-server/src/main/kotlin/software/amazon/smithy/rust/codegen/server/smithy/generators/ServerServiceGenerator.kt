@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.neighbor.Walker
+import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.PatternTrait
@@ -112,7 +113,8 @@ class ServerServiceGenerator(
      * All protocols contribute one primary spec via [ServerProtocol.serverRouterRequestSpec].
      * [ServerRpcV2CborProtocol] may additionally register a legacy capitalized alias
      * (see [ServerRpcV2CborProtocol.additionalRouterRequestSpecAliases]) - a knob scoped
-     * to that protocol and gated behind the `rpcV2CborAddCapitalizedRoute` setting.
+     * to that protocol, gated behind `customizationConfig.protocols` `capitalizeRoutes`
+     * (or the legacy `codegen.rpcV2CborAddCapitalizedRoute` flag).
      */
     private val requestSpecMap: Map<OperationShape, List<Pair<String, Writable>>> =
         if (schemaSerde) {
@@ -583,7 +585,7 @@ class ServerServiceGenerator(
                     layer: L,
                     http_plugin: HttpPl,
                     model_plugin: ModelPl,
-                    ${if (schemaSerde) "routing_options: #{SmithyHttpServer}::routing::SchemaRoutingOptions," else ""}
+                    ${if (schemaSerde) "routing_options: #{SmithyHttpServer}::routing::RoutingOptions," else ""}
                 }
 
                 impl<$builderGenerics> $builderName<$builderGenerics> {
@@ -886,13 +888,18 @@ class ServerServiceGenerator(
         writable {
             val max = codegenContext.settings.codegenConfig.requestBodyMaxBytes
             val maxExpr = if (max > 0) "::std::num::NonZeroUsize::new(${max}usize)" else "#{None}"
-            val aliases = codegenContext.settings.codegenConfig.rpcV2CborAddCapitalizedRoute
-            val names =
-                operations.map { operation ->
+            // `customizationConfig.protocols` sections travel verbatim as JSON byte-strings,
+            // parsed once into `Document`s when the builder is constructed. `#` in the JSON
+            // (shape IDs) must be escaped for the template.
+            val protocolSettings =
+                codegenContext.settings.protocolSettings().entries.map { (protocolId, section) ->
                     writable {
-                        val id = operation.id.toString().replace("#", "##").dq()
-                        val name = symbolProvider.toSymbol(operation).name.dq()
-                        rustTemplate("($id.to_owned(), $name.to_owned())")
+                        val id = protocolId.replace("#", "##").dq()
+                        val json = Node.printJson(section).replace("#", "##")
+                        rustTemplate(
+                            "($id.to_owned(), #{SmithyHttpServer}::schema::parse_settings_json(br####\"$json\"####))",
+                            *codegenScope,
+                        )
                     }
                 }.join(",")
             rustTemplate(
@@ -928,14 +935,13 @@ class ServerServiceGenerator(
                             routing_options: Self::routing_options(),
                         }
                     }
-                    fn routing_options() -> #{SmithyHttpServer}::routing::SchemaRoutingOptions {
-                        #{SmithyHttpServer}::routing::SchemaRoutingOptions {
+                    fn routing_options() -> #{SmithyHttpServer}::routing::RoutingOptions {
+                        #{SmithyHttpServer}::routing::RoutingOptions {
                             request_body: #{SmithyHttpServer}::schema::ServiceRequestBodyConfig {
                                 global: #{SmithyHttpServer}::schema::RequestBodyCollectionConfig { max_bytes: $maxExpr, read_timeout: #{None} },
                                 per_operation: ::std::collections::HashMap::new(),
                             },
-                            rpc_v2_cbor_add_capitalized_route: $aliases,
-                            operation_names: ::std::collections::HashMap::from([#{Names}]),
+                            protocol_settings: ::std::collections::HashMap::from([#{ProtocolSettings}]),
                         }
                     }
                     ##[deprecated(note = "use builder with a service configuration")]
@@ -988,7 +994,8 @@ class ServerServiceGenerator(
                     fn call(&mut self, request: R) -> Self::Future { self.svc.call(request) }
                 }
                 """,
-                *codegenScope, "Fields1" to notSetFields(), "Fields2" to notSetFields(), "Names" to names,
+                *codegenScope, "Fields1" to notSetFields(), "Fields2" to notSetFields(),
+                "ProtocolSettings" to protocolSettings,
             )
         }
 

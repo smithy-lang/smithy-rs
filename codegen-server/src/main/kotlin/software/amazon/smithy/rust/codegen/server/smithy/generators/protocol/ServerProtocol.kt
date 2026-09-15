@@ -399,7 +399,7 @@ class ServerRpcV2CborProtocol(
         operationShape: OperationShape,
         serviceName: String,
     ): List<Writable> {
-        if (!serverCodegenContext.settings.codegenConfig.rpcV2CborAddCapitalizedRoute) {
+        if (!serverCodegenContext.settings.rpcV2CborCapitalizeRoutes()) {
             return emptyList()
         }
         val verbatimOperationName = operationShape.id.name

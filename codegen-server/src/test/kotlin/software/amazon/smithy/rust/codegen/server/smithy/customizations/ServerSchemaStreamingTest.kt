@@ -355,7 +355,7 @@ internal class ServerSchemaStreamingTest {
         ##[derive(Debug)]
         struct HttpOnly;
         impl #{SmithyHttpServer}::schema::ServerProtocol for HttpOnly {
-            fn build_router(&self, _: &'static #{Schema}::ServiceSchema<'static>, _: &[#{SmithyHttpServer}::routing::OperationIndex], _: &#{SmithyHttpServer}::routing::SchemaRoutingOptions)
+            fn build_router(&self, _: #{SmithyHttpServer}::routing::RouterBuildContext<'_>)
                 -> #{Result}<#{SmithyHttpServer}::routing::SharedProtocolRouter, #{SmithyHttpServer}::routing::RouterBuildError> { unreachable!() }
             fn serialize_internal_failure(&self) -> #{SmithyHttpServer}::response::Response { unreachable!() }
 

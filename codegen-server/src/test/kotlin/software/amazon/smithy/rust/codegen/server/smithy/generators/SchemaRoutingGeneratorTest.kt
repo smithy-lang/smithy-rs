@@ -224,17 +224,15 @@ class SchemaRoutingGeneratorTest {
                                     """
                                     {
                                         use #{Server}::schema::{ServerProtocol, SharedServerProtocol, ProtocolRegistration};
-                                        use #{Server}::routing::{ProtocolRouter, SharedProtocolRouter, OperationIndex, RouterBuildError, SchemaRoutingOptions};
-                                        use #{Server}::body::{Body, BoxBody};
-                                        use #{Schema}::{Schema, ShapeId, ServiceSchema};
+                                        use #{Server}::routing::{AsyncProtocolRouter, ProtocolRouteFuture, SharedProtocolRouter, RouterBuildContext, RouterBuildError};
+                                        use #{Server}::body::BoxBody;
+                                        use #{Schema}::{Schema, ShapeId};
                                         use #{Http}::{Request, Response};
                                         ##[derive(Debug)]
-                                        struct TestRouter(SharedProtocolRouter);
-                                        impl ProtocolRouter for TestRouter {
-                                            fn requires_body_for_routing(&self) -> bool { $bodyRouting }
-                                            fn route(&self, request: &Request<Body>, bytes: &#{Bytes}) -> #{Result}<OperationIndex, Response<BoxBody>> {
-                                                self.0.route(request, bytes)
-                                            }
+                                        struct BodyRouter;
+                                        impl AsyncProtocolRouter for BodyRouter {
+                                            // Construction rejects streaming operations before any request routes.
+                                            fn route(self: ::std::sync::Arc<Self>, _: Request<BoxBody>) -> ProtocolRouteFuture { unreachable!() }
                                         }
                                         ##[derive(Debug)]
                                         struct TestProtocol;
@@ -243,10 +241,13 @@ class SchemaRoutingGeneratorTest {
                                                 static ID: ShapeId<'static> = #{Schema}::shape_id!("test", "bodyRouting");
                                                 &ID
                                             }
-                                            fn build_router(&self, service: &'static ServiceSchema<'static>, targets: &[OperationIndex], options: &SchemaRoutingOptions)
+                                            fn build_router(&self, ctx: RouterBuildContext<'_>)
                                                 -> #{Result}<SharedProtocolRouter, RouterBuildError> {
-                                                let router = #{Server}::protocol::rest_json_1::RestJson1Protocol::default().build_router(service, targets, options)?;
-                                                #{Ok}(SharedProtocolRouter::new(TestRouter(router)))
+                                                if $bodyRouting {
+                                                    #{Ok}(SharedProtocolRouter::new_async(BodyRouter))
+                                                } else {
+                                                    #{Server}::protocol::rest_json_1::RestJson1Protocol::default().build_router(ctx)
+                                                }
                                             }
                                             fn deserialize_request<'a>(&'a self, _: &Schema<'_>, _: &'a #{Server}::schema::ServerRequest)
                                                 -> #{Result}<#{Box}<dyn #{Schema}::serde::ShapeDeserializer + 'a>, #{Server}::schema::DeserializeError> { unreachable!() }
@@ -304,6 +305,74 @@ class SchemaRoutingGeneratorTest {
                             *RuntimeType.preludeScope,
                         )
                     }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `customizationConfig protocols sections reach the schema router`() {
+        val model =
+            """
+            namespace test
+            use smithy.protocols#rpcv2Cbor
+            @rpcv2Cbor
+            service Example { operations: [getFoo] }
+            operation getFoo { input := { value: String } output := {} }
+            """.asSmithyModel(smithyVersion = "2")
+        val settings =
+            ObjectNode.builder()
+                .withMember("codegen", ObjectNode.builder().withMember("schemaSerde", true).build())
+                .withMember(
+                    "customizationConfig",
+                    ObjectNode.builder().withMember(
+                        "protocols",
+                        ObjectNode.builder()
+                            .withMember(
+                                "smithy.protocols#rpcv2Cbor",
+                                ObjectNode.builder().withMember("capitalizeRoutes", true).build(),
+                            )
+                            // An unrelated protocol's section passes through without being consulted.
+                            .withMember(
+                                "com.amazon.coral#rpcv1",
+                                ObjectNode.builder().withMember("anything", "opaque").build(),
+                            )
+                            .build(),
+                    ).build(),
+                )
+                .build()
+        serverIntegrationTest(
+            model,
+            IntegrationTestParams(additionalSettings = settings),
+            testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
+        ) { context, crate ->
+            crate.testModule {
+                tokioTest("capitalized_alias_and_verbatim_route_both_succeed") {
+                    rustTemplate(
+                        """
+                        use #{Tower}::ServiceExt;
+                        let service = crate::Example::builder(crate::ExampleConfig::builder().build())
+                            .get_foo(|_input: crate::input::GetFooInput| async { crate::output::GetFooOutput {} })
+                            .build()
+                            .unwrap();
+                        for path in ["/service/Example/operation/getFoo", "/service/Example/operation/GetFoo"] {
+                            let request = #{Http}::Request::builder()
+                                .method("POST")
+                                .uri(path)
+                                .header("content-type", "application/cbor")
+                                .header("smithy-protocol", "rpc-v2-cbor")
+                                // An empty CBOR map: every input member is optional.
+                                .body(#{Server}::body::Body::from_bytes(vec![0xA0u8].into()))
+                                .unwrap();
+                            let response = service.clone().oneshot(request).await.unwrap();
+                            assert_eq!(response.status(), 200, "{path}");
+                        }
+                        """,
+                        "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
+                        "Http" to RuntimeType.http(context.runtimeConfig),
+                        "Tower" to ServerCargoDependency.Tower.toType(),
+                        *RuntimeType.preludeScope,
+                    )
                 }
             }
         }
