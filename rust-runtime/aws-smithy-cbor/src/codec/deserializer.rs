@@ -402,7 +402,7 @@ mod tests {
     fn test_read_boolean() {
         let bytes = make_deser(|s| s.write_boolean(&BOOLEAN, true).unwrap());
         let mut de = CborDeserializer::new(&bytes, 128);
-        assert_eq!(de.read_boolean(&BOOLEAN).unwrap(), true);
+        assert!(de.read_boolean(&BOOLEAN).unwrap());
     }
 
     #[test]
