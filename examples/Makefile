@@ -39,6 +39,7 @@ lambda_invoke:
 	cargo lambda invoke pokemon-service-lambda --data-file pokemon-service/tests/fixtures/example-apigw-request.json
 
 distclean: clean
+	$(GRADLE) --project-dir $(SRC_DIR) :codegen-client-test:clean :codegen-server-test:clean
 	rm -rf $(SERVER_SDK_DST) $(CLIENT_SDK_DST) Cargo.lock
 
 .PHONY: all

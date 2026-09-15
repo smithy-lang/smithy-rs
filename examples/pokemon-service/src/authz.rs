@@ -10,13 +10,17 @@
 //! documentation for [`aws_smithy_http_server::plugin::ModelMarker`] calls out, most model
 //! plugins' implementation are _operation-specific_, which are simpler.
 
-use std::{marker::PhantomData, pin::Pin};
+use std::{marker::PhantomData, pin::Pin, sync::LazyLock};
+
+use aws_smithy_schema::{
+    serde::{SerdeError, SerializableStruct, ShapeSerializer},
+    shape_id, Schema, ShapeType, StringTrait, TraitMap,
+};
 
 use pokemon_service_server_sdk::server::{
-    body::BoxBody,
     operation::OperationShape,
     plugin::{ModelMarker, Plugin},
-    response::IntoResponse,
+    schema::{HttpModeledError, ModeledError},
 };
 use tower::Service;
 
@@ -66,70 +70,98 @@ where
 }
 
 /// The error returned by [`AuthorizeService`].
+#[derive(Debug)]
 pub enum AuthorizeServiceError<E> {
     /// Authorization was successful, but the inner service yielded an error.
     InnerServiceError(E),
     /// Authorization was not successful.
-    AuthorizeError { message: String },
+    AuthorizeError(AuthorizeError),
 }
 
-// Only the _outermost_ model plugin needs to apply a `Service` whose error type implements
-// `IntoResponse` for the protocol the service uses (this requirement comes from the `Service`
-// implementation of [`aws_smithy_http_server::operation::Upgrade`]). So if the model plugin is
-// meant to be applied in any position, and to any Smithy service, one should implement
-// `IntoResponse` for all protocols.
-//
-// Having model plugins apply a `Service` that has a `Service::Response` type or a `Service::Error`
-// type that is different from those returned by the inner service hence diminishes the reusability
-// of the plugin because it makes the plugin less composable. Most plugins should instead work with
-// the inner service's types, and _at most_ require that those be `Op::Input` and `Op::Error`, for
-// maximum composability:
-//
-// ```
-// ...
-// where
-//     S: Service<(Op::Input, ($($var,)*)), Error = Op::Error>
-//     ...
-// {
-//     type Response = S::Response;
-//     type Error = S::Error;
-//     type Future = Pin<Box<dyn Future<Output = Result<S::Response, S::Error>> + Send>>;
-// }
-//
-// ```
-//
-// This plugin still exemplifies how changing a type can be done to make it more interesting.
+/// The authorization failure is described as a Smithy error shape. Each selected
+/// protocol supplies its own content type, error discriminator, and serialized body.
+#[derive(Debug)]
+pub struct AuthorizeError {
+    pub message: String,
+}
 
-impl<P, E> IntoResponse<P> for AuthorizeServiceError<E>
-where
-    E: IntoResponse<P>,
-{
-    fn into_response(self) -> http::Response<BoxBody> {
-        match self {
-            AuthorizeServiceError::InnerServiceError(e) => e.into_response(),
-            AuthorizeServiceError::AuthorizeError { message } => http::Response::builder()
-                .status(http::StatusCode::UNAUTHORIZED)
-                .body(pokemon_service_server_sdk::server::body::to_boxed(message))
-                .expect("attempted to build an invalid HTTP response; please file a bug report"),
-        }
+static MESSAGE: Schema<'static> = Schema::new_member(
+    shape_id!("pokemon_service.authz", "AuthorizeError", "message"),
+    ShapeType::String,
+    "message",
+    0,
+);
+static ERROR_TRAITS: LazyLock<TraitMap> = LazyLock::new(|| {
+    let mut traits = TraitMap::new();
+    traits.insert(Box::new(StringTrait::new(
+        shape_id!("smithy.api", "error"),
+        "client",
+    )));
+    traits
+});
+static AUTHORIZE_ERROR: Schema<'static> = Schema::new_struct(
+    shape_id!("pokemon_service.authz", "AuthorizeError"),
+    ShapeType::Structure,
+    &[&MESSAGE],
+)
+.with_traits(&ERROR_TRAITS);
+
+impl std::fmt::Display for AuthorizeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+impl std::error::Error for AuthorizeError {}
+
+impl SerializableStruct for AuthorizeError {
+    fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+        serializer.write_string(&MESSAGE, &self.message)
+    }
+}
+impl ModeledError for AuthorizeError {
+    fn schema(&self) -> &Schema<'_> {
+        &AUTHORIZE_ERROR
+    }
+}
+impl HttpModeledError for AuthorizeError {
+    fn status_code(&self) -> u16 {
+        401
     }
 }
 
-impl<E> pokemon_service_server_sdk::server::operation::IntoDynResponse for AuthorizeServiceError<E>
-where
-    E: pokemon_service_server_sdk::server::operation::IntoDynResponse,
-{
-    fn into_dyn_response(
-        self,
-        protocol: &dyn pokemon_service_server_sdk::server::schema::DynServerProtocol,
-    ) -> http::Response<BoxBody> {
+// A wrapper exposes the schema and members of its active error variant. It has
+// no knowledge of the selected protocol or how HTTP responses are constructed.
+impl<E: HttpModeledError> AuthorizeServiceError<E> {
+    fn error(&self) -> &dyn HttpModeledError {
         match self {
-            AuthorizeServiceError::InnerServiceError(error) => error.into_dyn_response(protocol),
-            AuthorizeServiceError::AuthorizeError { message } => http::Response::builder()
-                .status(http::StatusCode::UNAUTHORIZED)
-                .body(pokemon_service_server_sdk::server::body::to_boxed(message))
-                .expect("attempted to build an invalid HTTP response; please file a bug report"),
+            Self::InnerServiceError(error) => error,
+            Self::AuthorizeError(error) => error,
         }
+    }
+}
+impl<E: HttpModeledError> std::fmt::Display for AuthorizeServiceError<E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self.error(), f)
+    }
+}
+impl<E: HttpModeledError> std::error::Error for AuthorizeServiceError<E> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(self.error())
+    }
+}
+impl<E: HttpModeledError> SerializableStruct for AuthorizeServiceError<E> {
+    fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+        self.error().serialize_members(serializer)
+    }
+}
+impl<E: HttpModeledError> ModeledError for AuthorizeServiceError<E> {
+    fn schema(&self) -> &Schema<'_> {
+        self.error().schema()
+    }
+}
+impl<E: HttpModeledError> HttpModeledError for AuthorizeServiceError<E> {
+    fn status_code(&self) -> u16 {
+        self.error().status_code()
     }
 }
 
@@ -170,9 +202,9 @@ macro_rules! impl_service {
                 let fut = async move {
                     let is_authorized = authorizer.authorize(&input).await;
                     if !is_authorized {
-                        return Err(Self::Error::AuthorizeError {
+                        return Err(Self::Error::AuthorizeError(AuthorizeError {
                             message: "Not authorized!".to_owned(),
-                        });
+                        }));
                     }
 
                     service
@@ -235,3 +267,83 @@ impl_service!(T1, T2, T3, T4);
 impl_service!(T1, T2, T3, T4, T5);
 impl_service!(T1, T2, T3, T4, T5, T6);
 impl_service!(T1, T2, T3, T4, T5, T6, T7);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use http_body_util::BodyExt;
+    use pokemon_service_server_sdk::server::protocol::{
+        aws_json_10::AwsJson1_0Protocol, aws_json_11::AwsJson1_1Protocol,
+        rest_json_1::RestJson1Protocol, rest_xml::RestXmlProtocol, rpc_v2_cbor::RpcV2CborProtocol,
+    };
+    use pokemon_service_server_sdk::server::schema::ServerProtocol;
+
+    #[tokio::test]
+    async fn authorization_error_uses_the_selected_protocol_wire_format() {
+        let protocols: [Box<dyn ServerProtocol>; 5] = [
+            Box::new(RestJson1Protocol::default()),
+            Box::new(AwsJson1_0Protocol::default()),
+            Box::new(AwsJson1_1Protocol::default()),
+            Box::new(RestXmlProtocol::default()),
+            Box::new(RpcV2CborProtocol::default()),
+        ];
+        for protocol in protocols {
+            let error =
+                AuthorizeServiceError::<std::convert::Infallible>::AuthorizeError(AuthorizeError {
+                    message: "Not authorized!".into(),
+                });
+            let response = protocol.serialize_error(&error);
+            assert_eq!(response.status(), http::StatusCode::UNAUTHORIZED);
+            let headers = response.headers().clone();
+            let bytes = response.into_body().collect().await.unwrap().to_bytes();
+            match protocol.protocol_id().as_str() {
+                "aws.protocols#restJson1" => {
+                    assert_eq!(headers["content-type"], "application/json");
+                    assert_eq!(headers["x-amzn-errortype"], "AuthorizeError");
+                    assert_eq!(bytes, r#"{"message":"Not authorized!"}"#);
+                }
+                "aws.protocols#awsJson1_0" => {
+                    assert_eq!(headers["content-type"], "application/x-amz-json-1.0");
+                    assert_eq!(
+                        bytes,
+                        r#"{"message":"Not authorized!","__type":"pokemon_service.authz#AuthorizeError"}"#
+                    );
+                }
+                "aws.protocols#awsJson1_1" => {
+                    assert_eq!(headers["content-type"], "application/x-amz-json-1.1");
+                    assert_eq!(
+                        bytes,
+                        r#"{"message":"Not authorized!","__type":"AuthorizeError"}"#
+                    );
+                }
+                "aws.protocols#restXml" => {
+                    assert_eq!(headers["content-type"], "application/xml");
+                    assert!(std::str::from_utf8(&bytes)
+                        .unwrap()
+                        .contains("<message>Not authorized!</message>"));
+                }
+                "smithy.protocols#rpcv2Cbor" => {
+                    assert_eq!(headers["smithy-protocol"], "rpc-v2-cbor");
+                    assert_eq!(headers["content-type"], "application/cbor");
+                    let shape_id = b"pokemon_service.authz#AuthorizeError";
+                    assert!(bytes
+                        .windows(shape_id.len())
+                        .any(|window| window == shape_id));
+                }
+                other => panic!("unexpected protocol {other}"),
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn wrapper_preserves_inner_error_and_protocol_escapes_its_message() {
+        let inner = AuthorizeError {
+            message: "inner \"message\"".into(),
+        };
+        let error = AuthorizeServiceError::InnerServiceError(inner);
+        let response = RestJson1Protocol::default().serialize_error(&error);
+        assert_eq!(response.status(), http::StatusCode::UNAUTHORIZED);
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(bytes, r#"{"message":"inner \"message\""}"#);
+    }
+}
