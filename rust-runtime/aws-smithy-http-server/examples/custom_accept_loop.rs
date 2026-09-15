@@ -8,6 +8,27 @@
 //! **NOTE: This is a demonstration example only, not production-ready code.**
 //! For most use cases, use the built-in `serve()` function instead.
 //!
+//! Custom accept loops bypass the default connection limit applied by `serve()`.
+//! Wrap the listener with `ListenerExt::limit_connections` to apply the same
+//! limit:
+//!
+//! ```rust,ignore
+//! use aws_smithy_http_server::serve::{
+//!     Listener, ListenerExt, DEFAULT_MAX_CONNECTIONS,
+//! };
+//! use tokio::net::TcpListener;
+//!
+//! let mut listener = TcpListener::bind("0.0.0.0:3000")
+//!     .await?
+//!     .limit_connections(DEFAULT_MAX_CONNECTIONS);
+//!
+//! loop {
+//!     // The returned IO owns a connection permit until it is dropped.
+//!     let (stream, remote_addr) = listener.accept().await;
+//!     // Move `stream` into the connection task.
+//! }
+//! ```
+//!
 //! This example shows how to implement your own custom accept loop if you need
 //! control over:
 //! - Overall connection duration limits
