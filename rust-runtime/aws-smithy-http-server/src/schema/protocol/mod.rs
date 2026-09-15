@@ -153,6 +153,22 @@ pub trait ServerEventStreamProtocol: Send + Sync + std::fmt::Debug {
 /// }
 /// ```
 pub trait ServerProtocol: Send + Sync + std::fmt::Debug + 'static {
+    /// Builds operation routing once for this service. Targets are assigned by the routing service.
+    fn build_router(
+        &self,
+        service: &'static aws_smithy_schema::ServiceSchema<'static>,
+        // The operations that have been generated.
+        operations: &[crate::routing::OperationIndex],
+        // TODO: this will be replaced by a Smithy Document / Hashmap that
+        // will let each protocol get the global or a protocol specific setting
+        // defined in smithy-build-template.json.
+        options: &crate::routing::SchemaRoutingOptions,
+    ) -> Result<crate::routing::SharedProtocolRouter, crate::routing::RouterBuildError>;
+
+    /// Renders the protocol's existing internal failure response when a service is built
+    /// using build_unchecked() and a handler has not been set.
+    fn serialize_internal_failure(&self) -> Response;
+
     /// The protocol trait's shape ID, such as `aws.protocols#restJson1`.
     fn protocol_id(&self) -> &'static ShapeId<'static>;
 
@@ -220,6 +236,17 @@ pub trait ServerProtocol: Send + Sync + std::fmt::Debug + 'static {
     fn serialize_rejection(&self, err: DeserializeError) -> Response;
 }
 
+/// Converts a body collection failure into the protocol's rejection response, retaining
+/// legacy wire behavior: the failure surfaces as an ordinary request-deserialization error.
+pub(crate) fn body_collection_rejection(
+    protocol: &dyn ServerProtocol,
+    error: RequestBodyCollectionError<crate::Error>,
+) -> Response {
+    protocol.serialize_rejection(DeserializeError::Serde(aws_smithy_schema::serde::SerdeError::custom(
+        error.to_string(),
+    )))
+}
+
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct RequestBodyCollectionConfig {
     pub max_bytes: Option<NonZeroUsize>,
@@ -233,8 +260,21 @@ pub struct ServiceRequestBodyConfig {
 }
 
 impl ServiceRequestBodyConfig {
+    /// Computes the provisional allowance before the operation is known.
+    /// An absent operation override inherits `global`; an unlimited field dominates the maximum.
     pub fn for_routing(&self) -> RequestBodyCollectionConfig {
-        self.global
+        let mut maximum = self.global;
+        for config in self.per_operation.values() {
+            maximum.max_bytes = match (maximum.max_bytes, config.max_bytes) {
+                (Some(left), Some(right)) => Some(left.max(right)),
+                _ => None,
+            };
+            maximum.read_timeout = match (maximum.read_timeout, config.read_timeout) {
+                (Some(left), Some(right)) => Some(left.max(right)),
+                _ => None,
+            };
+        }
+        maximum
     }
 
     pub fn for_operation(&self, operation: &ShapeId<'_>) -> RequestBodyCollectionConfig {
@@ -250,6 +290,17 @@ pub enum RequestBodyCollectionError<E> {
     Body(E),
     TooLarge(crate::body::BodyLimitExceeded),
     Timeout { timeout: Duration },
+}
+
+impl<E> RequestBodyCollectionError<E> {
+    /// Maps a transport-specific error without changing collection-limit failures.
+    pub fn map_body_error<F>(self, map: impl FnOnce(E) -> F) -> RequestBodyCollectionError<F> {
+        match self {
+            Self::Body(error) => RequestBodyCollectionError::Body(map(error)),
+            Self::TooLarge(error) => RequestBodyCollectionError::TooLarge(error),
+            Self::Timeout { timeout } => RequestBodyCollectionError::Timeout { timeout },
+        }
+    }
 }
 
 impl<E: std::fmt::Display> std::fmt::Display for RequestBodyCollectionError<E> {
@@ -269,8 +320,19 @@ pub async fn collect_request_body<B>(
     config: &RequestBodyCollectionConfig,
 ) -> Result<Bytes, RequestBodyCollectionError<B::Error>>
 where
-    B: HttpBody,
+    B: HttpBody + 'static,
 {
+    if let Some(bytes) = (&body as &dyn std::any::Any)
+        .downcast_ref::<crate::body::Body>()
+        .and_then(crate::body::Body::buffered_content)
+    {
+        if let Some(limit) = config.max_bytes.filter(|limit| bytes.len() > limit.get()) {
+            return Err(RequestBodyCollectionError::TooLarge(crate::body::BodyLimitExceeded {
+                limit: limit.get(),
+            }));
+        }
+        return Ok(bytes.clone());
+    }
     let limit = config.max_bytes.map(NonZeroUsize::get).unwrap_or(0);
     let collect = async move {
         collect_body_limited(body, limit).await.map_err(|err| match err {

@@ -16,6 +16,7 @@ pub use protocol::{
     RequestBodyCollectionError, ServerEventStreamProtocol, ServerProtocol, ServerRequest, ServiceRequestBodyConfig,
     SharedServerProtocol,
 };
+pub(crate) use protocol::body_collection_rejection;
 
 use aws_smithy_schema::OperationSchema;
 

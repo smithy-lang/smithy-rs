@@ -17,6 +17,12 @@ mod lambda_handler;
 pub mod request_spec;
 
 mod route;
+pub(crate) mod schema;
+
+pub use schema::{
+    OperationHandlerBinding, OperationIndex, ProtocolRouter, RouterBuildError, SchemaRoutingFuture, SharedProtocolRouter,
+    SchemaRoutingOptions, SchemaRoutingService,
+};
 
 pub(crate) mod tiny_map;
 
@@ -38,7 +44,6 @@ use http::Response;
 use http_body::Body as HttpBody;
 use tower::{util::Oneshot, Service, ServiceExt};
 
-use crate::schema::SelectedProtocolOperation;
 use crate::{
     body::{boxed, BoxBody},
     error::BoxError,
@@ -80,113 +85,6 @@ pub trait Router<B> {
 pub struct RoutingService<R, Protocol> {
     router: R,
     _protocol: PhantomData<Protocol>,
-}
-
-/// A route together with the erased protocol and the operation schema that selected it.
-pub struct SchemaRoute<B = hyper::body::Incoming> {
-    route: Route<B>,
-    selection: SelectedProtocolOperation,
-}
-
-impl<B> Clone for SchemaRoute<B> {
-    fn clone(&self) -> Self {
-        Self {
-            route: self.route.clone(),
-            selection: self.selection.clone(),
-        }
-    }
-}
-
-impl<B> SchemaRoute<B> {
-    pub fn new(route: Route<B>, selection: SelectedProtocolOperation) -> Self {
-        Self { route, selection }
-    }
-
-    pub fn selection(&self) -> &SelectedProtocolOperation {
-        &self.selection
-    }
-
-    /// Applies middleware inside the selection boundary and erases the result again.
-    pub fn layer<L>(self, layer: &L) -> Self
-    where
-        L: tower::Layer<Route<B>>,
-        L::Service: Service<http::Request<B>, Response = Response<BoxBody>, Error = std::convert::Infallible>
-            + Clone
-            + Send
-            + 'static,
-        <L::Service as Service<http::Request<B>>>::Future: Send + 'static,
-    {
-        Self {
-            route: Route::new(layer.layer(self.route)),
-            selection: self.selection,
-        }
-    }
-}
-
-impl<B> fmt::Debug for SchemaRoute<B> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("SchemaRoute").finish()
-    }
-}
-
-/// Routes schema-enabled REST requests and records the exact selected protocol operation.
-pub struct SchemaRoutingService<R, Protocol> {
-    router: R,
-    _protocol: PhantomData<Protocol>,
-}
-
-impl<R: Clone, P> Clone for SchemaRoutingService<R, P> {
-    fn clone(&self) -> Self {
-        Self::new(self.router.clone())
-    }
-}
-
-impl<R: fmt::Debug, P> fmt::Debug for SchemaRoutingService<R, P> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("SchemaRoutingService")
-            .field("router", &self.router)
-            .finish()
-    }
-}
-
-impl<R, P> SchemaRoutingService<R, P> {
-    pub fn new(router: R) -> Self {
-        Self {
-            router,
-            _protocol: PhantomData,
-        }
-    }
-
-    pub fn map<RNew, F>(self, f: F) -> SchemaRoutingService<RNew, P>
-    where
-        F: FnOnce(R) -> RNew,
-    {
-        SchemaRoutingService::new(f(self.router))
-    }
-}
-
-impl<R, P, B> Service<http::Request<B>> for SchemaRoutingService<R, P>
-where
-    R: Router<B, Service = SchemaRoute<B>>,
-    R::Error: IntoResponse<P> + Error,
-{
-    type Response = Response<BoxBody>;
-    type Error = std::convert::Infallible;
-    type Future = RoutingFuture<Route<B>, B>;
-
-    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
-    }
-
-    fn call(&mut self, mut req: http::Request<B>) -> Self::Future {
-        match self.router.match_route(&req) {
-            Ok(selected) => {
-                req.extensions_mut().insert(selected.selection);
-                RoutingFuture::from_oneshot(selected.route.oneshot(req))
-            }
-            Err(error) => RoutingFuture::from_response(error.into_response()),
-        }
-    }
 }
 
 impl<R, P> fmt::Debug for RoutingService<R, P>

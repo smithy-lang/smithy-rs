@@ -63,25 +63,6 @@ impl<S> RestRouter<S> {
     }
 }
 
-impl<B> RestRouter<crate::routing::SchemaRoute<B>> {
-    /// Applies route middleware after schema selection while retaining erased route types.
-    pub fn layer_schema<L>(self, layer: &L) -> Self
-    where
-        L: Layer<crate::routing::Route<B>>,
-        L::Service:
-            Service<http::Request<B>, Response = http::Response<BoxBody>, Error = Infallible> + Clone + Send + 'static,
-        <L::Service as Service<http::Request<B>>>::Future: Send + 'static,
-    {
-        Self {
-            routes: self
-                .routes
-                .into_iter()
-                .map(|(spec, route)| (spec, route.layer(layer)))
-                .collect(),
-        }
-    }
-}
-
 impl<B, S> Router<B> for RestRouter<S>
 where
     S: Clone,

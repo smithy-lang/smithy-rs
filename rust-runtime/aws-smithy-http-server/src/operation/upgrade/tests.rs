@@ -4,7 +4,7 @@
  */
 
 use super::*;
-use crate::schema::{HttpModeledError, SharedServerProtocol};
+use crate::schema::{HttpModeledError, ServerProtocol, SharedServerProtocol};
 use aws_smithy_schema::serde::ShapeDeserializer;
 use aws_smithy_schema::{shape_id, OperationSchema, Schema, ShapeType};
 use bytes::Bytes;
@@ -17,6 +17,20 @@ use std::sync::Arc;
 struct HttpOnly;
 
 impl ServerProtocol for HttpOnly {
+    fn build_router(
+        &self,
+        _: &'static aws_smithy_schema::ServiceSchema<'static>,
+        targets: &[crate::routing::OperationIndex],
+        _: &crate::routing::SchemaRoutingOptions,
+    ) -> Result<crate::routing::SharedProtocolRouter, crate::routing::RouterBuildError> {
+        crate::routing::schema::rest_router::<crate::protocol::rest_json_1::RestJson1>(targets)
+    }
+    fn serialize_internal_failure(&self) -> crate::response::Response {
+        crate::response::IntoResponse::<crate::protocol::rest_json_1::RestJson1>::into_response(
+            crate::runtime_error::InternalFailureException,
+        )
+    }
+
     fn protocol_id(&self) -> &'static aws_smithy_schema::ShapeId<'static> {
         static ID: aws_smithy_schema::ShapeId<'static> = shape_id!("test", "httpOnly");
         &ID

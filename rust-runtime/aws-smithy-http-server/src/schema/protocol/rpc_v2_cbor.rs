@@ -50,6 +50,19 @@ impl ServerEventStreamProtocol for RpcV2CborProtocol {
 }
 
 impl ServerProtocol for RpcV2CborProtocol {
+    fn build_router(
+        &self,
+        service: &'static aws_smithy_schema::ServiceSchema<'static>,
+        targets: &[crate::routing::OperationIndex],
+        options: &crate::routing::SchemaRoutingOptions,
+    ) -> Result<crate::routing::SharedProtocolRouter, crate::routing::RouterBuildError> {
+        let _ = (service, options);
+        crate::routing::schema::rpc_v2_cbor_router(service, targets, options)
+    }
+    fn serialize_internal_failure(&self) -> Response {
+        crate::response::IntoResponse::<RpcV2Cbor>::into_response(crate::runtime_error::InternalFailureException)
+    }
+
     fn protocol_id(&self) -> &'static ShapeId<'static> {
         &PROTOCOL_ID
     }

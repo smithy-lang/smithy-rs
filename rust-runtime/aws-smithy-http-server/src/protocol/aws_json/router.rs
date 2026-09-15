@@ -47,10 +47,20 @@ pub(crate) const ROUTE_CUTOFF: usize = 15;
 /// [AWS JSON 1.1]: https://smithy.io/2.0/aws/protocols/aws-json-1_1-protocol.html
 #[derive(Debug, Clone)]
 pub struct AwsJsonRouter<S> {
-    routes: TinyMap<&'static str, S, ROUTE_CUTOFF>,
+    routes: TinyMap<std::borrow::Cow<'static, str>, S, ROUTE_CUTOFF>,
 }
 
 impl<S> AwsJsonRouter<S> {
+    /// Builds routing keys owned by a runtime service schema adapter.
+    pub fn from_owned(iter: impl IntoIterator<Item = (String, S)>) -> Self {
+        Self {
+            routes: iter
+                .into_iter()
+                .map(|(key, value)| (std::borrow::Cow::Owned(key), value))
+                .collect(),
+        }
+    }
+
     /// Applies a [`Layer`] uniformly to all routes.
     pub fn layer<L>(self, layer: L) -> AwsJsonRouter<L::Service>
     where
@@ -74,25 +84,6 @@ impl<S> AwsJsonRouter<S> {
     {
         AwsJsonRouter {
             routes: self.routes.into_iter().map(|(key, s)| (key, Route::new(s))).collect(),
-        }
-    }
-}
-
-impl<B> AwsJsonRouter<crate::routing::SchemaRoute<B>> {
-    /// Applies route middleware after schema selection while retaining erased route types.
-    pub fn layer_schema<L>(self, layer: &L) -> Self
-    where
-        L: Layer<crate::routing::Route<B>>,
-        L::Service:
-            Service<http::Request<B>, Response = http::Response<BoxBody>, Error = Infallible> + Clone + Send + 'static,
-        <L::Service as Service<http::Request<B>>>::Future: Send + 'static,
-    {
-        Self {
-            routes: self
-                .routes
-                .into_iter()
-                .map(|(key, route)| (key, route.layer(layer)))
-                .collect(),
         }
     }
 }
@@ -129,7 +120,10 @@ impl<S> FromIterator<(&'static str, S)> for AwsJsonRouter<S> {
     #[inline]
     fn from_iter<T: IntoIterator<Item = (&'static str, S)>>(iter: T) -> Self {
         Self {
-            routes: iter.into_iter().collect(),
+            routes: iter
+                .into_iter()
+                .map(|(key, value)| (std::borrow::Cow::Borrowed(key), value))
+                .collect(),
         }
     }
 }

@@ -23,8 +23,8 @@ use crate::{
     response::IntoResponse,
     runtime_error::InternalFailureException,
     schema::{
-        collect_request_body, DeserializableShape, DeserializeError, RequestBodyCollectionConfig,
-        SelectedProtocolOperation, ServerProtocol, ServerRequest,
+        collect_request_body, DeserializableShape, DeserializeError, HttpModeledError, RequestBodyCollectionConfig,
+        SelectedProtocolOperation, ServerRequest,
     },
     service::ServiceShape,
 };
@@ -44,17 +44,6 @@ pub struct UpgradePlugin<Extractors> {
 
 /// Protocol-neutral marker for request-part extractors used by [`DynUpgrade`].
 pub struct DynProtocol;
-
-/// Converts a generated operation error enum using the protocol selected by routing.
-pub trait IntoDynResponse {
-    fn into_dyn_response(self, protocol: &dyn ServerProtocol) -> http::Response<BoxBody>;
-}
-
-impl IntoDynResponse for Infallible {
-    fn into_dyn_response(self, _protocol: &dyn ServerProtocol) -> http::Response<BoxBody> {
-        match self {}
-    }
-}
 
 /// Schema-driven, protocol-neutral HTTP upgrade plugin for operations without streaming members.
 #[derive(Debug, Clone)]
@@ -146,7 +135,7 @@ where
     B::Data: Send,
     B::Error: std::error::Error + Send + Sync + 'static,
     S: Service<(Op::Input, Extractors), Response = Op::Output> + Clone + Send + 'static,
-    S::Error: IntoDynResponse + Send + 'static,
+    S::Error: HttpModeledError,
     S::Future: Send + 'static,
 {
     type Response = http::Response<BoxBody>;
@@ -187,9 +176,7 @@ where
                 match collect_request_body(converted.body, &config).await {
                     Ok(bytes) => bytes,
                     Err(err) => {
-                        return Ok(protocol.serialize_rejection(DeserializeError::Serde(
-                            aws_smithy_schema::serde::SerdeError::custom(err.to_string()),
-                        )))
+                        return Ok(crate::schema::body_collection_rejection(&**protocol, err.map_body_error(crate::Error::new)))
                     }
                 }
             } else {
@@ -212,7 +199,7 @@ where
             };
             match service.oneshot((input, extractors)).await {
                 Ok(output) => Ok(protocol.serialize_response(operation.output(), &output)),
-                Err(err) => Ok(err.into_dyn_response(&**protocol)),
+                Err(err) => Ok(protocol.serialize_error(&err)),
             }
         })
     }
@@ -289,7 +276,7 @@ where
     B: HttpBody<Data = bytes::Bytes> + Send + Sync + 'static,
     B::Error: std::error::Error + Send + Sync + 'static,
     S: Service<(Op::Input, Extractors), Response = Op::Output> + Clone + Send + 'static,
-    S::Error: IntoDynResponse + Send + 'static,
+    S::Error: HttpModeledError,
     S::Future: Send + 'static,
 {
     type Response = http::Response<BoxBody>;
@@ -341,9 +328,7 @@ where
                 match collect_request_body(converted.body, &config).await {
                     Ok(bytes) => (bytes, SdkBody::empty()),
                     Err(err) => {
-                        return Ok(protocol.serialize_rejection(DeserializeError::Serde(
-                            aws_smithy_schema::serde::SerdeError::custom(err.to_string()),
-                        )))
+                        return Ok(crate::schema::body_collection_rejection(&**protocol, err.map_body_error(crate::Error::new)))
                     }
                 }
             } else {
@@ -370,7 +355,7 @@ where
             };
             match service.oneshot((input, extractors)).await {
                 Ok(output) => Ok(Op::serialize_streaming_output(output, protocol)),
-                Err(err) => Ok(err.into_dyn_response(&**protocol)),
+                Err(err) => Ok(protocol.serialize_error(&err)),
             }
         })
     }
@@ -583,3 +568,23 @@ where
 
 #[cfg(test)]
 mod tests;
+
+/// Missing-handler fallback using the protocol selected by schema routing.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SchemaMissingFailure;
+impl Service<http::Request<crate::body::Body>> for SchemaMissingFailure {
+    type Response = http::Response<BoxBody>;
+    type Error = Infallible;
+    type Future = Ready<Result<Self::Response, Self::Error>>;
+    fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Infallible>> {
+        Poll::Ready(Ok(()))
+    }
+    fn call(&mut self, request: http::Request<crate::body::Body>) -> Self::Future {
+        error!("the operation has not been set");
+        let selected = request
+            .extensions()
+            .get::<crate::schema::SelectedProtocolOperation>()
+            .expect("schema fallback requires selected protocol context");
+        std::future::ready(Ok(selected.protocol().serialize_internal_failure()))
+    }
+}

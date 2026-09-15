@@ -21,3 +21,15 @@ pub trait HttpModeledError: ModeledError + std::error::Error + Send + Sync + 'st
     /// `@error("client")` shapes and `500` for `@error("server")` shapes.
     fn status_code(&self) -> u16;
 }
+
+// Operations without modeled errors use Infallible. These methods can never be called.
+impl ModeledError for std::convert::Infallible {
+    fn schema(&self) -> &Schema<'_> {
+        match *self {}
+    }
+}
+impl HttpModeledError for std::convert::Infallible {
+    fn status_code(&self) -> u16 {
+        match *self {}
+    }
+}

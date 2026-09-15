@@ -32,6 +32,146 @@ pub type BoxBody = http_body_util::combinators::UnsyncBoxBody<Bytes, Error>;
 /// that need thread safety guarantees.
 pub type BoxBodySync = http_body_util::combinators::BoxBody<Bytes, Error>;
 
+/// A transport-independent request body. Construction does not read the stream.
+///
+/// Its representation is private so buffering and transport-specific optimizations can evolve.
+///
+/// `Body` is `Send + Sync`. The `Sync` bound is required so a request body can be handed
+/// to [`SdkBody::from_body_1_x`] when an operation input has a streaming member; `SdkBody`
+/// only accepts `Sync` bodies. Non-`Sync` sources can be admitted through a stream-based
+/// constructor (`Stream` has no `&self` methods, so a `SyncWrapper` is sound there),
+/// should the need arise.
+///
+/// [`SdkBody::from_body_1_x`]: aws_smithy_types::body::SdkBody::from_body_1_x
+#[derive(Debug)]
+pub struct Body(BodyInner);
+
+#[derive(Debug)]
+enum BodyInner {
+    /// A stream not yet pulled into memory. May have been partially polled.
+    Unbuffered(BoxBodySync),
+    /// Content held in memory, replayed as a data frame then an optional trailers frame.
+    Buffered {
+        bytes: Option<Bytes>,
+        trailers: Option<http::HeaderMap>,
+    },
+}
+
+impl Body {
+    /// Wraps any compatible HTTP body without polling it.
+    pub fn new<B>(body: B) -> Self
+    where
+        B: http_body::Body<Data = Bytes> + Send + Sync + 'static,
+        B::Error: Into<BoxError>,
+    {
+        try_downcast(body).unwrap_or_else(|body| Self(BodyInner::Unbuffered(boxed_sync(body))))
+    }
+
+    /// Builds an already-buffered body, preserving any trailers read with the content.
+    pub(crate) fn buffered(bytes: Bytes, trailers: Option<http::HeaderMap>) -> Self {
+        Self(BodyInner::Buffered {
+            bytes: Some(bytes),
+            trailers,
+        })
+    }
+
+    // Only unpolled buffered bodies qualify. Polling or wrapping consumes this representation.
+    pub(crate) fn buffered_content(&self) -> Option<&Bytes> {
+        match &self.0 {
+            BodyInner::Buffered { bytes, .. } => bytes.as_ref(),
+            BodyInner::Unbuffered(_) => None,
+        }
+    }
+
+    /// Creates an empty request body.
+    pub fn empty() -> Self {
+        Self::new(http_body_util::Empty::<Bytes>::new())
+    }
+
+    /// Creates a request body containing buffered bytes.
+    pub fn from_bytes(bytes: Bytes) -> Self {
+        Self(BodyInner::Buffered {
+            bytes: Some(bytes),
+            trailers: None,
+        })
+    }
+}
+
+impl Default for Body {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
+impl From<Bytes> for Body {
+    fn from(bytes: Bytes) -> Self {
+        Self::from_bytes(bytes)
+    }
+}
+
+impl From<Vec<u8>> for Body {
+    fn from(bytes: Vec<u8>) -> Self {
+        Self::from_bytes(bytes.into())
+    }
+}
+
+impl From<&'static [u8]> for Body {
+    fn from(bytes: &'static [u8]) -> Self {
+        Self::from_bytes(Bytes::from_static(bytes))
+    }
+}
+
+impl From<String> for Body {
+    fn from(string: String) -> Self {
+        Self::from_bytes(string.into())
+    }
+}
+
+impl From<&'static str> for Body {
+    fn from(string: &'static str) -> Self {
+        Self::from_bytes(Bytes::from_static(string.as_bytes()))
+    }
+}
+
+impl http_body::Body for Body {
+    type Data = Bytes;
+    type Error = Error;
+
+    fn poll_frame(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Result<http_body::Frame<Bytes>, Error>>> {
+        match &mut self.0 {
+            BodyInner::Unbuffered(body) => std::pin::Pin::new(body).poll_frame(cx),
+            BodyInner::Buffered { bytes, trailers } => std::task::Poll::Ready(
+                bytes
+                    .take()
+                    .filter(|bytes| !bytes.is_empty())
+                    .map(http_body::Frame::data)
+                    .or_else(|| trailers.take().map(http_body::Frame::trailers))
+                    .map(Ok),
+            ),
+        }
+    }
+
+    fn is_end_stream(&self) -> bool {
+        match &self.0 {
+            BodyInner::Unbuffered(body) => body.is_end_stream(),
+            BodyInner::Buffered { bytes, trailers } => {
+                bytes.as_ref().is_none_or(|bytes| bytes.is_empty()) && trailers.is_none()
+            }
+        }
+    }
+    fn size_hint(&self) -> http_body::SizeHint {
+        match &self.0 {
+            BodyInner::Unbuffered(body) => body.size_hint(),
+            BodyInner::Buffered { bytes, .. } => {
+                http_body::SizeHint::with_exact(bytes.as_ref().map_or(0, |bytes| bytes.len() as u64))
+            }
+        }
+    }
+}
+
 // ============================================================================
 // Body Construction Functions
 // ============================================================================

@@ -51,7 +51,7 @@ pub enum Error {
 /// [Smithy RPC v2 CBOR]: https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html
 #[derive(Debug, Clone)]
 pub struct RpcV2CborRouter<S> {
-    routes: TinyMap<&'static str, S, ROUTE_CUTOFF>,
+    routes: TinyMap<std::borrow::Cow<'static, str>, S, ROUTE_CUTOFF>,
 }
 
 /// Requests for the `rpcv2Cbor` protocol MUST NOT contain an `x-amz-target` or `x-amzn-target`
@@ -64,6 +64,16 @@ const FORBIDDEN_HEADERS: &[&str] = &["x-amz-target", "x-amzn-target"];
 const IDENTIFIER_PATTERN: &str = r#"((_+([A-Za-z]|[0-9]))|[A-Za-z])[A-Za-z0-9_]*"#;
 
 impl<S> RpcV2CborRouter<S> {
+    /// Builds routing keys owned by a runtime service schema adapter.
+    pub fn from_owned(iter: impl IntoIterator<Item = (String, S)>) -> Self {
+        Self {
+            routes: iter
+                .into_iter()
+                .map(|(key, value)| (std::borrow::Cow::Owned(key), value))
+                .collect(),
+        }
+    }
+
     // TODO(https://github.com/smithy-lang/smithy-rs/issues/3748) Consider building a nom parser.
     fn uri_path_regex() -> &'static Regex {
         // Every request for the `rpcv2Cbor` protocol MUST be sent to a URL with the
@@ -121,25 +131,6 @@ impl<S> RpcV2CborRouter<S> {
                 .routes
                 .into_iter()
                 .map(|(key, route)| (key, layer.layer(route)))
-                .collect(),
-        }
-    }
-}
-
-impl<B> RpcV2CborRouter<crate::routing::SchemaRoute<B>> {
-    /// Applies route middleware after schema selection while retaining erased route types.
-    pub fn layer_schema<L>(self, layer: &L) -> Self
-    where
-        L: Layer<crate::routing::Route<B>>,
-        L::Service:
-            Service<http::Request<B>, Response = http::Response<BoxBody>, Error = Infallible> + Clone + Send + 'static,
-        <L::Service as Service<http::Request<B>>>::Future: Send + 'static,
-    {
-        Self {
-            routes: self
-                .routes
-                .into_iter()
-                .map(|(key, route)| (key, route.layer(layer)))
                 .collect(),
         }
     }
@@ -263,7 +254,10 @@ impl<S> FromIterator<(&'static str, S)> for RpcV2CborRouter<S> {
     #[inline]
     fn from_iter<T: IntoIterator<Item = (&'static str, S)>>(iter: T) -> Self {
         Self {
-            routes: iter.into_iter().collect(),
+            routes: iter
+                .into_iter()
+                .map(|(key, value)| (std::borrow::Cow::Borrowed(key), value))
+                .collect(),
         }
     }
 }
