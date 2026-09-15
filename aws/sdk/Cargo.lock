@@ -438,7 +438,7 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.9.2"
+version = "1.9.4"
 dependencies = [
  "arbitrary",
  "aws-credential-types",
@@ -1227,7 +1227,7 @@ dependencies = [
 
 [[package]]
 name = "aws-sigv4"
-version = "1.5.1"
+version = "1.5.3"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-eventstream",
@@ -1325,7 +1325,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-dns"
-version = "0.2.0"
+version = "0.2.2"
 dependencies = [
  "aws-smithy-runtime-api",
  "criterion",
@@ -1335,7 +1335,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-eventstream"
-version = "0.61.2"
+version = "0.61.4"
 dependencies = [
  "arbitrary",
  "aws-smithy-types",
@@ -1378,7 +1378,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-client"
-version = "1.4.0"
+version = "1.4.2"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-protocol-test",
@@ -1478,7 +1478,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-observability-otel"
-version = "0.2.0"
+version = "0.2.2"
 dependencies = [
  "async-global-executor",
  "async-task",
@@ -1511,7 +1511,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-query"
-version = "0.62.0"
+version = "0.62.1"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-schema",
@@ -1523,7 +1523,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.14.0"
+version = "1.14.2"
 dependencies = [
  "approx",
  "aws-smithy-async",
@@ -1553,7 +1553,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.16.0"
+version = "1.16.2"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api-macros",
@@ -1579,7 +1579,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-schema"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",
@@ -1588,7 +1588,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.6.3"
+version = "1.6.4"
 dependencies = [
  "base64 0.13.1",
  "base64-simd",
