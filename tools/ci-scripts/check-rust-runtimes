@@ -68,7 +68,29 @@ do
         cargo +"${RUST_NIGHTLY_VERSION}" minimal-versions tree --direct || echo "cargo minimal-versions tree failed"
         # The `--direct` flag is used to test only direct dependencies, rather than all transitive dependencies. See:
         # https://doc.rust-lang.org/cargo/reference/unstable.html#direct-minimal-versions
-        cargo +"${RUST_NIGHTLY_VERSION}" minimal-versions check --direct --all-features
+        #
+        # TEMPORARY EXCLUSION: `aws-smithy-http-server-metrics` is excluded because it cannot pass
+        # this check until the published `aws-smithy-json` lines are repaired.
+        #
+        # Its `aws-smithy-http-server-065` feature depends on the *published* `aws-smithy-http-server
+        # = "0.65"`, every version of which requires `aws-smithy-json ^0.61.x`. Every published
+        # `aws-smithy-json` before 0.64.0 fails to compile against `aws-smithy-types >= 1.7.0`,
+        # which shipped the source-breaking `Document` change (`Document::Object` now wraps
+        # `DocumentObject` rather than `HashMap`, and `Document` is `#[non_exhaustive]`).
+        #
+        # `minimal-versions` regenerates the lockfile, discarding the committed pin that otherwise
+        # holds the registry copy of `aws-smithy-types` at a compatible 1.6.3. Because `--direct`
+        # minimizes only *direct* dependencies, the transitive `aws-smithy-types` resolves to the
+        # newest 1.x and the old codec no longer builds.
+        #
+        # Remove this exclusion once the pre-0.64 `aws-smithy-json` lines are republished with an
+        # upper bound on `aws-smithy-types`, or once the 0.65 back-compat feature is dropped.
+        if [[ "${runtime_path}" == "rust-runtime" ]]; then
+            cargo +"${RUST_NIGHTLY_VERSION}" minimal-versions check --direct --all-features \
+                --exclude aws-smithy-http-server-metrics
+        else
+            cargo +"${RUST_NIGHTLY_VERSION}" minimal-versions check --direct --all-features
+        fi
 
         for crate_path in *; do
             if [[ -f "${crate_path}/Cargo.toml" ]]; then
