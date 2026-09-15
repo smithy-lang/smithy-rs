@@ -578,6 +578,174 @@ async fn test_mixed_protocol_concurrent_connections() {
     let _ = tokio::time::timeout(Duration::from_secs(2), server_handle).await;
 }
 
+#[tokio::test]
+async fn test_serve_defaults_to_8192_connections() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("failed to bind");
+    let server = aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(ok_service)));
+
+    assert!(
+        format!("{server:?}").contains("max_connections: Some(8192)"),
+        "serve should default to 8192 concurrent connections"
+    );
+}
+
+#[tokio::test]
+async fn test_serve_max_connections_blocks_excess_connections() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let accepted_connections = Arc::new(AtomicUsize::new(0));
+    let accepted_connections_clone = accepted_connections.clone();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("failed to bind")
+        .tap_io(move |_| {
+            accepted_connections_clone.fetch_add(1, Ordering::SeqCst);
+        });
+    let addr = listener.local_addr().unwrap();
+
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+    let server_handle = tokio::spawn(async move {
+        aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(ok_service)))
+            .max_connections(1)
+            .with_graceful_shutdown(async {
+                shutdown_rx.await.ok();
+            })
+            .await
+    });
+
+    let first_connection = tokio::net::TcpStream::connect(addr)
+        .await
+        .expect("failed to open first connection");
+    for _ in 0..20 {
+        if accepted_connections.load(Ordering::SeqCst) == 1 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_eq!(accepted_connections.load(Ordering::SeqCst), 1);
+
+    let mut second_connection = tokio::net::TcpStream::connect(addr)
+        .await
+        .expect("failed to open second connection");
+    second_connection
+        .write_all(b"GET /test HTTP/1.1\r\nHost: localhost\r\n\r\n")
+        .await
+        .expect("failed to write second request");
+
+    let mut buffer = vec![0u8; 4096];
+    assert!(
+        tokio::time::timeout(Duration::from_millis(200), second_connection.read(&mut buffer))
+            .await
+            .is_err(),
+        "second request should wait while the first connection holds the only slot"
+    );
+    assert_eq!(accepted_connections.load(Ordering::SeqCst), 1);
+
+    drop(first_connection);
+
+    let n = tokio::time::timeout(Duration::from_secs(2), second_connection.read(&mut buffer))
+        .await
+        .expect("second request should complete after the first connection closes")
+        .expect("failed to read second response");
+    assert!(String::from_utf8_lossy(&buffer[..n]).contains("HTTP/1.1 200 OK"));
+
+    drop(second_connection);
+    shutdown_tx.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(2), server_handle)
+        .await
+        .expect("server did not shutdown in time")
+        .expect("server task panicked")
+        .expect("server should shutdown cleanly");
+}
+
+#[tokio::test]
+async fn test_graceful_shutdown_interrupts_connection_limit_wait() {
+    let accepted_connections = Arc::new(AtomicUsize::new(0));
+    let accepted_connections_clone = accepted_connections.clone();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("failed to bind")
+        .tap_io(move |_| {
+            accepted_connections_clone.fetch_add(1, Ordering::SeqCst);
+        });
+    let addr = listener.local_addr().unwrap();
+
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+    let server_handle = tokio::spawn(async move {
+        aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(ok_service)))
+            .max_connections(1)
+            .with_graceful_shutdown(async {
+                shutdown_rx.await.ok();
+            })
+            .await
+    });
+
+    let connection = tokio::net::TcpStream::connect(addr)
+        .await
+        .expect("failed to open connection");
+    for _ in 0..20 {
+        if accepted_connections.load(Ordering::SeqCst) == 1 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_eq!(accepted_connections.load(Ordering::SeqCst), 1);
+
+    shutdown_tx.send(()).unwrap();
+    drop(connection);
+
+    tokio::time::timeout(Duration::from_secs(2), server_handle)
+        .await
+        .expect("shutdown should interrupt the wait for a connection permit")
+        .expect("server task panicked")
+        .expect("server should shutdown cleanly");
+}
+
+#[tokio::test]
+async fn test_disable_connection_limit_accepts_multiple_connections() {
+    let accepted_connections = Arc::new(AtomicUsize::new(0));
+    let accepted_connections_clone = accepted_connections.clone();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("failed to bind")
+        .tap_io(move |_| {
+            accepted_connections_clone.fetch_add(1, Ordering::SeqCst);
+        });
+    let addr = listener.local_addr().unwrap();
+
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+    let server_handle = tokio::spawn(async move {
+        aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(ok_service)))
+            .max_connections(1)
+            .disable_connection_limit()
+            .with_graceful_shutdown(async {
+                shutdown_rx.await.ok();
+            })
+            .await
+    });
+
+    let first_connection = tokio::net::TcpStream::connect(addr).await.unwrap();
+    let second_connection = tokio::net::TcpStream::connect(addr).await.unwrap();
+    for _ in 0..20 {
+        if accepted_connections.load(Ordering::SeqCst) == 2 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_eq!(accepted_connections.load(Ordering::SeqCst), 2);
+
+    drop(first_connection);
+    drop(second_connection);
+    shutdown_tx.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(2), server_handle)
+        .await
+        .expect("server did not shutdown in time")
+        .expect("server task panicked")
+        .expect("server should shutdown cleanly");
+}
+
 /// Test that `limit_connections()` enforces the connection limit correctly using semaphores.
 #[tokio::test]
 async fn test_limit_connections_blocks_excess() {
