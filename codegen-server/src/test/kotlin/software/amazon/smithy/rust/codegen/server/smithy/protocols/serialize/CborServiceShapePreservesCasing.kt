@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.ServerHttpTestHelpers
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
@@ -48,7 +49,7 @@ class CborServiceShapePreservesCasing {
                     "Ciborium" to CargoDependency.Ciborium.toDevDependency().toType(),
                     "Hyper" to RuntimeType.hyper(codegenContext.runtimeConfig),
                     "Http" to RuntimeType.http(codegenContext.runtimeConfig),
-                    "Tower" to RuntimeType.Tower,
+                    "Tower" to ServerCargoDependency.Tower.toType(),
                     "HashMap" to RuntimeType.HashMap,
                     *RuntimeType.preludeScope,
                 )

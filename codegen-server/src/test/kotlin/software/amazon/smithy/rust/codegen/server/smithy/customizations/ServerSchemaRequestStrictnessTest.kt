@@ -143,7 +143,7 @@ internal class ServerSchemaRequestStrictnessTest {
                             let calls = Arc::new(AtomicUsize::new(0));
                             let counter = calls.clone();
                             let config = crate::service::StrictServiceConfig::builder().build();
-                            let service = crate::service::StrictService::builder::<#{Server}::body::BoxBodySync, _, _, _>(config)
+                            let service = crate::service::StrictService::builder(config)
                                 .read(move |input: crate::input::ReadInput| {
                                     if let #{Some}(child) = input.child { assert!(child.flag); }
                                     counter.fetch_add(1, Ordering::SeqCst);

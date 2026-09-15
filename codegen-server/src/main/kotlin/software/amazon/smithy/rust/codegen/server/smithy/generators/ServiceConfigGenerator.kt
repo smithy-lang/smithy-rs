@@ -160,8 +160,8 @@ class ServiceConfigGenerator(
             "PluginStack" to smithyHttpServer.resolve("plugin::PluginStack"),
             "ModelMarker" to smithyHttpServer.resolve("plugin::ModelMarker"),
             "HttpMarker" to smithyHttpServer.resolve("plugin::HttpMarker"),
-            "Tower" to RuntimeType.Tower,
-            "Stack" to RuntimeType.Tower.resolve("layer::util::Stack"),
+            "Tower" to ServerCargoDependency.Tower.toType(),
+            "Stack" to ServerCargoDependency.Tower.toType().resolve("layer::util::Stack"),
         )
     private val serviceName = codegenContext.serviceShape.id.name.toPascalCase()
 
@@ -396,7 +396,7 @@ class ServiceConfigGenerator(
                     }
 
                 val layersReturnTy =
-                    it.initializer.layerBindings.stackReturnType("L", RuntimeType.Tower.resolve("layer::util::Stack"))
+                    it.initializer.layerBindings.stackReturnType("L", ServerCargoDependency.Tower.toType().resolve("layer::util::Stack"))
                 val httpPluginsReturnTy =
                     it.initializer.httpPluginBindings.stackReturnType("H", smithyHttpServer.resolve("plugin::PluginStack"))
                 val modelPluginsReturnTy =

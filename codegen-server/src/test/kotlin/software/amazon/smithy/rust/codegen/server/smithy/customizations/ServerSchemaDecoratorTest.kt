@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.ObjectNode
@@ -158,6 +159,11 @@ internal class ServerSchemaDecoratorTest {
             val src = server.path.resolve("src")
             src.resolve("protocol_serde").toFile().exists() shouldBe (server.httpVersion == HttpTestVersion.HTTP_0_X)
             if (server.httpVersion == HttpTestVersion.HTTP_1_X) {
+                val service = src.resolve("service.rs").readText()
+                service shouldContain "from_operation_handler_bindings_with_options"
+                service shouldNotContain "request_specs"
+                service shouldNotContain "RestRouter"
+                service shouldNotContain "SchemaRoute::new"
                 src.toFile().walkTopDown().filter { it.isFile }.forEach {
                     it.readText() shouldNotContain "protocol_serde"
                 }

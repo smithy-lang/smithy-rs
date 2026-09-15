@@ -19,12 +19,14 @@ import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 
 /**
  * Generates a unified error enum for [operation]. [ErrorGenerator] handles generating the individual variants,
@@ -35,6 +37,7 @@ open class ServerOperationErrorGenerator(
     private val symbolProvider: RustSymbolProvider,
     private val operationOrEventStream: Shape,
     private val schemaSerde: Boolean = false,
+    private val runtimeConfig: RuntimeConfig = RuntimeConfig(),
 ) {
     private val symbol = symbolProvider.toSymbol(operationOrEventStream)
 
@@ -107,14 +110,24 @@ open class ServerOperationErrorGenerator(
         }
 
         if (schemaSerde && operationOrEventStream is OperationShape) {
-            writer.rustBlock("impl ::aws_smithy_http_server::operation::IntoDynResponse for ${errorSymbol.name}") {
-                rustBlock("fn into_dyn_response(self, protocol: &dyn ::aws_smithy_http_server::schema::ServerProtocol) -> ::aws_smithy_http_server::http::Response<::aws_smithy_http_server::body::BoxBody>") {
-                    rustBlock("match self") {
-                        errors.forEach {
-                            val variant = symbolProvider.toSymbol(it).name
-                            rust("${errorSymbol.name}::$variant(inner) => protocol.serialize_error(&inner),")
-                        }
-                    }
+            val schema = RuntimeType.smithySchema(runtimeConfig)
+            val serializable = schema.resolve("serde::SerializableStruct")
+            val server = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+            val modeledError = server.resolve("schema::ModeledError")
+            val httpModeledError = server.resolve("schema::HttpModeledError")
+            writer.rustBlock("impl #T for ${errorSymbol.name}", serializable) {
+                rustBlock("fn serialize_members(&self, serializer: &mut dyn #T) -> #T<(), #T>", schema.resolve("serde::ShapeSerializer"), RuntimeType.std.resolve("result::Result"), schema.resolve("serde::SerdeError")) {
+                    delegateToVariants(errors, errorSymbol) { rust("#T::serialize_members(_inner, serializer)", serializable) }
+                }
+            }
+            writer.rustBlock("impl #T for ${errorSymbol.name}", modeledError) {
+                rustBlock("fn schema(&self) -> &#T<'_>", schema.resolve("Schema")) {
+                    delegateToVariants(errors, errorSymbol) { rust("#T::schema(_inner)", modeledError) }
+                }
+            }
+            writer.rustBlock("impl #T for ${errorSymbol.name}", httpModeledError) {
+                rustBlock("fn status_code(&self) -> u16") {
+                    delegateToVariants(errors, errorSymbol) { rust("#T::status_code(_inner)", httpModeledError) }
                 }
             }
         }

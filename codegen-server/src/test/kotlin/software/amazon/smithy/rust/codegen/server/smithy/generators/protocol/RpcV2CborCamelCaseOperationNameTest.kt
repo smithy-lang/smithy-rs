@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSetting
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.ServerHttpTestHelpers
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
@@ -110,7 +111,7 @@ class RpcV2CborCamelCaseOperationNameTest {
                     "Ciborium" to CargoDependency.Ciborium.toDevDependency().toType(),
                     "Hyper" to RuntimeType.hyper(codegenContext.runtimeConfig),
                     "Http" to RuntimeType.http(codegenContext.runtimeConfig),
-                    "Tower" to RuntimeType.Tower,
+                    "Tower" to ServerCargoDependency.Tower.toType(),
                     "HashMap" to RuntimeType.HashMap,
                     *RuntimeType.preludeScope,
                 )
@@ -346,7 +347,7 @@ class RpcV2CborCamelCaseOperationNameTest {
                     "Ciborium" to CargoDependency.Ciborium.toDevDependency().toType(),
                     "Hyper" to RuntimeType.hyper(codegenContext.runtimeConfig),
                     "Http" to RuntimeType.http(codegenContext.runtimeConfig),
-                    "Tower" to RuntimeType.Tower,
+                    "Tower" to ServerCargoDependency.Tower.toType(),
                     "HashMap" to RuntimeType.HashMap,
                     *RuntimeType.preludeScope,
                 )
@@ -533,7 +534,7 @@ class RpcV2CborCamelCaseOperationNameTest {
                     "SerdeJson" to CargoDependency.SerdeJson.toDevDependency().toType(),
                     "Ciborium" to CargoDependency.Ciborium.toDevDependency().toType(),
                     "Http" to RuntimeType.http(codegenContext.runtimeConfig),
-                    "Tower" to RuntimeType.Tower,
+                    "Tower" to ServerCargoDependency.Tower.toType(),
                     "HashMap" to RuntimeType.HashMap,
                     *RuntimeType.preludeScope,
                 )

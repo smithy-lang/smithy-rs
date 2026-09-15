@@ -179,7 +179,7 @@ internal class ServiceConfigGeneratorTest {
                     get() = 69
 
                 override fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> {
-                    val identityLayer = RuntimeType.Tower.resolve("layer::util::Identity")
+                    val identityLayer = ServerCargoDependency.Tower.toType().resolve("layer::util::Identity")
                     val codegenScope =
                         arrayOf(
                             "Identity" to identityLayer,
@@ -273,7 +273,7 @@ internal class ServiceConfigGeneratorTest {
                     get() = 69
 
                 override fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> {
-                    val identityLayer = RuntimeType.Tower.resolve("layer::util::Identity")
+                    val identityLayer = ServerCargoDependency.Tower.toType().resolve("layer::util::Identity")
                     return listOf(
                         ConfigMethod(
                             name = "invalid_generic_bindings",

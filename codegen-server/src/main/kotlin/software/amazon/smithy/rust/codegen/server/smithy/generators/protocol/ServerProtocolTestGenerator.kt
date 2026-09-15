@@ -317,7 +317,7 @@ class ServerProtocolTestGenerator(
             "Hyper" to RuntimeType.hyper(codegenContext.runtimeConfig),
             "MediaType" to protocolTestRuntimeType.resolve("MediaType"),
             "Tokio" to ServerCargoDependency.TokioDev.toType(),
-            "Tower" to RuntimeType.Tower,
+            "Tower" to ServerCargoDependency.Tower.toType(),
             "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
             "decode_body_data" to protocolTestRuntimeType.resolve("decode_body_data"),
         )
@@ -410,7 +410,7 @@ class ServerProtocolTestGenerator(
                 if (shape.hasTrait<ErrorTrait>()) {
                     writable {
                         rustTemplate(
-                            "{ use #{SmithyHttpServer}::operation::IntoDynResponse; output.into_dyn_response(&*protocol) }",
+                            "protocol.serialize_error(&output)",
                             *codegenScope,
                         )
                     }
@@ -575,7 +575,7 @@ class ServerProtocolTestGenerator(
         if (runtimeConfig.httpVersion == software.amazon.smithy.rust.codegen.core.smithy.HttpVersion.Http1x) {
             val bodyUtil = software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.HttpBodyUtil01x.toType()
 
-            val boxFn = if (needsSync) "boxed_sync" else "boxed"
+            val boxFn = if (needsSync || schemaSerde) "boxed_sync" else "boxed"
             if (bytesExpr != null) {
                 rustTemplate(
                     "#{BoxFn}(#{Full}::new($bytesExpr))",
@@ -657,7 +657,7 @@ class ServerProtocolTestGenerator(
             ##[allow(unused_mut)]
             let (sender, mut receiver) = #{Tokio}::sync::mpsc::channel(1);
             let config = crate::service::${serviceName}Config::builder().build();
-            let service = crate::service::$serviceName::builder::<#{BodyType}, _, _, _>(config)
+            let service = crate::service::$serviceName::builder${if (schemaSerde) "" else "::<#{BodyType}, _, _, _>"}(config)
                 .$operationName(
                     // Rust 1.94+ flags the moved `sender` as "value captured is never read"
                     // since `send()` only borrows it.

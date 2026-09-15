@@ -5,17 +5,11 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators.protocol
 
-import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
-import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
-import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
-import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -67,13 +61,13 @@ interface ServerProtocol : Protocol {
     fun markerStruct(): RuntimeType
 
     /** Returns the Rust router type. */
-    fun routerType(): RuntimeType
+    fun routerType(): RuntimeType = error("This protocol does not support legacy router generation")
 
     /**
      * Returns the name of the constructor to be used on the `Router` type, to instantiate a `Router` using this
      * protocol.
      */
-    fun serverRouterRuntimeConstructor(): String
+    fun serverRouterRuntimeConstructor(): String = error("This protocol does not support legacy router generation")
 
     /**
      * Returns a writable for the `RequestSpec` for an operation.
@@ -83,12 +77,13 @@ interface ServerProtocol : Protocol {
         operationName: String,
         serviceName: String,
         requestSpecModule: RuntimeType,
-    ): Writable
+    ): Writable = error("This protocol does not support legacy request specification generation")
 
     /**
      * Returns the Rust type of the `RequestSpec` for an operation.
      */
-    fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType
+    fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType =
+        error("This protocol does not support legacy request specification generation")
 
     /**
      * In some protocols, such as `restJson1` and `rpcv2Cbor`,

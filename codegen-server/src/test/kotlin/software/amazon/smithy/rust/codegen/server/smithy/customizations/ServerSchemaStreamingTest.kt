@@ -174,7 +174,7 @@ internal class ServerSchemaStreamingTest {
     private val echoService =
         """
         let config = crate::service::ChatServiceConfig::builder().build();
-        let service = crate::service::ChatService::builder::<#{SmithyHttpServer}::body::BoxBodySync, _, _, _>(config)
+        let service = crate::service::ChatService::builder(config)
             .chat(|mut input: crate::input::ChatInput| async move {
                 let topic = format!("{}/{}", input.room, input.nick.unwrap_or_default());
                 let mut echoed = #{Vec}::new();
@@ -355,6 +355,10 @@ internal class ServerSchemaStreamingTest {
         ##[derive(Debug)]
         struct HttpOnly;
         impl #{SmithyHttpServer}::schema::ServerProtocol for HttpOnly {
+            fn build_router(&self, _: &'static #{Schema}::ServiceSchema<'static>, _: &[#{SmithyHttpServer}::routing::OperationIndex], _: &#{SmithyHttpServer}::routing::SchemaRoutingOptions)
+                -> #{Result}<#{SmithyHttpServer}::routing::SharedProtocolRouter, #{SmithyHttpServer}::routing::RouterBuildError> { unreachable!() }
+            fn serialize_internal_failure(&self) -> #{SmithyHttpServer}::response::Response { unreachable!() }
+
             fn protocol_id(&self) -> &'static #{Schema}::ShapeId<'static> {
                 static ID: #{Schema}::ShapeId<'static> = #{Schema}::shape_id!("test", "HttpOnly");
                 &ID
@@ -383,7 +387,7 @@ internal class ServerSchemaStreamingTest {
     private val delayedInputTest =
         """
         let config = crate::service::ChatServiceConfig::builder().build();
-        let service = crate::service::ChatService::builder::<#{SmithyHttpServer}::body::BoxBodySync, _, _, _>(config)
+        let service = crate::service::ChatService::builder(config)
             .chat(|input: crate::input::ChatInput| async move {
                 // Preserve the Pokemon regression: input is only polled while sending output.
                 let events = #{FuturesUtil}::stream::unfold(input.events, |mut receiver| async move {
@@ -414,7 +418,7 @@ internal class ServerSchemaStreamingTest {
             SharedServerProtocol::new(#{SmithyHttpServer}::protocol::rest_json_1::RestJson1Protocol::default())
         };
         let config = crate::service::ChatServiceConfig::builder().build();
-        let service = crate::service::ChatService::builder::<#{SmithyHttpServer}::body::BoxBodySync, _, _, _>(config)
+        let service = crate::service::ChatService::builder(config)
             .upload(|mut input: crate::input::UploadInput| async move {
                 let mut count = 0;
                 while input.events.recv().await.unwrap().is_some() { count += 1; }
@@ -468,7 +472,7 @@ internal class ServerSchemaStreamingTest {
         let protocol = #{SmithyHttpServer}::schema::SharedServerProtocol::new(
             #{SmithyHttpServer}::protocol::aws_json_11::AwsJson1_1Protocol::default());
         let selected = protocol.clone();
-        let layer = #{Tower}::util::MapRequestLayer::new(move |mut request: #{Http}::Request<#{SmithyHttpServer}::body::BoxBodySync>| {
+        let layer = #{Tower}::util::MapRequestLayer::new(move |mut request: #{Http}::Request<#{SmithyHttpServer}::body::Body>| {
             let operation = request.extensions().get::<#{SmithyHttpServer}::schema::SelectedProtocolOperation>().unwrap().operation();
             request.extensions_mut().insert(#{SmithyHttpServer}::schema::SelectedProtocolOperation::new(selected.clone(), operation));
             request
@@ -555,7 +559,7 @@ internal class ServerSchemaStreamingTest {
                         rustTemplate(
                             """
                         let config = crate::service::ChatServiceConfig::builder().build();
-                        let service = crate::service::ChatService::builder::<#{SmithyHttpServer}::body::BoxBodySync, _, _, _>(config)
+                        let service = crate::service::ChatService::builder(config)
                             .blob_echo(|input: crate::input::BlobEchoInput| async move {
                                 #{Ok}::<_, crate::error::BlobEchoError>(crate::output::BlobEchoOutput { data: input.data })
                             }).build_unchecked();

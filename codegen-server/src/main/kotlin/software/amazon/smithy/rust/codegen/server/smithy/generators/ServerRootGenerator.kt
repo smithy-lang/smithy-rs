@@ -263,7 +263,7 @@ open class ServerRootGenerator(
             //!         .push(LoggingPlugin)
             //!         .push(MetricsPlugin);
             //! let config = ${serviceName}Config::builder().build()$unwrapConfigBuilder;
-            //! let builder: $builderName<#{Body}, _, _, _> = $serviceName::builder(config);
+            //! let builder: $builderName<${if (codegenContext.usesSchemaHttpSerde) "_, _, _" else "#{Body}, _, _, _"}> = $serviceName::builder(config);
             //! ```
             //!
             //! Check out [`crate::server::plugin`] to learn more about plugins.
@@ -378,9 +378,9 @@ open class ServerRootGenerator(
             HttpVersion.Http1x -> {
                 rustTemplate(
                     """
-                        //! [`serve`]: crate::serve
-                        //! [hyper server]: https://docs.rs/hyper/latest/hyper/server/index.html
-                        """,
+                    //! [`serve`]: crate::serve
+                    //! [hyper server]: https://docs.rs/hyper/latest/hyper/server/index.html
+                    """,
                 )
             }
         }
@@ -408,7 +408,8 @@ open class ServerRootGenerator(
                 ${serviceName}ConfigBuilder,
                 $configErrorReExport
                 ${serviceName}Builder,
-                MissingOperationsError
+                MissingOperationsError,
+                ${if (codegenContext.usesSchemaHttpSerde) "BuildError," else ""}
             };
             """,
         )

@@ -759,6 +759,7 @@ open class ServerCodegenVisitor(
                 codegenContext.symbolProvider,
                 shape,
                 codegenContext.usesSchemaHttpSerde,
+                codegenContext.runtimeConfig,
             ).render(this)
         }
 

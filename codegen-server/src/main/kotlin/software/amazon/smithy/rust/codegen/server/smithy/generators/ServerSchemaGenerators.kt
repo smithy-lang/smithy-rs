@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
-import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
@@ -113,7 +112,7 @@ class ServerServiceSchemaGenerator(
 
     private fun renderService(writer: RustWriter) {
         val protocols =
-            ServiceIndex.of(model).getProtocols(service).keys.sorted().joinToString(", ") { shapeIdExpr(it) }
+            shapeIdExpr(codegenContext.protocol)
         val operationRefs = operations.joinToString(", ") { "&super::operations::${operationConstName(it)}" }
         val version = service.version.takeIf { it.isNotEmpty() }?.let { "Some(${it.dq()})" } ?: "None"
         writer.rustTemplate(
