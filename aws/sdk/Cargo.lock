@@ -1271,7 +1271,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-cbor"
-version = "0.62.0"
+version = "0.62.1"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-schema",
@@ -1645,7 +1645,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-xml"
-version = "0.62.0"
+version = "0.62.1"
 dependencies = [
  "aws-smithy-protocol-test",
  "aws-smithy-runtime-api",
