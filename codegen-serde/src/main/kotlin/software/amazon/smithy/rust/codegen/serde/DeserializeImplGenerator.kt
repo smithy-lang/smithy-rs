@@ -781,10 +781,7 @@ class DeserializeImplGenerator(private val codegenContext: CodegenContext) {
                     where
                         A: #{serde}::de::MapAccess<'de>,
                     {
-                        // `DocumentObject` rather than a `HashMap` intermediate: a document
-                        // parsed from the wire must iterate in the order its entries appeared
-                        // in the source data, and a `HashMap` would discard that order.
-                        let mut result = #{DocumentObject}::with_capacity(
+                        let mut result = #{HashMap}::with_capacity(
                             map.size_hint().unwrap_or(0).min(10_000)
                         );
                         while let #{Some}(key) = map.next_key::<#{String}>()? {
@@ -800,8 +797,8 @@ class DeserializeImplGenerator(private val codegenContext: CodegenContext) {
                     }
                     """,
                     "Document" to RuntimeType.document(codegenContext.runtimeConfig),
-                    "DocumentObject" to RuntimeType.documentObject(codegenContext.runtimeConfig),
                     "Number" to RuntimeType.smithyTypes(codegenContext.runtimeConfig).resolve("Number"),
+                    "HashMap" to RuntimeType.HashMap,
                     *SupportStructures.codegenScope,
                     *RuntimeType.preludeScope,
                 )

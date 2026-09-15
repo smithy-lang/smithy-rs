@@ -11,7 +11,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Approx
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.AsyncStd
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.AsyncStream
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Bytes
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.BytesUtils
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Criterion
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.FastRand
@@ -128,7 +127,6 @@ class IntegrationTestDependencies(
                             ),
                         )
                         addDependency(Http1x.toDevDependency())
-                        addDependency(Bytes.toDevDependency())
                     }
                     if (hasBenches) {
                         addDependency(Criterion)

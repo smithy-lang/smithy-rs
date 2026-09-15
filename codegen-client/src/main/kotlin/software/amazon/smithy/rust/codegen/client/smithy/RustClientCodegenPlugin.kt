@@ -11,7 +11,6 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ClientCustomizations
-import software.amazon.smithy.rust.codegen.client.smithy.customizations.ErrorRegistryDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpAuthDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpConnectorConfigDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.IdempotencyTokenDecorator
@@ -21,7 +20,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaDe
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.SensitiveOutputDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.StaticSdkFeatureTrackerDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.TelemetryInputCaptureDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.customizations.TypeRegistryDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RequiredCustomizations
@@ -77,8 +75,6 @@ class RustClientCodegenPlugin : ClientDecoratableBuildPlugin() {
                 HttpConnectorConfigDecorator(),
                 SensitiveOutputDecorator(),
                 SchemaDecorator(),
-                TypeRegistryDecorator(),
-                ErrorRegistryDecorator(),
                 IdempotencyTokenDecorator(),
                 LongPollingOperationDecorator(),
                 StalledStreamProtectionDecorator(),
