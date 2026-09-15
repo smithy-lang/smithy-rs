@@ -21,7 +21,8 @@ pub(crate) mod schema;
 
 pub use schema::{
     AsyncProtocolRouter, CollectedBody, OperationHandlerBinding, OperationIndex, ProtocolRouteFuture, ProtocolRouter,
-    RouterBuildError, SchemaRoutingFuture, SchemaRoutingOptions, SchemaRoutingService, SharedProtocolRouter,
+    RouterBuildContext, RouterBuildError, RoutingOptions, SchemaRoutingFuture, SchemaRoutingService,
+    SharedProtocolRouter,
 };
 
 pub(crate) mod tiny_map;

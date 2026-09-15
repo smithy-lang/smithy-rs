@@ -103,15 +103,10 @@ impl ServerProtocol for BodyProtocol {
     fn protocol_id(&self) -> &'static ShapeId<'static> {
         &PROTOCOLS[0]
     }
-    fn build_router(
-        &self,
-        _: &'static ServiceSchema<'static>,
-        targets: &[OperationIndex],
-        options: &SchemaRoutingOptions,
-    ) -> Result<SharedProtocolRouter, RouterBuildError> {
+    fn build_router(&self, ctx: RouterBuildContext<'_>) -> Result<SharedProtocolRouter, RouterBuildError> {
         Ok(SharedProtocolRouter::new_async(BodyRouter {
-            targets: targets.to_vec(),
-            config: options.request_body.for_routing(),
+            targets: ctx.targets.to_vec(),
+            config: ctx.config.for_routing(),
         }))
     }
     fn serialize_internal_failure(&self) -> Response<BoxBody> {
@@ -162,7 +157,7 @@ fn binding(operation: &'static OperationSchema<'static>) -> OperationHandlerBind
         })),
     )
 }
-fn service(options: SchemaRoutingOptions) -> SchemaRoutingService {
+fn service(options: RoutingOptions) -> SchemaRoutingService {
     SchemaRoutingService::from_operation_handler_bindings_with_options(
         &SERVICE,
         [registration()],
@@ -191,14 +186,14 @@ async fn body_selects_index_and_preserves_payload_and_trailers() {
         Ok(Frame::trailers(trailers.clone())),
     ];
     let body = Body::new(http_body_util::StreamBody::new(futures_util::stream::iter(frames)));
-    let response = service(SchemaRoutingOptions::default())
+    let response = service(RoutingOptions::default())
         .oneshot(Request::new(body))
         .await
         .unwrap();
     let collected = response.into_body().collect().await.unwrap();
     assert_eq!(collected.trailers(), Some(&trailers));
     assert_eq!(collected.to_bytes(), "first\n123");
-    let response = service(SchemaRoutingOptions::default())
+    let response = service(RoutingOptions::default())
         .oneshot(request("second\npayload"))
         .await
         .unwrap();
@@ -214,7 +209,7 @@ async fn malformed_and_unknown_operation_are_terminal_rejections() {
         (Bytes::from_static(b"\xff\n"), StatusCode::BAD_REQUEST),
         (Bytes::from_static(b"unknown\n"), StatusCode::NOT_FOUND),
     ] {
-        let response = service(SchemaRoutingOptions::default())
+        let response = service(RoutingOptions::default())
             .oneshot(request(body))
             .await
             .unwrap();
@@ -224,7 +219,7 @@ async fn malformed_and_unknown_operation_are_terminal_rejections() {
 
 #[tokio::test]
 async fn provisional_maximum_caps_collection_and_is_the_only_routing_limit() {
-    let mut options = SchemaRoutingOptions::default();
+    let mut options = RoutingOptions::default();
     options.request_body.global = config(8, 1000);
     options
         .request_body
@@ -255,7 +250,7 @@ async fn provisional_maximum_caps_collection_and_is_the_only_routing_limit() {
 
 #[tokio::test]
 async fn explicit_unlimited_operation_dominates_and_absent_override_inherits_global() {
-    let mut options = SchemaRoutingOptions::default();
+    let mut options = RoutingOptions::default();
     options.request_body.global = config(8, 1000);
     options
         .request_body
@@ -291,7 +286,7 @@ fn delayed_body(delay: Duration, bytes: &'static [u8]) -> Body {
 }
 #[tokio::test(start_paused = true)]
 async fn collection_enforces_the_provisional_maximum_timeout() {
-    let mut options = SchemaRoutingOptions::default();
+    let mut options = RoutingOptions::default();
     options.request_body.global = config(64, 50);
     options
         .request_body
@@ -336,7 +331,7 @@ async fn body_read_failure_is_owned_by_protocol() {
         Error::new("transport failure"),
     )])));
     assert_eq!(
-        service(SchemaRoutingOptions::default())
+        service(RoutingOptions::default())
             .oneshot(Request::new(body))
             .await
             .unwrap()
@@ -425,36 +420,93 @@ async fn all_builtins_route_without_polling_body_and_preserve_fallback_errors() 
 }
 
 #[tokio::test]
-async fn aws_names_and_rpc_aliases_are_runtime_options() {
-    for (schema, path, target, aliases) in [
-        (&AWS_JSON_11, "/", Some("Service.FirstSymbol"), false),
-        (&RPC, "/service/Service/operation/First", None, true),
+async fn aws_json_routes_on_the_schema_compat_name() {
+    static FIRST_COMPAT: OperationSchema<'static> =
+        OperationSchema::new(&FIRST_SHAPE, &UNIT, &UNIT, &[]).with_compat_name("FirstSymbol");
+    static COMPAT_OPERATIONS: &[&OperationSchema<'static>] = &[&FIRST_COMPAT, &SECOND];
+    static AWS_JSON_11_COMPAT: ServiceSchema<'static> = ServiceSchema::new(
+        &SERVICE_SHAPE,
+        None,
+        &[shape_id!("aws.protocols", "awsJson1_1")],
+        COMPAT_OPERATIONS,
+    );
+    let app = SchemaRoutingService::from_operation_handler_bindings(
+        &AWS_JSON_11_COMPAT,
+        [],
+        [binding(&SECOND), binding(&FIRST_COMPAT)],
+    )
+    .unwrap();
+    for (target, status) in [
+        ("Service.FirstSymbol", StatusCode::OK),
+        // The compat name replaces the modeled name; `second` has none and keeps its own.
+        ("Service.first", StatusCode::NOT_FOUND),
+        ("Service.second", StatusCode::OK),
     ] {
-        let mut options = SchemaRoutingOptions {
-            rpc_v2_cbor_add_capitalized_route: aliases,
+        let req = Request::builder()
+            .method("POST")
+            .uri("/")
+            .header("x-amz-target", target)
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(app.clone().oneshot(req).await.unwrap().status(), status, "{target}");
+    }
+}
+
+#[tokio::test]
+async fn rpc_capitalized_alias_is_a_protocol_setting() {
+    for (settings, capitalized_status) in [
+        (r#"{"capitalizeRoutes":true}"#, StatusCode::OK),
+        (r#"{"capitalizeRoutes":false}"#, StatusCode::NOT_FOUND),
+        (r#"{}"#, StatusCode::NOT_FOUND),
+    ] {
+        let options = RoutingOptions {
+            protocol_settings: HashMap::from([(
+                "smithy.protocols#rpcv2Cbor".to_owned(),
+                crate::schema::parse_settings_json(settings.as_bytes()),
+            )]),
             ..Default::default()
         };
-        options
-            .operation_names
-            .insert(FIRST.shape_id().to_string(), "FirstSymbol".into());
         let app = SchemaRoutingService::from_operation_handler_bindings_with_options(
-            schema,
+            &RPC,
             [],
             [binding(&SECOND), binding(&FIRST)],
             options,
         )
         .unwrap();
-        let mut req = Request::builder()
-            .method("POST")
-            .uri(path)
-            .header("smithy-protocol", "rpc-v2-cbor");
-        if let Some(target) = target {
-            req = req.header("x-amz-target", target);
+        for (path, status) in [
+            ("/service/Service/operation/First", capitalized_status),
+            ("/service/Service/operation/first", StatusCode::OK),
+        ] {
+            let req = Request::builder()
+                .method("POST")
+                .uri(path)
+                .header("smithy-protocol", "rpc-v2-cbor")
+                .body(Body::empty())
+                .unwrap();
+            assert_eq!(app.clone().oneshot(req).await.unwrap().status(), status, "{settings} {path}");
         }
-        assert_eq!(
-            app.oneshot(req.body(Body::empty()).unwrap()).await.unwrap().status(),
-            StatusCode::OK
-        );
+    }
+}
+
+#[test]
+fn invalid_protocol_settings_fail_the_build() {
+    for settings in [r#"{"capitalizeRoutes":"yes"}"#, r#""not an object""#] {
+        let options = RoutingOptions {
+            protocol_settings: HashMap::from([(
+                "smithy.protocols#rpcv2Cbor".to_owned(),
+                crate::schema::parse_settings_json(settings.as_bytes()),
+            )]),
+            ..Default::default()
+        };
+        assert!(matches!(
+            SchemaRoutingService::from_operation_handler_bindings_with_options(
+                &RPC,
+                [],
+                [binding(&SECOND), binding(&FIRST)],
+                options,
+            ),
+            Err(RouterBuildError::Configuration(_))
+        ));
     }
 }
 
@@ -471,7 +523,7 @@ async fn layers_see_selection_and_do_not_observe_routing_rejections() {
             inner.clone().oneshot(request)
         })
     });
-    let app = service(SchemaRoutingOptions::default()).layer(&layer);
+    let app = service(RoutingOptions::default()).layer(&layer);
     assert_eq!(
         app.clone().oneshot(request("first\n")).await.unwrap().status(),
         StatusCode::OK
@@ -500,7 +552,7 @@ async fn cancelling_body_routing_drops_the_pending_stream() {
         }
     }
     let dropped = Arc::new(AtomicBool::new(false));
-    let mut service = service(SchemaRoutingOptions::default());
+    let mut service = service(RoutingOptions::default());
     let mut future = Box::pin(service.call(Request::new(Body::new(PendingBody(dropped.clone())))));
     let waker = futures_util::task::noop_waker();
     assert!(future.as_mut().poll(&mut Context::from_waker(&waker)).is_pending());
@@ -550,7 +602,7 @@ async fn inconsistent_operation_identity_is_detected_before_handler_dispatch() {
             })
         }
     }
-    let mut app = service(SchemaRoutingOptions::default()); // Index zero belongs to SECOND.
+    let mut app = service(RoutingOptions::default()); // Index zero belongs to SECOND.
     app.inner.router = SharedProtocolRouter::new(IncorrectRouter);
     let _ = app.oneshot(request("first\n")).await;
 }
@@ -669,7 +721,7 @@ fn body_routing_rejects_streaming_inputs_and_outputs_at_construction() {
 async fn buffered_content_is_reused_and_replacements_and_wrappers_are_read() {
     let original = Bytes::from_static(b"first\npayload");
     let mut app =
-        service(SchemaRoutingOptions::default()).layer(&tower::layer::layer_fn(move |_inner: Route<Body>| {
+        service(RoutingOptions::default()).layer(&tower::layer::layer_fn(move |_inner: Route<Body>| {
             let original = original.clone();
             tower::service_fn(move |request: Request<Body>| {
                 let original = original.clone();

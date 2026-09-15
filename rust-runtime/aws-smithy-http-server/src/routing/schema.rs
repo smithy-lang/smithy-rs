@@ -15,6 +15,7 @@ use crate::{
     },
 };
 use aws_smithy_schema::{OperationSchema, ServiceSchema};
+use aws_smithy_types::Document;
 use bytes::Bytes;
 use http::{Request, Response};
 
@@ -72,14 +73,35 @@ impl<B> fmt::Debug for OperationHandlerBinding<B> {
 
 /// Construction options, independent of any generated router implementation.
 #[derive(Clone, Debug, Default)]
-pub struct SchemaRoutingOptions {
+pub struct RoutingOptions {
     /// Global and per-operation body-read allowances. Operation entries replace the whole record.
     pub request_body: ServiceRequestBodyConfig,
-    /// Preserve the existing RPC v2 CBOR capitalized operation aliases.
-    pub rpc_v2_cbor_add_capitalized_route: bool,
-    /// Compatibility names emitted by codegen, keyed by absolute operation shape ID.
-    /// Protocols that use modeled names can ignore these overrides.
-    pub operation_names: HashMap<String, String>,
+    /// Per-protocol settings, keyed by protocol shape ID such as
+    /// `smithy.protocols#rpcv2Cbor`. Each section is opaque here: the protocol
+    /// it names parses it in [`ServerProtocol::build_router`] and rejects
+    /// invalid values with [`RouterBuildError::Configuration`].
+    ///
+    /// [`ServerProtocol::build_router`]: crate::schema::ServerProtocol::build_router
+    pub protocol_settings: HashMap<String, Document>,
+}
+
+/// Everything a protocol sees when building its router: the service, the
+/// assigned targets, the server-global configuration, and the protocol's own
+/// settings section. Constructed by the routing service, so a protocol never
+/// sees another protocol's settings.
+#[derive(Debug)]
+#[non_exhaustive]
+pub struct RouterBuildContext<'a> {
+    /// The service schema.
+    pub service: &'static ServiceSchema<'static>,
+    /// The operations to route, with targets assigned by the routing service.
+    pub targets: &'a [OperationIndex],
+    /// Server-global body-read allowances, for protocols that collect the body
+    /// to route (see [`ServiceRequestBodyConfig::for_routing`]).
+    pub config: &'a ServiceRequestBodyConfig,
+    /// This protocol's section of [`RoutingOptions::protocol_settings`], when
+    /// one was configured.
+    pub protocol_settings: Option<&'a Document>,
 }
 
 /// Invalid schema, bindings, or protocol-specific routing configuration.
@@ -344,19 +366,14 @@ impl<B> SchemaRoutingService<B> {
         registrations: impl IntoIterator<Item = ProtocolRegistration>,
         bindings: impl IntoIterator<Item = OperationHandlerBinding<B>>,
     ) -> Result<Self, RouterBuildError> {
-        Self::from_operation_handler_bindings_with_options(
-            service,
-            registrations,
-            bindings,
-            SchemaRoutingOptions::default(),
-        )
+        Self::from_operation_handler_bindings_with_options(service, registrations, bindings, RoutingOptions::default())
     }
 
     pub fn from_operation_handler_bindings_with_options(
         service: &'static ServiceSchema<'static>,
         registrations: impl IntoIterator<Item = ProtocolRegistration>,
         bindings: impl IntoIterator<Item = OperationHandlerBinding<B>>,
-        options: SchemaRoutingOptions,
+        options: RoutingOptions,
     ) -> Result<Self, RouterBuildError> {
         if service.protocols().len() != 1 {
             return Err(RouterBuildError::ProtocolCount(service.protocols().len()));
@@ -387,12 +404,7 @@ impl<B> SchemaRoutingService<B> {
         if seen.len() != service.operations().len() {
             return Err(RouterBuildError::Binding("duplicate service operation schemas".into()));
         }
-        for id in options
-            .request_body
-            .per_operation
-            .keys()
-            .chain(options.operation_names.keys())
-        {
+        for id in options.request_body.per_operation.keys() {
             if !seen.contains(id.as_str()) {
                 return Err(RouterBuildError::Configuration(format!("unknown operation {id}")));
             }
@@ -405,7 +417,12 @@ impl<B> SchemaRoutingService<B> {
                 operation: binding.operation,
             })
             .collect();
-        let router = protocol.build_router(service, &targets, &options)?;
+        let router = protocol.build_router(RouterBuildContext {
+            service,
+            targets: &targets,
+            config: &options.request_body,
+            protocol_settings: options.protocol_settings.get(protocol.protocol_id().as_str()),
+        })?;
         if router.routes_on_body() {
             for operation in service.operations() {
                 if [operation.input(), operation.output()]
@@ -569,20 +586,17 @@ where
 }
 
 pub(crate) fn aws_json_router<P: fmt::Debug + 'static>(
-    service: &'static ServiceSchema<'static>,
-    targets: &[OperationIndex],
-    options: &SchemaRoutingOptions,
+    ctx: &RouterBuildContext<'_>,
 ) -> Result<SharedProtocolRouter, RouterBuildError>
 where
     crate::protocol::aws_json::router::Error: crate::response::IntoResponse<P>,
 {
-    let entries = targets.iter().map(|target| {
-        let name = options
-            .operation_names
-            .get(target.operation.shape_id().as_str())
-            .map(String::as_str)
+    let entries = ctx.targets.iter().map(|target| {
+        let name = target
+            .operation
+            .compat_name()
             .unwrap_or(target.operation.shape_id().shape_name());
-        (format!("{}.{}", service.shape_id().shape_name(), name), *target)
+        (format!("{}.{}", ctx.service.shape_id().shape_name(), name), *target)
     });
     Ok(SharedProtocolRouter::new(ExistingRouter::<_, P> {
         router: crate::protocol::aws_json::router::AwsJsonRouter::from_owned(entries),
@@ -590,15 +604,12 @@ where
     }))
 }
 
-pub(crate) fn rpc_v2_cbor_router(
-    service: &'static ServiceSchema<'static>,
-    targets: &[OperationIndex],
-    options: &SchemaRoutingOptions,
-) -> Result<SharedProtocolRouter, RouterBuildError> {
-    let entries = targets.iter().flat_map(|target| {
+pub(crate) fn rpc_v2_cbor_router(ctx: &RouterBuildContext<'_>) -> Result<SharedProtocolRouter, RouterBuildError> {
+    let capitalize_routes = crate::schema::protocol::settings_bool(ctx.protocol_settings, "capitalizeRoutes")?;
+    let entries = ctx.targets.iter().flat_map(|target| {
         let name = target.operation.shape_id().shape_name();
         let mut names = vec![name.to_owned()];
-        if options.rpc_v2_cbor_add_capitalized_route {
+        if capitalize_routes {
             let mut chars = name.chars();
             if let Some(first) = chars.next() {
                 let alias = format!("{}{}", first.to_uppercase(), chars.as_str());
@@ -609,7 +620,7 @@ pub(crate) fn rpc_v2_cbor_router(
         }
         names
             .into_iter()
-            .map(move |name| (format!("{}.{}", service.shape_id().shape_name(), name), *target))
+            .map(move |name| (format!("{}.{}", ctx.service.shape_id().shape_name(), name), *target))
     });
     Ok(SharedProtocolRouter::new(ExistingRouter::<_, crate::protocol::rpc_v2_cbor::RpcV2Cbor> {
         router: crate::protocol::rpc_v2_cbor::router::RpcV2CborRouter::from_owned(entries),

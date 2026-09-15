@@ -515,11 +515,9 @@ fn provided_methods_collect_the_body_and_gate_nothing() {
     impl ServerProtocol for Minimal {
         fn build_router(
             &self,
-            _: &'static aws_smithy_schema::ServiceSchema<'static>,
-            targets: &[crate::routing::OperationIndex],
-            _: &crate::routing::SchemaRoutingOptions,
+            ctx: crate::routing::RouterBuildContext<'_>,
         ) -> Result<crate::routing::SharedProtocolRouter, crate::routing::RouterBuildError> {
-            crate::routing::schema::rest_router::<crate::protocol::rest_json_1::RestJson1>(targets)
+            crate::routing::schema::rest_router::<crate::protocol::rest_json_1::RestJson1>(ctx.targets)
         }
         fn serialize_internal_failure(&self) -> crate::response::Response {
             crate::response::IntoResponse::<crate::protocol::rest_json_1::RestJson1>::into_response(

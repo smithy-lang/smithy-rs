@@ -51,12 +51,9 @@ impl ServerEventStreamProtocol for RestXmlProtocol {
 impl ServerProtocol for RestXmlProtocol {
     fn build_router(
         &self,
-        service: &'static aws_smithy_schema::ServiceSchema<'static>,
-        targets: &[crate::routing::OperationIndex],
-        options: &crate::routing::SchemaRoutingOptions,
+        ctx: crate::routing::RouterBuildContext<'_>,
     ) -> Result<crate::routing::SharedProtocolRouter, crate::routing::RouterBuildError> {
-        let _ = (service, options);
-        crate::routing::schema::rest_router::<RestXml>(targets)
+        crate::routing::schema::rest_router::<RestXml>(ctx.targets)
     }
     fn serialize_internal_failure(&self) -> Response {
         crate::response::IntoResponse::<RestXml>::into_response(crate::runtime_error::InternalFailureException)

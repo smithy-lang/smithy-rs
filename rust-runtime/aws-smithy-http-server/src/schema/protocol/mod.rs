@@ -153,16 +153,15 @@ pub trait ServerEventStreamProtocol: Send + Sync + std::fmt::Debug {
 /// }
 /// ```
 pub trait ServerProtocol: Send + Sync + std::fmt::Debug + 'static {
-    /// Builds operation routing once for this service. Targets are assigned by the routing service.
+    /// Builds operation routing once for this service.
+    ///
+    /// The context carries the protocol's own settings section next to the
+    /// server-global configuration; invalid settings are rejected with
+    /// [`RouterBuildError::Configuration`](crate::routing::RouterBuildError::Configuration),
+    /// failing the service build.
     fn build_router(
         &self,
-        service: &'static aws_smithy_schema::ServiceSchema<'static>,
-        // The operations that have been generated.
-        operations: &[crate::routing::OperationIndex],
-        // TODO: this will be replaced by a Smithy Document / Hashmap that
-        // will let each protocol get the global or a protocol specific setting
-        // defined in smithy-build-template.json.
-        options: &crate::routing::SchemaRoutingOptions,
+        ctx: crate::routing::RouterBuildContext<'_>,
     ) -> Result<crate::routing::SharedProtocolRouter, crate::routing::RouterBuildError>;
 
     /// Renders the protocol's existing internal failure response when a service is built
@@ -234,6 +233,48 @@ pub trait ServerProtocol: Send + Sync + std::fmt::Debug + 'static {
     /// and rpcv2Cbor collapsing `Accept` and `Content-Type` failures into a plain 400. These
     /// responses are the protocol's wire contract and must not change shape.
     fn serialize_rejection(&self, err: DeserializeError) -> Response;
+}
+
+/// Parses a JSON object emitted by codegen into a settings [`Document`].
+///
+/// Generated `routing_options()` functions embed each protocol's section of
+/// `customizationConfig.protocols` as a JSON byte-string and call this once at
+/// service build time. The input is printed by codegen from a validated node,
+/// so malformed JSON is a codegen bug: this panics rather than returning an
+/// error.
+///
+/// [`Document`]: aws_smithy_types::Document
+pub fn parse_settings_json(json: &[u8]) -> aws_smithy_types::Document {
+    let mut tokens = aws_smithy_json::deserialize::json_token_iter(json).peekable();
+    let document = aws_smithy_json::deserialize::token::expect_document(&mut tokens)
+        .expect("codegen emits well-formed settings JSON");
+    assert!(tokens.next().is_none(), "codegen emits a single settings JSON document");
+    document
+}
+
+/// Reads an opt-in boolean flag from a protocol's settings section.
+///
+/// Absent section or key is `false`. A section that is not an object, or a
+/// value that is not a boolean, is a configuration error.
+pub fn settings_bool(
+    settings: Option<&aws_smithy_types::Document>,
+    key: &str,
+) -> Result<bool, crate::routing::RouterBuildError> {
+    let Some(settings) = settings else {
+        return Ok(false);
+    };
+    let aws_smithy_types::Document::Object(object) = settings else {
+        return Err(crate::routing::RouterBuildError::Configuration(format!(
+            "protocol settings must be a JSON object, got {settings:?}"
+        )));
+    };
+    match object.get(key) {
+        None => Ok(false),
+        Some(aws_smithy_types::Document::Bool(value)) => Ok(*value),
+        Some(other) => Err(crate::routing::RouterBuildError::Configuration(format!(
+            "protocol setting `{key}` must be a boolean, got {other:?}"
+        ))),
+    }
 }
 
 /// Converts a body collection failure into the protocol's rejection response, retaining
@@ -322,12 +363,12 @@ impl<E: std::error::Error + 'static> std::error::Error for RequestBodyCollection
 /// from the returned bytes and hands the [`CollectedBody`] back with its selection; the routing
 /// service rebuilds the dispatched request around it, so the handler reads exactly what routing
 /// read. The allowance in `config` is enforced during collection — protocols derive it from
-/// [`SchemaRoutingOptions::request_body`] with [`ServiceRequestBodyConfig::for_routing`] when
+/// [`RouterBuildContext::config`] with [`ServiceRequestBodyConfig::for_routing`] when
 /// building their router — and a failure is framed by the protocol itself.
 ///
 /// [`AsyncProtocolRouter`]: crate::routing::AsyncProtocolRouter
 /// [`CollectedBody`]: crate::routing::CollectedBody
-/// [`SchemaRoutingOptions::request_body`]: crate::routing::SchemaRoutingOptions
+/// [`RouterBuildContext::config`]: crate::routing::RouterBuildContext
 pub async fn collect_for_routing(
     body: BoxBody,
     config: &RequestBodyCollectionConfig,

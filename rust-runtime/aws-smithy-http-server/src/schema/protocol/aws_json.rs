@@ -77,11 +77,9 @@ macro_rules! aws_json_protocol {
         impl ServerProtocol for $protocol {
             fn build_router(
                 &self,
-                service: &'static aws_smithy_schema::ServiceSchema<'static>,
-                targets: &[crate::routing::OperationIndex],
-                options: &crate::routing::SchemaRoutingOptions,
+                ctx: crate::routing::RouterBuildContext<'_>,
             ) -> Result<crate::routing::SharedProtocolRouter, crate::routing::RouterBuildError> {
-                crate::routing::schema::aws_json_router::<$marker>(service, targets, options)
+                crate::routing::schema::aws_json_router::<$marker>(&ctx)
             }
             fn serialize_internal_failure(&self) -> Response {
                 IntoResponse::<$marker>::into_response(crate::runtime_error::InternalFailureException)
