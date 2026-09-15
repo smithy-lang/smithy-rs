@@ -315,6 +315,75 @@ impl<E: std::fmt::Display> std::fmt::Display for RequestBodyCollectionError<E> {
 
 impl<E: std::error::Error + 'static> std::error::Error for RequestBodyCollectionError<E> {}
 
+/// Collects a request body for body-first routing, returning the routing bytes and a
+/// replacement body that replays the same content, trailers included.
+///
+/// This is the collection step of an [`AsyncProtocolRouter`]: the router selects an operation
+/// from the returned bytes and rebuilds the request around the returned body, so the handler
+/// reads exactly what routing read. An unpolled, already-buffered body is reused without
+/// copying. The allowance in `config` is enforced during collection — protocols derive it from
+/// [`SchemaRoutingOptions::request_body`] with [`ServiceRequestBodyConfig::for_routing`] when
+/// building their router — and a failure is framed by the protocol itself.
+///
+/// [`AsyncProtocolRouter`]: crate::routing::AsyncProtocolRouter
+/// [`SchemaRoutingOptions::request_body`]: crate::routing::SchemaRoutingOptions
+pub async fn collect_for_routing(
+    body: crate::body::Body,
+    config: &RequestBodyCollectionConfig,
+) -> Result<(Bytes, crate::body::Body), RequestBodyCollectionError<crate::Error>> {
+    if let Some(bytes) = body.buffered_content() {
+        if let Some(limit) = config.max_bytes.filter(|limit| bytes.len() > limit.get()) {
+            return Err(RequestBodyCollectionError::TooLarge(crate::body::BodyLimitExceeded {
+                limit: limit.get(),
+            }));
+        }
+        let bytes = bytes.clone();
+        return Ok((bytes, body));
+    }
+    let collect = collect_frames(body, config);
+    let (bytes, trailers) = match config.read_timeout {
+        Some(timeout) => tokio::time::timeout(timeout, collect)
+            .await
+            .map_err(|_| RequestBodyCollectionError::Timeout { timeout })??,
+        None => collect.await?,
+    };
+    Ok((bytes.clone(), crate::body::Body::buffered(bytes, trailers)))
+}
+
+/// Collects data frames under the size allowance, retaining trailers.
+async fn collect_frames(
+    body: crate::body::Body,
+    config: &RequestBodyCollectionConfig,
+) -> Result<(Bytes, Option<http::HeaderMap>), RequestBodyCollectionError<crate::Error>> {
+    let mut body = std::pin::pin!(body);
+    let mut bytes = bytes::BytesMut::new();
+    let mut trailers: Option<http::HeaderMap> = None;
+    while let Some(frame) = std::future::poll_fn(|cx| body.as_mut().poll_frame(cx))
+        .await
+        .transpose()
+        .map_err(RequestBodyCollectionError::Body)?
+    {
+        match frame.into_data() {
+            Ok(data) => {
+                if let Some(limit) = config.max_bytes {
+                    if data.len() > limit.get().saturating_sub(bytes.len()) {
+                        return Err(RequestBodyCollectionError::TooLarge(crate::body::BodyLimitExceeded {
+                            limit: limit.get(),
+                        }));
+                    }
+                }
+                bytes.extend_from_slice(&data);
+            }
+            Err(frame) => {
+                if let Ok(new_trailers) = frame.into_trailers() {
+                    trailers.get_or_insert_with(http::HeaderMap::new).extend(new_trailers);
+                }
+            }
+        }
+    }
+    Ok((bytes.freeze(), trailers))
+}
+
 pub async fn collect_request_body<B>(
     body: B,
     config: &RequestBodyCollectionConfig,

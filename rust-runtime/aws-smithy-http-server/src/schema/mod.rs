@@ -12,7 +12,7 @@ pub(crate) mod response_bindings;
 pub use deserialize::{DeserializableShape, DeserializeError};
 pub use modeled_error::{HttpModeledError, ModeledError};
 pub use protocol::{
-    collect_request_body, ProtocolRegistration, ProtocolRegistry, RequestBodyCollectionConfig,
+    collect_for_routing, collect_request_body, ProtocolRegistration, ProtocolRegistry, RequestBodyCollectionConfig,
     RequestBodyCollectionError, ServerEventStreamProtocol, ServerProtocol, ServerRequest, ServiceRequestBodyConfig,
     SharedServerProtocol,
 };

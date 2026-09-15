@@ -20,8 +20,8 @@ mod route;
 pub(crate) mod schema;
 
 pub use schema::{
-    OperationHandlerBinding, OperationIndex, ProtocolRouter, RouterBuildError, SchemaRoutingFuture, SharedProtocolRouter,
-    SchemaRoutingOptions, SchemaRoutingService,
+    AsyncProtocolRouter, OperationHandlerBinding, OperationIndex, ProtocolRouteFuture, ProtocolRouter,
+    RouterBuildError, SchemaRoutingFuture, SchemaRoutingOptions, SchemaRoutingService, SharedProtocolRouter,
 };
 
 pub(crate) mod tiny_map;

@@ -3,13 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 use super::*;
-use crate::schema::{DeserializeError, HttpModeledError, ServerProtocol, ServerRequest};
+use crate::error::Error;
+use crate::schema::{
+    DeserializeError, HttpModeledError, RequestBodyCollectionConfig, ServerProtocol, ServerRequest,
+};
 use aws_smithy_schema::serde::{SerializableStruct, ShapeDeserializer};
 use aws_smithy_schema::{shape_id, traits::HttpTrait, Schema, ShapeId, ShapeType};
 use http::{HeaderMap, HeaderValue, StatusCode};
 use http_body::Frame;
 use http_body_util::BodyExt;
 use std::num::NonZeroUsize;
+use std::time::Duration;
 use tower::ServiceExt;
 
 static UNIT: Schema<'static> = Schema::new(shape_id!("test", "Unit"), ShapeType::Structure);
@@ -58,7 +62,10 @@ static RPC: ServiceSchema<'static> = ServiceSchema::new(
 #[derive(Debug, Default)]
 struct BodyProtocol(crate::protocol::rest_json_1::RestJson1Protocol);
 #[derive(Debug)]
-struct BodyRouter(Vec<OperationIndex>);
+struct BodyRouter {
+    targets: Vec<OperationIndex>,
+    config: RequestBodyCollectionConfig,
+}
 fn rejection(status: StatusCode, message: impl Into<Bytes>) -> Response<BoxBody> {
     Response::builder()
         .status(status)
@@ -71,19 +78,24 @@ async fn rejection_message(response: Response<BoxBody>) -> String {
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
     String::from_utf8(bytes.to_vec()).unwrap()
 }
-impl ProtocolRouter for BodyRouter {
-    fn requires_body_for_routing(&self) -> bool {
-        true
-    }
-    fn route(&self, _: &Request<Body>, bytes: &Bytes) -> Result<OperationIndex, Response<BoxBody>> {
-        let first_line = bytes.split(|byte| *byte == b'\n').next().unwrap_or_default();
-        let name = std::str::from_utf8(first_line)
-            .map_err(|_| rejection(StatusCode::BAD_REQUEST, "invalid operation name"))?;
-        self.0
-            .iter()
-            .find(|target| target.operation().shape_id().shape_name() == name)
-            .copied()
-            .ok_or_else(|| rejection(StatusCode::NOT_FOUND, "unknown operation"))
+impl AsyncProtocolRouter for BodyRouter {
+    fn route(self: Arc<Self>, request: Request<Body>) -> ProtocolRouteFuture {
+        Box::pin(async move {
+            let (parts, body) = request.into_parts();
+            let (bytes, body) = crate::schema::collect_for_routing(body, &self.config)
+                .await
+                .map_err(|error| rejection(StatusCode::BAD_REQUEST, error.to_string()))?;
+            let first_line = bytes.split(|byte| *byte == b'\n').next().unwrap_or_default();
+            let name = std::str::from_utf8(first_line)
+                .map_err(|_| rejection(StatusCode::BAD_REQUEST, "invalid operation name"))?;
+            let selected = self
+                .targets
+                .iter()
+                .find(|target| target.operation().shape_id().shape_name() == name)
+                .copied()
+                .ok_or_else(|| rejection(StatusCode::NOT_FOUND, "unknown operation"))?;
+            Ok((selected, Request::from_parts(parts, body)))
+        })
     }
 }
 impl ServerProtocol for BodyProtocol {
@@ -94,9 +106,12 @@ impl ServerProtocol for BodyProtocol {
         &self,
         _: &'static ServiceSchema<'static>,
         targets: &[OperationIndex],
-        _: &SchemaRoutingOptions,
+        options: &SchemaRoutingOptions,
     ) -> Result<SharedProtocolRouter, RouterBuildError> {
-        Ok(SharedProtocolRouter::new(BodyRouter(targets.to_vec())))
+        Ok(SharedProtocolRouter::new_async(BodyRouter {
+            targets: targets.to_vec(),
+            config: options.request_body.for_routing(),
+        }))
     }
     fn serialize_internal_failure(&self) -> Response<BoxBody> {
         rejection(StatusCode::INTERNAL_SERVER_ERROR, "test protocol missing handler")
@@ -207,7 +222,7 @@ async fn malformed_and_unknown_operation_are_terminal_rejections() {
 }
 
 #[tokio::test]
-async fn provisional_maximum_allows_identification_then_checks_selected_limit() {
+async fn provisional_maximum_caps_collection_and_is_the_only_routing_limit() {
     let mut options = SchemaRoutingOptions::default();
     options.request_body.global = config(8, 1000);
     options
@@ -223,11 +238,13 @@ async fn provisional_maximum_allows_identification_then_checks_selected_limit() 
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+    // Bodies under the provisional maximum route through; the selected operation's tighter
+    // limit is enforced when its body is collected for deserialization, not at routing.
     let response = service(options.clone())
         .oneshot(request("second\n1234567890123456"))
         .await
         .unwrap();
-    assert!(rejection_message(response).await.contains("exceeded the configured maximum"));
+    assert_eq!(response.status(), StatusCode::OK);
     let response = service(options)
         .oneshot(request(format!("first\n{}", "x".repeat(100))))
         .await
@@ -243,19 +260,12 @@ async fn explicit_unlimited_operation_dominates_and_absent_override_inherits_glo
         .request_body
         .per_operation
         .insert(FIRST.shape_id().to_string(), RequestBodyCollectionConfig::default());
+    // The provisional allowance the router was built with: an explicit unlimited override
+    // dominates the global limit on both axes.
+    let provisional = options.request_body.for_routing();
+    assert!(provisional.max_bytes.is_none());
+    assert!(provisional.read_timeout.is_none());
     let app = service(options);
-    assert!((match &app.inner {
-        Either::Left(preparation) => preparation.config,
-        _ => panic!("expected body preparation"),
-    })
-    .max_bytes
-    .is_none());
-    assert!((match &app.inner {
-        Either::Left(preparation) => preparation.config,
-        _ => panic!("expected body preparation"),
-    })
-    .read_timeout
-    .is_none());
     assert_eq!(
         app.clone()
             .oneshot(request("first\nlong payload"))
@@ -264,8 +274,10 @@ async fn explicit_unlimited_operation_dominates_and_absent_override_inherits_glo
             .status(),
         StatusCode::OK
     );
+    // Routing collects under the unlimited provisional allowance; the inherited global limit
+    // applies when the selected operation collects its body, not here.
     let response = app.oneshot(request("second\nlong payload")).await.unwrap();
-    assert!(rejection_message(response).await.contains("exceeded the configured maximum"));
+    assert_eq!(response.status(), StatusCode::OK);
 }
 
 fn delayed_body(delay: Duration, bytes: &'static [u8]) -> Body {
@@ -277,22 +289,18 @@ fn delayed_body(delay: Duration, bytes: &'static [u8]) -> Body {
     )))
 }
 #[tokio::test(start_paused = true)]
-async fn routing_time_counts_against_selected_operation_timeout() {
+async fn collection_enforces_the_provisional_maximum_timeout() {
     let mut options = SchemaRoutingOptions::default();
     options.request_body.global = config(64, 50);
     options
         .request_body
         .per_operation
         .insert(FIRST.shape_id().to_string(), config(64, 500));
-    let app = service(options);
     assert_eq!(
-        (match &app.inner {
-            Either::Left(preparation) => preparation.config,
-            _ => panic!("expected body preparation"),
-        })
-        .read_timeout,
+        options.request_body.for_routing().read_timeout,
         Some(Duration::from_millis(500))
     );
+    let app = service(options);
     assert_eq!(
         app.clone()
             .oneshot(Request::new(delayed_body(Duration::from_millis(100), b"first\n")))
@@ -301,12 +309,16 @@ async fn routing_time_counts_against_selected_operation_timeout() {
             .status(),
         StatusCode::OK
     );
-    let response = app
-        .clone()
-        .oneshot(Request::new(delayed_body(Duration::from_millis(100), b"second\n")))
-        .await
-        .unwrap();
-    assert!(rejection_message(response).await.contains("timed out"));
+    // Bodies arriving within the provisional maximum timeout route through even when the
+    // selected operation configures a tighter timeout.
+    assert_eq!(
+        app.clone()
+            .oneshot(Request::new(delayed_body(Duration::from_millis(100), b"second\n")))
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::OK
+    );
     let response = app
         .oneshot(Request::new(delayed_body(Duration::from_millis(600), b"first\n")))
         .await
@@ -390,11 +402,7 @@ async fn all_builtins_route_without_polling_body_and_preserve_fallback_errors() 
             .iter()
             .map(|op| OperationHandlerBinding::new(op, Route::new(crate::operation::SchemaMissingFailure)));
         let app = SchemaRoutingService::from_operation_handler_bindings(schema, [], bindings).unwrap();
-        let expected = (match &app.inner {
-            Either::Left(preparation) => &preparation.inner.protocol,
-            Either::Right(dispatch) => &dispatch.protocol,
-        })
-        .serialize_internal_failure();
+        let expected = app.inner.protocol.serialize_internal_failure();
         let mut req = Request::builder()
             .method("POST")
             .uri(path)
@@ -513,20 +521,23 @@ async fn immediate_routing_uses_ready_future_and_rejects_unknown_routes() {
         },
     ];
     let router = rest_router::<crate::protocol::rest_json_1::RestJson1>(&targets).unwrap();
+    assert!(!router.routes_on_body());
+    let RouterKind::Metadata(router) = &router.0 else {
+        panic!("REST routing selects from metadata");
+    };
     let req = Request::builder()
         .method("POST")
         .uri("/first")
         .body(Body::empty())
         .unwrap();
-    assert!(!router.requires_body_for_routing());
-    assert_eq!(router.route(&req, &Bytes::new()).unwrap().index(), 0);
+    assert_eq!(router.route(&req).unwrap().index(), 0);
     let req = Request::builder()
         .method("GET")
         .uri("/first")
         .body(Body::empty())
         .unwrap();
     assert_eq!(
-        router.route(&req, &Bytes::new()).unwrap_err().status(),
+        router.route(&req).unwrap_err().status(),
         StatusCode::METHOD_NOT_ALLOWED
     );
 }
@@ -538,10 +549,7 @@ async fn inconsistent_operation_identity_is_detected_before_handler_dispatch() {
     #[derive(Debug)]
     struct IncorrectRouter;
     impl ProtocolRouter for IncorrectRouter {
-        fn requires_body_for_routing(&self) -> bool {
-            false
-        }
-        fn route(&self, _: &Request<Body>, _: &Bytes) -> Result<OperationIndex, Response<BoxBody>> {
+        fn route(&self, _: &Request<Body>) -> Result<OperationIndex, Response<BoxBody>> {
             // This test is in the defining module; external routers cannot construct arbitrary indices.
             Ok(OperationIndex {
                 index: 0,
@@ -550,10 +558,7 @@ async fn inconsistent_operation_identity_is_detected_before_handler_dispatch() {
         }
     }
     let mut app = service(SchemaRoutingOptions::default()); // Index zero belongs to SECOND.
-    match &mut app.inner {
-        Either::Left(preparation) => preparation.inner.router = SharedProtocolRouter::new(IncorrectRouter),
-        Either::Right(dispatch) => dispatch.router = SharedProtocolRouter::new(IncorrectRouter),
-    }
+    app.inner.router = SharedProtocolRouter::new(IncorrectRouter);
     let _ = app.oneshot(request("first\n")).await;
 }
 

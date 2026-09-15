@@ -7,15 +7,15 @@
 
 use super::Route;
 use crate::{
-    body::{Body, BodyLimitExceeded, BoxBody},
-    error::{BoxError, Error},
+    body::{Body, BoxBody},
+    error::BoxError,
     schema::{
-        ProtocolRegistration, ProtocolRegistry, RequestBodyCollectionConfig, RequestBodyCollectionError,
-        SelectedProtocolOperation, ServiceRequestBodyConfig, SharedServerProtocol,
+        ProtocolRegistration, ProtocolRegistry, SelectedProtocolOperation, ServiceRequestBodyConfig,
+        SharedServerProtocol,
     },
 };
 use aws_smithy_schema::{OperationSchema, ServiceSchema};
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use http::{Request, Response};
 
 use std::{
@@ -26,10 +26,8 @@ use std::{
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
-    time::Duration,
 };
-use tokio::time::Instant;
-use tower::{util::Either, Service};
+use tower::Service;
 
 /// A canonical operation schema and its position in the handler array.
 #[derive(Clone, Copy, Debug)]
@@ -101,32 +99,53 @@ pub enum RouterBuildError {
     Protocol(#[source] BoxError),
 }
 
-/// Selects an operation within an already-selected protocol. All rejections are terminal.
+/// Selects an operation within an already-selected protocol from request metadata alone.
+/// All rejections are terminal.
 pub trait ProtocolRouter: Send + Sync + fmt::Debug {
-    /// Whether operation selection requires the complete request body.
-    fn requires_body_for_routing(&self) -> bool;
-
-    /// Selects from request metadata and, for body-first protocols, the collected content.
+    /// Selects from the request URI, method and headers. The body is never polled.
     #[allow(clippy::result_large_err)] // Keep immediate protocol responses allocation-free.
-    fn route(&self, request: &Request<Body>, body: &Bytes) -> Result<OperationIndex, Response<BoxBody>>;
+    fn route(&self, request: &Request<Body>) -> Result<OperationIndex, Response<BoxBody>>;
+}
+
+/// The future returned by [`AsyncProtocolRouter::route`].
+pub type ProtocolRouteFuture =
+    Pin<Box<dyn Future<Output = Result<(OperationIndex, Request<Body>), Response<BoxBody>>> + Send>>;
+
+/// Selects an operation for protocols that read the request body to route.
+///
+/// The router owns the request while routing: it collects the body under the allowance it was
+/// built with (see [`collect_for_routing`](crate::schema::collect_for_routing)) and returns the
+/// request rebuilt around the collected content, so the selected handler replays the same bytes.
+/// All rejections are terminal and the protocol frames them itself.
+pub trait AsyncProtocolRouter: Send + Sync + fmt::Debug {
+    /// Selects an operation, returning the request for dispatch to its handler.
+    fn route(self: Arc<Self>, request: Request<Body>) -> ProtocolRouteFuture;
 }
 
 /// Shared, erased operation router built by a server protocol.
 #[derive(Clone, Debug)]
-pub struct SharedProtocolRouter(Arc<dyn ProtocolRouter>);
+pub struct SharedProtocolRouter(RouterKind);
 
-impl SharedProtocolRouter {
-    /// Wrap a concrete protocol router.
-    pub fn new(router: impl ProtocolRouter + 'static) -> Self {
-        Self(Arc::new(router))
-    }
+#[derive(Clone, Debug)]
+enum RouterKind {
+    Metadata(Arc<dyn ProtocolRouter>),
+    Body(Arc<dyn AsyncProtocolRouter>),
 }
 
-impl std::ops::Deref for SharedProtocolRouter {
-    type Target = dyn ProtocolRouter;
+impl SharedProtocolRouter {
+    /// Wraps a router that selects from request metadata alone.
+    pub fn new(router: impl ProtocolRouter + 'static) -> Self {
+        Self(RouterKind::Metadata(Arc::new(router)))
+    }
 
-    fn deref(&self) -> &Self::Target {
-        self.0.as_ref()
+    /// Wraps a router that reads the request body to select an operation.
+    pub fn new_async(router: impl AsyncProtocolRouter + 'static) -> Self {
+        Self(RouterKind::Body(Arc::new(router)))
+    }
+
+    /// Whether operation selection reads the request body.
+    pub fn routes_on_body(&self) -> bool {
+        matches!(self.0, RouterKind::Body(_))
     }
 }
 
@@ -134,7 +153,6 @@ impl std::ops::Deref for SharedProtocolRouter {
 struct BoundHandler {
     operation: &'static OperationSchema<'static>,
     route: Route<Body>,
-    config: RequestBodyCollectionConfig,
 }
 
 #[derive(Clone, Debug)]
@@ -147,211 +165,89 @@ struct Dispatch {
 /// A service routing normalized requests using one protocol and an owned handler collection.
 #[derive(Clone, Debug)]
 pub struct SchemaRoutingService {
-    inner: Either<BodyPreparation<Dispatch>, Dispatch>,
+    inner: Dispatch,
 }
 
-#[derive(Clone, Debug)]
-struct BodyPreparation<S> {
-    inner: S,
-    config: RequestBodyCollectionConfig,
-}
-
-pin_project_lite::pin_project! {
-    struct CollectionFuture {
-        body: Body,
-        config: RequestBodyCollectionConfig,
-        bytes: BytesMut,
-        trailers: Option<http::HeaderMap>,
-        started: Instant,
-        #[pin]
-        timeout: Option<tokio::time::Sleep>,
-    }
-}
-impl CollectionFuture {
-    fn new(body: Body, config: RequestBodyCollectionConfig) -> Self {
-        Self {
-            body,
-            config,
-            bytes: BytesMut::new(),
-            trailers: None,
-            started: Instant::now(),
-            timeout: config.read_timeout.map(tokio::time::sleep),
-        }
-    }
-}
-impl Future for CollectionFuture {
-    type Output = Result<(Bytes, Option<http::HeaderMap>, Duration), RequestBodyCollectionError<Error>>;
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        use http_body::Body as _;
-        let mut this = self.project();
-        loop {
-            if let Some(timeout) = this.timeout.as_mut().as_pin_mut() {
-                if timeout.poll(cx).is_ready() {
-                    return Poll::Ready(Err(RequestBodyCollectionError::Timeout {
-                        timeout: this.config.read_timeout.expect("configured timeout"),
-                    }));
-                }
-            }
-            match std::task::ready!(Pin::new(&mut *this.body).poll_frame(cx)) {
-                Some(Ok(frame)) => match frame.into_data() {
-                    Ok(data) => {
-                        if let Some(limit) = this.config.max_bytes {
-                            if data.len() > limit.get().saturating_sub(this.bytes.len()) {
-                                return Poll::Ready(Err(RequestBodyCollectionError::TooLarge(BodyLimitExceeded {
-                                    limit: limit.get(),
-                                })));
-                            }
-                        }
-                        this.bytes.extend_from_slice(&data);
-                    }
-                    Err(frame) => {
-                        if let Ok(trailers) = frame.into_trailers() {
-                            this.trailers.get_or_insert_with(http::HeaderMap::new).extend(trailers);
-                        }
-                    }
-                },
-                Some(Err(error)) => return Poll::Ready(Err(RequestBodyCollectionError::Body(error))),
-                None => {
-                    return Poll::Ready(Ok((
-                        this.bytes.split().freeze(),
-                        this.trailers.take(),
-                        this.started.elapsed(),
-                    )))
-                }
-            }
-        }
-    }
-}
-
-pin_project_lite::pin_project! {
-    struct DispatchFuture {
-        #[pin]
-        inner: futures_util::future::Either<super::route::RouteFuture<Body>, std::future::Ready<Result<Response<BoxBody>, Infallible>>>,
-    }
-}
-impl DispatchFuture {
-    fn rejection(response: Response<BoxBody>) -> Self {
-        Self {
-            inner: futures_util::future::Either::Right(std::future::ready(Ok(response))),
-        }
-    }
-}
-impl Future for DispatchFuture {
-    type Output = Result<Response<BoxBody>, Infallible>;
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        self.project().inner.poll(cx)
-    }
-}
 impl Dispatch {
-    fn dispatch(&mut self, mut request: Request<Body>, bytes: &Bytes, elapsed: Option<Duration>) -> DispatchFuture {
-        let selected = match self.router.route(&request, bytes) {
-            Ok(selected) => selected,
-            Err(response) => return DispatchFuture::rejection(response),
-        };
+    /// Hands the routed request to its handler, recording the selection for downstream consumers.
+    fn handle(&mut self, selected: OperationIndex, mut request: Request<Body>) -> super::route::RouteFuture<Body> {
         let binding = &mut self.bindings[selected.index];
         debug_assert!(
             std::ptr::eq(binding.operation, selected.operation),
             "router index belongs to a different operation"
         );
-        if let Some(elapsed) = elapsed {
-            let failure = if let Some(limit) = binding.config.max_bytes.filter(|limit| bytes.len() > limit.get()) {
-                Some(RequestBodyCollectionError::TooLarge(BodyLimitExceeded {
-                    limit: limit.get(),
-                }))
-            } else {
-                binding
-                    .config
-                    .read_timeout
-                    .filter(|timeout| elapsed > *timeout)
-                    .map(|timeout| RequestBodyCollectionError::Timeout { timeout })
-            };
-            if let Some(failure) = failure {
-                return DispatchFuture::rejection(crate::schema::body_collection_rejection(&*self.protocol, failure));
-            }
-        }
         request
             .extensions_mut()
             .insert(SelectedProtocolOperation::new(self.protocol.clone(), binding.operation));
-        DispatchFuture {
-            inner: futures_util::future::Either::Left(binding.route.call(request)),
-        }
+        binding.route.call(request)
     }
-}
-impl Service<Request<Body>> for Dispatch {
-    type Response = Response<BoxBody>;
-    type Error = Infallible;
-    type Future = DispatchFuture;
-    fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Infallible>> {
-        Poll::Ready(Ok(()))
-    }
-    fn call(&mut self, request: Request<Body>) -> Self::Future {
-        self.dispatch(request, &Bytes::new(), None)
+
+    fn call(&mut self, request: Request<Body>) -> SchemaRoutingFuture {
+        let state = match &self.router.0 {
+            RouterKind::Metadata(router) => match router.route(&request) {
+                Ok(selected) => State::Handling {
+                    future: self.handle(selected, request),
+                },
+                Err(response) => State::Rejected {
+                    response: Some(response),
+                },
+            },
+            RouterKind::Body(router) => State::Routing {
+                future: router.clone().route(request),
+                dispatch: Some(self.clone()),
+            },
+        };
+        SchemaRoutingFuture { inner: state }
     }
 }
 
 pin_project_lite::pin_project! {
-    struct PreparationFuture {
-        dispatch: Dispatch,
-        parts: Option<http::request::Parts>,
-        #[pin]
-        collection: CollectionFuture,
-        #[pin]
-        response: Option<DispatchFuture>,
-    }
-}
-impl Future for PreparationFuture {
-    type Output = Result<Response<BoxBody>, Infallible>;
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let mut this = self.project();
-        if this.response.is_none() {
-            let response = match std::task::ready!(this.collection.poll(cx)) {
-                Ok((bytes, trailers, elapsed)) => {
-                    let request = Request::from_parts(
-                        this.parts.take().expect("request dispatched once"),
-                        Body::buffered(bytes.clone(), trailers),
-                    );
-                    this.dispatch.dispatch(request, &bytes, Some(elapsed))
-                }
-                Err(error) => {
-                    DispatchFuture::rejection(crate::schema::body_collection_rejection(&*this.dispatch.protocol, error))
-                }
-            };
-            this.response.set(Some(response));
-        }
-        this.response.as_pin_mut().expect("response initialized").poll(cx)
-    }
-}
-impl Service<Request<Body>> for BodyPreparation<Dispatch> {
-    type Response = Response<BoxBody>;
-    type Error = Infallible;
-    type Future = PreparationFuture;
-    fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Infallible>> {
-        Poll::Ready(Ok(()))
-    }
-    fn call(&mut self, request: Request<Body>) -> Self::Future {
-        let replacement = self.inner.clone();
-        let dispatch = std::mem::replace(&mut self.inner, replacement);
-        let (parts, body) = request.into_parts();
-        PreparationFuture {
-            dispatch,
-            parts: Some(parts),
-            collection: CollectionFuture::new(body, self.config),
-            response: None,
-        }
+    #[project = StateProj]
+    enum State {
+        // The routing future owns the request; the dispatch clone owns the handlers. Nothing is
+        // borrowed across the await, so `Route` needs `Clone + Send` but never `Sync`.
+        Routing {
+            future: ProtocolRouteFuture,
+            dispatch: Option<Dispatch>,
+        },
+        Handling {
+            #[pin]
+            future: super::route::RouteFuture<Body>,
+        },
+        Rejected {
+            response: Option<Response<BoxBody>>,
+        },
     }
 }
 
 pin_project_lite::pin_project! {
-    /// Response future for schema routing, including optional body preparation.
+    /// Response future for schema routing.
     pub struct SchemaRoutingFuture {
         #[pin]
-        inner: tower::util::future::EitherResponseFuture<PreparationFuture, DispatchFuture>,
+        inner: State,
     }
 }
 impl Future for SchemaRoutingFuture {
     type Output = Result<Response<BoxBody>, Infallible>;
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        self.project().inner.poll(cx)
+        let mut this = self.project();
+        loop {
+            match this.inner.as_mut().project() {
+                StateProj::Routing { future, dispatch } => match future.as_mut().poll(cx) {
+                    Poll::Ready(Ok((selected, request))) => {
+                        let mut dispatch = dispatch.take().expect("routing resolves once");
+                        let future = dispatch.handle(selected, request);
+                        this.inner.set(State::Handling { future });
+                    }
+                    Poll::Ready(Err(response)) => return Poll::Ready(Ok(response)),
+                    Poll::Pending => return Poll::Pending,
+                },
+                StateProj::Handling { future } => return future.poll(cx),
+                StateProj::Rejected { response } => {
+                    return Poll::Ready(Ok(response.take().expect("polled after completion")))
+                }
+            }
+        }
     }
 }
 impl SchemaRoutingService {
@@ -421,10 +317,8 @@ impl SchemaRoutingService {
                 operation: binding.operation,
             })
             .collect();
-        let routing_config = options.request_body.for_routing();
         let router = protocol.build_router(service, &targets, &options)?;
-        let requires_body = router.requires_body_for_routing();
-        if requires_body {
+        if router.routes_on_body() {
             for operation in service.operations() {
                 if [operation.input(), operation.output()]
                     .iter()
@@ -442,22 +336,13 @@ impl SchemaRoutingService {
             .map(|binding| BoundHandler {
                 operation: binding.operation,
                 route: binding.route,
-                config: options.request_body.for_operation(binding.operation.shape_id()),
             })
             .collect();
-        let dispatch = Dispatch {
-            router,
-            protocol,
-            bindings,
-        };
         Ok(Self {
-            inner: if requires_body {
-                Either::Left(BodyPreparation {
-                    inner: dispatch,
-                    config: routing_config,
-                })
-            } else {
-                Either::Right(dispatch)
+            inner: Dispatch {
+                router,
+                protocol,
+                bindings,
             },
         })
     }
@@ -469,15 +354,11 @@ impl SchemaRoutingService {
         L::Service: Service<Request<Body>, Response = Response<BoxBody>, Error = Infallible> + Clone + Send + 'static,
         <L::Service as Service<Request<Body>>>::Future: Send + 'static,
     {
-        let dispatch = match &mut self.inner {
-            Either::Left(preparation) => &mut preparation.inner,
-            Either::Right(dispatch) => dispatch,
-        };
+        let dispatch = &mut self.inner;
         dispatch.bindings = std::mem::take(&mut dispatch.bindings)
             .into_iter()
             .map(|binding| BoundHandler {
                 operation: binding.operation,
-                config: binding.config,
                 route: Route::new(layer.layer(binding.route)),
             })
             .collect();
@@ -496,9 +377,7 @@ where
         Poll::Ready(Ok(()))
     }
     fn call(&mut self, request: Request<B>) -> Self::Future {
-        SchemaRoutingFuture {
-            inner: self.inner.call(request.map(Body::new)),
-        }
+        self.inner.call(request.map(Body::new))
     }
 }
 
@@ -514,10 +393,7 @@ where
     R::Error: crate::response::IntoResponse<P>,
     P: fmt::Debug,
 {
-    fn requires_body_for_routing(&self) -> bool {
-        false
-    }
-    fn route(&self, request: &Request<Body>, _: &Bytes) -> Result<OperationIndex, Response<BoxBody>> {
+    fn route(&self, request: &Request<Body>) -> Result<OperationIndex, Response<BoxBody>> {
         use crate::response::IntoResponse;
         self.router.match_route(request).map_err(|error| error.into_response())
     }
