@@ -357,8 +357,6 @@ internal class ServerSchemaStreamingTest {
         impl #{SmithyHttpServer}::schema::ServerProtocol for HttpOnly {
             fn build_router(&self, _: #{SmithyHttpServer}::routing::RouterBuildContext<'_>)
                 -> #{Result}<#{SmithyHttpServer}::routing::SharedProtocolRouter, #{SmithyHttpServer}::routing::RouterBuildError> { unreachable!() }
-            fn serialize_internal_failure(&self) -> #{SmithyHttpServer}::response::Response { unreachable!() }
-
             fn protocol_id(&self) -> &'static #{Schema}::ShapeId<'static> {
                 static ID: #{Schema}::ShapeId<'static> = #{Schema}::shape_id!("test", "HttpOnly");
                 &ID

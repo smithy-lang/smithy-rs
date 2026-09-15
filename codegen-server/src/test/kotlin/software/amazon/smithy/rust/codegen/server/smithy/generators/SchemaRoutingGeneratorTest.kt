@@ -255,7 +255,6 @@ class SchemaRoutingGeneratorTest {
                                             fn serialize_streaming_response(&self, _: &Schema<'_>, _: &dyn #{Schema}::serde::SerializableStruct, _: BoxBody) -> Response<BoxBody> { unreachable!() }
                                             fn serialize_error(&self, _: &dyn #{Server}::schema::HttpModeledError) -> Response<BoxBody> { unreachable!() }
                                             fn serialize_rejection(&self, _: #{Server}::schema::DeserializeError) -> Response<BoxBody> { unreachable!() }
-                                            fn serialize_internal_failure(&self) -> Response<BoxBody> { unreachable!() }
                                         }
                                         ProtocolRegistration::new(|_| #{Some}(SharedServerProtocol::new(TestProtocol)))
                                     }
