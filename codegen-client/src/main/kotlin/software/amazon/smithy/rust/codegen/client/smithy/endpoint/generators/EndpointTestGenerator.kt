@@ -46,7 +46,7 @@ internal class EndpointTestGenerator(
             "Endpoint" to types.smithyEndpoint,
             "Error" to types.resolveEndpointError,
             "Document" to RuntimeType.document(runtimeConfig),
-            "HashMap" to RuntimeType.HashMap,
+            "DocumentObject" to RuntimeType.documentObject(runtimeConfig),
             "capture_request" to RuntimeType.captureRequest(runtimeConfig),
         )
 
@@ -162,7 +162,7 @@ internal class EndpointTestGenerator(
                 is RecordValue ->
                     rustBlock("") {
                         rustTemplate(
-                            "let mut out = #{HashMap}::<String, #{Document}>::new();",
+                            "let mut out = #{DocumentObject}::new();",
                             *codegenScope,
                         )
                         val ids = mutableListOf<Identifier>()
