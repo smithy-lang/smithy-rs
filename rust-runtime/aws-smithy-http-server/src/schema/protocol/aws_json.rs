@@ -81,10 +81,6 @@ macro_rules! aws_json_protocol {
             ) -> Result<crate::routing::SharedProtocolRouter, crate::routing::RouterBuildError> {
                 crate::routing::schema::aws_json_router::<$marker>(&ctx)
             }
-            fn serialize_internal_failure(&self) -> Response {
-                IntoResponse::<$marker>::into_response(crate::runtime_error::InternalFailureException)
-            }
-
             fn protocol_id(&self) -> &'static ShapeId<'static> {
                 static PROTOCOL_ID: ShapeId<'static> = $protocol_id;
                 &PROTOCOL_ID
@@ -153,6 +149,9 @@ macro_rules! aws_json_protocol {
                     }
                     DeserializeError::ConstraintViolation(err) => {
                         stamp_validation_extension(self.serialize_error(&*err))
+                    }
+                    DeserializeError::InternalFailure(err) => {
+                        IntoResponse::<$marker>::into_response(RuntimeError::InternalFailure(err))
                     }
                 }
             }

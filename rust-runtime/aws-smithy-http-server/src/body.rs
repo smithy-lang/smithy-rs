@@ -38,7 +38,7 @@ pub type BoxBodySync = http_body_util::combinators::BoxBody<Bytes, Error>;
 /// [`Incoming`](hyper::body::Incoming) by default — inside the `Passthrough` state, unerased and
 /// monomorphized. A body-first protocol router replaces it with the `Buffered` state after
 /// collection. Sources that are not the transport body (tests, upgrade layers, Lambda events)
-/// enter through [`SchemaBody::new`], which erases into a boxed state.
+/// enter through [`SchemaBody::new`], which erases them into a boxed state.
 ///
 /// The states are private so buffering and transport-specific optimizations can evolve.
 ///
@@ -67,17 +67,19 @@ enum BodyInner<B> {
 }
 
 impl<B> SchemaBody<B> {
-    /// Wraps any compatible HTTP body without polling it, erasing its type.
+    /// Wraps any compatible HTTP body without polling it.
     ///
-    /// The transport's own body should use [`SchemaBody::passthrough`] instead, which keeps it
-    /// unerased.
+    /// The transport body `B` and an already-wrapped `SchemaBody<B>` stay unerased; any other
+    /// body type is erased into a boxed state.
     pub fn new<T>(body: T) -> Self
     where
         B: 'static,
         T: http_body::Body<Data = Bytes> + Send + Sync + 'static,
         T::Error: Into<BoxError>,
     {
-        try_downcast(body).unwrap_or_else(|body| Self(BodyInner::Boxed(boxed_sync(body))))
+        try_downcast(body)
+            .or_else(|body| try_downcast(body).map(|body| Self(BodyInner::Passthrough(body))))
+            .unwrap_or_else(|body| Self(BodyInner::Boxed(boxed_sync(body))))
     }
 
     /// Wraps the transport body without erasing or polling it.

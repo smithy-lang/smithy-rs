@@ -8,11 +8,13 @@ use aws_smithy_schema::serde::{SerdeError, ShapeDeserializer};
 use super::HttpModeledError;
 use crate::rejection::MissingContentTypeReason;
 
-/// Why an operation input could not be produced from a request.
+/// Why a request failed without reaching its operation handler.
 ///
 /// This is the one protocol-independent failure enum on the schema path: every way a request can
-/// fail to become an operation input lands here, and each protocol turns the whole enum into its
-/// wire response through [`ServerProtocol::serialize_rejection`](super::ServerProtocol::serialize_rejection).
+/// fail before its handler runs lands here — almost always a failure to become the operation
+/// input, plus the missing-handler [`InternalFailure`](Self::InternalFailure) — and each protocol
+/// turns the whole enum into its wire response through
+/// [`ServerProtocol::serialize_rejection`](super::ServerProtocol::serialize_rejection).
 ///
 /// There is one variant per distinct rejection response, which is why the `Content-Type` and
 /// `Accept` failures are not folded into [`Serde`](Self::Serde): protocols answer them
@@ -41,6 +43,13 @@ pub enum DeserializeError {
     ///
     /// Raised by the protocol layer's header check, never by the codec.
     NotAcceptable,
+    /// The service cannot run the selected operation.
+    ///
+    /// Raised by the missing-handler fallback when a service built with `build_unchecked` receives
+    /// a request for an operation without a registered handler, never by request parsing. Renders
+    /// as the protocol's 500 internal-failure response; the carried error is logged, not written
+    /// to the wire.
+    InternalFailure(crate::Error),
 }
 
 impl std::fmt::Display for DeserializeError {
@@ -54,6 +63,7 @@ impl std::fmt::Display for DeserializeError {
                 write!(f, "request has an unsupported `Content-Type`: {reason}")
             }
             Self::NotAcceptable => write!(f, "request contains an invalid value for the `Accept` header"),
+            Self::InternalFailure(err) => write!(f, "internal server error: {err}"),
         }
     }
 }
@@ -65,6 +75,7 @@ impl std::error::Error for DeserializeError {
             Self::ConstraintViolation(err) => Some(&**err),
             Self::UnsupportedMediaType(reason) => Some(&**reason),
             Self::NotAcceptable => None,
+            Self::InternalFailure(err) => Some(err),
         }
     }
 }

@@ -585,6 +585,9 @@ impl Service<http::Request<crate::body::Body>> for SchemaMissingFailure {
             .extensions()
             .get::<crate::schema::SelectedProtocolOperation>()
             .expect("schema fallback requires selected protocol context");
-        std::future::ready(Ok(selected.protocol().serialize_internal_failure()))
+        let rejection = crate::schema::DeserializeError::InternalFailure(crate::Error::new(String::from(
+            "the operation has not been set",
+        )));
+        std::future::ready(Ok(selected.protocol().serialize_rejection(rejection)))
     }
 }

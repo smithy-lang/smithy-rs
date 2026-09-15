@@ -13,8 +13,10 @@
 //! `&'static ServiceSchema<'static>` is a complete, read-only description of
 //! the modeled service.
 //!
-//! These descriptors carry model information only. Anything specific to a
-//! particular runtime (routing state, configuration) belongs in that runtime.
+//! These descriptors carry the service's wire contract: the modeled shapes
+//! plus codegen-supplied naming such as [`OperationSchema::compat_name`].
+//! Anything specific to a particular runtime (routing state, configuration)
+//! belongs in that runtime.
 //!
 //! Like [`Schema`], both descriptors are `const`-constructible and covariant
 //! in `'a`, so codegen-emitted `'static` descriptors coerce to any shorter
@@ -33,6 +35,7 @@ pub struct OperationSchema<'a> {
     input: &'a Schema<'a>,
     output: &'a Schema<'a>,
     errors: &'a [&'a Schema<'a>],
+    compat_name: Option<&'a str>,
 }
 
 impl<'a> OperationSchema<'a> {
@@ -50,7 +53,15 @@ impl<'a> OperationSchema<'a> {
             input,
             output,
             errors,
+            compat_name: None,
         }
+    }
+
+    /// Sets the operation name that name-keyed routing matches in place of the
+    /// modeled shape name. See [`Self::compat_name`].
+    pub const fn with_compat_name(mut self, name: &'a str) -> Self {
+        self.compat_name = Some(name);
+        self
     }
 
     /// Returns the operation shape schema.
@@ -76,6 +87,16 @@ impl<'a> OperationSchema<'a> {
     /// Returns the schemas of the errors modeled on this operation.
     pub fn errors(&self) -> &'a [&'a Schema<'a>] {
         self.errors
+    }
+
+    /// Returns the operation name that name-keyed routing matches in place of
+    /// the modeled shape name, when one is set.
+    ///
+    /// Protocols that select operations by name (such as awsJson's
+    /// `X-Amz-Target`) route on this name when present, falling back to
+    /// [`shape_id`](Self::shape_id)'s shape name otherwise.
+    pub fn compat_name(&self) -> Option<&'a str> {
+        self.compat_name
     }
 }
 

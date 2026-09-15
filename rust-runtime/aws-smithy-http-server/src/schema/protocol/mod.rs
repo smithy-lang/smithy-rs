@@ -164,10 +164,6 @@ pub trait ServerProtocol: Send + Sync + std::fmt::Debug + 'static {
         ctx: crate::routing::RouterBuildContext<'_>,
     ) -> Result<crate::routing::SharedProtocolRouter, crate::routing::RouterBuildError>;
 
-    /// Renders the protocol's existing internal failure response when a service is built
-    /// using build_unchecked() and a handler has not been set.
-    fn serialize_internal_failure(&self) -> Response;
-
     /// The protocol trait's shape ID, such as `aws.protocols#restJson1`.
     fn protocol_id(&self) -> &'static ShapeId<'static>;
 
@@ -227,10 +223,11 @@ pub trait ServerProtocol: Send + Sync + std::fmt::Debug + 'static {
     /// Serializes a modeled error with the protocol's discriminator framing.
     fn serialize_error(&self, error: &dyn HttpModeledError) -> Response;
 
-    /// Converts a request-deserialization failure into the protocol's response.
+    /// Converts a rejected request into the protocol's response.
     ///
     /// Each protocol answers with its `RuntimeError` responses, quirks included, such as awsJson
-    /// and rpcv2Cbor collapsing `Accept` and `Content-Type` failures into a plain 400. These
+    /// and rpcv2Cbor collapsing `Accept` and `Content-Type` failures into a plain 400, and
+    /// [`DeserializeError::InternalFailure`] becoming the 500 internal-failure response. These
     /// responses are the protocol's wire contract and must not change shape.
     fn serialize_rejection(&self, err: DeserializeError) -> Response;
 }

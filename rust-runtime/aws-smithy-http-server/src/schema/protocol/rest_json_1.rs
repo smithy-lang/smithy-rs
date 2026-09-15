@@ -56,10 +56,6 @@ impl ServerProtocol for RestJson1Protocol {
     ) -> Result<crate::routing::SharedProtocolRouter, crate::routing::RouterBuildError> {
         crate::routing::schema::rest_router::<RestJson1>(ctx.targets)
     }
-    fn serialize_internal_failure(&self) -> Response {
-        crate::response::IntoResponse::<RestJson1>::into_response(crate::runtime_error::InternalFailureException)
-    }
-
     fn protocol_id(&self) -> &'static ShapeId<'static> {
         &PROTOCOL_ID
     }
@@ -139,6 +135,9 @@ impl ServerProtocol for RestJson1Protocol {
                 IntoResponse::<RestJson1>::into_response(RuntimeError::from(RequestRejection::NotAcceptable))
             }
             DeserializeError::ConstraintViolation(err) => stamp_validation_extension(self.serialize_error(&*err)),
+            DeserializeError::InternalFailure(err) => {
+                IntoResponse::<RestJson1>::into_response(RuntimeError::InternalFailure(err))
+            }
         }
     }
 }

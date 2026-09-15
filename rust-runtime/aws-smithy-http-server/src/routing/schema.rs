@@ -235,8 +235,8 @@ impl<B> fmt::Debug for Dispatch<B> {
 /// A service routing normalized requests using one protocol and an owned handler collection.
 ///
 /// Generic over the transport body `B`: requests entering with the transport's own body flow to
-/// handlers unerased. The default is hyper's body; anything else — tests, upgrade layers, other
-/// transports — enters through [`SchemaBody::new`](crate::body::SchemaBody::new)-built bodies.
+/// handlers unerased. The default is hyper's body; any other request body — tests, upgrade
+/// layers, other transports — is accepted and erased into a boxed state on entry.
 pub struct SchemaRoutingService<B = hyper::body::Incoming> {
     inner: Dispatch<B>,
 }
@@ -473,11 +473,15 @@ impl<B> SchemaRoutingService<B> {
         self
     }
 }
-/// The transport door: the transport's own body enters unerased.
-impl<B> Service<Request<B>> for SchemaRoutingService<B>
+/// Any compatible body enters. The transport body `B` and an already-normalized
+/// [`SchemaBody<B>`](crate::body::SchemaBody) stay unerased; any other body — tests, adapters,
+/// upgrade layers — is erased into a boxed state (see [`SchemaBody::new`](crate::body::SchemaBody::new)).
+impl<B, RB> Service<Request<RB>> for SchemaRoutingService<B>
 where
     B: http_body::Body<Data = Bytes> + Send + Sync + Unpin + 'static,
     B::Error: Into<BoxError>,
+    RB: http_body::Body<Data = Bytes> + Send + Sync + 'static,
+    RB::Error: Into<BoxError>,
 {
     type Response = Response<BoxBody>;
     type Error = Infallible;
@@ -485,26 +489,8 @@ where
     fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Infallible>> {
         Poll::Ready(Ok(()))
     }
-    fn call(&mut self, request: Request<B>) -> Self::Future {
-        self.inner.call(request.map(crate::body::SchemaBody::passthrough))
-    }
-}
-
-/// The pipeline door: an already-normalized body — buffered, erased, or rebuilt — enters as-is.
-/// Coherent with the transport door because `B` can never equal `SchemaBody<B>`.
-impl<B> Service<Request<crate::body::SchemaBody<B>>> for SchemaRoutingService<B>
-where
-    B: http_body::Body<Data = Bytes> + Send + Sync + Unpin + 'static,
-    B::Error: Into<BoxError>,
-{
-    type Response = Response<BoxBody>;
-    type Error = Infallible;
-    type Future = SchemaRoutingFuture<B>;
-    fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Infallible>> {
-        Poll::Ready(Ok(()))
-    }
-    fn call(&mut self, request: Request<crate::body::SchemaBody<B>>) -> Self::Future {
-        self.inner.call(request)
+    fn call(&mut self, request: Request<RB>) -> Self::Future {
+        self.inner.call(request.map(crate::body::SchemaBody::new))
     }
 }
 

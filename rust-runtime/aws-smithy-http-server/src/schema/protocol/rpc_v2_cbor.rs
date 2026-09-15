@@ -56,10 +56,6 @@ impl ServerProtocol for RpcV2CborProtocol {
     ) -> Result<crate::routing::SharedProtocolRouter, crate::routing::RouterBuildError> {
         crate::routing::schema::rpc_v2_cbor_router(&ctx)
     }
-    fn serialize_internal_failure(&self) -> Response {
-        crate::response::IntoResponse::<RpcV2Cbor>::into_response(crate::runtime_error::InternalFailureException)
-    }
-
     fn protocol_id(&self) -> &'static ShapeId<'static> {
         &PROTOCOL_ID
     }
@@ -148,6 +144,9 @@ impl ServerProtocol for RpcV2CborProtocol {
                 .map(|response| stamp_error_extension(response, schema.shape_id().shape_name()))
                 .map(stamp_validation_extension)
                 .unwrap_or_else(serialization_failure)
+            }
+            DeserializeError::InternalFailure(err) => {
+                IntoResponse::<RpcV2Cbor>::into_response(RuntimeError::InternalFailure(err))
             }
         }
     }

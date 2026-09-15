@@ -55,10 +55,6 @@ impl ServerProtocol for RestXmlProtocol {
     ) -> Result<crate::routing::SharedProtocolRouter, crate::routing::RouterBuildError> {
         crate::routing::schema::rest_router::<RestXml>(ctx.targets)
     }
-    fn serialize_internal_failure(&self) -> Response {
-        crate::response::IntoResponse::<RestXml>::into_response(crate::runtime_error::InternalFailureException)
-    }
-
     fn protocol_id(&self) -> &'static ShapeId<'static> {
         &PROTOCOL_ID
     }
@@ -134,6 +130,9 @@ impl ServerProtocol for RestXmlProtocol {
             // The smuggled reason string never reaches the wire; legacy renders `{}` regardless.
             DeserializeError::ConstraintViolation(_) => {
                 IntoResponse::<RestXml>::into_response(RuntimeError::Validation(String::new()))
+            }
+            DeserializeError::InternalFailure(err) => {
+                IntoResponse::<RestXml>::into_response(RuntimeError::InternalFailure(err))
             }
         }
     }

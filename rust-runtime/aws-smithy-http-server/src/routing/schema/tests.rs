@@ -109,9 +109,6 @@ impl ServerProtocol for BodyProtocol {
             config: ctx.config.for_routing(),
         }))
     }
-    fn serialize_internal_failure(&self) -> Response<BoxBody> {
-        rejection(StatusCode::INTERNAL_SERVER_ERROR, "test protocol missing handler")
-    }
     fn deserialize_request<'a>(
         &'a self,
         input: &Schema<'_>,
@@ -398,7 +395,12 @@ async fn all_builtins_route_without_polling_body_and_preserve_fallback_errors() 
             .iter()
             .map(|op| OperationHandlerBinding::new(op, Route::new(crate::operation::SchemaMissingFailure)));
         let app = SchemaRoutingService::from_operation_handler_bindings(schema, [], bindings).unwrap();
-        let expected = app.inner.protocol.serialize_internal_failure();
+        let expected = app
+            .inner
+            .protocol
+            .serialize_rejection(DeserializeError::InternalFailure(Error::new(String::from(
+                "the operation has not been set",
+            ))));
         let mut req = Request::builder()
             .method("POST")
             .uri(path)
