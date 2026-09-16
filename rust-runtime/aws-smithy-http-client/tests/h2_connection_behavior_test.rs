@@ -48,7 +48,7 @@ fn h2_client_with_provider(
     backend.build_https(
         BackendConfig::default(),
         provider,
-        test_tls::server_tls_context(),
+        test_tls::SERVER_IDENTITY.client_context(),
     )
 }
 
@@ -752,7 +752,7 @@ mod idle_timeout {
                 ..Default::default()
             },
             rustls_aws_lc(),
-            test_tls::server_tls_context(),
+            test_tls::SERVER_IDENTITY.client_context(),
         )
     }
 
@@ -977,7 +977,7 @@ mod partition_reuse {
         let second = PartitionId::from_index(2);
         let pool = ConnectionPool::builder()
             .tls_provider(rustls_aws_lc())
-            .tls_context(test_tls::server_tls_context())
+            .tls_context(test_tls::SERVER_IDENTITY.client_context())
             .partitions([
                 Partition::new(first, TokioDriverSpawner::current()),
                 Partition::new(second, TokioDriverSpawner::current()),
