@@ -55,16 +55,16 @@ import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
-class XmlBindingTraitSerializerGenerator(
+open class XmlBindingTraitSerializerGenerator(
     codegenContext: CodegenContext,
-    private val httpBindingResolver: HttpBindingResolver,
+    protected val httpBindingResolver: HttpBindingResolver,
 ) : StructuredDataSerializerGenerator {
-    private val symbolProvider = codegenContext.symbolProvider
-    private val runtimeConfig = codegenContext.runtimeConfig
-    private val model = codegenContext.model
-    private val codegenTarget = codegenContext.target
-    private val protocolFunctions = ProtocolFunctions(codegenContext)
-    private val codegenScope =
+    protected val symbolProvider = codegenContext.symbolProvider
+    protected val runtimeConfig = codegenContext.runtimeConfig
+    protected val model = codegenContext.model
+    protected val codegenTarget = codegenContext.target
+    protected val protocolFunctions = ProtocolFunctions(codegenContext)
+    protected val codegenScope =
         arrayOf(
             "XmlWriter" to
                 RuntimeType.smithyXml(runtimeConfig).resolve("encode::XmlWriter"),
@@ -75,9 +75,9 @@ class XmlBindingTraitSerializerGenerator(
             *RuntimeType.preludeScope,
         )
 
-    private val xmlIndex = XmlNameIndex.of(model)
-    private val rootNamespace = codegenContext.serviceShape.getTrait<XmlNamespaceTrait>()
-    private val util = SerializerUtil(model, symbolProvider)
+    protected val xmlIndex = XmlNameIndex.of(model)
+    protected val rootNamespace = codegenContext.serviceShape.getTrait<XmlNamespaceTrait>()
+    protected val util = SerializerUtil(model, symbolProvider)
 
     sealed class Ctx {
         abstract val input: String
@@ -101,10 +101,10 @@ class XmlBindingTraitSerializerGenerator(
         }
     }
 
-    private fun Ctx.Element.scopedTo(member: MemberShape) =
+    protected fun Ctx.Element.scopedTo(member: MemberShape) =
         this.copy(input = "$input.${symbolProvider.toMemberName(member)}")
 
-    private fun Ctx.Scope.scopedTo(member: MemberShape) =
+    protected fun Ctx.Scope.scopedTo(member: MemberShape) =
         this.copy(input = "$input.${symbolProvider.toMemberName(member)}")
 
     override fun operationInputSerializer(operationShape: OperationShape): RuntimeType? {
@@ -295,13 +295,13 @@ class XmlBindingTraitSerializerGenerator(
         }
     }
 
-    private fun XmlNamespaceTrait?.apply(): String {
+    protected fun XmlNamespaceTrait?.apply(): String {
         this ?: return ""
         val prefix = prefix.map { prefix -> "Some(${prefix.dq()})" }.orElse("None")
         return ".write_ns(${uri.dq()}, $prefix)"
     }
 
-    private fun RustWriter.structureInner(
+    protected open fun RustWriter.structureInner(
         members: XmlMemberIndex,
         ctx: Ctx.Element,
     ) {
@@ -325,7 +325,7 @@ class XmlBindingTraitSerializerGenerator(
         rust("scope.finish();")
     }
 
-    private fun RustWriter.serializeRawMember(
+    protected open fun RustWriter.serializeRawMember(
         member: MemberShape,
         input: String,
     ) {
@@ -374,7 +374,7 @@ class XmlBindingTraitSerializerGenerator(
     }
 
     @Suppress("NAME_SHADOWING")
-    private fun RustWriter.serializeMember(
+    protected open fun RustWriter.serializeMember(
         memberShape: MemberShape,
         ctx: Ctx.Scope,
         rootNameOverride: String? = null,
@@ -454,7 +454,7 @@ class XmlBindingTraitSerializerGenerator(
         }
     }
 
-    private fun RustWriter.serializeStructure(
+    protected open fun RustWriter.serializeStructure(
         structureShape: StructureShape,
         members: XmlMemberIndex,
         ctx: Ctx.Element,
@@ -480,7 +480,7 @@ class XmlBindingTraitSerializerGenerator(
         rust("#T(${ctx.input}, ${ctx.elementWriter})?", structureSerializer)
     }
 
-    private fun RustWriter.serializeUnion(
+    protected open fun RustWriter.serializeUnion(
         unionShape: UnionShape,
         ctx: Ctx.Element,
     ) {
@@ -536,7 +536,7 @@ class XmlBindingTraitSerializerGenerator(
         rust("#T(${ctx.input}, ${ctx.elementWriter})?", structureSerializer)
     }
 
-    private fun RustWriter.serializeList(
+    protected open fun RustWriter.serializeList(
         listShape: CollectionShape,
         ctx: Ctx.Scope,
     ) {
@@ -546,7 +546,7 @@ class XmlBindingTraitSerializerGenerator(
         }
     }
 
-    private fun RustWriter.serializeFlatList(
+    protected open fun RustWriter.serializeFlatList(
         member: MemberShape,
         listShape: CollectionShape,
         ctx: Ctx.Scope,
@@ -561,7 +561,7 @@ class XmlBindingTraitSerializerGenerator(
         }
     }
 
-    private fun RustWriter.serializeMap(
+    protected open fun RustWriter.serializeMap(
         mapShape: MapShape,
         entryName: String,
         ctx: Ctx.Scope,
@@ -588,7 +588,7 @@ class XmlBindingTraitSerializerGenerator(
      * [inner] is passed a new `ctx` object to use for code generation which handles the potentially
      * new name of the input.
      */
-    private fun <T : Ctx> RustWriter.handleOptional(
+    protected open fun <T : Ctx> RustWriter.handleOptional(
         member: MemberShape,
         ctx: T,
         inner: RustWriter.(T) -> Unit,
@@ -624,17 +624,17 @@ class XmlBindingTraitSerializerGenerator(
         }
     }
 
-    private fun OperationShape.requestBodyMembers(): XmlMemberIndex =
+    protected fun OperationShape.requestBodyMembers(): XmlMemberIndex =
         XmlMemberIndex.fromMembers(
             httpBindingResolver.requestMembers(this, HttpLocation.DOCUMENT),
         )
 
-    private fun OperationShape.responseBodyMembers(): XmlMemberIndex =
+    protected fun OperationShape.responseBodyMembers(): XmlMemberIndex =
         XmlMemberIndex.fromMembers(
             httpBindingResolver.responseMembers(this, HttpLocation.DOCUMENT),
         )
 
-    private fun Shape.xmlNamespace(root: Boolean): XmlNamespaceTrait? {
+    protected fun Shape.xmlNamespace(root: Boolean): XmlNamespaceTrait? {
         return this.getTrait<XmlNamespaceTrait>().letIf(root) { it ?: rootNamespace }
     }
 }
