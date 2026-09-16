@@ -22,6 +22,7 @@ use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::connection::CaptureSmithyConnection;
 use aws_smithy_runtime_api::client::connection::ConnectionMetadata;
 use aws_smithy_runtime_api::client::connector_metadata::ConnectorMetadata;
+use aws_smithy_runtime_api::client::dns::ResolveDnsError;
 use aws_smithy_runtime_api::client::http::{
     HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpClient,
     SharedHttpConnector,
@@ -639,6 +640,10 @@ fn downcast_error(err: BoxError) -> ConnectorError {
         Ok(connector_error) => return *connector_error,
         Err(box_error) => box_error,
     };
+    // DNS resolution is part of connection establishment and is retryable as I/O.
+    if find_source::<ResolveDnsError>(err.as_ref()).is_some() {
+        return ConnectorError::io(err);
+    }
     // generally, the top of chain will probably be a hyper error. Go through a set of hyper specific
     // error classifications
     let err = match find_source::<hyper::Error>(err.as_ref()) {

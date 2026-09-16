@@ -520,13 +520,16 @@ mod tests {
             &registry.partition(second).expect("second partition exists"),
         );
 
+        let constructions = fixture
+            .constructions
+            .lock()
+            .expect("construction log is not poisoned");
         assert_eq!(
-            2,
-            fixture
-                .constructions
-                .lock()
-                .expect("construction log is not poisoned")
-                .len()
+            [
+                (Some("interface-a".to_string()), HTTP_ALPN_PROTOCOLS),
+                (Some("interface-a".to_string()), HTTP1_ALPN_PROTOCOLS),
+            ],
+            constructions.as_slice()
         );
         assert_eq!(2, fixture.factory.connectors.lock().len());
     }
@@ -548,13 +551,18 @@ mod tests {
             &registry.partition(second).expect("second partition exists"),
         );
 
+        let constructions = fixture
+            .constructions
+            .lock()
+            .expect("construction log is not poisoned");
         assert_eq!(
-            4,
-            fixture
-                .constructions
-                .lock()
-                .expect("construction log is not poisoned")
-                .len()
+            [
+                (Some("interface-a".to_string()), HTTP_ALPN_PROTOCOLS),
+                (Some("interface-a".to_string()), HTTP1_ALPN_PROTOCOLS),
+                (Some("interface-b".to_string()), HTTP_ALPN_PROTOCOLS),
+                (Some("interface-b".to_string()), HTTP1_ALPN_PROTOCOLS),
+            ],
+            constructions.as_slice()
         );
         assert_eq!(4, fixture.factory.connectors.lock().len());
     }

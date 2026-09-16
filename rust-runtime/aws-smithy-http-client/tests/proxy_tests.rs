@@ -18,12 +18,17 @@ mod common {
     pub(crate) mod tls;
 }
 
-use aws_smithy_http_client::pool::{Client as PoolClient, ConnectionPool};
 use aws_smithy_http_client::proxy::ProxyConfig;
 #[cfg(any(feature = "rustls-ring", feature = "s2n-tls"))]
 use aws_smithy_http_client::tls;
 use aws_smithy_runtime_api::box_error::BoxError;
-use aws_smithy_runtime_api::client::dns::{DnsFuture, ResolveDns};
+#[cfg(any(
+    feature = "rustls-aws-lc",
+    feature = "rustls-aws-lc-fips",
+    feature = "rustls-ring",
+    feature = "s2n-tls"
+))]
+use aws_smithy_runtime_api::client::dns::SharedDnsResolver;
 use aws_smithy_runtime_api::client::http::{HttpConnector, SharedHttpClient, SharedHttpConnector};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 #[cfg(any(feature = "rustls-ring", feature = "s2n-tls"))]
@@ -40,8 +45,6 @@ use common::tls as test_tls;
 use http_1x::{Response, StatusCode};
 use http_body_util::BodyExt;
 use std::future::Future;
-use std::net::IpAddr;
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 struct TestClient {
@@ -49,47 +52,19 @@ struct TestClient {
     connector: SharedHttpConnector,
 }
 
-#[derive(Clone, Debug)]
-struct RecordingResolver {
-    address: IpAddr,
-    names: Arc<Mutex<Vec<String>>>,
-}
-
-impl RecordingResolver {
-    fn new(address: IpAddr) -> Self {
-        Self {
-            address,
-            names: Arc::new(Mutex::new(Vec::new())),
-        }
-    }
-
-    fn names(&self) -> Vec<String> {
-        self.names.lock().expect("DNS log is not poisoned").clone()
-    }
-}
-
-impl ResolveDns for RecordingResolver {
-    fn resolve_dns<'a>(&'a self, name: &'a str) -> DnsFuture<'a> {
-        self.names
-            .lock()
-            .expect("DNS log is not poisoned")
-            .push(name.to_string());
-        DnsFuture::ready(Ok(vec![self.address]))
-    }
-}
-fn http_client(
-    backend: &dyn HttpClientBackend,
-    proxy_config: ProxyConfig,
-    pool_idle_timeout: Option<Duration>,
-) -> TestClient {
-    let client = backend.build(BackendConfig {
-        pool_idle_timeout,
-        proxy_config: Some(proxy_config),
-    });
+fn http_client(backend: &dyn HttpClientBackend, config: BackendConfig) -> TestClient {
+    let client = backend.build(config);
     let connector = test_client::connector(&client);
     TestClient {
         _client: client,
         connector,
+    }
+}
+
+fn proxy_backend_config(proxy_config: ProxyConfig) -> BackendConfig {
+    BackendConfig {
+        proxy_config: Some(proxy_config),
+        ..Default::default()
     }
 }
 
@@ -170,7 +145,7 @@ async fn http_forward_proxy_uses_absolute_form(backend: &dyn HttpClientBackend) 
     })
     .await;
     let config = ProxyConfig::http(format!("http://{}", proxy.addr())).expect("valid proxy");
-    let client = http_client(backend, config, None);
+    let client = http_client(backend, proxy_backend_config(config));
 
     assert_eq!(
         (StatusCode::OK, "proxied".to_string()),
@@ -191,24 +166,26 @@ async fn test_http_forward_proxy_uses_absolute_form_with_partitioned_connection_
     http_forward_proxy_uses_absolute_form(&PartitionedConnectionPool).await;
 }
 
-#[tokio::test]
-async fn test_custom_dns_resolver_is_used_for_proxy_connections() {
-    const PROXY_HOST: &str = "pool-proxy.test";
+#[cfg(any(
+    feature = "rustls-aws-lc",
+    feature = "rustls-aws-lc-fips",
+    feature = "rustls-ring",
+    feature = "s2n-tls"
+))]
+async fn custom_dns_resolver_is_used_for_proxy_connections(backend: &dyn HttpClientBackend) {
+    const PROXY_HOST: &str = "proxy.test";
 
     let proxy = MockHttpServer::with_response(StatusCode::OK, "proxied through custom DNS").await;
-    let resolver = RecordingResolver::new(proxy.addr().ip());
+    let resolver = proxy.dns_resolver(PROXY_HOST);
     let proxy_config = ProxyConfig::http(format!("http://{PROXY_HOST}:{}", proxy.addr().port()))
         .expect("valid proxy URI");
-    let pool = ConnectionPool::builder()
-        .proxy_config(proxy_config)
-        .dns_resolver(resolver.clone())
-        .build_http()
-        .expect("valid pool");
-    let client = SharedHttpClient::new(PoolClient::new(&pool).expect("anonymous partition"));
-    let client = TestClient {
-        connector: test_client::connector(&client),
-        _client: client,
-    };
+    let client = http_client(
+        backend,
+        BackendConfig {
+            dns_resolver: Some(SharedDnsResolver::new(resolver.clone())),
+            ..proxy_backend_config(proxy_config)
+        },
+    );
 
     assert_eq!(
         (StatusCode::OK, "proxied through custom DNS".to_string()),
@@ -216,11 +193,33 @@ async fn test_custom_dns_resolver_is_used_for_proxy_connections() {
             .await
             .expect("proxy request succeeds")
     );
-    assert_eq!(vec![PROXY_HOST.to_string()], resolver.names());
+    assert_eq!(vec![PROXY_HOST.to_string()], resolver.lookups());
     assert_eq!(
         "http://origin.test/custom-dns-proxy",
         proxy.requests()[0].uri
     );
+}
+
+#[cfg(any(
+    feature = "rustls-aws-lc",
+    feature = "rustls-aws-lc-fips",
+    feature = "rustls-ring",
+    feature = "s2n-tls"
+))]
+#[tokio::test]
+async fn test_custom_dns_resolver_is_used_for_proxy_connections_with_hyper_util_legacy_pool() {
+    custom_dns_resolver_is_used_for_proxy_connections(&HyperUtilLegacyPool).await;
+}
+
+#[cfg(any(
+    feature = "rustls-aws-lc",
+    feature = "rustls-aws-lc-fips",
+    feature = "rustls-ring",
+    feature = "s2n-tls"
+))]
+#[tokio::test]
+async fn test_custom_dns_resolver_is_used_for_proxy_connections_with_partitioned_connection_pool() {
+    custom_dns_resolver_is_used_for_proxy_connections(&PartitionedConnectionPool).await;
 }
 
 async fn configured_proxy_authentication_is_applied(backend: &dyn HttpClientBackend) {
@@ -228,7 +227,7 @@ async fn configured_proxy_authentication_is_applied(backend: &dyn HttpClientBack
     let config = ProxyConfig::http(format!("http://{}", proxy.addr()))
         .expect("valid proxy")
         .with_basic_auth("testuser", "testpass");
-    let client = http_client(backend, config, None);
+    let client = http_client(backend, proxy_backend_config(config));
 
     assert_eq!(
         (StatusCode::OK, "authenticated".to_string()),
@@ -266,7 +265,7 @@ async fn caller_proxy_authorization_is_preserved(backend: &dyn HttpClientBackend
     let config = ProxyConfig::http(format!("http://{}", proxy.addr()))
         .expect("valid proxy")
         .with_basic_auth("configured", "credentials");
-    let client = http_client(backend, config, None);
+    let client = http_client(backend, proxy_backend_config(config));
     let mut request = HttpRequest::get("http://service.test/caller-auth").expect("valid request");
     request
         .headers_mut()
@@ -294,7 +293,7 @@ async fn proxy_url_authentication_is_applied(backend: &dyn HttpClientBackend) {
     let proxy = MockHttpServer::with_auth_validation("urluser", "urlpass").await;
     let config =
         ProxyConfig::http(format!("http://urluser:urlpass@{}", proxy.addr())).expect("valid proxy");
-    let client = http_client(backend, config, None);
+    let client = http_client(backend, proxy_backend_config(config));
 
     assert_eq!(
         StatusCode::OK,
@@ -326,7 +325,7 @@ async fn proxy_url_authentication_precedes_configured_authentication(
     let config = ProxyConfig::http(format!("http://urluser:urlpass@{}", proxy.addr()))
         .expect("valid proxy")
         .with_basic_auth("configured", "credentials");
-    let client = http_client(backend, config, None);
+    let client = http_client(backend, proxy_backend_config(config));
 
     assert_eq!(
         StatusCode::OK,
@@ -360,7 +359,7 @@ async fn environment_proxy_is_used(backend: &dyn HttpClientBackend) {
             ("NO_PROXY", "localhost,127.0.0.1"),
         ],
         || async {
-            let client = http_client(backend, ProxyConfig::from_env(), None);
+            let client = http_client(backend, proxy_backend_config(ProxyConfig::from_env()));
             assert_eq!(
                 (StatusCode::OK, "environment proxy".to_string()),
                 get(&client, "http://service.test/environment")
@@ -389,7 +388,7 @@ async fn no_proxy_bypasses_proxy(backend: &dyn HttpClientBackend) {
     let config = ProxyConfig::http(format!("http://{}", proxy.addr()))
         .expect("valid proxy")
         .no_proxy("127.0.0.1");
-    let client = http_client(backend, config, None);
+    let client = http_client(backend, proxy_backend_config(config));
 
     assert_eq!(
         (StatusCode::OK, "direct".to_string()),
@@ -413,7 +412,7 @@ async fn test_no_proxy_bypass_with_partitioned_connection_pool() {
 
 async fn disabled_proxy_uses_direct_origin_form(backend: &dyn HttpClientBackend) {
     let origin = MockHttpServer::with_response(StatusCode::OK, "direct").await;
-    let client = http_client(backend, ProxyConfig::disabled(), None);
+    let client = http_client(backend, proxy_backend_config(ProxyConfig::disabled()));
 
     assert_eq!(
         (StatusCode::OK, "direct".to_string()),
@@ -439,7 +438,7 @@ async fn https_only_proxy_bypasses_http(backend: &dyn HttpClientBackend) {
     let origin = MockHttpServer::with_response(StatusCode::OK, "direct HTTP").await;
     let config =
         ProxyConfig::https(format!("http://{}", proxy.addr())).expect("valid proxy configuration");
-    let client = http_client(backend, config, None);
+    let client = http_client(backend, proxy_backend_config(config));
 
     assert_eq!(
         (StatusCode::OK, "direct HTTP".to_string()),
@@ -463,7 +462,7 @@ async fn test_https_only_proxy_bypasses_http_with_partitioned_connection_pool() 
 async fn all_traffic_proxy_forwards_http(backend: &dyn HttpClientBackend) {
     let proxy = MockHttpServer::with_response(StatusCode::OK, "all traffic").await;
     let config = ProxyConfig::all(format!("http://{}", proxy.addr())).expect("valid proxy");
-    let client = http_client(backend, config, None);
+    let client = http_client(backend, proxy_backend_config(config));
 
     assert_eq!(
         (StatusCode::OK, "all traffic".to_string()),
@@ -486,7 +485,7 @@ async fn test_all_traffic_proxy_forwards_http_with_partitioned_connection_pool()
 
 async fn unreachable_proxy_fails(backend: &dyn HttpClientBackend) {
     let config = ProxyConfig::http("http://127.0.0.1:1").expect("valid proxy");
-    let client = http_client(backend, config, None);
+    let client = http_client(backend, proxy_backend_config(config));
     assert!(
         get(&client, "http://service.test/unreachable")
             .await
@@ -510,7 +509,7 @@ async fn incorrect_proxy_authentication_returns_407(backend: &dyn HttpClientBack
     let config = ProxyConfig::http(format!("http://{}", proxy.addr()))
         .expect("valid proxy")
         .with_basic_auth("wrong", "credentials");
-    let client = http_client(backend, config, None);
+    let client = http_client(backend, proxy_backend_config(config));
 
     assert_eq!(
         StatusCode::PROXY_AUTHENTICATION_REQUIRED,
@@ -540,7 +539,7 @@ async fn disabled_proxy_overrides_environment(backend: &dyn HttpClientBackend) {
     let origin = MockHttpServer::with_response(StatusCode::OK, "direct").await;
     let proxy_uri = format!("http://{}", proxy.addr());
     with_env_vars(&[("HTTP_PROXY", &proxy_uri)], || async {
-        let client = http_client(backend, ProxyConfig::disabled(), None);
+        let client = http_client(backend, proxy_backend_config(ProxyConfig::disabled()));
         assert_eq!(
             (StatusCode::OK, "direct".to_string()),
             get(&client, &format!("http://{}/disabled", origin.addr()))
@@ -566,7 +565,13 @@ async fn test_disabled_proxy_overrides_environment_with_partitioned_connection_p
 async fn idle_proxy_connection_is_evicted(backend: &dyn HttpClientBackend) {
     let proxy = MockHttpServer::with_response(StatusCode::OK, "proxied").await;
     let config = ProxyConfig::http(format!("http://{}", proxy.addr())).expect("valid proxy");
-    let client = http_client(backend, config, Some(Duration::from_millis(100)));
+    let client = http_client(
+        backend,
+        BackendConfig {
+            pool_idle_timeout: Some(Duration::from_millis(100)),
+            ..proxy_backend_config(config)
+        },
+    );
 
     assert_eq!(
         StatusCode::OK,
@@ -745,7 +750,12 @@ async fn tunneled_https_request_uses_origin_form(
     let config = ProxyConfig::all(format!("http://{}", proxy.addr()))
         .expect("valid proxy")
         .with_basic_auth("connectuser", "connectpass");
-    let client = https_client(backend, config, provider, test_tls::server_tls_context());
+    let client = https_client(
+        backend,
+        config,
+        provider,
+        test_tls::SERVER_IDENTITY.client_context(),
+    );
     let target = format!("https://localhost:{}/inside?value=1", origin.addr().port());
 
     assert_eq!(

@@ -5,6 +5,13 @@
 
 //! HTTP proxy and tunneled-origin support for integration tests.
 
+#[cfg(any(
+    feature = "rustls-aws-lc",
+    feature = "rustls-aws-lc-fips",
+    feature = "rustls-ring",
+    feature = "s2n-tls"
+))]
+use aws_smithy_runtime_api::client::dns::{DnsFuture, ResolveDns, ResolveDnsError};
 use base64::Engine;
 use http_1x::{Request, Response, StatusCode};
 use hyper::body::Incoming;
@@ -12,6 +19,13 @@ use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
 use std::collections::HashMap;
 use std::convert::Infallible;
+#[cfg(any(
+    feature = "rustls-aws-lc",
+    feature = "rustls-aws-lc-fips",
+    feature = "rustls-ring",
+    feature = "s2n-tls"
+))]
+use std::net::IpAddr;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
@@ -49,6 +63,65 @@ impl RecordedRequest {
                     )
                 })
                 .collect(),
+        }
+    }
+}
+
+/// DNS resolver that maps one expected hostname to a test server.
+#[cfg(any(
+    feature = "rustls-aws-lc",
+    feature = "rustls-aws-lc-fips",
+    feature = "rustls-ring",
+    feature = "s2n-tls"
+))]
+#[derive(Clone, Debug)]
+pub(crate) struct RecordingDnsResolver {
+    hostname: String,
+    address: IpAddr,
+    lookups: Arc<Mutex<Vec<String>>>,
+}
+
+#[cfg(any(
+    feature = "rustls-aws-lc",
+    feature = "rustls-aws-lc-fips",
+    feature = "rustls-ring",
+    feature = "s2n-tls"
+))]
+impl RecordingDnsResolver {
+    fn new(hostname: impl Into<String>, address: IpAddr) -> Self {
+        Self {
+            hostname: hostname.into(),
+            address,
+            lookups: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    pub(crate) fn lookups(&self) -> Vec<String> {
+        self.lookups
+            .lock()
+            .expect("DNS lookup log is not poisoned")
+            .clone()
+    }
+}
+
+#[cfg(any(
+    feature = "rustls-aws-lc",
+    feature = "rustls-aws-lc-fips",
+    feature = "rustls-ring",
+    feature = "s2n-tls"
+))]
+impl ResolveDns for RecordingDnsResolver {
+    fn resolve_dns<'a>(&'a self, name: &'a str) -> DnsFuture<'a> {
+        self.lookups
+            .lock()
+            .expect("DNS lookup log is not poisoned")
+            .push(name.to_string());
+        if name == self.hostname {
+            DnsFuture::ready(Ok(vec![self.address]))
+        } else {
+            DnsFuture::ready(Err(ResolveDnsError::new(std::io::Error::other(format!(
+                "unexpected DNS lookup for {name}"
+            )))))
         }
     }
 }
@@ -155,6 +228,16 @@ impl MockHttpServer {
 
     pub(crate) fn addr(&self) -> SocketAddr {
         self.addr
+    }
+
+    #[cfg(any(
+        feature = "rustls-aws-lc",
+        feature = "rustls-aws-lc-fips",
+        feature = "rustls-ring",
+        feature = "s2n-tls"
+    ))]
+    pub(crate) fn dns_resolver(&self, hostname: impl Into<String>) -> RecordingDnsResolver {
+        RecordingDnsResolver::new(hostname, self.addr.ip())
     }
 
     pub(crate) fn requests(&self) -> Vec<RecordedRequest> {
@@ -307,7 +390,8 @@ impl MockTlsOrigin {
             .await
             .expect("TLS origin should bind");
         let addr = listener.local_addr().expect("listener has an address");
-        let acceptor = super::tls::server_tls_acceptor(&[b"http/1.1"])
+        let acceptor = super::tls::SERVER_IDENTITY
+            .acceptor(&[b"http/1.1"])
             .expect("test TLS configuration should load");
         let (shutdown, mut shutdown_rx) = oneshot::channel();
         let requests = Arc::new(Mutex::new(Vec::new()));

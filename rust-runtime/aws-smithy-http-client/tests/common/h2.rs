@@ -411,7 +411,8 @@ impl H2ServerBuilder {
         let connections = self
             .connections
             .ok_or_else(|| H2HarnessError::new("an H2 connection plan is required"))?;
-        let tls_acceptor = tls::server_tls_acceptor(&[b"h2"])
+        let tls_acceptor = tls::SERVER_IDENTITY
+            .acceptor(&[b"h2"])
             .map_err(|err| H2HarnessError::new(format!("failed to configure TLS: {err}")))?;
         let listener = TcpListener::bind("127.0.0.1:0")
             .await

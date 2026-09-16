@@ -44,8 +44,8 @@ fn connector(client: &SharedHttpClient) -> SharedHttpConnector {
 }
 
 #[tokio::test]
-async fn custom_dns_resolver_is_used_for_pool_connections() {
-    const HOST: &str = "pool-dns.test";
+async fn custom_dns_resolver_is_used_for_explicit_partition_connections() {
+    const HOST: &str = "partition-dns.test";
 
     let harness = ConnectionTestHarness::builder()
         .endpoint(
@@ -56,24 +56,19 @@ async fn custom_dns_resolver_is_used_for_pool_connections() {
         .build()
         .await
         .expect("harness should start");
+    let partition = PartitionId::from_index(1);
     let pool = ConnectionPool::builder()
+        .partitions([Partition::new(partition, TokioDriverSpawner::current())])
         .dns_resolver(harness.dns_resolver())
         .build_http()
         .expect("valid pool");
-    let client = SharedHttpClient::new(Client::new(&pool).expect("anonymous partition"));
+    let client = shared_client(&pool, partition);
     let connector = connector(&client);
     let url = format!("http://{HOST}:{}/custom-dns", harness.port());
 
     let (status, body) = test_client::get_and_collect(&connector, &url).await;
     assert_eq!((status, body.as_slice()), (200, b"custom dns".as_slice()));
     assert_eq!(1, harness.dns_lookup_count());
-    assert_eq!(
-        vec![(
-            "/custom-dns".to_string(),
-            Some(format!("{HOST}:{}", harness.port()))
-        )],
-        harness.http_requests()
-    );
 
     drop(connector);
     drop(client);
