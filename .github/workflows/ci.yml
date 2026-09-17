@@ -281,6 +281,8 @@ jobs:
           # `legacy-client` (#4755) took it from 80 to 160 feature combinations
           # and pushed it past the default 45 minutes: observed runs have
           # completed in ~43.5 minutes and been killed at the 45 minute cap.
+          # `legacy-client` has since been removed, which should halve that again,
+          # but the raised timeout is kept as headroom for the next feature.
           timeout: 60
         - action: check-aws-sdk-canary
           runner: smithy_ubuntu-latest_8-core
