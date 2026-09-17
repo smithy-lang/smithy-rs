@@ -93,8 +93,8 @@ class MapConstraintViolationGenerator(
                     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                         match self {
                             ${if (shape.hasTrait<LengthTrait>()) "#{LengthMatchingArm}" else ""}
-                            ${if (keyConstraintViolationExists) """Self::Key(key_constraint_violation) => write!(f, "{}", key_constraint_violation),""" else ""}
-                            ${if (valueConstraintViolationExists) """Self::Value(_, value_constraint_violation) => write!(f, "{}", value_constraint_violation),""" else ""}
+                            ${if (keyConstraintViolationExists) """Self::Key(key_constraint_violation) => write!(f, "{key_constraint_violation}"),""" else ""}
+                            ${if (valueConstraintViolationExists) """Self::Value(_, value_constraint_violation) => write!(f, "{value_constraint_violation}"),""" else ""}
                         }
                     }
                 }
@@ -133,7 +133,7 @@ class MapConstraintViolationGenerator(
                 rustTemplate(
                     """
                     Self::Length(length) => {
-                        write!(f, "${it.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}", length)
+                        write!(f, "${it.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}")
                     },
                     """,
                 )

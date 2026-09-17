@@ -9,7 +9,7 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.traits.RangeTrait
 
 fun RangeTrait.validationErrorMessage() =
-    "Value at '{}' failed to satisfy constraint: Member must be ${this.rangeDescription()}"
+    "Value at '{path}' failed to satisfy constraint: Member must be ${this.rangeDescription()}"
 
 fun RangeTrait.shapeConstraintViolationDisplayMessage(shape: Shape) =
     "Value for `${shape.id}`failed to satisfy constraint: Member must be ${this.rangeDescription()}"
