@@ -291,7 +291,7 @@ data class CargoDependency(
         val Hex: CargoDependency = CargoDependency("hex", CratesIo("0.4.3"))
         val Hmac: CargoDependency = CargoDependency("hmac", CratesIo("0.13"))
         val LazyStatic: CargoDependency = CargoDependency("lazy_static", CratesIo("1.4.0"))
-        val Lru: CargoDependency = CargoDependency("lru", CratesIo("0.16.3"))
+        val Lru: CargoDependency = CargoDependency("lru", CratesIo("0.18.2"))
         val Md5: CargoDependency = CargoDependency("md-5", CratesIo("0.11.0"), rustName = "md5")
         val PercentEncoding: CargoDependency =
             CargoDependency("percent-encoding", CratesIo("2.0.0"))

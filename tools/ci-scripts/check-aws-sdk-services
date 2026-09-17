@@ -7,6 +7,9 @@
 C_YELLOW='\033[1;33m'
 C_RESET='\033[0m'
 
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/lib-doctest-helper.sh"
+
 set -eux
 cd aws-sdk
 
@@ -17,9 +20,12 @@ if [ "$ENABLE_SMOKETESTS" = "true" ]; then
     # Invoking `cargo test` at the root directory implicitly checks for the validity
     # of the top-level `Cargo.toml`
     echo "${C_YELLOW}## Running smoketests...${C_RESET}"
-    RUSTFLAGS="--cfg smoketests" cargo test --all-features
+    RUSTFLAGS="--cfg smoketests" cargo nextest run --no-tests=pass --all-features
+    RUSTFLAGS="--cfg smoketests" cargo test --all-features --doc
 else
-    cargo test --all-features
+    cargo nextest run --no-tests=pass --all-features
+    # nextest does not run doctests, so run them separately (only where a lib target exists)
+    run_doctests_if_lib ""
 fi
 
 # TODO reenable these tests when they have lockfiles

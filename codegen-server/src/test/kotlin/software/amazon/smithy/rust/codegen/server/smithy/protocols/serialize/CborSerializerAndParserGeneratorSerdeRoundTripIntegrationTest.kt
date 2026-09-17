@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols.serialize
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.ListShape
@@ -246,7 +247,16 @@ internal class CborSerializerAndParserGeneratorSerdeRoundTripIntegrationTest {
             val instantiator = ServerInstantiator(codegenContext, ignoreMissingMembers = true, withinTest = true)
             val rpcv2Cbor = ServerRpcV2CborProtocol(codegenContext)
 
-            for (operationShape in codegenContext.model.operationShapes) {
+            // Only generate round-trip tests for operations in the target service's closure.
+            // `prepareRpcV2CborModel` builds the model with `discoverModels()`, which loads *every* Smithy model on
+            // the classpath — including the test suites of unrelated protocols (`rpcv2Json`, for instance, which
+            // Smithy added in 1.73). `codegenContext.model` is documented as not necessarily being pruned to the
+            // service closure, so iterating its operations directly would generate CBOR round-trip tests for
+            // operations that belong to another protocol and are not part of the generated crate.
+            val operationShapes =
+                TopDownIndex.of(codegenContext.model).getContainedOperations(codegenContext.serviceShape)
+
+            for (operationShape in operationShapes) {
                 val serverProtocolTestGenerator =
                     ServerProtocolTestGenerator(codegenContext, ServerRpcV2CborFactory().support(), operationShape)
 

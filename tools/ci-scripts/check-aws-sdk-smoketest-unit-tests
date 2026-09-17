@@ -4,13 +4,19 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/lib-doctest-helper.sh"
+
 set -eux
 cd aws-sdk-smoketest
-cargo test --all-features
+cargo nextest run --no-tests=pass --all-features
+# nextest does not run doctests, so run them separately (only where a lib target exists)
+run_doctests_if_lib ""
 
 for test_dir in tests/*; do
     if [ -f "${test_dir}/Cargo.toml" ]; then
         echo "#### Testing ${test_dir}..."
-        cargo test --all-features --manifest-path "${test_dir}/Cargo.toml"
+        cargo nextest run --no-tests=pass --all-features --manifest-path "${test_dir}/Cargo.toml"
+        run_doctests_if_lib "" --manifest-path "${test_dir}/Cargo.toml"
     fi
 done

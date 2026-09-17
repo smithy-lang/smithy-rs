@@ -192,7 +192,7 @@ mod tests {
     fn test_write_boolean() {
         let bytes = round_trip(|s| s.write_boolean(&BOOLEAN, true).unwrap());
         let mut dec = crate::Decoder::new(&bytes);
-        assert_eq!(dec.boolean().unwrap(), true);
+        assert!(dec.boolean().unwrap());
     }
 
     #[test]
