@@ -32,8 +32,8 @@ Finally, the `legacy-client` feature flags added when the legacy client was firs
 
 **Breaking change:** `aws-smithy-runtime-api`'s `legacy-client` feature is removed. It was an alias for `client` and gated no code, so if you enabled it, enable `client` instead. `aws-smithy-runtime`'s `tls-rustls` no longer enables it.
 
-**Breaking change:** `aws-config`'s `legacy-client` feature is renamed to `legacy-https-client`. Unlike the `aws-smithy-runtime-api` feature of the same name, this one is not inert — it selects the `hyper` 0.14.x + `rustls` 0.21.x stack — so it is kept under a name that says so, matching the feature on generated SDK crates:
+**Breaking change:** `aws-config`'s `legacy-client` feature is removed. It existed to gate the pre-`v2026_01_12` behavior versions, which no longer need gating now that they fall back to the `hyper` 1.x client. If you specifically want the `hyper` 0.14.x + `rustls` 0.21.x stack, depend on `aws-smithy-runtime` directly and enable `tls-rustls`:
 
 ```toml
-aws-config = { version = "...", features = ["legacy-https-client"] }
+aws-smithy-runtime = { version = "...", features = ["client", "tls-rustls"] }
 ```
