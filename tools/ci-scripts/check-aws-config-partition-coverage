@@ -1,0 +1,70 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Checks that the check-aws-config `--partition` legs cover the feature powerset exactly once, so
+# partitioning can't drop coverage. Cheap; no generated SDK needed.
+
+C_YELLOW='\033[1;33m'
+C_RESET='\033[0m'
+
+set -euo pipefail
+cd smithy-rs
+
+N="${1:-4}"   # number of partitions; keep in sync with the check-aws-config matrix in ci.yml
+# A crate that builds standalone (no generated SDK needed) so this can run in test-codegen.
+PROBE_DIR="rust-runtime/aws-smithy-types"
+
+echo -e "${C_YELLOW}# Guarding check-aws-config partition coverage (N=${N})...${C_RESET}"
+
+# --partition was added in cargo-hack 0.6.31
+if ! cargo hack --help 2>&1 | grep -q -- '--partition'; then
+    echo "ERROR: installed cargo-hack has no --partition flag (needs >= 0.6.31)" && cargo hack --version && exit 1
+fi
+echo "cargo-hack supports --partition: $(cargo hack --version)"
+
+pushd "${PROBE_DIR}" &>/dev/null
+
+# cargo-hack logs `info: running ... (k/TOTAL)` for combos in the partition and `info: skipping`
+# for the rest. --depth 1 keeps the set small and fast.
+HACK_ARGS=(check --feature-powerset --exclude-all-features --depth 1)
+
+total_run=0
+union_file="$(mktemp)"
+TOTAL=""
+for (( i=1; i<=N; i++ )); do
+    log="$(mktemp)"
+    # --partition must precede the subcommand, or it's forwarded to cargo and errors
+    cargo hack --partition "${i}/${N}" "${HACK_ARGS[@]}" >"${log}" 2>&1 || {
+        echo "ERROR: partition ${i}/${N} invocation errored:" && cat "${log}" && exit 1; }
+
+    # `|| true` since grep exits 1 on no match under `set -e`
+    ran="$(grep -c 'info: running '  "${log}" || true)"
+    skipped="$(grep -c 'info: skipping ' "${log}" || true)"
+    seen=$(( ran + skipped ))
+    echo "  partition ${i}/${N}: ran=${ran} skipped=${skipped} (accounted ${seen})"
+
+    # Every partition sees the same full set as its denominator
+    if [[ -z "${TOTAL}" ]]; then TOTAL="${seen}"; fi
+    if [[ "${seen}" -ne "${TOTAL}" ]]; then
+        echo "ERROR: partition ${i}/${N} accounted ${seen}, expected ${TOTAL}" && exit 1
+    fi
+
+    (grep 'info: running ' "${log}" || true) | sed -E 's/.*running .(cargo[^`]*). on.*/\1/' >>"${union_file}"
+    total_run=$(( total_run + ran ))
+done
+
+# Completeness: the partitions together run the whole set
+if [[ "${total_run}" -ne "${TOTAL}" ]]; then
+    echo "ERROR: partitions ran ${total_run} combinations but the full set is ${TOTAL} -- coverage lost" && exit 1
+fi
+
+# Disjointness: no combination runs in more than one partition
+distinct="$(sort -u "${union_file}" | wc -l | tr -d ' ')"
+if [[ "${distinct}" -ne "${TOTAL}" ]]; then
+    echo "ERROR: partitions overlap -- ${total_run} runs but ${distinct} distinct combinations" && exit 1
+fi
+
+popd &>/dev/null
+echo -e "${C_YELLOW}# ${N} partitions are a complete, disjoint cover of all ${TOTAL} combinations${C_RESET}"

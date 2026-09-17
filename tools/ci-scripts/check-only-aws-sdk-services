@@ -12,18 +12,43 @@ cd aws-sdk
 # Remove examples from workspace
 sed -i '/"examples\//d' Cargo.toml
 
-cargo check --all-targets --all-features
+# Optional `i/N` shards the ~300 service crates across parallel legs. No arg checks the whole
+# workspace (local dev and any non-matrix caller).
+PARTITION="${1:-}"
 
-for test_dir in tests/*; do
-    if [ -f "${test_dir}/Cargo.toml" ]; then
-        echo "#### Checking ${test_dir}..."
-        cargo check --all-targets --all-features --manifest-path "${test_dir}/Cargo.toml"
+if [[ -n "${PARTITION}" ]]; then
+    i="${PARTITION%/*}"
+    n="${PARTITION#*/}"
+    # Round-robin the sorted workspace members into this leg's slice, then check just those crates
+    mapfile -t all_pkgs < <(cargo metadata --no-deps --format-version 1 | python3 -c '
+import json, sys
+for name in sorted(p["name"] for p in json.load(sys.stdin)["packages"]):
+    print(name)')
+    pkg_args=()
+    for idx in "${!all_pkgs[@]}"; do
+        if (( idx % n == i - 1 )); then
+            pkg_args+=(-p "${all_pkgs[$idx]}")
+        fi
+    done
+    cargo check --all-targets --all-features "${pkg_args[@]}"
+else
+    cargo check --all-targets --all-features
+fi
+
+# The integration-test check and the large-file guard cover the whole SDK, so run them once (on the
+# first leg, or when unpartitioned) rather than repeating them on every shard.
+if [[ -z "${PARTITION}" || "${PARTITION%/*}" == "1" ]]; then
+    for test_dir in tests/*; do
+        if [ -f "${test_dir}/Cargo.toml" ]; then
+            echo "#### Checking ${test_dir}..."
+            cargo check --all-targets --all-features --manifest-path "${test_dir}/Cargo.toml"
+        fi
+    done
+
+    large_file_count="$(find sdk -iname '*.rs' -type f -size +1M | wc -l | bc)"
+    if [[ "${large_file_count}" != "0" ]]; then
+        echo "Found ${large_file_count} generated code files larger than 1 MB:"
+        find sdk -iname '*.rs' -type f -size +1M
+        exit 1
     fi
-done
-
-large_file_count="$(find sdk -iname '*.rs' -type f -size +1M | wc -l | bc)"
-if [[ "${large_file_count}" != "0" ]]; then
-    echo "Found ${large_file_count} generated code files larger than 1 MB:"
-    find sdk -iname '*.rs' -type f -size +1M
-    exit 1
 fi
