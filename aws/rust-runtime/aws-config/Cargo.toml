@@ -24,10 +24,6 @@ rt-tokio = ["aws-smithy-async/rt-tokio", "aws-smithy-runtime/rt-tokio", "tokio/r
 client-hyper = ["aws-smithy-runtime/default-https-client"]
 rustls = ["client-hyper"]
 default-https-client = ["aws-smithy-runtime/default-https-client"]
-# The `hyper` 0.14.x + `rustls` 0.21.x stack. Renamed from `legacy-client`, which was too generic:
-# unlike the inert `aws-smithy-runtime-api/legacy-client` that was removed alongside this, it selects
-# an HTTP stack, so it is named to match the `legacy-https-client` feature on generated SDK crates.
-legacy-https-client = ["aws-smithy-runtime/tls-rustls"]
 sso = ["dep:aws-sdk-sso", "dep:aws-sdk-ssooidc", "dep:sha1", "dep:hex", "dep:zeroize", "aws-smithy-runtime-api/http-auth"]
 credentials-login = [
     "dep:aws-sdk-signin",
