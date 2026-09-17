@@ -27,3 +27,13 @@ aws-sdk-s3 = { version = "...", features = ["legacy-https-client"] }
 This also applies if you implement `HttpConnector`/`SharedHttpClient` against `http` 0.2.x types, or otherwise depend on the legacy stack being present in the tree.
 
 Separately, `aws-smithy-runtime` now falls back to the `hyper` 1.x client when a `BehaviorVersion` older than `v2026_01_12` would otherwise get no default HTTP client at all. Previously that path consulted only `connector-hyper-0-14-x`, so two configurations installed no client and failed every request with "No HTTP client was available to send this request": a build without the legacy connector, and a build with the connector but no TLS implementation, since the legacy `default_client` requires `legacy-rustls-ring`. Builds that do have a working legacy client are unaffected and continue to use it for those behavior versions.
+
+Finally, the `legacy-client` feature flags added when the legacy client was first made opt-in are cleaned up, now that pre-`v2026_01_12` behavior versions fall back to the `hyper` 1.x client instead of being gated behind a legacy feature.
+
+**Breaking change:** `aws-smithy-runtime-api`'s `legacy-client` feature is removed. It was an alias for `client` and gated no code, so if you enabled it, enable `client` instead. `aws-smithy-runtime`'s `tls-rustls` no longer enables it.
+
+**Breaking change:** `aws-config`'s `legacy-client` feature is renamed to `legacy-https-client`. Unlike the `aws-smithy-runtime-api` feature of the same name, this one is not inert — it selects the `hyper` 0.14.x + `rustls` 0.21.x stack — so it is kept under a name that says so, matching the feature on generated SDK crates:
+
+```toml
+aws-config = { version = "...", features = ["legacy-https-client"] }
+```
