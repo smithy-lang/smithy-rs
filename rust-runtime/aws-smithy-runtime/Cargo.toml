@@ -29,7 +29,7 @@ http-02x = [
 ]
 # NOTE: connector-hyper-0-14-x and tls-rustls are "legacy" features related to default HTTP client based on hyper 0.14.x ecosystem
 connector-hyper-0-14-x = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/hyper-014", "aws-smithy-types/http-body-0-4-x"]
-tls-rustls = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/legacy-rustls-ring", "connector-hyper-0-14-x", "aws-smithy-runtime-api/legacy-client"]
+tls-rustls = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/legacy-rustls-ring", "connector-hyper-0-14-x"]
 default-https-client = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/rustls-aws-lc"]
 rt-tokio = ["tokio/rt"]
 
