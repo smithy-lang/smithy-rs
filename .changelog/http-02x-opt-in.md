@@ -28,7 +28,7 @@ aws-sdk-s3 = { version = "...", features = ["http-02x"] }
 
 ### Removing `http` 0.2.x from your dependency tree
 
-If you need `http` 0.2.x gone entirely — for example to satisfy a patch-compliance scan, since `http` 0.2.x has unpatched advisories — disable default features and re-enable the ones you need, omitting `rustls`:
+If you need `http` 0.2.x gone entirely — for example to satisfy a patch-compliance scan, since `http` 0.2.x has unpatched advisories — disable default features and re-enable the ones you need, omitting `rustls` (and not enabling `legacy-https-client`, which selects the same legacy stack):
 
 ```toml
 aws-sdk-s3 = { version = "...", default-features = false, features = [
@@ -100,6 +100,14 @@ The `http` dependency is now optional, enabled by a new opt-in `http-02x` featur
 - `PresignedRequest::into_http_02x_request`
 
 Prefer migrating to the `http` 1.x equivalents, which are enabled by default and are not deprecated: `PresignedRequest::make_http_1x_request` and `PresignedRequest::into_http_1x_request`.
+
+A new opt-in **`legacy-https-client`** feature names the `hyper` 0.14.x + `rustls` 0.21.x HTTP client — the same stack the default-on `rustls` feature selects today. It is additive: `rustls` is what puts that stack in a default build, so adding this feature changes no dependency tree.
+
+It exists now because `rustls` is going to change meaning. A later release will make `rustls` a synonym for `default-https-client` (the `hyper` 1.x stack) and drop it from the default list, at which point a call site that wrote `features = ["rustls"]` meaning "the legacy stack" will silently get a different one. Spelling it `legacy-https-client` instead pins the stack you actually want, and that spelling will keep working:
+
+```toml
+aws-sdk-s3 = { version = "...", features = ["legacy-https-client"] }
+```
 
 The generated test features changed too, so that building with `test-util` no longer drags `http` 0.2.x in:
 

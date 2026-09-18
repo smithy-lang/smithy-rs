@@ -122,8 +122,8 @@ pub fn default_http_client_plugin_v2(
                     behavior_version = ?behavior_version,
                     "this behavior version selects the legacy hyper 0.14.x HTTP client, which is \
                      not available in this build, so the default hyper 1.x HTTPS client is being \
-                     used instead. Enable the `rustls` feature on your AWS SDK crate (or \
-                     `aws-smithy-runtime/tls-rustls`) to get the legacy stack, or move to \
+                     used instead. Enable the `legacy-https-client` feature on your AWS SDK crate \
+                     (or `aws-smithy-runtime/tls-rustls`) to get the legacy stack, or move to \
                      `BehaviorVersion::v2026_01_12()` or later to stop seeing this warning.",
                 );
             }
