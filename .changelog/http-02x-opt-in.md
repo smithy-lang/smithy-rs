@@ -71,7 +71,7 @@ Neither the `http-body-1-x` feature nor the `rt-tokio` feature pulls in `http` 0
 - `client::endpoint`, which contains the already-deprecated `apply_endpoint`. Its 1.8.0 deprecation notice already announced that it may be feature gated in a future minor version.
 - `client::http::body::minimum_throughput::http_body_0_4_x`, which provides the `http_body::Body` 0.4.x implementations for `MinimumThroughputDownloadBody` and `ThroughputReadingBody`. Stalled stream protection is unaffected on the `http` 1.x path, which is what generated clients use.
 
-**Breaking change:** the `test-util` feature no longer enables `legacy-test-util`, so it no longer pulls the `hyper` 0.14 / `http` 0.2.x ecosystem into the dependency tree. Two re-exports moved behind `legacy-test-util`, since both are the pre-1.x variants:
+**Breaking change:** the `test-util` feature no longer enables `legacy-test-util`, so it no longer pulls the `hyper` 0.14 stack — `hyper` 0.14 and `http-body` 0.4.x — into the dependency tree. Note that `http` 0.2.x itself is still reachable under `test-util`, through `aws-smithy-protocol-test`, which has not been moved off it. Two re-exports moved behind `legacy-test-util`, since both are the pre-1.x variants:
 
 - `client::http::test_util::capture_request`
 - `client::http::test_util::infallible_client_fn`
