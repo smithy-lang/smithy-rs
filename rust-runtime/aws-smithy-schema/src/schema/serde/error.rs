@@ -77,4 +77,39 @@ impl SerdeError {
             message: message.into(),
         }
     }
+
+    /// Creates an [`InvalidInput`](Self::InvalidInput) error with the given message.
+    pub fn invalid_input(message: impl Into<String>) -> Self {
+        SerdeError::InvalidInput {
+            message: message.into(),
+        }
+    }
+
+    /// Creates an [`UnsupportedOperation`](Self::UnsupportedOperation) error with the given message.
+    pub fn unsupported(message: impl Into<String>) -> Self {
+        SerdeError::UnsupportedOperation {
+            message: message.into(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn constructors_build_the_matching_variant() {
+        assert!(matches!(
+            SerdeError::invalid_input("bad"),
+            SerdeError::InvalidInput { message } if message == "bad"
+        ));
+        assert!(matches!(
+            SerdeError::unsupported("nope"),
+            SerdeError::UnsupportedOperation { message } if message == "nope"
+        ));
+        assert!(matches!(
+            SerdeError::custom("other"),
+            SerdeError::Custom { message } if message == "other"
+        ));
+    }
 }
