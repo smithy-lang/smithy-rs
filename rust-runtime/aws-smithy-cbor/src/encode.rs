@@ -537,4 +537,22 @@ mod tests {
             ]
         );
     }
+
+    #[test]
+    fn valid_big_decimal_can_be_encoded() {
+        for value in [
+            "0",
+            "+5",
+            "-0.0",
+            ".5",
+            "-.5",
+            "5.",
+            "1.5E+3",
+            "1e9223372036854775807",
+            "1e-9223372036854775807",
+        ] {
+            let mut encoder = Encoder::new(Vec::new());
+            encoder.big_decimal(&value.parse().unwrap());
+        }
+    }
 }
