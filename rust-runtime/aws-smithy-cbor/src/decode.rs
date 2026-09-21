@@ -677,12 +677,20 @@ mod tests {
     }
 
     #[test]
-    fn big_decimal_round_trip() {
+    fn big_decimal_round_trip_preserves_numeric_value() {
         for value in [
             "0",
+            "0.0",
+            "-0.0",
+            "+5",
+            ".5",
+            "5.",
             "1.2300",
             "-273.15",
             "1.23e10",
+            "1e2",
+            "1.5E+3",
+            "1E-10",
             "0.123456789012345678901234567890",
             "18446744073709551616",
             "-18446744073709551617",
@@ -692,9 +700,18 @@ mod tests {
             let bytes = encoder.into_writer();
             let mut decoder = Decoder::new(&bytes);
             let result = decoder.big_decimal().expect("should decode");
+
+            // CBOR decimal fractions preserve the numeric value, but not the
+            // original spelling. BigDecimal equality compares its inner string, so compare the parsed values instead.
+            // See https://github.com/smithy-lang/smithy-rs/issues/4863
             let actual: bigdecimal::BigDecimal = result.as_ref().parse().unwrap();
             let expected: bigdecimal::BigDecimal = value.parse().unwrap();
-            assert_eq!(actual, expected, "round-trip failed for {value}");
+            assert_eq!(
+                actual,
+                expected,
+                "round-trip failed for {value}, decoded as {}",
+                result.as_ref()
+            );
         }
     }
 
