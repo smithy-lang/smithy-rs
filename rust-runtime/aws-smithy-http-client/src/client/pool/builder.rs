@@ -6,6 +6,7 @@
 //! Construction and validation for [`ConnectionPool`].
 
 use super::establish::{self, TransportFactory};
+use super::events::{ConnectionEventListener, ConnectionEvents, SharedConnectionEventListener};
 use super::maintenance::MaintenanceConfig;
 use super::registry::{AdmissionPolicy, PartitionRegistry, PartitionRegistryError};
 use super::{ConnectionPool, ConnectionReuseScope, Partition, PoolConfig, PoolInner};
@@ -101,6 +102,8 @@ pub struct Builder<Tls = TlsUnset> {
     proxy_config: ProxyConfig,
     /// Caller-supplied DNS resolver, or `None` for the client default.
     dns_resolver: Option<SharedDnsResolver>,
+    /// Optional listener for every connection lifecycle event from this pool.
+    event_listener: Option<SharedConnectionEventListener>,
     /// TLS typestate carried into protocol-specific terminal builders.
     tls: Tls,
 }
@@ -118,6 +121,7 @@ impl Default for Builder<TlsUnset> {
             partitions: None,
             proxy_config: ProxyConfig::disabled(),
             dns_resolver: None,
+            event_listener: None,
             tls: TlsUnset {},
         }
     }
@@ -150,6 +154,14 @@ impl<Tls: fmt::Debug> fmt::Debug for Builder<Tls> {
                     "custom"
                 } else {
                     "default"
+                },
+            )
+            .field(
+                "event_listener",
+                &if self.event_listener.is_some() {
+                    "configured"
+                } else {
+                    "disabled"
                 },
             )
             .field("tls", &self.tls)
@@ -304,6 +316,26 @@ impl<Tls> Builder<Tls> {
         self.dns_resolver = resolver;
         self
     }
+
+    /// Observes connection establishment and installed-lifetime transitions.
+    ///
+    /// The listener applies to every partition and runs synchronously outside
+    /// pool locks. Observation is disabled unless a listener is configured.
+    pub fn event_listener(mut self, listener: impl ConnectionEventListener) -> Self {
+        self.event_listener = Some(SharedConnectionEventListener::new(listener));
+        self
+    }
+
+    /// Mutably configures pool-wide connection lifecycle observation.
+    ///
+    /// Passing `None` disables observation.
+    pub fn set_event_listener(
+        &mut self,
+        listener: Option<SharedConnectionEventListener>,
+    ) -> &mut Self {
+        self.event_listener = listener;
+        self
+    }
 }
 
 impl Builder<TlsUnset> {
@@ -320,6 +352,7 @@ impl Builder<TlsUnset> {
             partitions: self.partitions,
             proxy_config: self.proxy_config,
             dns_resolver: self.dns_resolver,
+            event_listener: self.event_listener,
             tls: TlsProviderSelected {
                 provider,
                 context: TlsContext::default(),
@@ -556,6 +589,7 @@ impl<Tls> Builder<Tls> {
                 config,
                 registry,
                 transport,
+                connection_events: ConnectionEvents::new(self.event_listener, time_source),
                 next_connection_id: AtomicU64::new(0),
             }),
         })
@@ -727,6 +761,7 @@ mod tests {
         assert!(builder.partitions.is_none());
         assert!(builder.proxy_config.is_disabled());
         assert!(builder.dns_resolver.is_none());
+        assert!(builder.event_listener.is_none());
 
         builder.set_idle_timeout(Some(None));
         builder.set_tcp_keepalive(Some(None));
@@ -782,6 +817,31 @@ mod tests {
         builder.set_dns_resolver(None);
         assert!(builder.proxy_config.is_disabled());
         assert!(builder.dns_resolver.is_none());
+    }
+
+    #[test]
+    fn event_listener_sets_resets_and_survives_tls_selection() {
+        let observed = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let mut builder = Builder::default().event_listener({
+            let observed = observed.clone();
+            move |_: &super::super::ConnectionEvent<'_>| {
+                observed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
+        });
+        assert!(builder.event_listener.is_some());
+
+        let shared = builder.event_listener.clone();
+        builder.set_event_listener(None);
+        assert!(builder.event_listener.is_none());
+        builder.set_event_listener(shared);
+        assert!(builder.event_listener.is_some());
+
+        #[cfg(feature = "rustls-ring")]
+        let builder = builder.tls_provider(tls::Provider::rustls(
+            tls::rustls_provider::CryptoMode::Ring,
+        ));
+        assert!(builder.event_listener.is_some());
+        assert_eq!(0, observed.load(std::sync::atomic::Ordering::Relaxed));
     }
 
     #[cfg(feature = "rustls-ring")]

@@ -15,7 +15,7 @@
 use super::admission::CapacityLease;
 use super::origin::OriginKey;
 use super::partition::PartitionId;
-use crate::client::connect::ConnectPath;
+use crate::client::connect::{ConnectPath, ConnectPathInner};
 use crate::sync::{Arc, Mutex};
 pub use aws_smithy_runtime_api::client::connection::ConnectionId;
 use aws_smithy_runtime_api::client::connection::ConnectionMetadata;
@@ -53,7 +53,8 @@ pub enum CloseReason {
 
 /// Protocol selected for one installed physical connection.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum NegotiatedProtocol {
+#[non_exhaustive]
+pub enum ConnectionProtocol {
     /// HTTP/1.1 with one exclusive request sender.
     Http1,
     /// HTTP/2 with a multiplexed request sender.
@@ -66,7 +67,7 @@ pub(super) enum NegotiatedProtocol {
 /// all retain this one allocation rather than reconstructing origin or address
 /// data at each transition.
 #[derive(Debug)]
-pub(super) struct ConnectionInfo {
+pub struct ConnectionInfo {
     /// Stable identity assigned by the owning pool.
     id: ConnectionId,
     /// Canonical origin this connection may serve.
@@ -74,13 +75,13 @@ pub(super) struct ConnectionInfo {
     /// Partition that retains the transport and protocol driver.
     owner_partition: PartitionId,
     /// Protocol selected by configuration or ALPN.
-    protocol: NegotiatedProtocol,
+    protocol: ConnectionProtocol,
     /// Local socket address reported by the connector, when available.
     local_addr: Option<SocketAddr>,
     /// Remote socket address reported by the connector, when available.
     remote_addr: Option<SocketAddr>,
-    /// How the established transport reaches its origin.
-    connect_path: ConnectPath,
+    /// Connector-owned path state, including request-time proxy authorization.
+    connect_path: ConnectPathInner,
     /// Connector metadata copied into every response on this connection.
     connected: Connected,
 }
@@ -91,13 +92,13 @@ impl ConnectionInfo {
         id: ConnectionId,
         origin: OriginKey,
         owner_partition: PartitionId,
-        protocol: NegotiatedProtocol,
+        protocol: ConnectionProtocol,
         connected: Connected,
     ) -> Arc<Self> {
         let mut extras = Extensions::new();
         connected.get_extras(&mut extras);
         let http_info = extras.get::<HttpInfo>();
-        let connect_path = ConnectPath::from_connected(&connected, &extras);
+        let connect_path = ConnectPathInner::from_connected(&connected, &extras);
         Arc::new(Self {
             id,
             origin,
@@ -111,39 +112,47 @@ impl ConnectionInfo {
     }
 
     /// Returns the pool-assigned physical connection identity.
-    pub(super) fn id(&self) -> ConnectionId {
+    pub fn id(&self) -> ConnectionId {
         self.id
     }
 
     /// Returns the canonical origin this connection may serve.
-    pub(super) fn origin(&self) -> &OriginKey {
+    pub fn origin(&self) -> &OriginKey {
         &self.origin
     }
 
     /// Returns the partition that owns this connection's I/O and driver.
-    pub(super) fn owner_partition(&self) -> PartitionId {
+    pub fn owner_partition(&self) -> PartitionId {
         self.owner_partition
     }
 
     /// Returns the established HTTP protocol.
-    pub(super) fn protocol(&self) -> NegotiatedProtocol {
+    pub fn protocol(&self) -> ConnectionProtocol {
         self.protocol
     }
 
     /// Returns the connector-reported local socket address.
-    #[cfg(test)]
-    pub(super) fn local_addr(&self) -> Option<SocketAddr> {
+    pub fn local_addr(&self) -> Option<SocketAddr> {
         self.local_addr
     }
 
     /// Returns the connector-reported remote socket address.
-    #[cfg(test)]
-    pub(super) fn remote_addr(&self) -> Option<SocketAddr> {
+    pub fn remote_addr(&self) -> Option<SocketAddr> {
         self.remote_addr
     }
 
     /// Returns how this connection reaches its origin.
-    pub(super) fn connect_path(&self) -> &ConnectPath {
+    pub fn connect_path(&self) -> ConnectPath {
+        self.connect_path.public()
+    }
+
+    /// Returns whether an HTTP proxy participates in this connection path.
+    pub fn is_proxied(&self) -> bool {
+        self.connect_path().is_proxied()
+    }
+
+    /// Returns connector-owned request-path state.
+    pub(super) fn connect_path_inner(&self) -> &ConnectPathInner {
         &self.connect_path
     }
 
@@ -155,7 +164,7 @@ impl ConnectionInfo {
     /// Builds Smithy metadata with close authority for this H1 record.
     pub(super) fn metadata(&self, close: super::cell::h1::H1CloseHandle) -> ConnectionMetadata {
         let mut builder = ConnectionMetadata::builder()
-            .proxied(self.connect_path.is_proxied())
+            .proxied(self.is_proxied())
             .connection_id(self.id)
             .poison_fn(move || {
                 close.close(CloseReason::Poisoned);
@@ -169,7 +178,7 @@ impl ConnectionInfo {
     /// Builds Smithy metadata with close authority for this H2 generation.
     pub(super) fn h2_metadata(&self, close: super::cell::h2::H2CloseHandle) -> ConnectionMetadata {
         let mut builder = ConnectionMetadata::builder()
-            .proxied(self.connect_path.is_proxied())
+            .proxied(self.is_proxied())
             .connection_id(self.id)
             .poison_fn(move || {
                 close.close(CloseReason::Poisoned);
@@ -188,7 +197,7 @@ impl ConnectionInfo {
             OriginKey::from_parts(http_1x::uri::Scheme::HTTPS, "example.com", None)
                 .expect("synthetic test origin is valid"),
             owner_partition,
-            NegotiatedProtocol::Http1,
+            ConnectionProtocol::Http1,
             Connected::new(),
         )
     }
@@ -740,7 +749,7 @@ mod tests {
             ConnectionId::new(7),
             origin.clone(),
             PartitionId::from_index(2),
-            NegotiatedProtocol::Http1,
+            ConnectionProtocol::Http1,
             Connected::new()
                 .proxy(true)
                 .extra(ConnectorMarker("connector-extra")),
@@ -750,10 +759,10 @@ mod tests {
         assert_eq!(ConnectionId::new(7), connection.info().id());
         assert_eq!(&origin, connection.info().origin());
         assert_eq!(PartitionId::from_index(2), connection.owner_partition());
-        assert_eq!(NegotiatedProtocol::Http1, connection.info().protocol());
+        assert_eq!(ConnectionProtocol::Http1, connection.info().protocol());
         assert_eq!(None, connection.info().local_addr());
         assert_eq!(None, connection.info().remote_addr());
-        assert!(connection.info().connect_path().is_proxied());
+        assert_eq!(ConnectPath::ForwardProxy, connection.info().connect_path());
         let mut extensions = Extensions::new();
         connection.info().apply_connector_extras(&mut extensions);
         assert_eq!(

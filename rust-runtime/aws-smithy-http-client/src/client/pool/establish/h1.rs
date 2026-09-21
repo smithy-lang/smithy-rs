@@ -12,15 +12,14 @@
 use super::super::cell::h1::{H1CloseHandle, H1DriverGuard, H1Selection, H1Sender};
 use super::super::cell::{EstablishmentPermit, OriginCell};
 use super::super::connection::{
-    CloseReason, ConnectionInfo, ConnectionIo, ConnectionState, NegotiatedProtocol,
+    CloseReason, ConnectionInfo, ConnectionIo, ConnectionProtocol, ConnectionState,
 };
 use super::super::dispatch::AcquisitionContext;
-use super::next_connection_id;
-use crate::client::connect::BoxConn;
+use super::super::events::ConnectionEstablishment;
+use super::{next_connection_id, ConnectedTransport};
 use crate::client::downcast_error;
 use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_types::body::SdkBody;
-use hyper_util::client::legacy::connect::Connected;
 
 /// Handshakes, installs, and starts the owner-partition driver.
 ///
@@ -32,8 +31,8 @@ use hyper_util::client::legacy::connect::Connected;
 pub(in crate::client::pool) async fn establish_h1(
     context: AcquisitionContext,
     permit: EstablishmentPermit,
-    io: BoxConn,
-    connected: Connected,
+    transport: ConnectedTransport,
+    establishment: ConnectionEstablishment,
 ) -> Result<H1Selection, ConnectorError> {
     let request_partition = context.partition.id();
     let connection_cell = context.cell.clone();
@@ -46,7 +45,7 @@ pub(in crate::client::pool) async fn establish_h1(
         "HTTP/1 connection establishment started"
     );
 
-    let result = run_h1_handshake(context, permit, io, connected).await;
+    let result = run_h1_handshake(context, permit, transport, establishment).await;
     match &result {
         Ok(selection) => {
             let connection = selection.connection();
@@ -77,8 +76,8 @@ pub(in crate::client::pool) async fn establish_h1(
 async fn run_h1_handshake(
     context: AcquisitionContext,
     permit: EstablishmentPermit,
-    io: BoxConn,
-    connected: Connected,
+    transport: ConnectedTransport,
+    mut establishment: ConnectionEstablishment,
 ) -> Result<H1Selection, ConnectorError> {
     let AcquisitionContext {
         pool,
@@ -89,35 +88,46 @@ async fn run_h1_handshake(
         connect_timeout: _,
     } = context;
 
-    let id =
-        next_connection_id(&pool).map_err(|error| ConnectorError::other(error.into(), None))?;
+    let id = match next_connection_id(&pool) {
+        Ok(id) => id,
+        Err(error) => {
+            let error = ConnectorError::other(error.into(), None);
+            establishment.failed(&error);
+            return Err(error);
+        }
+    };
     let info = ConnectionInfo::new(
         id,
         cell.id().origin().clone(),
         partition.id(),
-        NegotiatedProtocol::Http1,
-        connected,
+        ConnectionProtocol::Http1,
+        transport.metadata,
     );
     let (connection, physical) = ConnectionState::pending_open(info);
-    let io = ConnectionIo::new(io, physical);
+    let io = ConnectionIo::new(transport.io, physical);
 
+    establishment.protocol_handshake_started();
     let (sender, driver) = match hyper::client::conn::http1::Builder::new()
         .handshake::<_, SdkBody>(io)
         .await
     {
         Ok(established) => established,
         Err(error) => {
+            let error = downcast_error(Box::new(error));
+            establishment.protocol_handshake_failed();
             connection.logical_close(CloseReason::ProtocolClosed);
-            return Err(downcast_error(Box::new(error)));
+            establishment.failed(&error);
+            return Err(error);
         }
     };
+    establishment.protocol_handshake_completed();
 
     if let Err(lease) = connection.open(permit.into_lease()) {
         drop(lease);
         connection.logical_close(CloseReason::ProtocolClosed);
-        return Err(ConnectorError::io(
-            "HTTP/1 connection closed before installation".into(),
-        ));
+        let error = ConnectorError::io("HTTP/1 connection closed before installation".into());
+        establishment.failed(&error);
+        return Err(error);
     }
 
     let selection =
@@ -139,5 +149,6 @@ async fn run_h1_handshake(
         }
         driver_guard.protocol_closed();
     }));
+    establishment.opened(connection.info());
     Ok(selection)
 }
