@@ -84,6 +84,18 @@ The legacy `connector-hyper-0-14-x` and `legacy-test-util` features otherwise wo
 
 This matters for the opt-out above. Leaving `rustls` out of the feature list removes the legacy connector, so without this fallback a client pinned to a `BehaviorVersion` older than `v2026_01_12` would come up with no HTTP client. Falling back is not silent: it logs a warning naming the feature to enable if you need the legacy stack.
 
+**Advance notice of a coming default change.** A build that resolves to the legacy `hyper` 0.14.x client now logs a warning once per process saying that the default becomes the `hyper` 1.x client in the 2.x release, currently expected November 2026 — a different TLS implementation, with different connection-pooling and timeout behavior. Nothing changes yet; this release only tells you where you stand.
+
+It fires only where the legacy client is actually selected: a `BehaviorVersion` older than `v2026_01_12` with the legacy stack compiled in, which is what a default build is today. Clients on `v2026_01_12` or later already use the `hyper` 1.x client and are unaffected, so they stay quiet.
+
+To keep the legacy client through that change, add `legacy-https-client` now — that spelling is stable across it, whereas `rustls` becomes a synonym for the `hyper` 1.x client:
+
+```toml
+aws-sdk-s3 = { version = "...", features = ["legacy-https-client"] }
+```
+
+Note the warning cannot tell a caller who has already pinned `legacy-https-client` apart from one riding the default, because both arrive at `aws-smithy-runtime` as `tls-rustls`. If you have already pinned it, you are set and can ignore the warning.
+
 ### `aws-sigv4`
 
 The default-on `sign-http` feature no longer declares a dependency on `http` 0.2.x. Nothing compiled under that feature used it: request signing runs on `http` 1.x through `SigningInstructions::apply_to_request_http1x`, and the only `http` 0.2.x path, `apply_to_request_http0x`, is gated on `http0-compat`. `http` 0.2.x is now reachable only through `http0-compat`.

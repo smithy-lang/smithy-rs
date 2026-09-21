@@ -65,6 +65,44 @@ pub fn default_http_client_plugin() -> Option<SharedRuntimePlugin> {
     default_http_client_plugin_v2(BehaviorVersion::v2024_03_28())
 }
 
+/// Announce the upcoming default HTTP client change, while the legacy stack is still the default.
+///
+/// Called only where the legacy client was actually selected, which is exactly the set of
+/// configurations that will resolve differently once `rustls` stops being a default feature of
+/// generated SDK crates. Callers who have already pinned `legacy-https-client` cannot be
+/// distinguished from callers riding the default at this layer — both arrive as `tls-rustls` — so
+/// they see it too; the message is written to be actionable either way.
+///
+/// This is transient: delete it when that default change lands. From then on the fallback warning
+/// in `default_http_client_plugin_v2` is what callers see instead.
+#[cfg(feature = "connector-hyper-0-14-x")]
+fn warn_legacy_client_default_is_changing(behavior_version: BehaviorVersion) {
+    let emit = || {
+        tracing::warn!(
+            behavior_version = ?behavior_version,
+            "this build resolves to the legacy hyper 0.14.x / http 0.2.x HTTP client. In the 2.x \
+             release, currently expected November 2026, the default becomes the hyper 1.x client: \
+             a different TLS implementation, with different connection-pooling and timeout \
+             behavior. To keep the legacy client, add `features = [\"legacy-https-client\"]` to \
+             your AWS SDK crate now — that spelling is stable across the change, whereas `rustls` \
+             will become a synonym for the hyper 1.x client. To move early instead, use \
+             `BehaviorVersion::v2026_01_12()` or later. \
+             See https://github.com/smithy-lang/smithy-rs/issues/4489",
+        );
+    };
+
+    // Once per process, so building a client per request does not flood the log. Under `cfg(test)`
+    // every call warns, because a process-wide latch would let whichever test ran first consume
+    // the only warning and make the others silently vacuous.
+    #[cfg(not(test))]
+    {
+        static WARNED: std::sync::Once = std::sync::Once::new();
+        WARNED.call_once(emit);
+    }
+    #[cfg(test)]
+    emit();
+}
+
 /// Runtime plugin that provides a default HTTPS connector.
 pub fn default_http_client_plugin_v2(
     behavior_version: BehaviorVersion,
@@ -83,6 +121,12 @@ pub fn default_http_client_plugin_v2(
         #[allow(deprecated)]
         {
             _default = crate::client::http::hyper_014::default_client();
+
+            // A legacy-only build reaches the legacy client even on a current behavior version,
+            // and will resolve to hyper 1.x once `rustls` stops being a default feature.
+            if _default.is_some() {
+                warn_legacy_client_default_is_changing(behavior_version);
+            }
         }
 
         // takes precedence over legacy connector if enabled
@@ -98,6 +142,12 @@ pub fn default_http_client_plugin_v2(
         #[allow(deprecated)]
         {
             _default = crate::client::http::hyper_014::default_client();
+
+            // The main population for the upcoming default change: an older behavior version with
+            // the legacy stack compiled in, which is what a default build is today.
+            if _default.is_some() {
+                warn_legacy_client_default_is_changing(behavior_version);
+            }
         }
 
         // Fall back to the latest https stack so that an older behavior version still gets a
@@ -457,7 +507,7 @@ pub fn default_plugins(
 mod tests {
     use super::*;
     use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, RuntimePlugins};
-    #[cfg(feature = "default-https-client")]
+    #[cfg(any(feature = "default-https-client", feature = "tls-rustls"))]
     use tracing_test::traced_test;
 
     fn test_plugin_params(version: BehaviorVersion) -> DefaultPluginParams {
@@ -768,6 +818,45 @@ mod tests {
         assert!(
             logs_contain("selects the legacy hyper 0.14.x HTTP client"),
             "falling back to the hyper 1.x client must be logged"
+        );
+    }
+
+    /// While the legacy stack is still the default, a build that resolves to it must be told the
+    /// default is changing — otherwise the change arrives with no notice.
+    ///
+    /// Gated to a build where the legacy client actually yields something: `hyper_014::default_client`
+    /// needs `legacy-rustls-ring`, which `tls-rustls` supplies.
+    #[test]
+    #[traced_test]
+    #[expect(deprecated)]
+    #[cfg(feature = "tls-rustls")]
+    fn resolving_to_the_legacy_client_warns_that_the_default_is_changing() {
+        let old = default_http_client_plugin_v2(BehaviorVersion::v2024_03_28());
+        assert!(old.is_some(), "the legacy client should have been selected");
+        assert!(
+            logs_contain("the default becomes the hyper 1.x client"),
+            "resolving to the legacy client must announce the upcoming default change"
+        );
+        assert!(
+            logs_contain("legacy-https-client"),
+            "the warning must name the feature that pins the legacy client"
+        );
+    }
+
+    /// The warning is about *resolving to* the legacy client, so a build without it must stay quiet
+    /// rather than warn about a stack it never had.
+    #[test]
+    #[traced_test]
+    #[expect(deprecated)]
+    #[cfg(all(
+        feature = "default-https-client",
+        not(feature = "connector-hyper-0-14-x")
+    ))]
+    fn a_build_without_the_legacy_client_does_not_warn_about_it() {
+        let _ = default_http_client_plugin_v2(BehaviorVersion::v2024_03_28());
+        assert!(
+            !logs_contain("the default becomes the hyper 1.x client"),
+            "a build with no legacy client must not warn about the legacy default changing"
         );
     }
 
