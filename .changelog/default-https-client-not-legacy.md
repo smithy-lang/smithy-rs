@@ -26,6 +26,8 @@ aws-sdk-s3 = { version = "...", features = ["legacy-https-client"] }
 
 This also applies if you implement `HttpConnector`/`SharedHttpClient` against `http` 0.2.x types, or otherwise depend on the legacy stack being present in the tree.
 
+The advance-notice warning that announced this change is removed, since the change has now happened. A build that still wants the legacy client keeps working by enabling `legacy-https-client`, and one that expected it but does not enable it gets the existing fallback warning instead, which reports the substitution rather than predicting it.
+
 Finally, the `legacy-client` feature flags added when the legacy client was first made opt-in are cleaned up, now that pre-`v2026_01_12` behavior versions fall back to the `hyper` 1.x client instead of being gated behind a legacy feature.
 
 `aws-smithy-runtime`'s `tls-rustls` no longer enables `aws-smithy-runtime-api/legacy-client`. That feature is now a deprecated no-op: it is still declared, and still expands to `client` so that enabling `tls-rustls` alone keeps working, but nothing reads it. It will be deleted in a later release, once no released crate names it. If you enable it directly, switch to `client`.
