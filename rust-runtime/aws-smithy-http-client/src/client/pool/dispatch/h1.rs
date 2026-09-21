@@ -71,7 +71,7 @@ pub(super) async fn dispatch(
 
     add_host_header(&mut request, &context.absolute_uri)
         .map_err(|error| ConnectorError::user(error.into()))?;
-    let connect_path = connection.info().connect_path();
+    let connect_path = connection.info().connect_path_inner();
     connect_path.apply_proxy_authorization(request.headers_mut());
     rewrite_h1_request_target(&mut request, connect_path.uses_absolute_form());
 
@@ -425,7 +425,7 @@ fn rewrite_h1_request_target(request: &mut Request<SdkBody>, is_proxied: bool) {
 #[cfg(all(test, not(smithy_http_client_loom), feature = "rt-tokio"))]
 mod tests {
     use super::*;
-    use crate::client::connect::ConnectPath;
+    use crate::client::connect::ConnectPathInner;
     use crate::client::pool::cell::h1::H1Sender;
     use crate::client::pool::cell::OriginCell;
     use crate::client::pool::connection::ConnectionInfo;
@@ -831,8 +831,9 @@ mod tests {
 
     #[test]
     fn forward_proxy_authorization_preserves_a_caller_value() {
-        let connect_path =
-            ConnectPath::forward_proxy(Some(http_1x::HeaderValue::from_static("Basic connector")));
+        let connect_path = ConnectPathInner::forward_proxy(Some(
+            http_1x::HeaderValue::from_static("Basic connector"),
+        ));
         let caller_value = http_1x::HeaderValue::from_static("Basic caller");
 
         let mut request = Request::get("http://example.com/")

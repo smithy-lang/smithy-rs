@@ -17,19 +17,50 @@ mod common {
 }
 
 use aws_smithy_http_client::pool::{
-    Client, ConnectionPool, ConnectionReuseScope, Partition, PartitionId, TokioDriverSpawner,
+    Client, ConnectPath, ConnectionEstablishmentId, ConnectionEstablishmentStage, ConnectionEvent,
+    ConnectionPool, ConnectionProtocol, ConnectionReuseScope, OriginKey, Partition, PartitionId,
+    TokioDriverSpawner,
 };
 use aws_smithy_http_client::test_util::wire::connection::{
-    BodyPlan, ConnectionCloseReason, ConnectionEvent, ConnectionTestHarness, EndpointPlan,
-    Http1Response, Http1Script, ManualGate,
+    BodyPlan, ConnectionCloseReason, ConnectionEvent as WireConnectionEvent, ConnectionTestHarness,
+    EndpointPlan, Http1Response, Http1Script, ManualGate,
 };
+use aws_smithy_runtime_api::client::connection::ConnectionId;
 use aws_smithy_runtime_api::client::http::{SharedHttpClient, SharedHttpConnector};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use common::client as test_client;
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpListener;
 
 const IP1: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
+const IP2: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 2));
+
+#[derive(Debug)]
+enum ObservedConnectionEvent {
+    Failed {
+        establishment: ConnectionEstablishmentId,
+        origin: OriginKey,
+        stage: ConnectionEstablishmentStage,
+        remote_addr: Option<SocketAddr>,
+        protocol: Option<ConnectionProtocol>,
+        error: String,
+    },
+    Opened {
+        establishment: ConnectionEstablishmentId,
+        connection: aws_smithy_runtime_api::client::connection::ConnectionId,
+        establishment_partition: PartitionId,
+        establishment_origin: OriginKey,
+        connection_origin: OriginKey,
+        connection_partition: PartitionId,
+        remote_addr: Option<SocketAddr>,
+        protocol: ConnectionProtocol,
+        connect_path: ConnectPath,
+        handshake_measured: bool,
+    },
+}
 
 /// Resolves one declared partition through the public Smithy client boundary.
 fn shared_client(pool: &ConnectionPool, partition: PartitionId) -> SharedHttpClient {
@@ -41,6 +72,218 @@ fn shared_client(pool: &ConnectionPool, partition: PartitionId) -> SharedHttpCli
 /// Builds an operation connector with the shared test runtime components.
 fn connector(client: &SharedHttpClient) -> SharedHttpConnector {
     test_client::connector(client)
+}
+
+#[tokio::test]
+async fn connection_listener_observes_each_establishment_terminal_event() {
+    let refused_listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+        .await
+        .expect("ephemeral listener should bind");
+    let refused_addr = refused_listener.local_addr().unwrap();
+    drop(refused_listener);
+
+    let handshake_listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+        .await
+        .expect("handshake listener should bind");
+    let closed_peer_addr = handshake_listener.local_addr().unwrap();
+    let closed_peer_server = tokio::spawn(async move {
+        // HTTP/1 installation completes before the driver observes this close.
+        let (stream, _) = handshake_listener.accept().await.unwrap();
+        drop(stream);
+    });
+
+    let observed = Arc::new(Mutex::new(Vec::new()));
+    let pool = ConnectionPool::builder()
+        .event_listener({
+            let observed = observed.clone();
+            move |event: &ConnectionEvent<'_>| {
+                let event = match event {
+                    ConnectionEvent::EstablishmentFailed(failed) => {
+                        ObservedConnectionEvent::Failed {
+                            establishment: failed.establishment().id(),
+                            origin: failed.establishment().origin().clone(),
+                            stage: failed.stage(),
+                            remote_addr: failed.remote_addr(),
+                            protocol: failed.protocol(),
+                            error: failed.error().to_string(),
+                        }
+                    }
+                    ConnectionEvent::Opened(opened) => ObservedConnectionEvent::Opened {
+                        establishment: opened.establishment().id(),
+                        connection: opened.connection().id(),
+                        establishment_origin: opened.establishment().origin().clone(),
+                        connection_origin: opened.connection().origin().clone(),
+                        establishment_partition: opened.establishment().partition(),
+                        connection_partition: opened.connection().owner_partition(),
+                        remote_addr: opened.connection().remote_addr(),
+                        protocol: opened.connection().protocol(),
+                        connect_path: opened.connection().connect_path(),
+                        handshake_measured: opened.stats().protocol_handshake_duration().is_some(),
+                    },
+                    _ => return,
+                };
+                observed.lock().unwrap().push(event);
+            }
+        })
+        .build_http()
+        .expect("valid pool");
+    let client = SharedHttpClient::new(Client::new(&pool).expect("anonymous partition"));
+    let connector = connector(&client);
+
+    let refused_url = format!("http://{refused_addr}/");
+    test_client::send_request(
+        &connector,
+        HttpRequest::get(&refused_url).expect("valid refused request"),
+    )
+    .await
+    .expect_err("closed listener should refuse the transport");
+
+    let closed_peer_url = format!("http://{closed_peer_addr}/");
+    test_client::send_request(
+        &connector,
+        HttpRequest::get(closed_peer_url).expect("valid closed-peer request"),
+    )
+    .await
+    .expect_err("closed peer should fail the request after installation");
+    closed_peer_server.await.unwrap();
+
+    let success_listener = TcpListener::bind(refused_addr)
+        .await
+        .expect("failed origin should become reachable");
+    let success_server = tokio::spawn(async move {
+        let (mut stream, _) = success_listener.accept().await.unwrap();
+        let mut request = Vec::new();
+        let mut buffer = [0_u8; 1024];
+        while !request.windows(4).any(|window| window == b"\r\n\r\n") {
+            let count = stream.read(&mut buffer).await.unwrap();
+            assert_ne!(0, count, "request ended before its header block");
+            request.extend_from_slice(&buffer[..count]);
+        }
+        stream
+            .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 6\r\n\r\nopened")
+            .await
+            .unwrap();
+    });
+
+    let (status, body) = test_client::get_and_collect(&connector, &refused_url).await;
+    assert_eq!((status, body.as_slice()), (200, b"opened".as_slice()));
+    success_server.await.unwrap();
+
+    let events = observed.lock().unwrap();
+    assert_eq!(
+        3,
+        events.len(),
+        "each establishment emits one terminal event"
+    );
+    let (transport_id, closed_peer_id, opened_id) = match events.as_slice() {
+        [ObservedConnectionEvent::Failed {
+            establishment: transport_id,
+            origin: failed_origin,
+            stage: ConnectionEstablishmentStage::Transport,
+            remote_addr: None,
+            protocol: None,
+            error,
+        }, ObservedConnectionEvent::Opened {
+            establishment: closed_peer_id,
+            connection: closed_peer_connection,
+            establishment_origin: closed_peer_establishment_origin,
+            connection_origin: closed_peer_connection_origin,
+            establishment_partition: closed_peer_establishment_partition,
+            connection_partition: closed_peer_connection_partition,
+            remote_addr: Some(closed_peer_remote_addr),
+            protocol: ConnectionProtocol::Http1,
+            connect_path: ConnectPath::Direct,
+            handshake_measured: true,
+        }, ObservedConnectionEvent::Opened {
+            establishment: opened_id,
+            connection,
+            establishment_origin,
+            connection_origin,
+            establishment_partition,
+            connection_partition,
+            remote_addr: Some(opened_remote_addr),
+            protocol: ConnectionProtocol::Http1,
+            connect_path: ConnectPath::Direct,
+            handshake_measured: true,
+        }] => {
+            assert!(!error.is_empty());
+            assert_eq!(closed_peer_addr, *closed_peer_remote_addr);
+            assert_eq!(
+                closed_peer_establishment_origin,
+                closed_peer_connection_origin
+            );
+            assert_eq!(ConnectionId::new(0), *closed_peer_connection);
+            assert_eq!(PartitionId::ANONYMOUS, *closed_peer_establishment_partition);
+            assert_eq!(
+                *closed_peer_establishment_partition,
+                *closed_peer_connection_partition
+            );
+            assert_eq!(refused_addr, *opened_remote_addr);
+            assert_eq!(failed_origin, establishment_origin);
+            assert_eq!(establishment_origin, connection_origin);
+            assert_eq!(PartitionId::ANONYMOUS, *establishment_partition);
+            assert_eq!(*establishment_partition, *connection_partition);
+            assert_eq!(ConnectionId::new(1), *connection);
+            (*transport_id, *closed_peer_id, *opened_id)
+        }
+        events => panic!("unexpected connection events: {events:#?}"),
+    };
+    assert_ne!(transport_id, closed_peer_id);
+    assert_ne!(transport_id, opened_id);
+    assert_ne!(closed_peer_id, opened_id);
+
+    drop(events);
+    drop(connector);
+    drop(client);
+    drop(pool);
+}
+
+#[tokio::test]
+async fn address_fallback_emits_one_successful_establishment() {
+    const HOST: &str = "address-fallback.test";
+
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP2,
+            Http1Script::responses([Http1Response::ok().body("fallback")]),
+        )
+        .dns(HOST, [IP1, IP2])
+        .build()
+        .await
+        .expect("harness should start");
+    let endpoint = harness.endpoint(0).unwrap().addr();
+    let observed = Arc::new(Mutex::new(Vec::new()));
+    let pool = ConnectionPool::builder()
+        .dns_resolver(harness.dns_resolver())
+        .event_listener({
+            let observed = observed.clone();
+            move |event: &ConnectionEvent<'_>| {
+                let observation = match event {
+                    ConnectionEvent::EstablishmentFailed(failed) => (false, failed.remote_addr()),
+                    ConnectionEvent::Opened(opened) => (true, opened.connection().remote_addr()),
+                    _ => return,
+                };
+                observed.lock().unwrap().push(observation);
+            }
+        })
+        .build_http()
+        .expect("valid pool");
+    let client = SharedHttpClient::new(Client::new(&pool).expect("anonymous partition"));
+    let connector = connector(&client);
+    let url = format!("http://{HOST}:{}/", harness.port());
+
+    let (status, body) = test_client::get_and_collect(&connector, &url).await;
+    assert_eq!((status, body.as_slice()), (200, b"fallback".as_slice()));
+    assert_eq!(
+        &[(true, Some(endpoint))],
+        observed.lock().unwrap().as_slice(),
+        "a failed address attempt remains inside one successful establishment"
+    );
+
+    drop(connector);
+    drop(client);
+    drop(pool);
+    harness.shutdown().await.expect("clean harness shutdown");
 }
 
 #[tokio::test]
@@ -175,7 +418,7 @@ async fn eligible_partition_borrows_the_peer_h1() {
         .events()
         .into_iter()
         .filter_map(|event| match event {
-            ConnectionEvent::Http1Request { connection_id, .. } => Some(connection_id),
+            WireConnectionEvent::Http1Request { connection_id, .. } => Some(connection_id),
             _ => None,
         })
         .collect::<Vec<_>>();
@@ -228,7 +471,7 @@ async fn ineligible_partition_reclaims_peer_capacity() {
         .events()
         .into_iter()
         .find_map(|event| match event {
-            ConnectionEvent::Http1Request { connection_id, .. } => Some(connection_id),
+            WireConnectionEvent::Http1Request { connection_id, .. } => Some(connection_id),
             _ => None,
         })
         .expect("first request should name a connection");
@@ -238,7 +481,7 @@ async fn ineligible_partition_reclaims_peer_capacity() {
         .wait_for_event(test_client::WAIT, |event| {
             matches!(
                 event,
-                ConnectionEvent::ConnectionClosed {
+                WireConnectionEvent::ConnectionClosed {
                     connection_id,
                     reason: ConnectionCloseReason::ClientClosed,
                 } if *connection_id == first_connection
@@ -278,7 +521,7 @@ async fn dropping_the_last_pool_handle_closes_idle_connections() {
         .events()
         .into_iter()
         .find_map(|event| match event {
-            ConnectionEvent::Http1Request { connection_id, .. } => Some(connection_id),
+            WireConnectionEvent::Http1Request { connection_id, .. } => Some(connection_id),
             _ => None,
         })
         .expect("request should name a connection");
@@ -290,7 +533,7 @@ async fn dropping_the_last_pool_handle_closes_idle_connections() {
         .wait_for_event(test_client::WAIT, |event| {
             matches!(
                 event,
-                ConnectionEvent::ConnectionClosed {
+                WireConnectionEvent::ConnectionClosed {
                     connection_id,
                     reason: ConnectionCloseReason::ClientClosed,
                 } if *connection_id == connection

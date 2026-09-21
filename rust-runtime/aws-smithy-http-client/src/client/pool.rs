@@ -170,6 +170,7 @@ mod client;
 mod connection;
 mod dispatch;
 mod establish;
+mod events;
 mod maintenance;
 mod origin;
 mod partition;
@@ -177,12 +178,19 @@ mod registry;
 
 pub use builder::{BuildError, Builder};
 pub use client::{Client, ClientBuildError};
-pub use connection::{CloseReason, ConnectionId};
+pub use connection::{CloseReason, ConnectionId, ConnectionInfo, ConnectionProtocol};
+pub use events::{
+    ConnectionEstablishmentFailed, ConnectionEstablishmentId, ConnectionEstablishmentInfo,
+    ConnectionEstablishmentStage, ConnectionEstablishmentStats, ConnectionEvent,
+    ConnectionEventListener, ConnectionLogicalClose, ConnectionOpened, ConnectionPhysicalClose,
+    LogicalCloseCause, SharedConnectionEventListener,
+};
 pub use origin::{InvalidOrigin, OriginKey};
 #[cfg(feature = "rt-tokio")]
 pub use partition::TokioDriverSpawner;
 pub use partition::{ConnectionReuseScope, DriverSpawner, Partition, PartitionId};
 
+pub use crate::client::connect::ConnectPath;
 use crate::sync::Arc;
 use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_types::body::SdkBody;
@@ -261,6 +269,8 @@ struct PoolInner {
     registry: PartitionRegistry,
     /// Type-erased construction of one partition-bound transport.
     transport: StdArc<dyn TransportFactory>,
+    /// Pool-wide connection lifecycle observation.
+    connection_events: events::ConnectionEvents,
     /// Monotonic identity source shared by every physical connection.
     next_connection_id: AtomicU64,
 }
