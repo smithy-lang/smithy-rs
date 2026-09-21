@@ -438,7 +438,7 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.9.4"
+version = "1.10.0"
 dependencies = [
  "arbitrary",
  "aws-credential-types",
@@ -502,7 +502,6 @@ dependencies = [
  "bytes",
  "fastrand 2.5.0",
  "futures-util",
- "http 0.2.12",
  "http 1.5.0",
  "http-body-util",
  "proptest",
@@ -536,7 +535,6 @@ dependencies = [
  "bytes",
  "fastrand 2.5.0",
  "futures-util",
- "http 0.2.12",
  "http 1.5.0",
  "proptest",
  "regex-lite",
@@ -568,7 +566,6 @@ dependencies = [
  "bytes",
  "fastrand 2.5.0",
  "futures-util",
- "http 0.2.12",
  "http 1.5.0",
  "proptest",
  "regex-lite",
@@ -597,7 +594,6 @@ dependencies = [
  "aws-types",
  "bytes",
  "fastrand 2.5.0",
- "http 0.2.12",
  "http 1.5.0",
  "proptest",
  "regex-lite",
@@ -630,7 +626,6 @@ dependencies = [
  "criterion",
  "fastrand 2.5.0",
  "futures-util",
- "http 0.2.12",
  "http 1.5.0",
  "proptest",
  "regex-lite",
@@ -663,7 +658,6 @@ dependencies = [
  "aws-types",
  "fastrand 2.5.0",
  "futures-util",
- "http 0.2.12",
  "http 1.5.0",
  "proptest",
  "regex-lite",
@@ -692,7 +686,6 @@ dependencies = [
  "aws-types",
  "bytes",
  "fastrand 2.5.0",
- "http 0.2.12",
  "http 1.5.0",
  "proptest",
  "regex-lite",
@@ -724,7 +717,6 @@ dependencies = [
  "fastrand 2.5.0",
  "futures-util",
  "hex",
- "http 0.2.12",
  "http 1.5.0",
  "pretty_assertions",
  "proptest",
@@ -760,7 +752,6 @@ dependencies = [
  "aws-types",
  "fastrand 2.5.0",
  "futures-util",
- "http 0.2.12",
  "http 1.5.0",
  "proptest",
  "regex-lite",
@@ -792,7 +783,6 @@ dependencies = [
  "bytes",
  "fastrand 2.5.0",
  "futures-util",
- "http 0.2.12",
  "http 1.5.0",
  "proptest",
  "regex-lite",
@@ -825,7 +815,6 @@ dependencies = [
  "bytes",
  "fastrand 2.5.0",
  "futures-util",
- "http 0.2.12",
  "http 1.5.0",
  "proptest",
  "regex-lite",
@@ -890,7 +879,6 @@ dependencies = [
  "aws-smithy-xml",
  "aws-types",
  "fastrand 2.5.0",
- "http 0.2.12",
  "http 1.5.0",
  "proptest",
  "regex-lite",
@@ -974,7 +962,6 @@ dependencies = [
  "aws-types",
  "fastrand 2.5.0",
  "futures-util",
- "http 0.2.12",
  "http 1.5.0",
  "md-5",
  "proptest",
@@ -1004,7 +991,6 @@ dependencies = [
  "aws-types",
  "bytes",
  "fastrand 2.5.0",
- "http 0.2.12",
  "http 1.5.0",
  "proptest",
  "regex-lite",
@@ -1034,7 +1020,6 @@ dependencies = [
  "bytes",
  "fastrand 2.5.0",
  "futures-util",
- "http 0.2.12",
  "http 1.5.0",
  "proptest",
  "regex-lite",
@@ -1062,7 +1047,6 @@ dependencies = [
  "aws-types",
  "bytes",
  "fastrand 2.5.0",
- "http 0.2.12",
  "http 1.5.0",
  "proptest",
  "regex-lite",
@@ -1088,7 +1072,6 @@ dependencies = [
  "aws-types",
  "bytes",
  "fastrand 2.5.0",
- "http 0.2.12",
  "http 1.5.0",
  "proptest",
  "regex-lite",
@@ -1118,7 +1101,6 @@ dependencies = [
  "aws-types",
  "fastrand 2.5.0",
  "futures-util",
- "http 0.2.12",
  "http 1.5.0",
  "proptest",
  "regex-lite",
@@ -1150,7 +1132,6 @@ dependencies = [
  "bytes",
  "fastrand 2.5.0",
  "futures-util",
- "http 0.2.12",
  "http 1.5.0",
  "proptest",
  "regex-lite",
@@ -1179,7 +1160,6 @@ dependencies = [
  "aws-types",
  "bytes",
  "fastrand 2.5.0",
- "http 0.2.12",
  "http 1.5.0",
  "proptest",
  "regex-lite",
@@ -1214,7 +1194,6 @@ dependencies = [
  "futures-core",
  "futures-util",
  "hound",
- "http 0.2.12",
  "http 1.5.0",
  "http-body-util",
  "proptest",
@@ -1227,7 +1206,7 @@ dependencies = [
 
 [[package]]
 name = "aws-sigv4"
-version = "1.5.3"
+version = "1.6.0"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-eventstream",
@@ -1523,7 +1502,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.14.2"
+version = "1.15.0"
 dependencies = [
  "approx",
  "aws-smithy-async",
