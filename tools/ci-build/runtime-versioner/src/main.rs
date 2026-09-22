@@ -20,7 +20,9 @@ mod command {
     pub use patch::{patch, patch_with};
 }
 
+mod manifest;
 mod repo;
+mod requirements;
 mod tag;
 mod util;
 
