@@ -30,9 +30,9 @@ fn is_sensitive(name: &str) -> bool {
 
 /// An immutable view of headers
 ///
-/// Header values are stored exactly as received and are *not* required to be valid UTF-8: an
-/// HTTP header value may contain any octet except a control character, while a Rust `str` may
-/// not. The string-typed accessors ([`get`](Headers::get), [`get_all`](Headers::get_all),
+/// Header values are stored exactly as received and are *not* required to be valid UTF-8: an HTTP
+/// header value may contain any octet in `0x80..=0xFF` (obs-text, RFC 7230), and an arbitrary
+/// sequence of those is not necessarily valid UTF-8. The string-typed accessors ([`get`](Headers::get), [`get_all`](Headers::get_all),
 /// [`iter`](Headers::iter), [`remove`](Headers::remove)) therefore yield only values that are
 /// valid UTF-8, and skip those that are not. Use the corresponding byte accessors
 /// ([`get_bytes`](Headers::get_bytes), [`get_all_bytes`](Headers::get_all_bytes),

@@ -8,7 +8,7 @@ bug_fix: true
 ---
 A response header value that is not valid UTF-8 no longer fails the whole response.
 
-An HTTP header value may contain any octet except a control character, so a service can send a value that is not representable as a Rust `String`. Previously one such value failed the entire response during the HTTP-to-SDK conversion. That happened before deserialization, whether or not anything read that header, and surfaced as a non-retryable `DispatchFailure`.
+An HTTP header value may contain any octet in `0x80..=0xFF` (obs-text, RFC 7230), and an arbitrary sequence of those is not necessarily valid UTF-8, so a service can send a value that is not representable as a Rust `String`. Previously one such value failed the entire response during the HTTP-to-SDK conversion. That happened before deserialization, whether or not anything read that header, and surfaced as a non-retryable `DispatchFailure`.
 
 Header values are now stored as received, and the encoding requirement applies where a value is bound to a modeled member. A header bound to no member is harmless. A header bound to a member reports an error naming that member on the client, or a 400 on the server. Nothing is dropped silently.
 

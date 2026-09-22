@@ -9,23 +9,32 @@ use aws_smithy_types::config_bag::{Storable, StoreReplace};
 
 /// What to do when a response header value bound to a modeled member is not valid UTF-8
 ///
-/// An HTTP header value may contain any octet except a control character, so a service may send a
-/// value that cannot be represented as a Rust `String`. [`Headers`](crate::http::Headers) stores
+/// An HTTP header value may contain any octet in `0x80..=0xFF` (obs-text, RFC 7230), and an
+/// arbitrary sequence of those is not necessarily valid UTF-8, so a service may send a value that
+/// cannot be represented as a Rust `String`. [`Headers`](crate::http::Headers) stores
 /// such a value as received, but the modeled member it is bound to is a `String`, so something has
 /// to give when the member is deserialized.
 ///
 /// The default is [`Reject`](Self::Reject). To choose otherwise, put this in the config bag from an
-/// interceptor that runs before deserialization:
+/// interceptor that runs before deserialization. [`Skip`](Self::Skip) does not remove the header, so
+/// the same interceptor can read the octets from any hook that sees the response, using
+/// [`Headers::get_bytes`](crate::http::Headers::get_bytes) or
+/// [`iter_bytes`](crate::http::Headers::iter_bytes):
 ///
 /// ```no_run
 /// # use aws_smithy_runtime_api::box_error::BoxError;
-/// # use aws_smithy_runtime_api::client::interceptors::context::BeforeSerializationInterceptorContextRef;
+/// # use aws_smithy_runtime_api::client::interceptors::context::{
+/// #     BeforeDeserializationInterceptorContextRef, BeforeSerializationInterceptorContextRef,
+/// # };
 /// # use aws_smithy_runtime_api::client::interceptors::Intercept;
 /// # use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 /// # use aws_smithy_runtime_api::http::NonUtf8HeaderHandling;
 /// # use aws_smithy_types::config_bag::ConfigBag;
-/// #[derive(Debug)]
-/// struct SkipNonUtf8Headers;
+/// # use std::sync::{Arc, Mutex};
+/// #[derive(Clone, Debug, Default)]
+/// struct SkipNonUtf8Headers {
+///     seen: Arc<Mutex<Vec<(String, Vec<u8>)>>>,
+/// }
 ///
 /// impl Intercept for SkipNonUtf8Headers {
 ///     fn name(&self) -> &'static str {
@@ -35,18 +44,34 @@ use aws_smithy_types::config_bag::{Storable, StoreReplace};
 ///     fn read_before_execution(
 ///         &self,
 ///         _context: &BeforeSerializationInterceptorContextRef<'_>,
+///         cfg: &mut ConfigBag,
+///     ) -> Result<(), BoxError> {
+///         cfg.interceptor_state()
+///             .store_put(NonUtf8HeaderHandling::Skip);
+///         Ok(())
+///     }
+///
+///     fn read_before_deserialization(
+///         &self,
+///         context: &BeforeDeserializationInterceptorContextRef<'_>,
+///         _runtime_components: &RuntimeComponents,
 ///         _cfg: &mut ConfigBag,
 ///     ) -> Result<(), BoxError> {
-///         _cfg.interceptor_state()
-///             .store_put(NonUtf8HeaderHandling::Skip);
+///         // Runs once per attempt, so overwrite rather than append.
+///         *self.seen.lock().unwrap() = context
+///             .response()
+///             .headers()
+///             .iter_bytes()
+///             .filter(|(_, value)| std::str::from_utf8(value).is_err())
+///             .map(|(name, value)| (name.to_owned(), value.to_vec()))
+///             .collect();
 ///         Ok(())
 ///     }
 /// }
 /// ```
 ///
 /// This applies only to values bound to a modeled member. A header bound to nothing is never an
-/// error regardless of encoding, and the raw octets of every header remain readable through
-/// [`Headers::get_bytes`](crate::http::Headers::get_bytes) and its siblings.
+/// error regardless of encoding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[non_exhaustive]
 pub enum NonUtf8HeaderHandling {
