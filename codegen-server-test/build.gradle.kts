@@ -160,13 +160,21 @@ tasks["smithyBuild"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace", "generateCargoConfigToml")
 
 project.registerModifyMtimeTask()
-project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
+project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile, useNextest = true)
 
 tasks.register<Exec>("cargoTestIntegration") {
     dependsOn("assemble")
     workingDir(projectDir.resolve("integration-tests"))
-    commandLine("cargo", "test")
+    commandLine("cargo", "nextest", "run", "--no-tests=pass")
 }
+
+// `cargo nextest run` does not run doctests, so run them separately to preserve coverage.
+tasks.register<Exec>("cargoTestIntegrationDoctests") {
+    dependsOn("assemble")
+    workingDir(projectDir.resolve("integration-tests"))
+    commandLine("cargo", "test", "--doc")
+}
+tasks["cargoTestIntegration"].finalizedBy("cargoTestIntegrationDoctests")
 
 tasks["test"].finalizedBy(cargoCommands(properties).map { it.toString }, "cargoTestIntegration")
 
