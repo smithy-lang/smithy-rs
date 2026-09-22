@@ -73,10 +73,12 @@ class BigNumberPrecisionTest {
             } else {
                 """
                 let headers = ::aws_smithy_runtime_api::http::Headers::new();
+                let cfg = ::aws_smithy_types::config_bag::ConfigBag::base();
                 let output = crate::protocol_serde::shape_test_op::de_test_op_http_response(
                     200,
                     &headers,
-                    json_response.as_bytes()
+                    json_response.as_bytes(),
+                    &cfg
                 ).unwrap();
                 """.trimIndent()
             }
@@ -278,10 +280,12 @@ class BigNumberPrecisionTest {
                         xml_response.push_str(r#"</bigDec></TestOutput>"#);
 
                         let headers = ::aws_smithy_runtime_api::http::Headers::new();
+                        let cfg = ::aws_smithy_types::config_bag::ConfigBag::base();
                         let output = crate::protocol_serde::shape_test_op::de_test_op_http_response(
                             200,
                             &headers,
-                            xml_response.as_bytes()
+                            xml_response.as_bytes(),
+                            &cfg
                         ).unwrap();
 
                         assert_eq!(output.big_int.unwrap().as_ref(), big_int_str);
