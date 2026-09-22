@@ -1,6 +1,6 @@
 [package]
 name = "aws-sigv4"
-version = "1.5.1"
+version = "1.6.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "David Barsky <me@davidbarsky.com>"]
 description = "SigV4 signer for HTTP requests and Event Stream messages."
 edition = "2021"
@@ -13,7 +13,10 @@ rust-version = "1.94.1"
 default = ["sign-http", "http1"]
 http0-compat = ["dep:http0"]
 http1 = ["dep:http"]
-sign-http = ["dep:http0", "dep:percent-encoding", "dep:form_urlencoded"]
+# NOTE: this deliberately does not enable `dep:http0`. Signing runs on `http` 1.x via
+# `SigningInstructions::apply_to_request_http1x`; the only code needing `http` 0.2.x is
+# `apply_to_request_http0x`, which is gated on `http0-compat` below.
+sign-http = ["dep:percent-encoding", "dep:form_urlencoded"]
 sign-eventstream = ["dep:aws-smithy-eventstream"]
 sigv4a = ["dep:p256", "dep:crypto-bigint", "dep:subtle", "dep:zeroize"]
 

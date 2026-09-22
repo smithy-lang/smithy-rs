@@ -1,4 +1,264 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+September 21st, 2026
+====================
+**Breaking Changes:**
+- :bug::warning: (client, [smithy-rs#4805](https://github.com/smithy-lang/smithy-rs/issues/4805), [smithy-rs#4810](https://github.com/smithy-lang/smithy-rs/issues/4810), [smithy-rs#4827](https://github.com/smithy-lang/smithy-rs/issues/4827), @yychen23) Across the Smithy runtime crates and generated SDK crates, `http` 0.2.x is now reached only through a named feature. Every crate below still supports it; nothing is removed.
+
+    **A default build is unchanged.** Generated SDK crates still enable the `rustls` feature by default, which builds the legacy `hyper` 0.14 / `rustls` 0.21 HTTP client and brings `http` 0.2.x with it. No crate is added to or removed from a default dependency tree by this change. Making the default client opt-in is a separate, later change.
+
+    What this change makes possible is *removing* `http` 0.2.x, which addresses the unpatched `http` 0.2.x advisories for builds that opt out. See "Removing `http` 0.2.x from your dependency tree" below.
+
+    ### Recommended setup
+
+    Most users need no feature configuration and are unaffected:
+
+    ```toml
+    aws-sdk-s3 = "..."
+    ```
+
+    Enable `http-02x` (on the SDK crate, or on the individual runtime crate) only if you need the `http` 0.2.x interop APIs:
+
+    ```toml
+    aws-sdk-s3 = { version = "...", features = ["http-02x"] }
+    ```
+
+    ### Removing `http` 0.2.x from your dependency tree
+
+    If you need `http` 0.2.x gone entirely — for example to satisfy a patch-compliance scan, since `http` 0.2.x has unpatched advisories — disable default features and re-enable the ones you need, omitting `rustls` (and not enabling `legacy-https-client`, which selects the same legacy stack):
+
+    ```toml
+    aws-sdk-s3 = { version = "...", default-features = false, features = [
+        "sigv4a", "http-1x", "default-https-client", "rt-tokio"
+    ] }
+    ```
+
+    That is `aws-sdk-s3`'s default feature list with `rustls` left out; the list varies slightly per SDK crate, so check the crate you depend on. The result has no `http` 0.2.x, `http-body` 0.4.x, `hyper` 0.14, `rustls` 0.21 or `h2` 0.3 in **either normal or dev scope**. `aws-config` needs no configuration — it already depends on the SDK crates it uses with `default-features = false` and defaults to `default-https-client`.
+
+    Cargo features are additive, so this is the only way to get a smaller tree: there is no feature that removes `http` 0.2.x, only features that add it.
+
+    ### `aws-smithy-runtime-api`
+
+    `http` 0.2.x is now optional behind the pre-existing `http-02x` feature (off by default). The crate's internal HTTP representations (`Headers`, `Uri`, `HttpError`, `EndpointPrefix`, and request/response extensions) now use the `http` 1.x types.
+
+    **Breaking change:** these previously unconditional `pub` conversions now require the `http-02x` feature:
+
+    - `Request::try_into_http02x` and `Response::try_into_http02x`
+    - `impl From<http_02x::Uri> for Uri`
+    - `impl TryInto<http_02x::Request<B>> for Request<B>` and `impl TryFrom<http_02x::Request<B>> for Request<B>`
+    - `impl TryFrom<http_02x::Response<B>> for Response<B>`
+    - `impl From<http_02x::StatusCode> for StatusCode` and `impl From<StatusCode> for http_02x::StatusCode`
+    - `impl TryFrom<http_02x::HeaderMap> for Headers`
+    - `impl AsHeaderComponent for http_02x::HeaderName` and `impl AsHeaderComponent for http_02x::HeaderValue`
+
+    Additionally, `Request::try_into_http02x` now returns an `Err` instead of panicking when the request URI is valid under `http` 1.x but not under `http` 0.2.x, and `TryFrom<http_02x::HeaderMap> for Headers` now returns an `Err` instead of panicking for header names that `http` 0.2.x accepts but `http` 1.x rejects.
+
+    ### `aws-smithy-types`
+
+    Neither the `http-body-1-x` feature nor the `rt-tokio` feature pulls in `http` 0.2.x or `http-body` 0.4.x anymore. `rt-tokio` now uses the `http-body` 1.x path for file-based bodies, and the legacy adapter code (the `Http1toHttp04` body adapter, the 0.2.x header conversions, and the 0.4.x file-body impl) is gated behind the `http-body-0-4-x` feature.
+
+    **Breaking change:** because `rt-tokio` no longer implies `http-body-0-4-x`, the `http` 0.2.x / `http-body` 0.4.x interop APIs are not available with only `rt-tokio` enabled. If you use `SdkBody::from_body_0_4`, `ByteStream::from_body_0_4`, or the `From<hyper_0_14::Body>` impls, enable `http-body-0-4-x`.
+
+    ### `aws-smithy-runtime`
+
+    `http` 0.2.x and `http-body` 0.4.x are now optional behind a new `http-02x` feature (off by default), and the crate no longer forces on `aws-smithy-types`' `http-body-0-4-x` feature.
+
+    **Breaking change:** these `pub` modules now require the `http-02x` feature:
+
+    - `client::endpoint`, which contains the already-deprecated `apply_endpoint`. Its 1.8.0 deprecation notice already announced that it may be feature gated in a future minor version.
+    - `client::http::body::minimum_throughput::http_body_0_4_x`, which provides the `http_body::Body` 0.4.x implementations for `MinimumThroughputDownloadBody` and `ThroughputReadingBody`. Stalled stream protection is unaffected on the `http` 1.x path, which is what generated clients use.
+
+    **Breaking change:** the `test-util` feature no longer enables `legacy-test-util`, so it no longer pulls the `hyper` 0.14 stack — `hyper` 0.14 and `http-body` 0.4.x — into the dependency tree. Note that `http` 0.2.x itself is still reachable under `test-util`, through `aws-smithy-protocol-test`, which has not been moved off it. Two re-exports moved behind `legacy-test-util`, since both are the pre-1.x variants:
+
+    - `client::http::test_util::capture_request`
+    - `client::http::test_util::infallible_client_fn`
+
+    Keep them by enabling `legacy-test-util`, or migrate to the `http` 1.x equivalents in `aws_smithy_http_client::test_util`. `ReplayEvent`, `StaticReplayClient`, `NeverClient` and `capture_test_logs` are unaffected — they are already `http` 1.x or version-agnostic.
+
+    The legacy `connector-hyper-0-14-x` and `legacy-test-util` features otherwise work unchanged: they already pulled in the `http` 0.2.x ecosystem transitively through `aws-smithy-http-client`, and now declare what they need explicitly.
+
+    **Bug fix:** `aws-smithy-runtime` now falls back to the `hyper` 1.x client when a `BehaviorVersion` older than `v2026_01_12` would otherwise get no default HTTP client at all. That path previously consulted only `connector-hyper-0-14-x`, so two configurations installed no client and failed every request with "No HTTP client was available to send this request": a build without the legacy connector, and a build with the connector but no TLS implementation, since the legacy `default_client` requires `legacy-rustls-ring`. Builds that do have a working legacy client are unaffected and continue to use it for those behavior versions.
+
+    This matters for the opt-out above. Leaving `rustls` out of the feature list removes the legacy connector, so without this fallback a client pinned to a `BehaviorVersion` older than `v2026_01_12` would come up with no HTTP client. Falling back is not silent: it logs a warning naming the feature to enable if you need the legacy stack.
+
+    **Advance notice of a coming default change.** A build that resolves to the legacy `hyper` 0.14.x client now logs a warning once per process saying that the default becomes the `hyper` 1.x client in the 2.x release, currently expected November 2026 — a different TLS implementation, with different connection-pooling and timeout behavior. Nothing changes yet; this release only tells you where you stand.
+
+    It fires only where the legacy client is actually selected: a `BehaviorVersion` older than `v2026_01_12` with the legacy stack compiled in, which is what a default build is today. Clients on `v2026_01_12` or later already use the `hyper` 1.x client and are unaffected, so they stay quiet.
+
+    To keep the legacy client through that change, add `legacy-https-client` now — that spelling is stable across it, whereas `rustls` becomes a synonym for the `hyper` 1.x client:
+
+    ```toml
+    aws-sdk-s3 = { version = "...", features = ["legacy-https-client"] }
+    ```
+
+    Note the warning cannot tell a caller who has already pinned `legacy-https-client` apart from one riding the default, because both arrive at `aws-smithy-runtime` as `tls-rustls`. If you have already pinned it, you are set and can ignore the warning.
+
+    ### `aws-sigv4`
+
+    The default-on `sign-http` feature no longer declares a dependency on `http` 0.2.x. Nothing compiled under that feature used it: request signing runs on `http` 1.x through `SigningInstructions::apply_to_request_http1x`, and the only `http` 0.2.x path, `apply_to_request_http0x`, is gated on `http0-compat`. `http` 0.2.x is now reachable only through `http0-compat`.
+
+    No public API changed. However, `aws-runtime` used to enable `aws-sigv4/http0-compat`, so applications depending on both crates were getting that feature switched on for them through Cargo feature unification. If you call `apply_to_request_http0x`, enable `aws-sigv4/http0-compat` explicitly.
+
+    ### Generated SDK crates
+
+    The `http` dependency is now optional, enabled by a new opt-in `http-02x` feature. Generated crates also no longer enable `http-02x` on `aws-smithy-runtime-api` or `aws-runtime` unless that feature is turned on.
+
+    **Breaking change:** the deprecated `http` 0.2.x conversions on `PresignedRequest` require the `http-02x` feature:
+
+    - `PresignedRequest::make_http_02x_request`
+    - `PresignedRequest::into_http_02x_request`
+
+    Prefer migrating to the `http` 1.x equivalents, which are enabled by default and are not deprecated: `PresignedRequest::make_http_1x_request` and `PresignedRequest::into_http_1x_request`.
+
+    A new opt-in **`legacy-https-client`** feature names the `hyper` 0.14.x + `rustls` 0.21.x HTTP client — the same stack the default-on `rustls` feature selects today. It is additive: `rustls` is what puts that stack in a default build, so adding this feature changes no dependency tree.
+
+    It exists now because `rustls` is going to change meaning. A later release will make `rustls` a synonym for `default-https-client` (the `hyper` 1.x stack) and drop it from the default list, at which point a call site that wrote `features = ["rustls"]` meaning "the legacy stack" will silently get a different one. Spelling it `legacy-https-client` instead pins the stack you actually want, and that spelling will keep working:
+
+    ```toml
+    aws-sdk-s3 = { version = "...", features = ["legacy-https-client"] }
+    ```
+
+    The generated test features changed too, so that building with `test-util` no longer drags `http` 0.2.x in:
+
+    - `test-util` no longer enables `aws-smithy-runtime`'s test features, so it no longer adds `http` 0.2.x on top of whatever the build already has. A build with `--features test-util` now resolves to the same HTTP stack as a build without it.
+    - A new opt-in **`legacy-test-util`** feature provides the pre-1.x test helpers for anyone who still needs them, and pulls `http` 0.2.x back in when enabled. It also enables `test-util`, so `--features legacy-test-util` on its own is enough to compile and run tests.
+
+    ### `aws-runtime`
+
+    `aws-runtime`'s `http-02x` feature now enables `aws-smithy-types/http-body-0-4-x` itself. It previously inherited that feature transitively from `aws-smithy-runtime`, so enabling `aws-runtime/http-02x` on its own did not compile.
+
+**New this release:**
+- :bug: (client) `SharedHttpClient` now forwards the public `HttpClient` validation methods to its selector, so external HTTP-client decorators preserve eager connector initialization.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @yychen23 ([smithy-rs#4805](https://github.com/smithy-lang/smithy-rs/issues/4805), [smithy-rs#4810](https://github.com/smithy-lang/smithy-rs/issues/4810), [smithy-rs#4827](https://github.com/smithy-lang/smithy-rs/issues/4827))
+
+
+September 15th, 2026
+====================
+**Breaking Changes:**
+- :bug::warning: (all, [smithy-rs#4721](https://github.com/smithy-lang/smithy-rs/issues/4721), [smithy-rs#4837](https://github.com/smithy-lang/smithy-rs/issues/4837)) Reverted the expanded `aws_smithy_types::Document` data model and the accompanying type/error registries, restoring the `Document` API as it was in `aws-smithy-types` 1.6.3.
+
+    The expanded `Document` was a source-breaking change shipped as a minor version bump (`aws-smithy-types` 1.6.3 -> 1.7.0). Every published `aws-smithy-json` before 0.64.0 declares an open-ended `aws-smithy-types = "^1.x"` requirement while matching exhaustively on `Document` and constructing `Document::Object(HashMap)`, so those crates stopped compiling as soon as cargo resolved `aws-smithy-types` to 1.7.0. Because `aws-config` 1.12.0 still required `aws-smithy-json ^0.63.0`, a clean `cargo add aws-config` resolved both json 0.63.0 and 0.64.0 against a single unified `aws-smithy-types` 1.7.0 and failed to build. The 1.1.7 runtime release has been yanked in full.
+
+    **What this restores**
+
+    - `Document` returns to six variants (`Object`, `Array`, `Number`, `String`, `Bool`, `Null`) and is no longer `#[non_exhaustive]`, so exhaustive `match` statements compile again without a wildcard arm.
+    - `Document::Object` holds a `HashMap<String, Document>` again. `DocumentObject` is removed, along with its insertion-order iteration guarantee; object iteration order is unspecified once more.
+    - The companion public types `DiscriminatedDocument`, `DocumentSettings`, and `DocumentError` are removed, as are the `as_blob` / `as_timestamp` / `as_big_integer` / `as_big_decimal` accessors and the `Result`-returning numeric accessors.
+    - `aws_smithy_schema`'s `ShapeId` and `Schema` drop their lifetime parameter, returning to `ShapeId` / `Schema` with `ShapeId::from_static(...)`.
+    - The `TypeRegistry` and error-registry machinery is removed, including the generated package-level `registry()` and `error_registry()` accessors and the registry-backed fallback for unmodeled error codes. Error dispatch returns to the generated `match error_code { ... }` over each operation's modeled errors.
+    - Schema-based serde is no longer enabled for the SSM client.
+
+    **Migration**
+
+    Code written against 1.6.3 needs no changes. Code that adopted the 1.7.0 `Document` should revert to the 1.6.3 shape: drop wildcard `match` arms added solely for `#[non_exhaustive]`, replace `DocumentObject` annotations with `HashMap<String, Document>`, and stop relying on insertion-ordered object iteration. Since 1.7.0 is yanked, cargo will resolve `^1` to the restored API automatically.
+
+
+September 14th, 2026
+====================
+**Breaking Changes:**
+- :warning::tada: (all) Updated `aws_smithy_types::Document` to cover the full Smithy data model in line with recent updates to the Smithy "Document Types and Type Registries" specification. The enum gains four variants — `Blob(Vec<u8>)`, `Timestamp(DateTime)`, `BigInteger(BigInteger)`, and `BigDecimal(BigDecimal)` — and is now marked `#[non_exhaustive]` so future Smithy data-model extensions can ship as additive changes. Three companion types join the public API at `aws_smithy_types::*`: `DiscriminatedDocument` (wraps a `Document` with an optional shape-ID discriminator and protocol-aware codec settings, used by the type-registry deserialization flow); `DocumentSettings` (trait for format-specific coercion, e.g. base64-decoding JSON strings to blobs); and `DocumentError` (numeric-coercion overflow, type mismatch, and invalid-input errors emitted by the new numeric / blob / timestamp accessors).
+
+    Construction via the pre-existing variants (`Document::String("...".into())`, `Document::Bool(true)`, `Document::Array(vec![])`, `Document::Null`) and every pre-existing `From<...>` impl (`bool`, `&str`, `String`, `Cow<'_, str>`, `u64`, `i64`, `i32`, `f64`, `Number`, `Vec<Document>`, `Option<T>`, and `HashMap<String, Document>`) continue to work unchanged. `Document::Object` is the exception: its inner type changed (see below), so `Document::Object(my_hash_map)` no longer compiles, though `Document::from(my_hash_map)` and `my_hash_map.into()` still do.
+
+    **Migration recipe**
+
+    Exhaustive `match` statements on `Document` no longer compile. Because the enum is now `#[non_exhaustive]`, external code must include a wildcard arm even if every currently-known variant is named — this is what protects future variant additions from being a breaking change. Add a `_ =>` arm:
+
+    ```rust
+    match doc {
+        Document::Null => /* ... */,
+        Document::Bool(b) => /* ... */,
+        Document::Number(n) => /* ... */,
+        Document::String(s) => /* ... */,
+        Document::Object(o) => /* ... */,
+        Document::Array(a) => /* ... */,
+        // Optionally handle the new variants explicitly:
+        Document::Blob(b) => /* base64-encode? */,
+        Document::Timestamp(ts) => /* format? */,
+        Document::BigInteger(bi) => /* string-encode? */,
+        Document::BigDecimal(bd) => /* string-encode? */,
+        // Required by #[non_exhaustive]:
+        _ => /* fallback for future variants */,
+    }
+    ```
+
+    `Document::Object` map entries are now iterated in insertion order.
+
+    **`Document::Object` inner type change**
+
+    `Document::Object` now wraps an insertion-ordered `aws_smithy_types::document::DocumentObject` instead of a `std::collections::HashMap<String, Document>`. This is source-breaking beyond the variant additions in three ways:
+
+    - Naming the old inner type no longer compiles. A pattern bind or annotation that referred to `HashMap<String, Document>` (for example `Document::Object(map) => { let _: &HashMap<String, Document> = map; }`) must be updated to `DocumentObject`.
+    - Passing a `HashMap` to the variant constructor no longer compiles. A variant position performs no implicit conversion, so `Document::Object(my_hash_map)` must become `Document::Object(DocumentObject::from(my_hash_map))` — or, more simply, `Document::from(my_hash_map)`, since `From<HashMap<String, Document>> for Document` is retained.
+    - `HashMap`-only methods are unavailable. `DocumentObject` mirrors most of the `HashMap` surface (`insert`, `get`, `get_mut`, `contains_key`, `remove`, `len`, `is_empty`, `clear`, `iter` / `iter_mut`, `keys`, `values` / `values_mut`, indexing by `&str` / `&String`, and the `IntoIterator` / `FromIterator` / `Extend` impls), but methods such as `.entry()`, `.retain()`, `.drain()`, `.capacity()`, `.reserve()`, and `.get_key_value()` are not provided.
+
+    Migration:
+
+    ```rust
+    use aws_smithy_types::document::DocumentObject;
+    use std::collections::HashMap;
+
+    // Build a DocumentObject from a HashMap...
+    let obj = DocumentObject::from(map);
+    // ...or from scratch (`DocumentObject::with_capacity` is also available):
+    let mut obj = DocumentObject::new();
+    obj.insert("key".to_string(), Document::String("value".to_string()));
+
+    // Construct the variant from a HashMap:
+    let doc = Document::Object(DocumentObject::from(map));
+    // ...or use the retained `From` impl on `Document`:
+    let doc = Document::from(map);
+
+    // Recover a HashMap when one is specifically required:
+    let map: HashMap<String, Document> = obj.into_iter().collect();
+    ```
+
+**New this release:**
+- :tada: (all) The schema-based JSON, XML, and CBOR codecs gained an opt-in `enforce_strictness` setting for request validation. JSON validates string contents and number syntax and rejects whitespace-only structure bodies and out-of-range floating-point epoch timestamps. XML validates the document root against the schema. CBOR rejects trailing bytes after top-level containers and truncated nested structures, and skips a `null` structure-member value as if the member were absent (union variants still see nulls and reject them). Defaults remain unchanged. JSON also gained `allow_integral_float_numbers` to accept exactly integral decimal and exponent numbers for integer members without losing precision through floating-point conversion.
+- :tada: (all) `ShapeDeserializer::read_struct` in the JSON and CBOR codecs now reports a key that names no member of the structure or union being read, instead of skipping it silently. The consumer is called with the prelude `DOCUMENT` schema, whose `member_index()` is `None`, positioned at the value; a consumer that does not read the value leaves the codec to skip it. Generated structure code ignores the call; union code uses it to decide how an unknown variant is handled. The `__type` discriminator and `null`-valued keys are not reported.
+- :tada: (client) Added a `disableSchemaSerde` client codegen setting that opts a single service
+    out of schema-based serialization/deserialization even when its protocol has
+    schema serde enabled, falling back to the legacy per-shape `protocol_serde`
+    path:
+
+    ```json
+    {
+      "plugins": {
+        "rust-client-codegen": {
+          "service": "com.example#MyService",
+          "module": "my-service",
+          "moduleVersion": "0.1.0",
+          "codegen": {
+            "disableSchemaSerde": true
+          }
+        }
+      }
+    }
+    ```
+
+    The setting only ever turns schema serde _off_; it cannot turn it on for a
+    protocol that does not have it enabled. It exists as a per-service escape hatch
+    during the phased rollout of schema serde, so a service that hits a schema-path
+    issue can be reverted without disabling its whole protocol.
+
+    Note: this setting is temporary and will be removed once schema serde is
+    stabilized. It is only intended as a stop-gap for users that encounter bugs with
+    schema serde.
+- :bug: (all) Fix schema-based JSON serialization to preserve decimal points for integral float and double values, including negative zero, without widening float values.
+- :bug: (all, @fahadzub) The schema-based JSON deserializer now rejects quoted finite numbers for float and double members, such as `{"doubleInBody": "123"}`. A string is accepted only when it represents a non-finite value (`"NaN"`, `"Infinity"`, `"-Infinity"`), matching the token-based parser and the Smithy protocol tests `RestJsonBodyFloatMalformedValueRejected_case0` and `RestJsonBodyDoubleMalformedValueRejected_case0`.
+- :bug: (all) The schema-based union deserializer now enforces the union rules the token-based parser enforces. A second key in the union object, whatever it names, is an error ("encountered mixed variants in union"); previously the last member won. A key that names no member becomes the unknown variant on a client and an "unexpected union variant" error on a server; previously it was skipped. On a server, the generated `SerializableStruct` impl no longer refers to an unknown variant the union does not have. This makes the restJson1 protocol tests `RestJsonMalformedUnionMultipleFieldsSet` and `RestJsonMalformedUnionKnownAndUnknownFieldsSet` pass on the schema-based path.
+- :bug: (all, @fahadzub) The schema-based JSON deserializer now rejects malformed JSON that it previously accepted: commas were skipped as whitespace, so `{"int": 10,}`, `[1,,2]` and `{,"a": 1}` parsed successfully; bytes after the top-level value such as `{"int": 10}abc` were ignored; and values inside unknown members were skipped without validating number grammar or string escapes. These correspond to the Smithy protocol tests `RestJsonInvalidJsonBody_case1` and `RestJsonInvalidJsonBody_case7`.
+- :bug: (client) Fix CBOR client deserialization for unnamed enums by removing an ambiguous
+    `AsRef` conversion from the generated Rust code.
+- :bug: (all, @fahadzub) `JsonCodecSettings` gained `strict_timestamp_formats`. When enabled, the schema-based JSON deserializer requires a timestamp to use exactly the wire form its `@timestampFormat` (or the codec default) prescribes: a number for `epoch-seconds`, an RFC 3339 string without a UTC offset for `date-time`, an IMF-fixdate string for `http-date`. Servers enable it so that the restJson1 `MalformedTimestampBody*` protocol tests are honored; the default remains the tolerant client behavior.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @fahadzub
+
+
 September 3rd, 2026
 ===================
 **New this release:**
