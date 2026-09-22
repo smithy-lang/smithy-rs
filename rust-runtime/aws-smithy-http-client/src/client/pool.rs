@@ -156,6 +156,19 @@
 //! transport handle. The operating system may continue TCP teardown afterward.
 //! All connection-owned work runs through the partition
 //! [`DriverSpawner`].
+//!
+//! # Observation
+//!
+//! A pool-wide [`ConnectionEventListener`] observes establishment failure,
+//! successful installation, logical close, and release of the client's root
+//! transport handle. Callbacks run synchronously after pool locks are released.
+//! Observation is disabled unless a listener is configured.
+//!
+//! [`ConnectionPool::origin_stats`] reports the bounded capacity shared by all
+//! partitions for one canonical origin. [`ConnectionPool::partition_stats`]
+//! reports request acquisition and connection state for one exact
+//! partition-origin cell. These snapshots are diagnostic; the pool does not use
+//! them for admission, reuse, reclaim, routing, or dispatch.
 
 #![cfg_attr(
     smithy_http_client_loom,
@@ -177,6 +190,7 @@ mod maintenance;
 mod origin;
 mod partition;
 mod registry;
+mod stats;
 
 pub use builder::{BuildError, Builder};
 pub use client::{Client, ClientBuildError};
@@ -191,6 +205,10 @@ pub use origin::{InvalidOrigin, OriginKey};
 #[cfg(feature = "rt-tokio")]
 pub use partition::TokioDriverSpawner;
 pub use partition::{ConnectionReuseScope, DriverSpawner, Partition, PartitionId};
+pub use stats::{
+    ConnectionCapacityStats, Http1ConnectionStats, Http2ConnectionStats, OriginConnectionStats,
+    PartitionConnectionStats,
+};
 
 pub use crate::client::connect::ConnectPath;
 use crate::sync::Arc;
@@ -225,6 +243,34 @@ impl ConnectionPool {
     /// Returns a builder for a new connection pool.
     pub fn builder() -> Builder<super::TlsUnset> {
         Builder::default()
+    }
+
+    /// Returns current bounded-capacity accounting for one canonical origin.
+    ///
+    /// The capacity limit applies across every partition. Capacity in use
+    /// includes establishments, open connections, and detached HTTP/1 upgrades
+    /// that still own root transport I/O. Ordinary draining connections are
+    /// excluded after returning their capacity.
+    ///
+    /// Unbounded origins return statistics without a capacity value. The query
+    /// does not create admission state for an unused origin.
+    pub fn origin_stats(&self, origin: &OriginKey) -> OriginConnectionStats {
+        self.inner.registry.origin_stats(origin)
+    }
+
+    /// Returns a diagnostic connection snapshot for one partition and origin.
+    ///
+    /// An unknown partition returns `None`. A configured partition without a
+    /// retained cell for `origin` returns zeroed statistics. Cell-owned values
+    /// are read under the existing cell lock. Counts for lifetimes that can
+    /// outlive cell records use relaxed atomics and converge after concurrent
+    /// transitions settle.
+    pub fn partition_stats(
+        &self,
+        partition: PartitionId,
+        origin: &OriginKey,
+    ) -> Option<PartitionConnectionStats> {
+        self.inner.registry.partition_stats(partition, origin)
     }
 
     /// Routes one request from its selected partition through pool dispatch.

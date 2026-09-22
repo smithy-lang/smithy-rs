@@ -1218,6 +1218,22 @@ impl AcquisitionQueue {
         );
     }
 
+    /// Returns requests that have not received a terminal acquisition outcome.
+    pub(super) fn pending_count(&self) -> usize {
+        self.records
+            .values()
+            .filter(|record| {
+                matches!(
+                    record.state,
+                    WaiterState::Waiting { .. }
+                        | WaiterState::DeliveryPending { .. }
+                        | WaiterState::ReadyToEstablish { .. }
+                        | WaiterState::Launching { .. }
+                )
+            })
+            .count()
+    }
+
     #[cfg(test)]
     pub(super) fn probe(&self) -> AcquisitionProbe {
         let (waiting, demand) = match &self.waiting {

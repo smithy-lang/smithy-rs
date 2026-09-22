@@ -17,6 +17,7 @@ use super::admission::CapacityLease;
 use super::events::{LogicalCloseCause, SharedConnectionEventListener};
 use super::origin::OriginKey;
 use super::partition::PartitionId;
+use super::stats::CellConnectionStats;
 use crate::client::connect::{ConnectPath, ConnectPathInner};
 use crate::sync::{Arc, Mutex};
 pub use aws_smithy_runtime_api::client::connection::ConnectionId;
@@ -31,7 +32,11 @@ use std::net::SocketAddr;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-/// Why a connection stopped accepting new work.
+/// Final protocol and ownership classification for a closed connection.
+///
+/// [`LogicalCloseCause`] reports the first stable reason that pool dispatch
+/// ended. This more specific classification is reported at physical close
+/// because HTTP/1 upgrade ownership may be resolved after logical close.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum CloseReason {
@@ -63,11 +68,11 @@ pub enum ConnectionProtocol {
     Http2,
 }
 
-/// Immutable identity and transport facts shared by a connection's owners.
+/// Immutable identity and transport facts for one installed connection.
 ///
-/// The protocol record, request metadata, tracing, and lifecycle events
-/// all retain this one allocation rather than reconstructing origin or address
-/// data at each transition.
+/// Protocol records, request metadata, tracing, and lifecycle events retain the
+/// same value. It remains valid after logical close so the final physical-close
+/// observation names the same connection.
 #[derive(Debug)]
 pub struct ConnectionInfo {
     /// Stable identity assigned by the owning pool.
@@ -133,12 +138,12 @@ impl ConnectionInfo {
         self.protocol
     }
 
-    /// Returns the connector-reported local socket address.
+    /// Returns the connector-reported local socket address, when available.
     pub fn local_addr(&self) -> Option<SocketAddr> {
         self.local_addr
     }
 
-    /// Returns the connector-reported remote socket address.
+    /// Returns the connector-reported remote socket address, when available.
     pub fn remote_addr(&self) -> Option<SocketAddr> {
         self.remote_addr
     }
@@ -209,6 +214,8 @@ impl ConnectionInfo {
 pub(super) struct ConnectionState {
     /// Identity and transport facts shared with metadata and lifecycle events.
     info: Arc<ConnectionInfo>,
+    /// Cell-owned counts for connection lifetimes that outlive protocol records.
+    stats: Arc<CellConnectionStats>,
     /// Dispatch, logical-close, and physical-connection completion state.
     lifecycle: Mutex<ConnectionLifecycle>,
 }
@@ -222,6 +229,8 @@ struct ConnectionLifecycle {
     in_flight: usize,
     /// Whether the client has released its physical connection handle.
     physical_connection_complete: bool,
+    /// Protocol drain or upgrade count held until physical completion.
+    counted_close: Option<CountedClose>,
     /// Progress through installed-connection event delivery.
     events: LifecycleEventProgress,
 }
@@ -277,6 +286,38 @@ enum H1CloseDisposition {
     },
     /// Exchange classification is complete.
     Final(CloseReason),
+}
+
+/// Relaxed protocol-lifetime count held by one closed physical connection.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CountedClose {
+    H1Draining,
+    H1Upgraded,
+    H2Draining,
+}
+
+impl CountedClose {
+    fn start(self, stats: &CellConnectionStats) {
+        match self {
+            Self::H1Draining => stats.h1_drain_started(),
+            Self::H1Upgraded => stats.h1_upgrade_started(),
+            Self::H2Draining => stats.h2_drain_started(),
+        }
+    }
+
+    fn finish(self, stats: &CellConnectionStats) {
+        match self {
+            Self::H1Draining => stats.h1_drain_finished(),
+            Self::H1Upgraded => stats.h1_upgrade_finished(),
+            Self::H2Draining => stats.h2_drain_finished(),
+        }
+    }
+
+    fn h1_upgrade(self, stats: &CellConnectionStats) -> Self {
+        assert_eq!(Self::H1Draining, self, "non-HTTP/1 drain became an upgrade");
+        stats.h1_drain_upgraded();
+        Self::H1Upgraded
+    }
 }
 
 /// Progress through installed-connection event delivery.
@@ -392,13 +433,19 @@ impl ConnectionState {
     /// After Hyper returns a request handle, [`Self::open`] attaches optional
     /// bounded capacity before cell installation makes the connection
     /// discoverable.
-    pub(super) fn pending_open(info: Arc<ConnectionInfo>) -> (Arc<Self>, PhysicalConnectionGuard) {
+    pub(super) fn pending_open(
+        info: Arc<ConnectionInfo>,
+        stats: Arc<CellConnectionStats>,
+    ) -> (Arc<Self>, PhysicalConnectionGuard) {
+        stats.physical_connection_started();
         let connection = Arc::new(Self {
             info,
+            stats,
             lifecycle: Mutex::new(ConnectionLifecycle {
                 logical: LogicalState::PendingOpen,
                 in_flight: 0,
                 physical_connection_complete: false,
+                counted_close: None,
                 events: LifecycleEventProgress::OpenedPending,
             }),
         });
@@ -407,6 +454,13 @@ impl ConnectionState {
             active: true,
         };
         (connection, physical)
+    }
+
+    #[cfg(test)]
+    pub(super) fn pending_open_for_test(
+        info: Arc<ConnectionInfo>,
+    ) -> (Arc<Self>, PhysicalConnectionGuard) {
+        Self::pending_open(info, Arc::new(CellConnectionStats::default()))
     }
 
     /// Opens dispatch commitment and transfers optional bounded capacity.
@@ -430,7 +484,7 @@ impl ConnectionState {
     /// The returned unique guard must move with the root I/O task.
     #[cfg(test)]
     pub(super) fn unbounded(info: Arc<ConnectionInfo>) -> (Arc<Self>, PhysicalConnectionGuard) {
-        let (connection, physical) = Self::pending_open(info);
+        let (connection, physical) = Self::pending_open_for_test(info);
         connection
             .open(None)
             .expect("new unbounded connection could not open");
@@ -446,7 +500,7 @@ impl ConnectionState {
         info: Arc<ConnectionInfo>,
         lease: CapacityLease,
     ) -> (Arc<Self>, PhysicalConnectionGuard) {
-        let (connection, physical) = Self::pending_open(info);
+        let (connection, physical) = Self::pending_open_for_test(info);
         connection
             .open(Some(lease))
             .expect("new bounded connection could not open");
@@ -539,7 +593,7 @@ impl ConnectionState {
         let (released_capacity, pending_events) = {
             let mut lifecycle = self.lifecycle.lock();
             let previous = std::mem::replace(&mut lifecycle.logical, LogicalState::PendingOpen);
-            let (disposition, retained_capacity, released_capacity) = match previous {
+            let (disposition, retained_capacity, released_capacity, was_open) = match previous {
                 LogicalState::PendingOpen => {
                     let disposition = match self.info.protocol() {
                         ConnectionProtocol::Http1 => {
@@ -547,7 +601,7 @@ impl ConnectionState {
                         }
                         ConnectionProtocol::Http2 => CloseDisposition::Http2(reason),
                     };
-                    (disposition, None, None)
+                    (disposition, None, None, false)
                 }
                 LogicalState::Open { mut capacity } => match self.info.protocol() {
                     ConnectionProtocol::Http1
@@ -564,6 +618,7 @@ impl ConnectionState {
                             }),
                             capacity.take(),
                             None,
+                            true,
                         )
                     }
                     ConnectionProtocol::Http1 => {
@@ -575,9 +630,12 @@ impl ConnectionState {
                             CloseDisposition::Http1(H1CloseDisposition::Final(reason)),
                             retained_capacity,
                             capacity,
+                            true,
                         )
                     }
-                    ConnectionProtocol::Http2 => (CloseDisposition::Http2(reason), None, capacity),
+                    ConnectionProtocol::Http2 => {
+                        (CloseDisposition::Http2(reason), None, capacity, true)
+                    }
                 },
                 closed @ LogicalState::Closed { .. } => {
                     lifecycle.logical = closed;
@@ -585,6 +643,21 @@ impl ConnectionState {
                 }
             };
             let final_reason = disposition.final_reason();
+            if was_open && !lifecycle.physical_connection_complete {
+                let counted_close = match self.info.protocol() {
+                    ConnectionProtocol::Http1 if reason == CloseReason::Upgraded => {
+                        CountedClose::H1Upgraded
+                    }
+                    ConnectionProtocol::Http1 => CountedClose::H1Draining,
+                    ConnectionProtocol::Http2 => CountedClose::H2Draining,
+                };
+                assert!(
+                    lifecycle.counted_close.is_none(),
+                    "connection close was counted more than once"
+                );
+                counted_close.start(&self.stats);
+                lifecycle.counted_close = Some(counted_close);
+            }
             lifecycle.logical = LogicalState::Closed {
                 cause,
                 disposition,
@@ -649,6 +722,14 @@ impl ConnectionState {
                 }
                 _ => return false,
             };
+            if final_reason == CloseReason::Upgraded && !physical_connection_complete {
+                lifecycle.counted_close = Some(
+                    lifecycle
+                        .counted_close
+                        .expect("upgraded HTTP/1 connection had no draining count")
+                        .h1_upgrade(&self.stats),
+                );
+            }
             let listener = if physical_connection_complete {
                 lifecycle.events.physical_closed()
             } else {
@@ -729,6 +810,10 @@ impl ConnectionState {
                 }
                 LogicalState::PendingOpen | LogicalState::Open { .. } => (None, None),
             };
+            if let Some(counted_close) = lifecycle.counted_close.take() {
+                counted_close.finish(&self.stats);
+            }
+            self.stats.physical_connection_finished();
             let listener = final_reason.and_then(|_| lifecycle.events.physical_closed());
             (released_capacity, listener, final_reason)
         };
@@ -1016,9 +1101,70 @@ mod tests {
             )),
             SharedTimeSource::default(),
         );
-        let establishment =
-            events.establishment_started(connection.info().origin(), connection.owner_partition());
+        let establishment = events.establishment_started(
+            connection.info().origin(),
+            connection.owner_partition(),
+            connection.stats.clone(),
+        );
         establishment.opened(connection);
+    }
+
+    #[test]
+    fn lifecycle_callbacks_observe_updated_connection_stats() {
+        #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+        enum EventKind {
+            Opened,
+            LogicalClose,
+            PhysicalClose,
+        }
+
+        let stats = Arc::new(CellConnectionStats::default());
+        let observed = StdArc::new(StdMutex::new(Vec::new()));
+        let events = ConnectionEvents::new(
+            Some(SharedConnectionEventListener::new({
+                let stats = stats.clone();
+                let observed = observed.clone();
+                move |event: &ConnectionEvent<'_>| {
+                    let kind = match event {
+                        ConnectionEvent::Opened(_) => EventKind::Opened,
+                        ConnectionEvent::LogicalClose(_) => EventKind::LogicalClose,
+                        ConnectionEvent::PhysicalClose(_) => EventKind::PhysicalClose,
+                        ConnectionEvent::EstablishmentFailed(failed) => {
+                            panic!("installed connection failed: {failed:?}")
+                        }
+                    };
+                    let snapshot = stats.snapshot(0, 0, 0, 0, 0);
+                    observed.lock().unwrap().push((
+                        kind,
+                        snapshot.establishing_connections(),
+                        snapshot.h1().draining(),
+                        snapshot.physically_live_connections(),
+                    ));
+                }
+            })),
+            SharedTimeSource::default(),
+        );
+        let mut establishment = events.establishment_started(
+            test_info(1).origin(),
+            PartitionId::from_index(0),
+            stats.clone(),
+        );
+        establishment.protocol_selected(ConnectionProtocol::Http1);
+        let (connection, physical) = ConnectionState::pending_open(test_info(1), stats);
+        connection.open(None).unwrap();
+
+        establishment.opened(&connection);
+        assert!(connection.logical_close(CloseReason::ProtocolClosed));
+        physical.release();
+
+        assert_eq!(
+            &[
+                (EventKind::Opened, 0, 0, 1),
+                (EventKind::LogicalClose, 0, 1, 1),
+                (EventKind::PhysicalClose, 0, 0, 0),
+            ],
+            observed.lock().unwrap().as_slice()
+        );
     }
 
     #[test]
@@ -1114,8 +1260,11 @@ mod tests {
         );
         let (connection, _physical) = ConnectionState::unbounded(test_info(1));
         *connection_slot.lock().unwrap() = Some(connection.clone());
-        let establishment =
-            events.establishment_started(connection.info().origin(), connection.owner_partition());
+        let establishment = events.establishment_started(
+            connection.info().origin(),
+            connection.owner_partition(),
+            connection.stats.clone(),
+        );
         establishment.opened(&connection);
 
         assert!(connection.logical_close(CloseReason::Poisoned));
@@ -1136,8 +1285,11 @@ mod tests {
             )),
             SharedTimeSource::default(),
         );
-        let establishment =
-            events.establishment_started(connection.info().origin(), connection.owner_partition());
+        let establishment = events.establishment_started(
+            connection.info().origin(),
+            connection.owner_partition(),
+            connection.stats.clone(),
+        );
         establishment.opened(&connection);
 
         assert!(connection.logical_close(CloseReason::Reclaimed));

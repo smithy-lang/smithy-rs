@@ -59,10 +59,11 @@ pub(super) async fn establish(
     permit: EstablishmentPermit,
     requirement: ProtocolRequirement,
 ) -> EstablishmentOutcome {
-    let mut establishment = context
-        .pool
-        .connection_events
-        .establishment_started(context.cell.id().origin(), context.partition.id());
+    let mut establishment = context.pool.connection_events.establishment_started(
+        context.cell.id().origin(),
+        context.partition.id(),
+        context.cell.connection_stats(),
+    );
     let connect = TransportConnectContext::new(
         &context.partition,
         context.absolute_uri.clone(),

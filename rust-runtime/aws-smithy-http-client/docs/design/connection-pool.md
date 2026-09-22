@@ -1742,8 +1742,8 @@ transition.
 
 An upgrade changes which object owns protocol completion. H1 drivers run with upgrade support. A `101`
 response or successful HTTP/1 `CONNECT` logically closes the checked-out record before the response is
-exposed: its sender cannot return to the pool, and bounded capacity is released immediately. There is no
-separate upgrade-pending pool residence.
+exposed: its sender cannot return to the pool. The connection retains bounded capacity while the transferred
+root I/O remains client-owned. There is no separate reusable upgrade-pending pool residence.
 
 Hyper's upgrade-capable driver owns the subsequent transport transfer. It moves the wrapped transport and any
 bytes read past the HTTP message into the `Upgraded` object. The caller then owns that I/O; dropping it completes
@@ -1751,10 +1751,11 @@ the client's physical connection ownership through the transport wrapper. If `On
 transfer fails, Hyper closes the transport instead.
 
 Hyper may complete its HTTP/1 driver in the same poll that delivers the upgrading response head. The driver
-guard can therefore record `ProtocolClosed` before the request task observes the response. Once the response
-path confirms `101` or successful `CONNECT`, it refines that close reason to `Upgraded`; the refinement changes
-no ownership and cannot release bounded capacity again. In either poll order the H1 record was already
-logically closed and can never return as an HTTP connection.
+guard can therefore record `ProtocolClosed` before the request task observes the response. While one committed
+exchange can still prove an upgrade, the connection retains its permit until that exchange supplies the final
+classification. A confirmed `101` or successful `CONNECT` refines the close reason to `Upgraded` and retains the
+permit until physical completion. A non-upgrade result returns the permit when classification completes. In
+either poll order the H1 record was already logically closed and can never return as an HTTP connection.
 
 For H2 extended `CONNECT`, the physical H2 connection remains pooled but that stream is no longer represented
 by an ordinary response body. An upgrade lifecycle bridge takes the response guard and retains it
@@ -1839,19 +1840,21 @@ make a connection selectable after retirement.
 
 #### Logical close and physical connection ownership
 
-A connection that leaves the pool has two independently tracked transitions. At
-**logical close** it stops accepting new work and releases its permit. At
-**physical connection completion** the client releases its transport handle,
-whether because a driver dropped the root I/O or an upgraded protocol finished
-with it. This does not assert that the peer, kernel, or TCP teardown has
-completed. The permit returns to admission at logical close, so a replacement
-can be admitted while the old transport is still draining or tearing down.
+A connection that leaves the pool has two independently tracked transitions. At **logical close** it stops
+accepting new work. An ordinary draining connection returns its permit at that transition, so a replacement can
+be admitted while the old transport is still draining or tearing down. An H1 connection with one committed
+exchange that may have transferred upgraded I/O retains its permit until the exchange classifies the outcome.
+A non-upgrade result then returns the permit; a confirmed upgrade retains it until physical completion.
 
-Releasing capacity at logical close is what keeps a slow teardown from stalling the pool. A connection's
-socket does not close instantly: TLS sends `close_notify`, TCP exchanges FIN, and the OS may linger the
-socket after that. Were the permit held until the socket was gone, a connection ending would block a waiter
-for the length of a teardown the pool does not control. Instead the permit is released the moment the
-connection stops taking work, and the driver finishes the teardown on its owning partition afterward.
+At **physical connection completion** the client releases its transport handle, whether because a driver
+dropped the root I/O or an upgraded protocol finished with it. This does not assert that the peer, kernel, or
+TCP teardown has completed.
+
+Returning capacity when an ordinary connection stops accepting work keeps a slow teardown from stalling the
+pool. A connection's socket does not close instantly: TLS sends `close_notify`, TCP exchanges FIN, and the OS
+may linger the socket after that. Holding every permit until the socket was gone would block a waiter for a
+teardown the pool does not control. The H1 upgrade exception prevents a different failure: repeated upgrades
+cannot bypass `max_connections_per_host` while caller-owned transports remain open.
 
 The complete connection lifecycle is:
 
@@ -1880,12 +1883,12 @@ establishing (attempt or flight owns capacity lease)
                 |
                 `-- GOAWAY/poison/driver close -------------> logical close
 
-logical close (once: remove reuse eligibility + release capacity lease)
+logical close (once: remove reuse eligibility; normally release capacity)
   |
   +-- no accepted work ------------------------------> transport teardown
-  +-- H1 accepted exchange --------------------------> finish or cancel, then teardown
+  +-- H1 accepted exchange --------------------------> classify; release if not upgraded
   +-- H2 request claims remain ----------------------> drain to zero, then teardown
-  `-- H1 upgraded I/O transferred ------------------> caller owns wrapped transport
+  `-- H1 upgraded I/O transferred ------------------> retain capacity; caller owns transport
                                                         |
 transport root is dropped <-----------------------------+
   `-- physical connection ownership ends
@@ -1973,24 +1976,27 @@ A connection retires for one of a few reasons:
   themselves close a healthy H2 connection. Outstanding request and body guards run their normal terminal
   cleanup, and every close request races through the same exactly-once transition.
 
-The first trigger to begin logical close removes reuse eligibility, releases capacity, and records the close
-reason. Later triggers observe that terminal transition and cannot release capacity or report close again. The
-one reason-only refinement is an H1 upgrade: Hyper can complete the protocol driver in the same poll that
-delivers the upgrade response, so a request path that later confirms the upgrade may change
-`ProtocolClosed` to `Upgraded` without repeating close, capacity release, or the close callback. The
-refinement emits a structured diagnostic record carrying both reasons so tracing reflects the final
-classification even when driver completion won the close race.
+The first trigger to begin logical close removes reuse eligibility, records the close cause, and normally
+releases capacity. An H1 connection with one committed exchange that can still prove an upgrade retains capacity
+until the exchange resolves that ambiguity. A non-upgrade resolution returns it then; an upgrade retains it
+until physical completion. Later close triggers observe the same terminal transition and cannot release
+capacity or report close again. Hyper can complete the protocol driver in the same poll that delivers the
+upgrade response, so a request path that later confirms the upgrade may change `ProtocolClosed` to `Upgraded`
+without repeating logical close or its callback. The refinement emits a structured diagnostic record carrying
+both reasons so tracing reflects the final classification even when driver completion won the close race.
 
 `Poisoned` is reserved for an explicit poison signal. `ProtocolClosed` is final when it reflects independently
 observed connection-level termination; only later confirmation that the same H1 exchange upgraded may refine
 it. The close event carries the source error when one exists. Other concurrent signals still race through
 first-trigger-wins, but one initiating signal does not match both categories. Every reason ends at the same
-physical connection ownership transition, so capacity and lifecycle accounting do not depend on what won the race.
+physical connection ownership transition, and the H1 disposition determines the one valid capacity-release
+point.
 
 #### Obligations
 
-* **Capacity on logical close** [safety] — a connection releases its permit at logical close, before physical
-  connection ownership ends, and releases it exactly once.
+* **Capacity ownership on close** [safety] — an ordinary draining connection releases its permit at logical
+  close. An H1 exchange that may prove an upgrade retains the permit until classification; a confirmed upgrade
+  retains it until physical completion. Every path releases the permit exactly once.
 * **No dispatch after logical close** [safety] — dispatch commit and logical close race through mutually
   exclusive per-record or per-generation gates; a close that wins leaves the request locally owned, while a
   commit that wins is recorded as an in-flight dispatch and calls Hyper immediately without holding a pool
@@ -2013,232 +2019,225 @@ physical connection ownership transition, so capacity and lifecycle accounting d
 
 ### Telemetry
 
-An operator diagnosing a connection problem — establishment happening more often than expected, connections
-closing early, reuse not occurring — cannot see it in request outcomes, which look the same whether a request
-reused a warm connection or opened a fresh one. The pool reports what request outcomes hide, in two forms.
+Request results do not reveal whether a request reused a connection, opened a
+new one, waited for capacity, or observed a connection closing. The pool exposes
+two complementary observations:
 
-#### Events and statistics
+- lifecycle events report completed transitions; and
+- statistics report current origin or partition-origin state.
 
-Lifecycle **events** report transitions; statistics report current gauges. Their public types live here
-because their fields derive directly from the connection states above:
+Neither surface participates in admission, reuse, reclaim, or dispatch.
+
+#### Lifecycle events
+
+One listener receives a non-exhaustive event enum:
 
 ```rust
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct ConnectionId(/* private */);
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[non_exhaustive]
-pub enum NegotiatedProtocol { Http1, Http2 }
-
-#[derive(Clone, Debug)]
-#[non_exhaustive]
-pub struct ConnectionInfo {
-    pub id: ConnectionId,
-    pub origin: OriginKey,
-    pub owner_partition: PartitionId,
-    pub protocol: NegotiatedProtocol,
-    pub local_addr: Option<SocketAddr>,
-    pub remote_addr: Option<SocketAddr>,
-    pub proxied: bool,
-}
-
-#[derive(Clone, Copy, Debug)]
-#[non_exhaustive]
-pub struct ConnectionTiming {
-    // Includes DNS, TCP, proxy, and TLS work performed by the connector.
-    pub connector: Duration,
-    pub protocol_handshake: Option<Duration>,
-}
-
-#[non_exhaustive]
-pub struct ConnectionCreatedEvent {
-    pub connection: Arc<ConnectionInfo>,
-    pub timing: ConnectionTiming,
-}
-
-#[non_exhaustive]
-pub struct ConnectionReusedEvent {
-    pub connection: Arc<ConnectionInfo>,
-    pub request_partition: PartitionId,
-}
-
-#[non_exhaustive]
-pub struct ConnectionBorrowedEvent {
-    pub connection: Arc<ConnectionInfo>,
-    pub request_partition: PartitionId,
-}
-
-#[non_exhaustive]
-pub struct ConnectionClosedEvent {
-    pub connection: Arc<ConnectionInfo>,
-    pub reason: CloseReason,
-    pub error: Option<BoxError>,
-}
-
-#[non_exhaustive]
-pub struct ConnectionFailedEvent {
-    pub origin: OriginKey,
-    pub partition: PartitionId,
-    pub protocol: Option<NegotiatedProtocol>,
-    pub remote_addr: Option<SocketAddr>,
-    pub timing: ConnectionTiming,
-    pub error: BoxError,
-}
-
 pub trait ConnectionEventListener: Send + Sync + 'static {
-    fn connection_created(&self, _event: &ConnectionCreatedEvent) {}
-    fn connection_reused(&self, _event: &ConnectionReusedEvent) {}
-    fn connection_borrowed(&self, _event: &ConnectionBorrowedEvent) {}
-    fn connection_closed(&self, _event: &ConnectionClosedEvent) {}
-    fn connection_failed(&self, _event: &ConnectionFailedEvent) {}
+    fn on_event(&self, event: &ConnectionEvent<'_>);
+}
+
+#[non_exhaustive]
+pub enum ConnectionEvent<'a> {
+    EstablishmentFailed(ConnectionEstablishmentFailed<'a>),
+    Opened(ConnectionOpened<'a>),
+    LogicalClose(ConnectionLogicalClose<'a>),
+    PhysicalClose(ConnectionPhysicalClose<'a>),
 }
 ```
 
-The connection record and its events share one immutable `Arc<ConnectionInfo>`, so reporting reuse does not
-reallocate origin or address metadata. `ConnectionId` is unique within one pool and is never reused.
-Installed-connection events carry `ConnectionInfo`, whose `owner_partition` is where the physical I/O and
-driver live; the separate `request_partition` on reuse and borrow reports where demand originated.
-`ConnectionBorrowedEvent` reports a successful H1 transfer from a connection-owning cell to a requesting cell.
-Cross-partition H2 selection is visible as reuse whose owner and request partitions differ, preserving
-*borrow* as the H1 mechanism defined above.
-`ConnectionFailedEvent` is different: an attempt can fail before a physical connection identity or negotiated
-protocol exists, so it identifies the origin and attempted partition and makes protocol optional.
+The pool assigns each establishment a `ConnectionEstablishmentId`. A retry
+starts another establishment and receives another identity; earlier failed
+attempts are not folded into a later successful event. Establishment events
+carry the canonical origin, owner partition, stage, selected protocol and
+remote address when known, and timing for transport and Hyper protocol
+handshake work.
 
-The emission points follow ownership transitions rather than future creation or object drop:
+`Opened` is emitted after Hyper produces the protocol request handle and the
+connection is installed as pool supply. It carries the establishment
+observation and the installed connection's immutable `ConnectionInfo`:
 
 ```text
-establishment accepted
-  |
-  +-- connector or handshake fails
-  |     -> release establishment accounting
-  |     -> connection_failed
-  |
-  `-- driver transferred + record installed + physical metadata fixed
-        -> update connection accounting
-        -> connection_created
-        -> publish H1 record or H2 generation to requests
-              |
-              +-- existing connection selected -> connection_reused
-              +-- cross-cell H1 transfer commits -> connection_borrowed
-              `-- first logical-close trigger
-                    -> remove eligibility + release admission + record reason
-                    -> connection_closed exactly once
-                          `-- later root-I/O drop updates physical statistics only
+ConnectionEstablishmentInfo
+  establishment ID
+  origin
+  owner partition
+
+ConnectionInfo
+  connection ID
+  origin
+  owner partition
+  HTTP protocol
+  local and remote addresses, when known
+  direct, forward-proxy, or proxy-tunnel path
 ```
 
-Creation is the one event-order barrier: its synchronous callback returns before the connection becomes
-request-visible. A callback panic instead unwinds the establishment task and guarded cleanup prevents the
-pre-published record from becoming usable. After publication, callbacks from concurrent tasks are not
-serialized. A reuse callback may still be running when another task begins a close callback, and no ordering
-is promised between two concurrent reuses. Events causally emitted by one task are invoked in that task's
-program order until a callback panics. This is the complete ordering contract; consumers needing a total order
-add timestamps or sequencing in their listener.
+The installed lifetime has two close observations:
 
-`connection_reused` is emitted when an existing H1 guard or H2 activation is committed to a request, before
-Hyper readiness. A stale selection may therefore be followed by `connection_closed` and a transparent retry;
-the event reports the attempted reuse that operators need to diagnose. `connection_closed` marks logical
-close, not physical teardown, and reports the reason that won that transition. If Hyper's H1 driver wins a
-race with upgrade confirmation, the callback reports `ProtocolClosed` exactly once and the later one-way
-diagnostic refinement records `ProtocolClosed -> Upgraded` without another callback. If the request path wins,
-the callback reports `Upgraded` directly. Establishment failure is emitted after its capacity and waiter state
-have been reconciled. All callbacks observe committed pool state.
+```text
+Opened
+  |
+  v
+LogicalClose     connection no longer accepts pool dispatch
+  |
+  v
+PhysicalClose    client released root transport ownership
+```
 
-The same `ConnectionInfo` remains available through the existing per-request connection-capture API. Events
-extend observation; they do not replace metadata capture or its generation-specific poison callback.
+`LogicalCloseCause` records the first policy or protocol cause that ended pool
+dispatch ownership. It deliberately maps both HTTP/1 upgrade transfer and
+ordinary protocol-driver completion to `ProtocolEnded`; at logical close the
+pool may not yet know which final physical disposition applies.
 
-Statistics use the same state boundaries:
+`PhysicalClose` carries the final `CloseReason`. For an HTTP/1 upgrade this
+event occurs when caller-owned upgraded I/O releases the wrapped root transport,
+not when the connection first leaves the pool. The operating system may
+continue TCP teardown after the client releases that handle.
+
+Connection state can close while the synchronous `Opened` callback is running.
+The authoritative close transition is not delayed, but callback progress
+preserves:
+
+```text
+Opened -> LogicalClose -> PhysicalClose
+```
+
+Callbacks run after the transition releases every pool lock. Counter updates
+also precede the corresponding callback, so a listener may query statistics
+that already reflect the event. Concurrent connections have no total event
+order.
+
+#### Connection statistics
+
+Origin statistics expose the authoritative capacity budget for one canonical
+origin:
 
 ```rust
-#[derive(Clone, Copy, Debug, Default)]
 #[non_exhaustive]
-pub struct PartitionStats {
-    pub establishing: usize,
-    pub h1_idle: usize,
-    pub h1_active: usize,
-    pub h1_draining: usize,
-    pub h2_accepting: usize,
-    pub h2_draining: usize,
-    pub h2_active_streams: usize,
-    pub physically_live: usize,
-    pub waiting_requests: usize,
+pub struct OriginConnectionStats {
+    capacity: Option<ConnectionCapacityStats>,
 }
 
-pub struct OriginStats { /* sparse per-partition snapshot */ }
-
-impl OriginStats {
-    pub fn limit(&self) -> Option<usize>;
-    pub fn admitted(&self) -> usize;
-    pub fn get(&self, partition: PartitionId) -> Option<PartitionStats>;
-    pub fn iter(&self) -> impl Iterator<Item = (PartitionId, PartitionStats)> + '_;
-    pub fn is_empty(&self) -> bool;
+#[non_exhaustive]
+pub struct ConnectionCapacityStats {
+    limit: usize,
+    in_use: usize,
 }
 
 impl ConnectionPool {
-    pub fn stats(&self, origin: &OriginKey) -> OriginStats;
+    pub fn origin_stats(&self, origin: &OriginKey) -> OriginConnectionStats;
 }
 ```
 
-`establishing` starts when an attempt or flight is admitted and ends when it fails or installs a record.
-`h1_idle` and `h1_active` partition logically open H1 records; checked-out and `ReservedForPeer` H1 records are
-active, while only dispatch-eligible records in the idle set are idle.
-`h2_accepting` counts generations that may issue activations, while `h2_active_streams` counts accepted
-request claims across accepting and draining generations. Logical close moves a connection out of those
-admitted gauges and, while its transport remains, into `h1_draining` or `h2_draining`. An upgraded H1 remains
-H1-draining until its wrapped root I/O drops. `physically_live` starts when the connector's returned transport
-is wrapped for
-lifecycle tracking and ends only at root-I/O drop, so it includes handshaking, admitted, draining, and
-upgraded transports and may exceed the configured limit. `waiting_requests` counts requests registered in
-acquisition that do not yet own a dispatch authority, including flight participants.
+`capacity` is `None` when the origin is unbounded. For a bounded origin,
+`in_use` is read from admission's conserved capacity budget rather than
+reconstructed from protocol counts. It includes permits held by establishment,
+logically open connections, and detached HTTP/1 upgrades. Draining connections
+that already returned capacity are excluded.
 
-`OriginStats::admitted` derives the saturating sum of `establishing`, `h1_idle`, `h1_active`, and
-`h2_accepting` from the captured partition rows; it is not another shared counter or admission authority.
-Draining connections are excluded because they hold no permits. `limit` is the configured per-origin bound,
-or `None` for an unbounded origin. A connection and its streams are attributed to the owner partition even
-when another partition dispatches through them; a waiting request is attributed to its requesting partition.
+Partition statistics expose one exact `(PartitionId, OriginKey)` cell:
 
-Each gauge changes at its named transition before any corresponding callback. The counters use relaxed or
-otherwise non-coordinating reads so observation adds no origin-wide write to a local reuse hit. Consequently,
-an `OriginStats` value is not an atomic multi-counter snapshot: a transition can appear in one loaded field
-and not yet in another, so `admitted` can transiently over- or under-report the authoritative state even
-though it always equals its captured rows. Each field is nonnegative and converges to the state after
-concurrent transitions settle. Statistics are diagnostic values, not admission authority or a synchronization
-API.
+```rust
+#[non_exhaustive]
+pub struct PartitionConnectionStats {
+    pending_acquisitions: usize,
+    establishing_connections: usize,
+    h1: Http1ConnectionStats,
+    h2: Http2ConnectionStats,
+    physically_live_connections: usize,
+}
 
-The result is sparse: only partitions whose stable cell for the origin has been created appear, including
-`PartitionId::ANONYMOUS` for the default pool. An unknown but valid origin returns an empty result. These are
-current gauges, not cumulative operation counts; rates and close-cause totals belong in an event listener.
-Events answer "what happened" while statistics answer "what state is represented now."
+#[non_exhaustive]
+pub struct Http1ConnectionStats {
+    idle: usize,
+    active: usize,
+    draining: usize,
+    upgraded: usize,
+}
+
+#[non_exhaustive]
+pub struct Http2ConnectionStats {
+    accepting: usize,
+    draining: usize,
+    active_requests: usize,
+}
+
+impl ConnectionPool {
+    pub fn partition_stats(
+        &self,
+        partition: PartitionId,
+        origin: &OriginKey,
+    ) -> Option<PartitionConnectionStats>;
+}
+```
+
+An unknown partition returns `None`. A configured partition without a retained
+cell for the origin returns zeroed statistics. Neither query creates admission
+or cell state, and the pool does not scan all partitions to construct an
+aggregate.
+
+The fields have these meanings:
+
+- `pending_acquisitions` counts requests still waiting for a terminal
+  acquisition outcome, including queued demand, crossing delivery, capacity
+  ready to establish, and submitted establishment;
+- `establishing_connections` counts establishments that have not reported
+  failure, successful installation, or internal supersession;
+- H1 `idle` counts senders available for immediate local selection;
+- H1 `active` counts senders selected or reserved outside idle storage, not
+  necessarily requests currently transferring bytes;
+- H2 `accepting` counts generations that may issue new activations;
+- H2 `active_requests` counts accepted requests whose upload and response sides
+  have not both finished;
+- `draining` counts logically closed protocol connections that still own root
+  transport I/O;
+- H1 `upgraded` counts transferred upgraded connections whose root transport is
+  still caller-owned; and
+- `physically_live_connections` counts every root transport handle retained by
+  the client, including handshaking, open, draining, and upgraded connections.
+
+The snapshot combines two ownership domains without nesting locks:
+
+1. one cell lock provides exact waiter, H1 sender, H2 generation, and H2 request
+   counts;
+2. relaxed atomics provide establishment, drain, upgrade, and physical-lifetime
+   counts that may outlive a protocol record.
+
+The complete result is not one atomic snapshot across those domains. Each
+lock-owned observation is exact while its lock is held; relaxed counts are
+nonnegative and converge after concurrent transitions settle. Statistics are
+diagnostics, not a synchronization API or routing authority.
 
 #### The listener contract
 
-A listener runs synchronously, on the request or task that produced the event, and outside every pool lock.
-Running outside locks is what lets the pool call a listener without freezing pool coordination; running
-synchronously means a slow listener delays the request, establishment, maintenance, or driver task that
-triggered it and may defer work that follows that transition. A listener must not block on or wait for pool
-work that depends on the invoking task.
+A listener runs synchronously on the request, establishment, maintenance, or
+driver task that produces an event. It must not block on work that requires
+progress from that same task.
 
-A panicking listener does not corrupt the pool. The pool completes its state change and releases its locks
-before it invokes a listener, so a panic unwinds only the task that triggered the event — that one request
-fails — and leaves pool invariants intact. The pool does not catch the panic or guarantee delivery of the
-events that would have followed on the same task; a listener is an observer, and containing its own panics is
-the caller's responsibility.
+Listener invocation occurs outside every pool lock. On unwind-capable builds,
+the pool catches and logs listener panics after the authoritative transition;
+the panic does not alter pool state or prevent required cleanup. Abort-on-panic
+builds retain their normal process-abort semantics.
+
+Installing no listener avoids event timing, establishment identity allocation,
+listener cloning, and callback work. Diagnostic connection counts remain
+available independently of event configuration.
 
 #### Obligations
 
-* **Report locality** [safety] — a listener is invoked outside all pool locks, after the triggering state
-  change is complete.
-* **Panic containment** [safety] — a panicking listener leaves committed pool state and invariants intact;
-  guarded cleanup resolves any follow-up transition that the invoking task had not yet published.
-* **Creation before visibility** [safety] — an installed connection invokes its created callback before it is
-  visible for request selection; a callback panic cannot publish the pre-created record.
-* **Single close report** [safety] — logical close records one reason and invokes at most one close callback
-  for a connection identity. The only later reason mutation is the one-way H1-upgrade refinement from
-  `ProtocolClosed` to `Upgraded`; it changes no ownership, capacity, close count, or callback count and emits
-  both the previous and refined reasons to structured tracing.
-* **Attribution** [safety] — every installed-connection event identifies the physical connection, owning
-  partition, and negotiated protocol; a failed attempt identifies its origin and attempted partition.
-* **Defined gauges** [safety] — every statistics field changes only at its named lifecycle transition and is
-  never used as admission or scheduling authority.
+* **Transition ownership** [safety] — each event is emitted by the transition
+  that owns its final state, after releasing pool locks.
+* **Installed event order** [safety] — one connection reports `Opened`, then
+  `LogicalClose`, then `PhysicalClose`, with each event at most once.
+* **Establishment terminality** [safety] — each establishment ends as failed,
+  opened, or internally superseded exactly once.
+* **Diagnostic isolation** [safety] — statistics never participate in
+  admission, selection, reclaim, or dispatch.
+* **No local-path coordination** [performance] — ordinary request dispatch does
+  not update shared diagnostic counters or enter origin admission for
+  statistics.
+* **Non-creating queries** [performance] — statistics queries do not create an
+  admission authority or partition-origin cell.
 
 ## Terminology
 
@@ -2503,8 +2502,8 @@ the pool has no such partition. Resolution happens once at client construction, 
 partition lookup. `ClientBuildError` implements `Error`; `partition` returns the unresolved identity for the
 current error kind without making that kind exhaustive.
 
-[`ConnectionPool::stats`](#events-and-statistics) and the event API are specified with telemetry rather than
-repeated here.
+[`ConnectionPool::origin_stats`], [`ConnectionPool::partition_stats`], and the event API are specified with
+telemetry rather than repeated here.
 
 ### Builder
 
@@ -2531,7 +2530,8 @@ impl<Tls> Builder<Tls> {
     pub fn connection_reuse_scope(self, scope: ConnectionReuseScope) -> Self;
     pub fn proxy_config(self, config: ProxyConfig) -> Self;
     pub fn dns_resolver(self, resolver: impl ResolveDns + 'static) -> Self;
-    pub fn connection_event_listener(self, listener: impl ConnectionEventListener + 'static) -> Self;
+    pub fn event_listener(self, listener: impl ConnectionEventListener) -> Self;
+    pub fn set_event_listener(&mut self, listener: Option<SharedConnectionEventListener>) -> &mut Self;
     pub fn partitions(self, partitions: impl IntoIterator<Item = Partition>) -> Self;
 }
 
@@ -2684,9 +2684,10 @@ negotiate layer, each a `Service` wrapping the one below. The pool owns the coor
 state it coordinates is not local to any one layer, and stacked layers give no layer the whole picture.
 
 Reuse and admission illustrate it. A connection limit as a middleware layer parks a request until a permit
-frees, and a permit frees on logical close. Reuse is a different layer, and it wakes a waiter when a
-connection returns to the idle set. Nothing connects the two: a request parked for a permit is not waiting on
-the idle set, so an idle return does not wake it, and a request parked for reuse is not waiting on a permit,
+frees. A permit normally frees on logical close; an H1 connection that may have transferred upgraded I/O keeps
+it until final classification or physical completion. Reuse is a different layer, and it wakes a waiter when
+a connection returns to the idle set. Nothing connects the two: a request parked for a permit is not waiting
+on the idle set, so an idle return does not wake it, and a request parked for reuse is not waiting on a permit,
 so a close does not wake it. This already breaks in a single partition — a capacity-bound waiter is not woken
 by the idle return that should satisfy it — and it is not a tuning bug in one layer but a consequence of the
 lifecycle being split across layers that do not share a view of it. Coordinating capacity across partitions,

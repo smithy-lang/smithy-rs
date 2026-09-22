@@ -188,7 +188,8 @@ async fn drive_flight(
         ConnectionProtocol::Http2,
         transport.metadata,
     );
-    let (connection, physical) = ConnectionState::pending_open(info);
+    let (connection, physical) =
+        ConnectionState::pending_open(info, context.cell.connection_stats());
     let io = ConnectionIo::new(transport.io, physical);
     let executor = PartitionExecutor {
         spawner: context.owner_spawner.clone(),

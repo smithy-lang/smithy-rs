@@ -7,10 +7,14 @@
 //!
 //! Event payloads borrow transition-owned values for one synchronous callback.
 //! Listener invocation occurs after pool state transitions release their locks.
+//! One observed establishment emits either [`ConnectionEvent::EstablishmentFailed`]
+//! or [`ConnectionEvent::Opened`]. An opened connection then emits
+//! [`ConnectionEvent::LogicalClose`] before [`ConnectionEvent::PhysicalClose`].
 
 use super::connection::{CloseReason, ConnectionInfo, ConnectionProtocol, ConnectionState};
 use super::origin::OriginKey;
 use super::partition::PartitionId;
+use super::stats::CellConnectionStats;
 use crate::sync::Arc as PoolArc;
 use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_runtime_api::client::result::ConnectorError;
@@ -25,7 +29,9 @@ use std::time::{Duration, SystemTime};
 ///
 /// Callbacks run synchronously on the task that performs the observed
 /// transition. They must not block on work that requires progress from the
-/// same pool.
+/// same task. Pool locks are released before invocation. On unwind-capable
+/// builds, a listener panic is caught after the authoritative transition and
+/// cannot roll back pool state or cleanup.
 pub trait ConnectionEventListener: Send + Sync + 'static {
     /// Observes one completed lifecycle transition.
     fn on_event(&self, event: &ConnectionEvent<'_>);
@@ -41,6 +47,9 @@ where
 }
 
 /// Cloneable, type-erased connection event listener.
+///
+/// Use this wrapper with mutable builder configuration or when several pools
+/// share one listener.
 #[derive(Clone)]
 pub struct SharedConnectionEventListener(Arc<dyn ConnectionEventListener>);
 
@@ -96,6 +105,9 @@ impl fmt::Debug for SharedConnectionEventListener {
 }
 
 /// One connection establishment or installed-lifetime observation.
+///
+/// Payload references are valid for the synchronous callback. Clone or copy
+/// the individual values needed after the callback returns.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum ConnectionEvent<'a> {
@@ -122,7 +134,10 @@ impl fmt::Display for ConnectionEstablishmentId {
     }
 }
 
-/// Stable identity and routing context for one establishment.
+/// Stable identity and routing context for one pool-level establishment.
+///
+/// Address fallback performed inside a connector remains part of this one
+/// establishment.
 #[derive(Debug)]
 pub struct ConnectionEstablishmentInfo {
     id: ConnectionEstablishmentId,
@@ -147,7 +162,10 @@ impl ConnectionEstablishmentInfo {
     }
 }
 
-/// Measurements from one complete connection establishment.
+/// Measurements collected during one pool-level connection establishment.
+///
+/// A later retry receives a different [`ConnectionEstablishmentId`] and its own
+/// measurements.
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub struct ConnectionEstablishmentStats {
@@ -162,12 +180,17 @@ impl ConnectionEstablishmentStats {
         self.total_duration
     }
 
-    /// Returns elapsed time spent establishing the connected transport.
+    /// Returns elapsed time spent in the configured transport connector.
+    ///
+    /// This may include DNS, socket, proxy, and TLS work. Custom connectors may
+    /// perform a different set of transport operations.
     pub fn transport_duration(&self) -> Duration {
         self.transport_duration
     }
 
     /// Returns elapsed time spent in the Hyper protocol handshake, when started.
+    ///
+    /// Failures before protocol handshake return `None`.
     pub fn protocol_handshake_duration(&self) -> Option<Duration> {
         self.protocol_handshake_duration
     }
@@ -177,7 +200,7 @@ impl ConnectionEstablishmentStats {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum ConnectionEstablishmentStage {
-    /// DNS, socket, proxy, or TLS transport establishment.
+    /// Work performed by the configured transport connector.
     Transport,
     /// Selection of an HTTP protocol compatible with the request.
     ProtocolSelection,
@@ -187,7 +210,7 @@ pub enum ConnectionEstablishmentStage {
     PoolInstallation,
 }
 
-/// A terminal failure before a connection became pool supply.
+/// A terminal failure before a connection became available for pool dispatch.
 #[derive(Debug)]
 pub struct ConnectionEstablishmentFailed<'a> {
     establishment: &'a ConnectionEstablishmentInfo,
@@ -214,7 +237,8 @@ impl<'a> ConnectionEstablishmentFailed<'a> {
         self.stage
     }
 
-    /// Returns the connector-reported remote address, when transport completed.
+    /// Returns the connector-reported remote address, when transport completed
+    /// before a later stage failed.
     pub fn remote_addr(&self) -> Option<SocketAddr> {
         self.remote_addr
     }
@@ -224,13 +248,13 @@ impl<'a> ConnectionEstablishmentFailed<'a> {
         self.protocol
     }
 
-    /// Returns the classified connector error delivered to acquisition.
+    /// Returns the terminal error delivered to connection acquisition.
     pub fn error(&self) -> &'a (dyn Error + Send + Sync) {
         self.error
     }
 }
 
-/// A connection installed for pool dispatch.
+/// A connection installed and available for pool dispatch.
 #[derive(Debug)]
 pub struct ConnectionOpened<'a> {
     establishment: &'a ConnectionEstablishmentInfo,
@@ -256,6 +280,8 @@ impl<'a> ConnectionOpened<'a> {
 }
 
 /// Stable cause recorded when pool dispatch ownership ends.
+///
+/// The later physical-close event may carry a more specific [`CloseReason`].
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum LogicalCloseCause {
@@ -291,6 +317,9 @@ impl LogicalCloseCause {
 }
 
 /// Observation that an installed connection stopped accepting new dispatch.
+///
+/// Accepted HTTP/2 streams, an HTTP/1 exchange, or root transport I/O may
+/// remain live after this event.
 #[derive(Debug)]
 pub struct ConnectionLogicalClose<'a> {
     connection: &'a PoolArc<ConnectionInfo>,
@@ -310,6 +339,9 @@ impl<'a> ConnectionLogicalClose<'a> {
 }
 
 /// Observation that the client released root transport ownership.
+///
+/// This is the final event for an installed connection. It does not assert
+/// that peer, kernel, or TCP teardown has completed.
 #[derive(Debug)]
 pub struct ConnectionPhysicalClose<'a> {
     connection: &'a PoolArc<ConnectionInfo>,
@@ -322,7 +354,7 @@ impl<'a> ConnectionPhysicalClose<'a> {
         self.connection
     }
 
-    /// Returns the final connection close classification.
+    /// Returns the final protocol and ownership close classification.
     pub fn reason(&self) -> CloseReason {
         self.reason
     }
@@ -358,7 +390,9 @@ impl ConnectionEvents {
         &self,
         origin: &OriginKey,
         partition: PartitionId,
+        connection_stats: PoolArc<CellConnectionStats>,
     ) -> ConnectionEstablishment {
+        connection_stats.establishment_started();
         let observation = self
             .listener
             .as_ref()
@@ -380,13 +414,17 @@ impl ConnectionEvents {
                 remote_addr: None,
                 protocol: None,
             });
-        ConnectionEstablishment { observation }
+        ConnectionEstablishment {
+            observation,
+            connection_stats: Some(connection_stats),
+        }
     }
 }
 
 /// Tracks observations collected during one connection establishment.
 pub(super) struct ConnectionEstablishment {
     observation: Option<EstablishmentObservation>,
+    connection_stats: Option<PoolArc<CellConnectionStats>>,
 }
 
 /// Data collected while one observed establishment is active.
@@ -446,6 +484,7 @@ impl ConnectionEstablishment {
 
     /// Emits the terminal failure for this establishment.
     pub(super) fn failed(mut self, error: &ConnectorError) {
+        self.finish_connection_stats();
         let Some(observation) = self.observation.take() else {
             return;
         };
@@ -454,6 +493,7 @@ impl ConnectionEstablishment {
 
     /// Reports successful installation and enables ordered close observations.
     pub(super) fn opened(mut self, connection: &PoolArc<ConnectionState>) {
+        self.finish_connection_stats();
         let listener = self.observation.take().map(|observation| {
             let stats = observation.stats();
             observation
@@ -470,12 +510,20 @@ impl ConnectionEstablishment {
 
     /// Ends an establishment whose transport lost to existing HTTP/2 supply.
     pub(super) fn superseded(mut self) {
+        self.finish_connection_stats();
         self.observation.take();
+    }
+
+    fn finish_connection_stats(&mut self) {
+        if let Some(stats) = self.connection_stats.take() {
+            stats.establishment_finished();
+        }
     }
 }
 
 impl Drop for ConnectionEstablishment {
     fn drop(&mut self) {
+        self.finish_connection_stats();
         let Some(observation) = self.observation.take() else {
             return;
         };
@@ -526,7 +574,7 @@ impl EstablishmentObservation {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(smithy_http_client_loom)))]
 mod tests {
     use super::*;
     use std::sync::atomic::AtomicUsize;
@@ -541,7 +589,11 @@ mod tests {
     }
 
     fn establishment(events: &ConnectionEvents) -> ConnectionEstablishment {
-        events.establishment_started(&origin(), PartitionId::from_index(1))
+        events.establishment_started(
+            &origin(),
+            PartitionId::from_index(1),
+            PoolArc::new(CellConnectionStats::default()),
+        )
     }
 
     #[test]
@@ -586,6 +638,31 @@ mod tests {
             )),
             *observed.lock().unwrap()
         );
+    }
+
+    #[test]
+    fn failed_callback_observes_finished_establishment_count() {
+        let stats = PoolArc::new(CellConnectionStats::default());
+        let observed = Arc::new(Mutex::new(None));
+        let events = events(Some(SharedConnectionEventListener::new({
+            let stats = stats.clone();
+            let observed = observed.clone();
+            move |event: &ConnectionEvent<'_>| {
+                let ConnectionEvent::EstablishmentFailed(_) = event else {
+                    panic!("unexpected event: {event:?}");
+                };
+                *observed.lock().unwrap() =
+                    Some(stats.snapshot(0, 0, 0, 0, 0).establishing_connections());
+            }
+        })));
+        let establishment =
+            events.establishment_started(&origin(), PartitionId::from_index(1), stats.clone());
+        assert_eq!(1, stats.snapshot(0, 0, 0, 0, 0).establishing_connections());
+        let error = ConnectorError::io("synthetic transport failure".into());
+
+        establishment.failed(&error);
+
+        assert_eq!(Some(0), *observed.lock().unwrap());
     }
 
     #[test]

@@ -618,6 +618,19 @@ impl H1CellState {
         self.assert_consistent();
     }
 
+    /// Returns idle and externally owned sender counts.
+    pub(super) fn connection_counts(&self) -> (usize, usize) {
+        self.records
+            .values()
+            .fold((0, 0), |(idle, active), record| match record.sender_state {
+                H1SenderResidence::Idle { .. } => (idle + 1, active),
+                H1SenderResidence::Selected | H1SenderResidence::ReservedForPeer => {
+                    (idle, active + 1)
+                }
+                H1SenderResidence::Closing => (idle, active),
+            })
+    }
+
     /// Returns the installed record and idle counts.
     #[cfg(test)]
     pub(super) fn counts(&self) -> (usize, usize) {
