@@ -60,7 +60,14 @@ fn read_after_deserialization(
 `@httpPrefixHeaders`, where one unreadable entry makes the whole map `None` rather than a map
 silently missing that entry.
 
-Register a capturing interceptor **per operation** (`.customize().interceptor(..)`) rather than on the
-client: one registered on the client shares a single handle across every request, so captured values
-cannot be attributed to a particular call. Setting `Skip` itself is stateless and is fine to do
-client-wide.
+Two things to get right if you capture the octets this way:
+
+- Register the capturing interceptor **per operation** (`.customize().interceptor(..)`) rather than on
+  the client. One registered on the client shares a single handle across every request, so captured
+  values cannot be attributed to a particular call. Setting `Skip` itself is stateless and is fine to
+  do client-wide.
+- `read_after_deserialization` runs once per *attempt*, including an attempt that ends in a service
+  error, so **overwrite** what you captured rather than appending — otherwise you accumulate an entry
+  per attempt with no way to tell which response each came from. Only trust what you captured when
+  `send()` returned `Ok`: a final attempt that fails before a response is deserialized leaves the
+  previous attempt's octets in place.

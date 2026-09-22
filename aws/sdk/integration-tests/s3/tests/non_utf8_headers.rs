@@ -78,22 +78,30 @@ impl Intercept for SkipNonUtf8Headers {
     }
 }
 
+fn request() -> http_1x::Request<SdkBody> {
+    http_1x::Request::builder()
+        .uri("https://some-bucket.s3.us-east-1.amazonaws.com/some-key")
+        .body(SdkBody::empty())
+        .unwrap()
+}
+
+/// Note this conversion admits the non-UTF-8 value at all: `ReplayEvent::new` converts into the
+/// SDK's own response type, which previously rejected the whole header map.
+fn response(status: u16, expiration: &[u8], body: &'static str) -> http_1x::Response<SdkBody> {
+    http_1x::Response::builder()
+        .status(status)
+        .header(
+            "x-amz-expiration",
+            http_1x::HeaderValue::from_bytes(expiration).unwrap(),
+        )
+        .body(SdkBody::from(body))
+        .unwrap()
+}
+
 fn replay_client() -> StaticReplayClient {
     StaticReplayClient::new(vec![ReplayEvent::new(
-        http_1x::Request::builder()
-            .uri("https://some-bucket.s3.us-east-1.amazonaws.com/some-key")
-            .body(SdkBody::empty())
-            .unwrap(),
-        // Note this conversion admits the non-UTF-8 value at all: `ReplayEvent::new` converts into
-        // the SDK's own response type, which previously rejected the whole header map.
-        http_1x::Response::builder()
-            .status(200)
-            .header(
-                "x-amz-expiration",
-                http_1x::HeaderValue::from_bytes(NON_UTF8_EXPIRATION).unwrap(),
-            )
-            .body(SdkBody::from("some-object-contents"))
-            .unwrap(),
+        request(),
+        response(200, NON_UTF8_EXPIRATION, "some-object-contents"),
     )])
 }
 
@@ -146,6 +154,61 @@ async fn skip_yields_no_expiration_and_leaves_the_octets_readable() {
     assert_eq!(None, out.expiration());
 
     // ...and the header was never removed, so the octets are still there byte for byte.
+    assert_eq!(
+        vec![("x-amz-expiration".to_string(), NON_UTF8_EXPIRATION.to_vec())],
+        interceptor.seen(),
+    );
+}
+
+/// `read_after_deserialization` runs once per *attempt*, including an attempt that ends in a
+/// deserialized service error. An interceptor that captures header octets therefore has to overwrite
+/// rather than append, or it accumulates a value per attempt with no way to tell which response each
+/// one came from.
+///
+/// This pins that the captured octets belong to the attempt that actually produced the output.
+#[tokio::test]
+async fn only_the_final_attempt_is_captured() {
+    // The unreadable value differs per attempt so they cannot be confused. The retried response is
+    // an error, whose shape binds nothing to `x-amz-expiration` — that is fine, and is itself the
+    // point that a header bound to no member is now harmless.
+    const FIRST_ATTEMPT_EXPIRATION: &[u8] = b"rule-id=\"first-\xe9\"";
+
+    let http_client = StaticReplayClient::new(vec![
+        ReplayEvent::new(
+            request(),
+            response(
+                503,
+                FIRST_ATTEMPT_EXPIRATION,
+                "<Error><Code>SlowDown</Code></Error>",
+            ),
+        ),
+        ReplayEvent::new(
+            request(),
+            response(200, NON_UTF8_EXPIRATION, "some-object-contents"),
+        ),
+    ]);
+
+    let interceptor = SkipNonUtf8Headers::default();
+    let config = Config::builder()
+        .region(Region::new("us-east-1"))
+        .http_client(http_client)
+        .retry_config(aws_sdk_s3::config::retry::RetryConfig::standard())
+        .sleep_impl(aws_smithy_async::test_util::InstantSleep::unlogged())
+        .interceptor(interceptor.clone())
+        .with_test_defaults()
+        .build();
+
+    let out = Client::from_conf(config)
+        .get_object()
+        .bucket("some-bucket")
+        .key("some-key")
+        .send()
+        .await
+        .expect("the retry succeeds");
+
+    assert_eq!(None, out.expiration());
+
+    // Exactly one entry, and it is the successful attempt's — not the 503's, and not both.
     assert_eq!(
         vec![("x-amz-expiration".to_string(), NON_UTF8_EXPIRATION.to_vec())],
         interceptor.seen(),
