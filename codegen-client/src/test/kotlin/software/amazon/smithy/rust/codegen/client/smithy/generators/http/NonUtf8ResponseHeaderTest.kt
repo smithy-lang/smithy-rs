@@ -188,6 +188,91 @@ class NonUtf8ResponseHeaderTest {
         }
     }
 
+    /**
+     * `NonUtf8HeaderHandling::Skip` deserializes the member as if the header were absent, without
+     * touching the response — so unlike the removal approach above, the octets are still readable
+     * afterwards and any other reader of that header is unaffected.
+     */
+    @Test
+    fun skipLeavesTheMemberAbsentAndTheOctetsReadable() {
+        clientIntegrationTest(model) { codegenContext, rustCrate ->
+            rustCrate.testModule {
+                rustTemplate(
+                    """
+                    /// Opts into `Skip`, and separately records what the response still carried by the
+                    /// time deserialization finished.
+                    ##[derive(Clone, Debug, Default)]
+                    struct SkipNonUtf8Headers {
+                        seen_after_deser: std::sync::Arc<std::sync::Mutex<Option<Vec<u8>>>>,
+                    }
+
+                    impl #{Intercept} for SkipNonUtf8Headers {
+                        fn name(&self) -> &'static str {
+                            "SkipNonUtf8Headers"
+                        }
+
+                        fn read_before_execution(
+                            &self,
+                            _context: &#{BeforeSerializationRef}<'_>,
+                            cfg: &mut #{ConfigBag},
+                        ) -> Result<(), #{BoxError}> {
+                            cfg.interceptor_state()
+                                .store_put(#{NonUtf8HeaderHandling}::Skip);
+                            Ok(())
+                        }
+
+                        fn read_after_deserialization(
+                            &self,
+                            context: &#{AfterDeserializationRef}<'_>,
+                            _runtime_components: &#{RuntimeComponents},
+                            _cfg: &mut #{ConfigBag},
+                        ) -> Result<(), #{BoxError}> {
+                            *self.seen_after_deser.lock().unwrap() = context
+                                .response()
+                                .headers()
+                                .get_bytes("x-header")
+                                .map(|v| v.to_vec());
+                            Ok(())
+                        }
+                    }
+                    """,
+                    *scope(codegenContext),
+                )
+
+                tokioTest("skip_leaves_the_member_absent_and_the_octets_readable") {
+                    rustTemplate(
+                        """
+                        $nonUtf8Response
+                        let interceptor = SkipNonUtf8Headers::default();
+                        let client = crate::Client::from_conf(
+                            crate::Config::builder()
+                                .http_client(#{infallible_client_fn}(response))
+                                .endpoint_url("http://localhost:1234")
+                                .interceptor(interceptor.clone())
+                                .build(),
+                        );
+
+                        let out = client
+                            .some_operation()
+                            .send()
+                            .await
+                            .expect("Skip tolerates the unreadable value");
+
+                        assert_eq!(None, out.header());
+
+                        // The header was never removed, so the octets survived deserialization.
+                        assert_eq!(
+                            Some(b"value-\xe9".to_vec()),
+                            *interceptor.seen_after_deser.lock().unwrap(),
+                        );
+                        """,
+                        *scope(codegenContext),
+                    )
+                }
+            }
+        }
+    }
+
     private fun scope(
         codegenContext: software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext,
     ): Array<Pair<String, Any>> {
@@ -201,8 +286,17 @@ class NonUtf8ResponseHeaderTest {
                 smithyRuntimeApi.resolve(
                     "client::interceptors::context::BeforeDeserializationInterceptorContextMut",
                 ),
+            "AfterDeserializationRef" to
+                smithyRuntimeApi.resolve(
+                    "client::interceptors::context::AfterDeserializationInterceptorContextRef",
+                ),
+            "BeforeSerializationRef" to
+                smithyRuntimeApi.resolve(
+                    "client::interceptors::context::BeforeSerializationInterceptorContextRef",
+                ),
             "DisplayErrorContext" to RuntimeType.smithyTypes(rc).resolve("error::display::DisplayErrorContext"),
             "Intercept" to smithyRuntimeApi.resolve("client::interceptors::Intercept"),
+            "NonUtf8HeaderHandling" to smithyRuntimeApi.resolve("http::NonUtf8HeaderHandling"),
             "RuntimeComponents" to smithyRuntimeApi.resolve("client::runtime_components::RuntimeComponents"),
             "SdkBody" to RuntimeType.sdkBody(rc),
             "http_1x" to CargoDependency.Http1x.toType(),

@@ -43,54 +43,70 @@ The requirement on *writes* is unchanged: `insert` still panics and `try_insert`
 error for a value that is not valid UTF-8, so no `HeaderValue` a caller can name is non-UTF-8 and
 `HeaderValue::as_str` still cannot panic.
 
-### Recovering a value and letting the operation succeed
+### Tolerating a value you cannot read
 
-A caller that does not need the value can capture the raw octets and drop the header before
-deserialization, after which the member deserializes to `None` and the operation succeeds. This
-needs no configuration support:
+A caller that does not need the value can opt into `NonUtf8HeaderHandling::Skip`, which
+deserializes the affected member as if the header were absent so the operation succeeds. The header
+itself is left alone, so the octets remain readable and any other reader of that header is
+unaffected.
+
+There is no `Config` builder setting for this yet — what every AWS SDK should do about non-UTF-8
+headers is still an open cross-SDK question, and a config field would be hard to change later. For
+now, put the setting in the config bag from an interceptor. The same interceptor can read the
+octets, since `Skip` does not remove them:
 
 ```rust
 use aws_smithy_runtime_api::box_error::BoxError;
-use aws_smithy_runtime_api::client::interceptors::context::BeforeDeserializationInterceptorContextMut;
+use aws_smithy_runtime_api::client::interceptors::context::{
+    AfterDeserializationInterceptorContextRef, BeforeSerializationInterceptorContextRef,
+};
 use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+use aws_smithy_runtime_api::http::NonUtf8HeaderHandling;
 use aws_smithy_types::config_bag::ConfigBag;
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Debug, Default)]
-struct NonUtf8Headers {
+struct SkipNonUtf8Headers {
     captured: Arc<Mutex<Vec<(String, Vec<u8>)>>>,
 }
 
-impl Intercept for NonUtf8Headers {
+impl Intercept for SkipNonUtf8Headers {
     fn name(&self) -> &'static str {
-        "NonUtf8Headers"
+        "SkipNonUtf8Headers"
     }
 
-    fn modify_before_deserialization(
+    fn read_before_execution(
         &self,
-        context: &mut BeforeDeserializationInterceptorContextMut<'_>,
+        _context: &BeforeSerializationInterceptorContextRef<'_>,
+        cfg: &mut ConfigBag,
+    ) -> Result<(), BoxError> {
+        cfg.interceptor_state().store_put(NonUtf8HeaderHandling::Skip);
+        Ok(())
+    }
+
+    fn read_after_deserialization(
+        &self,
+        context: &AfterDeserializationInterceptorContextRef<'_>,
         _runtime_components: &RuntimeComponents,
         _cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        let headers = context.response_mut().headers_mut();
-        let captured: Vec<(String, Vec<u8>)> = headers
+        // Overwrite rather than append, so this describes the response that was deserialized
+        // even after a retry.
+        *self.captured.lock().unwrap() = context
+            .response()
+            .headers()
             .iter_bytes()
             .filter(|(_, value)| std::str::from_utf8(value).is_err())
             .map(|(name, value)| (name.to_owned(), value.to_vec()))
             .collect();
-        for (name, _) in &captured {
-            headers.remove(name);
-        }
-        // Overwrite rather than append, so this describes the response about to be deserialized
-        // even after a retry.
-        *self.captured.lock().unwrap() = captured;
         Ok(())
     }
 }
 ```
 
-Register it on the client config, or per operation via `.customize().interceptor(..)`, and read the
-captured octets after `send()` returns. Note that `Headers::remove` removes every value for a
-header name, so for a multi-value header this also drops the values that *were* valid UTF-8;
-re-insert them if you need them.
+Register it on the client config, or per operation via `.customize().interceptor(..)`.
+
+`Skip` drops the whole member, not just the offending value: for a member bound to a list-valued
+header, one unreadable value makes the entire member `None`. It also applies only to members bound
+with `@httpHeader` — a non-UTF-8 value under `@httpPrefixHeaders` still fails the operation.

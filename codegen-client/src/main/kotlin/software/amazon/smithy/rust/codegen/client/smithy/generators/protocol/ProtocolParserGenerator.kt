@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
@@ -53,6 +54,7 @@ class ProtocolParserGenerator(
     private val codegenScope =
         arrayOf(
             "Bytes" to RuntimeType.Bytes,
+            "ConfigBag" to RuntimeType.configBag(codegenContext.runtimeConfig),
             "Headers" to RuntimeType.headers(codegenContext.runtimeConfig),
             "Response" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig).resolve("http::Response"),
             "http" to RuntimeType.Http1x,
@@ -69,7 +71,7 @@ class ProtocolParserGenerator(
         return protocolFunctions.deserializeFn(operationShape, fnNameSuffix = "http_response") { fnName ->
             Attribute.AllowClippyUnnecessaryWraps.render(this)
             rustBlockTemplate(
-                "pub fn $fnName(_response_status: u16, _response_headers: &#{Headers}, _response_body: &[u8]) -> std::result::Result<#{O}, #{E}>",
+                "pub fn $fnName(_response_status: u16, _response_headers: &#{Headers}, _response_body: &[u8], _cfg: &#{ConfigBag}) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol,
@@ -97,7 +99,7 @@ class ProtocolParserGenerator(
         return protocolFunctions.deserializeFn(operationShape, fnNameSuffix = "http_error") { fnName ->
             Attribute.AllowClippyUnnecessaryWraps.render(this)
             rustBlockTemplate(
-                "pub fn $fnName(_response_status: u16, _response_headers: &#{Headers}, _response_body: &[u8]) -> std::result::Result<#{O}, #{E}>",
+                "pub fn $fnName(_response_status: u16, _response_headers: &#{Headers}, _response_body: &[u8], _cfg: &#{ConfigBag}) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol,
@@ -198,7 +200,7 @@ class ProtocolParserGenerator(
         return protocolFunctions.deserializeFn(operationShape, fnNameSuffix = "http_response") { fnName ->
             Attribute.AllowClippyUnnecessaryWraps.render(this)
             rustBlockTemplate(
-                "pub fn $fnName(response: &mut #{Response}) -> std::result::Result<#{O}, #{E}>",
+                "pub fn $fnName(response: &mut #{Response}, _cfg: &#{ConfigBag}) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol,
@@ -299,12 +301,34 @@ class ProtocolParserGenerator(
             HttpLocation.HEADER ->
                 writable {
                     val fnName = httpBindingGenerator.generateDeserializeHeaderFn(binding)
-                    rust(
+                    // A value that is not valid UTF-8 cannot be represented as a `String`. By
+                    // default that is an error naming this member; `Skip` deserializes the member as
+                    // if the header were absent, leaving the octets readable on the response. Any
+                    // other parse failure is an error regardless of the setting.
+                    rustTemplate(
                         """
-                        #T(_response_headers)
-                            .map_err(|_|#T::unhandled("Failed to parse ${member.memberName} from header `${binding.locationName}"))?
+                        match #{de_header}(_response_headers) {
+                            #{Ok}(value) => value,
+                            #{Err}(err) => {
+                                if err.is_non_utf8()
+                                    && _cfg.load::<#{NonUtf8HeaderHandling}>().copied()
+                                        == #{Some}(#{NonUtf8HeaderHandling}::Skip)
+                                {
+                                    #{None}
+                                } else {
+                                    return #{Err}(#{Error}::unhandled(
+                                        "Failed to parse ${member.memberName} from header `${binding.locationName}`",
+                                    ));
+                                }
+                            }
+                        }
                         """,
-                        fnName, errorSymbol,
+                        *preludeScope,
+                        "de_header" to fnName,
+                        "Error" to errorSymbol,
+                        "NonUtf8HeaderHandling" to
+                            RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
+                                .resolve("http::NonUtf8HeaderHandling"),
                     )
                 }
 
