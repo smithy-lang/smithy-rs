@@ -86,17 +86,14 @@ pub fn stale_requirements(
             continue;
         };
 
-        // Only entries that follow the local runtime crate are checked. A version-only
-        // entry is an intentional pin to a published line.
-        if !current_edge.has_path {
-            continue;
-        }
-
         let Some(current_version) = current_versions.get(&current_edge.package) else {
             // Third-party crates and generated SDK clients aren't managed here.
             continue;
         };
 
+        // Checked before the `path` test below: an inherited dependency can't also declare
+        // a `path`, so testing for a path first would silently skip these instead of
+        // failing closed.
         if let Some(unsupported) = &current_edge.unsupported_form {
             return Err(anyhow!(
                 "{dependent}'s dependency `{alias}` on the runtime crate {package} \
@@ -106,6 +103,12 @@ pub fn stale_requirements(
                 package = current_edge.package,
                 requirement = requirement.requirement,
             ));
+        }
+
+        // Only entries that follow the local runtime crate are checked. A version-only
+        // entry is an intentional pin to a published line.
+        if !current_edge.has_path {
+            continue;
         }
 
         let parsed = VersionReq::parse(&requirement.requirement).with_context(|| {
@@ -366,19 +369,37 @@ mod test {
         }
     }
 
-    /// 7. Nothing to check when the dependent's current version isn't published: the
-    ///    publisher stamps the current dependency version before publishing it.
+    /// 7. A published record's requirements are evaluated against the dependency's current
+    ///    version, not the dependent's, so a dependent that has moved on is only exempt
+    ///    because the caller skips it.
     ///
-    ///    The audit pass skips these crates before calling this function, so this test
-    ///    asserts the condition the caller relies on.
+    ///    `audit_published_requirements` looks the record up by the dependent's current
+    ///    version and does nothing when there is none, which the
+    ///    `bumping_the_dependent_resolves_a_stale_requirement` integration test covers
+    ///    end to end. This test pins the remaining half of that contract: an old published
+    ///    record still produces findings when it is the one handed in.
     #[test]
-    fn unpublished_dependent_version_has_no_published_record() {
-        let published = publish("1.12.0", vec![]);
-        let current = current_versions(&[("aws-config", "1.13.0")]);
-        assert_ne!(
-            Some(&Version::parse(&published.version).unwrap()),
-            current.get("aws-config")
-        );
+    fn requirements_are_evaluated_for_the_record_handed_in() {
+        let stale = stale_requirements(
+            "aws-config",
+            &publish(
+                "1.11.0",
+                vec![requirement(
+                    "aws-smithy-json",
+                    "^0.60.0",
+                    DependencyKind::Normal,
+                )],
+            ),
+            &[path_edge("aws-smithy-json", DependencyKind::Normal)],
+            &current_versions(&[
+                ("aws-smithy-json", "0.61.0"),
+                // The dependent's own current version is irrelevant here.
+                ("aws-config", "1.12.0"),
+            ]),
+        )
+        .unwrap();
+        assert_eq!(1, stale.len());
+        assert_eq!("aws-smithy-json", stale[0].package);
     }
 
     /// 8. A yanked version is still published and its number can't be reused, so its
@@ -714,20 +735,37 @@ mod test {
     /// managed runtime crate.
     #[test]
     fn unsupported_managed_dependency_form_fails_closed() {
-        let mut edge = path_edge("aws-smithy-json", DependencyKind::Normal);
-        edge.unsupported_form = Some("uses workspace dependency inheritance".into());
+        // Parsed from a manifest rather than hand-built: Cargo forbids combining
+        // `workspace = true` with `path`, so testing for a path first would skip these
+        // entries instead of failing closed.
+        let edges = crate::manifest::dependency_edges(
+            &toml::from_str(
+                r#"
+                [dependencies]
+                aws-smithy-json = { workspace = true }
+                "#,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert!(
+            !edges[0].has_path,
+            "an inherited entry can't declare a path"
+        );
+
+        let published = publish(
+            "1.12.0",
+            vec![requirement(
+                "aws-smithy-json",
+                "^0.63.0",
+                DependencyKind::Normal,
+            )],
+        );
 
         let err = stale_requirements(
             "aws-config",
-            &publish(
-                "1.12.0",
-                vec![requirement(
-                    "aws-smithy-json",
-                    "^0.63.0",
-                    DependencyKind::Normal,
-                )],
-            ),
-            &[edge.clone()],
+            &published,
+            &edges,
             &current_versions(&[("aws-smithy-json", "0.64.0")]),
         )
         .expect_err("workspace inheritance can't be evaluated");
@@ -736,24 +774,12 @@ mod test {
             err.contains("uses workspace dependency inheritance"),
             "unexpected error: {err}"
         );
+        assert!(err.contains("aws-smithy-json"), "unexpected error: {err}");
 
-        // The same form on a third-party crate is not an error.
+        // The same form on a crate that isn't a managed runtime crate is not an error.
         assert_eq!(
             Vec::<StaleRequirement>::new(),
-            stale_requirements(
-                "aws-config",
-                &publish(
-                    "1.12.0",
-                    vec![requirement(
-                        "aws-smithy-json",
-                        "^0.63.0",
-                        DependencyKind::Normal
-                    )]
-                ),
-                &[edge],
-                &current_versions(&[]),
-            )
-            .unwrap()
+            stale_requirements("aws-config", &published, &edges, &current_versions(&[])).unwrap()
         );
     }
 }
