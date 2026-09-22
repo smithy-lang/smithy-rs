@@ -19,7 +19,7 @@ For servers this narrows what gets rejected rather than changing the status. A n
 - `Headers::get_bytes`, `Headers::get_all_bytes`, `Headers::iter_bytes`
 - `HeaderValue::as_bytes`, `HeaderValue::try_as_str`
 
-Note that `Headers::len` and `Headers::contains_key` count and report values the string accessors skip.
+`Headers::get` returns `None` both for an absent header and for one whose value is not valid UTF-8. Use `Headers::try_get` where the difference matters: it returns `Some(Ok(_))`, `Some(Err(raw_octets))` and `None` respectively. Note also that `Headers::len` and `Headers::contains_key` count and report values the string accessors skip.
 
 To tolerate an unreadable value rather than fail, put `NonUtf8HeaderHandling::Skip` in the config bag from an interceptor. The member then deserializes as if the header were absent, and because the header is left in place the octets stay readable, so a caller that needs the value can decode it however its service encodes it:
 
@@ -59,7 +59,7 @@ impl Intercept for ContentDispositionAsLatin1 {
 }
 ```
 
-`Skip` always yields `None` for the whole member, never a partial value. That includes `@httpPrefixHeaders`, where one unreadable entry makes the whole map `None` rather than a map silently missing that entry.
+`Skip` always yields `None` for the whole member, never a partial value. That includes `@httpPrefixHeaders`, where one unreadable entry makes the whole map `None` rather than a map silently missing that entry. A member whose header carries an unreadable value is skipped even if that header also carries a separately malformed one; a header with no unreadable value always reports its parse failure.
 
 Two things to get right if you capture the octets this way:
 
