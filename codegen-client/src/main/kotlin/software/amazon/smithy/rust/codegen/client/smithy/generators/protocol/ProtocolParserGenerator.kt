@@ -285,6 +285,50 @@ class ProtocolParserGenerator(
     }
 
     /**
+     * Parses a header-bound member, applying [NonUtf8HeaderHandling] when the value cannot be read.
+     *
+     * A header value may contain any octet except a control character, so it is not necessarily
+     * representable as a `String`. By default that is an error naming the member; `Skip`
+     * deserializes the member as if the header were absent. The header itself is untouched either
+     * way, so the octets remain readable via `Headers::get_bytes`.
+     *
+     * `Skip` yields `None` for the whole member, including for `@httpPrefixHeaders`: a partially
+     * populated map would read as complete and hide the values that were dropped.
+     *
+     * Any parse failure that is not an encoding failure is an error regardless of the setting.
+     */
+    private fun parseHeaderBinding(
+        deserializer: RuntimeType,
+        errorSymbol: Symbol,
+        errorMessage: String,
+    ): Writable =
+        writable {
+            rustTemplate(
+                """
+                match #{deserializer}(_response_headers) {
+                    #{Ok}(value) => value,
+                    #{Err}(err) => {
+                        if err.is_non_utf8()
+                            && _cfg.load::<#{NonUtf8HeaderHandling}>().copied()
+                                == #{Some}(#{NonUtf8HeaderHandling}::Skip)
+                        {
+                            #{None}
+                        } else {
+                            return #{Err}(#{Error}::unhandled(${errorMessage.dq()}));
+                        }
+                    }
+                }
+                """,
+                *preludeScope,
+                "deserializer" to deserializer,
+                "Error" to errorSymbol,
+                "NonUtf8HeaderHandling" to
+                    RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
+                        .resolve("http::NonUtf8HeaderHandling"),
+            )
+        }
+
+    /**
      * Generate a parser & a parsed value converter for each output member of `operationShape`
      *
      * Returns a map with key = memberName, value = parsedValue
@@ -300,36 +344,11 @@ class ProtocolParserGenerator(
         return when (binding.location) {
             HttpLocation.HEADER ->
                 writable {
-                    val fnName = httpBindingGenerator.generateDeserializeHeaderFn(binding)
-                    // A value that is not valid UTF-8 cannot be represented as a `String`. By
-                    // default that is an error naming this member; `Skip` deserializes the member as
-                    // if the header were absent, leaving the octets readable on the response. Any
-                    // other parse failure is an error regardless of the setting.
-                    rustTemplate(
-                        """
-                        match #{de_header}(_response_headers) {
-                            #{Ok}(value) => value,
-                            #{Err}(err) => {
-                                if err.is_non_utf8()
-                                    && _cfg.load::<#{NonUtf8HeaderHandling}>().copied()
-                                        == #{Some}(#{NonUtf8HeaderHandling}::Skip)
-                                {
-                                    #{None}
-                                } else {
-                                    return #{Err}(#{Error}::unhandled(
-                                        "Failed to parse ${member.memberName} from header `${binding.locationName}`",
-                                    ));
-                                }
-                            }
-                        }
-                        """,
-                        *preludeScope,
-                        "de_header" to fnName,
-                        "Error" to errorSymbol,
-                        "NonUtf8HeaderHandling" to
-                            RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
-                                .resolve("http::NonUtf8HeaderHandling"),
-                    )
+                    parseHeaderBinding(
+                        httpBindingGenerator.generateDeserializeHeaderFn(binding),
+                        errorSymbol,
+                        "Failed to parse ${member.memberName} from header `${binding.locationName}`",
+                    )(this)
                 }
 
             HttpLocation.DOCUMENT -> {
@@ -362,15 +381,11 @@ class ProtocolParserGenerator(
             HttpLocation.PREFIX_HEADERS -> {
                 val sym = httpBindingGenerator.generateDeserializePrefixHeaderFn(binding)
                 writable {
-                    rustTemplate(
-                        """
-                        #{deser}(_response_headers)
-                             .map_err(|_|
-                                #{err}::unhandled("Failed to parse ${member.memberName} from prefix header `${binding.locationName}")
-                             )?
-                        """,
-                        "deser" to sym, "err" to errorSymbol,
-                    )
+                    parseHeaderBinding(
+                        sym,
+                        errorSymbol,
+                        "Failed to parse ${member.memberName} from prefix header `${binding.locationName}`",
+                    )(this)
                 }
             }
 

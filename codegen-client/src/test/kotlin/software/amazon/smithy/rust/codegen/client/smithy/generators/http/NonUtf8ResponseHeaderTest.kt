@@ -6,9 +6,12 @@
 package software.amazon.smithy.rust.codegen.client.smithy.generators.http
 
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
@@ -16,15 +19,16 @@ import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 
 /**
  * A service may echo back a header value that is not valid UTF-8 — HTTP permits any octet except a
- * control character in a header value. These tests pin the two ends of that behavior:
+ * control character in a header value. These tests pin that behavior:
  *
- *  - by default, a non-UTF-8 value bound to a modeled member is an error naming that member, rather
- *    than being silently dropped;
- *  - a caller that does not need the value can recover the raw octets and drop the header with an
- *    interceptor, after which the operation succeeds and the member deserializes to `None`.
- *
- * The second case is the supported workaround: it needs no codegen or configuration support, only
- * the byte accessors on `Headers`.
+ *  - by default, a value bound to a modeled member is an error naming that member, rather than being
+ *    silently dropped. Covered for `@httpHeader` and `@httpPrefixHeaders`, on both the buffered and
+ *    the streaming deserializer paths.
+ *  - `NonUtf8HeaderHandling::Skip` deserializes the member as if the header were absent, leaving the
+ *    header on the response so the octets stay readable. For `@httpPrefixHeaders` that means the
+ *    whole map is `None`, not a map missing one entry.
+ *  - alternatively a caller can remove the header outright from an interceptor, which needs no
+ *    setting at all — only the byte accessors on `Headers`.
  */
 class NonUtf8ResponseHeaderTest {
     private val model =
@@ -36,7 +40,7 @@ class NonUtf8ResponseHeaderTest {
         @restJson1
         service TestService {
             version: "2023-01-01",
-            operations: [SomeOperation],
+            operations: [SomeOperation, StreamingOperation, PrefixOperation],
         }
 
         @http(uri: "/", method: "GET")
@@ -47,6 +51,40 @@ class NonUtf8ResponseHeaderTest {
         structure SomeOutput {
             @httpHeader("x-header")
             header: String,
+        }
+
+        // A streaming output takes a different deserializer path than a buffered one, so it needs
+        // its own coverage.
+        @http(uri: "/streaming", method: "GET")
+        operation StreamingOperation {
+            output: StreamingOutput,
+        }
+
+        structure StreamingOutput {
+            @httpHeader("x-header")
+            header: String,
+
+            @httpPayload
+            @required
+            data: StreamingBlob,
+        }
+
+        @streaming
+        blob StreamingBlob
+
+        @http(uri: "/prefix", method: "GET")
+        operation PrefixOperation {
+            output: PrefixOutput,
+        }
+
+        structure PrefixOutput {
+            @httpPrefixHeaders("x-meta-")
+            metadata: StringMap,
+        }
+
+        map StringMap {
+            key: String,
+            value: String,
         }
         """.asSmithyModel()
 
@@ -197,47 +235,7 @@ class NonUtf8ResponseHeaderTest {
     fun skipLeavesTheMemberAbsentAndTheOctetsReadable() {
         clientIntegrationTest(model) { codegenContext, rustCrate ->
             rustCrate.testModule {
-                rustTemplate(
-                    """
-                    /// Opts into `Skip`, and separately records what the response still carried by the
-                    /// time deserialization finished.
-                    ##[derive(Clone, Debug, Default)]
-                    struct SkipNonUtf8Headers {
-                        seen_after_deser: std::sync::Arc<std::sync::Mutex<Option<Vec<u8>>>>,
-                    }
-
-                    impl #{Intercept} for SkipNonUtf8Headers {
-                        fn name(&self) -> &'static str {
-                            "SkipNonUtf8Headers"
-                        }
-
-                        fn read_before_execution(
-                            &self,
-                            _context: &#{BeforeSerializationRef}<'_>,
-                            cfg: &mut #{ConfigBag},
-                        ) -> Result<(), #{BoxError}> {
-                            cfg.interceptor_state()
-                                .store_put(#{NonUtf8HeaderHandling}::Skip);
-                            Ok(())
-                        }
-
-                        fn read_after_deserialization(
-                            &self,
-                            context: &#{AfterDeserializationRef}<'_>,
-                            _runtime_components: &#{RuntimeComponents},
-                            _cfg: &mut #{ConfigBag},
-                        ) -> Result<(), #{BoxError}> {
-                            *self.seen_after_deser.lock().unwrap() = context
-                                .response()
-                                .headers()
-                                .get_bytes("x-header")
-                                .map(|v| v.to_vec());
-                            Ok(())
-                        }
-                    }
-                    """,
-                    *scope(codegenContext),
-                )
+                skipInterceptor(codegenContext)(this)
 
                 tokioTest("skip_leaves_the_member_absent_and_the_octets_readable") {
                     rustTemplate(
@@ -262,8 +260,8 @@ class NonUtf8ResponseHeaderTest {
 
                         // The header was never removed, so the octets survived deserialization.
                         assert_eq!(
-                            Some(b"value-\xe9".to_vec()),
-                            *interceptor.seen_after_deser.lock().unwrap(),
+                            vec![("x-header".to_string(), b"value-\xe9".to_vec())],
+                            interceptor.seen_after_deser(),
                         );
                         """,
                         *scope(codegenContext),
@@ -273,9 +271,217 @@ class NonUtf8ResponseHeaderTest {
         }
     }
 
-    private fun scope(
-        codegenContext: software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext,
-    ): Array<Pair<String, Any>> {
+    /**
+     * A streaming output is deserialized by `deserialize_streaming_with_config` rather than the
+     * buffered path, so `Skip` needs its own coverage there.
+     */
+    @Test
+    fun skipAppliesOnTheStreamingDeserializerPath() {
+        clientIntegrationTest(model) { codegenContext, rustCrate ->
+            rustCrate.testModule {
+                skipInterceptor(codegenContext)(this)
+
+                tokioTest("skip_applies_on_the_streaming_deserializer_path") {
+                    rustTemplate(
+                        """
+                        $nonUtf8Response
+                        let interceptor = SkipNonUtf8Headers::default();
+                        let client = crate::Client::from_conf(
+                            crate::Config::builder()
+                                .http_client(#{infallible_client_fn}(response))
+                                .endpoint_url("http://localhost:1234")
+                                .interceptor(interceptor.clone())
+                                .build(),
+                        );
+
+                        let out = client
+                            .streaming_operation()
+                            .send()
+                            .await
+                            .expect("Skip applies to the streaming path too");
+
+                        assert_eq!(None, out.header());
+                        assert_eq!(
+                            vec![("x-header".to_string(), b"value-\xe9".to_vec())],
+                            interceptor.seen_after_deser(),
+                        );
+                        """,
+                        *scope(codegenContext),
+                    )
+                }
+
+                tokioTest("streaming_non_utf8_header_is_an_error_by_default") {
+                    rustTemplate(
+                        """
+                        $nonUtf8Response
+                        let client = crate::Client::from_conf(
+                            crate::Config::builder()
+                                .http_client(#{infallible_client_fn}(response))
+                                .endpoint_url("http://localhost:1234")
+                                .build(),
+                        );
+
+                        client
+                            .streaming_operation()
+                            .send()
+                            .await
+                            .expect_err("a non-UTF-8 header value must not be silently dropped");
+                        """,
+                        *scope(codegenContext),
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * For `@httpPrefixHeaders`, `Skip` drops the whole map rather than the offending entry. A
+     * partially populated map would read as complete and hide what was dropped; `None` says plainly
+     * that the map could not be built, and the octets of every entry are still recoverable.
+     */
+    @Test
+    fun skipDropsTheEntirePrefixHeaderMap() {
+        clientIntegrationTest(model) { codegenContext, rustCrate ->
+            rustCrate.testModule {
+                skipInterceptor(codegenContext)(this)
+
+                tokioTest("skip_drops_the_entire_prefix_header_map") {
+                    rustTemplate(
+                        """
+                        // One readable entry alongside one that is not valid UTF-8.
+                        let response = |_: #{http_1x}::Request<#{SdkBody}>| {
+                            #{http_1x}::Response::builder()
+                                .status(200)
+                                .header("x-meta-good", "readable")
+                                .header(
+                                    "x-meta-bad",
+                                    #{http_1x}::HeaderValue::from_bytes(b"value-\xe9").unwrap(),
+                                )
+                                .body(#{SdkBody}::from(""))
+                                .unwrap()
+                        };
+
+                        let interceptor = SkipNonUtf8Headers::default();
+                        let client = crate::Client::from_conf(
+                            crate::Config::builder()
+                                .http_client(#{infallible_client_fn}(response))
+                                .endpoint_url("http://localhost:1234")
+                                .interceptor(interceptor.clone())
+                                .build(),
+                        );
+
+                        let out = client
+                            .prefix_operation()
+                            .send()
+                            .await
+                            .expect("Skip tolerates the unreadable entry");
+
+                        // Not a map containing only `good` — the whole member is absent.
+                        assert_eq!(None, out.metadata());
+
+                        assert_eq!(
+                            vec![("x-meta-bad".to_string(), b"value-\xe9".to_vec())],
+                            interceptor.seen_after_deser(),
+                        );
+                        """,
+                        *scope(codegenContext),
+                    )
+                }
+
+                tokioTest("prefix_header_non_utf8_is_an_error_by_default") {
+                    rustTemplate(
+                        """
+                        let response = |_: #{http_1x}::Request<#{SdkBody}>| {
+                            #{http_1x}::Response::builder()
+                                .status(200)
+                                .header("x-meta-good", "readable")
+                                .header(
+                                    "x-meta-bad",
+                                    #{http_1x}::HeaderValue::from_bytes(b"value-\xe9").unwrap(),
+                                )
+                                .body(#{SdkBody}::from(""))
+                                .unwrap()
+                        };
+                        let client = crate::Client::from_conf(
+                            crate::Config::builder()
+                                .http_client(#{infallible_client_fn}(response))
+                                .endpoint_url("http://localhost:1234")
+                                .build(),
+                        );
+
+                        client
+                            .prefix_operation()
+                            .send()
+                            .await
+                            .expect_err("a non-UTF-8 prefix header value must not be silently dropped");
+                        """,
+                        *scope(codegenContext),
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Emits an interceptor that opts into [NonUtf8HeaderHandling::Skip] and, separately, records
+     * which header values were still unreadable on the response once deserialization finished.
+     * `Skip` does not remove anything, so that list is what a caller would use to recover the
+     * octets.
+     */
+    private fun skipInterceptor(codegenContext: ClientCodegenContext): Writable =
+        writable {
+            rustTemplate(
+                """
+                ##[derive(Clone, Debug, Default)]
+                struct SkipNonUtf8Headers {
+                    seen: std::sync::Arc<std::sync::Mutex<Vec<(String, Vec<u8>)>>>,
+                }
+
+                impl SkipNonUtf8Headers {
+                    fn seen_after_deser(&self) -> Vec<(String, Vec<u8>)> {
+                        self.seen.lock().unwrap().clone()
+                    }
+                }
+
+                impl #{Intercept} for SkipNonUtf8Headers {
+                    fn name(&self) -> &'static str {
+                        "SkipNonUtf8Headers"
+                    }
+
+                    fn read_before_execution(
+                        &self,
+                        _context: &#{BeforeSerializationRef}<'_>,
+                        cfg: &mut #{ConfigBag},
+                    ) -> Result<(), #{BoxError}> {
+                        cfg.interceptor_state()
+                            .store_put(#{NonUtf8HeaderHandling}::Skip);
+                        Ok(())
+                    }
+
+                    fn read_after_deserialization(
+                        &self,
+                        context: &#{AfterDeserializationRef}<'_>,
+                        _runtime_components: &#{RuntimeComponents},
+                        _cfg: &mut #{ConfigBag},
+                    ) -> Result<(), #{BoxError}> {
+                        let mut seen: Vec<(String, Vec<u8>)> = context
+                            .response()
+                            .headers()
+                            .iter_bytes()
+                            .filter(|(_, value)| std::str::from_utf8(value).is_err())
+                            .map(|(name, value)| (name.to_owned(), value.to_vec()))
+                            .collect();
+                        seen.sort();
+                        *self.seen.lock().unwrap() = seen;
+                        Ok(())
+                    }
+                }
+                """,
+                *scope(codegenContext),
+            )
+        }
+
+    private fun scope(codegenContext: ClientCodegenContext): Array<Pair<String, Any>> {
         val rc = codegenContext.runtimeConfig
         val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(rc)
         return arrayOf(

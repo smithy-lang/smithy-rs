@@ -107,6 +107,12 @@ impl Intercept for SkipNonUtf8Headers {
 
 Register it on the client config, or per operation via `.customize().interceptor(..)`.
 
-`Skip` drops the whole member, not just the offending value: for a member bound to a list-valued
-header, one unreadable value makes the entire member `None`. It also applies only to members bound
-with `@httpHeader` — a non-UTF-8 value under `@httpPrefixHeaders` still fails the operation.
+`Skip` always yields `None` for the whole member, never a partial value:
+
+- For a member bound to a list-valued header, one unreadable value makes the entire member `None`.
+- For `@httpPrefixHeaders` (S3 object metadata, for instance), one unreadable entry makes the whole
+  map `None` rather than a map missing that entry. A partially populated map would read as complete
+  and hide what had been dropped.
+
+In both cases every header is left on the response, so the octets of *all* the entries — including
+the readable ones — remain available through the byte accessors.
