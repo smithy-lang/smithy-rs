@@ -310,7 +310,9 @@ pub(crate) mod v4a {
         sign, PayloadChecksumKind, SessionTokenMode, SignatureLocation, SigningSettings,
     };
     use crate::sign::v4a;
+    #[cfg(not(feature = "__aws-lc-rs"))]
     use p256::ecdsa::signature::Verifier;
+    #[cfg(not(feature = "__aws-lc-rs"))]
     use p256::ecdsa::{DerSignature, SigningKey};
     use std::time::Duration;
     use time::format_description::well_known::Rfc3339;
@@ -369,12 +371,33 @@ pub(crate) mod v4a {
         let creds = params.credentials().unwrap();
         let signing_key =
             v4a::generate_signing_key(creds.access_key_id(), creds.secret_access_key());
-        let sig = DerSignature::try_from(hex::decode(out.signature).unwrap().as_slice()).unwrap();
-
-        let signing_key = SigningKey::from_slice(signing_key.as_ref()).unwrap();
-        let peer_public_key = signing_key.verifying_key();
+        let sig_bytes = hex::decode(out.signature).unwrap();
         let sts = actual_string_to_sign.as_bytes();
-        peer_public_key.verify(sts, &sig).unwrap();
+
+        #[cfg(not(feature = "__aws-lc-rs"))]
+        {
+            let sig = DerSignature::try_from(sig_bytes.as_slice()).unwrap();
+            let signing_key = SigningKey::from_slice(signing_key.as_ref()).unwrap();
+            let peer_public_key = signing_key.verifying_key();
+            peer_public_key.verify(sts, &sig).unwrap();
+        }
+        #[cfg(feature = "__aws-lc-rs")]
+        {
+            use aws_lc_rs::signature::KeyPair as _;
+            let scalar: &[u8; 32] = signing_key.as_ref().try_into().unwrap();
+            let der = v4a::scalar_to_sec1_p256_der(scalar);
+            let key_pair = aws_lc_rs::signature::EcdsaKeyPair::from_private_key_der(
+                &aws_lc_rs::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
+                &der,
+            )
+            .unwrap();
+            let pub_key = key_pair.public_key().as_ref();
+            let upk = aws_lc_rs::signature::UnparsedPublicKey::new(
+                &aws_lc_rs::signature::ECDSA_P256_SHA256_ASN1,
+                pub_key,
+            );
+            upk.verify(sts, &sig_bytes).unwrap();
+        }
         // TODO(sigv4a) - use public.key.json as verifying key?
     }
 

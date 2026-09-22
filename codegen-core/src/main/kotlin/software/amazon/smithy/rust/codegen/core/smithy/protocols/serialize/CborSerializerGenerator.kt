@@ -496,13 +496,7 @@ class CborSerializerGenerator(
 
             is TimestampShape -> rust("$encoder.timestamp(${value.asRef()});")
 
-            // BigInteger/BigDecimal are not supported with CBOR.
-            // The Smithy RPC v2 CBOR spec requires these to be encoded using CBOR tags 2/3/4
-            // (binary bignum representation), but aws-smithy-cbor doesn't implement these tags yet.
-            is BigIntegerShape ->
-                throw CodegenException(
-                    "BigInteger is not supported with Concise Binary Object Representation (CBOR) protocol",
-                )
+            is BigIntegerShape -> rust("$encoder.big_integer(${value.asRef()});")
             is BigDecimalShape ->
                 throw CodegenException(
                     "BigDecimal is not supported with Concise Binary Object Representation (CBOR) protocol",

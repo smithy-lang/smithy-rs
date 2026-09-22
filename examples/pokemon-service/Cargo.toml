@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 authors = ["Smithy-rs Server Team <smithy-rs-server@amazon.com>"]
 description = "A smithy Rust service to retrieve information about Pokémon."
-rust-version = "1.88"
+rust-version = "1.94.1"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }

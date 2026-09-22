@@ -11,19 +11,30 @@ use crate::{
 use aws_credential_types::Credentials;
 use aws_smithy_runtime_api::{client::identity::Identity, http::Headers};
 use bytes::Bytes;
+#[cfg(not(feature = "__aws-lc-rs"))]
 use hmac::{digest::FixedOutput, Hmac, KeyInit, Mac};
+#[cfg(not(feature = "__aws-lc-rs"))]
 use sha2::{Digest, Sha256};
 use std::time::SystemTime;
 
 /// HashedPayload = Lowercase(HexEncode(Hash(requestPayload)))
 #[allow(dead_code)] // Unused when compiling without certain features
+#[cfg(not(feature = "__aws-lc-rs"))]
 pub(crate) fn sha256_hex_string(bytes: impl AsRef<[u8]>) -> String {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
     hex::encode(hasher.finalize_fixed())
 }
 
+/// HashedPayload = Lowercase(HexEncode(Hash(requestPayload)))
+#[allow(dead_code)] // Unused when compiling without certain features
+#[cfg(feature = "__aws-lc-rs")]
+pub(crate) fn sha256_hex_string(bytes: impl AsRef<[u8]>) -> String {
+    hex::encode(aws_lc_rs::digest::digest(&aws_lc_rs::digest::SHA256, bytes.as_ref()).as_ref())
+}
+
 /// Calculates a Sigv4 signature
+#[cfg(not(feature = "__aws-lc-rs"))]
 pub fn calculate_signature(signing_key: impl AsRef<[u8]>, string_to_sign: &[u8]) -> String {
     let mut mac = Hmac::<Sha256>::new_from_slice(signing_key.as_ref())
         .expect("HMAC can take key of any size");
@@ -31,7 +42,15 @@ pub fn calculate_signature(signing_key: impl AsRef<[u8]>, string_to_sign: &[u8])
     hex::encode(mac.finalize_fixed())
 }
 
+/// Calculates a Sigv4 signature
+#[cfg(feature = "__aws-lc-rs")]
+pub fn calculate_signature(signing_key: impl AsRef<[u8]>, string_to_sign: &[u8]) -> String {
+    let key = aws_lc_rs::hmac::Key::new(aws_lc_rs::hmac::HMAC_SHA256, signing_key.as_ref());
+    hex::encode(aws_lc_rs::hmac::sign(&key, string_to_sign).as_ref())
+}
+
 /// Generates a signing key for Sigv4
+#[cfg(not(feature = "__aws-lc-rs"))]
 pub fn generate_signing_key(
     secret: &str,
     time: SystemTime,
@@ -64,6 +83,26 @@ pub fn generate_signing_key(
     let mut mac = Hmac::<Sha256>::new_from_slice(&tag).expect("HMAC can take key of any size");
     mac.update("aws4_request".as_bytes());
     mac.finalize_fixed()
+}
+
+/// Generates a signing key for Sigv4
+#[cfg(feature = "__aws-lc-rs")]
+pub fn generate_signing_key(
+    secret: &str,
+    time: SystemTime,
+    region: &str,
+    service: &str,
+) -> impl AsRef<[u8]> {
+    use aws_lc_rs::hmac::{sign, Key, HMAC_SHA256};
+
+    let secret = format!("AWS4{secret}");
+    let tag = sign(
+        &Key::new(HMAC_SHA256, secret.as_bytes()),
+        format_date(time).as_bytes(),
+    );
+    let tag = sign(&Key::new(HMAC_SHA256, tag.as_ref()), region.as_bytes());
+    let tag = sign(&Key::new(HMAC_SHA256, tag.as_ref()), service.as_bytes());
+    sign(&Key::new(HMAC_SHA256, tag.as_ref()), b"aws4_request")
 }
 
 /// Parameters to use when signing.

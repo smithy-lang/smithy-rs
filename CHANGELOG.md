@@ -1,4 +1,14 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+June 11th, 2026
+===============
+**New this release:**
+- :tada: (all, [smithy-rs#4473](https://github.com/smithy-lang/smithy-rs/issues/4473), @ethoman) Add CBOR encoding and decoding support for `BigInteger` using CBOR tags 2 (positive bignum) and 3 (negative bignum) as specified by RFC 8949 §3.4.3 and the Smithy RPC v2 CBOR protocol. Values that fit in CBOR major types 0 or 1 use preferred serialization (plain integers) instead of bignum tags.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @ethoman ([smithy-rs#4473](https://github.com/smithy-lang/smithy-rs/issues/4473))
+
+
 June 1st, 2026
 ==============
 **New this release:**

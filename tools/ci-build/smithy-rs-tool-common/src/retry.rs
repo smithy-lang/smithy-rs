@@ -6,7 +6,7 @@
 use std::error::Error;
 use std::error::Error as StdError;
 use std::time::Duration;
-use tracing::{error, info};
+use tracing::info;
 
 pub type BoxError = Box<dyn StdError + Send + Sync + 'static>;
 

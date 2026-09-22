@@ -6,9 +6,13 @@
 use aws_smithy_runtime_api::client::identity::Identity;
 use bytes::{BufMut, BytesMut};
 use crypto_bigint::{CheckedAdd, CheckedSub, Encoding, U256};
+#[cfg(not(feature = "__aws-lc-rs"))]
 use hmac::{digest::FixedOutput, Hmac, KeyInit, Mac};
+#[cfg(not(feature = "__aws-lc-rs"))]
 use p256::ecdsa::signature::Signer;
+#[cfg(not(feature = "__aws-lc-rs"))]
 use p256::ecdsa::{DerSignature, SigningKey};
+#[cfg(not(feature = "__aws-lc-rs"))]
 use sha2::Sha256;
 use std::io::Write;
 use std::sync::LazyLock;
@@ -25,11 +29,62 @@ static BIG_N_MINUS_2: LazyLock<U256> = LazyLock::new(|| {
     ORDER.checked_sub(&U256::from(2u32)).unwrap()
 });
 
+/// Wraps a P-256 scalar in a minimal RFC 5915 SEC1 `ECPrivateKey` DER blob.
+///
+/// AWS-LC parses this via [`aws_lc_rs::signature::EcdsaKeyPair::from_private_key_der`] and
+/// derives the public point internally — the `publicKey [1] BIT STRING OPTIONAL` field is
+/// allowed to be absent by RFC 5915, which lets the caller avoid pulling in a separate EC
+/// implementation just to compute the public key.
+///
+/// Output layout (51 bytes):
+///   30 31              SEQUENCE, length 49
+///     02 01 01           INTEGER 1 (version = ecPrivkeyVer1)
+///     04 20 <32>         OCTET STRING (privateKey scalar)
+///     A0 0A              [0] EXPLICIT (parameters)
+///       06 08 2A 86 48 CE 3D 03 01 07   OID 1.2.840.10045.3.1.7 (prime256v1)
+#[cfg(feature = "__aws-lc-rs")]
+pub(crate) fn scalar_to_sec1_p256_der(scalar: &[u8; 32]) -> [u8; 51] {
+    let mut out = [0u8; 51];
+    out[0] = 0x30;
+    out[1] = 0x31;
+    out[2] = 0x02;
+    out[3] = 0x01;
+    out[4] = 0x01;
+    out[5] = 0x04;
+    out[6] = 0x20;
+    out[7..39].copy_from_slice(scalar);
+    out[39] = 0xA0;
+    out[40] = 0x0A;
+    out[41..51].copy_from_slice(&[0x06, 0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07]);
+    out
+}
+
 /// Calculates a Sigv4a signature
+#[cfg(not(feature = "__aws-lc-rs"))]
 pub fn calculate_signature(signing_key: impl AsRef<[u8]>, string_to_sign: &[u8]) -> String {
     let signing_key = SigningKey::from_slice(signing_key.as_ref()).unwrap();
     let signature: DerSignature = signing_key.sign(string_to_sign);
     hex::encode(signature.as_bytes())
+}
+
+/// Calculates a Sigv4a signature
+#[cfg(feature = "__aws-lc-rs")]
+pub fn calculate_signature(signing_key: impl AsRef<[u8]>, string_to_sign: &[u8]) -> String {
+    let scalar: &[u8; 32] = signing_key
+        .as_ref()
+        .try_into()
+        .expect("sigv4a signing key is always a 32-byte P-256 scalar");
+    let der = scalar_to_sec1_p256_der(scalar);
+    let key_pair = aws_lc_rs::signature::EcdsaKeyPair::from_private_key_der(
+        &aws_lc_rs::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
+        &der,
+    )
+    .expect("scalar-derived SEC1 DER is well-formed");
+    let rng = aws_lc_rs::rand::SystemRandom::new();
+    let signature = key_pair
+        .sign(&rng, string_to_sign)
+        .expect("ECDSA signing should not fail with a valid key");
+    hex::encode(signature.as_ref())
 }
 
 /// Generates a signing key for Sigv4a signing.
@@ -41,7 +96,7 @@ pub fn generate_signing_key(access_key: &str, secret_access_key: &str) -> impl A
     // Capacity is the access key length plus the counter byte
     let mut kdf_context = Zeroizing::new(Vec::with_capacity(access_key.len() + 1));
     let mut counter = Zeroizing::new(1u8);
-    let key = loop {
+    let d = loop {
         write!(kdf_context, "{access_key}").unwrap();
         kdf_context.push(*counter);
 
@@ -50,14 +105,11 @@ pub fn generate_signing_key(access_key: &str, secret_access_key: &str) -> impl A
         fis.append(&mut kdf_context);
         fis.put_i32(256);
 
-        let mut mac =
-            Hmac::<Sha256>::new_from_slice(&input_key).expect("HMAC can take key of any size");
-
         let mut buf = BytesMut::new();
         buf.put_i32(1);
         buf.put_slice(&fis);
-        mac.update(&buf);
-        let k0 = U256::from_be_bytes(mac.finalize_fixed().into());
+
+        let k0 = hmac_sha256_for_kdf(&input_key, &buf);
 
         // It would be more secure for this to be a constant time comparison, but because this
         // is for client usage, that's not as big a deal.
@@ -65,8 +117,7 @@ pub fn generate_signing_key(access_key: &str, secret_access_key: &str) -> impl A
             let pk = k0
                 .checked_add(&U256::ONE)
                 .expect("k0 is always less than U256::MAX");
-            let d = Zeroizing::new(pk.to_be_bytes());
-            break SigningKey::from_slice(d.as_ref()).unwrap();
+            break Zeroizing::new(pk.to_be_bytes());
         }
 
         *counter = counter
@@ -74,7 +125,25 @@ pub fn generate_signing_key(access_key: &str, secret_access_key: &str) -> impl A
             .expect("counter will never get to 255");
     };
 
-    key.to_bytes()
+    *d
+}
+
+#[cfg(not(feature = "__aws-lc-rs"))]
+fn hmac_sha256_for_kdf(key: &[u8], msg: &[u8]) -> U256 {
+    let mut mac = Hmac::<Sha256>::new_from_slice(key).expect("HMAC can take key of any size");
+    mac.update(msg);
+    U256::from_be_bytes(mac.finalize_fixed().into())
+}
+
+#[cfg(feature = "__aws-lc-rs")]
+fn hmac_sha256_for_kdf(key: &[u8], msg: &[u8]) -> U256 {
+    let key = aws_lc_rs::hmac::Key::new(aws_lc_rs::hmac::HMAC_SHA256, key);
+    let tag = aws_lc_rs::hmac::sign(&key, msg);
+    let bytes: [u8; 32] = tag
+        .as_ref()
+        .try_into()
+        .expect("HMAC-SHA256 tag is always 32 bytes");
+    U256::from_be_bytes(bytes)
 }
 
 /// Parameters to use when signing.

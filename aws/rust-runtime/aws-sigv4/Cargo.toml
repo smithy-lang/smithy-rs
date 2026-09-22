@@ -1,13 +1,13 @@
 [package]
 name = "aws-sigv4"
-version = "1.4.5"
+version = "1.5.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "David Barsky <me@davidbarsky.com>"]
 description = "SigV4 signer for HTTP requests and Event Stream messages."
 edition = "2021"
 exclude = ["aws-sig-v4-test-suite/*"]
 license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
-rust-version = "1.91.1"
+rust-version = "1.94.1"
 
 [features]
 default = ["sign-http", "http1"]
@@ -17,8 +17,19 @@ sign-http = ["dep:http0", "dep:percent-encoding", "dep:form_urlencoded"]
 sign-eventstream = ["dep:aws-smithy-eventstream"]
 sigv4a = ["dep:p256", "dep:crypto-bigint", "dep:subtle", "dep:zeroize"]
 
+# Internal feature used to gate code that depends on aws-lc-rs being linked.
+# Users should not enable this directly; choose `aws-lc-rs` or `fips` instead.
+__aws-lc-rs = ["dep:aws-lc-rs"]
+# Route SigV4 (and, with `sigv4a`, SigV4a) cryptographic primitives through
+# `aws-lc-rs` (non-FIPS, backed by `aws-lc-sys`) instead of RustCrypto's
+# `hmac` / `sha2` / `p256`.
+aws-lc-rs = ["__aws-lc-rs", "aws-lc-rs?/aws-lc-sys"]
+# Same as `aws-lc-rs`, but backed by the FIPS-validated `aws-lc-fips-sys`.
+fips = ["__aws-lc-rs", "aws-lc-rs?/fips"]
+
 [dependencies]
 aws-credential-types = { path = "../aws-credential-types" }
+aws-lc-rs = { version = "1", default-features = false, optional = true }
 aws-smithy-eventstream = { path = "../../../rust-runtime/aws-smithy-eventstream", optional = true }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
@@ -63,7 +74,8 @@ harness = false
 required-features = ["sigv4a"]
 
 [package.metadata.docs.rs]
-all-features = true
+all-features = false
+features = ["aws-lc-rs", "sigv4a", "sign-http", "http1", "sign-eventstream", "http0-compat"]
 targets = ["x86_64-unknown-linux-gnu"]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 rustdoc-args = ["--cfg", "docsrs"]

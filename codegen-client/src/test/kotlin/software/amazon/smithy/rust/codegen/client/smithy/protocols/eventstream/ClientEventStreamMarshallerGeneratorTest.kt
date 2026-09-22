@@ -269,7 +269,7 @@ class ClientEventStreamMarshallerGeneratorTest {
                                 ) -> Result<(), BoxError> {
                                     if let Some(signer_sender) = cfg.load::<DeferredSignerSender>() {
                                         signer_sender
-                                            .send(Box::new(TestSigner))
+                                            .send(Box::new(TestSigner) as Box<dyn SignMessage + Send + Sync>)
                                             .expect("failed to send test signer");
                                     }
                                     Ok(())
