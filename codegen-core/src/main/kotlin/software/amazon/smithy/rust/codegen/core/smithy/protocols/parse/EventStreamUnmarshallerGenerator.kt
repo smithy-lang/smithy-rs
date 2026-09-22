@@ -413,16 +413,33 @@ class EventStreamUnmarshallerGenerator(
     private fun RustWriter.renderUnmarshallError() {
         when (codegenTarget) {
             CodegenTarget.CLIENT -> {
-                rustTemplate(
-                    """
-                    let generic = match #{parse_error_metadata}(message.payload()) {
-                        Ok(builder) => builder.build(),
-                        Err(err) => return Ok(#{UnmarshalledMessage}::Error(#{OpError}::unhandled(err))),
-                    };
-                    """,
-                    "parse_error_metadata" to protocol.parseEventStreamErrorMetadata(operationShape),
-                    *codegenScope,
-                )
+                if (useSchemaSerde) {
+                    // The frame's payload is encoded by whichever protocol is selected at
+                    // runtime, so its error envelope must be parsed by that same protocol.
+                    // A codegen-emitted parser would be keyed on the protocol the client was
+                    // generated for and would fail to locate the discriminator after a swap,
+                    // costing the error code and with it the modeled error variant.
+                    rustTemplate(
+                        """
+                        let generic = match self.protocol.parse_event_stream_error_metadata(&message.payload()[..]) {
+                            Ok(builder) => builder.build(),
+                            Err(err) => return Ok(#{UnmarshalledMessage}::Error(#{OpError}::unhandled(err))),
+                        };
+                        """,
+                        *codegenScope,
+                    )
+                } else {
+                    rustTemplate(
+                        """
+                        let generic = match #{parse_error_metadata}(message.payload()) {
+                            Ok(builder) => builder.build(),
+                            Err(err) => return Ok(#{UnmarshalledMessage}::Error(#{OpError}::unhandled(err))),
+                        };
+                        """,
+                        "parse_error_metadata" to protocol.parseEventStreamErrorMetadata(operationShape),
+                        *codegenScope,
+                    )
+                }
             }
 
             CodegenTarget.SERVER -> {}

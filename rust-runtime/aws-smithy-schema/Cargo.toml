@@ -1,8 +1,10 @@
 [package]
 name = "aws-smithy-schema"
-# Note: bumping minor (0.1 -> 0.2) for an MSRV update causes semver hazards
-# because aws-config depends on ^0.1. Use patch bumps until stable is released.
-version = "0.2.1"
+# Keep this 0.x crate on patch bumps unless its public API breaks. For a minor bump,
+# also bump its stable dependents: multiple schema versions give ConfigBag Storables
+# different TypeIds, so values stored through one copy are silently missed by another.
+# Version 0.4 skips the yanked 0.3.0.
+version = "0.4.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Schema types for the smithy-rs ecosystem"
 edition = "2021"
