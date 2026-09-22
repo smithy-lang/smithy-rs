@@ -42,10 +42,16 @@ impl Debug for Headers {
             if is_sensitive(name) {
                 map.entry(
                     &name,
-                    &format_args!("** redacted (length={}) **", value.as_ref().len()),
+                    &format_args!("** redacted (length={}) **", value.as_bytes().len()),
                 );
             } else {
-                map.entry(&name, &value.as_ref());
+                match value.try_as_str() {
+                    Some(value) => map.entry(&name, &value),
+                    None => map.entry(
+                        &name,
+                        &format_args!("** non-utf8 (length={}) **", value.as_bytes().len()),
+                    ),
+                };
             }
         }
         map.finish()
@@ -121,11 +127,37 @@ impl Headers {
             .map(|v| v.as_ref())
     }
 
+    /// Returns the value for a given key as raw bytes
+    ///
+    /// Unlike [`get`](Self::get), the returned bytes are not required to be valid UTF-8.
+    ///
+    /// If multiple values are associated, the first value is returned.
+    pub fn get_bytes(&self, key: impl AsRef<str>) -> Option<&[u8]> {
+        self.headers.get(key.as_ref()).map(|v| v.as_bytes())
+    }
+
+    /// Returns all values for a given key as raw bytes
+    ///
+    /// Unlike [`get_all`](Self::get_all), the returned bytes are not required to be valid UTF-8.
+    pub fn get_all_bytes(&self, key: impl AsRef<str>) -> impl Iterator<Item = &[u8]> {
+        self.headers
+            .get_all(key.as_ref())
+            .iter()
+            .map(|v| v.as_bytes())
+    }
+
     /// Returns an iterator over the headers
     pub fn iter(&self) -> HeadersIter<'_> {
         HeadersIter {
             inner: self.headers.iter(),
         }
+    }
+
+    /// Returns an iterator over the headers, pairing each name with its raw value bytes
+    ///
+    /// Unlike [`iter`](Self::iter), the returned bytes are not required to be valid UTF-8.
+    pub fn iter_bytes(&self) -> impl Iterator<Item = (&str, &[u8])> {
+        self.headers.iter().map(|(k, v)| (k.as_str(), v.as_bytes()))
     }
 
     /// Returns the total number of **values** stored in the map
@@ -468,12 +500,7 @@ mod header_value {
 
     impl AsRef<str> for HeaderValue {
         fn as_ref(&self) -> &str {
-            let bytes = match &self._private {
-                #[cfg(feature = "http-02x")]
-                Inner::H0(v) => v.as_bytes(),
-                Inner::H1(v) => v.as_bytes(),
-            };
-            std::str::from_utf8(bytes).expect("unreachable—only strings may be stored")
+            std::str::from_utf8(self.as_bytes()).expect("unreachable—only strings may be stored")
         }
     }
 
@@ -485,8 +512,30 @@ mod header_value {
 
     impl HeaderValue {
         /// Returns the string representation of this header value
+        ///
+        /// # Panics
+        /// If the value is not valid UTF-8. Values reachable through the public API of
+        /// [`Headers`] are always valid UTF-8, so this cannot panic for them. Use
+        /// [`try_as_str`](Self::try_as_str) for values obtained from raw byte accessors.
         pub fn as_str(&self) -> &str {
             self.as_ref()
+        }
+
+        /// Returns the bytes of this header value exactly as they were received
+        ///
+        /// Unlike [`as_str`](Self::as_str), this is always available.
+        pub fn as_bytes(&self) -> &[u8] {
+            match &self._private {
+                #[cfg(feature = "http-02x")]
+                Inner::H0(v) => v.as_bytes(),
+                Inner::H1(v) => v.as_bytes(),
+            }
+        }
+
+        /// Returns the string representation of this header value, or `None` if it is not
+        /// valid UTF-8
+        pub fn try_as_str(&self) -> Option<&str> {
+            std::str::from_utf8(self.as_bytes()).ok()
         }
     }
 
@@ -623,12 +672,48 @@ mod tests {
     fn no_panic_try_append_invalid_header_value() {
         let mut headers = Headers::new();
         assert!(headers
-            .try_insert(
+            .try_append(
                 "foo",
                 // Valid header value with invalid UTF-8
                 http_1x::HeaderValue::from_bytes(&[0xC0, 0x80]).unwrap()
             )
             .is_err());
+    }
+
+    #[test]
+    fn header_value_exposes_bytes_and_checked_str() {
+        let value: HeaderValue = "hello".parse().expect("valid");
+        assert_eq!(b"hello", value.as_bytes());
+        assert_eq!(Some("hello"), value.try_as_str());
+        assert_eq!("hello", value.as_str());
+    }
+
+    #[test]
+    fn byte_accessors_agree_with_str_accessors() {
+        let mut map = http_1x::HeaderMap::new();
+        map.append("single", http_1x::HeaderValue::from_static("v1"));
+        map.append("multi", http_1x::HeaderValue::from_static("m1"));
+        map.append("multi", http_1x::HeaderValue::from_static("m2"));
+        let headers = Headers::try_from(map).expect("all values are valid UTF-8");
+
+        assert_eq!(Some(b"v1".as_slice()), headers.get_bytes("single"));
+        assert_eq!(
+            headers.get("single").map(str::as_bytes),
+            headers.get_bytes("single")
+        );
+
+        let all_bytes: Vec<_> = headers.get_all_bytes("multi").collect();
+        assert_eq!(vec![b"m1".as_slice(), b"m2".as_slice()], all_bytes);
+        let all_str: Vec<_> = headers.get_all("multi").map(str::as_bytes).collect();
+        assert_eq!(all_str, all_bytes);
+
+        assert_eq!(None, headers.get_bytes("absent"));
+
+        let mut from_bytes: Vec<_> = headers.iter_bytes().collect();
+        from_bytes.sort();
+        let mut from_str: Vec<_> = headers.iter().map(|(k, v)| (k, v.as_bytes())).collect();
+        from_str.sort();
+        assert_eq!(from_str, from_bytes);
     }
 
     proptest::proptest! {
