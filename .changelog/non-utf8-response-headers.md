@@ -22,6 +22,9 @@ Note that `Headers::len` and `Headers::contains_key` count and report values the
 To tolerate an unreadable value rather than fail, put `NonUtf8HeaderHandling::Skip` in the config bag from an interceptor. The member then deserializes as if the header were absent, and because the header is left in place the octets stay readable, so a caller that needs the value can decode it however its service encodes it:
 
 ```rust
+/// Whatever decoding this service's encoding calls for.
+fn decode_latin1(bytes: &[u8]) -> String { /* ... */ }
+
 fn read_before_execution(
     &self,
     _context: &BeforeSerializationInterceptorContextRef<'_>,
@@ -37,11 +40,9 @@ fn read_after_deserialization(
     _runtime_components: &RuntimeComponents,
     _cfg: &mut ConfigBag,
 ) -> Result<(), BoxError> {
-    if let Some(value) = context.response().headers().get_bytes("content-disposition") {
-        // ISO-8859-1: every octet is one code point, so this cannot fail.
-        let decoded: String = value.iter().map(|&b| b as char).collect();
-        *self.content_disposition.lock().unwrap() = Some(decoded);
-    }
+    let headers = context.response().headers();
+    *self.content_disposition.lock().unwrap() =
+        headers.get_bytes("content-disposition").map(decode_latin1);
     Ok(())
 }
 ```
