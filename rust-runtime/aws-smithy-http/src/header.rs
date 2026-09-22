@@ -19,7 +19,6 @@ use std::str::FromStr;
 pub struct ParseError {
     message: Cow<'static, str>,
     source: Option<Box<dyn Error + Send + Sync + 'static>>,
-    non_utf8: bool,
 }
 
 impl ParseError {
@@ -28,26 +27,7 @@ impl ParseError {
         Self {
             message: message.into(),
             source: None,
-            non_utf8: false,
         }
-    }
-
-    /// Create a parse error for a header value that is not valid UTF-8
-    ///
-    /// This is distinguished from other parse failures so that a caller may choose to tolerate a
-    /// value it cannot read without also tolerating one that is malformed.
-    pub fn non_utf8() -> Self {
-        Self {
-            non_utf8: true,
-            ..Self::new(NON_UTF8_HEADER)
-        }
-    }
-
-    /// Returns `true` if this error reports a header value that is not valid UTF-8
-    ///
-    /// See [`ParseError::non_utf8`].
-    pub fn is_non_utf8(&self) -> bool {
-        self.non_utf8
     }
 
     /// Attach a source to this error.
@@ -75,7 +55,7 @@ const NON_UTF8_HEADER: &str = "header was not valid utf-8";
 
 /// Interpret raw header bytes as UTF-8, or fail with a [`ParseError`].
 fn str_from_utf8(bytes: &[u8]) -> Result<&str, ParseError> {
-    std::str::from_utf8(bytes).map_err(|_| ParseError::non_utf8())
+    std::str::from_utf8(bytes).map_err(|_| ParseError::new(NON_UTF8_HEADER))
 }
 
 /// Read all the dates from the header map at `key` according the `format`
@@ -316,7 +296,8 @@ mod parse_multi_header {
     fn read_unquoted_value(input: &[u8]) -> Result<(Cow<'_, str>, &[u8]), ParseError> {
         let next_delim = input.iter().position(|&b| b == b',').unwrap_or(input.len());
         let (first, next) = input.split_at(next_delim);
-        let first = std::str::from_utf8(first).map_err(|_| ParseError::non_utf8())?;
+        let first =
+            std::str::from_utf8(first).map_err(|_| ParseError::new(super::NON_UTF8_HEADER))?;
         Ok((Cow::Borrowed(first), then_comma(next).unwrap()))
     }
 
@@ -328,7 +309,7 @@ mod parse_multi_header {
                 b'"' if index == 0 || input[index - 1] != b'\\' => {
                     let mut inner = Cow::Borrowed(
                         std::str::from_utf8(&input[0..index])
-                            .map_err(|_| ParseError::non_utf8())?,
+                            .map_err(|_| ParseError::new(super::NON_UTF8_HEADER))?,
                     );
                     inner = replace(inner, "\\\"", "\"");
                     inner = replace(inner, "\\\\", "\\");

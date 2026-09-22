@@ -51,6 +51,13 @@ class NonUtf8ResponseHeaderTest {
         structure SomeOutput {
             @httpHeader("x-header")
             header: String,
+
+            @httpHeader("x-int-list")
+            intList: IntList,
+        }
+
+        list IntList {
+            member: Integer,
         }
 
         // A streaming output takes a different deserializer path than a buffered one, so it needs
@@ -417,6 +424,73 @@ class NonUtf8ResponseHeaderTest {
                         """,
                         *scope(codegenContext),
                     )
+                }
+            }
+        }
+    }
+
+    /**
+     * Parsing a list-valued header short-circuits at the first bad value, so the error only describes
+     * whichever failure came first. `Skip` must not therefore depend on the order the service sent
+     * the values in: an unreadable value makes the member `None` either way.
+     */
+    @Test
+    fun skipIsIndependentOfTheOrderOfBadValues() {
+        clientIntegrationTest(model) { codegenContext, rustCrate ->
+            rustCrate.testModule {
+                skipInterceptor(codegenContext)(this)
+
+                for (
+                (name, first, second) in
+                listOf(
+                    Triple("unreadable_first", "b\"value-\\xe9\"", "b\"not-an-integer\""),
+                    Triple("malformed_first", "b\"not-an-integer\"", "b\"value-\\xe9\""),
+                )
+                ) {
+                    tokioTest("skip_is_independent_of_order_$name") {
+                        rustTemplate(
+                            """
+                            let response = |_: #{http_1x}::Request<#{SdkBody}>| {
+                                #{http_1x}::Response::builder()
+                                    .status(200)
+                                    .header(
+                                        "x-int-list",
+                                        #{http_1x}::HeaderValue::from_bytes($first).unwrap(),
+                                    )
+                                    .header(
+                                        "x-int-list",
+                                        #{http_1x}::HeaderValue::from_bytes($second).unwrap(),
+                                    )
+                                    .body(#{SdkBody}::from(""))
+                                    .unwrap()
+                            };
+                            let interceptor = SkipNonUtf8Headers::default();
+                            let client = crate::Client::from_conf(
+                                crate::Config::builder()
+                                    .http_client(#{infallible_client_fn}(response))
+                                    .endpoint_url("http://localhost:1234")
+                                    .interceptor(interceptor.clone())
+                                    .build(),
+                            );
+
+                            let out = client
+                                .some_operation()
+                                .send()
+                                .await
+                                .expect("an unreadable value is skipped regardless of position");
+                            // The accessor flattens `Option<Vec<_>>` to a slice, so an absent
+                            // member reads as empty.
+                            assert!(out.int_list().is_empty());
+                            // Either way it is the unreadable value that is recoverable, not the
+                            // malformed one.
+                            assert_eq!(
+                                vec![("x-int-list".to_string(), b"value-\xe9".to_vec())],
+                                interceptor.seen_after_deser(),
+                            );
+                            """,
+                            *scope(codegenContext),
+                        )
+                    }
                 }
             }
         }

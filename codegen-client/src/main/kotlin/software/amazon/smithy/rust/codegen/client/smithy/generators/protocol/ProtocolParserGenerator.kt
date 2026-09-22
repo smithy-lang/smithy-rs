@@ -287,20 +287,28 @@ class ProtocolParserGenerator(
     /**
      * Parses a header-bound member, applying [NonUtf8HeaderHandling] when the value cannot be read.
      *
-     * A header value may contain any octet except a control character, so it is not necessarily
-     * representable as a `String`. By default that is an error naming the member; `Skip`
-     * deserializes the member as if the header were absent. The header itself is untouched either
-     * way, so the octets remain readable via `Headers::get_bytes`.
+     * A header value may contain any octet in `0x80..=0xFF`, so it is not necessarily representable
+     * as a `String`. By default that is an error naming the member; `Skip` deserializes the member as
+     * if the header were absent. The header itself is untouched either way, so the octets remain
+     * readable via `Headers::get_bytes`.
      *
      * `Skip` yields `None` for the whole member, including for `@httpPrefixHeaders`: a partially
      * populated map would read as complete and hide the values that were dropped.
      *
-     * Any parse failure that is not an encoding failure is an error regardless of the setting.
+     * The decision scans the bound headers rather than inspecting the error, because parsing
+     * short-circuits at the first bad value and so which failure the error describes depends on the
+     * order the service sent them in. The consequence is that a header carrying an unreadable value
+     * is skipped even when it also carries a separately malformed one; a header with no unreadable
+     * value always reports its parse failure.
+     *
+     * [unreadableScan] must evaluate to a `bool`, true when any octet sequence bound to this member
+     * is not valid UTF-8.
      */
     private fun parseHeaderBinding(
         deserializer: RuntimeType,
         errorSymbol: Symbol,
         errorMessage: String,
+        unreadableScan: Writable,
     ): Writable =
         writable {
             rustTemplate(
@@ -308,9 +316,11 @@ class ProtocolParserGenerator(
                 match #{deserializer}(_response_headers) {
                     #{Ok}(value) => value,
                     #{Err}(err) => {
-                        if err.is_non_utf8()
-                            && _cfg.load::<#{NonUtf8HeaderHandling}>().copied()
-                                == #{Some}(#{NonUtf8HeaderHandling}::Skip)
+                        let _ = &err;
+                        let has_unreadable_value = #{unreadable_scan:W};
+                        if has_unreadable_value
+                            && _cfg.load::<#{NonUtf8HeaderHandling}>()
+                                == #{Some}(&#{NonUtf8HeaderHandling}::Skip)
                         {
                             #{None}
                         } else {
@@ -322,6 +332,7 @@ class ProtocolParserGenerator(
                 *preludeScope,
                 "deserializer" to deserializer,
                 "Error" to errorSymbol,
+                "unreadable_scan" to unreadableScan,
                 "NonUtf8HeaderHandling" to
                     RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
                         .resolve("http::NonUtf8HeaderHandling"),
@@ -348,6 +359,15 @@ class ProtocolParserGenerator(
                         httpBindingGenerator.generateDeserializeHeaderFn(binding),
                         errorSymbol,
                         "Failed to parse ${member.memberName} from header `${binding.locationName}`",
+                        writable {
+                            rust(
+                                """
+                                _response_headers
+                                    .get_all_bytes(${binding.locationName.dq()})
+                                    .any(|value| std::str::from_utf8(value).is_err())
+                                """,
+                            )
+                        },
                     )(this)
                 }
 
@@ -385,6 +405,16 @@ class ProtocolParserGenerator(
                         sym,
                         errorSymbol,
                         "Failed to parse ${member.memberName} from prefix header `${binding.locationName}`",
+                        writable {
+                            rust(
+                                """
+                                _response_headers
+                                    .iter_bytes()
+                                    .filter(|(name, _)| name.starts_with(${binding.locationName.lowercase().dq()}))
+                                    .any(|(_, value)| std::str::from_utf8(value).is_err())
+                                """,
+                            )
+                        },
                     )(this)
                 }
             }
