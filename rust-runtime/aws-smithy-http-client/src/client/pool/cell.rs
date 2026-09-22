@@ -1563,21 +1563,28 @@ mod tests {
     }
 
     #[test]
-    fn confirmed_upgrade_refines_an_earlier_driver_close() {
+    fn confirmed_upgrade_completes_an_earlier_driver_close() {
         let (admission, cell) = bounded_cell();
         let lease = OriginAdmission::lease_for_test(&admission);
-        let (connection, _physical) = ConnectionState::bounded(connection_info(1), lease);
+        let (connection, physical) = ConnectionState::bounded(connection_info(1), lease);
         let selection =
             OriginCell::insert_selected_h1(&cell, connection.clone(), H1Sender::test(11));
+        let dispatch = ConnectionState::try_commit_dispatch(&connection).unwrap();
         let driver = H1DriverGuard::new(H1CloseHandle::new(&cell, &connection));
         let return_task = selection.into_exchange();
 
         driver.protocol_closed();
-        return_task.retire_connection(CloseReason::Upgraded);
+        assert!(connection.probe().awaiting_h1_exchange);
+        assert_eq!(0, admission.available_capacity_for_test());
 
+        return_task.retire_connection(CloseReason::Upgraded);
         assert_eq!(Some(CloseReason::Upgraded), connection.probe().close_reason);
-        assert_eq!(1, admission.available_capacity_for_test());
+        assert_eq!(0, admission.available_capacity_for_test());
         assert_eq!((0, 0), cell.h1_counts());
+
+        dispatch.release();
+        physical.release();
+        assert_eq!(1, admission.available_capacity_for_test());
     }
 
     #[test]
@@ -2678,8 +2685,18 @@ mod loom_tests {
             let local_waiter =
                 OriginCell::register_waiter(&connection_cell, ProtocolRequirement::H1Compatible);
 
-            let returning = loom::thread::spawn(move || drop(returning));
-            let closing = loom::thread::spawn(move || close.close(CloseReason::Poisoned));
+            // These paths cross cell and admission state. Loom's default 4-KiB
+            // coroutine stack is smaller than a production thread stack.
+            let returning = loom::thread::Builder::new()
+                .name("returning H1 sender".into())
+                .stack_size(16 * 1024)
+                .spawn(move || drop(returning))
+                .unwrap();
+            let closing = loom::thread::Builder::new()
+                .name("closing H1 connection".into())
+                .stack_size(16 * 1024)
+                .spawn(move || close.close(CloseReason::Poisoned))
+                .unwrap();
             returning.join().unwrap();
             let close_won = closing.join().unwrap();
 

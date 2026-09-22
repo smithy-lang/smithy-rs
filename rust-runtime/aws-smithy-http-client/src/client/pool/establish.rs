@@ -62,7 +62,7 @@ pub(super) async fn establish(
     let mut establishment = context
         .pool
         .connection_events
-        .start_establishment(context.cell.id().origin(), context.partition.id());
+        .establishment_started(context.cell.id().origin(), context.partition.id());
     let connect = TransportConnectContext::new(
         &context.partition,
         context.absolute_uri.clone(),

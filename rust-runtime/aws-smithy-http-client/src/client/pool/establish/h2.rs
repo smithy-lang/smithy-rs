@@ -257,7 +257,7 @@ async fn drive_flight(
     }));
 
     completion.disarm();
-    establishment.opened(connection.info());
+    establishment.opened(&connection);
     tracing::debug!(
         connection_id = %connection.id(),
         request_partition = ?context.partition.id(),

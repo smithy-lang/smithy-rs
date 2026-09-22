@@ -969,20 +969,18 @@ impl H1Exchange {
             .owner
             .take()
             .expect("HTTP/1 exchange consumed more than once");
+        let connection = owner.connection().clone();
         owner.mark_reused();
         return_to_connection_cell(&self.connection_cell, owner);
+        connection.complete_h1_exchange(CloseReason::ProtocolClosed);
     }
 
     /// Retires the sender instead of returning it to the connection-owning cell.
     pub(in crate::client::pool) fn retire_connection(mut self, reason: CloseReason) {
         if let Some(owner) = self.owner.take() {
-            let upgrade = (reason == CloseReason::Upgraded).then(|| owner.connection().clone());
+            let connection = owner.connection().clone();
             retire_at_connection_cell(&self.connection_cell, owner, reason);
-            if let Some(connection) = upgrade {
-                connection.refine_protocol_close_as_upgrade();
-                #[cfg(any(debug_assertions, test))]
-                connection.debug_assert_close_reason(CloseReason::Upgraded);
-            }
+            connection.complete_h1_exchange(reason);
         }
     }
 }
@@ -1005,11 +1003,13 @@ impl fmt::Debug for H1Exchange {
 impl Drop for H1Exchange {
     fn drop(&mut self) {
         if let Some(owner) = self.owner.take() {
+            let connection = owner.connection().clone();
             retire_at_connection_cell(
                 &self.connection_cell,
                 owner,
                 CloseReason::IncompleteH1Exchange,
             );
+            connection.complete_h1_exchange(CloseReason::IncompleteH1Exchange);
         }
     }
 }

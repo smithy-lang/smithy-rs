@@ -10,9 +10,11 @@
 //! [`PhysicalConnectionGuard`] follows root I/O until the client releases its
 //! physical connection handle, including transfer through a protocol upgrade.
 //! The operating system may continue TCP teardown afterward. Logical close
-//! returns bounded capacity without waiting for either lifetime to finish.
+//! returns bounded capacity before physical completion except while an HTTP/1
+//! exchange may still transfer upgraded I/O.
 
 use super::admission::CapacityLease;
+use super::events::{LogicalCloseCause, SharedConnectionEventListener};
 use super::origin::OriginKey;
 use super::partition::PartitionId;
 use crate::client::connect::{ConnectPath, ConnectPathInner};
@@ -220,6 +222,8 @@ struct ConnectionLifecycle {
     in_flight: usize,
     /// Whether the client has released its physical connection handle.
     physical_connection_complete: bool,
+    /// Progress through installed-connection event delivery.
+    events: LifecycleEventProgress,
 }
 
 /// Whether a connection may accept dispatch and still owns bounded capacity.
@@ -235,11 +239,148 @@ enum LogicalState {
     },
     /// New dispatch is rejected while accepted work may still drain.
     Closed {
-        /// Reason recorded by the first logical-close transition.
-        reason: CloseReason,
+        /// Stable cause recorded by the first logical-close transition.
+        cause: LogicalCloseCause,
+        /// Protocol-specific final close classification.
+        disposition: CloseDisposition,
+        /// Capacity retained only while HTTP/1 may transfer upgraded I/O.
+        retained_capacity: Option<CapacityLease>,
     },
 }
 
+/// Final close classification, including HTTP/1's upgrade handoff window.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CloseDisposition {
+    /// HTTP/1 may require exchange-side classification after its driver ends.
+    Http1(H1CloseDisposition),
+    /// HTTP/2 has no post-driver ownership transfer.
+    Http2(CloseReason),
+}
+
+impl CloseDisposition {
+    /// Returns the final physical close reason once classification completes.
+    fn final_reason(self) -> Option<CloseReason> {
+        match self {
+            Self::Http1(H1CloseDisposition::AwaitingExchange { .. }) => None,
+            Self::Http1(H1CloseDisposition::Final(reason)) | Self::Http2(reason) => Some(reason),
+        }
+    }
+}
+
+/// HTTP/1 close classification around a possible upgrade handoff.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum H1CloseDisposition {
+    /// The driver ended while one accepted exchange may still prove an upgrade.
+    AwaitingExchange {
+        /// Final reason when physical ownership ends before an upgrade appears.
+        fallback: CloseReason,
+    },
+    /// Exchange classification is complete.
+    Final(CloseReason),
+}
+
+/// Progress through installed-connection event delivery.
+///
+/// Connection state may close while the `Opened` callback is running. Tracking
+/// callback progress under the lifecycle lock delays close callbacks until
+/// `Opened` returns and preserves `Opened -> LogicalClose -> PhysicalClose`
+/// without invoking a listener while the lock is held.
+#[derive(Debug)]
+enum LifecycleEventProgress {
+    /// Pool installation completed, but the `Opened` callback has not returned.
+    OpenedPending,
+    /// `Opened` returned and logical close is the next event.
+    WaitingForLogicalClose(SharedConnectionEventListener),
+    /// Logical close was reported and physical close is the next event.
+    WaitingForPhysicalClose(SharedConnectionEventListener),
+    /// No further installed-connection event remains.
+    Complete,
+}
+
+impl LifecycleEventProgress {
+    /// Advances callback progress after the `Opened` callback returns.
+    fn opened_completed(
+        &mut self,
+        listener: Option<&SharedConnectionEventListener>,
+        close: Option<(LogicalCloseCause, Option<CloseReason>)>,
+        physically_closed: bool,
+    ) -> Option<(LogicalCloseCause, Option<CloseReason>)> {
+        assert!(
+            matches!(self, Self::OpenedPending),
+            "connection opened event completed more than once"
+        );
+        let Some(listener) = listener else {
+            *self = Self::Complete;
+            return None;
+        };
+        match (close, physically_closed) {
+            (None, _) => {
+                *self = Self::WaitingForLogicalClose(listener.clone());
+                None
+            }
+            (Some((cause, _)), false) => {
+                *self = Self::WaitingForPhysicalClose(listener.clone());
+                Some((cause, None))
+            }
+            (Some((cause, final_reason)), true) => {
+                *self = Self::Complete;
+                Some((
+                    cause,
+                    Some(final_reason.expect("physical close completed before H1 classification")),
+                ))
+            }
+        }
+    }
+
+    /// Returns the listener when logical close may now be reported.
+    fn logical_closed(
+        &mut self,
+        final_reason: Option<CloseReason>,
+        physically_closed: bool,
+    ) -> Option<(SharedConnectionEventListener, Option<CloseReason>)> {
+        match std::mem::replace(self, Self::Complete) {
+            Self::OpenedPending => {
+                *self = Self::OpenedPending;
+                None
+            }
+            Self::WaitingForLogicalClose(listener) => {
+                if physically_closed {
+                    Some((
+                        listener,
+                        Some(
+                            final_reason
+                                .expect("physical close completed before H1 classification"),
+                        ),
+                    ))
+                } else {
+                    *self = Self::WaitingForPhysicalClose(listener.clone());
+                    Some((listener, None))
+                }
+            }
+            Self::WaitingForPhysicalClose(listener) => {
+                *self = Self::WaitingForPhysicalClose(listener);
+                None
+            }
+            Self::Complete => None,
+        }
+    }
+
+    /// Returns the listener when physical close may now be reported.
+    fn physical_closed(&mut self) -> Option<SharedConnectionEventListener> {
+        match std::mem::replace(self, Self::Complete) {
+            Self::OpenedPending => {
+                *self = Self::OpenedPending;
+                None
+            }
+            Self::WaitingForLogicalClose(listener) => {
+                *self = Self::WaitingForLogicalClose(listener);
+                None
+            }
+            Self::WaitingForPhysicalClose(listener) => Some(listener),
+            Self::Complete => None,
+        }
+    }
+}
 impl ConnectionState {
     /// Creates state after transport establishment and protocol selection.
     ///
@@ -258,6 +399,7 @@ impl ConnectionState {
                 logical: LogicalState::PendingOpen,
                 in_flight: 0,
                 physical_connection_complete: false,
+                events: LifecycleEventProgress::OpenedPending,
             }),
         });
         let physical = PhysicalConnectionGuard {
@@ -347,31 +489,120 @@ impl ConnectionState {
         })
     }
 
+    /// Completes the `Opened` callback and reports any close that occurred
+    /// while it was running.
+    ///
+    /// A listener may reenter the pool and close this connection from its
+    /// `Opened` callback. The lifecycle transition completes immediately, but
+    /// its callbacks are delayed until this method can preserve
+    /// `Opened`, logical close, and physical close in that order.
+    pub(super) fn complete_opened_event(&self, listener: Option<&SharedConnectionEventListener>) {
+        let pending_close = {
+            let mut lifecycle = self.lifecycle.lock();
+            assert!(
+                !matches!(lifecycle.logical, LogicalState::PendingOpen),
+                "connection opened event completed before the connection opened"
+            );
+            let close = match &lifecycle.logical {
+                LogicalState::PendingOpen | LogicalState::Open { .. } => None,
+                LogicalState::Closed {
+                    cause, disposition, ..
+                } => Some((*cause, disposition.final_reason())),
+            };
+            let physically_closed = lifecycle.physical_connection_complete;
+            lifecycle
+                .events
+                .opened_completed(listener, close, physically_closed)
+        };
+        let Some(listener) = listener else {
+            return;
+        };
+        if let Some((cause, physical_reason)) = pending_close {
+            listener.logical_close(&self.info, cause);
+            if let Some(reason) = physical_reason {
+                listener.physical_close(&self.info, reason);
+            }
+        }
+    }
+
     /// Performs the first logical-close transition.
     ///
     /// Returns `true` when this call closes the connection and records
     /// `reason`. Returns `false` when another close already won; the original
-    /// reason remains unchanged.
+    /// logical cause remains unchanged.
     ///
-    /// The detached lease is dropped only after the connection lock is
-    /// released, so admission and connection locks are never nested.
+    /// Capacity normally returns after the connection lock is released.
+    /// HTTP/1 retains it while an accepted exchange may still transfer
+    /// upgraded I/O.
     pub(super) fn logical_close(&self, reason: CloseReason) -> bool {
-        let lease = {
+        let cause = LogicalCloseCause::from_reason(reason);
+        let (released_capacity, pending_events) = {
             let mut lifecycle = self.lifecycle.lock();
-            match &mut lifecycle.logical {
+            let previous = std::mem::replace(&mut lifecycle.logical, LogicalState::PendingOpen);
+            let (disposition, retained_capacity, released_capacity) = match previous {
                 LogicalState::PendingOpen => {
-                    lifecycle.logical = LogicalState::Closed { reason };
-                    None
+                    let disposition = match self.info.protocol() {
+                        ConnectionProtocol::Http1 => {
+                            CloseDisposition::Http1(H1CloseDisposition::Final(reason))
+                        }
+                        ConnectionProtocol::Http2 => CloseDisposition::Http2(reason),
+                    };
+                    (disposition, None, None)
                 }
-                LogicalState::Open { capacity } => {
-                    let lease = capacity.take();
-                    lifecycle.logical = LogicalState::Closed { reason };
-                    lease
+                LogicalState::Open { mut capacity } => match self.info.protocol() {
+                    ConnectionProtocol::Http1
+                        if lifecycle.in_flight != 0
+                            && !lifecycle.physical_connection_complete
+                            && matches!(
+                                reason,
+                                CloseReason::ProtocolClosed | CloseReason::OwnerRuntimeShutdown
+                            ) =>
+                    {
+                        (
+                            CloseDisposition::Http1(H1CloseDisposition::AwaitingExchange {
+                                fallback: reason,
+                            }),
+                            capacity.take(),
+                            None,
+                        )
+                    }
+                    ConnectionProtocol::Http1 => {
+                        let retain_for_upgrade = reason == CloseReason::Upgraded
+                            && !lifecycle.physical_connection_complete;
+                        let retained_capacity =
+                            retain_for_upgrade.then(|| capacity.take()).flatten();
+                        (
+                            CloseDisposition::Http1(H1CloseDisposition::Final(reason)),
+                            retained_capacity,
+                            capacity,
+                        )
+                    }
+                    ConnectionProtocol::Http2 => (CloseDisposition::Http2(reason), None, capacity),
+                },
+                closed @ LogicalState::Closed { .. } => {
+                    lifecycle.logical = closed;
+                    return false;
                 }
-                LogicalState::Closed { .. } => return false,
-            }
+            };
+            let final_reason = disposition.final_reason();
+            lifecycle.logical = LogicalState::Closed {
+                cause,
+                disposition,
+                retained_capacity,
+            };
+            let physically_closed = lifecycle.physical_connection_complete;
+            let pending_events = lifecycle
+                .events
+                .logical_closed(final_reason, physically_closed);
+            (released_capacity, pending_events)
         };
-        drop(lease);
+        drop(released_capacity);
+        if let Some((listener, physical_reason)) = pending_events {
+            listener.logical_close(&self.info, cause);
+            if let Some(reason) = physical_reason {
+                listener.physical_close(&self.info, reason);
+            }
+        }
         tracing::debug!(
             connection_id = %self.id(),
             connection_partition = ?self.owner_partition(),
@@ -385,61 +616,87 @@ impl ConnectionState {
         true
     }
 
-    /// Refines a driver-observed close after Hyper confirms an upgrade.
+    /// Finalizes a driver-observed HTTP/1 close from exchange-side evidence.
     ///
-    /// Hyper may transfer upgraded I/O and complete its HTTP/1 driver in one
-    /// poll. The driver can therefore record [`CloseReason::ProtocolClosed`]
-    /// before the request task observes the upgrading response. This method
-    /// changes that stored reason to [`CloseReason::Upgraded`].
-    ///
-    /// Returns `true` only when that refinement was applied. It does not close
-    /// the connection again, change I/O ownership, or release capacity a second
-    /// time.
-    pub(super) fn refine_protocol_close_as_upgrade(&self) -> bool {
-        let refined = {
+    /// A confirmed upgrade retains bounded capacity until root I/O leaves the
+    /// client. Every other classification preserves the driver reason and
+    /// returns capacity immediately.
+    pub(super) fn complete_h1_exchange(&self, exchange_reason: CloseReason) -> bool {
+        let (released_capacity, listener, final_reason) = {
             let mut lifecycle = self.lifecycle.lock();
-            match &mut lifecycle.logical {
-                LogicalState::Closed { reason } if *reason == CloseReason::ProtocolClosed => {
-                    *reason = CloseReason::Upgraded;
-                    true
+            let physical_connection_complete = lifecycle.physical_connection_complete;
+            let (released_capacity, final_reason) = match &mut lifecycle.logical {
+                LogicalState::Closed {
+                    disposition: CloseDisposition::Http1(state),
+                    retained_capacity,
+                    ..
+                } => {
+                    let H1CloseDisposition::AwaitingExchange { fallback } = *state else {
+                        return false;
+                    };
+                    let final_reason = if exchange_reason == CloseReason::Upgraded {
+                        CloseReason::Upgraded
+                    } else {
+                        fallback
+                    };
+                    *state = H1CloseDisposition::Final(final_reason);
+                    let release_capacity =
+                        final_reason != CloseReason::Upgraded || physical_connection_complete;
+                    (
+                        release_capacity.then(|| retained_capacity.take()).flatten(),
+                        final_reason,
+                    )
                 }
-                _ => false,
-            }
+                _ => return false,
+            };
+            let listener = if physical_connection_complete {
+                lifecycle.events.physical_closed()
+            } else {
+                None
+            };
+            (released_capacity, listener, final_reason)
         };
-        if refined {
-            tracing::debug!(
-                connection_id = %self.id(),
-                connection_partition = ?self.owner_partition(),
-                origin_scheme = %self.info.origin().scheme(),
-                origin_host = self.info.origin().host(),
-                origin_port = ?self.info.origin().port(),
-                previous_close_reason = ?CloseReason::ProtocolClosed,
-                close_reason = ?CloseReason::Upgraded,
-                "refined connection close reason after HTTP/1 upgrade"
-            );
+        drop(released_capacity);
+        if let Some(listener) = listener {
+            listener.physical_close(&self.info, final_reason);
         }
-        refined
-    }
-
-    /// Verifies a close reason at a protocol handoff boundary in debug builds and tests.
-    #[cfg(any(debug_assertions, test))]
-    pub(super) fn debug_assert_close_reason(&self, expected: CloseReason) {
-        let lifecycle = self.lifecycle.lock();
-        let actual = match lifecycle.logical {
-            LogicalState::PendingOpen => None,
-            LogicalState::Open { .. } => None,
-            LogicalState::Closed { reason } => Some(reason),
-        };
-        debug_assert_eq!(Some(expected), actual);
+        tracing::debug!(
+            connection_id = %self.id(),
+            connection_partition = ?self.owner_partition(),
+            origin_scheme = %self.info.origin().scheme(),
+            origin_host = self.info.origin().host(),
+            origin_port = ?self.info.origin().port(),
+            close_reason = ?final_reason,
+            exchange_reason = ?exchange_reason,
+            "HTTP/1 connection close classification completed"
+        );
+        true
     }
 
     /// Removes one dispatch previously committed by [`Self::try_commit_dispatch`].
     fn release_dispatch(&self) {
-        let mut lifecycle = self.lifecycle.lock();
-        lifecycle.in_flight = lifecycle
-            .in_flight
-            .checked_sub(1)
-            .expect("completed a dispatch that was not in flight");
+        let complete_reason = {
+            let mut lifecycle = self.lifecycle.lock();
+            lifecycle.in_flight = lifecycle
+                .in_flight
+                .checked_sub(1)
+                .expect("completed a dispatch that was not in flight");
+            if lifecycle.in_flight == 0 {
+                match lifecycle.logical {
+                    LogicalState::Closed {
+                        disposition:
+                            CloseDisposition::Http1(H1CloseDisposition::AwaitingExchange { fallback }),
+                        ..
+                    } => Some(fallback),
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        };
+        if let Some(reason) = complete_reason {
+            self.complete_h1_exchange(reason);
+        }
     }
 
     /// Records that the client released its physical connection handle.
@@ -448,13 +705,39 @@ impl ConnectionState {
     ///
     /// Panics if physical connection ownership completes more than once.
     fn complete_physical_connection(&self) {
-        {
+        let (released_capacity, listener, final_reason) = {
             let mut lifecycle = self.lifecycle.lock();
             assert!(
                 !lifecycle.physical_connection_complete,
                 "physical connection ownership completed more than once"
             );
             lifecycle.physical_connection_complete = true;
+
+            let (released_capacity, final_reason) = match &mut lifecycle.logical {
+                LogicalState::Closed {
+                    disposition,
+                    retained_capacity,
+                    ..
+                } => {
+                    if let CloseDisposition::Http1(H1CloseDisposition::AwaitingExchange {
+                        fallback,
+                    }) = *disposition
+                    {
+                        *disposition = CloseDisposition::Http1(H1CloseDisposition::Final(fallback));
+                    }
+                    (retained_capacity.take(), disposition.final_reason())
+                }
+                LogicalState::PendingOpen | LogicalState::Open { .. } => (None, None),
+            };
+            let listener = final_reason.and_then(|_| lifecycle.events.physical_closed());
+            (released_capacity, listener, final_reason)
+        };
+        drop(released_capacity);
+        if let Some(listener) = listener {
+            listener.physical_close(
+                &self.info,
+                final_reason.expect("physical close event had no final reason"),
+            );
         }
         tracing::debug!(
             connection_id = %self.id(),
@@ -470,12 +753,19 @@ impl ConnectionState {
     #[cfg(test)]
     pub(super) fn probe(&self) -> ConnectionProbe {
         let lifecycle = self.lifecycle.lock();
+        let (close_reason, awaiting_h1_exchange) = match &lifecycle.logical {
+            LogicalState::PendingOpen | LogicalState::Open { .. } => (None, false),
+            LogicalState::Closed { disposition, .. } => (
+                disposition.final_reason(),
+                matches!(
+                    disposition,
+                    CloseDisposition::Http1(H1CloseDisposition::AwaitingExchange { .. })
+                ),
+            ),
+        };
         ConnectionProbe {
-            close_reason: match lifecycle.logical {
-                LogicalState::PendingOpen => None,
-                LogicalState::Open { .. } => None,
-                LogicalState::Closed { reason } => Some(reason),
-            },
+            close_reason,
+            awaiting_h1_exchange,
             in_flight: lifecycle.in_flight,
             physical_connection_complete: lifecycle.physical_connection_complete,
         }
@@ -497,6 +787,8 @@ impl fmt::Debug for ConnectionState {
 pub(super) struct ConnectionProbe {
     /// Reason logical close won, or `None` while dispatch is accepted.
     pub(super) close_reason: Option<CloseReason>,
+    /// Whether an accepted H1 exchange still owes final close classification.
+    pub(super) awaiting_h1_exchange: bool,
     /// Number of dispatches that have not completed.
     pub(super) in_flight: usize,
     /// Whether the client released its physical connection handle.
@@ -671,10 +963,62 @@ where
 mod tests {
     use super::*;
     use crate::client::pool::admission::OriginAdmission;
+    use crate::client::pool::events::{
+        ConnectionEvent, ConnectionEvents, SharedConnectionEventListener,
+    };
+    use aws_smithy_async::time::SharedTimeSource;
     use std::num::NonZeroUsize;
+    use std::sync::{Arc as StdArc, Mutex as StdMutex};
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    enum ObservedLifecycleEvent {
+        Opened,
+        LogicalClose(LogicalCloseCause),
+        PhysicalClose(CloseReason),
+    }
 
     fn test_info(id: u64) -> Arc<ConnectionInfo> {
-        ConnectionInfo::for_test(ConnectionId::new(id), PartitionId::from_index(0))
+        test_info_for_protocol(id, ConnectionProtocol::Http1)
+    }
+
+    fn test_info_for_protocol(id: u64, protocol: ConnectionProtocol) -> Arc<ConnectionInfo> {
+        ConnectionInfo::new(
+            ConnectionId::new(id),
+            OriginKey::from_parts(http_1x::uri::Scheme::HTTPS, "example.com", None)
+                .expect("synthetic test origin is valid"),
+            PartitionId::from_index(0),
+            protocol,
+            Connected::new(),
+        )
+    }
+
+    fn attach_observer(
+        connection: &Arc<ConnectionState>,
+        observed: StdArc<StdMutex<Vec<ObservedLifecycleEvent>>>,
+    ) {
+        let events = ConnectionEvents::new(
+            Some(SharedConnectionEventListener::new(
+                move |event: &ConnectionEvent<'_>| {
+                    let event = match event {
+                        ConnectionEvent::Opened(_) => ObservedLifecycleEvent::Opened,
+                        ConnectionEvent::LogicalClose(closed) => {
+                            ObservedLifecycleEvent::LogicalClose(closed.cause())
+                        }
+                        ConnectionEvent::PhysicalClose(closed) => {
+                            ObservedLifecycleEvent::PhysicalClose(closed.reason())
+                        }
+                        ConnectionEvent::EstablishmentFailed(failed) => {
+                            panic!("installed connection failed: {failed:?}")
+                        }
+                    };
+                    observed.lock().unwrap().push(event);
+                },
+            )),
+            SharedTimeSource::default(),
+        );
+        let establishment =
+            events.establishment_started(connection.info().origin(), connection.owner_partition());
+        establishment.opened(connection);
     }
 
     #[test]
@@ -697,23 +1041,207 @@ mod tests {
     }
 
     #[test]
-    fn upgrade_refines_only_a_driver_observed_protocol_close() {
-        let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
-        let lease = OriginAdmission::lease_for_test(&origin);
-        let (connection, _physical) = ConnectionState::bounded(test_info(1), lease);
+    fn installed_events_are_ordered_for_h1_and_h2() {
+        for (id, protocol) in [
+            (1, ConnectionProtocol::Http1),
+            (2, ConnectionProtocol::Http2),
+        ] {
+            let observed = StdArc::new(StdMutex::new(Vec::new()));
+            let (connection, physical) =
+                ConnectionState::unbounded(test_info_for_protocol(id, protocol));
+            attach_observer(&connection, observed.clone());
 
-        assert!(connection.logical_close(CloseReason::ProtocolClosed));
-        assert!(connection.refine_protocol_close_as_upgrade());
-        assert_eq!(Some(CloseReason::Upgraded), connection.probe().close_reason);
-        assert_eq!(1, origin.available_capacity_for_test());
-        assert!(!connection.refine_protocol_close_as_upgrade());
+            physical.release();
+            assert_eq!(
+                &[ObservedLifecycleEvent::Opened],
+                observed.lock().unwrap().as_slice()
+            );
 
-        let (poisoned, _physical) = ConnectionState::unbounded(test_info(2));
-        assert!(poisoned.logical_close(CloseReason::Poisoned));
-        assert!(!poisoned.refine_protocol_close_as_upgrade());
-        assert_eq!(Some(CloseReason::Poisoned), poisoned.probe().close_reason);
+            assert!(connection.logical_close(CloseReason::ProtocolClosed));
+            assert_eq!(
+                &[
+                    ObservedLifecycleEvent::Opened,
+                    ObservedLifecycleEvent::LogicalClose(LogicalCloseCause::ProtocolEnded),
+                    ObservedLifecycleEvent::PhysicalClose(CloseReason::ProtocolClosed),
+                ],
+                observed.lock().unwrap().as_slice()
+            );
+        }
     }
 
+    #[test]
+    fn close_before_opened_delivery_is_replayed_in_order() {
+        let observed = StdArc::new(StdMutex::new(Vec::new()));
+        let (connection, physical) = ConnectionState::unbounded(test_info(1));
+
+        assert!(connection.logical_close(CloseReason::PoolDropped));
+        physical.release();
+        assert!(observed.lock().unwrap().is_empty());
+
+        attach_observer(&connection, observed.clone());
+        assert_eq!(
+            &[
+                ObservedLifecycleEvent::Opened,
+                ObservedLifecycleEvent::LogicalClose(LogicalCloseCause::PoolDropped),
+                ObservedLifecycleEvent::PhysicalClose(CloseReason::PoolDropped),
+            ],
+            observed.lock().unwrap().as_slice()
+        );
+    }
+
+    #[test]
+    fn close_callback_may_reenter_connection_state() {
+        let observed = StdArc::new(StdMutex::new(Vec::new()));
+        let connection_slot = StdArc::new(StdMutex::new(None::<Arc<ConnectionState>>));
+        let events = ConnectionEvents::new(
+            Some(SharedConnectionEventListener::new({
+                let observed = observed.clone();
+                let connection_slot = connection_slot.clone();
+                move |event: &ConnectionEvent<'_>| {
+                    let ConnectionEvent::LogicalClose(closed) = event else {
+                        return;
+                    };
+                    observed.lock().unwrap().push(closed.cause());
+                    let connection = connection_slot
+                        .lock()
+                        .unwrap()
+                        .clone()
+                        .expect("connection installed before callback");
+                    assert!(!connection.logical_close(CloseReason::PoolDropped));
+                }
+            })),
+            SharedTimeSource::default(),
+        );
+        let (connection, _physical) = ConnectionState::unbounded(test_info(1));
+        *connection_slot.lock().unwrap() = Some(connection.clone());
+        let establishment =
+            events.establishment_started(connection.info().origin(), connection.owner_partition());
+        establishment.opened(&connection);
+
+        assert!(connection.logical_close(CloseReason::Poisoned));
+        assert_eq!(
+            &[LogicalCloseCause::Poisoned],
+            observed.lock().unwrap().as_slice()
+        );
+    }
+
+    #[test]
+    fn panicking_close_listener_does_not_change_lifecycle_state() {
+        let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
+        let lease = OriginAdmission::lease_for_test(&origin);
+        let (connection, physical) = ConnectionState::bounded(test_info(1), lease);
+        let events = ConnectionEvents::new(
+            Some(SharedConnectionEventListener::new(
+                |_: &ConnectionEvent<'_>| panic!("listener failed"),
+            )),
+            SharedTimeSource::default(),
+        );
+        let establishment =
+            events.establishment_started(connection.info().origin(), connection.owner_partition());
+        establishment.opened(&connection);
+
+        assert!(connection.logical_close(CloseReason::Reclaimed));
+        physical.release();
+
+        assert_eq!(1, origin.available_capacity_for_test());
+        assert_eq!(
+            Some(CloseReason::Reclaimed),
+            connection.probe().close_reason
+        );
+        assert!(connection.probe().physical_connection_complete);
+    }
+    #[test]
+    fn driver_first_upgrade_retains_capacity_until_physical_completion() {
+        let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
+        let lease = OriginAdmission::lease_for_test(&origin);
+        let (connection, physical) = ConnectionState::bounded(test_info(1), lease);
+        let dispatch = ConnectionState::try_commit_dispatch(&connection).unwrap();
+
+        assert!(connection.logical_close(CloseReason::ProtocolClosed));
+        assert!(connection.probe().awaiting_h1_exchange);
+        assert_eq!(0, origin.available_capacity_for_test());
+
+        assert!(connection.complete_h1_exchange(CloseReason::Upgraded));
+        assert_eq!(Some(CloseReason::Upgraded), connection.probe().close_reason);
+        assert_eq!(0, origin.available_capacity_for_test());
+        dispatch.release();
+
+        physical.release();
+        assert_eq!(1, origin.available_capacity_for_test());
+    }
+
+    #[test]
+    fn exchange_first_upgrade_retains_capacity_until_physical_completion() {
+        let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
+        let lease = OriginAdmission::lease_for_test(&origin);
+        let (connection, physical) = ConnectionState::bounded(test_info(1), lease);
+        let dispatch = ConnectionState::try_commit_dispatch(&connection).unwrap();
+
+        assert!(connection.logical_close(CloseReason::Upgraded));
+        assert_eq!(Some(CloseReason::Upgraded), connection.probe().close_reason);
+        assert_eq!(0, origin.available_capacity_for_test());
+        dispatch.release();
+
+        physical.release();
+        assert_eq!(1, origin.available_capacity_for_test());
+    }
+
+    #[test]
+    fn non_upgrade_exchange_returns_capacity_before_physical_completion() {
+        let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
+        let lease = OriginAdmission::lease_for_test(&origin);
+        let (connection, physical) = ConnectionState::bounded(test_info(1), lease);
+        let dispatch = ConnectionState::try_commit_dispatch(&connection).unwrap();
+
+        assert!(connection.logical_close(CloseReason::ProtocolClosed));
+        assert!(connection.complete_h1_exchange(CloseReason::ProtocolClosed));
+        assert_eq!(
+            Some(CloseReason::ProtocolClosed),
+            connection.probe().close_reason
+        );
+        assert_eq!(1, origin.available_capacity_for_test());
+        assert!(!connection.probe().physical_connection_complete);
+
+        dispatch.release();
+        physical.release();
+    }
+
+    #[test]
+    fn non_upgrade_exchange_preserves_owner_runtime_shutdown_reason() {
+        let observed = StdArc::new(StdMutex::new(Vec::new()));
+        let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
+        let lease = OriginAdmission::lease_for_test(&origin);
+        let (connection, physical) = ConnectionState::bounded(test_info(1), lease);
+        attach_observer(&connection, observed.clone());
+        let dispatch = ConnectionState::try_commit_dispatch(&connection).unwrap();
+
+        assert!(connection.logical_close(CloseReason::OwnerRuntimeShutdown));
+        assert!(connection.complete_h1_exchange(CloseReason::ProtocolClosed));
+        assert_eq!(
+            Some(CloseReason::OwnerRuntimeShutdown),
+            connection.probe().close_reason
+        );
+        assert_eq!(1, origin.available_capacity_for_test());
+        dispatch.release();
+
+        physical.release();
+        assert_eq!(
+            &[
+                ObservedLifecycleEvent::Opened,
+                ObservedLifecycleEvent::LogicalClose(LogicalCloseCause::OwnerRuntimeShutdown,),
+                ObservedLifecycleEvent::PhysicalClose(CloseReason::OwnerRuntimeShutdown,),
+            ],
+            observed.lock().unwrap().as_slice()
+        );
+    }
+
+    #[test]
+    fn exchange_classification_does_not_replace_a_policy_close() {
+        let (connection, _physical) = ConnectionState::unbounded(test_info(1));
+        assert!(connection.logical_close(CloseReason::Poisoned));
+        assert!(!connection.complete_h1_exchange(CloseReason::Upgraded));
+        assert_eq!(Some(CloseReason::Poisoned), connection.probe().close_reason);
+    }
     #[test]
     fn committed_dispatch_drains_after_logical_close() {
         let (connection, _physical) = ConnectionState::unbounded(test_info(1));
@@ -810,16 +1338,25 @@ mod loom_tests {
 
             let dispatch = dispatch.join().unwrap();
             assert!(close.join().unwrap());
-            let probe = connection.probe();
-            assert_eq!(Some(CloseReason::ProtocolClosed), probe.close_reason);
             assert!(ConnectionState::try_commit_dispatch(&connection).is_none());
             match dispatch {
                 Some(dispatch) => {
+                    let probe = connection.probe();
+                    assert_eq!(None, probe.close_reason);
+                    assert!(probe.awaiting_h1_exchange);
                     assert_eq!(1, probe.in_flight);
                     drop(dispatch);
-                    assert_eq!(0, connection.probe().in_flight);
+                    let probe = connection.probe();
+                    assert_eq!(Some(CloseReason::ProtocolClosed), probe.close_reason);
+                    assert!(!probe.awaiting_h1_exchange);
+                    assert_eq!(0, probe.in_flight);
                 }
-                None => assert_eq!(0, probe.in_flight),
+                None => {
+                    let probe = connection.probe();
+                    assert_eq!(Some(CloseReason::ProtocolClosed), probe.close_reason);
+                    assert!(!probe.awaiting_h1_exchange);
+                    assert_eq!(0, probe.in_flight);
+                }
             }
         });
     }
