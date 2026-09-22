@@ -12,6 +12,8 @@ An HTTP header value may contain any octet in `0x80..=0xFF` (obs-text, RFC 7230)
 
 Header values are now stored as received, and the encoding requirement applies where a value is bound to a modeled member. A header bound to no member is harmless. A header bound to a member reports an error naming that member on the client, or a 400 on the server. Nothing is dropped silently.
 
+For servers this narrows what gets rejected rather than changing the status. A non-UTF-8 value bound to a member was already a 400 and still is; it is now detected at the member binding instead of when the request was converted. A request carrying a non-UTF-8 header that no modeled member is bound to used to be rejected and is now accepted.
+
 `Headers` gained byte accessors that return every value, alongside the existing string accessors, which now skip values that are not valid UTF-8:
 
 - `Headers::get_bytes`, `Headers::get_all_bytes`, `Headers::iter_bytes`
