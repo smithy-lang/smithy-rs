@@ -25,25 +25,35 @@ To tolerate an unreadable value rather than fail, put `NonUtf8HeaderHandling::Sk
 /// Whatever decoding this service's encoding calls for.
 fn decode_latin1(bytes: &[u8]) -> String { /* ... */ }
 
-fn read_before_execution(
-    &self,
-    _context: &BeforeSerializationInterceptorContextRef<'_>,
-    cfg: &mut ConfigBag,
-) -> Result<(), BoxError> {
-    cfg.interceptor_state().store_put(NonUtf8HeaderHandling::Skip);
-    Ok(())
+#[derive(Clone, Debug, Default)]
+struct ContentDispositionAsLatin1 {
+    value: Arc<Mutex<Option<String>>>,
 }
 
-fn read_after_deserialization(
-    &self,
-    context: &AfterDeserializationInterceptorContextRef<'_>,
-    _runtime_components: &RuntimeComponents,
-    _cfg: &mut ConfigBag,
-) -> Result<(), BoxError> {
-    let headers = context.response().headers();
-    *self.content_disposition.lock().unwrap() =
-        headers.get_bytes("content-disposition").map(decode_latin1);
-    Ok(())
+impl Intercept for ContentDispositionAsLatin1 {
+    fn name(&self) -> &'static str {
+        "ContentDispositionAsLatin1"
+    }
+
+    fn read_before_execution(
+        &self,
+        _context: &BeforeSerializationInterceptorContextRef<'_>,
+        cfg: &mut ConfigBag,
+    ) -> Result<(), BoxError> {
+        cfg.interceptor_state().store_put(NonUtf8HeaderHandling::Skip);
+        Ok(())
+    }
+
+    fn read_after_deserialization(
+        &self,
+        context: &AfterDeserializationInterceptorContextRef<'_>,
+        _runtime_components: &RuntimeComponents,
+        _cfg: &mut ConfigBag,
+    ) -> Result<(), BoxError> {
+        let headers = context.response().headers();
+        *self.value.lock().unwrap() = headers.get_bytes("content-disposition").map(decode_latin1);
+        Ok(())
+    }
 }
 ```
 
