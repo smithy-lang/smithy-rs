@@ -103,7 +103,7 @@ async fn run_h1_handshake(
         ConnectionProtocol::Http1,
         transport.metadata,
     );
-    let (connection, physical) = ConnectionState::pending_open(info);
+    let (connection, physical) = ConnectionState::pending_open(info, cell.connection_stats());
     let io = ConnectionIo::new(transport.io, physical);
 
     establishment.protocol_handshake_started();

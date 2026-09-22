@@ -50,6 +50,7 @@ use super::connection::ConnectionState;
 use super::maintenance::PartitionMaintenance;
 use super::origin::OriginKey;
 use super::partition::{EligibilityGroup, PartitionId};
+use super::stats::{CellConnectionStats, PartitionConnectionStats};
 use crate::sync::{Arc, Mutex};
 #[cfg(test)]
 use aws_smithy_runtime_api::client::connection::ConnectionId;
@@ -90,6 +91,8 @@ pub(in crate::client::pool) struct OriginCell {
     admission: Option<Arc<OriginAdmission>>,
     /// Partition-owned idle deadline scheduler.
     maintenance: Option<Arc<PartitionMaintenance>>,
+    /// Connection lifetimes that may outlive records under `state`.
+    connection_stats: Arc<CellConnectionStats>,
     /// Waiter order and protocol records protected by one cell-local lock.
     state: Mutex<CellState>,
 }
@@ -409,6 +412,7 @@ impl OriginCell {
             eligibility_group,
             admission,
             maintenance,
+            connection_stats: Arc::new(CellConnectionStats::default()),
             state: Mutex::new(CellState::default()),
         }
     }
@@ -429,6 +433,34 @@ impl OriginCell {
 
     pub(in crate::client::pool) fn id(&self) -> &CellId {
         &self.id
+    }
+
+    /// Returns shared lifetime counts for establishments and connections.
+    pub(in crate::client::pool) fn connection_stats(&self) -> Arc<CellConnectionStats> {
+        self.connection_stats.clone()
+    }
+
+    /// Returns connection state for this exact partition-origin cell.
+    pub(in crate::client::pool) fn connection_stats_snapshot(&self) -> PartitionConnectionStats {
+        let (pending, h1_idle, h1_active, h2_accepting, h2_active_requests) = {
+            let state = self.state.lock();
+            let (h1_idle, h1_active) = state.h1.connection_counts();
+            let (h2_accepting, h2_active_requests) = state.h2.connection_counts();
+            (
+                state.acquisitions.pending_count(),
+                h1_idle,
+                h1_active,
+                h2_accepting,
+                h2_active_requests,
+            )
+        };
+        self.connection_stats.snapshot(
+            pending,
+            h1_idle,
+            h1_active,
+            h2_accepting,
+            h2_active_requests,
+        )
     }
 
     #[cfg(test)]
@@ -977,6 +1009,23 @@ mod tests {
         assert!(state.h1.release_peer_reservation(match_id));
         assert!(state.h1.close_owned(&owner));
         drop(owner);
+    }
+
+    #[test]
+    fn connection_stats_snapshot_reads_exact_cell_state() {
+        let cell = unbounded_cell();
+        let waiter = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+        let (connection, _physical) = unbounded_connection(1);
+        OriginCell::insert_idle_h1(&cell, connection, H1Sender::test(11));
+
+        let stats = cell.connection_stats_snapshot();
+
+        assert_eq!(1, stats.pending_acquisitions());
+        assert_eq!(1, stats.h1().idle());
+        assert_eq!(0, stats.h1().active());
+        assert_eq!(0, stats.h2().accepting());
+        assert_eq!(0, stats.h2().active_requests());
+        assert!(cell.take_ready_event(waiter).is_some());
     }
 
     #[test]

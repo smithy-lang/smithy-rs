@@ -321,8 +321,12 @@ impl<Tls> Builder<Tls> {
 
     /// Observes connection establishment and installed-lifetime transitions.
     ///
-    /// The listener applies to every partition and runs synchronously outside
-    /// pool locks. Observation is disabled unless a listener is configured.
+    /// The listener applies to every partition. Each callback runs
+    /// synchronously on the task that completed the transition and after pool
+    /// locks are released. A listener must not block on work that requires
+    /// progress from that same task.
+    ///
+    /// Observation is disabled unless a listener is configured.
     pub fn event_listener(mut self, listener: impl ConnectionEventListener) -> Self {
         self.event_listener = Some(SharedConnectionEventListener::new(listener));
         self
@@ -330,7 +334,8 @@ impl<Tls> Builder<Tls> {
 
     /// Mutably configures pool-wide connection lifecycle observation.
     ///
-    /// Passing `None` disables observation.
+    /// Passing `None` disables observation. The callback contract is the same
+    /// as [`Builder::event_listener`].
     pub fn set_event_listener(
         &mut self,
         listener: Option<SharedConnectionEventListener>,

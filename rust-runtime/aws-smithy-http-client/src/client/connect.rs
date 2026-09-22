@@ -54,14 +54,17 @@ impl ProxyAuthorization {
 }
 
 /// How an established transport reaches its origin.
+///
+/// The classification contains no proxy credentials. It describes the path
+/// selected by the built-in connector or reported by a custom connector.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum ConnectPath {
-    /// The client connector reported no HTTP proxy participation.
+    /// The transport connects to the origin without an HTTP proxy.
     Direct,
-    /// HTTP requests are sent through a forward proxy.
+    /// HTTP requests are sent to a forward proxy in absolute form.
     ForwardProxy,
-    /// The transport reaches the origin through an HTTP `CONNECT` tunnel.
+    /// The connector established an HTTP `CONNECT` tunnel to the origin.
     ProxyTunnel,
 }
 
