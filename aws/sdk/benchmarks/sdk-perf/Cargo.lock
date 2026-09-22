@@ -107,7 +107,7 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.9.4"
+version = "1.10.1"
 dependencies = [
  "aws-credential-types",
  "aws-sigv4",
@@ -146,7 +146,6 @@ dependencies = [
  "aws-types",
  "bytes",
  "fastrand",
- "http 0.2.12",
  "http 1.4.0",
  "regex-lite",
  "tracing",
@@ -154,7 +153,7 @@ dependencies = [
 
 [[package]]
 name = "aws-sigv4"
-version = "1.5.3"
+version = "1.6.1"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-http",
@@ -164,7 +163,6 @@ dependencies = [
  "form_urlencoded",
  "hex",
  "hmac",
- "http 0.2.12",
  "http 1.4.0",
  "percent-encoding",
  "sha2",
@@ -230,7 +228,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-json"
-version = "0.63.1"
+version = "0.65.0"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-schema",
@@ -246,7 +244,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.14.2"
+version = "1.15.1"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http",
@@ -257,9 +255,7 @@ dependencies = [
  "aws-smithy-types",
  "bytes",
  "fastrand",
- "http 0.2.12",
  "http 1.4.0",
- "http-body 0.4.6",
  "http-body 1.0.1",
  "http-body-util",
  "pin-project-lite",
@@ -270,7 +266,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.16.2"
+version = "1.17.0"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api-macros",
@@ -295,7 +291,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-schema"
-version = "0.2.1"
+version = "0.4.0"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",
@@ -304,7 +300,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.6.4"
+version = "1.9.0"
 dependencies = [
  "base64-simd",
  "bytes",
@@ -328,7 +324,7 @@ dependencies = [
 
 [[package]]
 name = "aws-types"
-version = "1.6.0"
+version = "1.7.0"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-async",

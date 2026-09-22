@@ -1003,7 +1003,7 @@ mod tests {
             .build();
 
         // Build a Foo document with a "name" member and the Foo discriminator.
-        let mut foo_members = aws_smithy_types::document::DocumentObject::new();
+        let mut foo_members = std::collections::HashMap::new();
         foo_members.insert("name".to_string(), Document::String("hello".to_string()));
         let foo_doc = DiscriminatedDocument::new(Document::Object(foo_members))
             .with_discriminator(FOO_SCHEMA.shape_id().as_str());
@@ -1018,7 +1018,7 @@ mod tests {
         );
 
         // Same for Bar.
-        let mut bar_members = aws_smithy_types::document::DocumentObject::new();
+        let mut bar_members = std::collections::HashMap::new();
         bar_members.insert("value".to_string(), Document::Number(Number::PosInt(42)));
         let bar_doc = DiscriminatedDocument::new(Document::Object(bar_members))
             .with_discriminator(BAR_SCHEMA.shape_id().as_str());
@@ -1075,7 +1075,7 @@ mod tests {
             .insert_shape(&FOO_SCHEMA, deserialize_foo)
             .build();
 
-        let mut foo_members = aws_smithy_types::document::DocumentObject::new();
+        let mut foo_members = std::collections::HashMap::new();
         foo_members.insert("name".to_string(), Document::Number(Number::PosInt(5)));
         let doc = DiscriminatedDocument::new(Document::Object(foo_members))
             .with_discriminator(FOO_SCHEMA.shape_id().as_str());
@@ -1098,7 +1098,7 @@ mod tests {
         // `JsonDeserializer::read_discriminated_document` produces. The fix
         // threads these settings into the deserializer so the nested
         // `read_blob` can coerce.
-        let mut members = aws_smithy_types::document::DocumentObject::new();
+        let mut members = std::collections::HashMap::new();
         members.insert("data".to_string(), Document::String("YWJjZA==".to_string()));
         let doc = DiscriminatedDocument::new(Document::Object(members))
             .with_discriminator(WIDGET_SCHEMA.shape_id().as_str())
@@ -1117,26 +1117,48 @@ mod tests {
     }
 
     #[test]
-    fn deserialize_document_without_settings_cannot_coerce_blob() {
-        // Same base64-string blob, but no settings attached. Without
-        // settings the deserializer cannot coerce a JSON string into a blob
-        // and must report a type mismatch. This pins the behavior the
-        // settings-threading fix depends on: it is the failure mode that
-        // occurred on the registry path before the fix.
+    fn deserialize_document_without_settings_uses_base64_default_for_blob() {
+        // Same base64-string blob, but no settings attached. `Document`
+        // has no blob variant, so a `blob` member always arrives as a
+        // string; with no protocol settings the deserializer falls back
+        // to the deterministic standard-base64 decode, which is what
+        // `DocumentShapeSerializer::write_blob` produces.
         let registry = TypeRegistry::builder()
             .insert_shape(&WIDGET_SCHEMA, deserialize_widget)
             .build();
 
-        let mut members = aws_smithy_types::document::DocumentObject::new();
+        let mut members = std::collections::HashMap::new();
         members.insert("data".to_string(), Document::String("YWJjZA==".to_string()));
         let doc = DiscriminatedDocument::new(Document::Object(members))
             .with_discriminator(WIDGET_SCHEMA.shape_id().as_str());
 
-        let err = registry.deserialize_document(&doc).unwrap_err();
-        assert!(
-            matches!(err, SerdeError::TypeMismatch { .. }),
-            "expected TypeMismatch without settings, got {err:?}"
+        let widget: Widget = *registry
+            .deserialize_document(&doc)
+            .expect("base64 default should decode without settings")
+            .downcast()
+            .expect("registered shape downcasts to Widget");
+        assert_eq!(widget.data.unwrap().as_ref(), b"abcd");
+    }
+
+    #[test]
+    fn deserialize_document_without_settings_rejects_malformed_base64_blob() {
+        // The base64 fallback still validates: a string that is not
+        // base64 is reported rather than silently accepted.
+        let registry = TypeRegistry::builder()
+            .insert_shape(&WIDGET_SCHEMA, deserialize_widget)
+            .build();
+
+        let mut members = std::collections::HashMap::new();
+        members.insert(
+            "data".to_string(),
+            Document::String("not base64!!!".to_string()),
         );
+        let doc = DiscriminatedDocument::new(Document::Object(members))
+            .with_discriminator(WIDGET_SCHEMA.shape_id().as_str());
+
+        let err = registry.deserialize_document(&doc).unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("base64"), "unexpected error message: {msg}");
     }
 
     // -- Builder + Debug tests ------------------------------------------------------------------

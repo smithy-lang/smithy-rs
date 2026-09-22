@@ -49,7 +49,7 @@ class LiteralGenerator(
     private val codegenScope =
         arrayOf(
             "Document" to RuntimeType.document(runtimeConfig),
-            "DocumentObject" to RuntimeType.documentObject(runtimeConfig),
+            "HashMap" to RuntimeType.HashMap,
         )
 
     private fun renderTemplateExpression(
@@ -92,7 +92,7 @@ class LiteralGenerator(
         writable {
             rustBlock("") {
                 rustTemplate(
-                    "let mut out = #{DocumentObject}::with_capacity(${members.size});",
+                    "let mut out = #{HashMap}::<String, #{Document}>::with_capacity(${members.size});",
                     *codegenScope,
                 )
                 members.keys.sortedBy { it.toString() }.map { k -> k to members[k]!! }.forEach { (identifier, literal) ->

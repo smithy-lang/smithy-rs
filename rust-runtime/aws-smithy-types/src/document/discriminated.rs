@@ -39,13 +39,15 @@
 //!    `&DiscriminatedDocument`; codec deserializers produce
 //!    `DiscriminatedDocument` (with discriminator lifted from
 //!    `__type` and settings attached); type-typed shape construction
-//!    via `Document::from_struct` returns a `DiscriminatedDocument`
-//!    too.
+//!    via `DiscriminatedDocumentExt::from_struct` (in
+//!    `aws-smithy-schema`) returns a `DiscriminatedDocument` too.
 
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use crate::{DateTime, Document, DocumentError, DocumentSettings};
+use crate::date_time::Format;
+use crate::document::document_variant_name;
+use crate::{DateTime, Document, DocumentError, DocumentSettings, Number};
 
 /// A [`Document`] together with an optional discriminator and
 /// optional protocol settings.
@@ -53,9 +55,16 @@ use crate::{DateTime, Document, DocumentError, DocumentSettings};
 /// See the module-level documentation for the rationale behind
 /// splitting this off `Document`.
 ///
-/// `#[non_exhaustive]` matches `Document`'s policy — future fields
-/// (e.g. a typed `Schema` reference if the schema crate ever adds
-/// schema-binding to this wrapper) can land additively.
+/// This type is `#[non_exhaustive]` so that future fields (e.g. a typed
+/// `Schema` reference, if the schema crate ever adds schema-binding to
+/// this wrapper) can land additively.
+///
+/// Note that this is deliberately *unlike* [`Document`], which is
+/// intentionally **not** `#[non_exhaustive]`: `Document` is a released,
+/// exhaustively-matchable enum, and callers are expected to `match` it
+/// without a wildcard arm. Adding a variant to `Document` would be a
+/// breaking change, which is precisely why the extra context this
+/// wrapper carries lives here instead of on `Document` itself.
 #[non_exhaustive]
 #[derive(Clone, Debug, Default)]
 pub struct DiscriminatedDocument {
@@ -63,8 +72,9 @@ pub struct DiscriminatedDocument {
     document: Document,
     /// The fully-qualified shape ID of the source type, if known.
     /// Lifted from `__type` on the wire, set by
-    /// [`Document::from_struct`](crate::Document) callers, or left
-    /// `None` for documents constructed directly from data.
+    /// `DiscriminatedDocumentExt::from_struct` (in `aws-smithy-schema`)
+    /// callers, or left `None` for documents constructed directly from
+    /// data.
     discriminator: Option<String>,
     /// Protocol-specific settings used by format-aware coercion. Set
     /// by codec deserializers (e.g. JSON's
@@ -157,26 +167,28 @@ impl DiscriminatedDocument {
 
     /// Returns this document's value as bytes.
     ///
-    /// Dispatches three ways:
-    /// - For [`Document::Blob`], returns the bytes directly as
-    ///   `Cow::Borrowed`.
-    /// - For [`Document::String`], if protocol settings are attached,
-    ///   delegates to
-    ///   [`DocumentSettings::coerce_string_to_blob`] (typically
-    ///   base64-decode for JSON) and returns `Cow::Owned`.
-    /// - Otherwise returns
-    ///   [`DocumentError::TypeMismatch`] (for non-blob, non-string
-    ///   variants) or
-    ///   [`DocumentError::UnsupportedOperation`] (for `String` with
-    ///   no settings to drive the coercion).
+    /// `Document` has no native blob variant: the schema-driven legacy
+    /// representation of a Smithy `blob` is a base64-encoded
+    /// [`Document::String`]. This accessor therefore dispatches two
+    /// ways:
+    /// - With protocol settings attached, delegates to
+    ///   [`DocumentSettings::coerce_string_to_blob`].
+    /// - With no settings attached, falls back to the deterministic
+    ///   default: standard base64 decode.
+    ///
+    /// Non-string variants return [`DocumentError::TypeMismatch`].
     pub fn as_blob(&self) -> Result<Cow<'_, [u8]>, DocumentError> {
         match &self.document {
-            Document::Blob(b) => Ok(Cow::Borrowed(b.as_slice())),
             Document::String(s) => match &self.settings {
                 Some(settings) => settings.coerce_string_to_blob(s).map(Cow::Owned),
-                None => Err(DocumentError::unsupported(
-                    "cannot coerce string to blob without protocol-specific document settings",
-                )),
+                // Deterministic default: base64, the representation every
+                // JSON-family protocol uses and the one the schema
+                // serializer writes.
+                None => crate::base64::decode(s).map(Cow::Owned).map_err(|e| {
+                    DocumentError::invalid_input(format!(
+                        "cannot base64-decode string as blob: {e}"
+                    ))
+                }),
             },
             other => Err(DocumentError::type_mismatch(format!(
                 "expected blob, found {}",
@@ -187,30 +199,30 @@ impl DiscriminatedDocument {
 
     /// Returns this document's value as a timestamp.
     ///
-    /// Dispatches four ways:
-    /// - For [`Document::Timestamp`], returns the value directly.
-    /// - For [`Document::String`], if settings are attached,
-    ///   delegates to
-    ///   [`DocumentSettings::coerce_string_to_timestamp`] (typically
-    ///   parses an RFC-3339 string for JSON's default `date-time`
-    ///   format).
-    /// - For [`Document::Number`], if settings are attached,
-    ///   delegates to
-    ///   [`DocumentSettings::coerce_number_to_timestamp`] (typically
-    ///   interprets the value as epoch seconds).
-    /// - Otherwise returns [`DocumentError::TypeMismatch`] or
-    ///   [`DocumentError::UnsupportedOperation`].
+    /// `Document` has no native timestamp variant: the schema-driven
+    /// legacy representation of a Smithy `timestamp` is a
+    /// [`Document::Number`] holding epoch seconds. This accessor
+    /// dispatches four ways:
+    /// - For [`Document::Number`] with settings attached, delegates to
+    ///   [`DocumentSettings::coerce_number_to_timestamp`]; with no
+    ///   settings, falls back to the deterministic epoch-seconds
+    ///   default.
+    /// - For [`Document::String`] with settings attached, delegates to
+    ///   [`DocumentSettings::coerce_string_to_timestamp`]; with no
+    ///   settings, falls back to parsing RFC-3339 (`date-time`), which
+    ///   is Smithy's default string timestamp format.
+    ///
+    /// Other variants return [`DocumentError::TypeMismatch`].
     pub fn as_timestamp(&self) -> Result<DateTime, DocumentError> {
         match (&self.document, &self.settings) {
-            (Document::Timestamp(t), _) => Ok(*t),
-            (Document::String(s), Some(settings)) => settings.coerce_string_to_timestamp(s),
             (Document::Number(n), Some(settings)) => settings.coerce_number_to_timestamp(n),
-            (Document::String(_), None) | (Document::Number(_), None) => {
-                Err(DocumentError::unsupported(
-                    "cannot coerce string/number to timestamp without protocol-specific document \
-                     settings",
+            (Document::Number(n), None) => number_as_epoch_seconds(n),
+            (Document::String(s), Some(settings)) => settings.coerce_string_to_timestamp(s),
+            (Document::String(s), None) => DateTime::from_str(s, Format::DateTime).map_err(|e| {
+                DocumentError::invalid_input(format!(
+                    "cannot parse string as a date-time timestamp: {e}"
                 ))
-            }
+            }),
             (other, _) => Err(DocumentError::type_mismatch(format!(
                 "expected timestamp, found {}",
                 document_variant_name(other)
@@ -241,27 +253,26 @@ impl From<Document> for DiscriminatedDocument {
     }
 }
 
-/// Returns the human-readable name of a [`Document`] variant for use
-/// in error messages.
-//
-// Defined here, scoped to the discriminated module, because it's the
-// only error-producing site that names variants. The numeric coercion
-// path in `mod.rs` has its own `type_mismatch_for` for the same job
-// — they're intentionally not shared because the call sites construct
-// errors through different code paths and inlining the variant-name
-// match is cheaper than a cross-module call.
-fn document_variant_name(d: &Document) -> &'static str {
-    match d {
-        Document::Null => "null",
-        Document::Bool(_) => "boolean",
-        Document::Number(_) => "number",
-        Document::String(_) => "string",
-        Document::Blob(_) => "blob",
-        Document::Timestamp(_) => "timestamp",
-        Document::BigInteger(_) => "bigInteger",
-        Document::BigDecimal(_) => "bigDecimal",
-        Document::Array(_) => "array",
-        Document::Object(_) => "object",
+/// Interprets a [`Number`] as epoch seconds, retaining fractional
+/// seconds when the wire value carried them.
+///
+/// This is the deterministic default used when no protocol settings are
+/// attached. `epoch-seconds` is the format the schema serializer writes
+/// for a `timestamp` shape in the legacy `Document` representation.
+fn number_as_epoch_seconds(n: &Number) -> Result<DateTime, DocumentError> {
+    match n {
+        Number::PosInt(v) => i64::try_from(*v)
+            .map(DateTime::from_secs)
+            .map_err(|_| DocumentError::invalid_input(format!("epoch seconds {v} out of range"))),
+        Number::NegInt(v) => Ok(DateTime::from_secs(*v)),
+        Number::Float(v) => {
+            if !v.is_finite() {
+                return Err(DocumentError::invalid_input(format!(
+                    "epoch seconds {v} is not finite"
+                )));
+            }
+            Ok(DateTime::from_secs_f64(*v))
+        }
     }
 }
 
@@ -392,42 +403,34 @@ mod tests {
     // -- as_blob dispatch -----------------------------------------------
 
     #[test]
-    fn as_blob_returns_borrowed_for_native_blob_variant() {
-        let d = DiscriminatedDocument::new(Document::Blob(b"hi".to_vec()));
-        match d.as_blob().unwrap() {
-            Cow::Borrowed(bytes) => assert_eq!(bytes, b"hi"),
-            Cow::Owned(_) => panic!("expected Cow::Borrowed for native Blob"),
-        }
-    }
-
-    #[test]
-    fn as_blob_native_works_without_settings_attached() {
-        // Native blobs don't need settings — the variant directly
-        // satisfies the request.
-        let d = DiscriminatedDocument::new(Document::Blob(b"hi".to_vec()));
-        assert!(d.settings().is_none());
-        assert!(d.as_blob().is_ok());
-    }
-
-    #[test]
     fn as_blob_coerces_string_when_settings_present() {
         let d = DiscriminatedDocument::new(Document::String("hello".to_owned()))
             .with_settings(test_settings());
         match d.as_blob().unwrap() {
+            // TestSettings returns the raw bytes of the string.
             Cow::Owned(bytes) => assert_eq!(bytes, b"hello"),
             Cow::Borrowed(_) => panic!("expected Cow::Owned for coerced String"),
         }
     }
 
     #[test]
-    fn as_blob_string_without_settings_is_unsupported_operation() {
-        let d = DiscriminatedDocument::new(Document::String("hello".to_owned()));
-        let err = d.as_blob().unwrap_err();
-        assert!(matches!(err, DocumentError::UnsupportedOperation { .. }));
+    fn as_blob_falls_back_to_base64_without_settings() {
+        // No settings attached: the deterministic default is a standard
+        // base64 decode, matching what the schema serializer writes.
+        let d = DiscriminatedDocument::new(Document::String("YWJjZA==".to_owned()));
+        assert!(d.settings().is_none());
+        assert_eq!(d.as_blob().unwrap().as_ref(), b"abcd");
     }
 
     #[test]
-    fn as_blob_type_mismatch_for_non_blob_non_string_variants() {
+    fn as_blob_invalid_base64_without_settings_is_invalid_input() {
+        let d = DiscriminatedDocument::new(Document::String("not base64!!!".to_owned()));
+        let err = d.as_blob().unwrap_err();
+        assert!(matches!(err, DocumentError::InvalidInput { .. }));
+    }
+
+    #[test]
+    fn as_blob_type_mismatch_for_non_string_variants() {
         // Numeric variant: TypeMismatch regardless of settings.
         let d = DiscriminatedDocument::new(Document::Number(Number::PosInt(42)))
             .with_settings(test_settings());
@@ -436,22 +439,6 @@ mod tests {
     }
 
     // -- as_timestamp dispatch ------------------------------------------
-
-    #[test]
-    fn as_timestamp_returns_direct_for_native_timestamp_variant() {
-        let ts = DateTime::from_secs(1234);
-        let d = DiscriminatedDocument::new(Document::Timestamp(ts));
-        assert_eq!(d.as_timestamp().unwrap(), ts);
-    }
-
-    #[test]
-    fn as_timestamp_native_works_without_settings() {
-        // Native timestamps don't need settings either.
-        let ts = DateTime::from_secs(1);
-        let d = DiscriminatedDocument::new(Document::Timestamp(ts));
-        assert!(d.settings().is_none());
-        assert_eq!(d.as_timestamp().unwrap(), ts);
-    }
 
     #[test]
     fn as_timestamp_coerces_string_with_settings() {
@@ -469,17 +456,35 @@ mod tests {
     }
 
     #[test]
-    fn as_timestamp_string_without_settings_is_unsupported() {
-        let d = DiscriminatedDocument::new(Document::String("ignored".to_owned()));
-        let err = d.as_timestamp().unwrap_err();
-        assert!(matches!(err, DocumentError::UnsupportedOperation { .. }));
+    fn as_timestamp_number_defaults_to_epoch_seconds_without_settings() {
+        // The deterministic default: a number is epoch seconds. This is
+        // the legacy representation the schema serializer writes for a
+        // `timestamp` shape.
+        let d = DiscriminatedDocument::new(Document::Number(Number::PosInt(1234)));
+        assert!(d.settings().is_none());
+        assert_eq!(d.as_timestamp().unwrap(), DateTime::from_secs(1234));
+
+        let d = DiscriminatedDocument::new(Document::Number(Number::NegInt(-5)));
+        assert_eq!(d.as_timestamp().unwrap(), DateTime::from_secs(-5));
     }
 
     #[test]
-    fn as_timestamp_number_without_settings_is_unsupported() {
-        let d = DiscriminatedDocument::new(Document::Number(Number::PosInt(0)));
+    fn as_timestamp_retains_fractional_epoch_seconds() {
+        let d = DiscriminatedDocument::new(Document::Number(Number::Float(1234.5)));
+        assert_eq!(d.as_timestamp().unwrap(), DateTime::from_secs_f64(1234.5));
+    }
+
+    #[test]
+    fn as_timestamp_string_defaults_to_date_time_without_settings() {
+        let d = DiscriminatedDocument::new(Document::String("1970-01-01T00:00:00Z".to_owned()));
+        assert_eq!(d.as_timestamp().unwrap(), DateTime::from_secs(0));
+    }
+
+    #[test]
+    fn as_timestamp_malformed_string_without_settings_is_invalid_input() {
+        let d = DiscriminatedDocument::new(Document::String("not a timestamp".to_owned()));
         let err = d.as_timestamp().unwrap_err();
-        assert!(matches!(err, DocumentError::UnsupportedOperation { .. }));
+        assert!(matches!(err, DocumentError::InvalidInput { .. }));
     }
 
     #[test]

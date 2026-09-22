@@ -15,6 +15,74 @@ use crate::codec::JsonCodecSettings;
 
 use std::sync::Arc;
 
+/// `true` iff `s` is non-empty and consists entirely of ASCII digits.
+fn is_ascii_digits(s: &str) -> bool {
+    !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit())
+}
+
+/// `true` iff `text` matches the RFC 8259 JSON number grammar:
+/// `'-'? ('0' | [1-9][0-9]*) ('.' [0-9]+)? ([eE] [+-]? [0-9]+)?`.
+///
+/// [`aws_smithy_types::BigInteger`] and [`aws_smithy_types::BigDecimal`]
+/// are string wrappers whose `FromStr` validates the *structure* of its
+/// input — `'-'? DIGIT+` and
+/// `'-'? DIGIT+ ('.' DIGIT+)? ([eE] [+-]? DIGIT+)?` respectively — so it
+/// already rejects `"+123"`, `"1.2.3"`, `"--5"`, `"1e"`, `".5"` and
+/// `"1."`. It deliberately does **not** reject leading zeros, because
+/// `"00123"` has exactly one numeric reading and parsed in previously
+/// released versions.
+///
+/// RFC 8259 is stricter on exactly that point: `int` is `'0'` or a
+/// nonzero digit followed by digits, so `"00123"`, `"007"`, `"-01"` and
+/// `"00.1"` are all constructible values that are not JSON numbers.
+/// Their stored text is emitted verbatim on the raw-number path, so it is
+/// checked here instead of being trusted — the alternative is JSON output
+/// that no parser accepts.
+///
+/// This check is therefore the wire-format boundary, not a restatement of
+/// `FromStr`: the constraint here is the output format, and the codec's
+/// own deserializer already rejects a leading zero (`"01"`), so accepting
+/// one here would emit numbers this codec could not read back.
+///
+/// The remaining rejections (a leading `+`, an empty digit run) are kept
+/// as defense in depth: they are unreachable through `FromStr` today, but
+/// this function is the only thing standing between a value and the
+/// output buffer.
+fn is_json_number(text: &str) -> bool {
+    let rest = text.strip_prefix('-').unwrap_or(text);
+
+    let (mantissa, exponent) = match rest.split_once(['e', 'E']) {
+        Some((mantissa, exponent)) => (mantissa, Some(exponent)),
+        None => (rest, None),
+    };
+
+    let (int_part, frac_part) = match mantissa.split_once('.') {
+        Some((int_part, frac_part)) => (int_part, Some(frac_part)),
+        None => (mantissa, None),
+    };
+
+    // int = '0' / ( digit1-9 *DIGIT ) — no leading zeros, no empty run.
+    let int_ok = match int_part.as_bytes() {
+        [b'0'] => true,
+        [b'1'..=b'9', tail @ ..] => tail.iter().all(u8::is_ascii_digit),
+        _ => false,
+    };
+
+    // frac = '.' 1*DIGIT — the digit run may not be empty.
+    let frac_ok = match frac_part {
+        None => true,
+        Some(frac) => is_ascii_digits(frac),
+    };
+
+    // exp = ('e' / 'E') [ '-' / '+' ] 1*DIGIT
+    let exponent_ok = match exponent {
+        None => true,
+        Some(exponent) => is_ascii_digits(exponent.strip_prefix(['+', '-']).unwrap_or(exponent)),
+    };
+
+    int_ok && frac_ok && exponent_ok
+}
+
 /// JSON serializer that implements the ShapeSerializer trait.
 pub struct JsonSerializer {
     output: String,
@@ -106,23 +174,75 @@ impl JsonSerializer {
         self.settings.default_timestamp_format
     }
 
+    /// Writes an arbitrary-precision numeric string.
+    ///
+    /// By default the decimal text is emitted verbatim as a raw JSON
+    /// number, so a receiver with an arbitrary-precision parser recovers
+    /// the exact value with no `f64` round-trip. Emitting verbatim means
+    /// the text itself has to be a JSON number, which
+    /// [`aws_smithy_types::BigInteger`] / [`aws_smithy_types::BigDecimal`]
+    /// do not guarantee: their `FromStr` is structurally strict but
+    /// deliberately accepts leading zeros (`"00123"`), which RFC 8259
+    /// forbids (see [`is_json_number`]). The raw path therefore validates
+    /// the grammar and reports a violation as
+    /// [`SerdeError::InvalidInput`] rather than emitting malformed JSON.
+    ///
+    /// When [`JsonCodecSettings::use_string_for_arbitrary_precision`] is
+    /// set, the value is emitted as a JSON string instead — for interop
+    /// with receivers that route every JSON number through `f64` and
+    /// would otherwise lose precision on values that overflow it. That
+    /// path needs no grammar check: any text at all is representable
+    /// once escaped, so it cannot produce malformed JSON.
+    ///
+    /// This is driven by the schema: only `bigInteger` / `bigDecimal`
+    /// shapes reach it. A `Document` carries no schema and has no
+    /// arbitrary-precision variant, so `write_document` never takes this
+    /// path.
+    ///
+    /// Nothing is appended to the output when validation fails, so a
+    /// rejected value leaves no truncated fragment behind.
+    fn write_arbitrary_precision(
+        &mut self,
+        schema: &Schema<'_>,
+        text: &str,
+    ) -> Result<(), SerdeError> {
+        if self.settings.use_string_for_arbitrary_precision() {
+            self.prefix(schema);
+            crate::serialize::JsonValueWriter::new(&mut self.output).string(text);
+            return Ok(());
+        }
+        if !is_json_number(text) {
+            return Err(SerdeError::invalid_input(format!(
+                "arbitrary-precision value {text:?} is not a JSON number, so it cannot be \
+                 emitted as a raw JSON number; enable \
+                 `JsonCodecSettings::use_string_for_arbitrary_precision` to send it as a \
+                 JSON string instead"
+            )));
+        }
+        self.prefix(schema);
+        self.output.push_str(text);
+        Ok(())
+    }
+
     fn write_json_value(&mut self, doc: &Document) -> Result<(), SerdeError> {
         use crate::escape::escape_string;
         use crate::serialize::JsonValueWriter;
-        use aws_smithy_types::base64;
 
-        // Walk the [`aws_smithy_types::Document`] directly so blob
-        // (base64), timestamp (codec-default format), and bignum
-        // variants all serialize correctly.
+        // Walk the [`aws_smithy_types::Document`] directly.
         //
         // Per the SEP § Document Types rule 8, the document is
         // protocol-agnostic on the serialization side: it carries no
         // per-member format trait (the schema is the carrier of those
-        // traits, and a `Document` value erases the schema). Thus
-        // timestamp serialization here uses the codec's default format
-        // unconditionally — schema-typed members go through the
-        // dedicated `write_timestamp` path and inspect
-        // `@timestampFormat` themselves, not via `write_document`.
+        // traits, and a `Document` value erases the schema).
+        //
+        // `Document` has exactly the six JSON-shaped variants, so every
+        // node maps one-to-one onto a JSON value. Smithy types with no
+        // native JSON form — blob, timestamp, bigInteger, bigDecimal —
+        // already ride their legacy representation inside those variants
+        // (base64 string, epoch-seconds number, numeric text), written
+        // by the schema-driven `write_blob` / `write_timestamp` /
+        // `write_big_*` paths which do inspect `@timestampFormat` and
+        // the codec settings.
         //
         // [`Document`] has no discriminator slot. Discriminated
         // documents (with a `__type` field) flow through
@@ -140,44 +260,6 @@ impl JsonSerializer {
                 self.output.push('"');
                 self.output.push_str(&escape_string(s));
                 self.output.push('"');
-            }
-            Document::Blob(b) => {
-                // base64 alphabet contains no JSON-special characters,
-                // but route through `JsonValueWriter::string` to keep
-                // the encoding centralized.
-                let encoded = base64::encode(b);
-                JsonValueWriter::new(&mut self.output).string(&encoded);
-            }
-            Document::Timestamp(ts) => {
-                let format = self.settings.default_timestamp_format;
-                JsonValueWriter::new(&mut self.output)
-                    .date_time(ts, format)
-                    .map_err(|e| {
-                        SerdeError::write_failed(format!("failed to format timestamp: {e}"))
-                    })?;
-            }
-            Document::BigInteger(bi) => {
-                // Big integers serialize as raw JSON numbers (no quotes,
-                // no scientific notation) so receivers with arbitrary-
-                // precision parsers can recover the exact value.
-                //
-                // When [`JsonCodecSettings::use_string_for_arbitrary_precision`]
-                // is set, emit as a JSON string instead — for interop
-                // with receivers that route every JSON number through
-                // `f64` and would otherwise lose precision on values
-                // that overflow `f64`.
-                if self.settings.use_string_for_arbitrary_precision() {
-                    JsonValueWriter::new(&mut self.output).string(bi.as_ref());
-                } else {
-                    self.output.push_str(bi.as_ref());
-                }
-            }
-            Document::BigDecimal(bd) => {
-                if self.settings.use_string_for_arbitrary_precision() {
-                    JsonValueWriter::new(&mut self.output).string(bd.as_ref());
-                } else {
-                    self.output.push_str(bd.as_ref());
-                }
             }
             Document::Array(items) => {
                 self.output.push('[');
@@ -205,15 +287,11 @@ impl JsonSerializer {
                     self.write_json_value(value)?;
                 }
                 self.output.push('}');
-            }
-            // `Document` is `#[non_exhaustive]`. Future variants need a
-            // deliberate decision in this serializer rather than a
-            // silent no-op.
-            other => {
-                return Err(SerdeError::custom(format!(
-                    "JSON write_document: unsupported Document variant {other:?}"
-                )));
-            }
+            } // `Document` is not `#[non_exhaustive]`, so this match is
+              // exhaustive today and adding a variant is a breaking change
+              // to `aws-smithy-types` that will fail this match to compile.
+              // That is the intent: a new variant needs a deliberate
+              // decision here rather than a silent no-op.
         }
         Ok(())
     }
@@ -432,9 +510,7 @@ impl ShapeSerializer for JsonSerializer {
         schema: &Schema<'_>,
         value: &BigInteger,
     ) -> Result<(), SerdeError> {
-        self.prefix(schema);
-        self.output.push_str(value.as_ref());
-        Ok(())
+        self.write_arbitrary_precision(schema, value.as_ref())
     }
 
     fn write_big_decimal(
@@ -442,9 +518,7 @@ impl ShapeSerializer for JsonSerializer {
         schema: &Schema<'_>,
         value: &BigDecimal,
     ) -> Result<(), SerdeError> {
-        self.prefix(schema);
-        self.output.push_str(value.as_ref());
-        Ok(())
+        self.write_arbitrary_precision(schema, value.as_ref())
     }
 
     fn write_string(&mut self, schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
@@ -592,7 +666,7 @@ mod tests {
 
     #[test]
     fn write_discriminated_document_emits_absolute_type() {
-        let mut obj = aws_smithy_types::document::DocumentObject::new();
+        let mut obj = std::collections::HashMap::new();
         obj.insert(
             "greeting".to_string(),
             Document::String("hello".to_string()),
@@ -620,7 +694,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "absolute shape id")]
     fn write_discriminated_document_rejects_relative_discriminator() {
-        let mut obj = aws_smithy_types::document::DocumentObject::new();
+        let mut obj = std::collections::HashMap::new();
         obj.insert(
             "greeting".to_string(),
             Document::String("hello".to_string()),
@@ -1217,7 +1291,7 @@ mod tests {
         assert_eq!(output, r#"{"k":"v"}"#);
     }
 
-    // --- write_document gates BigInteger / BigDecimal on use_string_for_arbitrary_precision -----
+    // --- write_big_integer / write_big_decimal gate on use_string_for_arbitrary_precision -------
 
     fn settings_with_string_for_arbitrary_precision(value: bool) -> Arc<JsonCodecSettings> {
         Arc::new(
@@ -1228,65 +1302,208 @@ mod tests {
     }
 
     #[test]
-    fn write_document_emits_big_integer_as_number_by_default() {
-        // Default (`use_string_for_arbitrary_precision = false`) emits
-        // BigInteger as a raw JSON number — interoperable with arbitrary-
-        // precision parsers.
+    fn write_big_integer_emits_a_number_by_default() {
+        // Default (`use_string_for_arbitrary_precision = false`) emits a
+        // bigInteger as a raw JSON number — interoperable with
+        // arbitrary-precision parsers, and lossless.
         use std::str::FromStr;
         let bi = BigInteger::from_str("99999999999999999999999").unwrap();
-        let doc = Document::BigInteger(bi);
         let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
-        ser.write_document(&aws_smithy_schema::prelude::DOCUMENT, &doc)
+        ser.write_big_integer(&aws_smithy_schema::prelude::BIG_INTEGER, &bi)
             .unwrap();
         let output = String::from_utf8(ser.finish()).unwrap();
         assert_eq!(output, "99999999999999999999999");
     }
 
     #[test]
-    fn write_document_emits_big_integer_as_string_when_setting_enabled() {
+    fn write_big_integer_emits_a_string_when_setting_enabled() {
         use std::str::FromStr;
         let bi = BigInteger::from_str("99999999999999999999999").unwrap();
-        let doc = Document::BigInteger(bi);
         let mut ser = JsonSerializer::new(settings_with_string_for_arbitrary_precision(true));
-        ser.write_document(&aws_smithy_schema::prelude::DOCUMENT, &doc)
+        ser.write_big_integer(&aws_smithy_schema::prelude::BIG_INTEGER, &bi)
             .unwrap();
         let output = String::from_utf8(ser.finish()).unwrap();
         assert_eq!(output, "\"99999999999999999999999\"");
     }
 
     #[test]
-    fn write_document_emits_big_decimal_as_number_by_default() {
+    fn write_big_decimal_emits_a_number_by_default() {
         use std::str::FromStr;
         let bd = BigDecimal::from_str("1.234e500").unwrap();
-        let doc = Document::BigDecimal(bd);
         let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
-        ser.write_document(&aws_smithy_schema::prelude::DOCUMENT, &doc)
+        ser.write_big_decimal(&aws_smithy_schema::prelude::BIG_DECIMAL, &bd)
             .unwrap();
         let output = String::from_utf8(ser.finish()).unwrap();
-        // Raw JSON number — no quotes. Exact spelling depends on
-        // BigDecimal's normalization, so just assert "no quotes" and
-        // that it's not the JSON `null` token.
         assert!(
             !output.starts_with('"'),
-            "expected raw number, got {output}"
+            "expected a raw JSON number, got {output}"
         );
         assert_ne!(output, "null");
     }
 
     #[test]
-    fn write_document_emits_big_decimal_as_string_when_setting_enabled() {
+    fn write_big_decimal_emits_a_string_when_setting_enabled() {
         use std::str::FromStr;
-        let bd = BigDecimal::from_str("1.234e500").unwrap();
-        let doc = Document::BigDecimal(bd);
+        let bd = BigDecimal::from_str("0.123456789012345678901234567890").unwrap();
         let mut ser = JsonSerializer::new(settings_with_string_for_arbitrary_precision(true));
-        ser.write_document(&aws_smithy_schema::prelude::DOCUMENT, &doc)
+        ser.write_big_decimal(&aws_smithy_schema::prelude::BIG_DECIMAL, &bd)
             .unwrap();
         let output = String::from_utf8(ser.finish()).unwrap();
-        assert!(
-            output.starts_with('"'),
-            "expected quoted form, got {output}"
-        );
-        assert!(output.ends_with('"'), "expected quoted form, got {output}");
+        assert_eq!(output, "\"0.123456789012345678901234567890\"");
+    }
+
+    // --- Raw-number emission validates the JSON number grammar ------------------
+    //
+    // `BigInteger::from_str` / `BigDecimal::from_str` are structurally
+    // strict, but deliberately accept leading zeros for backward
+    // compatibility. RFC 8259 does not, so these values are all publicly
+    // constructible today *and* invalid as raw JSON. Emitting them verbatim
+    // would produce JSON no parser accepts, so the raw path must reject
+    // them.
+
+    /// Text accepted by `BigInteger::from_str` that is not an RFC 8259
+    /// JSON number.
+    ///
+    /// `FromStr` is structurally strict but deliberately permits leading
+    /// zeros, which RFC 8259 forbids — that gap is exactly what this path
+    /// has to catch, so every entry here must still parse.
+    const NON_JSON_BIG_INTEGERS: &[&str] = &["00123", "007", "-01", "0000", "-0000"];
+
+    /// Text accepted by `BigDecimal::from_str` that is not an RFC 8259
+    /// JSON number. Same leading-zero gap as above.
+    const NON_JSON_BIG_DECIMALS: &[&str] = &[
+        "00123", "007", "-01", "00.1", "-01.5", "007e2", "0000", "00.0", "01e-3",
+    ];
+
+    #[test]
+    fn write_big_integer_rejects_non_json_numbers_on_the_raw_path() {
+        use std::str::FromStr;
+        for text in NON_JSON_BIG_INTEGERS {
+            // Precondition: the (structurally strict) parser still accepts
+            // it, so this is a value a caller can actually hand to the
+            // serializer.
+            let bi = BigInteger::from_str(text)
+                .unwrap_or_else(|e| panic!("BigInteger::from_str({text:?}) should succeed: {e}"));
+            let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
+            let err = ser
+                .write_big_integer(&aws_smithy_schema::prelude::BIG_INTEGER, &bi)
+                .expect_err(&format!(
+                    "expected {text:?} to be rejected as a raw JSON number"
+                ));
+            assert!(
+                matches!(err, SerdeError::InvalidInput { .. }),
+                "expected InvalidInput for {text:?}, got {err:?}"
+            );
+            // Nothing partial was written before the rejection.
+            assert_eq!(String::from_utf8(ser.finish()).unwrap(), "", "for {text:?}");
+        }
+    }
+
+    #[test]
+    fn write_big_decimal_rejects_non_json_numbers_on_the_raw_path() {
+        use std::str::FromStr;
+        for text in NON_JSON_BIG_DECIMALS {
+            let bd = BigDecimal::from_str(text)
+                .unwrap_or_else(|e| panic!("BigDecimal::from_str({text:?}) should succeed: {e}"));
+            let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
+            let err = ser
+                .write_big_decimal(&aws_smithy_schema::prelude::BIG_DECIMAL, &bd)
+                .expect_err(&format!(
+                    "expected {text:?} to be rejected as a raw JSON number"
+                ));
+            assert!(
+                matches!(err, SerdeError::InvalidInput { .. }),
+                "expected InvalidInput for {text:?}, got {err:?}"
+            );
+            assert_eq!(String::from_utf8(ser.finish()).unwrap(), "", "for {text:?}");
+        }
+    }
+
+    #[test]
+    fn non_json_numbers_are_accepted_when_emitted_as_strings() {
+        use std::str::FromStr;
+        // The string path cannot produce malformed JSON, so it stays
+        // permissive: the exact stored text round-trips, escaped. The
+        // inputs are leading-zero forms — still constructible under the
+        // strict `FromStr` grammar, but not RFC 8259 JSON numbers, so they
+        // are exactly the values the raw path rejects.
+        let bi = BigInteger::from_str("00123").unwrap();
+        let mut ser = JsonSerializer::new(settings_with_string_for_arbitrary_precision(true));
+        ser.write_big_integer(&aws_smithy_schema::prelude::BIG_INTEGER, &bi)
+            .unwrap();
+        assert_eq!(String::from_utf8(ser.finish()).unwrap(), "\"00123\"");
+
+        let bd = BigDecimal::from_str("00.1").unwrap();
+        let mut ser = JsonSerializer::new(settings_with_string_for_arbitrary_precision(true));
+        ser.write_big_decimal(&aws_smithy_schema::prelude::BIG_DECIMAL, &bd)
+            .unwrap();
+        assert_eq!(String::from_utf8(ser.finish()).unwrap(), "\"00.1\"");
+    }
+
+    #[test]
+    fn write_big_numbers_accept_every_json_number_form() {
+        use std::str::FromStr;
+        for text in [
+            "0",
+            "-0",
+            "123",
+            "-123",
+            "99999999999999999999999",
+            "1.5",
+            "-0.5",
+            "1e3",
+            "1E3",
+            "1e+9",
+            "1e-9",
+            "1.23e10",
+            "1.23E-10",
+            "0.123456789012345678901234567890",
+        ] {
+            let bd = BigDecimal::from_str(text).unwrap();
+            let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
+            ser.write_big_decimal(&aws_smithy_schema::prelude::BIG_DECIMAL, &bd)
+                .unwrap_or_else(|e| panic!("expected {text:?} to serialize: {e}"));
+            assert_eq!(
+                String::from_utf8(ser.finish()).unwrap(),
+                *text,
+                "bigDecimal {text:?} must be emitted verbatim"
+            );
+        }
+
+        for text in ["0", "-0", "123", "-123", "99999999999999999999999"] {
+            let bi = BigInteger::from_str(text).unwrap();
+            let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
+            ser.write_big_integer(&aws_smithy_schema::prelude::BIG_INTEGER, &bi)
+                .unwrap_or_else(|e| panic!("expected {text:?} to serialize: {e}"));
+            assert_eq!(String::from_utf8(ser.finish()).unwrap(), *text);
+        }
+    }
+
+    #[test]
+    fn is_json_number_matches_the_rfc_8259_grammar() {
+        for good in [
+            "0",
+            "-0",
+            "1",
+            "-1",
+            "10",
+            "1.0",
+            "-1.25",
+            "1e1",
+            "1E1",
+            "1e+1",
+            "1e-1",
+            "0.5e-10",
+            "1234567890123456789012345678901234567890",
+        ] {
+            assert!(is_json_number(good), "expected {good:?} to be accepted");
+        }
+        for bad in [
+            "", "-", "+", "+1", "01", "00", "-01", "1.", ".5", "1..2", "1.2.3", "--1", "1e", "1e+",
+            "1e-", "e1", "1e2e3", "0x1f", "1 2", "Infinity", "NaN", "1,000",
+        ] {
+            assert!(!is_json_number(bad), "expected {bad:?} to be rejected");
+        }
     }
 
     // --- Required value-type members are serialized even when the value equals

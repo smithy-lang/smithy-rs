@@ -59,7 +59,7 @@ class ErrorRegistryDecoratorTest {
         val smithySchema = RuntimeType.smithySchema(runtimeConfig)
         return arrayOf(
             "Document" to smithyTypes.resolve("Document"),
-            "DocumentObject" to smithyTypes.resolve("document::DocumentObject"),
+            "HashMap" to RuntimeType.HashMap,
             "DiscriminatedDocument" to smithyTypes.resolve("DiscriminatedDocument"),
             "Number" to smithyTypes.resolve("Number"),
             "shape_id" to smithySchema.resolve("shape_id"),
@@ -282,7 +282,7 @@ class ErrorRegistryDecoratorTest {
                         // Build a Document carrying a BirdNotFound error. As
                         // with the primary registry round-trip, the map keys
                         // must match the Smithy member name (`message`).
-                        let mut members = #{DocumentObject}::new();
+                        let mut members = #{HashMap}::new();
                         members.insert(
                             "message".to_owned(),
                             #{Document}::String("no bird with that name".to_owned()),
@@ -320,7 +320,7 @@ class ErrorRegistryDecoratorTest {
                         // (or a shape outside the closure entirely) must
                         // produce an error rather than silently fall back.
                         let doc = #{DiscriminatedDocument}::new(
-                            #{Document}::Object(#{DocumentObject}::new()),
+                            #{Document}::Object(#{HashMap}::new()),
                         )
                         .with_discriminator("com.example##NotAModeledError");
 

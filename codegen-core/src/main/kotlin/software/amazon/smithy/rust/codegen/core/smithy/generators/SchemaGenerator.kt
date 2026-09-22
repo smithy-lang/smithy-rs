@@ -2010,7 +2010,7 @@ class SchemaGenerator(
                 arrayOf(
                     "Document" to RuntimeType.smithyTypes(runtimeConfig).resolve("Document"),
                     "Number" to RuntimeType.smithyTypes(runtimeConfig).resolve("Number"),
-                    "DocumentObject" to RuntimeType.smithyTypes(runtimeConfig).resolve("document::DocumentObject"),
+                    "HashMap" to RuntimeType.HashMap,
                 )
 
             fun escape(s: String) = s.replace("\\", "\\\\").replace("\"", "\\\"").replace("#", "##")
@@ -2041,7 +2041,7 @@ class SchemaGenerator(
                     rust("])")
                 }
                 node.isObjectNode -> {
-                    rustTemplate("{ let mut obj = #{DocumentObject}::new(); ", *docScope)
+                    rustTemplate("{ let mut obj = #{HashMap}::new(); ", *docScope)
                     node.expectObjectNode().stringMap.entries.forEach { (key, value) ->
                         rust("""obj.insert("${escape(key)}".to_string(), """)
                         nodeToDocument(value)(this)

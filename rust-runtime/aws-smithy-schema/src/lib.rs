@@ -28,12 +28,10 @@
 //!
 //! <div class="warning">
 //!
-//! **This crate's version number does not mean its API is settled.** It is
-//! versioned `1.x` because the generated SDK crates depend on it and a stable
-//! SDK cannot depend on a `0.x` crate. We might need to iterate on it in semver-incompatible
-//! ways if we find bugs as schema serde is rolled out. Treat it as a supporting
-//! crate for generated code that happens to be publicly reachable, but do not
-//! rely on it directly.
+//! **This crate's API is not settled.** It remains versioned `0.x` while schema
+//! serde is rolled out and may change incompatibly between minor releases. Treat
+//! it as a supporting crate for generated code that happens to be publicly
+//! reachable, but do not rely on it directly.
 //!
 //! </div>
 //!

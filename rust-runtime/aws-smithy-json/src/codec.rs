@@ -104,9 +104,9 @@ impl JsonFieldMapper {
 ///
 /// `JsonCodecSettings` implements [`DocumentSettings`]. The
 /// [`JsonDeserializer`] attaches `Arc<JsonCodecSettings>` to every
-/// `Document` it produces so the format-aware accessors
-/// ([`Document::as_blob`](aws_smithy_types::Document::as_blob),
-/// [`Document::as_timestamp`](aws_smithy_types::Document::as_timestamp))
+/// document it produces so the format-aware accessors
+/// ([`DiscriminatedDocument::as_blob`](aws_smithy_types::DiscriminatedDocument::as_blob),
+/// [`DiscriminatedDocument::as_timestamp`](aws_smithy_types::DiscriminatedDocument::as_timestamp))
 /// can coerce JSON-encoded blobs (base64 strings) and timestamps
 /// (date-time strings or epoch-seconds numbers) back to typed Rust
 /// values. The same instance is reused on the serialization side so a
@@ -122,13 +122,11 @@ pub struct JsonCodecSettings {
     /// Default: `aws.smithy.json#JsonCodec`. AWS protocols (awsJson1_0,
     /// awsJson1_1, restJson1) override this to their own shape id.
     protocol_id: ShapeId<'static>,
-    /// When `true`, [`Document::BigInteger`](aws_smithy_types::Document::BigInteger)
-    /// and [`Document::BigDecimal`](aws_smithy_types::Document::BigDecimal)
-    /// serialize as JSON strings to preserve precision for receivers
-    /// using `f64`-routed JSON parsers. When `false` (default), they
-    /// emit as raw JSON numbers — interoperable with arbitrary-
-    /// precision JSON parsers but lossy when the receiver routes
-    /// through `f64`.
+    /// When `true`, `bigInteger` and `bigDecimal` shapes serialize as
+    /// JSON strings to preserve precision for receivers using
+    /// `f64`-routed JSON parsers. When `false` (default), they emit as
+    /// raw JSON numbers — interoperable with arbitrary-precision JSON
+    /// parsers but lossy when the receiver routes through `f64`.
     ///
     /// The read path always accepts both wire forms, regardless of
     /// this setting, so a sender configured for one form interoperates
@@ -179,9 +177,8 @@ impl JsonCodecSettings {
         self.max_depth
     }
 
-    /// Whether [`Document::BigInteger`](aws_smithy_types::Document::BigInteger)
-    /// and [`Document::BigDecimal`](aws_smithy_types::Document::BigDecimal)
-    /// emit as JSON strings (when `true`) or as raw JSON numbers
+    /// Whether `bigInteger` and `bigDecimal` shapes emit as JSON
+    /// strings (when `true`) or as raw JSON numbers
     /// (when `false`, the default). The read path is always lenient —
     /// `read_big_integer` and `read_big_decimal` accept either wire form.
     pub fn use_string_for_arbitrary_precision(&self) -> bool {
@@ -359,10 +356,12 @@ impl JsonCodecSettingsBuilder {
         self
     }
 
-    /// Configures whether [`Document::BigInteger`](aws_smithy_types::Document::BigInteger)
-    /// and [`Document::BigDecimal`](aws_smithy_types::Document::BigDecimal)
+    /// Configures whether `bigInteger` and `bigDecimal` shapes
     /// serialize as JSON strings (when `true`) or as raw JSON numbers
     /// (when `false`, the default).
+    ///
+    /// This is schema-driven: a `Document` carries no schema and has no
+    /// arbitrary-precision variant, so `write_document` is unaffected.
     ///
     /// Set to `true` for interop with receivers using `f64`-routed
     /// JSON parsers that would otherwise lose precision on large

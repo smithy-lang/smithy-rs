@@ -7,6 +7,25 @@
 //!
 //! These types are simple string wrappers that allow users to parse and format
 //! big numbers using their preferred library.
+//!
+//! # Accepted input
+//!
+//! `FromStr` validates the *structure* of the input, not just its character
+//! set. The grammars are the JSON number grammar with one deliberate
+//! relaxation — leading zeros are accepted:
+//!
+//! ```text
+//! BigInteger := '-'? DIGIT+
+//! BigDecimal := '-'? DIGIT+ ( '.' DIGIT+ )? ( ('e' | 'E') ('+' | '-')? DIGIT+ )?
+//! ```
+//!
+//! So `"-12"`, `"00123"`, `"1.23E-10"` parse, while `"+123"`, `".5"`, `"1."`,
+//! `"1.2.3"`, `"--5"`, `"1e"`, `"e10"` and `"-"` do not.
+//!
+//! Leading zeros are accepted because they have exactly one numeric reading and
+//! were accepted by previously released versions. They are *not* valid RFC 8259
+//! JSON numbers, so a protocol that emits an arbitrary-precision value as a raw
+//! JSON number rejects them at the wire boundary instead.
 
 /// Error type for BigInteger and BigDecimal parsing.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,58 +50,74 @@ fn is_ascii_digits(s: &str) -> bool {
     !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit())
 }
 
-/// Validates that a string is a valid BigInteger: an optional leading
-/// `-` followed by one or more ASCII digits.
+/// Validates that a string is a valid `BigInteger`: `'-'? DIGIT+`.
 ///
-/// A leading `+` and any embedded non-digits are rejected. BigIntegers
-/// are emitted verbatim as JSON numbers, and a JSON number permits
-/// neither a leading `+` nor embedded non-digits, so the stored form
-/// must already be a valid JSON integer.
+/// A leading `-` is optional; a leading `+` is not accepted. At least one digit
+/// is mandatory, so a bare sign (`"-"`, `"+"`) and the empty string are
+/// rejected, as are repeated signs (`"--5"`), decimal points and exponents.
+///
+/// Leading zeros (`"00123"`) are accepted — see the module docs.
 fn is_valid_big_integer(s: &str) -> bool {
     is_ascii_digits(s.strip_prefix('-').unwrap_or(s))
 }
 
-/// Validates that a string is a valid BigDecimal, matching the JSON
-/// number grammar (minus a leading `+`):
-/// `'-'? digits ('.' digits)? (('e' | 'E') ('+' | '-')? digits)?`.
+/// Validates that a string is a valid `BigDecimal`:
+/// `'-'? DIGIT+ ( '.' DIGIT+ )? ( ('e' | 'E') ('+' | '-')? DIGIT+ )?`.
 ///
-/// BigDecimals are emitted verbatim as JSON numbers, so the stored form
-/// must be a valid JSON number. Unlike a plain character-set check this
-/// rejects malformed inputs such as `"1.2.3"`, `"--5"`, `"1e"`, `"+."`,
-/// and a leading `+`.
+/// Each separator that is present must be followed by a non-empty digit run, so
+/// `".5"`, `"1."`, `"1e"`, `"1e+"` and `"e10"` are rejected. A repeated
+/// separator leaves a non-digit in the following run (`"1.2.3"` leaves
+/// `"2.3"`), so it is rejected too. A leading `+` is not accepted.
+///
+/// Leading zeros (`"00123"`, `"00.1"`) are accepted — see the module docs.
 fn is_valid_big_decimal(s: &str) -> bool {
-    let mantissa_and_exp = s.strip_prefix('-').unwrap_or(s);
+    let rest = s.strip_prefix('-').unwrap_or(s);
 
-    let (mantissa, exponent) = match mantissa_and_exp.split_once(['e', 'E']) {
+    // Split the exponent off first: 'e'/'E' cannot appear in the mantissa.
+    let (mantissa, exponent) = match rest.split_once(['e', 'E']) {
         Some((mantissa, exponent)) => (mantissa, Some(exponent)),
-        None => (mantissa_and_exp, None),
+        None => (rest, None),
     };
 
-    let mantissa_ok = match mantissa.split_once('.') {
-        Some((int_part, frac_part)) => is_ascii_digits(int_part) && is_ascii_digits(frac_part),
-        None => is_ascii_digits(mantissa),
+    let (int_part, frac_part) = match mantissa.split_once('.') {
+        Some((int_part, frac_part)) => (int_part, Some(frac_part)),
+        None => (mantissa, None),
     };
 
-    let exponent_ok = match exponent {
+    // The integer digit run is mandatory and may not be empty.
+    if !is_ascii_digits(int_part) {
+        return false;
+    }
+
+    // `'.' DIGIT+` — when the point is present the digit run may not be empty.
+    if let Some(frac) = frac_part {
+        if !is_ascii_digits(frac) {
+            return false;
+        }
+    }
+
+    // `('e' | 'E') ('+' | '-')? DIGIT+` — the sign is optional, the digits are
+    // not.
+    match exponent {
         None => true,
         Some(exponent) => is_ascii_digits(exponent.strip_prefix(['+', '-']).unwrap_or(exponent)),
-    };
-
-    mantissa_ok && exponent_ok
+    }
 }
 
 /// A BigInteger represented as a string.
 ///
 /// This type does not perform arithmetic operations. Users should parse the string
 /// with their preferred big integer library.
+///
+/// See the [module docs](self) for the grammar accepted by `FromStr`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(
-    all(aws_sdk_unstable, feature = "serde-serialize"),
-    derive(serde::Serialize)
-)]
 #[cfg_attr(
     all(aws_sdk_unstable, feature = "serde-deserialize"),
     derive(serde::Deserialize)
+)]
+#[cfg_attr(
+    all(aws_sdk_unstable, feature = "serde-serialize"),
+    derive(serde::Serialize)
 )]
 pub struct BigInteger(String);
 
@@ -113,14 +148,16 @@ impl AsRef<str> for BigInteger {
 ///
 /// This type does not perform arithmetic operations. Users should parse the string
 /// with their preferred big decimal library.
+///
+/// See the [module docs](self) for the grammar accepted by `FromStr`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(
-    all(aws_sdk_unstable, feature = "serde-serialize"),
-    derive(serde::Serialize)
-)]
 #[cfg_attr(
     all(aws_sdk_unstable, feature = "serde-deserialize"),
     derive(serde::Deserialize)
+)]
+#[cfg_attr(
+    all(aws_sdk_unstable, feature = "serde-serialize"),
+    derive(serde::Serialize)
 )]
 pub struct BigDecimal(String);
 
@@ -147,96 +184,6 @@ impl AsRef<str> for BigDecimal {
     }
 }
 
-impl BigDecimal {
-    /// Upper bound on the length of the integer string
-    /// [`Self::to_integer_string`] will materialize. A scientific-notation
-    /// exponent can request an arbitrarily long run of trailing zeros;
-    /// this cap stops a pathological exponent (e.g. `1e1000000000`) from
-    /// triggering a huge allocation. ~1M digits is far beyond any
-    /// practical value.
-    const MAX_INTEGER_DIGITS: usize = 1 << 20;
-
-    /// Returns this decimal truncated toward zero as a plain integer
-    /// string (`-?[0-9]+`), or `None` if the integer magnitude is too
-    /// large to materialize (see [`Self::MAX_INTEGER_DIGITS`]).
-    ///
-    /// Fractional digits are dropped — per the SEP, numeric coercion
-    /// ignores loss of precision — and any scientific-notation exponent
-    /// is expanded so the integer magnitude is preserved. For example
-    /// `1.23e10` yields `"12300000000"`, `1.23e1` yields `"12"`, and
-    /// `5e-3` yields `"0"`.
-    pub(crate) fn to_integer_string(&self) -> Option<String> {
-        // `self.0` is always valid per `is_valid_big_decimal`.
-        let (negative, rest) = match self.0.strip_prefix('-') {
-            Some(rest) => (true, rest),
-            None => (false, self.0.as_str()),
-        };
-
-        let (mantissa, exp) = match rest.split_once(['e', 'E']) {
-            Some((mantissa, exp_str)) => match exp_str.parse::<i64>() {
-                Ok(exp) => (mantissa, exp),
-                // Exponent doesn't fit in i64: a huge positive exponent is
-                // too large to materialize; a huge negative one rounds to
-                // zero.
-                Err(_) => {
-                    return if exp_str.starts_with('-') {
-                        Some("0".to_string())
-                    } else {
-                        None
-                    }
-                }
-            },
-            None => (rest, 0),
-        };
-
-        let (int_digits, frac_digits) = match mantissa.split_once('.') {
-            Some((int_digits, frac_digits)) => (int_digits, frac_digits),
-            None => (mantissa, ""),
-        };
-
-        // Position of the decimal point from the left of the combined
-        // `int_digits ++ frac_digits` run, shifted right by the exponent.
-        // `saturating_add` keeps a near-`i64::MAX` exponent from overflowing
-        // (it then trips the size cap below).
-        let point = (int_digits.len() as i64).saturating_add(exp);
-
-        let int_part = if point <= 0 {
-            // The whole value is fractional.
-            "0".to_string()
-        } else {
-            let point = point as usize;
-            let mut digits = String::with_capacity(int_digits.len() + frac_digits.len());
-            digits.push_str(int_digits);
-            digits.push_str(frac_digits);
-
-            if point >= digits.len() {
-                // Decimal point at or beyond the last digit: pad with zeros.
-                if point > Self::MAX_INTEGER_DIGITS {
-                    return None;
-                }
-                digits.push_str(&"0".repeat(point - digits.len()));
-                digits
-            } else {
-                // Decimal point falls within the digit run; drop the rest.
-                digits.truncate(point);
-                digits
-            }
-        };
-
-        // Normalize leading zeros, keeping at least one digit.
-        let normalized = match int_part.trim_start_matches('0') {
-            "" => "0",
-            trimmed => trimmed,
-        };
-
-        Some(if negative && normalized != "0" {
-            format!("-{normalized}")
-        } else {
-            normalized.to_string()
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -252,6 +199,8 @@ mod tests {
     fn big_integer_default() {
         let bi = BigInteger::default();
         assert_eq!(bi.as_ref(), "0");
+        // The default must itself be parseable.
+        assert_eq!(BigInteger::from_str(bi.as_ref()).unwrap(), bi);
     }
 
     #[test]
@@ -264,6 +213,7 @@ mod tests {
     fn big_decimal_default() {
         let bd = BigDecimal::default();
         assert_eq!(bd.as_ref(), "0.0");
+        assert_eq!(BigDecimal::from_str(bd.as_ref()).unwrap(), bd);
     }
 
     #[test]
@@ -319,17 +269,6 @@ mod tests {
     }
 
     #[test]
-    fn big_integer_sign_handling() {
-        // A leading '-' is allowed; a leading '+' is rejected because it is
-        // not valid in a JSON number (big numbers are emitted verbatim).
-        assert!(BigInteger::from_str("-123").is_ok());
-        assert_eq!(BigInteger::from_str("-123").unwrap().as_ref(), "-123");
-        assert!(BigInteger::from_str("+123").is_err());
-        assert!(BigInteger::from_str("--5").is_err());
-        assert!(BigInteger::from_str("-").is_err());
-    }
-
-    #[test]
     fn big_decimal_rejects_invalid_chars() {
         assert!(BigDecimal::from_str("abc").is_err());
         assert!(BigDecimal::from_str("123.45abc").is_err());
@@ -337,100 +276,132 @@ mod tests {
         assert!(BigDecimal::from_str("").is_err());
     }
 
+    // --- Structural grammar: only a leading '-' is a sign -----------------------
+
     #[test]
-    fn big_integer_rejects_malformed_grammar() {
-        for bad in ["+123", "--5", "-", "1.0", "1e3", "", "1 2", "0x1f"] {
+    fn big_numbers_reject_a_leading_plus() {
+        // `+123` is not a JSON number and has no single canonical
+        // representation, so it is not accepted (a behavior change from
+        // 1.6.4, which validated only the character set).
+        assert!(BigInteger::from_str("+123").is_err());
+        assert!(BigInteger::from_str("+0").is_err());
+        assert!(BigDecimal::from_str("+1.0").is_err());
+        assert!(BigDecimal::from_str("+1e3").is_err());
+    }
+
+    #[test]
+    fn big_numbers_reject_bare_and_repeated_signs() {
+        for bad in ["-", "+", "--5", "++5", "-+5", "+-5", "5-", "5+"] {
             assert!(
                 BigInteger::from_str(bad).is_err(),
-                "expected {bad:?} to be rejected"
+                "BigInteger::from_str({bad:?}) should fail"
             );
-        }
-        for good in ["0", "123", "-123", "00123"] {
             assert!(
-                BigInteger::from_str(good).is_ok(),
-                "expected {good:?} to be accepted"
+                BigDecimal::from_str(bad).is_err(),
+                "BigDecimal::from_str({bad:?}) should fail"
             );
         }
     }
 
     #[test]
-    fn big_decimal_rejects_malformed_grammar() {
+    fn big_decimal_requires_digits_around_every_separator() {
         for bad in [
-            "1.2.3", "--5", "1e", "+.", "+1.0", ".5", "1.", "e10", "1e+", "1e2e3", "-", "1..2",
+            ".5",     // no integer digits
+            "-.5",    // no integer digits after the sign
+            "1.",     // no fractional digits
+            "1..2",   // repeated point
+            "1.2.3",  // repeated point
+            "0.0.0",  // repeated point
+            "1e",     // no exponent digits
+            "1E",     // no exponent digits
+            "1e+",    // sign but no exponent digits
+            "1e-",    // sign but no exponent digits
+            "e10",    // no mantissa
+            "-e10",   // no mantissa after the sign
+            "1e2e3",  // repeated exponent
+            "1.5e",   // no exponent digits
+            "1e2.5",  // fractional exponent
+            "1e 2",   // space inside the exponent
+            "1 .5",   // space inside the mantissa
+            ".",      // point only
+            "1.2e3e", // trailing exponent marker
         ] {
             assert!(
                 BigDecimal::from_str(bad).is_err(),
-                "expected {bad:?} to be rejected"
+                "BigDecimal::from_str({bad:?}) should fail"
             );
         }
     }
 
     #[test]
-    fn big_decimal_accepts_valid_grammar() {
+    fn big_decimal_accepts_the_full_json_number_grammar() {
         for good in [
-            "0", "123", "-123", "1.5", "-0.5", "1.23e10", "1.23E-10", "1e3", "1.0e+9",
+            "0",
+            "-0",
+            "123",
+            "-123",
+            "1.5",
+            "-0.5",
+            "1e3",
+            "1E3",
+            "1e+9",
+            "1e-9",
+            "1.23e10",
+            "1.23E-10",
+            "10.0",
+            "5e-3",
+            "0.123456789012345678901234567890",
+            "12345678901234567890.123",
+            "1.234e500",
         ] {
+            let bd = BigDecimal::from_str(good)
+                .unwrap_or_else(|e| panic!("BigDecimal::from_str({good:?}) should succeed: {e}"));
+            // The stored text is exactly the input: parsing never rewrites it.
+            assert_eq!(bd.as_ref(), good);
+        }
+    }
+
+    #[test]
+    fn big_numbers_still_accept_leading_zeros() {
+        // Retained for compatibility with previously released versions:
+        // leading zeros have one numeric reading. They are *not* valid RFC
+        // 8259 JSON numbers, and are rejected separately when an
+        // arbitrary-precision value is emitted as a raw JSON number.
+        for good in ["00123", "007", "-01", "0000", "-0000"] {
+            let bi = BigInteger::from_str(good)
+                .unwrap_or_else(|e| panic!("BigInteger::from_str({good:?}) should succeed: {e}"));
+            assert_eq!(bi.as_ref(), good);
+            let bd = BigDecimal::from_str(good)
+                .unwrap_or_else(|e| panic!("BigDecimal::from_str({good:?}) should succeed: {e}"));
+            assert_eq!(bd.as_ref(), good);
+        }
+        for good in ["00.1", "-01.5", "007e2"] {
+            let bd = BigDecimal::from_str(good)
+                .unwrap_or_else(|e| panic!("BigDecimal::from_str({good:?}) should succeed: {e}"));
+            assert_eq!(bd.as_ref(), good);
+        }
+    }
+
+    #[test]
+    fn big_integer_accepts_only_digits_after_an_optional_minus() {
+        for good in ["0", "-0", "1", "-1", "12345678901234567890"] {
             assert!(
-                BigDecimal::from_str(good).is_ok(),
-                "expected {good:?} to be accepted"
+                BigInteger::from_str(good).is_ok(),
+                "BigInteger::from_str({good:?}) should succeed"
+            );
+        }
+        for bad in ["1_000", "1,000", "0x1f", " 1", "1 ", "\t1", "1\n"] {
+            assert!(
+                BigInteger::from_str(bad).is_err(),
+                "BigInteger::from_str({bad:?}) should fail"
             );
         }
     }
 
     #[test]
-    fn big_decimal_to_integer_string_truncates_and_expands() {
-        // (input, expected truncated-toward-zero integer string)
-        let cases = [
-            ("0", "0"),
-            ("123", "123"),
-            ("123.99", "123"), // fractional digits dropped
-            ("-123.99", "-123"),
-            ("0.5", "0"),
-            ("-0.5", "0"),              // negative zero normalizes to "0"
-            ("1.23e10", "12300000000"), // exponent expanded, magnitude kept
-            ("1.23e1", "12"),           // 12.3 -> 12
-            ("1.5e1", "15"),
-            ("1e3", "1000"),
-            ("5e-3", "0"), // 0.005 -> 0
-            ("-1.23e10", "-12300000000"),
-            ("10.0", "10"),
-            ("00123", "123"),           // leading zeros normalized
-            ("1.23E10", "12300000000"), // uppercase E
-        ];
-        for (input, expected) in cases {
-            let bd = BigDecimal::from_str(input).unwrap();
-            assert_eq!(
-                bd.to_integer_string().as_deref(),
-                Some(expected),
-                "to_integer_string({input:?})"
-            );
-        }
-    }
-
-    #[test]
-    fn big_decimal_to_integer_string_guards_pathological_exponent() {
-        // Exponent fits in i64 but is absurdly large: refuse to materialize
-        // rather than allocating ~10^9 bytes.
-        assert_eq!(
-            BigDecimal::from_str("1e1000000000")
-                .unwrap()
-                .to_integer_string(),
-            None
-        );
-        // Exponent overflows i64 entirely.
-        assert_eq!(
-            BigDecimal::from_str("1e99999999999999999999")
-                .unwrap()
-                .to_integer_string(),
-            None
-        );
-        // A huge *negative* exponent rounds to zero with no allocation.
-        assert_eq!(
-            BigDecimal::from_str("1e-99999999999999999999")
-                .unwrap()
-                .to_integer_string()
-                .as_deref(),
-            Some("0")
-        );
+    fn big_number_error_reports_the_offending_input() {
+        let err = BigInteger::from_str("+123").unwrap_err();
+        assert_eq!(err, BigNumberError::InvalidFormat("+123".to_string()));
+        assert!(err.to_string().contains("+123"));
     }
 }

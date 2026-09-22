@@ -702,7 +702,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             }
             Some(b'{') => {
                 self.advance_by(1);
-                let mut map = aws_smithy_types::document::DocumentObject::new();
+                let mut map = std::collections::HashMap::new();
                 let mut first = true;
                 loop {
                     if self.next_element(first, b'}', "document object")? {
@@ -769,51 +769,44 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                 self.advance_by(len);
                 let s = std::str::from_utf8(&self.input[pos..pos + len])
                     .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
-                // Number variant selection follows the SEP "Reporting
-                // `Document` ambiguous shape types" guidance: pick the
-                // first container from `int -> long -> bigInteger ->
-                // double -> bigDecimal` that holds the value without
-                // loss of precision. `byte`, `intEnum`, `short`, and
-                // `float` are intentionally skipped per the same SEP
-                // guidance.
+                // `Document` has exactly the six JSON-shaped variants, so
+                // every JSON number lands in `Number`. The variant is
+                // chosen by range: `PosInt(u64)` / `NegInt(i64)` for
+                // integral text that fits, `Float(f64)` otherwise.
                 //
-                // The `Number` enum collapses `int`/`long` into
-                // `NegInt(i64)` and `PosInt(u64)`, so we only need
-                // three buckets here at the wire layer: `Number`
-                // (fits in i64 / u64 / finite f64), `BigInteger`
-                // (overflows i64 / u64), and `BigDecimal` (decimal
-                // value overflows f64 to non-finite).
-                use std::str::FromStr;
+                // A value that overflows the integer variants is carried
+                // as `Float`, matching the released
+                // `aws_smithy_json::deserialize` token reader. This is
+                // lossy for integers past 2^53, and deliberately so: the
+                // alternative — lifting the numeric text into
+                // `Document::String` — would change a JSON number into a
+                // JSON string on re-serialization. Arbitrary-precision
+                // *shapes* do not take this path; a `bigInteger` /
+                // `bigDecimal` member has a schema, so it is read by
+                // `read_big_integer` / `read_big_decimal`, which keep the
+                // source text intact.
                 if is_float {
                     match s.parse::<f64>() {
-                        Ok(f) if f.is_finite() => Ok(Document::Number(Number::Float(f))),
-                        // Either `f64` parse failed or yielded
-                        // `+/-Infinity` (overflow). Fall through to
-                        // `BigDecimal` so the source-string precision
-                        // is preserved. `BigDecimal::from_str` will
-                        // surface a real parse error if the input is
-                        // also malformed for arbitrary precision.
-                        _ => BigDecimal::from_str(s)
-                            .map(Document::BigDecimal)
-                            .map_err(|e| SerdeError::invalid_input(e.to_string())),
+                        Ok(f) => Ok(Document::Number(Number::Float(f))),
+                        Err(e) => Err(SerdeError::invalid_input(e.to_string())),
                     }
                 } else if is_negative {
                     match s.parse::<i64>() {
                         Ok(n) => Ok(Document::Number(Number::NegInt(n))),
-                        // Source string overflowed `i64`. Preserve
-                        // precision by routing to `BigInteger`.
-                        Err(_) => BigInteger::from_str(s)
-                            .map(Document::BigInteger)
-                            .map_err(|e| SerdeError::invalid_input(e.to_string())),
+                        // Overflowed `i64` — fall back to `f64`.
+                        Err(_) => match s.parse::<f64>() {
+                            Ok(f) => Ok(Document::Number(Number::Float(f))),
+                            Err(e) => Err(SerdeError::invalid_input(e.to_string())),
+                        },
                     }
                 } else {
                     match s.parse::<u64>() {
                         Ok(n) => Ok(Document::Number(Number::PosInt(n))),
-                        // Source string overflowed `u64`. Preserve
-                        // precision by routing to `BigInteger`.
-                        Err(_) => BigInteger::from_str(s)
-                            .map(Document::BigInteger)
-                            .map_err(|e| SerdeError::invalid_input(e.to_string())),
+                        // Overflowed `u64` — fall back to `f64`.
+                        Err(_) => match s.parse::<f64>() {
+                            Ok(f) => Ok(Document::Number(Number::Float(f))),
+                            Err(e) => Err(SerdeError::invalid_input(e.to_string())),
+                        },
                     }
                 }
             }
@@ -2612,70 +2605,58 @@ mod tests {
     }
 
     #[test]
-    fn read_document_lifts_oversize_positive_int_to_big_integer() {
+    fn read_document_falls_back_to_float_for_oversize_positive_int() {
         // 23-digit integer overflows `u64` (max is ~1.84e19, 20 digits).
-        // Today (pre-fix) this errored out; per SEP it must be lifted
-        // to `Document::BigInteger` to preserve precision.
+        // `Document` has only `Number` for numerics, so the value falls
+        // back to `Number::Float`, matching the released
+        // `aws_smithy_json::deserialize` token reader. This is lossy —
+        // arbitrary-precision *shapes* avoid it by going through
+        // `read_big_integer`, which keeps the source text intact.
         let bytes = b"99999999999999999999999";
         let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
         match deser.read_document(dummy_schema()).unwrap() {
-            Document::BigInteger(bi) => {
-                assert_eq!(bi.as_ref(), "99999999999999999999999");
+            Document::Number(Number::Float(f)) => {
+                assert_eq!(f, 99999999999999999999999f64);
             }
-            other => panic!("expected Document::BigInteger, got {other:?}"),
+            other => panic!("expected Number::Float, got {other:?}"),
         }
     }
 
     #[test]
-    fn read_document_lifts_oversize_negative_int_to_big_integer() {
+    fn read_document_falls_back_to_float_for_oversize_negative_int() {
         // 23-digit negative integer overflows `i64` (min is ~-9.2e18,
-        // 19 digits). Same SEP fall-through as the positive case.
+        // 19 digits). Same fall-through as the positive case.
         let bytes = b"-99999999999999999999999";
         let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
         match deser.read_document(dummy_schema()).unwrap() {
-            Document::BigInteger(bi) => {
-                assert_eq!(bi.as_ref(), "-99999999999999999999999");
+            Document::Number(Number::Float(f)) => {
+                assert_eq!(f, -99999999999999999999999f64);
             }
-            other => panic!("expected Document::BigInteger, got {other:?}"),
+            other => panic!("expected Number::Float, got {other:?}"),
         }
     }
 
     #[test]
-    fn read_document_lifts_oversize_decimal_to_big_decimal() {
-        // `1e500` overflows `f64` to `+Infinity`. Today (pre-fix) this
-        // silently produced `Number::Float(infinity)` — precision
-        // destroyed. Per SEP it must be lifted to `Document::BigDecimal`.
+    fn read_document_oversize_decimal_overflows_to_infinity() {
+        // `1e500` overflows `f64` to `+Infinity`. With only the six
+        // `Document` variants there is nowhere lossless to put it, so the
+        // released behavior stands. A `bigDecimal` *shape* is unaffected:
+        // `read_big_decimal` reads the source text directly.
         let bytes = b"1e500";
         let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
         match deser.read_document(dummy_schema()).unwrap() {
-            Document::BigDecimal(bd) => {
-                // `BigDecimal` may normalize the source; assert that
-                // it round-trips back to a finite, oversize-decimal
-                // representation rather than `inf`.
-                let s = bd.as_ref();
-                assert!(!s.contains("inf"), "expected finite repr, got {s}");
-                assert!(!s.contains("Inf"), "expected finite repr, got {s}");
-            }
-            other => panic!("expected Document::BigDecimal, got {other:?}"),
+            Document::Number(Number::Float(f)) => assert!(f.is_infinite() && f.is_sign_positive()),
+            other => panic!("expected Number::Float(inf), got {other:?}"),
         }
-    }
 
-    #[test]
-    fn read_document_lifts_oversize_negative_decimal_to_big_decimal() {
-        // Symmetric `-Infinity` overflow case.
-        let bytes = b"-1.234e500";
+        // The schema-driven read of the same bytes keeps full precision.
         let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
-        match deser.read_document(dummy_schema()).unwrap() {
-            Document::BigDecimal(bd) => {
-                let s = bd.as_ref();
-                assert!(s.starts_with('-'), "expected negative repr, got {s}");
-                assert!(
-                    !s.to_lowercase().contains("inf"),
-                    "expected finite repr, got {s}"
-                );
-            }
-            other => panic!("expected Document::BigDecimal, got {other:?}"),
-        }
+        let bd = deser.read_big_decimal(dummy_schema()).unwrap();
+        assert!(
+            !bd.as_ref().to_lowercase().contains("inf"),
+            "expected a finite arbitrary-precision repr, got {}",
+            bd.as_ref()
+        );
     }
 
     #[test]
@@ -2691,15 +2672,13 @@ mod tests {
     }
 
     #[test]
-    fn read_document_lifts_just_over_u64_max() {
+    fn read_document_falls_back_just_over_u64_max() {
         // `u64::MAX + 1`. First value that overflows.
         let bytes = b"18446744073709551616";
         let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
         match deser.read_document(dummy_schema()).unwrap() {
-            Document::BigInteger(bi) => {
-                assert_eq!(bi.as_ref(), "18446744073709551616");
-            }
-            other => panic!("expected Document::BigInteger, got {other:?}"),
+            Document::Number(Number::Float(f)) => assert_eq!(f, 18446744073709551616f64),
+            other => panic!("expected Number::Float, got {other:?}"),
         }
     }
 

@@ -35,9 +35,13 @@
 //!
 //! [`DocumentShapeSerializer`]: super::DocumentShapeSerializer
 
+use std::str::FromStr;
 use std::sync::Arc;
 
-use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document, DocumentSettings};
+use aws_smithy_types::date_time::Format;
+use aws_smithy_types::{
+    BigDecimal, BigInteger, Blob, DateTime, Document, DocumentSettings, Number,
+};
 
 use crate::serde::{capped_container_size, SerdeError, ShapeDeserializer};
 use crate::Schema;
@@ -128,6 +132,30 @@ impl<'a> DocumentShapeDeserializer<'a> {
     }
 }
 
+/// Interprets a [`Number`] as epoch seconds, retaining fractional
+/// seconds when present.
+///
+/// The deterministic default used by [`read_timestamp`](DocumentShapeDeserializer::read_timestamp)
+/// when no protocol settings are attached; the inverse of what
+/// [`DocumentShapeSerializer`](super::DocumentShapeSerializer) writes
+/// for a `timestamp` shape.
+fn number_to_timestamp(n: &Number) -> Result<DateTime, SerdeError> {
+    match n {
+        Number::PosInt(v) => i64::try_from(*v)
+            .map(DateTime::from_secs)
+            .map_err(|_| SerdeError::custom(format!("epoch seconds {v} out of range"))),
+        Number::NegInt(v) => Ok(DateTime::from_secs(*v)),
+        Number::Float(v) => {
+            if !v.is_finite() {
+                return Err(SerdeError::custom(format!(
+                    "epoch seconds {v} is not finite"
+                )));
+            }
+            Ok(DateTime::from_secs_f64(*v))
+        }
+    }
+}
+
 /// Builds a `TypeMismatch` error message for a read that expected one
 /// kind of value and found another.
 fn type_mismatch(expected: &str, found: &Document) -> SerdeError {
@@ -145,15 +173,8 @@ fn kind_name(d: &Document) -> &'static str {
         Document::Bool(_) => "boolean",
         Document::Number(_) => "number",
         Document::String(_) => "string",
-        Document::Blob(_) => "blob",
-        Document::Timestamp(_) => "timestamp",
-        Document::BigInteger(_) => "bigInteger",
-        Document::BigDecimal(_) => "bigDecimal",
         Document::Array(_) => "list",
         Document::Object(_) => "map",
-        // Document is `#[non_exhaustive]`. Future variants surface as
-        // a generic kind name so error messages remain informative.
-        _ => "unknown",
     }
 }
 
@@ -171,6 +192,321 @@ fn resolve_member<'s>(schema: &'s Schema<'s>, wire_name: &str) -> Option<&'s Sch
         .iter()
         .position(|m| m.member_name() == Some(wire_name))?;
     schema.member_schema_by_index(idx)
+}
+
+// -- Numeric coercion ------------------------------------------------
+//
+// [`Document`] carries exactly the six JSON-shaped variants published in
+// `aws-smithy-types`, and nothing more: no numeric-coercion accessors,
+// no arbitrary-precision accessors. Every Smithy-numeric coercion
+// therefore lives here, on the schema side, where the schema has already
+// established which Smithy type the caller is asking for.
+//
+// Per the SEP "Number coercion" rules, the signed-integer coercions
+// accept the bounded integer variants of [`Number`] (`PosInt` /
+// `NegInt`) and report overflow. They deliberately do **not** accept
+// `Number::Float`: the SEP forbids crossing the integer/float
+// logical-kind boundary. The reverse direction is lossless and is
+// allowed — [`coerce_float`] / [`coerce_double`] take integer sources.
+//
+// `Document` has no arbitrary-precision variant either, so the
+// schema-driven legacy representation carries `bigInteger` /
+// `bigDecimal` as [`Document::String`]. [`coerce_big_integer`] /
+// [`coerce_big_decimal`] accept a string source for exactly that
+// reason: they are only reached once a schema has established the
+// target shape is arbitrary-precision.
+
+/// Coerces a numeric [`Document`] to a signed integer target type.
+///
+/// Used by [`ShapeDeserializer::read_byte`] / `read_short` /
+/// `read_integer` / `read_long`.
+///
+/// The generic `T: TryFrom<i64> + TryFrom<u64>` bounds route
+/// `Number::PosInt(u64)` and `Number::NegInt(i64)` through the standard
+/// library's range-checked narrowing impls; no bespoke arithmetic.
+///
+/// Per the SEP, `Number::Float` is rejected with
+/// [`SerdeError::TypeMismatch`] (no integer/float crossover).
+/// Out-of-range integer sources produce
+/// [`SerdeError::NumericCoercionOverflow`].
+fn coerce_signed<T>(doc: &Document, name: &str) -> Result<T, SerdeError>
+where
+    T: TryFrom<i64> + TryFrom<u64>,
+{
+    match doc {
+        Document::Number(Number::PosInt(v)) => {
+            T::try_from(*v).map_err(|_| SerdeError::numeric_coercion_overflow(name, v.to_string()))
+        }
+        Document::Number(Number::NegInt(v)) => {
+            T::try_from(*v).map_err(|_| SerdeError::numeric_coercion_overflow(name, v.to_string()))
+        }
+        // No int/float crossover. Per SEP §"Number coercion": a Float
+        // source must NOT silently truncate into an integer accessor.
+        // Callers wanting that behavior can read a double and cast
+        // explicitly.
+        Document::Number(Number::Float(_)) => Err(SerdeError::type_mismatch(format!(
+            "cannot coerce float to {name} without explicit narrowing"
+        ))),
+        other => Err(type_mismatch(name, other)),
+    }
+}
+
+/// Coerces a numeric [`Document`] to `f64`.
+///
+/// Accepts every numeric variant: integer sources widen losslessly.
+fn coerce_double(doc: &Document) -> Result<f64, SerdeError> {
+    match doc {
+        Document::Number(Number::PosInt(v)) => Ok(*v as f64),
+        Document::Number(Number::NegInt(v)) => Ok(*v as f64),
+        Document::Number(Number::Float(f)) => Ok(*f),
+        other => Err(type_mismatch("double", other)),
+    }
+}
+
+/// Coerces a numeric [`Document`] to `f32`.
+///
+/// `Number::Float` is already `f64` and is narrowed by `as` cast
+/// (precision loss accepted per SEP).
+fn coerce_float(doc: &Document) -> Result<f32, SerdeError> {
+    Ok(coerce_double(doc)? as f32)
+}
+
+/// Coerces a [`Document`] to a [`BigInteger`].
+///
+/// Coerces from `Number::PosInt` / `Number::NegInt` by string-formatting
+/// (always lossless). `Number::Float` is rejected with
+/// [`SerdeError::TypeMismatch`] — per SEP, no integer/float crossover.
+///
+/// A [`Document::String`] source is accepted because the schema-driven
+/// legacy representation of an arbitrary-precision shape is its numeric
+/// text. A string holding a decimal point or exponent is truncated
+/// toward zero, expanding scientific notation so the integer magnitude
+/// is preserved.
+fn coerce_big_integer(doc: &Document) -> Result<BigInteger, SerdeError> {
+    match doc {
+        Document::Number(Number::PosInt(v)) => parse_big_integer(&v.to_string()),
+        Document::Number(Number::NegInt(v)) => parse_big_integer(&v.to_string()),
+        // No int/float crossover per SEP §"Number coercion". Callers
+        // wanting a float-to-integer coercion should read a long first.
+        Document::Number(Number::Float(_)) => Err(SerdeError::type_mismatch(
+            "cannot coerce float to bigInteger without explicit narrowing",
+        )),
+        Document::String(s) => {
+            if let Ok(bi) = BigInteger::from_str(s) {
+                return Ok(bi);
+            }
+            // Not integral text — try the decimal grammar and truncate
+            // toward zero, expanding any scientific-notation exponent so
+            // the magnitude is preserved. A naive split at the first
+            // '.' / 'e' / 'E' produces a silent wrong value (e.g.
+            // "1.23e10" -> "1"); dropping only the fractional digits is
+            // the SEP's "ignore loss of precision" rule.
+            let bd = BigDecimal::from_str(s).map_err(|e| invalid_input("bigInteger", s, &e))?;
+            // `BigDecimal::from_str` guarantees the decimal grammar, which
+            // is exactly what the magnitude algorithm needs. Re-check it
+            // here anyway: `big_decimal_to_integer_string` only
+            // `debug_assert!`s the precondition, so in release builds a
+            // future relaxation of `FromStr` would silently produce a
+            // wrong value rather than an error.
+            if !is_unambiguous_decimal(bd.as_ref()) {
+                return Err(SerdeError::invalid_input(format!(
+                    "cannot coerce {:?} to bigInteger: not a decimal number",
+                    bd.as_ref()
+                )));
+            }
+            let int_part = big_decimal_to_integer_string(&bd).ok_or_else(|| {
+                SerdeError::custom(format!(
+                    "cannot coerce bigDecimal {} to bigInteger: integer magnitude too large",
+                    bd.as_ref()
+                ))
+            })?;
+            parse_big_integer(&int_part)
+        }
+        other => Err(type_mismatch("bigInteger", other)),
+    }
+}
+
+/// Coerces a [`Document`] to a [`BigDecimal`].
+///
+/// Coerces from [`Number`] by string-formatting (`Number::Float`'s
+/// `to_string` produces a `BigDecimal`-parseable form). A
+/// [`Document::String`] source is accepted for the same reason as in
+/// [`coerce_big_integer`].
+fn coerce_big_decimal(doc: &Document) -> Result<BigDecimal, SerdeError> {
+    match doc {
+        Document::String(s) => parse_big_decimal(s),
+        Document::Number(Number::PosInt(v)) => parse_big_decimal(&v.to_string()),
+        Document::Number(Number::NegInt(v)) => parse_big_decimal(&v.to_string()),
+        Document::Number(Number::Float(f)) => {
+            if !f.is_finite() {
+                return Err(SerdeError::custom(format!(
+                    "cannot coerce non-finite float {f} to bigDecimal"
+                )));
+            }
+            parse_big_decimal(&f.to_string())
+        }
+        other => Err(type_mismatch("bigDecimal", other)),
+    }
+}
+
+/// Parses integral text into a [`BigInteger`], reporting malformed input
+/// as [`SerdeError::InvalidInput`].
+fn parse_big_integer(s: &str) -> Result<BigInteger, SerdeError> {
+    BigInteger::from_str(s).map_err(|e| invalid_input("bigInteger", s, &e))
+}
+
+/// Parses decimal text into a [`BigDecimal`], reporting malformed input
+/// as [`SerdeError::InvalidInput`].
+fn parse_big_decimal(s: &str) -> Result<BigDecimal, SerdeError> {
+    BigDecimal::from_str(s).map_err(|e| invalid_input("bigDecimal", s, &e))
+}
+
+/// Builds an `InvalidInput` error for arbitrary-precision parse
+/// failures.
+fn invalid_input(target: &str, value: &str, err: &dyn std::fmt::Display) -> SerdeError {
+    SerdeError::invalid_input(format!("cannot parse {value:?} as {target}: {err}"))
+}
+
+/// `true` iff `s` is non-empty and consists entirely of ASCII digits.
+fn is_ascii_digits(s: &str) -> bool {
+    !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit())
+}
+
+/// `true` iff `text` is a decimal number [`big_decimal_to_integer_string`]
+/// can read unambiguously:
+/// `'-'? digits ('.' digits)? (('e' | 'E') ('+' | '-')? digits)?`.
+///
+/// This is the same grammar [`BigDecimal`]'s `FromStr` enforces, so a
+/// parsed `BigDecimal` always satisfies it. It is kept as an explicit
+/// precondition check because [`big_decimal_to_integer_string`] would
+/// return a silently wrong value rather than an error on text with no
+/// single numeric reading (`"1.2.3"` would truncate to `"1"`), and its own
+/// guard is a `debug_assert!` that disappears in release builds.
+///
+/// Deliberately *permissive* about leading zeros, matching `FromStr`:
+/// `"00123"` has one reading, and the algorithm normalizes it to `"123"`.
+/// (The stricter RFC 8259 check, which does forbid leading zeros, belongs
+/// on the wire boundary in the JSON codec's serializer — there the
+/// constraint is the output format, not readability.)
+fn is_unambiguous_decimal(text: &str) -> bool {
+    let rest = text.strip_prefix('-').unwrap_or(text);
+
+    let (mantissa, exponent) = match rest.split_once(['e', 'E']) {
+        Some((mantissa, exponent)) => (mantissa, Some(exponent)),
+        None => (rest, None),
+    };
+
+    let mantissa_ok = match mantissa.split_once('.') {
+        Some((int_part, frac_part)) => is_ascii_digits(int_part) && is_ascii_digits(frac_part),
+        None => is_ascii_digits(mantissa),
+    };
+
+    let exponent_ok = match exponent {
+        None => true,
+        Some(exponent) => is_ascii_digits(exponent.strip_prefix(['+', '-']).unwrap_or(exponent)),
+    };
+
+    mantissa_ok && exponent_ok
+}
+
+/// Upper bound on the length of the integer string
+/// [`big_decimal_to_integer_string`] will materialize. A
+/// scientific-notation exponent can request an arbitrarily long run of
+/// trailing zeros; this cap stops a pathological exponent (e.g.
+/// `1e1000000000`) from triggering a huge allocation. ~1M digits is far
+/// beyond any practical value.
+const MAX_INTEGER_DIGITS: usize = 1 << 20;
+
+/// Returns `bd` truncated toward zero as a plain integer string
+/// (`-?[0-9]+`), or `None` if the integer magnitude is too large to
+/// materialize (see [`MAX_INTEGER_DIGITS`]).
+///
+/// Fractional digits are dropped — per the SEP, numeric coercion ignores
+/// loss of precision — and any scientific-notation exponent is expanded
+/// so the integer magnitude is preserved. For example `1.23e10` yields
+/// `"12300000000"`, `1.23e1` yields `"12"`, and `5e-3` yields `"0"`.
+///
+/// # Precondition
+///
+/// `bd` must satisfy [`is_unambiguous_decimal`]. That is implied by
+/// `BigDecimal::from_str` today, which enforces the same grammar, but this
+/// function returns a value rather than an error when given text with no
+/// single numeric reading — so the precondition is checked explicitly by
+/// the caller and only `debug_assert!`ed here.
+fn big_decimal_to_integer_string(bd: &BigDecimal) -> Option<String> {
+    debug_assert!(
+        is_unambiguous_decimal(bd.as_ref()),
+        "big_decimal_to_integer_string requires decimal text, got {:?}",
+        bd.as_ref()
+    );
+    let text = bd.as_ref();
+    let (negative, rest) = match text.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, text),
+    };
+
+    let (mantissa, exp) = match rest.split_once(['e', 'E']) {
+        Some((mantissa, exp_str)) => match exp_str.parse::<i64>() {
+            Ok(exp) => (mantissa, exp),
+            // Exponent doesn't fit in i64: a huge positive exponent is
+            // too large to materialize; a huge negative one rounds to
+            // zero.
+            Err(_) => {
+                return if exp_str.starts_with('-') {
+                    Some("0".to_string())
+                } else {
+                    None
+                }
+            }
+        },
+        None => (rest, 0),
+    };
+
+    let (int_digits, frac_digits) = match mantissa.split_once('.') {
+        Some((int_digits, frac_digits)) => (int_digits, frac_digits),
+        None => (mantissa, ""),
+    };
+
+    // Position of the decimal point from the left of the combined
+    // `int_digits ++ frac_digits` run, shifted right by the exponent.
+    // `saturating_add` keeps a near-`i64::MAX` exponent from overflowing
+    // (it then trips the size cap below).
+    let point = (int_digits.len() as i64).saturating_add(exp);
+
+    let int_part = if point <= 0 {
+        // The whole value is fractional.
+        "0".to_string()
+    } else {
+        let point = point as usize;
+        let mut digits = String::with_capacity(int_digits.len() + frac_digits.len());
+        digits.push_str(int_digits);
+        digits.push_str(frac_digits);
+
+        if point >= digits.len() {
+            // Decimal point at or beyond the last digit: pad with zeros.
+            if point > MAX_INTEGER_DIGITS {
+                return None;
+            }
+            digits.push_str(&"0".repeat(point - digits.len()));
+            digits
+        } else {
+            // Decimal point falls within the digit run; drop the rest.
+            digits.truncate(point);
+            digits
+        }
+    };
+
+    // Normalize leading zeros, keeping at least one digit.
+    let normalized = match int_part.trim_start_matches('0') {
+        "" => "0",
+        trimmed => trimmed,
+    };
+
+    Some(if negative && normalized != "0" {
+        format!("-{normalized}")
+    } else {
+        normalized.to_string()
+    })
 }
 
 impl<'a> ShapeDeserializer for DocumentShapeDeserializer<'a> {
@@ -235,38 +571,38 @@ impl<'a> ShapeDeserializer for DocumentShapeDeserializer<'a> {
     }
 
     fn read_byte(&mut self, _schema: &Schema<'_>) -> Result<i8, SerdeError> {
-        Ok(self.cursor.as_byte()?)
+        coerce_signed::<i8>(self.cursor, "byte")
     }
 
     fn read_short(&mut self, _schema: &Schema<'_>) -> Result<i16, SerdeError> {
-        Ok(self.cursor.as_short()?)
+        coerce_signed::<i16>(self.cursor, "short")
     }
 
     fn read_integer(&mut self, _schema: &Schema<'_>) -> Result<i32, SerdeError> {
-        Ok(self.cursor.as_integer()?)
+        coerce_signed::<i32>(self.cursor, "integer")
     }
 
     fn read_long(&mut self, _schema: &Schema<'_>) -> Result<i64, SerdeError> {
-        Ok(self.cursor.as_long()?)
+        coerce_signed::<i64>(self.cursor, "long")
     }
 
     fn read_float(&mut self, _schema: &Schema<'_>) -> Result<f32, SerdeError> {
-        Ok(self.cursor.as_float()?)
+        coerce_float(self.cursor)
     }
 
     fn read_double(&mut self, _schema: &Schema<'_>) -> Result<f64, SerdeError> {
-        Ok(self.cursor.as_double()?)
+        coerce_double(self.cursor)
     }
 
     fn read_big_integer(&mut self, _schema: &Schema<'_>) -> Result<BigInteger, SerdeError> {
-        // `coerce_big_integer` widens numeric variants into BigInteger
-        // and accepts a native `BigInteger` directly. Mirrors the
-        // schema-side type's previous behavior.
-        Ok(self.cursor.coerce_big_integer()?)
+        // `Document` has no arbitrary-precision variant: `coerce_big_integer`
+        // widens the numeric variants and reverses the legacy string
+        // representation that `DocumentShapeSerializer` writes.
+        coerce_big_integer(self.cursor)
     }
 
     fn read_big_decimal(&mut self, _schema: &Schema<'_>) -> Result<BigDecimal, SerdeError> {
-        Ok(self.cursor.coerce_big_decimal()?)
+        coerce_big_decimal(self.cursor)
     }
 
     fn read_string(&mut self, _schema: &Schema<'_>) -> Result<String, SerdeError> {
@@ -277,49 +613,52 @@ impl<'a> ShapeDeserializer for DocumentShapeDeserializer<'a> {
     }
 
     fn read_blob(&mut self, _schema: &Schema<'_>) -> Result<Blob, SerdeError> {
-        // Native variant — return directly.
-        if let Document::Blob(b) = self.cursor {
-            return Ok(Blob::new(b.clone()));
-        }
-        // Settings-driven coercion: e.g. JSON encodes blobs as
-        // base64-encoded strings on the wire, and the codec's
-        // [`DocumentSettings::coerce_string_to_blob`] decodes them.
-        if let (Document::String(s), Some(settings)) = (self.cursor, &self.settings) {
-            return settings
+        // `Document` has no blob variant. The legacy representation of a
+        // `blob` shape is a base64-encoded string.
+        //
+        // With settings attached, the codec decides the decoding (e.g.
+        // the JSON codec's `coerce_string_to_blob`). With no settings —
+        // the case for a document built by `DocumentShapeSerializer`
+        // outside a protocol context — fall back to standard base64,
+        // which is exactly what the serializer wrote.
+        match (self.cursor, &self.settings) {
+            (Document::String(s), Some(settings)) => settings
                 .coerce_string_to_blob(s)
                 .map(Blob::new)
-                .map_err(SerdeError::from);
+                .map_err(SerdeError::from),
+            (Document::String(s), None) => aws_smithy_types::base64::decode(s)
+                .map(Blob::new)
+                .map_err(|e| {
+                    SerdeError::custom(format!("cannot base64-decode string as blob: {e}"))
+                }),
+            (other, _) => Err(type_mismatch("blob", other)),
         }
-        Err(type_mismatch("blob", self.cursor))
     }
 
     fn read_timestamp(&mut self, _schema: &Schema<'_>) -> Result<DateTime, SerdeError> {
-        // Native variant — return directly.
-        if let Document::Timestamp(ts) = self.cursor {
-            return Ok(*ts);
+        // `Document` has no timestamp variant. The legacy representation
+        // written by `DocumentShapeSerializer` is epoch seconds as a
+        // number; a document parsed off a JSON-family wire may instead
+        // hold a formatted string.
+        //
+        // With settings attached, the codec's `DocumentSettings` supplies
+        // the format and the right `coerce_*_to_timestamp` is dispatched
+        // by source variant. With no settings, fall back to the
+        // deterministic defaults: epoch seconds for a number, RFC-3339
+        // for a string.
+        match (self.cursor, &self.settings) {
+            (Document::Number(n), Some(settings)) => settings
+                .coerce_number_to_timestamp(n)
+                .map_err(SerdeError::from),
+            (Document::Number(n), None) => number_to_timestamp(n),
+            (Document::String(s), Some(settings)) => settings
+                .coerce_string_to_timestamp(s)
+                .map_err(SerdeError::from),
+            (Document::String(s), None) => DateTime::from_str(s, Format::DateTime).map_err(|e| {
+                SerdeError::custom(format!("cannot parse string as a date-time timestamp: {e}"))
+            }),
+            (other, _) => Err(type_mismatch("timestamp", other)),
         }
-        // Settings-driven coercion: JSON typically encodes timestamps
-        // as numbers (epoch-seconds) or strings (date-time / http-date),
-        // depending on the codec's default format. The codec's
-        // [`DocumentSettings`] supplies the format; the right
-        // [`DocumentSettings::coerce_*_to_timestamp`] is dispatched
-        // by source variant.
-        if let Some(settings) = &self.settings {
-            match self.cursor {
-                Document::String(s) => {
-                    return settings
-                        .coerce_string_to_timestamp(s)
-                        .map_err(SerdeError::from);
-                }
-                Document::Number(n) => {
-                    return settings
-                        .coerce_number_to_timestamp(n)
-                        .map_err(SerdeError::from);
-                }
-                _ => {}
-            }
-        }
-        Err(type_mismatch("timestamp", self.cursor))
     }
 
     fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document, SerdeError> {
@@ -349,7 +688,6 @@ mod tests {
     use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer};
     use crate::{prelude, shape_id, Schema, ShapeId, ShapeType};
 
-    use aws_smithy_types::document::DocumentObject;
     use aws_smithy_types::Number;
 
     // -- Test schemas ----------------------------------------------------
@@ -442,21 +780,104 @@ mod tests {
     }
 
     #[test]
-    fn read_blob_returns_value_for_native_blob() {
-        let doc = Document::Blob(vec![1, 2, 3]);
+    fn read_blob_decodes_base64_string_without_settings() {
+        // `Document` has no blob variant: the legacy representation is a
+        // base64 string, and with no settings attached the deserializer
+        // decodes it with standard base64 — exactly what
+        // `DocumentShapeSerializer::write_blob` wrote.
+        let doc = Document::String("YWJjZA==".to_string());
         let mut deser = DocumentShapeDeserializer::new(&doc);
         let blob = deser.read_blob(&prelude::BLOB).unwrap();
-        assert_eq!(blob.as_ref(), &[1u8, 2, 3]);
+        assert_eq!(blob.as_ref(), b"abcd");
     }
 
     #[test]
-    fn read_blob_on_string_errors_without_settings() {
-        // The deserializer no longer consults DocumentSettings for
-        // base64-coercion — that lives on DiscriminatedDocument now.
-        let doc = Document::String("YWJjZA==".to_string());
+    fn read_blob_on_malformed_base64_errors() {
+        let doc = Document::String("not base64!!!".to_string());
+        let mut deser = DocumentShapeDeserializer::new(&doc);
+        let err = deser.read_blob(&prelude::BLOB).unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("base64"), "unexpected error message: {msg}");
+    }
+
+    #[test]
+    fn read_blob_on_non_string_errors() {
+        let doc = Document::Number(Number::PosInt(1));
         let mut deser = DocumentShapeDeserializer::new(&doc);
         let err = deser.read_blob(&prelude::BLOB).unwrap_err();
         assert!(matches!(err, SerdeError::TypeMismatch { .. }));
+    }
+
+    #[test]
+    fn read_timestamp_defaults_to_epoch_seconds_without_settings() {
+        let doc = Document::Number(Number::PosInt(1234));
+        let mut deser = DocumentShapeDeserializer::new(&doc);
+        assert_eq!(
+            deser.read_timestamp(&prelude::TIMESTAMP).unwrap(),
+            DateTime::from_secs(1234)
+        );
+
+        let doc = Document::Number(Number::NegInt(-9));
+        let mut deser = DocumentShapeDeserializer::new(&doc);
+        assert_eq!(
+            deser.read_timestamp(&prelude::TIMESTAMP).unwrap(),
+            DateTime::from_secs(-9)
+        );
+    }
+
+    #[test]
+    fn read_timestamp_retains_fractional_seconds() {
+        let doc = Document::Number(Number::Float(1234.5));
+        let mut deser = DocumentShapeDeserializer::new(&doc);
+        assert_eq!(
+            deser.read_timestamp(&prelude::TIMESTAMP).unwrap(),
+            DateTime::from_secs_f64(1234.5)
+        );
+    }
+
+    #[test]
+    fn read_timestamp_parses_date_time_string_without_settings() {
+        let doc = Document::String("1970-01-01T00:00:00Z".to_string());
+        let mut deser = DocumentShapeDeserializer::new(&doc);
+        assert_eq!(
+            deser.read_timestamp(&prelude::TIMESTAMP).unwrap(),
+            DateTime::from_secs(0)
+        );
+    }
+
+    #[test]
+    fn read_timestamp_on_non_coercible_variant_errors() {
+        let doc = Document::Bool(true);
+        let mut deser = DocumentShapeDeserializer::new(&doc);
+        let err = deser.read_timestamp(&prelude::TIMESTAMP).unwrap_err();
+        assert!(matches!(err, SerdeError::TypeMismatch { .. }));
+    }
+
+    #[test]
+    fn read_big_integer_and_decimal_reverse_the_string_representation() {
+        // The legacy representation of an arbitrary-precision shape is
+        // its numeric text, so precision beyond f64's range survives.
+        let big = "12345678901234567890123456789";
+        let doc = Document::String(big.to_string());
+        let mut deser = DocumentShapeDeserializer::new(&doc);
+        assert_eq!(
+            deser
+                .read_big_integer(&prelude::BIG_INTEGER)
+                .unwrap()
+                .as_ref(),
+            big
+        );
+
+        let dec = "12345678901234567890123456789.25";
+        let doc = Document::String(dec.to_string());
+        let mut deser = DocumentShapeDeserializer::new(&doc);
+        assert_eq!(
+            deser
+                .read_big_decimal(&prelude::BIG_DECIMAL)
+                .unwrap()
+                .as_ref(),
+            dec
+        );
     }
 
     #[test]
@@ -495,7 +916,7 @@ mod tests {
 
     #[test]
     fn read_map_iterates_entries() {
-        let doc = Document::Object(DocumentObject::from([
+        let doc = Document::Object(HashMap::from([
             ("k1".to_string(), Document::String("v1".to_string())),
             ("k2".to_string(), Document::String("v2".to_string())),
         ]));
@@ -529,7 +950,7 @@ mod tests {
 
     #[test]
     fn read_struct_with_consumer_dispatch() {
-        let doc = Document::Object(DocumentObject::from([
+        let doc = Document::Object(HashMap::from([
             ("name".to_string(), Document::String("Alex".to_string())),
             ("age".to_string(), Document::Number(Number::PosInt(30))),
         ]));
@@ -547,7 +968,7 @@ mod tests {
     #[test]
     fn read_struct_with_missing_optional_member() {
         // Document only has `name`; `age` is missing.
-        let doc = Document::Object(DocumentObject::from([(
+        let doc = Document::Object(HashMap::from([(
             "name".to_string(),
             Document::String("Sam".to_string()),
         )]));
@@ -564,7 +985,7 @@ mod tests {
 
     #[test]
     fn read_struct_ignores_unknown_members() {
-        let doc = Document::Object(DocumentObject::from([
+        let doc = Document::Object(HashMap::from([
             ("name".to_string(), Document::String("Joe".to_string())),
             (
                 "unknown_field".to_string(),
@@ -602,5 +1023,415 @@ mod tests {
         assert_eq!(restored, original);
         // discriminator is preserved at the wrapper level
         assert_eq!(doc.discriminator(), Some("smithy.example#Person"));
+    }
+
+    // -- Numeric coercion (moved off `Document`) -------------------------
+    //
+    // These exercise the private coercion helpers in this module through
+    // the `ShapeDeserializer` surface. The logic used to live on
+    // `Document` itself as additive `as_byte` / `coerce_big_integer`
+    // accessors; `Document` is now exactly the released type, so the
+    // coercion — and its coverage — lives here.
+
+    /// Convenience: build a deserializer over a numeric document.
+    fn num(n: Number) -> Document {
+        Document::Number(n)
+    }
+
+    #[test]
+    fn read_signed_integers_coerce_across_bounded_integer_sources() {
+        let doc = num(Number::PosInt(42));
+        assert_eq!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_byte(&prelude::BYTE)
+                .unwrap(),
+            42
+        );
+        let doc = num(Number::NegInt(-42));
+        assert_eq!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_byte(&prelude::BYTE)
+                .unwrap(),
+            -42
+        );
+
+        let doc = num(Number::PosInt(1234));
+        assert_eq!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_short(&prelude::SHORT)
+                .unwrap(),
+            1234
+        );
+
+        let doc = num(Number::PosInt(i32::MAX as u64));
+        assert_eq!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_integer(&prelude::INTEGER)
+                .unwrap(),
+            i32::MAX
+        );
+        let doc = num(Number::NegInt(i32::MIN as i64));
+        assert_eq!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_integer(&prelude::INTEGER)
+                .unwrap(),
+            i32::MIN
+        );
+
+        let doc = num(Number::PosInt(i64::MAX as u64));
+        assert_eq!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_long(&prelude::LONG)
+                .unwrap(),
+            i64::MAX
+        );
+    }
+
+    #[test]
+    fn read_byte_overflow_populates_target_and_value() {
+        let doc = num(Number::PosInt(200));
+        let err = DocumentShapeDeserializer::new(&doc)
+            .read_byte(&prelude::BYTE)
+            .unwrap_err();
+        match err {
+            SerdeError::NumericCoercionOverflow { target, value } => {
+                assert_eq!(target, "byte");
+                assert_eq!(value, "200");
+            }
+            other => panic!("expected NumericCoercionOverflow, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_signed_integers_overflow_at_the_edges() {
+        // One below i32::MIN: `-(i32::MAX + 1) == i32::MIN` exactly, so
+        // we need one further to overflow.
+        let doc = num(Number::NegInt(i64::from(i32::MIN) - 1));
+        assert!(matches!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_integer(&prelude::INTEGER)
+                .unwrap_err(),
+            SerdeError::NumericCoercionOverflow { .. }
+        ));
+
+        let doc = num(Number::PosInt(u64::MAX));
+        assert!(matches!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_long(&prelude::LONG)
+                .unwrap_err(),
+            SerdeError::NumericCoercionOverflow { .. }
+        ));
+    }
+
+    #[test]
+    fn read_byte_on_non_numeric_is_type_mismatch() {
+        let doc = Document::Bool(true);
+        assert!(matches!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_byte(&prelude::BYTE)
+                .unwrap_err(),
+            SerdeError::TypeMismatch { .. }
+        ));
+    }
+
+    #[test]
+    fn integer_reads_reject_float_sources_even_when_integral() {
+        // A Float source must NOT silently truncate into an integer read,
+        // even with a zero fractional part. Read a double and cast if
+        // that is what the caller wants.
+        for value in [42.0_f64, 42.7_f64] {
+            let doc = num(Number::Float(value));
+            assert!(matches!(
+                DocumentShapeDeserializer::new(&doc)
+                    .read_byte(&prelude::BYTE)
+                    .unwrap_err(),
+                SerdeError::TypeMismatch { .. }
+            ));
+        }
+
+        let doc = num(Number::Float(1.0));
+        assert!(matches!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_short(&prelude::SHORT)
+                .unwrap_err(),
+            SerdeError::TypeMismatch { .. }
+        ));
+        assert!(matches!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_integer(&prelude::INTEGER)
+                .unwrap_err(),
+            SerdeError::TypeMismatch { .. }
+        ));
+        assert!(matches!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_long(&prelude::LONG)
+                .unwrap_err(),
+            SerdeError::TypeMismatch { .. }
+        ));
+        assert!(matches!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_big_integer(&prelude::BIG_INTEGER)
+                .unwrap_err(),
+            SerdeError::TypeMismatch { .. }
+        ));
+    }
+
+    #[test]
+    fn read_double_and_float_widen_from_integer_sources() {
+        // Integer → float IS allowed: the integer value is exactly
+        // representable. Only the reverse crossover is forbidden.
+        let doc = num(Number::PosInt(42));
+        assert_eq!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_double(&prelude::DOUBLE)
+                .unwrap(),
+            42.0
+        );
+        assert_eq!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_float(&prelude::FLOAT)
+                .unwrap(),
+            42.0_f32
+        );
+
+        let doc = num(Number::NegInt(-42));
+        assert_eq!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_double(&prelude::DOUBLE)
+                .unwrap(),
+            -42.0
+        );
+
+        let doc = num(Number::Float(1.5));
+        assert_eq!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_float(&prelude::FLOAT)
+                .unwrap(),
+            1.5_f32
+        );
+    }
+
+    #[test]
+    fn read_double_carries_non_finite_floats_intact() {
+        // The codec layer owns wire-format rendering of NaN / Infinity;
+        // the Document path must simply not mangle them.
+        let doc = num(Number::Float(f64::NAN));
+        assert!(DocumentShapeDeserializer::new(&doc)
+            .read_double(&prelude::DOUBLE)
+            .unwrap()
+            .is_nan());
+
+        let doc = num(Number::Float(f64::INFINITY));
+        assert_eq!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_double(&prelude::DOUBLE)
+                .unwrap(),
+            f64::INFINITY
+        );
+
+        let doc = num(Number::Float(f64::NEG_INFINITY));
+        assert_eq!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_double(&prelude::DOUBLE)
+                .unwrap(),
+            f64::NEG_INFINITY
+        );
+    }
+
+    #[test]
+    fn read_big_integer_truncates_a_decimal_string_as_text() {
+        // Truncation happens *as a string*, NOT via f64 (which would
+        // lose precision past 2^53).
+        let doc = Document::String("12345678901234567890.123".to_owned());
+        assert_eq!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_big_integer(&prelude::BIG_INTEGER)
+                .unwrap()
+                .as_ref(),
+            "12345678901234567890"
+        );
+    }
+
+    #[test]
+    fn read_big_integer_expands_scientific_notation() {
+        // Splitting at the first 'e' would return "1" for "1.23e10" —
+        // off by ten orders of magnitude.
+        let doc = Document::String("1.23e10".to_owned());
+        assert_eq!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_big_integer(&prelude::BIG_INTEGER)
+                .unwrap()
+                .as_ref(),
+            "12300000000"
+        );
+
+        let doc = Document::String("1e30".to_owned());
+        assert_eq!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_big_integer(&prelude::BIG_INTEGER)
+                .unwrap()
+                .as_ref(),
+            "1000000000000000000000000000000"
+        );
+    }
+
+    #[test]
+    fn read_big_integer_errors_on_unmaterializable_exponent() {
+        // A pathological exponent must error, not allocate gigabytes or
+        // return a wrong value.
+        let doc = Document::String("1e1000000000".to_owned());
+        let err = DocumentShapeDeserializer::new(&doc)
+            .read_big_integer(&prelude::BIG_INTEGER)
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("too large"),
+            "expected a 'too large' error, got: {err}"
+        );
+    }
+
+    #[test]
+    fn read_big_integer_rejects_non_numeric_text() {
+        let doc = Document::String("not a number".to_owned());
+        assert!(matches!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_big_integer(&prelude::BIG_INTEGER)
+                .unwrap_err(),
+            SerdeError::InvalidInput { .. }
+        ));
+    }
+
+    #[test]
+    fn read_big_numbers_coerce_from_integer_sources() {
+        let doc = num(Number::PosInt(7));
+        assert_eq!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_big_integer(&prelude::BIG_INTEGER)
+                .unwrap()
+                .as_ref(),
+            "7"
+        );
+        assert_eq!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_big_decimal(&prelude::BIG_DECIMAL)
+                .unwrap()
+                .as_ref(),
+            "7"
+        );
+
+        let doc = num(Number::NegInt(-7));
+        assert_eq!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_big_decimal(&prelude::BIG_DECIMAL)
+                .unwrap()
+                .as_ref(),
+            "-7"
+        );
+    }
+
+    #[test]
+    fn read_big_decimal_rejects_non_finite_floats() {
+        // Distinct from `read_big_integer`: Float→BigDecimal is accepted
+        // for finite values (a string-format conversion), but non-finite
+        // values have no decimal form.
+        let doc = num(Number::Float(f64::INFINITY));
+        let err = DocumentShapeDeserializer::new(&doc)
+            .read_big_decimal(&prelude::BIG_DECIMAL)
+            .unwrap_err();
+        match err {
+            SerdeError::Custom { message } => assert!(message.contains("non-finite")),
+            other => panic!("expected Custom non-finite error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn big_number_reads_reject_structural_variants() {
+        let doc = Document::Array(vec![]);
+        assert!(matches!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_big_integer(&prelude::BIG_INTEGER)
+                .unwrap_err(),
+            SerdeError::TypeMismatch { .. }
+        ));
+        assert!(matches!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_big_decimal(&prelude::BIG_DECIMAL)
+                .unwrap_err(),
+            SerdeError::TypeMismatch { .. }
+        ));
+        assert!(matches!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_double(&prelude::DOUBLE)
+                .unwrap_err(),
+            SerdeError::TypeMismatch { .. }
+        ));
+    }
+
+    #[test]
+    fn big_integer_legacy_string_round_trips() {
+        // Full circle: BigInteger -> legacy String representation ->
+        // BigInteger.
+        let bi = BigInteger::from_str("98765432109876543210").unwrap();
+        let doc = Document::String(bi.as_ref().to_owned());
+        assert_eq!(
+            DocumentShapeDeserializer::new(&doc)
+                .read_big_integer(&prelude::BIG_INTEGER)
+                .unwrap(),
+            bi
+        );
+    }
+
+    // -- big_decimal_to_integer_string (moved off `BigDecimal`) ----------
+
+    #[test]
+    fn big_decimal_to_integer_string_truncates_and_expands() {
+        // (input, expected truncated-toward-zero integer string)
+        let cases = [
+            ("0", "0"),
+            ("123", "123"),
+            ("123.99", "123"), // fractional digits dropped
+            ("-123.99", "-123"),
+            ("0.5", "0"),
+            ("-0.5", "0"),              // negative zero normalizes to "0"
+            ("1.23e10", "12300000000"), // exponent expanded, magnitude kept
+            ("1.23e1", "12"),           // 12.3 -> 12
+            ("1.5e1", "15"),
+            ("1e3", "1000"),
+            ("5e-3", "0"), // 0.005 -> 0
+            ("-1.23e10", "-12300000000"),
+            ("10.0", "10"),
+            ("00123", "123"),           // leading zeros normalized
+            ("1.23E10", "12300000000"), // uppercase E
+        ];
+        for (input, expected) in cases {
+            let bd = BigDecimal::from_str(input).unwrap();
+            assert_eq!(
+                big_decimal_to_integer_string(&bd).as_deref(),
+                Some(expected),
+                "big_decimal_to_integer_string({input:?})"
+            );
+        }
+    }
+
+    #[test]
+    fn big_decimal_to_integer_string_guards_pathological_exponent() {
+        // Exponent fits in i64 but is absurdly large: refuse to
+        // materialize rather than allocating ~10^9 bytes.
+        assert_eq!(
+            big_decimal_to_integer_string(&BigDecimal::from_str("1e1000000000").unwrap()),
+            None
+        );
+        // Exponent overflows i64 entirely.
+        assert_eq!(
+            big_decimal_to_integer_string(&BigDecimal::from_str("1e99999999999999999999").unwrap()),
+            None
+        );
+        // A huge *negative* exponent rounds to zero with no allocation.
+        assert_eq!(
+            big_decimal_to_integer_string(
+                &BigDecimal::from_str("1e-99999999999999999999").unwrap()
+            )
+            .as_deref(),
+            Some("0")
+        );
     }
 }

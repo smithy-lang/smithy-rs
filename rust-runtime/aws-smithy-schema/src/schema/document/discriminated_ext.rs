@@ -139,20 +139,18 @@ impl DiscriminatedDocumentExt for DiscriminatedDocument {
         // The number-disambiguation logic delegates to the private
         // helper that drives `Document::shape_type`. Reads through the
         // `document()` accessor for consistency with `as_shape`.
+        // `Document` carries no schema, so a `blob`, `timestamp`, or
+        // arbitrary-precision number is reported as the variant that
+        // actually holds it (`String` / `Number`). Recovering the Smithy
+        // type of such a value requires a schema — see
+        // `DiscriminatedDocumentExt::as_shape`.
         match self.document() {
             Doc::Null => ShapeType::Document,
             Doc::Bool(_) => ShapeType::Boolean,
             Doc::Number(n) => number_shape_type(n),
-            Doc::Blob(_) => ShapeType::Blob,
-            Doc::Timestamp(_) => ShapeType::Timestamp,
-            Doc::BigInteger(_) => ShapeType::BigInteger,
-            Doc::BigDecimal(_) => ShapeType::BigDecimal,
             Doc::String(_) => ShapeType::String,
             Doc::Array(_) => ShapeType::List,
             Doc::Object(_) => ShapeType::Map,
-            // Future variants on the `#[non_exhaustive]` enum fall
-            // through to a generic Document type.
-            _ => ShapeType::Document,
         }
     }
 }
@@ -224,7 +222,6 @@ mod tests {
     //! All tests use `Schema<'static>` because the schema-crate
     //! prelude and codegen-emitted schemas are `'static`. The trait
     //! method signatures accept any lifetime via `&Schema<'_>`.
-    use aws_smithy_types::DateTime;
 
     use super::*;
     use crate::serde::{SerdeError, ShapeSerializer};
@@ -326,8 +323,7 @@ mod tests {
         // base scalar variants (no schema-side intermediate). Confirms
         // as_shape works on documents that didn't come from
         // `from_struct`.
-        use aws_smithy_types::document::DocumentObject;
-        let mut map = DocumentObject::new();
+        let mut map = std::collections::HashMap::new();
         map.insert(
             "name".to_string(),
             aws_smithy_types::Document::String("Joe".into()),
@@ -370,34 +366,7 @@ mod tests {
         }
     }
 
-    #[test]
-    fn shape_type_reports_each_extended_variant() {
-        // The extended variants (Blob, Timestamp, BigInteger,
-        // BigDecimal) are matched directly by the impl.
-        use aws_smithy_types::{BigDecimal, BigInteger, Document};
-        use std::str::FromStr;
-        let cases: [(Document, ShapeType); 4] = [
-            (Document::Blob(vec![1, 2, 3]), ShapeType::Blob),
-            (
-                Document::Timestamp(DateTime::from_secs(0)),
-                ShapeType::Timestamp,
-            ),
-            (
-                Document::BigInteger(BigInteger::from_str("1").unwrap()),
-                ShapeType::BigInteger,
-            ),
-            (
-                Document::BigDecimal(BigDecimal::from_str("1.0").unwrap()),
-                ShapeType::BigDecimal,
-            ),
-        ];
-        for (doc, expected) in cases {
-            let wrapped = DiscriminatedDocument::new(doc);
-            assert_eq!(wrapped.shape_type(), expected);
-        }
-    }
-
-    // -- Extended variants round-trip end-to-end ------------------------
+    // -- Blob / timestamp legacy representation round-trips --------------
 
     #[test]
     fn from_struct_with_blob_member_round_trips() {
@@ -429,15 +398,21 @@ mod tests {
         .expect("from_struct should succeed for blob members");
         assert_eq!(doc.discriminator(), Some("smithy.example#Blobby"));
         let map = doc.document().as_object().unwrap();
+        // The legacy representation of a blob is a base64 string.
         match map.get("data").unwrap() {
-            aws_smithy_types::Document::Blob(b) => assert_eq!(b.as_slice(), b"raw"),
-            other => panic!("expected Blob in 'data' field, got {other:?}"),
+            aws_smithy_types::Document::String(s) => assert_eq!(s, "cmF3"),
+            other => panic!("expected a base64 String in 'data' field, got {other:?}"),
         }
+        // And the member reverses through the schema-driven read path.
+        let member = DiscriminatedDocument::new(map.get("data").unwrap().clone());
+        assert_eq!(member.as_blob().unwrap().as_ref(), b"raw");
     }
 
     #[test]
     fn as_shape_on_top_level_blob_document() {
-        let doc = DiscriminatedDocument::new(aws_smithy_types::Document::Blob(b"x".to_vec()));
+        // A top-level blob rides the legacy base64-string
+        // representation; `read_blob` reverses it using the schema.
+        let doc = DiscriminatedDocument::new(aws_smithy_types::Document::String("eA==".to_owned()));
         let blob = doc
             .as_shape(|deser| deser.read_blob(&prelude::BLOB))
             .expect("as_shape on a Blob document should succeed");

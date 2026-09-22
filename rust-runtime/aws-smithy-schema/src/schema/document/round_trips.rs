@@ -8,9 +8,10 @@
 //! Each test follows the same pattern:
 //!
 //! 1. Construct a typed value.
-//! 2. Serialize it to a [`Document`] via [`Document::from_struct`].
+//! 2. Serialize it to a [`Document`] via
+//!    `DiscriminatedDocumentExt::from_struct`.
 //! 3. Deserialize the [`Document`] back to the same typed value via
-//!    [`Document::as_shape`].
+//!    `DiscriminatedDocumentExt::as_shape`.
 //! 4. Assert structural equality between the original and the restored
 //!    value.
 //!

@@ -34,7 +34,7 @@ fn registry_deserialize_document_round_trip() {
     // The map keys must match the Smithy member names (the schema generator
     // uses the original Smithy names as `member_name`, not the snake_case Rust
     // field names).
-    let mut members = aws_smithy_types::document::DocumentObject::new();
+    let mut members = std::collections::HashMap::new();
     members.insert(
         "ReadCapacityUnits".to_owned(),
         Document::Number(Number::Float(1.5)),
@@ -69,10 +69,8 @@ fn registry_deserialize_document_round_trip() {
 #[test]
 fn registry_returns_none_for_unregistered_shape() {
     // Unknown shape id → registry has no entry → deserialize_document errors.
-    let doc = DiscriminatedDocument::new(Document::Object(
-        aws_smithy_types::document::DocumentObject::new(),
-    ))
-    .with_discriminator("com.example#NotARealShape");
+    let doc = DiscriminatedDocument::new(Document::Object(std::collections::HashMap::new()))
+        .with_discriminator("com.example#NotARealShape");
 
     let result = Client::registry().deserialize_document(&doc);
     assert!(result.is_err(), "unregistered shape should error");
@@ -81,9 +79,7 @@ fn registry_returns_none_for_unregistered_shape() {
 #[test]
 fn registry_errors_when_discriminator_missing() {
     // No discriminator → deserialize_document errors.
-    let doc = DiscriminatedDocument::new(Document::Object(
-        aws_smithy_types::document::DocumentObject::new(),
-    ));
+    let doc = DiscriminatedDocument::new(Document::Object(std::collections::HashMap::new()));
 
     let result = Client::registry().deserialize_document(&doc);
     assert!(
@@ -151,7 +147,7 @@ fn error_registry_deserialize_document_round_trip() {
     // Build a Document representing a ConditionalCheckFailedException with
     // the Smithy-modeled `Message` member set. Members come from the schema's
     // member_name (Smithy convention), not the snake_case Rust field name.
-    let mut members = aws_smithy_types::document::DocumentObject::new();
+    let mut members = std::collections::HashMap::new();
     members.insert(
         "message".to_owned(),
         Document::String("the conditional request failed".to_owned()),

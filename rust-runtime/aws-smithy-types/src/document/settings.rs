@@ -8,13 +8,14 @@
 //! [`DocumentSettings`] is implemented by codec crates (e.g.
 //! `aws-smithy-json`, `aws-smithy-cbor`) to teach
 //! [`DiscriminatedDocument`](super::DiscriminatedDocument) how to
-//! coerce JSON-style stringly-typed values back into their native
-//! Smithy variants — most importantly base64-encoded blobs and
-//! string-formatted timestamps. Wire formats that have native
-//! representations for these types (e.g. CBOR major type 2 for byte
-//! strings, CBOR tag 1 for timestamps) leave the trait methods at
-//! their defaults and let the format-aware accessors return the
-//! variant directly.
+//! interpret the stringly- and numerically-typed values that carry
+//! Smithy types [`Document`](super::Document) has no native variant
+//! for — most importantly base64-encoded blobs and string- or
+//! number-formatted timestamps. A protocol that follows the
+//! conventional encodings can leave every method at its default: the
+//! format-aware accessors then use deterministic defaults (standard
+//! base64 for blobs, epoch seconds for numeric timestamps, RFC-3339 for
+//! string timestamps).
 //!
 //! See the type-level docs on [`DiscriminatedDocument`](super::DiscriminatedDocument::as_blob)
 //! for how these methods feed into the `as_blob` / `as_timestamp`
@@ -52,14 +53,16 @@ pub trait DocumentSettings: std::fmt::Debug + Send + Sync {
     /// Coerces a string value to a blob.
     ///
     /// JSON-style protocols transmit blobs as base64-encoded strings
-    /// and override this method to decode. Protocols with a native
-    /// blob representation (CBOR, Sparrowhawk) leave this at the
-    /// default, which returns
-    /// [`DocumentError::UnsupportedOperation`] — those protocols
-    /// produce `Document::Blob(_)` directly during deserialization,
-    /// so the type-aware path on
+    /// and override this method to decode. A protocol whose encoding of
+    /// a blob differs from standard base64 overrides it to say so; one
+    /// that cannot represent a blob in a string at all leaves this at
+    /// the default, which returns
+    /// [`DocumentError::UnsupportedOperation`].
+    ///
+    /// When no settings are attached at all,
     /// [`DiscriminatedDocument::as_blob`](super::DiscriminatedDocument::as_blob)
-    /// returns the bytes without ever calling this method.
+    /// falls back to a standard base64 decode rather than calling this
+    /// method.
     fn coerce_string_to_blob(&self, s: &str) -> Result<Vec<u8>, DocumentError> {
         let _ = s;
         Err(DocumentError::unsupported(format!(
@@ -70,10 +73,10 @@ pub trait DocumentSettings: std::fmt::Debug + Send + Sync {
 
     /// Coerces a string value to a timestamp.
     ///
-    /// Used by JSON-style protocols when the configured timestamp
-    /// format encodes as a string (e.g. `date-time`, `http-date`).
-    /// Protocols that transmit timestamps only as numbers (epoch
-    /// seconds) or natively (CBOR's tag 1) leave this at the default.
+    /// Used by protocols whose configured timestamp format encodes as a
+    /// string (e.g. `http-date`, or `date-time` when it differs from
+    /// the RFC-3339 default). Protocols that transmit timestamps only
+    /// as numbers (epoch seconds) leave this at the default.
     fn coerce_string_to_timestamp(&self, s: &str) -> Result<DateTime, DocumentError> {
         let _ = s;
         Err(DocumentError::unsupported(format!(
@@ -84,9 +87,9 @@ pub trait DocumentSettings: std::fmt::Debug + Send + Sync {
 
     /// Coerces a numeric value to a timestamp.
     ///
-    /// Used by JSON-style protocols when the configured timestamp
-    /// format is `epoch-seconds`. Protocols that transmit timestamps
-    /// only as strings, or natively, leave this at the default.
+    /// Used by protocols whose numeric timestamp encoding differs from
+    /// plain `epoch-seconds`. Protocols that transmit timestamps only
+    /// as strings leave this at the default.
     fn coerce_number_to_timestamp(&self, n: &Number) -> Result<DateTime, DocumentError> {
         let _ = n;
         Err(DocumentError::unsupported(format!(

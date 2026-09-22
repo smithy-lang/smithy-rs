@@ -34,7 +34,8 @@
 //! it in the appropriate [`Document`] variant, and commits the wrapper
 //! to the parent frame (or to the root slot if the stack is now empty).
 
-use aws_smithy_types::document::DocumentObject;
+use std::collections::HashMap;
+
 use aws_smithy_types::{BigDecimal, BigInteger, DateTime, DiscriminatedDocument, Document, Number};
 
 use crate::serde::{SerdeError, SerializableStruct, ShapeSerializer};
@@ -103,11 +104,11 @@ pub struct DocumentShapeSerializer {
 #[derive(Debug)]
 enum Frame {
     Struct {
-        members: DocumentObject,
+        members: HashMap<String, Document>,
     },
     List(Vec<Document>),
     Map {
-        entries: DocumentObject,
+        entries: HashMap<String, Document>,
         /// `Some(k)` after a key has been written and we're awaiting the
         /// matching value; `None` when we are at an entry boundary
         /// (next write becomes the next key).
@@ -249,15 +250,8 @@ fn shape_kind_name(d: &Document) -> &'static str {
         Document::Bool(_) => "boolean",
         Document::Number(_) => "number",
         Document::String(_) => "string",
-        Document::Blob(_) => "blob",
-        Document::Timestamp(_) => "timestamp",
-        Document::BigInteger(_) => "bigInteger",
-        Document::BigDecimal(_) => "bigDecimal",
         Document::Array(_) => "list",
         Document::Object(_) => "map",
-        // The legacy enum is `#[non_exhaustive]`. Future variants are
-        // surfaced as a generic kind name for diagnostics.
-        _ => "unknown",
     }
 }
 
@@ -272,7 +266,7 @@ impl ShapeSerializer for DocumentShapeSerializer {
         // a discriminator — only the top-level inherent write_struct
         // entry point does that (see the type-level docs).
         self.stack.push(Frame::Struct {
-            members: DocumentObject::new(),
+            members: HashMap::new(),
         });
         value.serialize_members(self)?;
         let frame = self.stack.pop().expect("frame just pushed");
@@ -312,7 +306,7 @@ impl ShapeSerializer for DocumentShapeSerializer {
         write_entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         self.stack.push(Frame::Map {
-            entries: DocumentObject::new(),
+            entries: HashMap::new(),
             pending_key: None,
         });
         write_entries(self)?;
@@ -370,7 +364,11 @@ impl ShapeSerializer for DocumentShapeSerializer {
         schema: &Schema<'_>,
         value: &BigInteger,
     ) -> Result<(), SerdeError> {
-        self.commit_value(schema, Document::BigInteger(value.clone()))
+        // `Document` has no arbitrary-precision variant. The legacy
+        // representation is the value's numeric text, which
+        // `DocumentShapeDeserializer::read_big_integer` reverses on the
+        // way back in.
+        self.commit_value(schema, Document::String(value.as_ref().to_string()))
     }
 
     fn write_big_decimal(
@@ -378,7 +376,9 @@ impl ShapeSerializer for DocumentShapeSerializer {
         schema: &Schema<'_>,
         value: &BigDecimal,
     ) -> Result<(), SerdeError> {
-        self.commit_value(schema, Document::BigDecimal(value.clone()))
+        // See `write_big_integer`: numeric text, reversed by
+        // `DocumentShapeDeserializer::read_big_decimal`.
+        self.commit_value(schema, Document::String(value.as_ref().to_string()))
     }
 
     fn write_string(&mut self, schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
@@ -390,13 +390,24 @@ impl ShapeSerializer for DocumentShapeSerializer {
         schema: &Schema<'_>,
         value: aws_smithy_types::Blob,
     ) -> Result<(), SerdeError> {
-        // `into_inner` consumes the `Blob`, so this no longer copies the payload
-        // when the underlying `Bytes` uniquely owns its allocation.
-        self.commit_value(schema, Document::Blob(value.into_inner()))
+        // `Document` has no blob variant. The legacy representation is a
+        // standard base64 string — the encoding every JSON-family
+        // protocol uses and the one `DiscriminatedDocument::as_blob`
+        // decodes by default.
+        self.commit_value(
+            schema,
+            Document::String(aws_smithy_types::base64::encode(value.as_ref())),
+        )
     }
 
     fn write_timestamp(&mut self, schema: &Schema<'_>, value: &DateTime) -> Result<(), SerdeError> {
-        self.commit_value(schema, Document::Timestamp(*value))
+        // `Document` has no timestamp variant. The legacy representation
+        // is epoch seconds as a number, which
+        // `DiscriminatedDocument::as_timestamp` and
+        // `DocumentShapeDeserializer::read_timestamp` both reverse.
+        // Sub-second precision is retained by emitting a float; whole
+        // seconds stay exact integers.
+        self.commit_value(schema, Document::Number(timestamp_to_number(*value)))
     }
 
     fn write_document(&mut self, schema: &Schema<'_>, value: &Document) -> Result<(), SerdeError> {
@@ -417,6 +428,21 @@ fn signed_to_number(v: i64) -> Number {
         Number::PosInt(v as u64)
     } else {
         Number::NegInt(v)
+    }
+}
+
+/// Encodes a [`DateTime`] as epoch seconds in a [`Number`].
+///
+/// Whole-second timestamps become an exact integer so the common case
+/// round-trips bit-for-bit; timestamps carrying sub-second precision
+/// become a float, which retains the fraction at f64 precision. This
+/// mirrors what `epoch-seconds` means on the wire for the JSON-family
+/// protocols.
+fn timestamp_to_number(value: DateTime) -> Number {
+    if value.has_subsec_nanos() {
+        Number::Float(value.as_secs_f64())
+    } else {
+        signed_to_number(value.secs())
     }
 }
 
@@ -633,7 +659,7 @@ mod tests {
 
     #[test]
     fn write_document_commits_value_directly() {
-        let nested = Document::Object(DocumentObject::from([(
+        let nested = Document::Object(HashMap::from([(
             "foo".to_string(),
             Document::String("bar".to_string()),
         )]));

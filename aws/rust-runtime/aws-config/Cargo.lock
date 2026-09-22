@@ -283,7 +283,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-client"
-version = "1.4.3"
+version = "1.4.2"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-protocol-test",
@@ -428,7 +428,6 @@ dependencies = [
  "http-body 0.4.6",
  "http-body 1.1.0",
  "http-body-util",
- "indexmap",
  "itoa",
  "num-integer",
  "pin-project-lite",

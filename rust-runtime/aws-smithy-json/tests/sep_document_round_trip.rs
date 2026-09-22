@@ -14,7 +14,7 @@
 //! 3. `document_from_serialization` — a [`Document`] obtained by
 //!    parsing `canonical_serialization` (carries protocol settings)
 //! 4. `document_from_data_object` — a [`Document`] obtained by
-//!    `Document::from_struct(&SCHEMA, &canonical_data_object)`
+//!    `DiscriminatedDocument::from_struct(&SCHEMA, &canonical_data_object)`
 //!    (protocol-agnostic per SEP §Document Types rule 8)
 //!
 //! And six assertions are verified:
@@ -34,7 +34,7 @@
 //! (`epoch-seconds`). The SEP allows mixing per-member
 //! `@timestampFormat` overrides on the wire (the deserialization path
 //! handles that) but a [`Document`] produced via
-//! `Document::from_struct(...)` is protocol-agnostic — it carries no
+//! `DiscriminatedDocument::from_struct(...)` is protocol-agnostic — it carries no
 //! per-member format trait — so a Document constructed from a struct
 //! with mixed-format timestamps cannot round-trip through assertion 6
 //! without losing format info.
@@ -543,10 +543,11 @@ fn sep_round_trip_string_only() {
 #[test]
 fn sep_round_trip_blob_only() {
     // Blob — verifies that base64 round-trips through every path.
-    // `b"abcd"` encodes as `YWJjZA==`. Critically, `write_document`
-    // on a `Document::Blob` must emit the same base64 string the
-    // typed-shape `write_blob` would; this is the assertion 6 case
-    // for the extended variants.
+    // `b"abcd"` encodes as `YWJjZA==`. Critically, a blob's legacy
+    // `Document` representation is that same base64 string, so
+    // `write_document` on the Document form produces the same bytes the
+    // typed-shape `write_blob` does; this is the assertion 6 case for a
+    // Smithy type with no native JSON form.
     let value = OmniWidget {
         value_blob: Some(Blob::new(b"abcd".to_vec())),
         ..OmniWidget::default()
@@ -608,7 +609,7 @@ fn sep_round_trip_map_strings() {
 fn sep_round_trip_nested_struct() {
     // Nested structure — a struct member whose target is itself a
     // structure shape. Verifies that the recursive `Document` walk
-    // and `Document::from_struct` produce identical wire forms for a
+    // and `DiscriminatedDocument::from_struct` produce identical wire forms for a
     // multi-level shape graph.
     let value = OmniWidget {
         value_struct: Some(Nested {
@@ -626,7 +627,7 @@ fn sep_round_trip_sparse_list_with_nulls() {
     // intermixed with strings. Exercises:
     //   - typed-shape `write_null` framing inside `write_list`
     //   - typed-shape `is_null` detection inside `read_list`
-    //   - `Document::from_struct` walking a list whose elements
+    //   - `DiscriminatedDocument::from_struct` walking a list whose elements
     //     include null (the resulting Document tree has
     //     `Document::Null` for those positions)
     //   - `write_document` recursing into a list containing
@@ -727,7 +728,7 @@ fn sep_write_document_no_discriminator_omits_type() {
     // `write_document` never emits `__type` for *any* input — it
     // operates purely on the data tree. This pins down the contract
     // that `write_document` is the discriminator-free emission path.
-    let mut entries = aws_smithy_types::document::DocumentObject::new();
+    let mut entries = std::collections::HashMap::new();
     entries.insert("value_string".to_owned(), Document::String("hi".into()));
     let document = Document::Object(entries);
 
@@ -757,7 +758,7 @@ fn sep_write_document_no_discriminator_omits_type() {
 //    use the member's `@jsonName` value (restJson1 → true) or the
 //    Smithy member name (awsJson1.0 / 1.1 → false).
 //
-// 2. On the Document path, `Document::from_struct(...)` always stores
+// 2. On the Document path, `DiscriminatedDocument::from_struct(...)` always stores
 //    *Smithy member names* as map keys (per SEP § Document Types
 //    rule 8: serialize-side Documents are protocol-agnostic).
 //    Consequently `write_document` emits the member name regardless
@@ -847,7 +848,7 @@ fn sep_typed_shape_ignores_json_name_when_disabled() {
 
 #[test]
 fn sep_write_document_ignores_json_name() {
-    // `Document::from_struct(...)` uses `member.member_name()` as the
+    // `DiscriminatedDocument::from_struct(...)` uses `member.member_name()` as the
     // map key (the codebase comment confirms this:
     // "uses `member_schema.member_name()` as the map key" in
     // `aws-smithy-schema/src/schema/document/serializer.rs`). So the
@@ -886,52 +887,62 @@ fn sep_write_document_ignores_json_name() {
     );
 }
 
-// -- Big-number Document numerics -------------------------------------
+// -- Arbitrary-precision numerics -------------------------------------
 //
 // `BigInteger` and `BigDecimal` are arbitrary-precision numerics that
-// cannot be represented as `serde_json::Number` (which is f64 under
-// the hood). The Document path stores them as their own
-// `Document::BigInteger` / `Document::BigDecimal` variants;
-// `JsonSerializer::write_json_value` emits the underlying decimal
-// string verbatim as a raw JSON number — without any precision loss
-// that would occur if it were routed through `serde_json::Number`.
+// cannot be represented as an f64-backed JSON number without loss.
+//
+// `Document` has no arbitrary-precision variant, so these values are
+// only reachable through the *schema-driven* path: a `bigInteger` /
+// `bigDecimal` shape routes to `write_big_integer` /
+// `write_big_decimal`, which emit the underlying decimal string
+// verbatim as a raw JSON number (or as a JSON string when
+// `use_string_for_arbitrary_precision` is set) — never through an f64
+// intermediate.
 //
 // These tests pin the wire form down. They sit outside the SEP
 // 6-assertion matrix because there's no typed-shape carrier in
-// `OmniWidget` for these types — the Document is constructed
-// directly.
+// `OmniWidget` for these types.
 
 #[test]
-fn sep_write_document_big_integer_preserves_precision() {
+fn big_integer_write_preserves_precision() {
     use std::str::FromStr;
 
     use aws_smithy_types::BigInteger;
 
-    // A value far beyond i64::MAX (which is ~9.2 × 10^18). If
-    // `write_document` routed BigIntegers through any f64-typed
-    // intermediate it would lose the trailing digits — the f64
-    // round-trip of this number is `1.2345678901234568e+30`, which
-    // would emit at minimum a different string and at worst a
-    // mismatched exponent form. We assert the exact decimal string
-    // reaches the wire intact.
+    // A value far beyond i64::MAX (which is ~9.2 × 10^18). If the write
+    // path routed BigIntegers through any f64-typed intermediate it
+    // would lose the trailing digits — the f64 round-trip of this number
+    // is `1.2345678901234568e+30`, which would emit at minimum a
+    // different string and at worst a mismatched exponent form. We
+    // assert the exact decimal string reaches the wire intact.
     let value = BigInteger::from_str("1234567890123456789012345678901").expect("valid BigInteger");
-    let document = Document::BigInteger(value);
 
     let codec = JsonCodec::default();
     let mut ser = codec.create_serializer();
-    ser.write_document(&prelude::DOCUMENT, &document)
-        .expect("write_document on BigInteger must succeed");
+    ser.write_big_integer(&prelude::BIG_INTEGER, &value)
+        .expect("write_big_integer must succeed");
     let bytes = ser.finish();
 
     assert_eq!(
         bytes, b"1234567890123456789012345678901",
-        "write_document must emit a BigInteger as a raw JSON number, \
-         preserving the full decimal precision of the source string",
+        "a bigInteger must be emitted as a raw JSON number, preserving \
+         the full decimal precision of the source string",
+    );
+
+    // And it reads back losslessly.
+    let mut deser = codec.create_deserializer(&bytes);
+    assert_eq!(
+        deser
+            .read_big_integer(&prelude::BIG_INTEGER)
+            .expect("read_big_integer must succeed")
+            .as_ref(),
+        value.as_ref()
     );
 }
 
 #[test]
-fn sep_write_document_big_decimal_preserves_precision() {
+fn big_decimal_write_preserves_precision() {
     use std::str::FromStr;
 
     use aws_smithy_types::BigDecimal;
@@ -941,119 +952,63 @@ fn sep_write_document_big_decimal_preserves_precision() {
     // would produce `0.12345678901234568` — losing 14 trailing
     // digits. The wire form must keep every digit.
     let value = BigDecimal::from_str("0.123456789012345678901234567890").expect("valid BigDecimal");
-    let document = Document::BigDecimal(value);
 
     let codec = JsonCodec::default();
     let mut ser = codec.create_serializer();
-    ser.write_document(&prelude::DOCUMENT, &document)
-        .expect("write_document on BigDecimal must succeed");
+    ser.write_big_decimal(&prelude::BIG_DECIMAL, &value)
+        .expect("write_big_decimal must succeed");
     let bytes = ser.finish();
 
     assert_eq!(
         bytes, b"0.123456789012345678901234567890",
-        "write_document must emit a BigDecimal as a raw JSON number, \
-         preserving the full decimal precision of the source string \
-         (no f64 round-trip)",
+        "a bigDecimal must be emitted as a raw JSON number, preserving \
+         the full decimal precision of the source string (no f64 \
+         round-trip)",
+    );
+
+    let mut deser = codec.create_deserializer(&bytes);
+    assert_eq!(
+        deser
+            .read_big_decimal(&prelude::BIG_DECIMAL)
+            .expect("read_big_decimal must succeed")
+            .as_ref(),
+        value.as_ref()
     );
 }
 
 #[test]
-fn sep_write_document_big_numbers_inside_aggregate() {
-    // BigInteger and BigDecimal nested inside list and map containers
-    // — verifies the recursive walk in `write_json_value` visits big-
-    // number variants without going through `serde_json::Number` even
-    // when wrapped in container types.
+fn arbitrary_precision_rides_document_string_when_schema_erased() {
+    // `Document` cannot distinguish an arbitrary-precision number from
+    // any other value, so the schema-driven Document representation of a
+    // `bigInteger` is its numeric text in `Document::String`. That text
+    // reverses losslessly on the schema side, through
+    // `DocumentShapeDeserializer::read_big_integer` — `Document` itself
+    // exposes no coercion accessors.
     use std::str::FromStr;
 
-    use aws_smithy_types::{BigDecimal, BigInteger};
+    use aws_smithy_schema::document::DocumentShapeDeserializer;
+    use aws_smithy_types::BigInteger;
 
-    let big_int = BigInteger::from_str("999999999999999999999").expect("valid BigInteger");
-    let big_dec = BigDecimal::from_str("1.234567890123456789012345").expect("valid BigDecimal");
+    let value = BigInteger::from_str("1234567890123456789012345678901").expect("valid BigInteger");
+    let document = Document::String(value.as_ref().to_owned());
 
-    let mut entries = aws_smithy_types::document::DocumentObject::new();
-    entries.insert(
-        "list_of_big_ints".to_owned(),
-        Document::Array(vec![Document::BigInteger(big_int.clone())]),
+    assert_eq!(
+        DocumentShapeDeserializer::new(&document)
+            .read_big_integer(&prelude::BIG_INTEGER)
+            .expect("numeric text coerces back")
+            .as_ref(),
+        value.as_ref(),
+        "the legacy string representation of a bigInteger must reverse \
+         without precision loss",
     );
-    entries.insert(
-        "single_big_dec".to_owned(),
-        Document::BigDecimal(big_dec.clone()),
-    );
-    let document = Document::Object(entries);
 
+    // As a plain document it serializes as the JSON string it is — the
+    // protocol-agnostic Document contract: no schema, no reinterpretation.
     let codec = JsonCodec::default();
     let mut ser = codec.create_serializer();
     ser.write_document(&prelude::DOCUMENT, &document)
-        .expect("write_document on a map containing big numbers must succeed");
-    let bytes = ser.finish();
-
-    // HashMap iteration order is non-deterministic, so compare
-    // structurally via serde_json::Value rather than byte-for-byte.
-    // Note that `serde_json` itself preserves arbitrary precision via
-    // the `arbitrary_precision` feature; in its absence, big numbers
-    // round-trip through f64 and we'd lose precision. To sidestep that
-    // entirely, locate each precision-sensitive substring in the
-    // emitted bytes directly.
-    let bytes_str = std::str::from_utf8(&bytes).expect("output is valid UTF-8");
-    assert!(
-        bytes_str.contains(r#""list_of_big_ints":[999999999999999999999]"#),
-        "BigInteger inside a list must be emitted as a raw JSON number \
-         with full precision; got: {bytes_str}",
-    );
-    assert!(
-        bytes_str.contains(r#""single_big_dec":1.234567890123456789012345"#),
-        "BigDecimal inside a map must be emitted as a raw JSON number \
-         with full precision; got: {bytes_str}",
-    );
-}
-
-// =============================================================================
-// SEP "Document Type and Type Registries" §"`Document` interface and type
-// coercion" point 9: "Document implementations SHOULD iterate map entries in
-// insertion order if possible. For a document created from serialized data,
-// insertion order is the order in which the entries appear in the source data."
-// =============================================================================
-
-#[test]
-fn sep_map_document_iterates_in_source_order() {
-    // Three keys whose hash order would not match either source order or
-    // alphabetical order under a typical SipHasher seed. The test asserts the
-    // document iterates them in source order, not hash order.
-    let source = br#"{"zebra":1,"alpha":2,"middle":3}"#;
-
-    let codec = JsonCodec::default();
-    let mut deser = codec.create_deserializer(source);
-
-    let document: Document = deser
-        .read_document(&prelude::DOCUMENT)
-        .expect("source bytes are valid JSON");
-
-    let object = document
-        .as_object()
-        .expect("read_document on a JSON object yields Document::Object");
-
-    let observed: Vec<&str> = object.keys().map(String::as_str).collect();
-    assert_eq!(
-        observed,
-        ["zebra", "alpha", "middle"],
-        "DocumentObject must iterate keys in the order they appeared in the \
-         source bytes (SEP Document Type and Type Registries §`Document` \
-         interface point 9)"
-    );
-
-    // Round-trip back through write_document and assert wire bytes match the
-    // source order too — confirms that serialization preserves the same
-    // insertion order on output.
-    let mut ser = codec.create_serializer();
-    ser.write_document(&prelude::DOCUMENT, &document)
-        .expect("write_document succeeds");
-    let bytes = ser.finish();
-    let bytes_str = std::str::from_utf8(&bytes).expect("valid UTF-8");
-
-    assert_eq!(
-        bytes_str, r#"{"zebra":1,"alpha":2,"middle":3}"#,
-        "Round-trip serialization must preserve insertion order. Got: {bytes_str}",
-    );
+        .expect("write_document must succeed");
+    assert_eq!(ser.finish(), br#""1234567890123456789012345678901""#);
 }
 
 // -- use_string_for_arbitrary_precision wire-form round-trip ----------
@@ -1063,6 +1018,10 @@ fn sep_map_document_iterates_in_source_order() {
 // strings → receiver decodes from strings → re-emits as strings:
 // lossless. Cross-config round-trip (sender writes strings, receiver
 // is on default) also works because read is unconditionally lenient.
+//
+// The setting is schema-driven: only `bigInteger` / `bigDecimal` shapes
+// reach it. A `Document` carries no schema, so `write_document` is
+// unaffected.
 
 #[test]
 fn arbitrary_precision_string_form_round_trip() {
@@ -1077,17 +1036,15 @@ fn arbitrary_precision_string_form_round_trip() {
 
     let bi = BigInteger::from_str("99999999999999999999999").unwrap();
     let bd = BigDecimal::from_str("0.123456789012345678901234567890").unwrap();
-    let bi_doc = Document::BigInteger(bi.clone());
-    let bd_doc = Document::BigDecimal(bd.clone());
 
     // Write — wire form is a JSON string.
     let mut ser = codec.create_serializer();
-    ser.write_document(&prelude::DOCUMENT, &bi_doc).unwrap();
+    ser.write_big_integer(&prelude::BIG_INTEGER, &bi).unwrap();
     let bi_wire = ser.finish();
     assert_eq!(bi_wire, br#""99999999999999999999999""#);
 
     let mut ser = codec.create_serializer();
-    ser.write_document(&prelude::DOCUMENT, &bd_doc).unwrap();
+    ser.write_big_decimal(&prelude::BIG_DECIMAL, &bd).unwrap();
     let bd_wire = ser.finish();
     assert_eq!(bd_wire, br#""0.123456789012345678901234567890""#);
 
@@ -1104,10 +1061,8 @@ fn arbitrary_precision_string_form_round_trip() {
 #[test]
 fn arbitrary_precision_default_form_round_trip() {
     // Default `use_string_for_arbitrary_precision = false` writes raw
-    // JSON numbers. Confirms the existing baseline test
-    // `sep_write_document_big_integer_preserves_precision` covers this
-    // direction; here we additionally verify that
-    // `read_big_integer`/`read_big_decimal` still parse the number form.
+    // JSON numbers, and `read_big_integer` / `read_big_decimal` parse
+    // the number form back losslessly.
     use aws_smithy_types::{BigDecimal, BigInteger};
     use std::str::FromStr;
 
@@ -1117,8 +1072,7 @@ fn arbitrary_precision_default_form_round_trip() {
     let bd = BigDecimal::from_str("1.234567890123456789012345").unwrap();
 
     let mut ser = codec.create_serializer();
-    ser.write_document(&prelude::DOCUMENT, &Document::BigInteger(bi.clone()))
-        .unwrap();
+    ser.write_big_integer(&prelude::BIG_INTEGER, &bi).unwrap();
     let bi_wire = ser.finish();
     assert_eq!(bi_wire, b"99999999999999999999999"); // No quotes.
 
@@ -1127,8 +1081,7 @@ fn arbitrary_precision_default_form_round_trip() {
     assert_eq!(parsed_bi.as_ref(), bi.as_ref());
 
     let mut ser = codec.create_serializer();
-    ser.write_document(&prelude::DOCUMENT, &Document::BigDecimal(bd.clone()))
-        .unwrap();
+    ser.write_big_decimal(&prelude::BIG_DECIMAL, &bd).unwrap();
     let bd_wire = ser.finish();
     assert_eq!(bd_wire, b"1.234567890123456789012345");
 
@@ -1155,8 +1108,7 @@ fn arbitrary_precision_cross_config_interop() {
     let bi = BigInteger::from_str("99999999999999999999999").unwrap();
 
     let mut ser = strict_sender.create_serializer();
-    ser.write_document(&prelude::DOCUMENT, &Document::BigInteger(bi.clone()))
-        .unwrap();
+    ser.write_big_integer(&prelude::BIG_INTEGER, &bi).unwrap();
     let wire = ser.finish();
     assert!(wire.starts_with(b"\""));
 
