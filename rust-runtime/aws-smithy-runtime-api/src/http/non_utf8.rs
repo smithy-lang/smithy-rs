@@ -21,58 +21,63 @@ use aws_smithy_types::config_bag::{Storable, StoreReplace};
 /// [`Headers::get_bytes`](crate::http::Headers::get_bytes) or
 /// [`iter_bytes`](crate::http::Headers::iter_bytes):
 ///
-/// ```no_run
-/// # use aws_smithy_runtime_api::box_error::BoxError;
-/// # use aws_smithy_runtime_api::client::interceptors::context::{
-/// #     BeforeDeserializationInterceptorContextRef, BeforeSerializationInterceptorContextRef,
-/// # };
-/// # use aws_smithy_runtime_api::client::interceptors::Intercept;
-/// # use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
-/// # use aws_smithy_runtime_api::http::NonUtf8HeaderHandling;
-/// # use aws_smithy_types::config_bag::ConfigBag;
-/// # use std::sync::{Arc, Mutex};
-/// #[derive(Clone, Debug, Default)]
-/// struct SkipNonUtf8Headers {
-///     seen: Arc<Mutex<Vec<(String, Vec<u8>)>>>,
-/// }
-///
-/// impl Intercept for SkipNonUtf8Headers {
-///     fn name(&self) -> &'static str {
-///         "SkipNonUtf8Headers"
-///     }
-///
-///     fn read_before_execution(
-///         &self,
-///         _context: &BeforeSerializationInterceptorContextRef<'_>,
-///         cfg: &mut ConfigBag,
-///     ) -> Result<(), BoxError> {
-///         cfg.interceptor_state()
-///             .store_put(NonUtf8HeaderHandling::Skip);
-///         Ok(())
-///     }
-///
-///     fn read_before_deserialization(
-///         &self,
-///         context: &BeforeDeserializationInterceptorContextRef<'_>,
-///         _runtime_components: &RuntimeComponents,
-///         _cfg: &mut ConfigBag,
-///     ) -> Result<(), BoxError> {
-///         // Runs once per attempt, so overwrite rather than append.
-///         *self.seen.lock().unwrap() = context
-///             .response()
-///             .headers()
-///             .iter_bytes()
-///             .filter(|(_, value)| std::str::from_utf8(value).is_err())
-///             .map(|(name, value)| (name.to_owned(), value.to_vec()))
-///             .collect();
-///         Ok(())
-///     }
-/// }
-/// ```
+#[cfg_attr(
+    feature = "client",
+    doc = r#"
+```no_run
+# use aws_smithy_runtime_api::box_error::BoxError;
+# use aws_smithy_runtime_api::client::interceptors::context::{
+#     BeforeDeserializationInterceptorContextRef, BeforeSerializationInterceptorContextRef,
+# };
+# use aws_smithy_runtime_api::client::interceptors::Intercept;
+# use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+# use aws_smithy_runtime_api::http::NonUtf8HeaderHandling;
+# use aws_smithy_types::config_bag::ConfigBag;
+# use std::sync::{Arc, Mutex};
+#[derive(Clone, Debug, Default)]
+struct SkipNonUtf8Headers {
+    seen: Arc<Mutex<Vec<(String, Vec<u8>)>>>,
+}
+
+impl Intercept for SkipNonUtf8Headers {
+    fn name(&self) -> &'static str {
+        "SkipNonUtf8Headers"
+    }
+
+    fn read_before_execution(
+        &self,
+        _context: &BeforeSerializationInterceptorContextRef<'_>,
+        cfg: &mut ConfigBag,
+    ) -> Result<(), BoxError> {
+        cfg.interceptor_state()
+            .store_put(NonUtf8HeaderHandling::Skip);
+        Ok(())
+    }
+
+    fn read_before_deserialization(
+        &self,
+        context: &BeforeDeserializationInterceptorContextRef<'_>,
+        _runtime_components: &RuntimeComponents,
+        _cfg: &mut ConfigBag,
+    ) -> Result<(), BoxError> {
+        // Runs once per attempt, so overwrite rather than append.
+        *self.seen.lock().unwrap() = context
+            .response()
+            .headers()
+            .iter_bytes()
+            .filter(|(_, value)| std::str::from_utf8(value).is_err())
+            .map(|(name, value)| (name.to_owned(), value.to_vec()))
+            .collect();
+        Ok(())
+    }
+}
+```
+"#
+)]
 ///
 /// This applies only to values bound to a modeled member. A header bound to nothing is never an
 /// error regardless of encoding.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[non_exhaustive]
 pub enum NonUtf8HeaderHandling {
     /// Fail the operation, reporting the member and header that could not be parsed.
@@ -105,7 +110,7 @@ mod tests {
         assert_eq!(NonUtf8HeaderHandling::Reject, Default::default());
         // An empty bag must read as `Reject` rather than requiring callers to unwrap_or_default.
         let bag = ConfigBag::base();
-        assert_eq!(None, bag.load::<NonUtf8HeaderHandling>().copied());
+        assert_eq!(None, bag.load::<NonUtf8HeaderHandling>());
     }
 
     #[test]
@@ -114,8 +119,8 @@ mod tests {
         layer.store_put(NonUtf8HeaderHandling::Skip);
         let bag = ConfigBag::of_layers(vec![layer.into()]);
         assert_eq!(
-            Some(NonUtf8HeaderHandling::Skip),
-            bag.load::<NonUtf8HeaderHandling>().copied()
+            Some(&NonUtf8HeaderHandling::Skip),
+            bag.load::<NonUtf8HeaderHandling>()
         );
     }
 }
