@@ -149,6 +149,6 @@ async fn run_h1_handshake(
         }
         driver_guard.protocol_closed();
     }));
-    establishment.opened(connection.info());
+    establishment.opened(&connection);
     Ok(selection)
 }

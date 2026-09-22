@@ -241,18 +241,20 @@ impl<Tls> Builder<Tls> {
         self
     }
 
-    /// Bounds live connections to one origin across every partition in the pool.
+    /// Bounds connection capacity for one origin across every pool partition.
     ///
     /// An origin is a scheme, host, and port, so `https://example.com` and
     /// `http://example.com` are bounded separately, as is each non-default
-    /// port. The bound includes establishing, idle, and active connections; it
-    /// is not an idle-connection limit.
+    /// port. Establishing, idle, and active connections occupy capacity.
+    /// Logical close normally returns capacity while accepted work drains.
+    /// An HTTP/1 upgrade retains capacity until the caller releases upgraded
+    /// I/O. This is not an idle-connection limit.
     pub fn max_connections_per_host(mut self, limit: usize) -> Self {
         self.max_connections_per_host = Some(limit);
         self
     }
 
-    /// Mutably sets the live-connection bound described by
+    /// Mutably sets the connection-capacity bound described by
     /// [`Builder::max_connections_per_host`].
     pub fn set_max_connections_per_host(&mut self, limit: Option<usize>) -> &mut Self {
         self.max_connections_per_host = limit;

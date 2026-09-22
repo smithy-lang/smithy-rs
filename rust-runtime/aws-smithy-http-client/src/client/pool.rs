@@ -149,10 +149,12 @@
 //!
 //! `ConnectionState` separates logical close, accepted-request accounting, and
 //! physical connection ownership. Logical close rejects new dispatch and
-//! releases bounded capacity. `DispatchGuard` follows an accepted request,
-//! while `PhysicalConnectionGuard` follows root I/O until the client releases
-//! its transport handle. The operating system may continue TCP teardown
-//! afterward. All connection-owned work runs through the partition
+//! normally releases bounded capacity while accepted work drains. An HTTP/1
+//! upgrade retains capacity until upgraded root I/O leaves the client.
+//! `DispatchGuard` follows an accepted request, while
+//! `PhysicalConnectionGuard` follows root I/O until the client releases its
+//! transport handle. The operating system may continue TCP teardown afterward.
+//! All connection-owned work runs through the partition
 //! [`DriverSpawner`].
 
 #![cfg_attr(

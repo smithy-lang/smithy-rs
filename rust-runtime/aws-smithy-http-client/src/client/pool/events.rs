@@ -8,7 +8,7 @@
 //! Event payloads borrow transition-owned values for one synchronous callback.
 //! Listener invocation occurs after pool state transitions release their locks.
 
-use super::connection::{CloseReason, ConnectionInfo, ConnectionProtocol};
+use super::connection::{CloseReason, ConnectionInfo, ConnectionProtocol, ConnectionState};
 use super::origin::OriginKey;
 use super::partition::PartitionId;
 use crate::sync::Arc as PoolArc;
@@ -48,6 +48,38 @@ impl SharedConnectionEventListener {
     /// Creates a shared listener from one concrete implementation.
     pub fn new(listener: impl ConnectionEventListener) -> Self {
         Self(Arc::new(listener))
+    }
+
+    /// Invokes the listener without allowing observer panics to alter pool state.
+    fn notify(&self, event: &ConnectionEvent<'_>) {
+        #[cfg(panic = "unwind")]
+        if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.on_event(event))).is_err()
+        {
+            tracing::warn!("connection event listener panicked");
+        }
+
+        #[cfg(not(panic = "unwind"))]
+        self.on_event(event);
+    }
+
+    /// Reports the first transition that rejects new dispatch.
+    pub(super) fn logical_close(
+        &self,
+        connection: &PoolArc<ConnectionInfo>,
+        cause: LogicalCloseCause,
+    ) {
+        self.notify(&ConnectionEvent::LogicalClose(ConnectionLogicalClose {
+            connection,
+            cause,
+        }));
+    }
+
+    /// Reports release of the client's root transport ownership.
+    pub(super) fn physical_close(&self, connection: &PoolArc<ConnectionInfo>, reason: CloseReason) {
+        self.notify(&ConnectionEvent::PhysicalClose(ConnectionPhysicalClose {
+            connection,
+            reason,
+        }));
     }
 }
 
@@ -243,6 +275,21 @@ pub enum LogicalCloseCause {
     OwnerRuntimeShutdown,
 }
 
+impl LogicalCloseCause {
+    /// Maps the first pool close classification to its stable logical cause.
+    pub(super) fn from_reason(reason: CloseReason) -> Self {
+        match reason {
+            CloseReason::IdleTimeout => Self::IdleTimeout,
+            CloseReason::Poisoned => Self::Poisoned,
+            CloseReason::ProtocolClosed | CloseReason::Upgraded => Self::ProtocolEnded,
+            CloseReason::IncompleteH1Exchange => Self::IncompleteH1Exchange,
+            CloseReason::Reclaimed => Self::Reclaimed,
+            CloseReason::PoolDropped => Self::PoolDropped,
+            CloseReason::OwnerRuntimeShutdown => Self::OwnerRuntimeShutdown,
+        }
+    }
+}
+
 /// Observation that an installed connection stopped accepting new dispatch.
 #[derive(Debug)]
 pub struct ConnectionLogicalClose<'a> {
@@ -288,7 +335,7 @@ impl<'a> ConnectionPhysicalClose<'a> {
 /// identity work when no listener is configured.
 #[derive(Debug)]
 pub(super) struct ConnectionEvents {
-    callbacks: ConnectionEventCallbacks,
+    listener: Option<SharedConnectionEventListener>,
     time_source: SharedTimeSource,
     next_establishment_id: AtomicU64,
 }
@@ -300,77 +347,51 @@ impl ConnectionEvents {
         time_source: SharedTimeSource,
     ) -> Self {
         Self {
-            callbacks: ConnectionEventCallbacks { listener },
+            listener,
             time_source,
             next_establishment_id: AtomicU64::new(0),
         }
     }
 
-    /// Begins an observed establishment, or returns a disabled no-op owner.
-    pub(super) fn start_establishment(
+    /// Records the start of an establishment when observation is enabled.
+    pub(super) fn establishment_started(
         &self,
         origin: &OriginKey,
         partition: PartitionId,
     ) -> ConnectionEstablishment {
-        let active = self.callbacks.is_enabled().then(|| ActiveEstablishment {
-            callbacks: self.callbacks.clone(),
-            info: ConnectionEstablishmentInfo {
-                id: ConnectionEstablishmentId(
-                    self.next_establishment_id.fetch_add(1, Ordering::Relaxed),
-                ),
-                origin: origin.clone(),
-                partition,
-            },
-            time_source: self.time_source.clone(),
-            started_at: self.time_source.now(),
-            protocol_handshake_started_at: None,
-            transport_duration: None,
-            protocol_handshake_duration: None,
-            stage: ConnectionEstablishmentStage::Transport,
-            remote_addr: None,
-            protocol: None,
-        });
-        ConnectionEstablishment { active }
+        let observation = self
+            .listener
+            .as_ref()
+            .map(|listener| EstablishmentObservation {
+                listener: listener.clone(),
+                info: ConnectionEstablishmentInfo {
+                    id: ConnectionEstablishmentId(
+                        self.next_establishment_id.fetch_add(1, Ordering::Relaxed),
+                    ),
+                    origin: origin.clone(),
+                    partition,
+                },
+                time_source: self.time_source.clone(),
+                started_at: self.time_source.now(),
+                protocol_handshake_started_at: None,
+                transport_duration: None,
+                protocol_handshake_duration: None,
+                stage: ConnectionEstablishmentStage::Transport,
+                remote_addr: None,
+                protocol: None,
+            });
+        ConnectionEstablishment { observation }
     }
 }
 
-/// Cloneable callback delivery retained by active lifecycle observations.
-#[derive(Clone, Debug, Default)]
-struct ConnectionEventCallbacks {
-    listener: Option<SharedConnectionEventListener>,
-}
-
-impl ConnectionEventCallbacks {
-    /// Returns whether this pool has an observer.
-    fn is_enabled(&self) -> bool {
-        self.listener.is_some()
-    }
-
-    /// Invokes the listener without allowing observer panics to alter pool state.
-    fn notify(&self, event: &ConnectionEvent<'_>) {
-        let Some(listener) = &self.listener else {
-            return;
-        };
-
-        #[cfg(panic = "unwind")]
-        if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| listener.on_event(event)))
-            .is_err()
-        {
-            tracing::warn!("connection event listener panicked");
-        }
-
-        #[cfg(not(panic = "unwind"))]
-        listener.on_event(event);
-    }
-}
-
-/// Linear owner of one establishment's identity, timing, and terminal event.
+/// Tracks observations collected during one connection establishment.
 pub(super) struct ConnectionEstablishment {
-    active: Option<ActiveEstablishment>,
+    observation: Option<EstablishmentObservation>,
 }
 
-struct ActiveEstablishment {
-    callbacks: ConnectionEventCallbacks,
+/// Data collected while one observed establishment is active.
+struct EstablishmentObservation {
+    listener: SharedConnectionEventListener,
     info: ConnectionEstablishmentInfo,
     time_source: SharedTimeSource,
     started_at: SystemTime,
@@ -385,86 +406,88 @@ struct ActiveEstablishment {
 impl ConnectionEstablishment {
     /// Records completion of the transport stage.
     pub(super) fn transport_completed(&mut self, remote_addr: Option<SocketAddr>) {
-        if let Some(active) = &mut self.active {
-            active.transport_duration = Some(active.elapsed_since(active.started_at));
-            active.remote_addr = remote_addr;
-            active.stage = ConnectionEstablishmentStage::ProtocolSelection;
+        if let Some(observation) = &mut self.observation {
+            observation.transport_duration =
+                Some(observation.elapsed_since(observation.started_at));
+            observation.remote_addr = remote_addr;
+            observation.stage = ConnectionEstablishmentStage::ProtocolSelection;
         }
     }
 
     /// Records the protocol selected from connector metadata.
     pub(super) fn protocol_selected(&mut self, protocol: ConnectionProtocol) {
-        if let Some(active) = &mut self.active {
-            active.protocol = Some(protocol);
+        if let Some(observation) = &mut self.observation {
+            observation.protocol = Some(protocol);
         }
     }
 
     /// Records entry into Hyper's protocol handshake.
     pub(super) fn protocol_handshake_started(&mut self) {
-        if let Some(active) = &mut self.active {
-            active.protocol_handshake_started_at = Some(active.time_source.now());
-            active.stage = ConnectionEstablishmentStage::ProtocolHandshake;
+        if let Some(observation) = &mut self.observation {
+            observation.protocol_handshake_started_at = Some(observation.time_source.now());
+            observation.stage = ConnectionEstablishmentStage::ProtocolHandshake;
         }
     }
 
     /// Records a failed Hyper handshake before emitting its terminal event.
     pub(super) fn protocol_handshake_failed(&mut self) {
-        if let Some(active) = &mut self.active {
-            active.finish_protocol_handshake();
+        if let Some(observation) = &mut self.observation {
+            observation.finish_protocol_handshake();
         }
     }
 
     /// Records successful Hyper handshake before pool installation.
     pub(super) fn protocol_handshake_completed(&mut self) {
-        if let Some(active) = &mut self.active {
-            active.finish_protocol_handshake();
-            active.stage = ConnectionEstablishmentStage::PoolInstallation;
+        if let Some(observation) = &mut self.observation {
+            observation.finish_protocol_handshake();
+            observation.stage = ConnectionEstablishmentStage::PoolInstallation;
         }
     }
 
     /// Emits the terminal failure for this establishment.
     pub(super) fn failed(mut self, error: &ConnectorError) {
-        let Some(active) = self.active.take() else {
+        let Some(observation) = self.observation.take() else {
             return;
         };
-        active.notify_failure(error);
+        observation.notify_failure(error);
     }
 
-    /// Emits the successful terminal event after pool installation.
-    pub(super) fn opened(mut self, connection: &PoolArc<ConnectionInfo>) {
-        let Some(active) = self.active.take() else {
-            return;
-        };
-        let stats = active.stats();
-        active
-            .callbacks
-            .notify(&ConnectionEvent::Opened(ConnectionOpened {
-                establishment: &active.info,
-                stats: &stats,
-                connection,
-            }));
+    /// Reports successful installation and enables ordered close observations.
+    pub(super) fn opened(mut self, connection: &PoolArc<ConnectionState>) {
+        let listener = self.observation.take().map(|observation| {
+            let stats = observation.stats();
+            observation
+                .listener
+                .notify(&ConnectionEvent::Opened(ConnectionOpened {
+                    establishment: &observation.info,
+                    stats: &stats,
+                    connection: connection.info(),
+                }));
+            observation.listener
+        });
+        connection.complete_opened_event(listener.as_ref());
     }
 
     /// Ends an establishment whose transport lost to existing HTTP/2 supply.
     pub(super) fn superseded(mut self) {
-        self.active.take();
+        self.observation.take();
     }
 }
 
 impl Drop for ConnectionEstablishment {
     fn drop(&mut self) {
-        let Some(active) = self.active.take() else {
+        let Some(observation) = self.observation.take() else {
             return;
         };
         let error = ConnectorError::io("connection establishment task was dropped".into());
-        active.notify_failure(&error);
+        observation.notify_failure(&error);
     }
 }
 
-impl ActiveEstablishment {
+impl EstablishmentObservation {
     fn notify_failure(&self, error: &ConnectorError) {
         let stats = self.stats();
-        self.callbacks.notify(&ConnectionEvent::EstablishmentFailed(
+        self.listener.notify(&ConnectionEvent::EstablishmentFailed(
             ConnectionEstablishmentFailed {
                 establishment: &self.info,
                 stats: &stats,
@@ -518,7 +541,7 @@ mod tests {
     }
 
     fn establishment(events: &ConnectionEvents) -> ConnectionEstablishment {
-        events.start_establishment(&origin(), PartitionId::from_index(1))
+        events.establishment_started(&origin(), PartitionId::from_index(1))
     }
 
     #[test]
@@ -633,5 +656,32 @@ mod tests {
         establishment(&events).failed(&error);
 
         assert_eq!(1, observed.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn logical_close_causes_cover_every_close_reason() {
+        assert_eq!(
+            [
+                LogicalCloseCause::IdleTimeout,
+                LogicalCloseCause::Poisoned,
+                LogicalCloseCause::ProtocolEnded,
+                LogicalCloseCause::ProtocolEnded,
+                LogicalCloseCause::IncompleteH1Exchange,
+                LogicalCloseCause::Reclaimed,
+                LogicalCloseCause::PoolDropped,
+                LogicalCloseCause::OwnerRuntimeShutdown,
+            ],
+            [
+                CloseReason::IdleTimeout,
+                CloseReason::Poisoned,
+                CloseReason::ProtocolClosed,
+                CloseReason::Upgraded,
+                CloseReason::IncompleteH1Exchange,
+                CloseReason::Reclaimed,
+                CloseReason::PoolDropped,
+                CloseReason::OwnerRuntimeShutdown,
+            ]
+            .map(LogicalCloseCause::from_reason)
+        );
     }
 }
