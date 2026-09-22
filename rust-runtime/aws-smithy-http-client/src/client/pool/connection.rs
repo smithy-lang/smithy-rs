@@ -15,6 +15,7 @@
 use super::admission::CapacityLease;
 use super::origin::OriginKey;
 use super::partition::PartitionId;
+use crate::client::connect::ConnectPath;
 use crate::sync::{Arc, Mutex};
 pub use aws_smithy_runtime_api::client::connection::ConnectionId;
 use aws_smithy_runtime_api::client::connection::ConnectionMetadata;
@@ -78,8 +79,8 @@ pub(super) struct ConnectionInfo {
     local_addr: Option<SocketAddr>,
     /// Remote socket address reported by the connector, when available.
     remote_addr: Option<SocketAddr>,
-    /// Whether the transport reaches the origin through a proxy.
-    proxied: bool,
+    /// How the established transport reaches its origin.
+    connect_path: ConnectPath,
     /// Connector metadata copied into every response on this connection.
     connected: Connected,
 }
@@ -96,6 +97,7 @@ impl ConnectionInfo {
         let mut extras = Extensions::new();
         connected.get_extras(&mut extras);
         let http_info = extras.get::<HttpInfo>();
+        let connect_path = ConnectPath::from_connected(&connected, &extras);
         Arc::new(Self {
             id,
             origin,
@@ -103,7 +105,7 @@ impl ConnectionInfo {
             protocol,
             local_addr: http_info.map(HttpInfo::local_addr),
             remote_addr: http_info.map(HttpInfo::remote_addr),
-            proxied: connected.is_proxied(),
+            connect_path,
             connected,
         })
     }
@@ -140,9 +142,9 @@ impl ConnectionInfo {
         self.remote_addr
     }
 
-    /// Returns whether the origin is reached through a proxy.
-    pub(super) fn is_proxied(&self) -> bool {
-        self.proxied
+    /// Returns how this connection reaches its origin.
+    pub(super) fn connect_path(&self) -> &ConnectPath {
+        &self.connect_path
     }
 
     /// Copies connector-provided values into a response extension map.
@@ -153,7 +155,7 @@ impl ConnectionInfo {
     /// Builds Smithy metadata with close authority for this H1 record.
     pub(super) fn metadata(&self, close: super::cell::h1::H1CloseHandle) -> ConnectionMetadata {
         let mut builder = ConnectionMetadata::builder()
-            .proxied(self.proxied)
+            .proxied(self.connect_path.is_proxied())
             .connection_id(self.id)
             .poison_fn(move || {
                 close.close(CloseReason::Poisoned);
@@ -167,7 +169,7 @@ impl ConnectionInfo {
     /// Builds Smithy metadata with close authority for this H2 generation.
     pub(super) fn h2_metadata(&self, close: super::cell::h2::H2CloseHandle) -> ConnectionMetadata {
         let mut builder = ConnectionMetadata::builder()
-            .proxied(self.proxied)
+            .proxied(self.connect_path.is_proxied())
             .connection_id(self.id)
             .poison_fn(move || {
                 close.close(CloseReason::Poisoned);
@@ -751,7 +753,7 @@ mod tests {
         assert_eq!(NegotiatedProtocol::Http1, connection.info().protocol());
         assert_eq!(None, connection.info().local_addr());
         assert_eq!(None, connection.info().remote_addr());
-        assert!(connection.info().is_proxied());
+        assert!(connection.info().connect_path().is_proxied());
         let mut extensions = Extensions::new();
         connection.info().apply_connector_extras(&mut extensions);
         assert_eq!(

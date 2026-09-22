@@ -28,13 +28,11 @@ mod common {
 }
 
 use aws_smithy_async::assert_elapsed;
-use aws_smithy_http_client::pool::{Client as PoolClient, ConnectionPool};
 use aws_smithy_http_client::test_util::wire::connection::{
     BodyPlan, ConnectionCloseReason, ConnectionEvent, ConnectionId, ConnectionScript,
     ConnectionTestHarness, EndpointPlan, HarnessError, Http1Response, Http1Script, ManualGate,
     SocketScript,
 };
-use aws_smithy_http_client::Builder;
 use aws_smithy_runtime_api::client::connection::{
     CaptureSmithyConnection, ConnectionMetadata as SmithyConnectionMetadata,
 };
@@ -45,42 +43,15 @@ use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::retry::ErrorKind;
 use common::client as test_client;
-use common::client::{BackendConfig, HyperUtilLegacyPool};
+use common::client::{
+    BackendConfig, HttpClientBackend, HyperUtilLegacyPool, PartitionedConnectionPool,
+};
 use http_body_util::BodyExt;
 use std::collections::HashSet;
 use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
 
 const IP1: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
-
-trait HttpClientBackend {
-    fn build(&self, config: BackendConfig) -> SharedHttpClient;
-}
-
-impl HttpClientBackend for HyperUtilLegacyPool {
-    fn build(&self, config: BackendConfig) -> SharedHttpClient {
-        let mut builder = Builder::new();
-        if let Some(pool_idle_timeout) = config.pool_idle_timeout {
-            builder = builder.pool_idle_timeout(pool_idle_timeout);
-        }
-        builder.build_http()
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-struct PartitionedConnectionPool;
-
-impl HttpClientBackend for PartitionedConnectionPool {
-    fn build(&self, config: BackendConfig) -> SharedHttpClient {
-        let mut builder = ConnectionPool::builder();
-        if let Some(pool_idle_timeout) = config.pool_idle_timeout {
-            builder = builder.idle_timeout(pool_idle_timeout);
-        }
-        let pool = builder.build_http().expect("valid connection-pool config");
-        let client = PoolClient::new(&pool).expect("anonymous partition exists");
-        SharedHttpClient::new(client)
-    }
-}
 
 fn request_with_body(url: &str, body: &[u8]) -> HttpRequest {
     let mut request = HttpRequest::new(SdkBody::from(body.to_vec()));
@@ -257,6 +228,7 @@ mod reuse_and_lifecycle {
             .expect("harness should start");
         let client = backend.build(BackendConfig {
             pool_idle_timeout: Some(idle_timeout),
+            ..Default::default()
         });
         let connector = test_client::connector(&client);
 
@@ -325,6 +297,7 @@ mod reuse_and_lifecycle {
             .expect("harness should start");
         let client = backend.build(BackendConfig {
             pool_idle_timeout: Some(idle_timeout),
+            ..Default::default()
         });
         let connector = test_client::connector(&client);
 
@@ -2035,17 +2008,67 @@ mod concurrency {
     }
 }
 
-// A DNS resolver can only be installed through `Builder::build_with_resolver`, which is
-// available once a TLS provider is selected, so these tests need a TLS feature even though
-// they speak plaintext HTTP. `CryptoMode::Ring` requires `rustls-ring` specifically.
-#[cfg(feature = "rustls-ring")]
+// The legacy backend's custom-resolver constructor requires a TLS provider even though this
+// contract speaks plaintext HTTP.
+#[cfg(any(
+    feature = "rustls-aws-lc",
+    feature = "rustls-aws-lc-fips",
+    feature = "rustls-ring",
+    feature = "s2n-tls"
+))]
 mod dns_resolution {
     use super::*;
-    use aws_smithy_http_client::tls;
+    use aws_smithy_runtime_api::client::dns::SharedDnsResolver;
+
+    /// A configured resolver supplies the address used for an origin connection.
+    async fn custom_dns_resolver_is_used_for_origin(backend: &dyn HttpClientBackend) {
+        const HOST: &str = "custom-dns.test";
+
+        let harness = ConnectionTestHarness::builder()
+            .endpoint(
+                IP1,
+                Http1Script::responses([Http1Response::ok().body("custom dns")]),
+            )
+            .dns(HOST, [IP1])
+            .build()
+            .await
+            .expect("harness should start");
+        let client = backend.build(BackendConfig {
+            dns_resolver: Some(SharedDnsResolver::new(harness.dns_resolver())),
+            ..Default::default()
+        });
+        let connector = test_client::connector(&client);
+        let url = format!("http://{HOST}:{}/custom-dns", harness.port());
+
+        let (status, body) = test_client::get_and_collect(&connector, &url).await;
+        assert_eq!((status, body.as_slice()), (200, b"custom dns".as_slice()));
+        assert_eq!(1, harness.dns_lookup_count());
+        assert_eq!(
+            vec![(
+                "/custom-dns".to_string(),
+                Some(format!("{HOST}:{}", harness.port()))
+            )],
+            harness.http_requests()
+        );
+
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
+    }
+
+    #[tokio::test]
+    async fn test_custom_dns_resolver_is_used_for_origin_with_hyper_util_legacy_pool() {
+        custom_dns_resolver_is_used_for_origin(&HyperUtilLegacyPool).await;
+    }
+
+    #[tokio::test]
+    async fn test_custom_dns_resolver_is_used_for_origin_with_partitioned_connection_pool() {
+        custom_dns_resolver_is_used_for_origin(&PartitionedConnectionPool).await;
+    }
 
     /// A hostname with no DNS entry fails the request at resolution, before any TCP
     /// connection is attempted.
-    async fn unresolvable_hostname_fails_before_connect() {
+    async fn unresolvable_hostname_fails_before_connect(backend: &dyn HttpClientBackend) {
         // The endpoint is never connected to. It exists because a harness requires at
         // least one endpoint, and it supplies the port used to build the request URL.
         let harness = ConnectionTestHarness::builder()
@@ -2053,11 +2076,10 @@ mod dns_resolution {
             .build()
             .await
             .expect("harness should start");
-        let client = Builder::new()
-            .tls_provider(tls::Provider::Rustls(
-                tls::rustls_provider::CryptoMode::Ring,
-            ))
-            .build_with_resolver(harness.dns_resolver());
+        let client = backend.build(BackendConfig {
+            dns_resolver: Some(SharedDnsResolver::new(harness.dns_resolver())),
+            ..Default::default()
+        });
         let connector = test_client::connector(&client);
 
         let url = format!("http://unknown.test:{}/", harness.port());
@@ -2101,6 +2123,11 @@ mod dns_resolution {
 
     #[tokio::test]
     async fn test_unresolvable_hostname_fails_before_connect_with_hyper_util_legacy_pool() {
-        unresolvable_hostname_fails_before_connect().await;
+        unresolvable_hostname_fails_before_connect(&HyperUtilLegacyPool).await;
+    }
+
+    #[tokio::test]
+    async fn test_unresolvable_hostname_fails_before_connect_with_partitioned_connection_pool() {
+        unresolvable_hostname_fails_before_connect(&PartitionedConnectionPool).await;
     }
 }

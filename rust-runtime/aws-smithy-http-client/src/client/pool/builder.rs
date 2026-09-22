@@ -9,7 +9,10 @@ use super::establish::{self, TransportFactory};
 use super::maintenance::MaintenanceConfig;
 use super::registry::{AdmissionPolicy, PartitionRegistry, PartitionRegistryError};
 use super::{ConnectionPool, ConnectionReuseScope, Partition, PoolConfig, PoolInner};
+use crate::client::connect::HttpProxyConnector;
+use crate::client::dns::HyperUtilResolver;
 use crate::client::{TlsProviderSelected, TlsUnset};
+use crate::proxy::ProxyConfig;
 use crate::sync::Arc;
 use crate::tls::{self, TlsContext};
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
@@ -19,15 +22,19 @@ use aws_smithy_async::time::{SharedTimeSource, TimeSource};
     all(feature = "test-util", aws_sdk_unstable)
 ))]
 use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::dns::{ResolveDns, SharedDnsResolver};
+use aws_smithy_runtime_api::shared::IntoShared;
 #[cfg(any(
     all(test, feature = "rt-tokio"),
     all(feature = "test-util", aws_sdk_unstable)
 ))]
 use http_1x::Uri;
 use hyper_util::client::legacy::connect::dns::GaiResolver;
+use hyper_util::client::legacy::connect::dns::Name;
 use hyper_util::client::legacy::connect::HttpConnector;
 use std::error::Error;
 use std::fmt;
+use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::sync::atomic::AtomicU64;
 use std::time::Duration;
@@ -90,6 +97,10 @@ pub struct Builder<Tls = TlsUnset> {
     reuse_scope: ConnectionReuseScope,
     /// Complete explicit partition set, or `None` for anonymous topology.
     partitions: Option<Vec<Partition>>,
+    /// Pool-wide proxy selection, authentication, and bypass policy.
+    proxy_config: ProxyConfig,
+    /// Caller-supplied DNS resolver, or `None` for the client default.
+    dns_resolver: Option<SharedDnsResolver>,
     /// TLS typestate carried into protocol-specific terminal builders.
     tls: Tls,
 }
@@ -105,6 +116,8 @@ impl Default for Builder<TlsUnset> {
             max_connections_per_host: None,
             reuse_scope: ConnectionReuseScope::default(),
             partitions: None,
+            proxy_config: ProxyConfig::disabled(),
+            dns_resolver: None,
             tls: TlsUnset {},
         }
     }
@@ -121,6 +134,24 @@ impl<Tls: fmt::Debug> fmt::Debug for Builder<Tls> {
             .field("max_connections_per_host", &self.max_connections_per_host)
             .field("reuse_scope", &self.reuse_scope)
             .field("partitions", &self.partitions.as_ref().map(Vec::len))
+            .field(
+                "proxy_config",
+                &if self.proxy_config.is_disabled() {
+                    "disabled"
+                } else if self.proxy_config.is_from_env() {
+                    "environment"
+                } else {
+                    "configured"
+                },
+            )
+            .field(
+                "dns_resolver",
+                &if self.dns_resolver.is_some() {
+                    "custom"
+                } else {
+                    "default"
+                },
+            )
             .field("tls", &self.tls)
             .finish()
     }
@@ -239,6 +270,40 @@ impl<Tls> Builder<Tls> {
         self.partitions = partitions;
         self
     }
+
+    /// Configures proxy selection for every connection established by this pool.
+    ///
+    /// The configuration applies across every partition. Proxying is disabled
+    /// unless this method is called.
+    pub fn proxy_config(mut self, config: ProxyConfig) -> Self {
+        self.proxy_config = config;
+        self
+    }
+
+    /// Mutably configures pool-wide proxy selection.
+    ///
+    /// Passing `None` disables proxying.
+    pub fn set_proxy_config(&mut self, config: Option<ProxyConfig>) -> &mut Self {
+        self.proxy_config = config.unwrap_or_else(ProxyConfig::disabled);
+        self
+    }
+
+    /// Configures the DNS resolver used by connections established by this pool.
+    ///
+    /// The resolver applies across every partition. When unset, the client uses
+    /// its default resolver, which currently delegates to the operating system.
+    pub fn dns_resolver(mut self, resolver: impl ResolveDns + 'static) -> Self {
+        self.dns_resolver = Some(resolver.into_shared());
+        self
+    }
+
+    /// Mutably configures the pool-wide DNS resolver.
+    ///
+    /// Passing `None` restores the client default.
+    pub fn set_dns_resolver(&mut self, resolver: Option<SharedDnsResolver>) -> &mut Self {
+        self.dns_resolver = resolver;
+        self
+    }
 }
 
 impl Builder<TlsUnset> {
@@ -253,6 +318,8 @@ impl Builder<TlsUnset> {
             max_connections_per_host: self.max_connections_per_host,
             reuse_scope: self.reuse_scope,
             partitions: self.partitions,
+            proxy_config: self.proxy_config,
+            dns_resolver: self.dns_resolver,
             tls: TlsProviderSelected {
                 provider,
                 context: TlsContext::default(),
@@ -276,13 +343,28 @@ crate::cfg::cfg_tls! {
         }
 
         /// Builds a pool whose connector performs TLS and ALPN negotiation.
-        ///
-        /// This builder currently creates direct connections. Proxy routing
-        /// remains available through the existing `Connector` API.
         pub fn build_https(self) -> Result<ConnectionPool, BuildError> {
+            let resolver = self.dns_resolver.clone();
+            match resolver {
+                Some(resolver) => {
+                    self.build_https_with_resolver(HyperUtilResolver { resolver })
+                }
+                None => self.build_https_with_resolver(GaiResolver::new()),
+            }
+        }
+
+        /// Builds an HTTPS transport around one concrete Hyper resolver.
+        fn build_https_with_resolver<R>(self, resolver: R) -> Result<ConnectionPool, BuildError>
+        where
+            R: tower::Service<Name> + Clone + Send + Sync + 'static,
+            R::Response: Iterator<Item = SocketAddr>,
+            R::Future: Send,
+            R::Error: Into<Box<dyn Error + Send + Sync>>,
+        {
             validate_default_connector_interfaces(self.partitions.as_deref())?;
             let provider = self.tls.provider.clone();
             let context = self.tls.context.clone();
+            let proxy_config = self.proxy_config.clone();
             match provider {
                 #[cfg(feature = "__rustls")]
                 tls::Provider::Rustls(crypto_mode) => {
@@ -291,7 +373,7 @@ crate::cfg::cfg_tls! {
                     let transport = establish::from_cached_interface_connector(
                         move |interface, alpn_protocols| {
                             let mut connector =
-                                HttpConnector::new_with_resolver(GaiResolver::new());
+                                HttpConnector::new_with_resolver(resolver.clone());
                             connector.set_nodelay(tcp_nodelay);
                             connector.set_keepalive(tcp_keepalive);
                             set_default_connector_interface(&mut connector, interface);
@@ -299,7 +381,7 @@ crate::cfg::cfg_tls! {
                                 connector,
                                 crypto_mode.clone(),
                                 &context,
-                                crate::proxy::ProxyConfig::disabled(),
+                                proxy_config.clone(),
                                 alpn_protocols,
                             )
                         },
@@ -314,14 +396,14 @@ crate::cfg::cfg_tls! {
                     let transport = establish::from_cached_interface_connector(
                         move |interface, _alpn_protocols| {
                             let mut connector =
-                                HttpConnector::new_with_resolver(GaiResolver::new());
+                                HttpConnector::new_with_resolver(resolver.clone());
                             connector.set_nodelay(tcp_nodelay);
                             connector.set_keepalive(tcp_keepalive);
                             set_default_connector_interface(&mut connector, interface);
                             tls::s2n_tls_provider::build_connector::wrap_connector(
                                 connector,
                                 &context,
-                                crate::proxy::ProxyConfig::disabled(),
+                                proxy_config.clone(),
                             )
                         },
                         false,
@@ -335,17 +417,43 @@ crate::cfg::cfg_tls! {
 
 impl Builder<TlsUnset> {
     /// Builds a pool for cleartext HTTP connections.
-    #[doc(hidden)]
     pub fn build_http(self) -> Result<ConnectionPool, BuildError> {
+        let resolver = self.dns_resolver.clone();
+        match resolver {
+            Some(resolver) => self.build_http_with_resolver(HyperUtilResolver { resolver }),
+            None => self.build_http_with_resolver(GaiResolver::new()),
+        }
+    }
+
+    /// Builds a cleartext transport around one concrete Hyper resolver.
+    fn build_http_with_resolver<R>(self, resolver: R) -> Result<ConnectionPool, BuildError>
+    where
+        R: tower::Service<Name> + Clone + Send + Sync + 'static,
+        R::Response: Iterator<Item = SocketAddr>,
+        R::Future: Send,
+        R::Error: Into<Box<dyn Error + Send + Sync>>,
+    {
         validate_default_connector_interfaces(self.partitions.as_deref())?;
-        let mut connector = HttpConnector::new_with_resolver(GaiResolver::new());
-        connector.set_nodelay(self.tcp_nodelay);
-        connector.set_keepalive(self.tcp_keepalive.clone().resolve(None));
-        let transport = establish::from_interface_connector(move |interface| {
-            let mut connector = connector.clone();
-            set_default_connector_interface(&mut connector, interface);
-            connector
-        });
+        let tcp_nodelay = self.tcp_nodelay;
+        let tcp_keepalive = self.tcp_keepalive.clone().resolve(None);
+        let proxy_config = self.proxy_config.clone();
+        let transport = if proxy_config.is_disabled() {
+            establish::from_interface_connector(move |interface| {
+                let mut connector = HttpConnector::new_with_resolver(resolver.clone());
+                connector.set_nodelay(tcp_nodelay);
+                connector.set_keepalive(tcp_keepalive);
+                set_default_connector_interface(&mut connector, interface);
+                connector
+            })
+        } else {
+            establish::from_interface_connector(move |interface| {
+                let mut connector = HttpConnector::new_with_resolver(resolver.clone());
+                connector.set_nodelay(tcp_nodelay);
+                connector.set_keepalive(tcp_keepalive);
+                set_default_connector_interface(&mut connector, interface);
+                HttpProxyConnector::new(connector, proxy_config.clone())
+            })
+        };
         self.build_with_transport(transport)
     }
 
@@ -393,6 +501,15 @@ impl Builder<TlsUnset> {
 }
 
 impl<Tls> Builder<Tls> {
+    /// Builds a pool with a transport supplied by a pool-internal test.
+    #[cfg(test)]
+    pub(super) fn build_with_transport_for_test(
+        self,
+        transport: std::sync::Arc<dyn TransportFactory>,
+    ) -> Result<ConnectionPool, BuildError> {
+        self.build_with_transport(transport)
+    }
+
     /// Validates pool policy and installs the type-erased transport factory.
     fn build_with_transport(
         self,
@@ -536,10 +653,7 @@ fn validate_default_connector_interfaces(
     target_os = "visionos",
     target_os = "watchos",
 ))]
-fn set_default_connector_interface(
-    connector: &mut HttpConnector<GaiResolver>,
-    interface: Option<&str>,
-) {
+fn set_default_connector_interface<R>(connector: &mut HttpConnector<R>, interface: Option<&str>) {
     if let Some(interface) = interface {
         connector.set_interface(interface);
     }
@@ -558,10 +672,7 @@ fn set_default_connector_interface(
     target_os = "visionos",
     target_os = "watchos",
 )))]
-fn set_default_connector_interface(
-    _connector: &mut HttpConnector<GaiResolver>,
-    _interface: Option<&str>,
-) {
+fn set_default_connector_interface<R>(_connector: &mut HttpConnector<R>, _interface: Option<&str>) {
 }
 
 #[cfg(all(test, not(smithy_http_client_loom)))]
@@ -569,6 +680,7 @@ mod tests {
     use super::*;
     use crate::client::pool::{DriverSpawner, PartitionId};
     use std::future::Future;
+    use std::net::IpAddr;
     use std::pin::Pin;
 
     #[derive(Debug)]
@@ -589,6 +701,18 @@ mod tests {
         }
     }
 
+    #[derive(Debug)]
+    struct EmptyDnsResolver;
+
+    impl ResolveDns for EmptyDnsResolver {
+        fn resolve_dns<'a>(
+            &'a self,
+            _name: &'a str,
+        ) -> aws_smithy_runtime_api::client::dns::DnsFuture<'a> {
+            aws_smithy_runtime_api::client::dns::DnsFuture::ready(Ok(Vec::<IpAddr>::new()))
+        }
+    }
+
     fn partition(index: usize) -> Partition {
         Partition::new(PartitionId::from_index(index), TestSpawner)
     }
@@ -601,6 +725,8 @@ mod tests {
         assert!(builder.tcp_nodelay);
         assert_eq!(None, builder.max_connections_per_host);
         assert!(builder.partitions.is_none());
+        assert!(builder.proxy_config.is_disabled());
+        assert!(builder.dns_resolver.is_none());
 
         builder.set_idle_timeout(Some(None));
         builder.set_tcp_keepalive(Some(None));
@@ -632,6 +758,53 @@ mod tests {
         assert_eq!(TriStateOption::NotSet, builder.tcp_keepalive);
         assert_eq!(None, builder.max_connections_per_host);
         assert!(builder.partitions.is_none());
+    }
+
+    #[test]
+    fn proxy_and_dns_settings_set_reset_and_redact() {
+        let mut builder = Builder::default();
+        builder.set_proxy_config(Some(
+            ProxyConfig::http("http://proxy.test:8080")
+                .unwrap()
+                .with_basic_auth("secret-user", "secret-password"),
+        ));
+        builder.set_dns_resolver(Some(SharedDnsResolver::new(EmptyDnsResolver)));
+
+        assert!(!builder.proxy_config.is_disabled());
+        assert!(builder.dns_resolver.is_some());
+        let debug = format!("{builder:?}");
+        assert!(debug.contains("configured"));
+        assert!(debug.contains("custom"));
+        assert!(!debug.contains("secret-user"));
+        assert!(!debug.contains("secret-password"));
+
+        builder.set_proxy_config(None);
+        builder.set_dns_resolver(None);
+        assert!(builder.proxy_config.is_disabled());
+        assert!(builder.dns_resolver.is_none());
+    }
+
+    #[cfg(feature = "rustls-ring")]
+    #[test]
+    fn tls_selection_preserves_proxy_and_dns_settings() {
+        let builder = Builder::default()
+            .proxy_config(
+                ProxyConfig::http("http://proxy.test:8080")
+                    .unwrap()
+                    .with_basic_auth("secret-user", "secret-password"),
+            )
+            .dns_resolver(EmptyDnsResolver)
+            .tls_provider(tls::Provider::rustls(
+                tls::rustls_provider::CryptoMode::Ring,
+            ));
+
+        assert!(!builder.proxy_config.is_disabled());
+        assert!(builder.dns_resolver.is_some());
+        let debug = format!("{builder:?}");
+        assert!(debug.contains("configured"));
+        assert!(debug.contains("custom"));
+        assert!(!debug.contains("secret-user"));
+        assert!(!debug.contains("secret-password"));
     }
 
     #[test]

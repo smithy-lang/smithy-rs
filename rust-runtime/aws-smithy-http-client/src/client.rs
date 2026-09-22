@@ -13,6 +13,7 @@ pub mod tls;
 
 pub(crate) mod connect;
 
+use self::connect::ConnectPath;
 use crate::cfg::cfg_tls;
 use crate::tls::TlsContext;
 use aws_smithy_async::future::timeout::TimedOutError;
@@ -21,6 +22,7 @@ use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::connection::CaptureSmithyConnection;
 use aws_smithy_runtime_api::client::connection::ConnectionMetadata;
 use aws_smithy_runtime_api::client::connector_metadata::ConnectorMetadata;
+use aws_smithy_runtime_api::client::dns::ResolveDnsError;
 use aws_smithy_runtime_api::client::http::{
     HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpClient,
     SharedHttpConnector,
@@ -516,8 +518,9 @@ fn extract_smithy_connection(capture_conn: &CaptureConnection) -> Option<Connect
         let mut extensions = Extensions::new();
         conn.get_extras(&mut extensions);
         let http_info = extensions.get::<HttpInfo>();
+        let connect_path = ConnectPath::from_connected(conn, &extensions);
         let mut builder = ConnectionMetadata::builder()
-            .proxied(conn.is_proxied())
+            .proxied(connect_path.is_proxied())
             .poison_fn(move || match capture_conn.connection_metadata().as_ref() {
                 Some(conn) => conn.poison(),
                 None => tracing::trace!("no connection existed to poison"),
@@ -637,6 +640,10 @@ fn downcast_error(err: BoxError) -> ConnectorError {
         Ok(connector_error) => return *connector_error,
         Err(box_error) => box_error,
     };
+    // DNS resolution is part of connection establishment and is retryable as I/O.
+    if find_source::<ResolveDnsError>(err.as_ref()).is_some() {
+        return ConnectorError::io(err);
+    }
     // generally, the top of chain will probably be a hyper error. Go through a set of hyper specific
     // error classifications
     let err = match find_source::<hyper::Error>(err.as_ref()) {
