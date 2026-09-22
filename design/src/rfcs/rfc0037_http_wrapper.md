@@ -46,6 +46,14 @@ Finally, it's nicer for users if they can stay in "string land". Because of this
 
 **This is a one way door because `.as_str()` would panic in the future if we allow non-string values into headers.**
 
+> **Superseded (2026-09-22):** the construction gate described above has since been removed —
+> `Headers` stores header values as received, and the encoding requirement applies where a value is
+> bound to a modeled member instead. This turned out not to be a one way door. `.as_str()` still
+> cannot panic, because no accessor on `Headers` returns a `HeaderValue` (they return `&str` or
+> `&[u8]`) and the only public constructors of `HeaderValue` take a `str` — so the invariant is
+> upheld by encapsulation rather than by the gate. Adding an accessor that hands out a `HeaderValue`
+> would reintroduce the hazard. See the `non-utf8-response-headers` changelog entry.
+
 #### Where should these types live?
 These types will be used by all orchestrator functionality, so they will be housed in `aws-smithy-runtime-api`
 
