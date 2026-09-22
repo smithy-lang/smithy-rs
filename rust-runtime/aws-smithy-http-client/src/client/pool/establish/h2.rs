@@ -20,19 +20,18 @@ use super::super::cell::h2::{
 };
 use super::super::cell::{AcquisitionOutcome, EstablishmentPermit, OriginCell, WaiterId};
 use super::super::connection::{
-    CloseReason, ConnectionInfo, ConnectionIo, ConnectionState, NegotiatedProtocol,
+    CloseReason, ConnectionInfo, ConnectionIo, ConnectionProtocol, ConnectionState,
 };
 use super::super::dispatch::AcquisitionContext;
+use super::super::events::ConnectionEstablishment;
 use super::super::partition::DriverSpawner;
-use super::{next_connection_id, EstablishmentOutcome};
-use crate::client::connect::BoxConn;
+use super::{next_connection_id, ConnectedTransport, EstablishmentOutcome};
 use crate::client::downcast_error;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::retry::ErrorKind;
 use hyper::rt::Executor;
-use hyper_util::client::legacy::connect::Connected;
 use std::future::Future;
 use std::sync::Arc as StdArc;
 
@@ -98,11 +97,13 @@ impl Drop for FlightCompletionGuard {
 /// Converges after ALPN and performs at most one HTTP/2 handshake per cell.
 pub(super) async fn establish_h2(
     context: AcquisitionContext,
-    waiter: WaiterId,
     permit: EstablishmentPermit,
-    io: BoxConn,
-    connected: Connected,
+    transport: ConnectedTransport,
+    establishment: ConnectionEstablishment,
+    waiter: WaiterId,
 ) -> EstablishmentOutcome {
+    let ConnectedTransport { io, metadata } = transport;
+    let mut establishment = Some(establishment);
     loop {
         match context.cell.converge_h2_flight(waiter) {
             H2FlightDecision::UseGeneration(generation) => {
@@ -120,6 +121,7 @@ pub(super) async fn establish_h2(
                     H2GenerationJoinOutcome::Joined | H2GenerationJoinOutcome::WaiterResolved => {
                         drop(io);
                         drop(permit);
+                        establishment.take().unwrap().superseded();
                         return EstablishmentOutcome::WaiterCompletionTransferred;
                     }
                 }
@@ -135,6 +137,7 @@ pub(super) async fn establish_h2(
                 );
                 drop(io);
                 drop(permit);
+                establishment.take().unwrap().superseded();
                 return EstablishmentOutcome::WaiterCompletionTransferred;
             }
             H2FlightDecision::RunFlight(flight) => {
@@ -147,7 +150,14 @@ pub(super) async fn establish_h2(
                     h2_flight = ?flight,
                     "HTTP/2 establishment started a flight"
                 );
-                drive_flight(context, flight, permit, io, connected).await;
+                drive_flight(
+                    context,
+                    flight,
+                    permit,
+                    ConnectedTransport { io, metadata },
+                    establishment.take().unwrap(),
+                )
+                .await;
                 return EstablishmentOutcome::WaiterCompletionTransferred;
             }
         }
@@ -159,14 +169,15 @@ async fn drive_flight(
     context: AcquisitionContext,
     flight: H2FlightId,
     permit: EstablishmentPermit,
-    io: BoxConn,
-    connected: Connected,
+    transport: ConnectedTransport,
+    mut establishment: ConnectionEstablishment,
 ) {
     let mut completion = FlightCompletionGuard::new(context.cell.clone(), flight);
     let id = match next_connection_id(&context.pool) {
         Ok(id) => id,
         Err(error) => {
-            completion.fail(ConnectorError::other(Box::new(error), None));
+            let error = ConnectorError::other(Box::new(error), None);
+            fail_flight_establishment(&mut completion, establishment, error);
             return;
         }
     };
@@ -174,32 +185,38 @@ async fn drive_flight(
         id,
         context.cell.id().origin().clone(),
         context.partition.id(),
-        NegotiatedProtocol::Http2,
-        connected,
+        ConnectionProtocol::Http2,
+        transport.metadata,
     );
-    let (connection, physical) = ConnectionState::pending_open(info);
-    let io = ConnectionIo::new(io, physical);
+    let (connection, physical) =
+        ConnectionState::pending_open(info, context.cell.connection_stats());
+    let io = ConnectionIo::new(transport.io, physical);
     let executor = PartitionExecutor {
         spawner: context.owner_spawner.clone(),
     };
+    establishment.protocol_handshake_started();
     let (sender, driver) = match hyper::client::conn::http2::Builder::new(executor)
         .handshake::<_, SdkBody>(io)
         .await
     {
         Ok(established) => established,
         Err(error) => {
+            let error = downcast_error(Box::new(error));
+            establishment.protocol_handshake_failed();
             connection.logical_close(CloseReason::ProtocolClosed);
-            completion.fail(downcast_error(Box::new(error)));
+            fail_flight_establishment(&mut completion, establishment, error);
             return;
         }
     };
+    establishment.protocol_handshake_completed();
 
     if let Err(lease) = connection.open(permit.into_lease()) {
         drop(lease);
         connection.logical_close(CloseReason::ProtocolClosed);
-        completion.fail(ConnectorError::io(Box::new(std::io::Error::other(
+        let error = ConnectorError::io(Box::new(std::io::Error::other(
             "HTTP/2 connection closed before installation",
-        ))));
+        )));
+        fail_flight_establishment(&mut completion, establishment, error);
         return;
     }
 
@@ -214,9 +231,10 @@ async fn drive_flight(
         Ok(installed) => installed,
         Err((_connection, _sender)) => {
             connection.logical_close(CloseReason::ProtocolClosed);
-            completion.fail(ConnectorError::io(Box::new(std::io::Error::other(
+            let error = ConnectorError::io(Box::new(std::io::Error::other(
                 "HTTP/2 flight became stale before installation",
-            ))));
+            )));
+            fail_flight_establishment(&mut completion, establishment, error);
             return;
         }
     };
@@ -240,6 +258,7 @@ async fn drive_flight(
     }));
 
     completion.disarm();
+    establishment.opened(&connection);
     tracing::debug!(
         connection_id = %connection.id(),
         request_partition = ?context.partition.id(),
@@ -313,6 +332,18 @@ impl std::error::Error for SharedFlightFailure {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         Some(self.source.as_ref().as_ref())
     }
+}
+
+/// Fails flight participants and emits the owner's terminal establishment event.
+fn fail_flight_establishment(
+    completion: &mut FlightCompletionGuard,
+    establishment: ConnectionEstablishment,
+    error: ConnectorError,
+) {
+    let error = SharedFlightFailure::new(error);
+    let event_error = error.connector_error();
+    completion.fail(error.connector_error());
+    establishment.failed(&event_error);
 }
 
 /// Fails every participant still retained by one exact flight.

@@ -54,20 +54,41 @@ impl ProxyAuthorization {
 }
 
 /// How an established transport reaches its origin.
+///
+/// The classification contains no proxy credentials. It describes the path
+/// selected by the built-in connector or reported by a custom connector.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum ConnectPath {
+    /// The transport connects to the origin without an HTTP proxy.
+    Direct,
+    /// HTTP requests are sent to a forward proxy in absolute form.
+    ForwardProxy,
+    /// The connector established an HTTP `CONNECT` tunnel to the origin.
+    ProxyTunnel,
+}
+
+impl ConnectPath {
+    /// Returns whether an HTTP proxy participates in the connection path.
+    pub fn is_proxied(&self) -> bool {
+        !matches!(self, Self::Direct)
+    }
+}
+
+/// Connector-owned connection path with request-time proxy state.
 #[derive(Clone, Debug)]
-pub(crate) enum ConnectPath {
-    /// The transport reaches the origin without a proxy.
+pub(crate) enum ConnectPathInner {
+    /// The transport reaches the origin without a configured HTTP proxy.
     Direct,
     /// HTTP/1 requests are sent to a forward proxy in absolute form.
     ForwardProxy {
         authorization: Option<ProxyAuthorization>,
     },
     /// The transport reaches the origin through an established CONNECT tunnel.
-    #[cfg(any(feature = "__rustls", feature = "s2n-tls"))]
     ProxyTunnel,
 }
 
-impl ConnectPath {
+impl ConnectPathInner {
     pub(crate) fn forward_proxy(authorization: Option<HeaderValue>) -> Self {
         Self::ForwardProxy {
             authorization: authorization.map(ProxyAuthorization::new),
@@ -76,18 +97,35 @@ impl ConnectPath {
 
     /// Recovers the full path when available and preserves custom connector behavior.
     pub(crate) fn from_connected(connected: &Connected, extras: &Extensions) -> Self {
-        extras.get::<Self>().cloned().unwrap_or_else(|| {
-            if connected.is_proxied() {
-                Self::forward_proxy(None)
-            } else {
-                Self::Direct
-            }
-        })
+        extras
+            .get::<Self>()
+            .cloned()
+            .or_else(|| extras.get::<ConnectPath>().copied().map(Self::from_public))
+            .unwrap_or_else(|| {
+                if connected.is_proxied() {
+                    Self::forward_proxy(None)
+                } else {
+                    Self::Direct
+                }
+            })
     }
 
-    /// Returns whether a proxy participates in the established transport.
-    pub(crate) fn is_proxied(&self) -> bool {
-        !matches!(self, Self::Direct)
+    /// Returns the credential-free public path classification.
+    pub(crate) fn public(&self) -> ConnectPath {
+        match self {
+            Self::Direct => ConnectPath::Direct,
+            Self::ForwardProxy { .. } => ConnectPath::ForwardProxy,
+            Self::ProxyTunnel => ConnectPath::ProxyTunnel,
+        }
+    }
+
+    /// Creates connector state from a credential-free custom-connector value.
+    fn from_public(path: ConnectPath) -> Self {
+        match path {
+            ConnectPath::Direct => Self::Direct,
+            ConnectPath::ForwardProxy => Self::forward_proxy(None),
+            ConnectPath::ProxyTunnel => Self::ProxyTunnel,
+        }
     }
 
     /// Returns whether HTTP/1 requests require an absolute-form target.
@@ -110,7 +148,7 @@ pin_project! {
     pub(crate) struct Conn {
         #[pin]
         pub(super)inner: BoxConn,
-        pub(super) connect_path: ConnectPath,
+        pub(super) connect_path: ConnectPathInner,
     }
 }
 
@@ -225,7 +263,7 @@ where
         if let Some(intercept) = proxy_intercept {
             // HTTP through proxy: Connect to proxy server
             let proxy_uri = intercept.uri().clone();
-            let connect_path = ConnectPath::forward_proxy(intercept.basic_auth().cloned());
+            let connect_path = ConnectPathInner::forward_proxy(intercept.basic_auth().cloned());
             let fut = self.inner.call(proxy_uri);
             Box::pin(async move {
                 let conn = fut.await.map_err(Into::into)?;
@@ -241,9 +279,44 @@ where
                 let conn = fut.await.map_err(Into::into)?;
                 Ok(connect::Conn {
                     inner: Box::new(conn),
-                    connect_path: ConnectPath::Direct,
+                    connect_path: ConnectPathInner::Direct,
                 })
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn custom_connector_path_extra_preserves_public_classification() {
+        for path in [
+            ConnectPath::Direct,
+            ConnectPath::ForwardProxy,
+            ConnectPath::ProxyTunnel,
+        ] {
+            let connected = Connected::new().extra(path);
+            let mut extras = Extensions::new();
+            connected.get_extras(&mut extras);
+
+            assert_eq!(
+                path,
+                ConnectPathInner::from_connected(&connected, &extras).public()
+            );
+        }
+    }
+
+    #[test]
+    fn generic_proxy_metadata_maps_to_forward_proxy() {
+        let connected = Connected::new().proxy(true);
+        let mut extras = Extensions::new();
+        connected.get_extras(&mut extras);
+
+        assert_eq!(
+            ConnectPath::ForwardProxy,
+            ConnectPathInner::from_connected(&connected, &extras).public()
+        );
     }
 }
