@@ -47,10 +47,10 @@ fn read_after_deserialization(
     _runtime_components: &RuntimeComponents,
     _cfg: &mut ConfigBag,
 ) -> Result<(), BoxError> {
-    if let Some(value) = context.response().headers().get_bytes("x-amz-expiration") {
+    if let Some(value) = context.response().headers().get_bytes("content-disposition") {
         // ISO-8859-1: every octet is one code point, so this cannot fail.
         let decoded: String = value.iter().map(|&b| b as char).collect();
-        *self.expiration.lock().unwrap() = Some(decoded);
+        *self.content_disposition.lock().unwrap() = Some(decoded);
     }
     Ok(())
 }
