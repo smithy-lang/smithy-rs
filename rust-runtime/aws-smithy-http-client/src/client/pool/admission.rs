@@ -934,6 +934,10 @@ mod loom_tests {
         )
     }
 
+    /// Races return of the only capacity permit with publication of one demand.
+    ///
+    /// The permit remains conserved and demand is either absent or represented
+    /// by one schedulable record, never by an outstanding assignment.
     #[test]
     fn release_and_demand_submission_conserve_one_permit() {
         loom::model(|| {
@@ -951,11 +955,21 @@ mod loom_tests {
             release.join().unwrap();
             publish.join().unwrap();
 
-            assert_eq!(1, origin.probe().available);
-            assert!(origin.probe().ordered <= 1);
+            let probe = origin.probe();
+            assert_eq!(1, probe.limit);
+            assert_eq!(1, probe.available);
+            assert_eq!(0, probe.assigned);
+            assert!(
+                matches!((probe.ordered, probe.queued), (0, 0) | (1, 1)),
+                "demand publication left duplicate or unschedulable demand: {probe:?}"
+            );
         });
     }
 
+    /// Replaces cancelled demand while its previous assignment is still detached.
+    ///
+    /// The replacement must not receive a second assignment until the first
+    /// delivery settles.
     #[test]
     fn cancellation_preserves_an_outstanding_demand_assignment() {
         loom::model(|| {

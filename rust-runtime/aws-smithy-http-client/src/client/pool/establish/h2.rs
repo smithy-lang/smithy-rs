@@ -189,10 +189,10 @@ async fn drive_flight(
         transport.metadata,
     );
     let (connection, physical) =
-        ConnectionState::pending_open(info, context.cell.connection_stats());
+        ConnectionState::pending_open(info, context.owner_spawner, context.cell.connection_stats());
     let io = ConnectionIo::new(transport.io, physical);
     let executor = PartitionExecutor {
-        spawner: context.owner_spawner.clone(),
+        spawner: connection.owner_spawner(),
     };
     establishment.protocol_handshake_started();
     let (sender, driver) = match hyper::client::conn::http2::Builder::new(executor)
@@ -243,7 +243,7 @@ async fn drive_flight(
     let generation = installed;
     let driver_guard = H2DriverGuard::new(H2CloseHandle::new(&context.cell, generation));
     let driver_info = connection.info().clone();
-    context.owner_spawner.spawn(Box::pin(async move {
+    connection.owner_spawner().spawn(Box::pin(async move {
         if let Err(error) = driver.await {
             tracing::debug!(
                 connection_id = %driver_info.id(),

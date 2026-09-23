@@ -2923,6 +2923,10 @@ mod loom_tests {
         (generation, connection)
     }
 
+    /// Races activation of one exact generation with close of that generation.
+    ///
+    /// Close either rejects activation or retains the draining generation until
+    /// the prospective request releases its claim.
     #[test]
     fn activation_linearizes_against_generation_close() {
         loom::model(|| {
@@ -2941,13 +2945,24 @@ mod loom_tests {
                 OriginCell::close_h2(&closing_cell, generation, CloseReason::Poisoned)
             });
 
-            drop(activation.join().unwrap());
+            let activation = activation.join().unwrap();
             assert!(close.join().unwrap());
             assert_eq!(Some(CloseReason::Poisoned), connection.probe().close_reason);
+            if let Some(activation) = activation {
+                assert_eq!(
+                    Some((1, 0)),
+                    cell.h2_request_counts(generation),
+                    "close did not retain the prospective activation"
+                );
+                drop(activation);
+            }
             assert!(!cell.state.lock().h2.generations.contains_key(&generation));
         });
     }
 
+    /// Completes the upload and response sides of one accepted request concurrently.
+    ///
+    /// The two guards share one request claim and must release its dispatch once.
     #[test]
     fn concurrent_request_side_completion_releases_one_dispatch() {
         loom::model(|| {
@@ -2980,6 +2995,9 @@ mod loom_tests {
         });
     }
 
+    /// Closes a generation after only one side of an accepted request completes.
+    ///
+    /// The draining generation and dispatch remain until the second side ends.
     #[test]
     fn generation_close_waits_for_both_request_sides() {
         loom::model(|| {

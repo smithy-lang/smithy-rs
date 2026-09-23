@@ -11,6 +11,8 @@
 #![cfg(all(feature = "wire-mock", feature = "rustls-aws-lc"))]
 
 mod common;
+#[path = "common/runtime.rs"]
+mod runtime;
 
 use aws_smithy_http_client::pool::{
     Client as PoolClient, ConnectionPool, ConnectionReuseScope, Partition, PartitionId,
@@ -765,6 +767,249 @@ mod goaway_and_replacement {
     }
 }
 
+mod abrupt_transport_failure {
+    use super::*;
+    use aws_smithy_http_client::pool::ConnectionEvent;
+    use aws_smithy_runtime_api::client::connection::ConnectionId;
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    enum PoolEvent {
+        Opened(ConnectionId),
+        LogicalClose(ConnectionId),
+        PhysicalClose(ConnectionId),
+    }
+
+    /// Raw transport loss terminates every accepted stream and later demand uses
+    /// a replacement connection.
+    async fn abrupt_transport_failure_terminates_streams_and_replaces_connection(
+        client: SharedHttpClient,
+    ) -> aws_smithy_http_client::pool::OriginKey {
+        let body_gate = ManualGate::new();
+        let held = |body| {
+            H2StreamScript::respond(
+                H2Response::new(http_1x::StatusCode::OK).body(H2BodyPlan::gated(
+                    body,
+                    body_gate.waiter(),
+                    "-never",
+                )),
+            )
+        };
+        let first = H2ConnectionScript::new()
+            .route("/warm", H2StreamScript::respond(H2Response::ok("warm")))
+            .route("/one", held("one"))
+            .route("/two", held("two"))
+            .route("/three", held("three"));
+        let second = H2ConnectionScript::new().route(
+            "/replacement",
+            H2StreamScript::respond(H2Response::ok("replacement")),
+        );
+        let server = H2TestServer::builder()
+            .connections(H2ConnectionPlan::queue([first, second]))
+            .start()
+            .await
+            .expect("H2 server should start");
+        let connector = test_client::connector(&client);
+
+        let (status, body) = test_client::get_and_collect(&connector, &server.url("/warm")).await;
+        assert_eq!((status, body.as_slice()), (200, b"warm".as_slice()));
+        let (one, two, three) = tokio::join!(
+            test_client::send_request(
+                &connector,
+                HttpRequest::get(server.url("/one")).expect("valid HTTP request"),
+            ),
+            test_client::send_request(
+                &connector,
+                HttpRequest::get(server.url("/two")).expect("valid HTTP request"),
+            ),
+            test_client::send_request(
+                &connector,
+                HttpRequest::get(server.url("/three")).expect("valid HTTP request"),
+            ),
+        );
+        let responses = [
+            one.expect("first response headers should arrive"),
+            two.expect("second response headers should arrive"),
+            three.expect("third response headers should arrive"),
+        ];
+        body_gate
+            .wait_for_arrivals(3, test_client::WAIT)
+            .await
+            .expect("all response streams should reach the body gate");
+
+        let original = single_stream_connection(&server, "/warm");
+        assert_eq!(original, single_stream_connection(&server, "/one"));
+        assert_eq!(original, single_stream_connection(&server, "/two"));
+        assert_eq!(original, single_stream_connection(&server, "/three"));
+        server
+            .abort_transport(original)
+            .await
+            .expect("the original transport should abort");
+
+        for response in responses {
+            let body_result =
+                tokio::time::timeout(test_client::WAIT, response.into_body().collect())
+                    .await
+                    .expect("aborted response body should terminate");
+            assert!(
+                body_result.is_err(),
+                "abrupt transport loss completed an accepted response body"
+            );
+        }
+        server
+            .wait_for_event(test_client::WAIT, |event| {
+                matches!(
+                    event,
+                    H2Event::ConnectionClosed {
+                        connection_id,
+                        reason: ConnectionCloseReason::ScriptedTransportAbort,
+                    } if *connection_id == original
+                )
+            })
+            .await
+            .expect("the harness should record raw transport loss");
+
+        let replacement_url = server.url("/replacement");
+        let origin = aws_smithy_http_client::pool::OriginKey::from_uri(
+            &replacement_url.parse().expect("valid replacement URI"),
+        )
+        .expect("replacement URI should name an origin");
+        let (status, body) = test_client::get_and_collect(&connector, &replacement_url).await;
+        assert_eq!((status, body.as_slice()), (200, b"replacement".as_slice()));
+        assert_ne!(
+            original,
+            single_stream_connection(&server, "/replacement"),
+            "later demand reused the aborted connection"
+        );
+        assert_eq!(2, server.connection_count());
+
+        drop(connector);
+        drop(client);
+        server.shutdown().await.expect("clean H2 server shutdown");
+        origin
+    }
+
+    async fn wait_for_pool_events(
+        events: &Arc<Mutex<Vec<PoolEvent>>>,
+        predicate: impl Fn(&[PoolEvent]) -> bool,
+    ) {
+        tokio::time::timeout(test_client::WAIT, async {
+            loop {
+                if predicate(&events.lock().unwrap()) {
+                    return;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("pool lifecycle events should converge");
+    }
+
+    #[tokio::test]
+    async fn test_abrupt_transport_failure_terminates_streams_and_replaces_connection_with_hyper_util_legacy_pool(
+    ) {
+        abrupt_transport_failure_terminates_streams_and_replaces_connection(h2_client(
+            &HyperUtilLegacyPool,
+        ))
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_abrupt_transport_failure_terminates_streams_and_replaces_connection_with_partitioned_pool(
+    ) {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let observed = events.clone();
+        let pool = ConnectionPool::builder()
+            .tls_provider(rustls_aws_lc())
+            .tls_context(test_tls::SERVER_IDENTITY.client_context())
+            .max_connections_per_host(1)
+            .event_listener(move |event: &ConnectionEvent<'_>| {
+                let event = match event {
+                    ConnectionEvent::Opened(opened) => {
+                        Some(PoolEvent::Opened(opened.connection().id()))
+                    }
+                    ConnectionEvent::LogicalClose(closed) => {
+                        Some(PoolEvent::LogicalClose(closed.connection().id()))
+                    }
+                    ConnectionEvent::PhysicalClose(closed) => {
+                        Some(PoolEvent::PhysicalClose(closed.connection().id()))
+                    }
+                    ConnectionEvent::EstablishmentFailed(_) => None,
+                    _ => None,
+                };
+                if let Some(event) = event {
+                    observed.lock().unwrap().push(event);
+                }
+            })
+            .build_https()
+            .expect("valid partitioned HTTPS pool");
+        let client = SharedHttpClient::new(
+            PoolClient::new(&pool).expect("anonymous partition should resolve"),
+        );
+
+        let origin =
+            abrupt_transport_failure_terminates_streams_and_replaces_connection(client).await;
+        wait_for_pool_events(&events, |events| {
+            events
+                .iter()
+                .filter(|event| matches!(event, PoolEvent::PhysicalClose(_)))
+                .count()
+                >= 1
+        })
+        .await;
+
+        let events = events.lock().unwrap();
+        let opened: Vec<_> = events
+            .iter()
+            .filter_map(|event| match event {
+                PoolEvent::Opened(connection) => Some(*connection),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(2, opened.len(), "expected original and replacement opens");
+        assert_ne!(opened[0], opened[1]);
+        assert_eq!(
+            1,
+            events
+                .iter()
+                .filter(|event| matches!(event, PoolEvent::LogicalClose(id) if *id == opened[0]))
+                .count(),
+            "the aborted generation should close logically once"
+        );
+        assert_eq!(
+            1,
+            events
+                .iter()
+                .filter(|event| matches!(event, PoolEvent::PhysicalClose(id) if *id == opened[0]))
+                .count(),
+            "the aborted transport should close physically once"
+        );
+        drop(events);
+
+        let stats = pool
+            .partition_stats(PartitionId::ANONYMOUS, &origin)
+            .expect("anonymous partition should retain origin statistics");
+        assert_eq!(0, stats.pending_acquisitions());
+        assert_eq!(0, stats.establishing_connections());
+        assert_eq!(0, stats.h2().active_requests());
+        assert_eq!(1, stats.h2().accepting());
+        assert_eq!(0, stats.h2().draining());
+        assert_eq!(1, stats.physically_live_connections());
+        let capacity = pool
+            .origin_stats(&origin)
+            .capacity()
+            .copied()
+            .expect("origin should have bounded capacity");
+        assert_eq!(1, capacity.limit());
+        assert_eq!(
+            1,
+            capacity.in_use(),
+            "replacement connection should own the returned slot"
+        );
+    }
+}
+
 #[cfg(feature = "s2n-tls")]
 mod protocol_negotiation {
     use super::*;
@@ -1202,6 +1447,242 @@ mod partition_reuse {
         drop(metadata);
         drop(first);
         drop(pool);
+        server.shutdown().await.expect("clean H2 server shutdown");
+    }
+}
+
+mod runtime_placement {
+    use super::*;
+    use aws_smithy_http_client::pool::ConnectionEvent;
+    use aws_smithy_runtime_api::client::connection::ConnectionId;
+    use runtime::DrivenRuntime;
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
+    use tokio::runtime::{Handle, Id};
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    enum EventKind {
+        Opened,
+        LogicalClose,
+        PhysicalClose,
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    struct ObservedEvent {
+        kind: EventKind,
+        connection: ConnectionId,
+        partition: PartitionId,
+        runtime: Option<Id>,
+    }
+
+    async fn wait_for_event(
+        events: &Arc<Mutex<Vec<ObservedEvent>>>,
+        predicate: impl Fn(&ObservedEvent) -> bool,
+    ) -> ObservedEvent {
+        tokio::time::timeout(test_client::WAIT, async {
+            loop {
+                if let Some(event) = events.lock().unwrap().iter().copied().find(&predicate) {
+                    return event;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("connection event should arrive")
+    }
+
+    #[tokio::test]
+    async fn peer_h2_reuse_keeps_connection_work_on_the_owner_runtime() {
+        let first_id = PartitionId::from_index(1);
+        let second_id = PartitionId::from_index(2);
+        let first_runtime = DrivenRuntime::start("h2-owner-one");
+        let first_runtime_id = first_runtime.id();
+        let second_runtime = DrivenRuntime::start("h2-owner-two");
+        let second_runtime_id = second_runtime.id();
+        let peer_body_gate = ManualGate::new();
+        let first_script = H2ConnectionScript::new()
+            .route("/first", H2StreamScript::respond(H2Response::ok("first")))
+            .route(
+                "/peer",
+                H2StreamScript::respond(
+                    H2Response::new(http_1x::StatusCode::OK).body(H2BodyPlan::gated(
+                        "peer-",
+                        peer_body_gate.waiter(),
+                        "never",
+                    )),
+                ),
+            );
+        let second_script = H2ConnectionScript::new().route(
+            "/replacement",
+            H2StreamScript::respond(H2Response::ok("replacement")),
+        );
+        let server = H2TestServer::builder()
+            .connections(H2ConnectionPlan::queue([first_script, second_script]))
+            .start()
+            .await
+            .expect("H2 server should start");
+
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let observed = events.clone();
+        let pool = ConnectionPool::builder()
+            .tls_provider(rustls_aws_lc())
+            .tls_context(test_tls::SERVER_IDENTITY.client_context())
+            .partitions([
+                Partition::new(first_id, first_runtime.driver_spawner()),
+                Partition::new(second_id, second_runtime.driver_spawner()),
+            ])
+            .connection_reuse_scope(ConnectionReuseScope::Pool)
+            .max_connections_per_host(1)
+            .event_listener(move |event: &ConnectionEvent<'_>| {
+                let observed_event = match event {
+                    ConnectionEvent::Opened(opened) => {
+                        Some((EventKind::Opened, opened.connection()))
+                    }
+                    ConnectionEvent::LogicalClose(closed) => {
+                        Some((EventKind::LogicalClose, closed.connection()))
+                    }
+                    ConnectionEvent::PhysicalClose(closed) => {
+                        Some((EventKind::PhysicalClose, closed.connection()))
+                    }
+                    ConnectionEvent::EstablishmentFailed(_) => None,
+                    _ => None,
+                };
+                if let Some((kind, connection)) = observed_event {
+                    observed.lock().unwrap().push(ObservedEvent {
+                        kind,
+                        connection: connection.id(),
+                        partition: connection.owner_partition(),
+                        runtime: Handle::try_current().ok().map(|handle| handle.id()),
+                    });
+                }
+            })
+            .build_https()
+            .expect("valid partitioned HTTPS pool");
+        let first_client = SharedHttpClient::new(
+            PoolClient::from_partition(&pool, first_id).expect("first partition should resolve"),
+        );
+        let second_client = SharedHttpClient::new(
+            PoolClient::from_partition(&pool, second_id).expect("second partition should resolve"),
+        );
+        let first = test_client::connector(&first_client);
+        let second = test_client::connector(&second_client);
+
+        let first_request = first.clone();
+        let first_url = server.url("/first");
+        let (status, body) = first_runtime
+            .spawn(async move { test_client::get_and_collect(&first_request, &first_url).await })
+            .await
+            .expect("first partition request task should not panic");
+        assert_eq!((status, body.as_slice()), (200, b"first".as_slice()));
+        let original_server_connection = single_stream_connection(&server, "/first");
+        let original_open = wait_for_event(&events, |event| {
+            event.kind == EventKind::Opened && event.partition == first_id
+        })
+        .await;
+        assert_eq!(Some(first_runtime_id), original_open.runtime);
+        assert!(first_runtime.submitted_tasks() > 0);
+
+        let peer_request = second.clone();
+        let peer_url = server.url("/peer");
+        let peer_response = second_runtime
+            .spawn(async move {
+                test_client::send_request(
+                    &peer_request,
+                    HttpRequest::get(peer_url).expect("valid HTTP request"),
+                )
+                .await
+            })
+            .await
+            .expect("peer request task should not panic")
+            .expect("peer response headers should arrive");
+        peer_body_gate
+            .wait_until_reached(test_client::WAIT)
+            .await
+            .expect("peer response should reach its body gate");
+        assert_eq!(
+            original_server_connection,
+            single_stream_connection(&server, "/peer"),
+            "peer demand should use the first partition's generation"
+        );
+        assert!(
+            !events
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|event| { event.kind == EventKind::Opened && event.partition == second_id }),
+            "peer reuse should not establish a requester-owned connection"
+        );
+
+        first_runtime.shutdown();
+        let body_result =
+            tokio::time::timeout(test_client::WAIT, peer_response.into_body().collect())
+                .await
+                .expect("owner-runtime shutdown should terminate the accepted response");
+        assert!(
+            body_result.is_err(),
+            "accepted response completed after its owner runtime stopped"
+        );
+        let logical_close = wait_for_event(&events, |event| {
+            event.kind == EventKind::LogicalClose && event.connection == original_open.connection
+        })
+        .await;
+        assert_eq!(first_id, logical_close.partition);
+        let physical_close = wait_for_event(&events, |event| {
+            event.kind == EventKind::PhysicalClose && event.connection == original_open.connection
+        })
+        .await;
+        assert_eq!(first_id, physical_close.partition);
+
+        let replacement_request = second.clone();
+        let replacement_url = server.url("/replacement");
+        let (status, body) = second_runtime
+            .spawn(async move {
+                test_client::get_and_collect(&replacement_request, &replacement_url).await
+            })
+            .await
+            .expect("replacement request task should not panic");
+        assert_eq!((status, body.as_slice()), (200, b"replacement".as_slice()));
+        assert_ne!(
+            original_server_connection,
+            single_stream_connection(&server, "/replacement")
+        );
+        let replacement_open = wait_for_event(&events, |event| {
+            event.kind == EventKind::Opened && event.partition == second_id
+        })
+        .await;
+        assert_eq!(Some(second_runtime_id), replacement_open.runtime);
+        assert_ne!(original_open.connection, replacement_open.connection);
+        assert!(second_runtime.submitted_tasks() > 0);
+
+        let origin = aws_smithy_http_client::pool::OriginKey::from_uri(
+            &server.url("/").parse().expect("valid server URI"),
+        )
+        .expect("server URI should name an origin");
+        let first_stats = pool
+            .partition_stats(first_id, &origin)
+            .expect("first partition should retain origin statistics");
+        assert_eq!(0, first_stats.h2().active_requests());
+        assert_eq!(0, first_stats.physically_live_connections());
+        let second_stats = pool
+            .partition_stats(second_id, &origin)
+            .expect("second partition should retain origin statistics");
+        assert_eq!(1, second_stats.h2().accepting());
+        assert_eq!(0, second_stats.h2().active_requests());
+        assert_eq!(1, second_stats.physically_live_connections());
+        let capacity = pool
+            .origin_stats(&origin)
+            .capacity()
+            .copied()
+            .expect("origin should have bounded capacity");
+        assert_eq!(1, capacity.limit());
+        assert_eq!(1, capacity.in_use());
+
+        drop(first);
+        drop(second);
+        drop(first_client);
+        drop(second_client);
+        drop(pool);
+        second_runtime.shutdown();
         server.shutdown().await.expect("clean H2 server shutdown");
     }
 }

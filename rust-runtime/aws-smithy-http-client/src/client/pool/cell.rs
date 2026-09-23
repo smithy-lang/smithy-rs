@@ -2378,6 +2378,9 @@ mod loom_tests {
         ConnectionInfo::for_test(ConnectionId::new(id), PartitionId::from_index(1))
     }
 
+    /// Races local HTTP/1 selection with close.
+    ///
+    /// The sender must have one winner and no installed record may survive.
     #[test]
     fn h1_selection_linearizes_against_close() {
         loom::model(|| {
@@ -2399,6 +2402,9 @@ mod loom_tests {
         });
     }
 
+    /// Races a reusable HTTP/1 return with close.
+    ///
+    /// Close must prevent the returning sender from becoming selectable again.
     #[test]
     fn h1_return_linearizes_against_close() {
         loom::model(|| {
@@ -2419,6 +2425,9 @@ mod loom_tests {
         });
     }
 
+    /// Races local sender delivery with cancellation of its target waiter.
+    ///
+    /// Cancellation may win, but the exclusive sender must return exactly once.
     #[test]
     fn h1_delivery_and_waiter_cancellation_preserve_the_sender() {
         loom::model(|| {
@@ -2445,6 +2454,9 @@ mod loom_tests {
         });
     }
 
+    /// Races an idle return with completion of an already-started establishment.
+    ///
+    /// Exactly one result satisfies the waiter and the losing sender remains reusable.
     #[test]
     fn returned_h1_and_establishment_race_for_one_waiter() {
         loom::model(|| {
@@ -2485,6 +2497,9 @@ mod loom_tests {
         });
     }
 
+    /// Races first establishment commitment with a reusable HTTP/1 return.
+    ///
+    /// A return that wins before commitment must satisfy the waiter without being displaced.
     #[test]
     fn first_establishment_poll_races_returned_h1() {
         loom::model(|| {
@@ -2529,6 +2544,9 @@ mod loom_tests {
         });
     }
 
+    /// Races local HTTP/1 return with bounded-capacity delivery.
+    ///
+    /// The sender wins the waiter while the unused capacity returns to admission.
     #[test]
     fn h1_return_and_capacity_delivery_complete_one_waiter() {
         loom::model(|| {
@@ -2565,10 +2583,14 @@ mod loom_tests {
         });
     }
 
+    /// Races a retained peer match with cancellation of its requesting waiter.
+    ///
+    /// Three preemptions cover either actor entering first and a complete
+    /// reservation round trip across the admission and cell locks.
     #[test]
     fn peer_match_and_request_cancellation_preserve_the_sender() {
         let mut model = loom::model::Builder::new();
-        model.preemption_bound = Some(2);
+        model.preemption_bound = Some(3);
         model.check(|| {
             let (admission, connection_cell, requesting_cell) =
                 bounded_peer_cells(EligibilityGroup::Pool, EligibilityGroup::Pool);
@@ -2600,10 +2622,15 @@ mod loom_tests {
         });
     }
 
+    /// Races borrowed-sender delivery with a local sender return.
+    ///
+    /// Both exclusive sender identities must remain installed exactly once.
+    /// Three preemptions cover either actor entering first and one crossing
+    /// returning through both lock domains.
     #[test]
     fn borrowed_delivery_racing_a_local_return_preserves_both_senders() {
         let mut model = loom::model::Builder::new();
-        model.preemption_bound = Some(2);
+        model.preemption_bound = Some(3);
         model.check(|| {
             let (admission, connection_cell, requesting_cell) =
                 bounded_peer_cells_with_limit(2, EligibilityGroup::Pool, EligibilityGroup::Pool);
@@ -2642,6 +2669,14 @@ mod loom_tests {
                 .take_ready_h1(waiter)
                 .expect("delivery/return race did not satisfy the requesting cell waiter");
             drop(selected);
+            let mut sender_ids = connection_cell.h1_idle_sender_ids();
+            sender_ids.extend(requesting_cell.h1_idle_sender_ids());
+            sender_ids.sort_unstable();
+            assert_eq!(
+                vec![11, 22],
+                sender_ids,
+                "delivery/return race duplicated or lost an HTTP/1 sender"
+            );
             assert_eq!(
                 2,
                 connection_cell.h1_counts().0 + requesting_cell.h1_counts().0
@@ -2655,10 +2690,15 @@ mod loom_tests {
         });
     }
 
+    /// Races peer-sender materialization with close of the owning cell record.
+    ///
+    /// The request must receive the sender or establishment capacity, never
+    /// become stranded. Three preemptions cover the delivery-close-delivery
+    /// schedule across the two cell locks and admission lock.
     #[test]
     fn borrow_materialization_races_owning_cell_close_without_stranding_request() {
         let mut model = loom::model::Builder::new();
-        model.preemption_bound = Some(2);
+        model.preemption_bound = Some(3);
         model.check(|| {
             let (admission, connection_cell, requesting_cell) =
                 bounded_peer_cells(EligibilityGroup::Pool, EligibilityGroup::Pool);
@@ -2712,10 +2752,14 @@ mod loom_tests {
         });
     }
 
+    /// Races HTTP/1 capacity reclaim with independent close of the same connection.
+    ///
+    /// Capacity must return exactly once. Three preemptions cover close and
+    /// reclaim entering in either order and the resulting admission delivery.
     #[test]
     fn reclaim_and_connection_close_release_exactly_one_capacity_slot() {
         let mut model = loom::model::Builder::new();
-        model.preemption_bound = Some(2);
+        model.preemption_bound = Some(3);
         model.check(|| {
             let (admission, connection_cell, requesting_cell) = bounded_peer_cells(
                 EligibilityGroup::Partition(PartitionId::from_index(1)),
@@ -2766,6 +2810,9 @@ mod loom_tests {
         });
     }
 
+    /// Races bounded-capacity delivery with cancellation of its target waiter.
+    ///
+    /// Refusal must refunnel the permit after the cell lock is released.
     #[test]
     fn delivery_and_cancellation_race_refunnels_capacity() {
         loom::model(|| {
@@ -2795,10 +2842,14 @@ mod loom_tests {
         });
     }
 
+    /// Races peer HTTP/2 route installation with cancellation of its target waiter.
+    ///
+    /// Three preemptions cover either actor entering first and route settlement
+    /// returning through admission after cell validation.
     #[test]
     fn h2_route_installation_races_requesting_cell_cancellation() {
         let mut model = loom::model::Builder::new();
-        model.preemption_bound = Some(2);
+        model.preemption_bound = Some(3);
         model.check(|| {
             let (admission, connection_cell, requesting_cell) =
                 bounded_peer_cells(EligibilityGroup::Pool, EligibilityGroup::Pool);
@@ -2837,6 +2888,10 @@ mod loom_tests {
         });
     }
 
+    /// Races route publication, generation close, and peer route service.
+    ///
+    /// The three-preemption bound permits each actor to intervene before route
+    /// settlement returns through admission to the requesting cell.
     #[test]
     fn h2_route_acknowledgement_races_generation_close_and_route_service() {
         let mut model = loom::model::Builder::new();
@@ -2883,10 +2938,14 @@ mod loom_tests {
         });
     }
 
+    /// Races peer route publication with close of the routed generation.
+    ///
+    /// Three preemptions cover either actor entering first and the stale route
+    /// acknowledgement returning to admission.
     #[test]
     fn h2_route_close_race_preserves_capacity_ownership() {
         let mut model = loom::model::Builder::new();
-        model.preemption_bound = Some(2);
+        model.preemption_bound = Some(3);
         model.check(|| {
             let (admission, connection_cell, requesting_cell) =
                 bounded_peer_cells(EligibilityGroup::Pool, EligibilityGroup::Pool);

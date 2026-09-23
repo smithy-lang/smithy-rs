@@ -404,6 +404,7 @@ impl SharedState {
 #[derive(Debug)]
 enum ConnectionCommand {
     GracefulShutdown(oneshot::Sender<()>),
+    AbortTransport(oneshot::Sender<()>),
 }
 
 #[derive(Debug, Default)]
@@ -539,6 +540,34 @@ impl H2TestServer {
             .map_err(|_| {
                 H2HarnessError::new(format!(
                     "H2 connection {connection_id:?} closed before graceful shutdown started"
+                ))
+            })
+    }
+
+    /// Drops one active transport without sending GOAWAY.
+    pub(crate) async fn abort_transport(
+        &self,
+        connection_id: H2ConnectionId,
+    ) -> Result<(), H2HarnessError> {
+        let control = self.state.control(connection_id).ok_or_else(|| {
+            H2HarnessError::new(format!("H2 connection {connection_id:?} is not active"))
+        })?;
+        let (acknowledged, ack) = oneshot::channel();
+        control
+            .send(ConnectionCommand::AbortTransport(acknowledged))
+            .map_err(|_| {
+                H2HarnessError::new(format!("failed to abort H2 transport {connection_id:?}"))
+            })?;
+        tokio::time::timeout(WAIT, ack)
+            .await
+            .map_err(|_| {
+                H2HarnessError::new(format!(
+                    "timed out waiting to abort H2 transport {connection_id:?}"
+                ))
+            })?
+            .map_err(|_| {
+                H2HarnessError::new(format!(
+                    "H2 connection {connection_id:?} closed before its transport was aborted"
                 ))
             })
     }
@@ -747,6 +776,7 @@ async fn drive_connection(
 
     let mut stream_tasks = JoinSet::new();
     let mut shutting_down = false;
+    let mut transport_aborted = false;
     let mut graceful_shutdown = script.goaway_on_ready;
     let mut control_open = true;
     // Tracks whether the connection ended because the client closed it (accept returned None)
@@ -767,6 +797,11 @@ async fn drive_connection(
                         graceful_shutdown = true;
                         connection.graceful_shutdown();
                         let _ = acknowledged.send(());
+                    }
+                    Some(ConnectionCommand::AbortTransport(acknowledged)) => {
+                        transport_aborted = true;
+                        let _ = acknowledged.send(());
+                        break;
                     }
                     None => control_open = false,
                 }
@@ -839,10 +874,16 @@ async fn drive_connection(
         }
     }
 
-    if shutting_down {
+    if shutting_down || transport_aborted || client_initiated_close {
         stream_tasks.abort_all();
         while stream_tasks.join_next().await.is_some() {}
-        Ok(ConnectionCloseReason::HarnessShutdown)
+        if transport_aborted {
+            Ok(ConnectionCloseReason::ScriptedTransportAbort)
+        } else if client_initiated_close {
+            Ok(ConnectionCloseReason::ClientClosed)
+        } else {
+            Ok(ConnectionCloseReason::HarnessShutdown)
+        }
     } else {
         let drain = async {
             while let Some(completed) = stream_tasks.join_next().await {
@@ -856,11 +897,7 @@ async fn drive_connection(
             stream_tasks.abort_all();
             while stream_tasks.join_next().await.is_some() {}
         }
-        if client_initiated_close {
-            Ok(ConnectionCloseReason::ClientClosed)
-        } else {
-            Ok(ConnectionCloseReason::ScriptCompleted)
-        }
+        Ok(ConnectionCloseReason::ScriptCompleted)
     }
 }
 
