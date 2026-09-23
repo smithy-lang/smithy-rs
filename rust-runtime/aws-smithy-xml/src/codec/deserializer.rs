@@ -65,6 +65,27 @@ impl<'a> XmlDeserializer<'a> {
         }
     }
 
+    /// Spawn a deserializer for owned sub-content that cannot be reached via
+    /// [`dispatch_subslice`](Self::dispatch_subslice) — e.g. the synthesized
+    /// `<__flat>` wrapper around a flattened-aggregate group, whose buffer is
+    /// owned locally and so has a shorter lifetime than `'a`.
+    ///
+    /// Inherits the parent's [`depth`](Self::depth) so the recursion-depth
+    /// guard stays continuous across the boundary, exactly as it does for the
+    /// non-flattened path (which reuses `self` via `dispatch_subslice`).
+    /// Using [`new`](Self::new) here instead would reset `depth` to 0 and let
+    /// a shape that recurses through a flattened member (e.g.
+    /// `structure Node { @xmlFlattened kids: NodeList }`) nest without bound,
+    /// overflowing the stack.
+    fn new_child<'b>(&self, input: &'b [u8]) -> XmlDeserializer<'b> {
+        XmlDeserializer {
+            input,
+            text: None,
+            settings: self.settings.clone(),
+            depth: self.depth,
+        }
+    }
+
     /// Creates a deserializer pre-loaded with leaf text content. Used by
     /// tests; runtime dispatch uses [`dispatch_text`](Self::dispatch_text)
     /// to repoint an existing deserializer at leaf text rather than
@@ -176,6 +197,30 @@ impl<'a> XmlDeserializer<'a> {
     /// `start byte index N is not a char boundary` when a byte-level `pos += 1`
     /// landed inside a multi-byte sequence; sticking to bytes throughout
     /// avoids the issue.
+    /// If the element name beginning at `after` (the bytes immediately after
+    /// `<` or `</`) has local name `local` — ignoring any XML namespace
+    /// `prefix:` — return the length of the qname; otherwise `None`. The qname
+    /// runs up to the first whitespace, `/`, or `>`, and its local part is
+    /// whatever follows the last `:`.
+    ///
+    /// This is what lets `find_element_slice` match a prefixed element such as
+    /// `<a:flatList>` by its `flatList` local name. Matching on the raw prefixed
+    /// bytes would fail, sending the scan into the "rest of document" fallback —
+    /// which, under a flattened list, copies the remaining document per item and
+    /// blows memory/CPU up quadratically.
+    fn qname_local_len(after: &[u8], local: &[u8]) -> Option<usize> {
+        let qname_len = after
+            .iter()
+            .position(|&b| matches!(b, b' ' | b'\t' | b'\r' | b'\n' | b'/' | b'>'))
+            .unwrap_or(after.len());
+        let qname = &after[..qname_len];
+        let local_part = match qname.iter().rposition(|&b| b == b':') {
+            Some(i) => &qname[i + 1..],
+            None => qname,
+        };
+        (local_part == local).then_some(qname_len)
+    }
+
     pub(crate) fn find_element_slice(input: &'a [u8], el_local: &str) -> &'a [u8] {
         // Invariant: `el_local` must be a sub-slice of `input` (typically
         // returned by xmlparser as a borrow into the underlying bytes).
@@ -213,14 +258,19 @@ impl<'a> XmlDeserializer<'a> {
         let mut pos = 0;
         while pos < remaining.len() {
             if remaining[pos..].starts_with(b"</") {
-                // Close tag — check if it matches our tag name.
+                // Close tag — match by local name (ignoring any `prefix:`) and
+                // allow optional whitespace before `>` (e.g. `</flatList >`).
                 let after_slash = pos + 2;
-                if remaining[after_slash..].starts_with(tag_name) {
-                    let after_name = after_slash + tag_name.len();
-                    if remaining.get(after_name) == Some(&b'>') {
+                let after = &remaining[after_slash..];
+                if let Some(qlen) = Self::qname_local_len(after, tag_name) {
+                    let mut j = qlen;
+                    while matches!(after.get(j), Some(&(b' ' | b'\t' | b'\r' | b'\n'))) {
+                        j += 1;
+                    }
+                    if after.get(j) == Some(&b'>') {
                         depth -= 1;
                         if depth == 0 {
-                            let end = el_start + after_name + 1;
+                            let end = el_start + after_slash + j + 1;
                             return &input[el_start..end];
                         }
                     }
@@ -234,10 +284,8 @@ impl<'a> XmlDeserializer<'a> {
                 if let Some(gt) = remaining[pos..].iter().position(|&b| b == b'>') {
                     let tag_content = &remaining[pos + 1..pos + gt];
                     let is_self_closing = tag_content.last() == Some(&b'/');
-                    let opens_our_tag = tag_content.starts_with(tag_name)
-                        && tag_content
-                            .get(tag_name.len())
-                            .is_none_or(|&b| b == b' ' || b == b'>' || b == b'/');
+                    // Match by local name, ignoring any namespace `prefix:`.
+                    let opens_our_tag = Self::qname_local_len(tag_content, tag_name).is_some();
                     if opens_our_tag && is_self_closing && depth == 0 {
                         // The target element is itself self-closing (e.g.
                         // `<Foo/>`) — there is no matching close tag, so the
@@ -462,14 +510,15 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
             // `read_list` / `read_map` sees the collected siblings as
             // wrapper-children and iterates them normally. The wrapper buffer is
             // owned locally (lifetime is shorter than `'a`), so we cannot route
-            // it through `dispatch_subslice` — keep a fresh deserializer for
-            // this case only.
+            // it through `dispatch_subslice`; `new_child` instead spawns a
+            // deserializer that inherits the current depth, keeping the
+            // recursion-depth guard continuous across the flattened boundary.
             for (_idx, (member, bytes)) in flattened_groups {
                 let mut wrapped = Vec::with_capacity(bytes.len() + 16);
                 wrapped.extend_from_slice(b"<__flat>");
                 wrapped.extend_from_slice(&bytes);
                 wrapped.extend_from_slice(b"</__flat>");
-                let mut child_deser = XmlDeserializer::new(&wrapped, self.settings.clone());
+                let mut child_deser = self.new_child(&wrapped);
                 consumer(member, &mut child_deser)?;
             }
             Ok(())
@@ -1433,6 +1482,63 @@ mod tests {
     }
 
     #[test]
+    fn read_struct_rejects_overdeep_payloads_through_flattened_member() {
+        // Regression: a shape that recurses through an @xmlFlattened list
+        // member — `structure Node { @xmlFlattened kids: NodeList }` where
+        // `NodeList` is a list of `Node` — must still be depth-limited.
+        //
+        // Flattened groups are dispatched through a freshly spawned
+        // deserializer (the synthesized `<__flat>` wrapper is owned locally
+        // and can't route through `dispatch_subslice`). That child must
+        // inherit the parent's depth via `new_child`; if it instead started
+        // at 0 (as a plain `XmlDeserializer::new` would), the counter would
+        // reset on every flattened hop and this recursion would nest without
+        // bound, overflowing the worker stack instead of returning an error.
+        static NODE_KIDS: Schema<'static> =
+            Schema::new_member(shape_id!("test", "Node$kids"), ShapeType::List, "kids", 0)
+                .with_xml_flattened()
+                .with_xml_name("kids");
+        static NODE_SCHEMA: Schema<'static> = Schema::new_struct(
+            shape_id!("test", "Node"),
+            ShapeType::Structure,
+            &[&NODE_KIDS],
+        );
+
+        // Deeply nested flattened `<kids>` chain, far beyond `max`. Each
+        // `Node` level costs two enter_aggregate calls (its `read_struct`
+        // plus the flattened list's `read_list`), so `max = 4` rejects within
+        // a handful of levels; 50 levels guarantees we cross it.
+        let max = 4;
+        let depth = 50usize;
+        let mut xml = Vec::new();
+        xml.extend_from_slice(b"<Node>");
+        for _ in 0..depth {
+            xml.extend_from_slice(b"<kids>");
+        }
+        for _ in 0..depth {
+            xml.extend_from_slice(b"</kids>");
+        }
+        xml.extend_from_slice(b"</Node>");
+
+        let mut deser = XmlDeserializer::new(&xml, settings_with_max_depth(max));
+
+        // Each `<kids>` list item is itself a `Node`, so the list consumer
+        // recurses back into `read_struct`.
+        fn consume(_m: &Schema<'_>, d: &mut dyn ShapeDeserializer) -> Result<(), SerdeError> {
+            d.read_struct(&NODE_SCHEMA, &mut |member, d| {
+                d.read_list(member, &mut |d| consume(&NODE_SCHEMA, d))
+            })
+        }
+
+        let err = consume(&NODE_SCHEMA, &mut deser)
+            .expect_err("recursion through a flattened member must be depth-limited");
+        assert!(
+            format!("{err}").contains("maximum nesting depth exceeded"),
+            "expected depth-exceeded error, got: {err}"
+        );
+    }
+
+    #[test]
     fn depth_resets_after_consumer_error() {
         // Regression: prior to the IIFE refactor in `read_struct` /
         // `read_list` / `read_map` / the 5 collection helpers, a `?`
@@ -1578,6 +1684,57 @@ mod tests {
             .expect("must not panic on multi-byte UTF-8 inside map elements");
 
         assert_eq!(entries, vec![("Б".to_owned(), String::new())]);
+    }
+
+    /// Regression: `find_element_slice` must locate a namespace-prefixed
+    /// element by its local name. Previously the `a:` prefix defeated both the
+    /// open- and close-tag matches, so the scan fell through to the
+    /// "rest of document" fallback and returned everything from the element to
+    /// the end of the buffer. Under a flattened list that fallback is copied
+    /// per item, turning a small body into quadratic memory/CPU (a DoS).
+    #[test]
+    fn find_element_slice_matches_prefixed_element() {
+        // `el_local` must point INTO `input` (see the fn's debug_assert), so
+        // slice the local name straight out of the buffer.
+        fn local_in<'a>(input: &'a [u8], open: &[u8]) -> &'a str {
+            let at = input.windows(open.len()).position(|w| w == open).unwrap();
+            // `open` is `<prefix:` — the local name starts right after it.
+            let start = at + open.len();
+            let end = start
+                + input[start..]
+                    .iter()
+                    .position(|&b| matches!(b, b' ' | b'>' | b'/'))
+                    .unwrap();
+            std::str::from_utf8(&input[start..end]).unwrap()
+        }
+
+        // Two prefixed siblings; locating the first must yield ONLY the first,
+        // not the tail through the second.
+        let input = br#"<Root><a:flatList xmlns:a="u">x</a:flatList><a:flatList xmlns:a="u">y</a:flatList></Root>"#;
+        let el_local = local_in(input, b"<a:");
+        assert_eq!(el_local, "flatList");
+        assert_eq!(
+            XmlDeserializer::find_element_slice(input, el_local),
+            &br#"<a:flatList xmlns:a="u">x</a:flatList>"#[..],
+            "prefixed element must be sliced by local name, not fall back to rest-of-document",
+        );
+
+        // Whitespace before the close `>` (`</flatList >`) must still match.
+        let ws = b"<flatList >x</flatList ><flatList>y</flatList>";
+        let el_local = local_in(ws, b"<");
+        assert_eq!(
+            XmlDeserializer::find_element_slice(ws, el_local),
+            &b"<flatList >x</flatList >"[..],
+            "trailing whitespace in tags must not defeat the match",
+        );
+
+        // A different prefix on the close tag still matches by local name.
+        let mixed = br#"<a:flatList xmlns:a="u">x</a:flatList>tail"#;
+        let el_local = local_in(mixed, b"<a:");
+        assert_eq!(
+            XmlDeserializer::find_element_slice(mixed, el_local),
+            &br#"<a:flatList xmlns:a="u">x</a:flatList>"#[..],
+        );
     }
 
     #[test]
