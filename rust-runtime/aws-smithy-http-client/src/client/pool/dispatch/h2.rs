@@ -20,7 +20,7 @@ use super::super::cell::h2::{
     H2Activation, H2CloseHandle, H2DispatchParts, H2ResponseGuard, H2UploadGuard,
 };
 use super::super::connection::{CloseReason, ConnectionState};
-use super::{AcquisitionContext, H1HostHeaderInserted};
+use super::{AcquisitionContext, FrozenConnectionSelection, H1HostHeaderInserted};
 use crate::client::downcast_error;
 use crate::sync::{Arc, Mutex};
 use aws_smithy_runtime_api::client::connection::CaptureSmithyConnection;
@@ -31,7 +31,6 @@ use hyper::body::Body;
 use std::future::{poll_fn, Future};
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use std::time::SystemTime;
 
 /// Result of one checked HTTP/2 dispatch attempt.
 #[allow(
@@ -76,8 +75,8 @@ struct H2AcceptedDispatch {
     response_guard: H2ResponseGuard,
     /// Whether the generation accepted an earlier request.
     reused: bool,
-    /// Time at which Hyper first retained the request envelope.
-    acquisition_completed_at: Option<SystemTime>,
+    /// Selected-connection observation held until the request cannot return.
+    connection_selection: Option<FrozenConnectionSelection>,
 }
 
 /// Dispatches one request through prospective H2 request authority.
@@ -158,10 +157,10 @@ pub(super) async fn dispatch(
         }
         Poll::Ready(result) => {
             activation.accept(dispatch);
-            let acquisition_completed_at = context.connection_selection_time();
+            let connection_selection =
+                context.freeze_connection_selection(reused, captured_metadata.as_ref());
             let sender_closed = sender.is_closed();
             resolve_h2_send(
-                context,
                 sender_closed,
                 result,
                 H2AcceptedDispatch {
@@ -170,17 +169,17 @@ pub(super) async fn dispatch(
                     captured_metadata,
                     response_guard: response,
                     reused,
-                    acquisition_completed_at,
+                    connection_selection,
                 },
             )
         }
         Poll::Pending => {
             activation.accept(dispatch);
-            let acquisition_completed_at = context.connection_selection_time();
+            let connection_selection =
+                context.freeze_connection_selection(reused, captured_metadata.as_ref());
             let result = send.await;
             let sender_closed = sender.is_closed();
             resolve_h2_send(
-                context,
                 sender_closed,
                 result,
                 H2AcceptedDispatch {
@@ -189,19 +188,14 @@ pub(super) async fn dispatch(
                     captured_metadata,
                     response_guard: response,
                     reused,
-                    acquisition_completed_at,
+                    connection_selection,
                 },
             )
         }
     }
 }
 
-#[allow(
-    clippy::result_large_err,
-    reason = "ConnectorError preserves SDK classification and connection metadata"
-)]
 fn resolve_h2_send(
-    context: &AcquisitionContext,
     sender_closed: bool,
     result: Result<
         Response<hyper::body::Incoming>,
@@ -215,15 +209,13 @@ fn resolve_h2_send(
         captured_metadata,
         response_guard,
         reused,
-        acquisition_completed_at,
+        connection_selection,
     } = accepted;
     match result {
         Ok(mut response) => {
-            context.record_connection_selection(
-                acquisition_completed_at,
-                reused,
-                captured_metadata.as_ref(),
-            );
+            if let Some(selection) = connection_selection {
+                selection.record();
+            }
             connection
                 .info()
                 .apply_connector_extras(response.extensions_mut());
@@ -257,11 +249,9 @@ fn resolve_h2_send(
                 close.close(CloseReason::ProtocolClosed);
             }
             drop(response_guard);
-            context.record_connection_selection(
-                acquisition_completed_at,
-                reused,
-                captured_metadata.as_ref(),
-            );
+            if let Some(selection) = connection_selection {
+                selection.record();
+            }
             let metadata =
                 captured_metadata.unwrap_or_else(|| connection.info().h2_metadata(close));
             Err(downcast_error(Box::new(error.into_error())).with_connection(metadata))
@@ -295,10 +285,6 @@ enum UnacceptedStage {
 /// Pool-side checks always reacquire because no protocol code observed the
 /// request. A returned Hyper envelope reacquires only after prior successful
 /// use proves that replacing a stale pooled generation is appropriate.
-#[allow(
-    clippy::result_large_err,
-    reason = "ConnectorError preserves SDK classification and connection metadata"
-)]
 fn resolve_unaccepted_request(
     request: Request<SdkBody>,
     reused: bool,

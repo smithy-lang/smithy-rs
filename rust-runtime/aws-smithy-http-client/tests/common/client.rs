@@ -6,7 +6,7 @@
 //! Client configuration and request helpers shared by connection behavior tests.
 
 use aws_smithy_async::rt::sleep::{SharedAsyncSleep, TokioSleep};
-use aws_smithy_async::time::SystemTimeSource;
+use aws_smithy_async::time::{SystemTimeSource, TimeSource};
 use aws_smithy_http_client::pool::{Client as PoolClient, ConnectionPool};
 use aws_smithy_http_client::proxy::ProxyConfig;
 #[cfg(any(feature = "__rustls", feature = "s2n-tls"))]
@@ -244,6 +244,20 @@ pub(crate) fn connector_with_settings(
 
 pub(crate) fn connector(client: &SharedHttpClient) -> SharedHttpConnector {
     connector_with_settings(client, HttpConnectorSettings::builder().build())
+}
+
+/// Builds a connector whose request telemetry uses `time_source`.
+#[allow(dead_code)]
+pub(crate) fn connector_with_time_source(
+    client: &SharedHttpClient,
+    time_source: impl TimeSource + 'static,
+) -> SharedHttpConnector {
+    let components = RuntimeComponentsBuilder::for_tests()
+        .with_time_source(Some(time_source))
+        .with_sleep_impl(Some(SharedAsyncSleep::new(TokioSleep::new())))
+        .build()
+        .expect("valid runtime components");
+    client.http_connector(&HttpConnectorSettings::builder().build(), &components)
 }
 
 pub(crate) async fn send_request(

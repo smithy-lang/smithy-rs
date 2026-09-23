@@ -37,6 +37,7 @@ use super::partition::DriverSpawner;
 use super::registry::PartitionState;
 use super::{ConnectionPool, PoolInner};
 use crate::sync::Arc;
+use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_runtime_api::client::connection::ConnectionMetadata;
 use aws_smithy_runtime_api::client::http::telemetry::{
     CaptureHttpAttemptTelemetry, ConnectionAcquisitionTelemetry, ConnectionUsage,
@@ -59,12 +60,37 @@ const MAX_H2_REPLACEMENTS: usize = 2;
 pub(super) struct RequestOptions {
     /// Transport connection timeout configured for this operation.
     connect_timeout: Option<TransportTimeout>,
+    /// Inputs needed to start request-attempt observation at acquisition.
+    attempt_telemetry: Option<AttemptTelemetryInput>,
 }
 
 impl RequestOptions {
     /// Creates operation settings for one pool request.
-    pub(super) fn new(connect_timeout: Option<TransportTimeout>) -> Self {
-        Self { connect_timeout }
+    pub(super) fn new(
+        connect_timeout: Option<TransportTimeout>,
+        attempt_telemetry: Option<AttemptTelemetryInput>,
+    ) -> Self {
+        Self {
+            connect_timeout,
+            attempt_telemetry,
+        }
+    }
+}
+
+/// Capture and operation runtime clock paired before pool dispatch.
+#[derive(Clone, Debug)]
+pub(super) struct AttemptTelemetryInput {
+    capture: CaptureHttpAttemptTelemetry,
+    time_source: SharedTimeSource,
+}
+
+impl AttemptTelemetryInput {
+    /// Pairs the request capture with the clock that measures its attempt.
+    pub(super) fn new(capture: CaptureHttpAttemptTelemetry, time_source: SharedTimeSource) -> Self {
+        Self {
+            capture,
+            time_source,
+        }
     }
 }
 
@@ -101,6 +127,67 @@ pub(super) struct AttemptTelemetry {
     capture: CaptureHttpAttemptTelemetry,
     /// Time at which this request entered pool acquisition.
     acquisition_started_at: SystemTime,
+    /// Operation runtime clock used for this request attempt.
+    time_source: SharedTimeSource,
+}
+
+impl AttemptTelemetry {
+    /// Starts connection acquisition using the operation runtime clock.
+    fn start(input: AttemptTelemetryInput) -> Self {
+        let AttemptTelemetryInput {
+            capture,
+            time_source,
+        } = input;
+        let acquisition_started_at = time_source.now();
+        Self {
+            capture,
+            acquisition_started_at,
+            time_source,
+        }
+    }
+
+    /// Freezes one selected connection when the protocol accepts the request.
+    fn freeze_selection(
+        &self,
+        reused: bool,
+        metadata: Option<&ConnectionMetadata>,
+    ) -> FrozenConnectionSelection {
+        FrozenConnectionSelection {
+            capture: self.capture.clone(),
+            acquisition_started_at: self.acquisition_started_at,
+            acquisition_completed_at: self.time_source.now(),
+            usage: if reused {
+                ConnectionUsage::Reused
+            } else {
+                ConnectionUsage::Fresh
+            },
+            metadata: metadata
+                .expect("attempt telemetry requires selected connection metadata")
+                .clone(),
+        }
+    }
+}
+
+/// Selected connection facts held until the request cannot return to acquisition.
+pub(super) struct FrozenConnectionSelection {
+    capture: CaptureHttpAttemptTelemetry,
+    acquisition_started_at: SystemTime,
+    acquisition_completed_at: SystemTime,
+    usage: ConnectionUsage,
+    metadata: ConnectionMetadata,
+}
+
+impl FrozenConnectionSelection {
+    /// Commits the selected connection and any valid acquisition interval.
+    pub(super) fn record(self) {
+        let acquisition = ConnectionAcquisitionTelemetry::from_interval(
+            self.acquisition_started_at,
+            self.acquisition_completed_at,
+            self.usage,
+        );
+        self.capture
+            .record_connection_selection(acquisition, self.metadata);
+    }
 }
 
 impl AcquisitionContext {
@@ -108,47 +195,18 @@ impl AcquisitionContext {
         self.attempt_telemetry.is_some()
     }
 
-    /// Freezes the time at which Hyper may retain the request.
+    /// Freezes the selected connection when Hyper may retain the request.
     ///
     /// Protocol dispatch records the resulting telemetry only after the request
     /// can no longer be returned to acquisition.
-    fn connection_selection_time(&self) -> Option<SystemTime> {
-        self.attempt_telemetry
-            .as_ref()
-            .map(|_| self.pool.connection_events.now())
-    }
-
-    /// Records the connection that accepted this request.
-    ///
-    /// Callers invoke this only after Hyper has retained the request. Rejected
-    /// dispatch attempts leave the capture untouched so a later selection may
-    /// record the authoritative connection.
-    fn record_connection_selection(
+    pub(super) fn freeze_connection_selection(
         &self,
-        completed_at: Option<SystemTime>,
         reused: bool,
         metadata: Option<&ConnectionMetadata>,
-    ) {
-        let Some(telemetry) = &self.attempt_telemetry else {
-            return;
-        };
-        let completed_at =
-            completed_at.expect("attempt telemetry requires an acquisition completion time");
-        let metadata = metadata.expect("attempt telemetry requires selected connection metadata");
-        let duration = completed_at
-            .duration_since(telemetry.acquisition_started_at)
-            .unwrap_or_default();
-        telemetry.capture.record_connection_selection(
-            ConnectionAcquisitionTelemetry::new(
-                duration,
-                if reused {
-                    ConnectionUsage::Reused
-                } else {
-                    ConnectionUsage::Fresh
-                },
-            ),
-            metadata.clone(),
-        );
+    ) -> Option<FrozenConnectionSelection> {
+        self.attempt_telemetry
+            .as_ref()
+            .map(|telemetry| telemetry.freeze_selection(reused, metadata))
     }
 }
 
@@ -162,14 +220,11 @@ pub(super) async fn send(
     validate_request_before_acquisition(&request)
         .map_err(|error| ConnectorError::user(error.into()))?;
 
-    let attempt_telemetry = request
-        .extensions()
-        .get::<CaptureHttpAttemptTelemetry>()
-        .cloned()
-        .map(|capture| AttemptTelemetry {
-            capture,
-            acquisition_started_at: pool.inner.connection_events.now(),
-        });
+    let RequestOptions {
+        connect_timeout,
+        attempt_telemetry,
+    } = options;
+    let attempt_telemetry = attempt_telemetry.map(AttemptTelemetry::start);
     let absolute_uri = request.uri().clone();
     let cell = pool
         .inner
@@ -195,7 +250,7 @@ pub(super) async fn send(
         cell,
         absolute_uri,
         owner_spawner,
-        connect_timeout: options.connect_timeout,
+        connect_timeout,
         attempt_telemetry,
     };
 

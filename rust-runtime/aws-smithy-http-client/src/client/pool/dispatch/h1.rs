@@ -94,24 +94,25 @@ pub(super) async fn dispatch(
     };
     let send = selection.sender_mut().hyper_mut().try_send_request(request);
     let exchange = selection.into_exchange();
-    let mut send = Box::pin(send);
+    let mut send = std::pin::pin!(send);
     // Freeze acquisition time when Hyper first retains the request. Publish it
     // only after a later error can no longer return the request envelope.
     let first = poll_fn(|cx| Poll::Ready(send.as_mut().poll(cx))).await;
-    let (result, acquisition_completed_at) = match first {
-        Poll::Ready(result) => (result, context.connection_selection_time()),
+    let (result, connection_selection) = match first {
+        Poll::Ready(result) => (
+            result,
+            context.freeze_connection_selection(reused, captured_metadata.as_ref()),
+        ),
         Poll::Pending => {
-            let completed_at = context.connection_selection_time();
-            (send.await, completed_at)
+            let selection = context.freeze_connection_selection(reused, captured_metadata.as_ref());
+            (send.await, selection)
         }
     };
     match result {
         Ok(mut response) => {
-            context.record_connection_selection(
-                acquisition_completed_at,
-                reused,
-                captured_metadata.as_ref(),
-            );
+            if let Some(selection) = connection_selection {
+                selection.record();
+            }
             // Response-body ownership keeps both the accepted dispatch
             // and exclusive request handle out of the pool until Hyper
             // proves a complete message boundary.
@@ -148,11 +149,9 @@ pub(super) async fn dispatch(
             }
             exchange.retire_connection(CloseReason::IncompleteH1Exchange);
             drop(dispatch);
-            context.record_connection_selection(
-                acquisition_completed_at,
-                reused,
-                captured_metadata.as_ref(),
-            );
+            if let Some(selection) = connection_selection {
+                selection.record();
+            }
             let metadata =
                 captured_metadata.unwrap_or_else(|| connection.info().metadata(close_handle));
             Err(downcast_error(Box::new(error.into_error())).with_connection(metadata))
@@ -198,14 +197,9 @@ struct H1ResponseBody {
 impl H1ResponseBody {
     /// Wraps a response and immediately completes a body already at end stream.
     fn new(inner: hyper::body::Incoming, exchange: H1Exchange, dispatch: DispatchGuard) -> Self {
-        let spawner = exchange.connection().owner_spawner();
         let mut body = Self {
             inner,
-            lifecycle: Some(H1ResponseLifecycle {
-                exchange: Some(exchange),
-                dispatch: Some(dispatch),
-                spawner,
-            }),
+            lifecycle: Some(H1ResponseLifecycle::new(exchange, dispatch)),
         };
         if body.inner.is_end_stream() {
             body.finish_without_context();
@@ -308,6 +302,16 @@ struct H1ReadinessTask {
 }
 
 impl H1ResponseLifecycle {
+    /// Retains response ownership and derives follow-up placement from the connection.
+    fn new(exchange: H1Exchange, dispatch: DispatchGuard) -> Self {
+        let spawner = exchange.connection().owner_spawner();
+        Self {
+            exchange: Some(exchange),
+            dispatch: Some(dispatch),
+            spawner,
+        }
+    }
+
     /// Returns or retires the request handle and completes dispatch accounting.
     ///
     /// Readiness is first polled with the response body's task context when one
@@ -446,6 +450,7 @@ mod tests {
     use crate::client::pool::connection::ConnectionInfo;
     use crate::client::pool::dispatch::RequestOptions;
     use crate::client::pool::registry::PartitionState;
+    use crate::client::pool::stats::CellConnectionStats;
     use crate::client::pool::{
         Client, ConnectionId, ConnectionPool, ConnectionReuseScope, Partition, PartitionId,
         TokioDriverSpawner,
@@ -511,6 +516,18 @@ mod tests {
         fn spawn(&self, driver: Pin<Box<dyn Future<Output = ()> + Send + 'static>>) {
             self.submitted.fetch_add(1, Ordering::SeqCst);
             drop(tokio::spawn(driver));
+        }
+    }
+
+    #[derive(Clone, Debug)]
+    struct CountingDroppingSpawner {
+        submitted: StdArc<AtomicUsize>,
+    }
+
+    impl DriverSpawner for CountingDroppingSpawner {
+        fn spawn(&self, driver: Pin<Box<dyn Future<Output = ()> + Send + 'static>>) {
+            self.submitted.fetch_add(1, Ordering::SeqCst);
+            drop(driver);
         }
     }
 
@@ -975,16 +992,69 @@ mod tests {
         let exchange = selection.into_exchange();
         assert!(exchange.is_ready());
 
-        H1ResponseLifecycle {
-            exchange: Some(exchange),
-            dispatch: Some(dispatch),
-            spawner: StdArc::new(CountingSpawner {
-                submitted: submitted.clone(),
-            }),
-        }
-        .resolve(None);
+        H1ResponseLifecycle::new(exchange, dispatch).resolve(None);
 
         assert_eq!(baseline, submitted.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn response_lifecycle_uses_the_connection_owner_spawner() {
+        let pool = ConnectionPool::builder()
+            .idle_timeout(None)
+            .build_http()
+            .unwrap();
+        let partition = anonymous_partition(&pool);
+        let uri = "http://example.com/".parse().unwrap();
+        let cell = pool.inner.registry.resolve_cell(&partition, &uri).unwrap();
+        let submitted = StdArc::new(AtomicUsize::new(0));
+        let owner_spawner: StdArc<dyn DriverSpawner> = StdArc::new(CountingSpawner { submitted });
+        let (connection, _physical) = ConnectionState::pending_open(
+            ConnectionInfo::for_test(ConnectionId::new(1), PartitionId::ANONYMOUS),
+            owner_spawner.clone(),
+            Arc::new(CellConnectionStats::default()),
+        );
+        connection.open(None).unwrap();
+        let selection =
+            OriginCell::insert_selected_h1(&cell, connection.clone(), H1Sender::test(11));
+        let dispatch =
+            ConnectionState::try_commit_dispatch(&connection).expect("connection should be open");
+
+        let lifecycle = H1ResponseLifecycle::new(selection.into_exchange(), dispatch);
+
+        assert!(StdArc::ptr_eq(&owner_spawner, &lifecycle.spawner));
+    }
+
+    #[test]
+    fn pending_sender_readiness_uses_the_connection_owner_spawner() {
+        let pool = ConnectionPool::builder()
+            .idle_timeout(None)
+            .build_http()
+            .unwrap();
+        let partition = anonymous_partition(&pool);
+        let uri = "http://example.com/".parse().unwrap();
+        let cell = pool.inner.registry.resolve_cell(&partition, &uri).unwrap();
+        let submitted = StdArc::new(AtomicUsize::new(0));
+        let owner_spawner: StdArc<dyn DriverSpawner> = StdArc::new(CountingDroppingSpawner {
+            submitted: submitted.clone(),
+        });
+        let (connection, _physical) = ConnectionState::pending_open(
+            ConnectionInfo::for_test(ConnectionId::new(1), PartitionId::ANONYMOUS),
+            owner_spawner,
+            Arc::new(CellConnectionStats::default()),
+        );
+        connection.open(None).unwrap();
+        let selection =
+            OriginCell::insert_selected_h1(&cell, connection.clone(), H1Sender::pending_test(11));
+        let dispatch =
+            ConnectionState::try_commit_dispatch(&connection).expect("connection should be open");
+
+        H1ResponseLifecycle::new(selection.into_exchange(), dispatch).resolve(None);
+
+        assert_eq!(1, submitted.load(Ordering::SeqCst));
+        assert_eq!(
+            Some(CloseReason::OwnerRuntimeShutdown),
+            connection.probe().close_reason
+        );
     }
 
     #[tokio::test]

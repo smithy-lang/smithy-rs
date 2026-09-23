@@ -12,6 +12,7 @@ use crate::client::downcast_error;
 use crate::client::timeout::{self, TimeoutKind};
 use crate::sync::Arc;
 use aws_smithy_async::rt::sleep::{default_async_sleep, SharedAsyncSleep};
+use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::connector_metadata::ConnectorMetadata;
 use aws_smithy_runtime_api::client::http::telemetry::CaptureHttpAttemptTelemetry;
@@ -107,6 +108,7 @@ impl HttpClient for Client {
         let connect_timeout = settings.connect_timeout();
         let read_timeout = settings.read_timeout();
         let sleep = components.sleep_impl().or_else(default_async_sleep);
+        let time_source = components.time_source().unwrap_or_default();
 
         SharedHttpConnector::new(PoolConnector {
             pool: self.pool.clone(),
@@ -114,6 +116,7 @@ impl HttpClient for Client {
             connect_timeout,
             read_timeout,
             sleep,
+            time_source,
         })
     }
 
@@ -188,6 +191,8 @@ struct PoolConnector {
     read_timeout: Option<Duration>,
     /// Runtime timer used by operation timeouts.
     sleep: Option<SharedAsyncSleep>,
+    /// Operation runtime clock used for request-attempt telemetry.
+    time_source: SharedTimeSource,
 }
 
 impl fmt::Debug for PoolConnector {
@@ -208,6 +213,7 @@ async fn send_pool_request(
     connect_timeout: Option<Duration>,
     read_timeout: Option<Duration>,
     sleep: Option<SharedAsyncSleep>,
+    attempt_telemetry: Option<super::dispatch::AttemptTelemetryInput>,
 ) -> Result<HttpResponse, ConnectorError> {
     if (connect_timeout.is_some() || read_timeout.is_some()) && sleep.is_none() {
         return Err(ConnectorError::user(MissingAsyncSleep.into()));
@@ -220,6 +226,7 @@ async fn send_pool_request(
         connect_timeout
             .zip(sleep.clone())
             .map(|(duration, sleep)| super::establish::TransportTimeout::new(duration, sleep)),
+        attempt_telemetry,
     );
     let send = pool.send_request(partition, request, options);
     let response =
@@ -232,9 +239,14 @@ async fn send_pool_request(
 impl HttpConnector for PoolConnector {
     fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
         let attempt_capture = request.extension::<CaptureHttpAttemptTelemetry>().cloned();
-        let dispatch_started_at = attempt_capture
-            .as_ref()
-            .map(|_| self.pool.inner.connection_events.now());
+        let dispatch_timing = attempt_capture.as_ref().map(|_| {
+            let time_source = self.time_source.clone();
+            let started_at = time_source.now();
+            (time_source, started_at)
+        });
+        let attempt_telemetry = attempt_capture.as_ref().map(|capture| {
+            super::dispatch::AttemptTelemetryInput::new(capture.clone(), self.time_source.clone())
+        });
         let pool = self.pool.clone();
         let partition = self.partition.clone();
         let connect_timeout = self.connect_timeout;
@@ -248,18 +260,13 @@ impl HttpConnector for PoolConnector {
                 connect_timeout,
                 read_timeout,
                 sleep,
+                attempt_telemetry,
             )
             .await;
-            if let (Some(capture), Some(started_at)) =
-                (attempt_capture.as_ref(), dispatch_started_at)
+            if let (Some(capture), Some((time_source, started_at))) =
+                (attempt_capture.as_ref(), dispatch_timing)
             {
-                let duration = pool
-                    .inner
-                    .connection_events
-                    .now()
-                    .duration_since(started_at)
-                    .unwrap_or_default();
-                capture.record_dispatch_duration(duration);
+                capture.record_dispatch_interval(started_at, time_source.now());
             }
             result
         })
@@ -300,6 +307,7 @@ mod tests {
                 connect_timeout,
                 read_timeout,
                 sleep: None,
+                time_source: SharedTimeSource::default(),
             };
 
             let error = connector

@@ -16,6 +16,9 @@ mod common {
     pub(crate) mod client;
 }
 
+#[path = "common/runtime.rs"]
+mod runtime;
+
 use aws_smithy_async::test_util::ManualTimeSource;
 use aws_smithy_http_client::pool::{
     Client, ConnectPath, ConnectionEstablishmentId, ConnectionEstablishmentStage, ConnectionEvent,
@@ -336,7 +339,19 @@ async fn h1_attempt_telemetry_distinguishes_fresh_and_reused_connections() {
         .build()
         .await
         .expect("harness should start");
-    let pool = ConnectionPool::builder().build_http().expect("valid pool");
+    let opened = Arc::new(Mutex::new(None));
+    let pool = ConnectionPool::builder()
+        .event_listener({
+            let opened = opened.clone();
+            move |event: &ConnectionEvent<'_>| {
+                if let ConnectionEvent::Opened(event) = event {
+                    *opened.lock().unwrap() =
+                        Some((event.connection().id(), event.stats().total_duration()));
+                }
+            }
+        })
+        .build_http()
+        .expect("valid pool");
     let client = SharedHttpClient::new(Client::new(&pool).expect("anonymous partition"));
     let connector = connector(&client);
 
@@ -368,7 +383,26 @@ async fn h1_attempt_telemetry_distinguishes_fresh_and_reused_connections() {
         first_connection.connection_id(),
         second_connection.connection_id()
     );
-    assert!(first_connection.establishment().is_some());
+    assert_eq!(
+        first_connection.establishment(),
+        second_connection.establishment(),
+        "reuse must retain the establishment that created the connection"
+    );
+    let first_establishment = first_connection
+        .establishment()
+        .expect("first connection establishment");
+    let (opened_connection, opened_duration) =
+        opened.lock().unwrap().expect("opened connection event");
+    assert_eq!(
+        first_connection.connection_id(),
+        Some(opened_connection),
+        "request telemetry and lifecycle events must identify the same connection"
+    );
+    assert_eq!(
+        first_establishment.total_duration(),
+        opened_duration,
+        "request metadata and the opened event must share one establishment measurement"
+    );
     assert_eq!(1, harness.tcp_accepted_count());
 
     drop(connector);
@@ -394,13 +428,14 @@ async fn acquisition_duration_ends_when_hyper_accepts_the_request() {
         .build()
         .await
         .expect("harness should start");
-    let time = ManualTimeSource::new(UNIX_EPOCH);
+    let pool_time = ManualTimeSource::new(UNIX_EPOCH);
+    let attempt_time = ManualTimeSource::new(UNIX_EPOCH);
     let pool = ConnectionPool::builder()
-        .time_source(time.clone())
+        .time_source(pool_time)
         .build_http()
         .expect("valid pool");
     let client = SharedHttpClient::new(Client::new(&pool).expect("anonymous partition"));
-    let connector = connector(&client);
+    let connector = test_client::connector_with_time_source(&client, attempt_time.clone());
     let capture = CaptureHttpAttemptTelemetry::new();
     let mut request = HttpRequest::get(harness.endpoint_url()).expect("valid request");
     request.add_extension(capture.clone());
@@ -413,7 +448,7 @@ async fn acquisition_duration_ends_when_hyper_accepts_the_request() {
         .wait_until_reached(test_client::WAIT)
         .await
         .expect("server should receive the accepted request");
-    time.advance(Duration::from_secs(10));
+    attempt_time.advance(Duration::from_secs(10));
     response_gate.release();
     let (status, body) = send.await.expect("request task");
     assert_eq!((status, body.as_slice()), (200, b"ok".as_slice()));
@@ -421,7 +456,7 @@ async fn acquisition_duration_ends_when_hyper_accepts_the_request() {
     let telemetry = capture.get();
     assert_eq!(
         telemetry.acquisition().expect("acquisition").duration(),
-        Duration::ZERO
+        Some(Duration::ZERO)
     );
     assert_eq!(telemetry.dispatch_duration(), Some(Duration::from_secs(10)));
 
@@ -449,14 +484,13 @@ async fn bounded_waiter_proceeds_after_the_active_h1_returns() {
         .build()
         .await
         .expect("harness should start");
-    let time = ManualTimeSource::new(UNIX_EPOCH);
+    let attempt_time = ManualTimeSource::new(UNIX_EPOCH);
     let pool = ConnectionPool::builder()
         .max_connections_per_host(1)
-        .time_source(time.clone())
         .build_http()
         .expect("valid pool");
     let client = SharedHttpClient::new(Client::new(&pool).expect("anonymous partition"));
-    let connector = connector(&client);
+    let connector = test_client::connector_with_time_source(&client, attempt_time.clone());
 
     let first = test_client::send_request(
         &connector,
@@ -484,7 +518,7 @@ async fn bounded_waiter_proceeds_after_the_active_h1_returns() {
     );
     assert_eq!(1, harness.tcp_accepted_count());
 
-    time.advance(Duration::from_secs(5));
+    attempt_time.advance(Duration::from_secs(5));
     body_gate.release();
     let (status, body) = test_client::collect_response(first).await;
     assert_eq!((status, body.as_slice()), (200, b"first-body".as_slice()));
@@ -493,7 +527,7 @@ async fn bounded_waiter_proceeds_after_the_active_h1_returns() {
     assert_eq!(1, harness.tcp_accepted_count());
     let telemetry = second_capture.get();
     let acquisition = telemetry.acquisition().expect("second acquisition");
-    assert_eq!(acquisition.duration(), Duration::from_secs(5));
+    assert_eq!(acquisition.duration(), Some(Duration::from_secs(5)));
     assert_eq!(acquisition.usage(), ConnectionUsage::Reused);
     assert_eq!(telemetry.dispatch_duration(), Some(Duration::from_secs(5)));
 
@@ -555,6 +589,96 @@ async fn eligible_partition_borrows_the_peer_h1() {
     drop(first_client);
     drop(second_client);
     drop(pool);
+    harness.shutdown().await.expect("clean harness shutdown");
+}
+
+#[tokio::test]
+async fn peer_h1_reuse_survives_borrower_runtime_shutdown() {
+    use runtime::DrivenRuntime;
+
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            Http1Script::responses([
+                Http1Response::ok().body("owner"),
+                Http1Response::ok().body("peer"),
+                Http1Response::ok().body("reused"),
+            ]),
+        )
+        .build()
+        .await
+        .expect("harness should start");
+    let first_id = PartitionId::from_index(1);
+    let second_id = PartitionId::from_index(2);
+    let first_runtime = DrivenRuntime::start("h1-owner-one");
+    let second_runtime = DrivenRuntime::start("h1-owner-two");
+    assert_ne!(first_runtime.id(), second_runtime.id());
+    let pool = ConnectionPool::builder()
+        .partitions([
+            Partition::new(first_id, first_runtime.driver_spawner()),
+            Partition::new(second_id, second_runtime.driver_spawner()),
+        ])
+        .connection_reuse_scope(ConnectionReuseScope::Pool)
+        .max_connections_per_host(1)
+        .build_http()
+        .expect("valid pool");
+    let first_client = shared_client(&pool, first_id);
+    let second_client = shared_client(&pool, second_id);
+    let first_connector = connector(&first_client);
+    let second_connector = connector(&second_client);
+    let url = harness.endpoint_url();
+
+    let first_request = first_connector.clone();
+    let first_url = url.clone();
+    let (status, body) = first_runtime
+        .spawn(async move { test_client::get_and_collect(&first_request, &first_url).await })
+        .await
+        .expect("owner request task should not panic");
+    assert_eq!((status, body.as_slice()), (200, b"owner".as_slice()));
+
+    let peer_request = second_connector.clone();
+    let peer_url = url.clone();
+    let (status, body) = second_runtime
+        .spawn(async move { test_client::get_and_collect(&peer_request, &peer_url).await })
+        .await
+        .expect("peer request task should not panic");
+    assert_eq!((status, body.as_slice()), (200, b"peer".as_slice()));
+    assert!(first_runtime.submitted_tasks() > 0);
+    assert!(second_runtime.submitted_tasks() > 0);
+
+    second_runtime.shutdown();
+
+    let reused_request = first_connector.clone();
+    let reused_url = url.clone();
+    let (status, body) = first_runtime
+        .spawn(async move { test_client::get_and_collect(&reused_request, &reused_url).await })
+        .await
+        .expect("reused request task should not panic");
+    assert_eq!((status, body.as_slice()), (200, b"reused".as_slice()));
+
+    let request_connections = harness
+        .events()
+        .into_iter()
+        .filter_map(|event| match event {
+            WireConnectionEvent::Http1Request { connection_id, .. } => Some(connection_id),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(3, request_connections.len());
+    assert!(
+        request_connections
+            .iter()
+            .all(|connection| *connection == request_connections[0]),
+        "owner and peer requests should use one HTTP/1 connection"
+    );
+    assert_eq!(1, harness.tcp_accepted_count());
+
+    drop(first_connector);
+    drop(second_connector);
+    drop(first_client);
+    drop(second_client);
+    drop(pool);
+    first_runtime.shutdown();
     harness.shutdown().await.expect("clean harness shutdown");
 }
 

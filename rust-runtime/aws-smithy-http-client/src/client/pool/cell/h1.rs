@@ -78,7 +78,7 @@ pub(in crate::client::pool) enum H1Sender {
     Hyper(hyper::client::conn::http1::SendRequest<SdkBody>),
     /// Synthetic sender identity used only by ownership tests.
     #[cfg(test)]
-    Test(u64),
+    Test { id: u64, ready: bool },
 }
 
 impl H1Sender {
@@ -100,7 +100,7 @@ impl H1Sender {
         match self {
             Self::Hyper(sender) => sender,
             #[cfg(test)]
-            Self::Test(_) => panic!("test HTTP/1 sender reached Hyper dispatch"),
+            Self::Test { .. } => panic!("test HTTP/1 sender reached Hyper dispatch"),
         }
     }
 
@@ -109,21 +109,38 @@ impl H1Sender {
         match self {
             Self::Hyper(sender) => sender.is_ready(),
             #[cfg(test)]
-            Self::Test(_) => panic!("test HTTP/1 sender reached Hyper readiness"),
+            Self::Test { ready, .. } => *ready,
+        }
+    }
+
+    /// Polls Hyper for proof that another request may be sent.
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), hyper::Error>> {
+        match self {
+            Self::Hyper(sender) => sender.poll_ready(cx),
+            #[cfg(test)]
+            Self::Test { ready: true, .. } => Poll::Ready(Ok(())),
+            #[cfg(test)]
+            Self::Test { ready: false, .. } => Poll::Pending,
         }
     }
 
     /// Creates a synthetic sender for state-machine tests.
     #[cfg(test)]
     pub(in crate::client::pool) fn test(id: u64) -> Self {
-        Self::Test(id)
+        Self::Test { id, ready: true }
+    }
+
+    /// Creates a synthetic sender whose readiness remains pending.
+    #[cfg(test)]
+    pub(in crate::client::pool) fn pending_test(id: u64) -> Self {
+        Self::Test { id, ready: false }
     }
 
     /// Returns the synthetic sender identity.
     #[cfg(test)]
     pub(super) fn test_id(&self) -> u64 {
         match self {
-            Self::Test(id) => *id,
+            Self::Test { id, .. } => *id,
             Self::Hyper(_) => panic!("Hyper sender used in a synthetic ownership test"),
         }
     }
@@ -134,7 +151,11 @@ impl fmt::Debug for H1Sender {
         match self {
             Self::Hyper(_) => f.write_str("H1Sender::Hyper"),
             #[cfg(test)]
-            Self::Test(id) => f.debug_tuple("H1Sender::Test").field(id).finish(),
+            Self::Test { id, ready } => f
+                .debug_struct("H1Sender::Test")
+                .field("id", id)
+                .field("ready", ready)
+                .finish(),
         }
     }
 }
@@ -994,7 +1015,6 @@ impl H1Exchange {
             .as_mut()
             .expect("HTTP/1 exchange consumed more than once")
             .sender_mut()
-            .hyper_mut()
             .poll_ready(cx)
     }
 

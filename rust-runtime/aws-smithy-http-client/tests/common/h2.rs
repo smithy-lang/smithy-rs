@@ -239,6 +239,17 @@ pub(crate) struct H2ConnectionScript {
     fallback: Option<H2StreamScript>,
     allow_handshake_abandonment: bool,
     goaway_on_ready: bool,
+    client_close_behavior: ClientCloseBehavior,
+}
+
+/// How a scripted connection handles active stream tasks after client close.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum ClientCloseBehavior {
+    /// Wait for stream scripts and report their failures.
+    #[default]
+    Drain,
+    /// Abort scripts that a test deliberately leaves blocked.
+    AbortStreams,
 }
 
 impl H2ConnectionScript {
@@ -267,6 +278,15 @@ impl H2ConnectionScript {
 
     pub(crate) fn goaway_on_ready(mut self) -> Self {
         self.goaway_on_ready = true;
+        self
+    }
+
+    /// Aborts active stream scripts when the client closes the connection.
+    ///
+    /// Use this only when the test intentionally strands a stream while
+    /// terminating the runtime that owns its transport.
+    pub(crate) fn abort_streams_on_client_close(mut self) -> Self {
+        self.client_close_behavior = ClientCloseBehavior::AbortStreams;
         self
     }
 
@@ -874,16 +894,18 @@ async fn drive_connection(
         }
     }
 
-    if shutting_down || transport_aborted || client_initiated_close {
+    let abort_streams = shutting_down
+        || transport_aborted
+        || (client_initiated_close
+            && script.client_close_behavior == ClientCloseBehavior::AbortStreams);
+    if abort_streams {
         stream_tasks.abort_all();
         while stream_tasks.join_next().await.is_some() {}
-        if transport_aborted {
-            Ok(ConnectionCloseReason::ScriptedTransportAbort)
-        } else if client_initiated_close {
-            Ok(ConnectionCloseReason::ClientClosed)
-        } else {
-            Ok(ConnectionCloseReason::HarnessShutdown)
-        }
+        Ok(aborted_connection_close_reason(
+            transport_aborted,
+            shutting_down,
+            client_initiated_close,
+        ))
     } else {
         let drain = async {
             while let Some(completed) = stream_tasks.join_next().await {
@@ -897,8 +919,35 @@ async fn drive_connection(
             stream_tasks.abort_all();
             while stream_tasks.join_next().await.is_some() {}
         }
-        Ok(ConnectionCloseReason::ScriptCompleted)
+        if client_initiated_close {
+            Ok(ConnectionCloseReason::ClientClosed)
+        } else {
+            Ok(ConnectionCloseReason::ScriptCompleted)
+        }
     }
+}
+
+fn aborted_connection_close_reason(
+    transport_aborted: bool,
+    shutting_down: bool,
+    client_initiated_close: bool,
+) -> ConnectionCloseReason {
+    debug_assert!(transport_aborted || shutting_down || client_initiated_close);
+    if transport_aborted {
+        ConnectionCloseReason::ScriptedTransportAbort
+    } else if shutting_down {
+        ConnectionCloseReason::HarnessShutdown
+    } else {
+        ConnectionCloseReason::ClientClosed
+    }
+}
+
+#[test]
+fn harness_shutdown_precedes_client_close() {
+    assert_eq!(
+        ConnectionCloseReason::HarnessShutdown,
+        aborted_connection_close_reason(false, true, true,)
+    );
 }
 
 fn record_stream_task_result(

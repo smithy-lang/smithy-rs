@@ -752,7 +752,7 @@ impl ConnectionState {
     /// client. Every other classification preserves the driver reason and
     /// returns capacity immediately.
     pub(super) fn complete_h1_exchange(&self, exchange_reason: CloseReason) -> bool {
-        let (released_capacity, listener, final_reason) = {
+        let (released_capacity, final_reason) = {
             let mut lifecycle = self.lifecycle.lock();
             let physical_connection_complete = lifecycle.physical_connection_complete;
             let (released_capacity, final_reason) = match &mut lifecycle.logical {
@@ -764,6 +764,10 @@ impl ConnectionState {
                     let H1CloseDisposition::AwaitingExchange { fallback } = *state else {
                         return false;
                     };
+                    debug_assert!(
+                        !physical_connection_complete,
+                        "physical close left HTTP/1 exchange classification pending"
+                    );
                     let final_reason = if exchange_reason == CloseReason::Upgraded {
                         CloseReason::Upgraded
                     } else {
@@ -787,17 +791,9 @@ impl ConnectionState {
                         .h1_upgrade(&self.stats),
                 );
             }
-            let listener = if physical_connection_complete {
-                lifecycle.events.physical_closed()
-            } else {
-                None
-            };
-            (released_capacity, listener, final_reason)
+            (released_capacity, final_reason)
         };
         drop(released_capacity);
-        if let Some(listener) = listener {
-            listener.physical_close(&self.info, final_reason);
-        }
         tracing::debug!(
             connection_id = %self.id(),
             connection_partition = ?self.owner_partition(),

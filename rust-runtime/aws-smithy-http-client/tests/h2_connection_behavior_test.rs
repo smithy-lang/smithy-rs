@@ -329,6 +329,11 @@ mod connection_metadata {
                 first_connection.connection_id(),
                 second_connection.connection_id()
             );
+            assert_eq!(
+                first_connection.establishment(),
+                second_connection.establishment(),
+                "reuse must retain the establishment that created the connection"
+            );
             assert!(first_connection.establishment().is_some());
         } else {
             assert!(first.acquisition().is_none());
@@ -373,7 +378,7 @@ mod connection_metadata {
             .expect("valid partitioned HTTPS pool");
         let client =
             SharedHttpClient::new(PoolClient::new(&pool).expect("anonymous partition exists"));
-        let connector = test_client::connector(&client);
+        let connector = test_client::connector_with_time_source(&client, time.clone());
         let capture = CaptureHttpAttemptTelemetry::new();
         let mut request = HttpRequest::get(server.url("/gated")).expect("valid HTTP request");
         request.add_extension(capture.clone());
@@ -394,7 +399,7 @@ mod connection_metadata {
         let telemetry = capture.get();
         assert_eq!(
             telemetry.acquisition().expect("acquisition").duration(),
-            Duration::ZERO
+            Some(Duration::ZERO)
         );
         assert_eq!(telemetry.dispatch_duration(), Some(Duration::from_secs(10)));
 
@@ -1501,6 +1506,7 @@ mod runtime_placement {
         let second_runtime_id = second_runtime.id();
         let peer_body_gate = ManualGate::new();
         let first_script = H2ConnectionScript::new()
+            .abort_streams_on_client_close()
             .route("/first", H2StreamScript::respond(H2Response::ok("first")))
             .route(
                 "/peer",
