@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::crypto::{sha256, HmacSha256};
 use crate::{
     date_time::{format_date, format_date_time},
     http_request::SigningError,
@@ -11,24 +12,19 @@ use crate::{
 use aws_credential_types::Credentials;
 use aws_smithy_runtime_api::{client::identity::Identity, http::Headers};
 use bytes::Bytes;
-use hmac::{digest::FixedOutput, Hmac, KeyInit, Mac};
-use sha2::{Digest, Sha256};
 use std::time::SystemTime;
 
 /// HashedPayload = Lowercase(HexEncode(Hash(requestPayload)))
 #[allow(dead_code)] // Unused when compiling without certain features
 pub(crate) fn sha256_hex_string(bytes: impl AsRef<[u8]>) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(bytes);
-    hex::encode(hasher.finalize_fixed())
+    hex::encode(sha256(bytes.as_ref()))
 }
 
 /// Calculates a Sigv4 signature
 pub fn calculate_signature(signing_key: impl AsRef<[u8]>, string_to_sign: &[u8]) -> String {
-    let mut mac = Hmac::<Sha256>::new_from_slice(signing_key.as_ref())
-        .expect("HMAC can take key of any size");
+    let mut mac = HmacSha256::new(signing_key.as_ref());
     mac.update(string_to_sign);
-    hex::encode(mac.finalize_fixed())
+    hex::encode(mac.finalize())
 }
 
 /// Generates a signing key for Sigv4
@@ -45,25 +41,24 @@ pub fn generate_signing_key(
     // kSigning = HMAC(kService, "aws4_request")
 
     let secret = format!("AWS4{secret}");
-    let mut mac =
-        Hmac::<Sha256>::new_from_slice(secret.as_ref()).expect("HMAC can take key of any size");
+    let mut mac = HmacSha256::new(secret.as_ref());
     mac.update(format_date(time).as_bytes());
-    let tag = mac.finalize_fixed();
+    let tag = mac.finalize();
 
     // sign region
-    let mut mac = Hmac::<Sha256>::new_from_slice(&tag).expect("HMAC can take key of any size");
+    let mut mac = HmacSha256::new(&tag);
     mac.update(region.as_bytes());
-    let tag = mac.finalize_fixed();
+    let tag = mac.finalize();
 
     // sign service
-    let mut mac = Hmac::<Sha256>::new_from_slice(&tag).expect("HMAC can take key of any size");
+    let mut mac = HmacSha256::new(&tag);
     mac.update(service.as_bytes());
-    let tag = mac.finalize_fixed();
+    let tag = mac.finalize();
 
     // sign request
-    let mut mac = Hmac::<Sha256>::new_from_slice(&tag).expect("HMAC can take key of any size");
+    let mut mac = HmacSha256::new(&tag);
     mac.update("aws4_request".as_bytes());
-    mac.finalize_fixed()
+    mac.finalize()
 }
 
 /// Parameters to use when signing.

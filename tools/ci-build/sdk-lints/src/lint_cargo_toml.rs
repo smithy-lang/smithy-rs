@@ -176,7 +176,11 @@ fn check_crate_author(package: Package) -> Result<Vec<LintError>> {
 ///
 /// Each of these has a `fips` feature that builds `aws-lc-fips-sys`, which cannot build on
 /// docs.rs, so they pin an explicit feature list instead.
-const DOCS_RS_ALL_FEATURES_EXEMPT: &[&str] = &["aws-smithy-http-client", "aws-smithy-checksums"];
+const DOCS_RS_ALL_FEATURES_EXEMPT: &[&str] = &[
+    "aws-smithy-http-client",
+    "aws-smithy-checksums",
+    "aws-sigv4",
+];
 
 pub(crate) struct DocsRs;
 

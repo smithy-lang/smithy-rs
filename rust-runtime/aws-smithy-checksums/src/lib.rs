@@ -15,6 +15,31 @@
 )]
 
 //! Checksum calculation and verification callbacks.
+//!
+//! # Crypto backends
+//!
+//! SHA-1 and SHA-256 checksums are computed by one of two backends, chosen by feature at
+//! compile time:
+//!
+//! | Feature | Implementation | FIPS 140-3 validated |
+//! |---|---|---|
+//! | `rustcrypto` (default) | the [RustCrypto](https://github.com/RustCrypto/hashes) hashers | no |
+//! | `aws-lc-rs` | [aws-lc-rs](https://github.com/aws/aws-lc-rs) on the standard AWS-LC build | no |
+//! | `fips` | aws-lc-rs on the FIPS build of AWS-LC | yes |
+//!
+//! `fips` takes precedence over `aws-lc-rs`, and either takes precedence over `rustcrypto`, so
+//! enabling more than one — which Cargo feature unification does routinely — resolves to the
+//! strongest backend rather than failing to build.
+//!
+//! FIPS is a per-target capability. `fips` builds `aws-lc-fips-sys`, which is only available on
+//! CMVP-validated operating environments (Linux, macOS, and Windows) and is unavailable on iOS
+//! and WASM, and which needs a C compiler, CMake, and Go at build time.
+//!
+//! MD5 is only available on the `rustcrypto` backend, since aws-lc-rs does not expose it and it
+//! is not FIPS-approved. No public API reaches MD5 regardless: [`ChecksumAlgorithm::Md5`] is
+//! deprecated and resolves to CRC-32.
+//!
+//! CRC-32, CRC-32C, and CRC-64/NVME are not cryptographic and are unaffected by this choice.
 
 use crate::crypto::Digest as _;
 use crate::error::UnknownChecksumAlgorithmError;
