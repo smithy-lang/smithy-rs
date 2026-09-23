@@ -24,11 +24,16 @@ sigv4a = ["dep:p256", "dep:crypto-bigint", "dep:subtle", "dep:zeroize"]
 rustcrypto = ["dep:hmac", "dep:sha2"]
 # Use aws-lc-rs for HMAC-SHA256, SHA-256, and ECDSA-P256, backed by the non-FIPS AWS-LC build.
 #
-# This selects `aws-lc-sys` rather than aws-lc-rs's `non-fips` feature because `non-fips` and
-# `fips` are mutually exclusive there (aws-lc-rs fails its build if both are on), which would
-# make this feature and `fips` impossible to enable together — something `--all-features` and
-# feature unification across a workspace do routinely. With both on, aws-lc-rs uses the FIPS
-# build. This mirrors how rustls wires its `aws_lc_rs` and `fips` features.
+# Two details about the spelling below, both consequences of `default-features = false` on the
+# dependency, which means the AWS-LC build has to be named explicitly:
+# - `fips` does not stack on this feature, so enabling `fips` alone compiles only
+#   `aws-lc-fips-sys`, not both AWS-LC builds. (rustls stacks its `fips` on its `aws_lc_rs`
+#   feature and so always builds both.)
+# - This names aws-lc-rs's `aws-lc-sys` feature rather than its `non-fips` feature, because
+#   `non-fips` and `fips` are mutually exclusive there — aws-lc-rs fails its build if both are
+#   on — and that would make this feature and `fips` impossible to enable together, something
+#   `--all-features` and feature unification across a workspace do routinely. With both on,
+#   both AWS-LC builds compile and aws-lc-rs uses the FIPS one.
 aws-lc-rs = ["__aws-lc-rs", "aws-lc-rs?/aws-lc-sys"]
 # Use aws-lc-rs for HMAC-SHA256, SHA-256, and ECDSA-P256, backed by the FIPS 140-3 validated
 # AWS-LC build. Takes precedence over `aws-lc-rs` when both are enabled.
