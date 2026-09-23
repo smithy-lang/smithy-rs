@@ -112,6 +112,7 @@ async fn check<Op: StreamingOperationShape<Input = (), Output = ()>>(expected: h
     request.extensions_mut().insert(SelectedProtocolOperation::new(
         SharedServerProtocol::new(HttpOnly),
         Op::SCHEMA,
+        Default::default(),
     ));
     let handler_called = called.clone();
     let upgrade = StreamingUpgrade::<Op, (), _> {
@@ -119,7 +120,6 @@ async fn check<Op: StreamingOperationShape<Input = (), Output = ()>>(expected: h
             handler_called.store(true, Ordering::SeqCst);
             async { Ok::<_, Infallible>(()) }
         }),
-        config: RequestBodyCollectionConfig::default(),
         _operation: PhantomData,
         _extractors: PhantomData,
     };

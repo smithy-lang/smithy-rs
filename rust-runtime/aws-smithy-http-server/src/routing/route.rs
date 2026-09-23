@@ -42,27 +42,54 @@ use std::{
     task::{Context, Poll},
 };
 use tower::{
-    util::{BoxCloneService, Oneshot},
+    util::{BoxCloneSyncService, Oneshot},
     Service, ServiceExt,
 };
 
 /// A HTTP [`Service`] representing a single route.
 ///
 /// The construction of [`Route`] from a named HTTP [`Service`] `S`, erases the type of `S`.
+///
+/// Routes are `Sync` so routers can share one handler set across threads instead of copying it
+/// for every request; the wrapped service must therefore be `Send + Sync`.
 pub struct Route<B = hyper::body::Incoming> {
-    service: BoxCloneService<Request<B>, Response<BoxBody>, Infallible>,
+    service: BoxCloneSyncService<Request<B>, Response<BoxBody>, Infallible>,
 }
 
 impl<B> Route<B> {
     /// Constructs a new [`Route`] from a well-formed HTTP service which is cloneable.
+    ///
+    /// A service that is already a `Route` (for example, one passed through
+    /// [`Identity`](tower::layer::util::Identity)) is returned as is rather than boxed again, so
+    /// cloning it stays a single boxed clone.
     pub fn new<T>(svc: T) -> Self
     where
-        T: Service<Request<B>, Response = Response<BoxBody>, Error = Infallible> + Clone + Send + 'static,
+        B: 'static,
+        T: Service<Request<B>, Response = Response<BoxBody>, Error = Infallible> + Clone + Send + Sync + 'static,
         T::Future: Send + 'static,
     {
-        Self {
-            service: BoxCloneService::new(svc),
+        match try_downcast::<Self, T>(svc) {
+            Ok(route) => route,
+            Err(svc) => Self {
+                service: BoxCloneSyncService::new(svc),
+            },
         }
+    }
+}
+
+/// Moves `value` out as a `T` when it is one, without allocating.
+fn try_downcast<T: 'static, K: 'static>(value: K) -> Result<T, K> {
+    let mut slot = Some(value);
+    if let Some(slot) = (&mut slot as &mut dyn std::any::Any).downcast_mut::<Option<T>>() {
+        return Ok(slot.take().expect("slot is filled"));
+    }
+    Err(slot.expect("slot is filled"))
+}
+
+impl<B> Route<B> {
+    /// Calls an owned route without the extra clone [`Service::call`] makes through `&mut self`.
+    pub(crate) fn call_owned(self, req: Request<B>) -> RouteFuture<B> {
+        RouteFuture::new(self.service.oneshot(req))
     }
 }
 
@@ -100,12 +127,14 @@ pin_project_lite::pin_project! {
     /// Response future for [`Route`].
     pub struct RouteFuture<B> {
         #[pin]
-        future: Oneshot<BoxCloneService<Request<B>, Response<BoxBody>, Infallible>, Request<B>>,
+        future: Oneshot<BoxCloneSyncService<Request<B>, Response<BoxBody>, Infallible>, Request<B>>,
     }
 }
 
 impl<B> RouteFuture<B> {
-    pub(crate) fn new(future: Oneshot<BoxCloneService<Request<B>, Response<BoxBody>, Infallible>, Request<B>>) -> Self {
+    pub(crate) fn new(
+        future: Oneshot<BoxCloneSyncService<Request<B>, Response<BoxBody>, Infallible>, Request<B>>,
+    ) -> Self {
         RouteFuture { future }
     }
 }
@@ -128,5 +157,25 @@ mod tests {
         use crate::test_helpers::*;
 
         assert_send::<Route<()>>();
+        assert_sync::<Route<()>>();
+    }
+
+    #[test]
+    fn try_downcast_moves_out_only_the_matching_type() {
+        assert_eq!(
+            try_downcast::<String, _>(String::from("route")),
+            Ok(String::from("route"))
+        );
+        assert_eq!(try_downcast::<String, _>(7u8), Err(7u8));
+    }
+
+    #[tokio::test]
+    async fn wrapping_a_route_keeps_serving_it() {
+        let route: Route<()> = Route::new(tower::service_fn(|_: Request<()>| async {
+            Ok::<_, Infallible>(Response::builder().status(204).body(crate::body::empty()).unwrap())
+        }));
+        let rewrapped = Route::new(tower::Layer::layer(&tower::layer::util::Identity::new(), route));
+        let response = rewrapped.oneshot(Request::new(())).await.unwrap();
+        assert_eq!(response.status(), 204);
     }
 }

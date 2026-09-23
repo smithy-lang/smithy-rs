@@ -20,7 +20,8 @@ pub(crate) use protocol::body_collection_rejection;
 
 use aws_smithy_schema::OperationSchema;
 
-/// The protocol and the operation selected by routing, stored in the request extensions.
+/// The protocol and the operation selected by routing, with the operation's request-body limits,
+/// stored in the request extensions.
 ///
 /// The protocol is erased: everything after routing works through `dyn ServerProtocol`.
 ///
@@ -32,11 +33,20 @@ use aws_smithy_schema::OperationSchema;
 pub struct SelectedProtocolOperation {
     protocol: SharedServerProtocol,
     operation: &'static OperationSchema<'static>,
+    request_body: RequestBodyCollectionConfig,
 }
 
 impl SelectedProtocolOperation {
-    pub fn new(protocol: SharedServerProtocol, operation: &'static OperationSchema<'static>) -> Self {
-        Self { protocol, operation }
+    pub fn new(
+        protocol: SharedServerProtocol,
+        operation: &'static OperationSchema<'static>,
+        request_body: RequestBodyCollectionConfig,
+    ) -> Self {
+        Self {
+            protocol,
+            operation,
+            request_body,
+        }
     }
 
     /// The selected protocol.
@@ -48,6 +58,13 @@ impl SelectedProtocolOperation {
     pub fn operation(&self) -> &'static OperationSchema<'static> {
         self.operation
     }
+
+    /// The routed operation's request-body collection limits, resolved when the router was built.
+    ///
+    /// Carrying them here keeps the per-operation upgrade services free of per-operation state.
+    pub fn request_body_config(&self) -> RequestBodyCollectionConfig {
+        self.request_body
+    }
 }
 
 impl std::fmt::Debug for SelectedProtocolOperation {
@@ -55,6 +72,7 @@ impl std::fmt::Debug for SelectedProtocolOperation {
         f.debug_struct("SelectedProtocolOperation")
             .field("protocol", &self.protocol.protocol_id())
             .field("operation", &self.operation.shape_id())
+            .field("request_body", &self.request_body)
             .finish()
     }
 }

@@ -23,8 +23,8 @@ use crate::{
     response::IntoResponse,
     runtime_error::InternalFailureException,
     schema::{
-        collect_request_body, DeserializableShape, DeserializeError, HttpModeledError, RequestBodyCollectionConfig,
-        SelectedProtocolOperation, ServerRequest,
+        collect_request_body, DeserializableShape, DeserializeError, HttpModeledError, SelectedProtocolOperation,
+        ServerRequest,
     },
     service::ServiceShape,
 };
@@ -48,16 +48,20 @@ pub struct DynProtocol;
 /// Schema-driven, protocol-neutral HTTP upgrade plugin for operations without streaming members.
 #[derive(Debug, Clone)]
 pub struct DynUpgradePlugin<Extractors> {
-    config: RequestBodyCollectionConfig,
     _extractors: PhantomData<Extractors>,
 }
 
 impl<Extractors> DynUpgradePlugin<Extractors> {
-    pub fn new(config: RequestBodyCollectionConfig) -> Self {
+    pub fn new() -> Self {
         Self {
-            config,
             _extractors: PhantomData,
         }
+    }
+}
+
+impl<Extractors> Default for DynUpgradePlugin<Extractors> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -69,7 +73,6 @@ where
     type Output = DynUpgrade<Op, Extractors, T>;
     fn apply(&self, inner: T) -> Self::Output {
         DynUpgrade {
-            config: self.config,
             _operation: PhantomData,
             _extractors: PhantomData,
             inner,
@@ -79,11 +82,11 @@ where
 
 /// Upgrade service for a non-streaming schema operation.
 ///
-/// The body is collected under the operation's [`RequestBodyCollectionConfig`] when the selected
-/// protocol asks for it, the input is read through the erased protocol handle from the request
+/// The body is collected under the operation's
+/// [`RequestBodyCollectionConfig`](crate::schema::RequestBodyCollectionConfig), carried by
+/// [`SelectedProtocolOperation`], when the selected protocol asks for it, the input is read through the erased protocol handle from the request
 /// extensions, and the output or error is serialized through the same handle.
 pub struct DynUpgrade<Op, Extractors, S> {
-    config: RequestBodyCollectionConfig,
     _operation: PhantomData<Op>,
     _extractors: PhantomData<Extractors>,
     inner: S,
@@ -92,7 +95,6 @@ pub struct DynUpgrade<Op, Extractors, S> {
 impl<Op, Extractors, S: Clone> Clone for DynUpgrade<Op, Extractors, S> {
     fn clone(&self) -> Self {
         Self {
-            config: self.config,
             _operation: PhantomData,
             _extractors: PhantomData,
             inner: self.inner.clone(),
@@ -149,7 +151,6 @@ where
     fn call(&mut self, req: http::Request<B>) -> Self::Future {
         let clone = self.inner.clone();
         let service = std::mem::replace(&mut self.inner, clone);
-        let config = self.config;
         Box::pin(async move {
             let (mut parts, body) = req.into_parts();
             let Some(selected) = selected_operation::<Op>(&parts.extensions) else {
@@ -173,10 +174,13 @@ where
                 return Ok(protocol.serialize_rejection(err));
             }
             let bytes = if protocol.reads_request_body(operation.input()) {
-                match collect_request_body(converted.body, &config).await {
+                match collect_request_body(converted.body, &selected.request_body_config()).await {
                     Ok(bytes) => bytes,
                     Err(err) => {
-                        return Ok(crate::schema::body_collection_rejection(&**protocol, err.map_body_error(crate::Error::new)))
+                        return Ok(crate::schema::body_collection_rejection(
+                            &**protocol,
+                            err.map_body_error(crate::Error::new),
+                        ))
                     }
                 }
             } else {
@@ -213,16 +217,20 @@ where
 /// [`BoxBodySync`](crate::body::BoxBodySync) or hyper's incoming body.
 #[derive(Debug, Clone)]
 pub struct StreamingUpgradePlugin<Extractors> {
-    config: RequestBodyCollectionConfig,
     _extractors: PhantomData<Extractors>,
 }
 
 impl<Extractors> StreamingUpgradePlugin<Extractors> {
-    pub fn new(config: RequestBodyCollectionConfig) -> Self {
+    pub fn new() -> Self {
         Self {
-            config,
             _extractors: PhantomData,
         }
+    }
+}
+
+impl<Extractors> Default for StreamingUpgradePlugin<Extractors> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -234,7 +242,6 @@ where
     type Output = StreamingUpgrade<Op, Extractors, T>;
     fn apply(&self, inner: T) -> Self::Output {
         StreamingUpgrade {
-            config: self.config,
             _operation: PhantomData,
             _extractors: PhantomData,
             inner,
@@ -249,7 +256,6 @@ where
 /// [`StreamingOperationShape::deserialize_streaming_input`]. A non-streaming input on such an
 /// operation is collected exactly as [`DynUpgrade`] collects it.
 pub struct StreamingUpgrade<Op, Extractors, S> {
-    config: RequestBodyCollectionConfig,
     _operation: PhantomData<Op>,
     _extractors: PhantomData<Extractors>,
     inner: S,
@@ -258,7 +264,6 @@ pub struct StreamingUpgrade<Op, Extractors, S> {
 impl<Op, Extractors, S: Clone> Clone for StreamingUpgrade<Op, Extractors, S> {
     fn clone(&self) -> Self {
         Self {
-            config: self.config,
             _operation: PhantomData,
             _extractors: PhantomData,
             inner: self.inner.clone(),
@@ -290,7 +295,6 @@ where
     fn call(&mut self, req: http::Request<B>) -> Self::Future {
         let clone = self.inner.clone();
         let service = std::mem::replace(&mut self.inner, clone);
-        let config = self.config;
         Box::pin(async move {
             let (mut parts, body) = req.into_parts();
             let Some(selected) = selected_operation::<Op>(&parts.extensions) else {
@@ -325,10 +329,13 @@ where
             let (bytes, body) = if input_streams {
                 (bytes::Bytes::new(), SdkBody::from_body_1_x(converted.body))
             } else if protocol.reads_request_body(operation.input()) {
-                match collect_request_body(converted.body, &config).await {
+                match collect_request_body(converted.body, &selected.request_body_config()).await {
                     Ok(bytes) => (bytes, SdkBody::empty()),
                     Err(err) => {
-                        return Ok(crate::schema::body_collection_rejection(&**protocol, err.map_body_error(crate::Error::new)))
+                        return Ok(crate::schema::body_collection_rejection(
+                            &**protocol,
+                            err.map_body_error(crate::Error::new),
+                        ))
                     }
                 }
             } else {

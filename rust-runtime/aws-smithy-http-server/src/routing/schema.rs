@@ -10,8 +10,8 @@ use crate::{
     body::BoxBody,
     error::BoxError,
     schema::{
-        ProtocolRegistration, ProtocolRegistry, SelectedProtocolOperation, ServiceRequestBodyConfig,
-        SharedServerProtocol,
+        ProtocolRegistration, ProtocolRegistry, RequestBodyCollectionConfig, SelectedProtocolOperation,
+        ServiceRequestBodyConfig, SharedServerProtocol,
     },
 };
 use aws_smithy_schema::{OperationSchema, ServiceSchema};
@@ -190,12 +190,14 @@ impl SharedProtocolRouter {
 
 struct BoundHandler<B> {
     operation: &'static OperationSchema<'static>,
+    request_body: RequestBodyCollectionConfig,
     route: Route<crate::body::SchemaBody<B>>,
 }
 impl<B> Clone for BoundHandler<B> {
     fn clone(&self) -> Self {
         Self {
             operation: self.operation,
+            request_body: self.request_body,
             route: self.route.clone(),
         }
     }
@@ -208,10 +210,14 @@ impl<B> fmt::Debug for BoundHandler<B> {
     }
 }
 
+/// Routing state shared by every clone of the service.
+///
+/// hyper-util's `TowerToHyperService` clones the service for every request, so everything here is
+/// behind an `Arc`: a clone is a few reference counts, and dispatch clones only the selected route.
 struct Dispatch<B> {
     router: SharedProtocolRouter,
     protocol: SharedServerProtocol,
-    bindings: Vec<BoundHandler<B>>,
+    bindings: Arc<[BoundHandler<B>]>,
 }
 impl<B> Clone for Dispatch<B> {
     fn clone(&self) -> Self {
@@ -232,7 +238,7 @@ impl<B> fmt::Debug for Dispatch<B> {
     }
 }
 
-/// A service routing normalized requests using one protocol and an owned handler collection.
+/// A service routing normalized requests using one protocol and a shared handler collection.
 ///
 /// Generic over the transport body `B`: requests entering with the transport's own body flow to
 /// handlers unerased. The default is hyper's body; any other request body — tests, upgrade
@@ -260,19 +266,21 @@ where
 {
     /// Hands the routed request to its handler, recording the selection for downstream consumers.
     fn handle(
-        &mut self,
+        &self,
         selected: OperationIndex,
         mut request: Request<crate::body::SchemaBody<B>>,
     ) -> super::route::RouteFuture<crate::body::SchemaBody<B>> {
-        let binding = &mut self.bindings[selected.index];
+        let binding = &self.bindings[selected.index];
         debug_assert!(
             std::ptr::eq(binding.operation, selected.operation),
             "router index belongs to a different operation"
         );
-        request
-            .extensions_mut()
-            .insert(SelectedProtocolOperation::new(self.protocol.clone(), binding.operation));
-        binding.route.call(request)
+        request.extensions_mut().insert(SelectedProtocolOperation::new(
+            self.protocol.clone(),
+            binding.operation,
+            binding.request_body,
+        ));
+        binding.route.clone().call_owned(request)
     }
 
     fn call(&mut self, request: Request<crate::body::SchemaBody<B>>) -> SchemaRoutingFuture<B> {
@@ -308,8 +316,8 @@ where
 pin_project_lite::pin_project! {
     #[project = StateProj]
     enum State<B> {
-        // The routing future owns the request; the dispatch clone owns the handlers. Nothing is
-        // borrowed across the await, so `Route` needs `Clone + Send` but never `Sync`.
+        // The routing future owns the request; the dispatch clone shares the handlers. Nothing is
+        // borrowed across the await.
         Routing {
             future: ProtocolRouteFuture,
             dispatch: Option<Dispatch<B>>,
@@ -343,7 +351,7 @@ where
             match this.inner.as_mut().project() {
                 StateProj::Routing { future, dispatch } => match future.as_mut().poll(cx) {
                     Poll::Ready(Ok((selected, request))) => {
-                        let mut dispatch = dispatch.take().expect("routing resolves once");
+                        let dispatch = dispatch.take().expect("routing resolves once");
                         let request =
                             request.map(|collected| crate::body::SchemaBody::buffered(collected.bytes, collected.trailers));
                         let future = dispatch.handle(selected, request);
@@ -440,6 +448,7 @@ impl<B> SchemaRoutingService<B> {
             .into_iter()
             .map(|binding| BoundHandler {
                 operation: binding.operation,
+                request_body: options.request_body.for_operation(binding.operation.shape_id()),
                 route: binding.route,
             })
             .collect();
@@ -455,18 +464,23 @@ impl<B> SchemaRoutingService<B> {
     /// Applies middleware after routing, uniformly to all bound handlers.
     pub fn layer<L>(mut self, layer: &L) -> Self
     where
+        B: 'static,
         L: tower::Layer<Route<crate::body::SchemaBody<B>>>,
         L::Service: Service<Request<crate::body::SchemaBody<B>>, Response = Response<BoxBody>, Error = Infallible>
             + Clone
             + Send
+            + Sync
             + 'static,
         <L::Service as Service<Request<crate::body::SchemaBody<B>>>>::Future: Send + 'static,
     {
-        let dispatch = &mut self.inner;
-        dispatch.bindings = std::mem::take(&mut dispatch.bindings)
-            .into_iter()
+        self.inner.bindings = self
+            .inner
+            .bindings
+            .iter()
+            .cloned()
             .map(|binding| BoundHandler {
                 operation: binding.operation,
+                request_body: binding.request_body,
                 route: Route::new(layer.layer(binding.route)),
             })
             .collect();
@@ -571,7 +585,12 @@ where
     }))
 }
 
-pub(crate) fn aws_json_router<P: fmt::Debug + 'static>(
+/// Builds the awsJson-style target router (`Service.Operation`, honoring
+/// [`compat_name`](aws_smithy_schema::schema::OperationSchema::compat_name)) for any protocol
+/// marker `P` whose rejections convert like awsJson's. Exposed for out-of-tree protocols that
+/// route on the same key.
+#[doc(hidden)]
+pub fn aws_json_router<P: fmt::Debug + 'static>(
     ctx: &RouterBuildContext<'_>,
 ) -> Result<SharedProtocolRouter, RouterBuildError>
 where

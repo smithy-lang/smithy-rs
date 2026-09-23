@@ -610,21 +610,18 @@ async fn inconsistent_operation_identity_is_detected_before_handler_dispatch() {
 }
 
 #[tokio::test]
-async fn owned_non_sync_handlers_preserve_readiness_and_clone_only_when_needed() {
-    use std::{
-        cell::Cell,
-        sync::atomic::{AtomicUsize, Ordering},
-    };
+async fn shared_handlers_preserve_readiness_and_clone_only_the_selected_route() {
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     struct Handler {
         clones: Arc<AtomicUsize>,
-        ready: Cell<bool>,
+        ready: AtomicBool,
     }
     impl Clone for Handler {
         fn clone(&self) -> Self {
             self.clones.fetch_add(1, Ordering::SeqCst);
             Self {
                 clones: self.clones.clone(),
-                ready: Cell::new(false),
+                ready: AtomicBool::new(false),
             }
         }
     }
@@ -633,7 +630,7 @@ async fn owned_non_sync_handlers_preserve_readiness_and_clone_only_when_needed()
         type Error = Infallible;
         type Future = std::future::Ready<Result<Self::Response, Infallible>>;
         fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Infallible>> {
-            if self.ready.replace(true) {
+            if self.ready.swap(true, Ordering::SeqCst) {
                 Poll::Ready(Ok(()))
             } else {
                 cx.waker().wake_by_ref();
@@ -641,7 +638,10 @@ async fn owned_non_sync_handlers_preserve_readiness_and_clone_only_when_needed()
             }
         }
         fn call(&mut self, _: Request<Body>) -> Self::Future {
-            assert!(self.ready.replace(false), "handler must be polled ready before call");
+            assert!(
+                self.ready.swap(false, Ordering::SeqCst),
+                "handler must be polled ready before call"
+            );
             std::future::ready(Ok(Response::new(crate::body::empty())))
         }
     }
@@ -652,7 +652,7 @@ async fn owned_non_sync_handlers_preserve_readiness_and_clone_only_when_needed()
                 op,
                 Route::new(Handler {
                     clones: clones.clone(),
-                    ready: Cell::new(false),
+                    ready: AtomicBool::new(false),
                 }),
             )
         });
@@ -666,15 +666,17 @@ async fn owned_non_sync_handlers_preserve_readiness_and_clone_only_when_needed()
                 .body(Body::from_bytes(Bytes::from_static(b"first\n")))
                 .unwrap()
         };
-        // Both requests stay in flight on the same service, with Send, non-Sync handlers.
+        // Both requests stay in flight on the same service, which shares its handlers.
         let first = app.call(req());
         let second = app.call(req());
         let task = tokio::spawn(async move { tokio::join!(first, second) });
         let (first, second) = task.await.unwrap();
         assert_eq!(first.unwrap().status(), StatusCode::OK);
         assert_eq!(second.unwrap().status(), StatusCode::OK);
-        let expected = if std::ptr::eq(schema, &REST_JSON) { 2 } else { 6 };
-        assert_eq!(clones.load(Ordering::SeqCst), expected);
+        // Cloning the service shares the handlers; each request clones only its selected route,
+        // including body routing, whose future holds a service clone while it reads the body.
+        drop(app.clone());
+        assert_eq!(clones.load(Ordering::SeqCst), 2);
     }
 }
 

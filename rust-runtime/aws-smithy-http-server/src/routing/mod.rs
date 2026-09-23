@@ -24,6 +24,8 @@ pub use schema::{
     RouterBuildContext, RouterBuildError, RoutingOptions, SchemaRoutingFuture, SchemaRoutingService,
     SharedProtocolRouter,
 };
+#[doc(hidden)]
+pub use schema::aws_json_router;
 
 pub(crate) mod tiny_map;
 
