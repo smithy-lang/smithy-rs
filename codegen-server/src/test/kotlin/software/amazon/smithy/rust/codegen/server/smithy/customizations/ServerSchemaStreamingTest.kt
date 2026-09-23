@@ -471,8 +471,8 @@ internal class ServerSchemaStreamingTest {
             #{SmithyHttpServer}::protocol::aws_json_11::AwsJson1_1Protocol::default());
         let selected = protocol.clone();
         let layer = #{Tower}::util::MapRequestLayer::new(move |mut request: #{Http}::Request<#{SmithyHttpServer}::body::Body>| {
-            let operation = request.extensions().get::<#{SmithyHttpServer}::schema::SelectedProtocolOperation>().unwrap().operation();
-            request.extensions_mut().insert(#{SmithyHttpServer}::schema::SelectedProtocolOperation::new(selected.clone(), operation));
+            let routed = request.extensions().get::<#{SmithyHttpServer}::schema::SelectedProtocolOperation>().unwrap().clone();
+            request.extensions_mut().insert(#{SmithyHttpServer}::schema::SelectedProtocolOperation::new(selected.clone(), routed.operation(), routed.request_body_config()));
             request
         });
         ${echoService.replace("ChatServiceConfig::builder().build()", "ChatServiceConfig::builder().http_plugin(#{SmithyHttpServer}::plugin::LayerPlugin(layer)).build()")}

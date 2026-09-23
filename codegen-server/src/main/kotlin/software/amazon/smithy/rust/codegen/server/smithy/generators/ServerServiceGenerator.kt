@@ -94,13 +94,7 @@ class ServerServiceGenerator(
 
     /** A `Writable` block of "field: Type" for the builder. */
     private val builderFields =
-        builderFieldNames.values.map { name ->
-            if (schemaSerde) {
-                "$name: #{Option}<#{Box}<dyn #{FnOnce}(#{SmithyHttpServer}::schema::RequestBodyCollectionConfig, &HttpPl) -> #{SmithyHttpServer}::routing::Route<Body> + #{Send}>>"
-            } else {
-                "$name: Option<#{SmithyHttpServer}::routing::Route<Body>>"
-            }
-        }
+        builderFieldNames.values.map { name -> "$name: Option<#{SmithyHttpServer}::routing::Route<Body>>" }
 
     /** The name of the local private module containing the functions that return the request for each operation */
     private val requestSpecsModuleName = "request_specs"
@@ -176,37 +170,25 @@ class ServerServiceGenerator(
         }
     }
 
-    /** Model plugins have already run; defer configured HTTP upgrades until schema construction. */
+    /**
+     * Model plugins have already run; upgrade to HTTP and apply the HTTP plugins. On the schema path
+     * the upgrade reads the operation's request-body limits from the routed request, so the route
+     * can be built at registration.
+     */
     private fun configureHandler(
         operation: OperationShape,
         fieldName: String,
     ): Writable =
         writable {
-            if (schemaSerde) {
-                rustTemplate(
-                    """
-                    let mut builder = self;
-                    builder.$fieldName = #{Some}(#{Box}::new(move |config, http_plugin| {
-                        let svc = #{UpgradePlugin}::<UpgradeExtractors>::new(config).apply(svc);
-                        let svc = http_plugin.apply(svc);
-                        #{SmithyHttpServer}::routing::Route::new(svc)
-                    }));
-                    builder
-                    """,
-                    "UpgradePlugin" to upgradePlugin(operation),
-                    *codegenScope,
-                )
-            } else {
-                rustTemplate(
-                    """
-                    let svc = #{UpgradePlugin}::<UpgradeExtractors>::new().apply(svc);
-                    let svc = self.http_plugin.apply(svc);
-                    self.${fieldName}_custom(svc)
-                    """,
-                    "UpgradePlugin" to upgradePlugin(operation),
-                    *codegenScope,
-                )
-            }
+            rustTemplate(
+                """
+                let svc = #{UpgradePlugin}::<UpgradeExtractors>::new().apply(svc);
+                let svc = self.http_plugin.apply(svc);
+                self.${fieldName}_custom(svc)
+                """,
+                "UpgradePlugin" to upgradePlugin(operation),
+                *codegenScope,
+            )
         }
 
     /** A `Writable` block containing all the `Handler` and `Operation` setters for the builder. */
@@ -275,8 +257,7 @@ class ServerServiceGenerator(
                             >::Output
                         >,
 
-                        ${if (schemaSerde) "ModelPl::Output: #{Send} + 'static," else ""}
-                        HttpPl::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
+                        HttpPl::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + Sync + 'static,
                         <HttpPl::Output as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
 
                     {
@@ -338,8 +319,7 @@ class ServerServiceGenerator(
                             >::Output
                         >,
 
-                        ${if (schemaSerde) "ModelPl::Output: #{Send} + 'static," else ""}
-                        HttpPl::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
+                        HttpPl::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + Sync + 'static,
                         <HttpPl::Output as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
 
                     {
@@ -354,10 +334,10 @@ class ServerServiceGenerator(
                     /// not constrained by the Smithy contract.
                     ${if (schemaSerde) "pub " else ""}fn ${fieldName}_custom<S>(mut self, svc: S) -> Self
                     where
-                        S: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
+                        S: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + Sync + 'static,
                         S::Future: Send + 'static,
                     {
-                        self.$fieldName = ${if (schemaSerde) "#{Some}(#{Box}::new(move |_, _| #{SmithyHttpServer}::routing::Route::new(svc)))" else "Some(#{SmithyHttpServer}::routing::Route::new(svc))"};
+                        self.$fieldName = Some(#{SmithyHttpServer}::routing::Route::new(svc));
                         self
                     }
                     """,
@@ -588,7 +568,8 @@ class ServerServiceGenerator(
                     ${if (schemaSerde) "routing_options: #{SmithyHttpServer}::routing::RoutingOptions," else ""}
                 }
 
-                impl<$builderGenerics> $builderName<$builderGenerics> {
+                // `Route::new` requires a `'static` body; legacy builders are generic over it.
+                impl<$builderGenerics> $builderName<$builderGenerics> ${if (schemaSerde) "" else "where Body: 'static"} {
                     #{Setters:W}
                 }
 
@@ -788,12 +769,13 @@ class ServerServiceGenerator(
                             >,
                         >
                         where
+                            B: 'static,
                             S: #{Tower}::Service<
                                 #{Http}::Request<B>,
                                 Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>,
                                 Error = std::convert::Infallible,
                             >,
-                            S: Clone + Send + 'static,
+                            S: Clone + Send + Sync + 'static,
                             S::Future: Send + 'static,
                         {
                             self.layer(&::tower::layer::layer_fn(
@@ -848,9 +830,7 @@ class ServerServiceGenerator(
                     writable {
                         val field = builderFieldNames.getValue(operation)
                         val name = operationStructNames.getValue(operation)
-                        val operationSchema = "<crate::operation_shape::$name as #{SmithyHttpServer}::operation::SchemaOperationShape>::SCHEMA"
-                        val configuredHandler = "constructor(self.routing_options.request_body.for_operation($operationSchema.shape_id()), &self.http_plugin)"
-                        val handler = if (unchecked) "self.$field.map(|constructor| $configuredHandler).unwrap_or_else(|| #{SmithyHttpServer}::routing::Route::new(#{SmithyHttpServer}::operation::SchemaMissingFailure))" else "{ let constructor = self.$field.expect(\"handler checked above\"); $configuredHandler }"
+                        val handler = if (unchecked) "self.$field.unwrap_or_else(|| #{SmithyHttpServer}::routing::Route::new(#{SmithyHttpServer}::operation::SchemaMissingFailure))" else "self.$field.expect(\"handler checked above\")"
                         rustTemplate("#{SmithyHttpServer}::routing::OperationHandlerBinding::new(<crate::operation_shape::$name as #{SmithyHttpServer}::operation::SchemaOperationShape>::SCHEMA, $handler)", *codegenScope)
                     }
                 }.join(",")
@@ -867,7 +847,7 @@ class ServerServiceGenerator(
                 pub fn $name(self) -> $result
                 where
                     L: #{Tower}::Layer<#{SmithyHttpServer}::routing::Route<Body>>,
-                    L::Service: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
+                    L::Service: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + Sync + 'static,
                     <L::Service as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
                 {
                     #{Checks}
@@ -974,7 +954,7 @@ class ServerServiceGenerator(
                     pub fn layer<L>(self, layer: &L) -> Self
                     where
                         L: #{Tower}::Layer<#{SmithyHttpServer}::routing::Route<Body>>,
-                        L::Service: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
+                        L::Service: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + Sync + 'static,
                         <L::Service as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
                     { Self { svc: self.svc.layer(layer) } }
                 }
