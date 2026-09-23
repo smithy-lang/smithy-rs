@@ -968,49 +968,46 @@ mod loom_tests {
 
     /// Replaces cancelled demand while its previous assignment is still detached.
     ///
-    /// The replacement must not receive a second assignment until the first
-    /// delivery settles.
+    /// Assignment settlement and replacement publication may enter in either
+    /// order, but capacity and the requester's active assignment remain singular.
     #[test]
     fn cancellation_preserves_an_outstanding_demand_assignment() {
         loom::model(|| {
-            use loom::sync::atomic::{AtomicBool, Ordering};
-
             let origin = OriginAdmission::for_test(NonZeroUsize::new(2).unwrap());
             let requesting_partition = id();
             let delivery =
                 OriginAdmission::submit_without_running(&origin, requesting_partition, demand())
                     .unwrap();
-            let release = Arc::new(AtomicBool::new(false));
-
-            let delivery_release = release.clone();
-            let dropped = loom::thread::spawn(move || {
-                while !delivery_release.load(Ordering::Acquire) {
-                    loom::thread::yield_now();
-                }
-                drop(delivery);
+            let dropping = loom::thread::spawn(move || drop(delivery));
+            let replacement_origin = origin.clone();
+            let replacing = loom::thread::spawn(move || {
+                replacement_origin.state.lock().apply_demand_snapshot(
+                    requesting_partition,
+                    DemandSnapshot::inactive(
+                        DemandId::from_u64(1),
+                        SnapshotVersion::INITIAL.next(),
+                    ),
+                );
+                OriginAdmission::submit_without_running(
+                    &replacement_origin,
+                    requesting_partition,
+                    DemandSnapshot::active(
+                        DemandId::from_u64(2),
+                        SnapshotVersion::INITIAL,
+                        ProtocolRequirement::H1Compatible,
+                        EligibilityGroup::Pool,
+                    ),
+                )
             });
 
-            origin.state.lock().apply_demand_snapshot(
-                requesting_partition,
-                DemandSnapshot::inactive(DemandId::from_u64(1), SnapshotVersion::INITIAL.next()),
-            );
-            let duplicate = OriginAdmission::submit_without_running(
-                &origin,
-                requesting_partition,
-                DemandSnapshot::active(
-                    DemandId::from_u64(2),
-                    SnapshotVersion::INITIAL,
-                    ProtocolRequirement::H1Compatible,
-                    EligibilityGroup::Pool,
-                ),
-            );
-
-            release.store(true, Ordering::Release);
-            dropped.join().unwrap();
-            assert!(
-                duplicate.is_none(),
-                "outstanding demand assignment admitted a second delivery"
-            );
+            dropping.join().unwrap();
+            if let Some(replacement) = replacing.join().unwrap() {
+                assert!(
+                    replacement.is_current(),
+                    "replacement delivery did not own the current demand assignment"
+                );
+                drop(replacement);
+            }
 
             let probe = origin.probe();
             assert_eq!(2, probe.available);

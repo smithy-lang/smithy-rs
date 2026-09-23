@@ -1651,13 +1651,15 @@ mod loom_tests {
         });
     }
 
-    /// Races `Opened` completion, logical close, and physical completion.
+    /// Races `Opened`, accepted HTTP/1 completion, and both close transitions.
     ///
     /// The production lifecycle must report each event once and preserve
     /// `Opened -> LogicalClose -> PhysicalClose` for every interleaving.
     #[test]
     fn installed_events_remain_ordered_across_concurrent_close() {
-        loom::model(|| {
+        let mut model = loom::model::Builder::new();
+        model.preemption_bound.get_or_insert(3);
+        model.check(|| {
             let event_sequence = Arc::new(AtomicUsize::new(0));
             let observed = event_sequence.clone();
             let events = ConnectionEvents::new(
@@ -1681,6 +1683,8 @@ mod loom_tests {
             let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
             let lease = OriginAdmission::lease_for_test(&origin);
             let (connection, physical) = ConnectionState::bounded(test_info(1), lease);
+            let dispatch = ConnectionState::try_commit_dispatch(&connection)
+                .expect("open HTTP/1 connection rejected dispatch");
             let establishment = events.establishment_started(
                 connection.info().origin(),
                 connection.owner_partition(),
@@ -1691,13 +1695,15 @@ mod loom_tests {
             let opened = loom::thread::spawn(move || establishment.opened(&opened_connection));
             let close_connection = connection.clone();
             let close = loom::thread::spawn(move || {
-                close_connection.logical_close(CloseReason::PoolDropped)
+                close_connection.logical_close(CloseReason::ProtocolClosed)
             });
             let complete_physical = loom::thread::spawn(move || physical.release());
+            let complete_dispatch = loom::thread::spawn(move || dispatch.release());
 
             opened.join().unwrap();
             assert!(close.join().unwrap());
             complete_physical.join().unwrap();
+            complete_dispatch.join().unwrap();
 
             assert_eq!(
                 27,
@@ -1706,7 +1712,9 @@ mod loom_tests {
             );
             assert_eq!(1, origin.available_capacity_for_test());
             let probe = connection.probe();
-            assert_eq!(Some(CloseReason::PoolDropped), probe.close_reason);
+            assert_eq!(Some(CloseReason::ProtocolClosed), probe.close_reason);
+            assert!(!probe.awaiting_h1_exchange);
+            assert_eq!(0, probe.in_flight);
             assert!(probe.physical_connection_complete);
         });
     }

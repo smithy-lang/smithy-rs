@@ -66,12 +66,6 @@ impl PartitionMaintenance {
 
     /// Registers a retained cell without waking an idle task.
     pub(super) fn register(&self, cell: &Arc<OriginCell>) {
-        // Loom has no modeled Weak. Skip this production-only index to avoid a
-        // model-only maintenance -> cell -> maintenance cycle.
-        #[cfg(all(test, smithy_http_client_loom))]
-        let _ = cell;
-
-        #[cfg(not(all(test, smithy_http_client_loom)))]
         self.state
             .lock()
             .cells
@@ -189,6 +183,14 @@ impl PartitionMaintenance {
             state.waker = Some(cx.waker().clone());
         }
         Poll::Pending
+    }
+
+    #[cfg(all(test, smithy_http_client_loom))]
+    pub(super) fn clear_modeled_cells_for_test(&self) {
+        // Loom has no modeled Weak, so its synchronization facade retains
+        // registered cells strongly. Explicit teardown prevents that model-only
+        // substitution from creating a maintenance -> cell -> maintenance cycle.
+        self.state.lock().cells.clear();
     }
 
     #[cfg(all(test, feature = "rt-tokio", not(smithy_http_client_loom)))]
@@ -387,7 +389,14 @@ struct MaintenanceProbe {
 #[cfg(all(test, smithy_http_client_loom))]
 mod loom_tests {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering as StdOrdering};
+    use crate::client::pool::cell::h1::{H1CloseHandle, H1Sender};
+    use crate::client::pool::connection::{CloseReason, ConnectionInfo, ConnectionState};
+    use crate::client::pool::origin::OriginKey;
+    use crate::client::pool::partition::{EligibilityGroup, PartitionId};
+    use crate::sync::AtomicUsize;
+    use aws_smithy_async::test_util::ManualTimeSource;
+    use aws_smithy_runtime_api::client::connection::ConnectionId;
+    use http_1x::uri::Scheme;
     use std::sync::Arc as StdArc;
     use std::task::{Context, Wake, Waker};
     use std::time::UNIX_EPOCH;
@@ -396,11 +405,11 @@ mod loom_tests {
 
     impl Wake for WakeCounter {
         fn wake(self: StdArc<Self>) {
-            self.0.fetch_add(1, StdOrdering::SeqCst);
+            self.0.fetch_add(1, Ordering::SeqCst);
         }
 
         fn wake_by_ref(self: &StdArc<Self>) {
-            self.0.fetch_add(1, StdOrdering::SeqCst);
+            self.0.fetch_add(1, Ordering::SeqCst);
         }
     }
 
@@ -426,7 +435,7 @@ mod loom_tests {
             let before_join = maintenance.poll_revision(observed, &mut context);
             publish.join().unwrap();
             if before_join.is_pending() {
-                assert_eq!(1, counter.0.load(StdOrdering::SeqCst));
+                assert_eq!(1, counter.0.load(Ordering::SeqCst));
             }
             assert!(maintenance.poll_revision(observed, &mut context).is_ready());
         });
@@ -486,9 +495,76 @@ mod loom_tests {
             let before_join = maintenance.poll_revision(observed, &mut context);
             stop.join().unwrap();
             if before_join.is_pending() {
-                assert_eq!(1, counter.0.load(StdOrdering::SeqCst));
+                assert_eq!(1, counter.0.load(Ordering::SeqCst));
             }
             assert!(maintenance.poll_revision(observed, &mut context).is_ready());
+        });
+    }
+
+    /// Races an expired idle HTTP/1 record with local sender selection.
+    ///
+    /// Selection either takes the sender before the scan observes it or expiry
+    /// closes the exact record. The sender and record must have one final owner.
+    #[test]
+    fn idle_expiry_linearizes_against_h1_selection() {
+        loom::model(|| {
+            let maintenance = PartitionMaintenance::new(MaintenanceConfig {
+                idle_timeout: Some(Duration::ZERO),
+                time_source: SharedTimeSource::new(ManualTimeSource::new(UNIX_EPOCH)),
+                sleep: None,
+            });
+            let cell = Arc::new(OriginCell::new(
+                PartitionId::from_index(1),
+                OriginKey::from_parts(Scheme::HTTP, "example.com", None).unwrap(),
+                EligibilityGroup::Pool,
+                None,
+                Some(maintenance.clone()),
+            ));
+            maintenance.register(&cell);
+            let (connection, physical) = ConnectionState::unbounded(ConnectionInfo::for_test(
+                ConnectionId::new(1),
+                cell.id().partition(),
+            ));
+            OriginCell::insert_idle_h1(&cell, connection.clone(), H1Sender::test(1));
+
+            let selecting_cell = cell.clone();
+            let selecting = loom::thread::spawn(move || OriginCell::select_h1(&selecting_cell));
+            let scanning = maintenance.clone();
+            let expiring = loom::thread::spawn(move || {
+                let observed = scanning
+                    .begin_scan()
+                    .expect("maintenance shut down before its scan");
+                let cells = scanning.cells();
+                for cell in &cells {
+                    OriginCell::expire_idle(cell, UNIX_EPOCH);
+                }
+                let nearest = cells
+                    .iter()
+                    .filter_map(|cell| cell.nearest_idle_deadline())
+                    .min();
+                drop(cells);
+                scanning.schedule(observed, nearest)
+            });
+
+            let selected = selecting.join().unwrap();
+            assert!(matches!(
+                expiring.join().unwrap(),
+                ScheduleResult::Wait { .. }
+            ));
+            drop(selected);
+
+            if connection.probe().close_reason.is_none() {
+                assert!(H1CloseHandle::new(&cell, &connection).close(CloseReason::PoolDropped));
+            }
+            let stats = cell.connection_stats_snapshot();
+            assert_eq!(0, stats.h1().idle());
+            assert_eq!(0, stats.h1().active());
+            assert!(matches!(
+                connection.probe().close_reason,
+                Some(CloseReason::IdleTimeout | CloseReason::PoolDropped)
+            ));
+            drop(physical);
+            maintenance.clear_modeled_cells_for_test();
         });
     }
 }

@@ -2557,17 +2557,12 @@ mod loom_tests {
             let returning = OriginCell::insert_selected_h1(&cell, connection, H1Sender::test(11));
             let (waiter, demand) =
                 cell.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
-            let mut delivery =
+            let delivery =
                 OriginAdmission::submit_without_running(&admission, cell.id().partition(), demand)
                     .expect("published demand did not reserve capacity");
-            assert!(
-                delivery.resolve_payload_for_test(),
-                "capacity delivery did not materialize"
-            );
 
-            let delivery_cell = cell.clone();
             let delivering = loom::thread::spawn(move || {
-                drop(OriginCell::receive_delivery(&delivery_cell, delivery));
+                OriginAdmission::run_action_chain(Some(AdmissionAction::Deliver(delivery)));
             });
             let returning = loom::thread::spawn(move || drop(returning));
             delivering.join().unwrap();
@@ -2590,7 +2585,7 @@ mod loom_tests {
     #[test]
     fn peer_match_and_request_cancellation_preserve_the_sender() {
         let mut model = loom::model::Builder::new();
-        model.preemption_bound = Some(3);
+        model.preemption_bound.get_or_insert(3);
         model.check(|| {
             let (admission, connection_cell, requesting_cell) =
                 bounded_peer_cells(EligibilityGroup::Pool, EligibilityGroup::Pool);
@@ -2630,7 +2625,7 @@ mod loom_tests {
     #[test]
     fn borrowed_delivery_racing_a_local_return_preserves_both_senders() {
         let mut model = loom::model::Builder::new();
-        model.preemption_bound = Some(3);
+        model.preemption_bound.get_or_insert(3);
         model.check(|| {
             let (admission, connection_cell, requesting_cell) =
                 bounded_peer_cells_with_limit(2, EligibilityGroup::Pool, EligibilityGroup::Pool);
@@ -2654,12 +2649,8 @@ mod loom_tests {
                 demand,
             )
             .expect("peer demand did not prepare an H1 match");
-            let delivery = install
-                .run_once_for_test()
-                .expect("H1 supplier reservation did not prepare a delivery");
-
             let delivering = loom::thread::spawn(move || {
-                OriginAdmission::run_action_chain(Some(delivery));
+                OriginAdmission::run_action_chain(Some(install));
             });
             let returning = loom::thread::spawn(move || drop(local));
             delivering.join().unwrap();
@@ -2698,7 +2689,7 @@ mod loom_tests {
     #[test]
     fn borrow_materialization_races_owning_cell_close_without_stranding_request() {
         let mut model = loom::model::Builder::new();
-        model.preemption_bound = Some(3);
+        model.preemption_bound.get_or_insert(3);
         model.check(|| {
             let (admission, connection_cell, requesting_cell) =
                 bounded_peer_cells(EligibilityGroup::Pool, EligibilityGroup::Pool);
@@ -2714,12 +2705,8 @@ mod loom_tests {
                 demand,
             )
             .expect("peer demand did not prepare an H1 match");
-            let delivery = install
-                .run_once_for_test()
-                .expect("H1 supplier reservation did not prepare a delivery");
-
             let delivering = loom::thread::spawn(move || {
-                OriginAdmission::run_action_chain(Some(delivery));
+                OriginAdmission::run_action_chain(Some(install));
             });
             let closing = loom::thread::spawn(move || close.close(CloseReason::Poisoned));
             delivering.join().unwrap();
@@ -2759,7 +2746,7 @@ mod loom_tests {
     #[test]
     fn reclaim_and_connection_close_release_exactly_one_capacity_slot() {
         let mut model = loom::model::Builder::new();
-        model.preemption_bound = Some(3);
+        model.preemption_bound.get_or_insert(3);
         model.check(|| {
             let (admission, connection_cell, requesting_cell) = bounded_peer_cells(
                 EligibilityGroup::Partition(PartitionId::from_index(1)),
@@ -2819,17 +2806,12 @@ mod loom_tests {
             let (admission, cell) = bounded_cell();
             let (first, demand) =
                 cell.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
-            let mut delivery =
+            let delivery =
                 OriginAdmission::submit_without_running(&admission, cell.id().partition(), demand)
                     .unwrap();
-            assert!(
-                delivery.resolve_payload_for_test(),
-                "capacity delivery did not materialize"
-            );
 
-            let delivery_cell = cell.clone();
             let deliver = loom::thread::spawn(move || {
-                drop(OriginCell::receive_delivery(&delivery_cell, delivery));
+                OriginAdmission::run_action_chain(Some(AdmissionAction::Deliver(delivery)));
             });
             let cancel_cell = cell.clone();
             let cancel =
@@ -2842,14 +2824,60 @@ mod loom_tests {
         });
     }
 
-    /// Races peer HTTP/2 route installation with cancellation of its target waiter.
+    /// Executes production route preparation, attachment, and settlement.
     ///
-    /// Three preemptions cover either actor entering first and route settlement
-    /// returning through admission after cell validation.
+    /// The accepted assignment must deliver one activation, leave no retained
+    /// demand, and preserve the installed generation until explicit close.
     #[test]
-    fn h2_route_installation_races_requesting_cell_cancellation() {
+    fn prepared_h2_route_executes_and_settles_assignment() {
+        loom::model(|| {
+            let (admission, connection_cell, requesting_cell) =
+                bounded_peer_cells(EligibilityGroup::Pool, EligibilityGroup::Pool);
+            let lease = OriginAdmission::lease_for_test(&admission);
+            let (connection, _physical) = ConnectionState::bounded(connection_info(1), lease);
+            let generation = OriginCell::install_h2_for_test(&connection_cell, connection, 1, None);
+            let (waiter, demand) =
+                requesting_cell.register_waiter_without_publish(ProtocolRequirement::H2Required);
+            let action = OriginAdmission::submit_action_without_running(
+                &admission,
+                requesting_cell.id().partition(),
+                demand,
+            )
+            .expect("peer demand did not prepare an HTTP/2 route");
+
+            assert!(
+                action.run_once_for_test().is_none(),
+                "single route assignment prepared an unexpected successor"
+            );
+            let activation = match requesting_cell
+                .take_ready_event(waiter)
+                .expect("accepted route did not activate its waiter")
+            {
+                AcquisitionStep::Resolved(AcquisitionOutcome::H2(activation)) => activation,
+                _ => panic!("accepted route produced a non-HTTP/2 result"),
+            };
+            drop(activation);
+
+            assert_eq!(0, requesting_cell.probe().retained);
+            assert_eq!(0, admission.ordered_demand_count_for_test());
+            assert!(OriginCell::close_h2(
+                &connection_cell,
+                generation,
+                CloseReason::PoolDropped,
+            ));
+            assert_eq!(1, admission.available_capacity_for_test());
+            admission.clear_modeled_cells_for_test();
+        });
+    }
+
+    /// Races cell-local peer route attachment with waiter cancellation.
+    ///
+    /// This model isolates the requesting-cell transition. The production
+    /// admission preparation and settlement path is exercised separately above.
+    #[test]
+    fn h2_route_attachment_linearizes_against_requesting_cell_cancellation() {
         let mut model = loom::model::Builder::new();
-        model.preemption_bound = Some(3);
+        model.preemption_bound.get_or_insert(3);
         model.check(|| {
             let (admission, connection_cell, requesting_cell) =
                 bounded_peer_cells(EligibilityGroup::Pool, EligibilityGroup::Pool);
@@ -2876,7 +2904,6 @@ mod loom_tests {
             assert!(cancelling.join().unwrap());
 
             assert_eq!(0, requesting_cell.probe().retained);
-            assert_eq!(0, admission.ordered_demand_count_for_test());
             assert_eq!(0, admission.available_capacity_for_test());
             assert!(OriginCell::close_h2(
                 &connection_cell,
@@ -2895,7 +2922,7 @@ mod loom_tests {
     #[test]
     fn h2_route_acknowledgement_races_generation_close_and_route_service() {
         let mut model = loom::model::Builder::new();
-        model.preemption_bound = Some(3);
+        model.preemption_bound.get_or_insert(3);
         model.check(|| {
             let (admission, connection_cell, requesting_cell) =
                 bounded_peer_cells(EligibilityGroup::Pool, EligibilityGroup::Pool);
@@ -2945,7 +2972,7 @@ mod loom_tests {
     #[test]
     fn h2_route_close_race_preserves_capacity_ownership() {
         let mut model = loom::model::Builder::new();
-        model.preemption_bound = Some(3);
+        model.preemption_bound.get_or_insert(3);
         model.check(|| {
             let (admission, connection_cell, requesting_cell) =
                 bounded_peer_cells(EligibilityGroup::Pool, EligibilityGroup::Pool);

@@ -29,7 +29,7 @@ use aws_smithy_http_client::test_util::wire::connection::{
     BodyPlan, ConnectionCloseReason, ConnectionEvent as WireConnectionEvent, ConnectionTestHarness,
     EndpointPlan, Http1Response, Http1Script, ManualGate, SocketScript,
 };
-use aws_smithy_runtime_api::client::connection::ConnectionId;
+use aws_smithy_runtime_api::client::connection::{CaptureSmithyConnection, ConnectionId};
 use aws_smithy_runtime_api::client::http::telemetry::{
     CaptureHttpAttemptTelemetry, ConnectionUsage,
 };
@@ -355,8 +355,10 @@ async fn h1_attempt_telemetry_distinguishes_fresh_and_reused_connections() {
     let client = SharedHttpClient::new(Client::new(&pool).expect("anonymous partition"));
     let connector = connector(&client);
 
+    let first_connection_capture = CaptureSmithyConnection::new();
     let first_capture = CaptureHttpAttemptTelemetry::new();
     let mut first = HttpRequest::get(harness.endpoint_url()).expect("valid request");
+    first.add_extension(first_connection_capture.clone());
     first.add_extension(first_capture.clone());
     test_client::send_and_collect(&connector, first).await;
 
@@ -379,6 +381,18 @@ async fn h1_attempt_telemetry_distinguishes_fresh_and_reused_connections() {
     );
     let first_connection = first.connection().expect("first connection metadata");
     let second_connection = second.connection().expect("second connection metadata");
+    let captured_connection = first_connection_capture
+        .get()
+        .expect("connection capture should contain selected metadata");
+    assert_eq!(
+        captured_connection.connection_id(),
+        first_connection.connection_id()
+    );
+    assert_eq!(
+        captured_connection.establishment(),
+        first_connection.establishment(),
+        "connection and attempt captures must observe the same selected connection"
+    );
     assert_eq!(
         first_connection.connection_id(),
         second_connection.connection_id()
