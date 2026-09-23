@@ -61,7 +61,7 @@ sha2 = { version = "0.11", optional = true }
 # aws-lc-rs digest backend; see the `aws-lc-rs` and `fips` features.
 # `default-features = false` so that the AWS-LC build (non-FIPS vs FIPS) is chosen
 # explicitly by those features rather than defaulting to the non-FIPS one.
-aws-lc-rs = { version = "1.18.1", optional = true, default-features = false, features = ["alloc"] }
+aws-lc-rs = { version = "1.18.1", optional = true, default-features = false }
 
 [dev-dependencies]
 bytes-utils = "0.1.2"
