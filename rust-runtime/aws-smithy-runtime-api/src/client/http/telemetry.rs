@@ -13,34 +13,58 @@ use crate::client::connection::ConnectionMetadata;
 use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use std::fmt;
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 /// Whether the selected connection had accepted an earlier request.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum ConnectionUsage {
     /// The connection had not accepted an earlier request.
+    ///
+    /// For a multiplexed connection, only the first accepted request is fresh.
+    /// Concurrent requests accepted afterward observe reuse.
     Fresh,
     /// The connection had accepted at least one earlier request.
     Reused,
 }
 
-/// Time and reuse state for the connection selected by one request attempt.
+/// Timing and reuse state for the connection selected by one request attempt.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub struct ConnectionAcquisitionTelemetry {
-    duration: Duration,
+    duration: Option<Duration>,
     usage: ConnectionUsage,
 }
 
 impl ConnectionAcquisitionTelemetry {
     /// Creates a completed connection-acquisition observation.
     pub fn new(duration: Duration, usage: ConnectionUsage) -> Self {
-        Self { duration, usage }
+        Self {
+            duration: Some(duration),
+            usage,
+        }
     }
 
-    /// Returns elapsed time from acquisition start until Hyper accepted the request.
-    pub fn duration(&self) -> Duration {
+    /// Creates an observation from acquisition start and completion times.
+    ///
+    /// The duration is absent when `completed_at` precedes `started_at`. The
+    /// selected connection and its reuse state remain valid observations.
+    pub fn from_interval(
+        started_at: SystemTime,
+        completed_at: SystemTime,
+        usage: ConnectionUsage,
+    ) -> Self {
+        Self {
+            duration: completed_at.duration_since(started_at).ok(),
+            usage,
+        }
+    }
+
+    /// Returns elapsed time until the selected connection accepted the request.
+    ///
+    /// This is absent when the HTTP client's clock did not produce a valid
+    /// interval.
+    pub fn duration(&self) -> Option<Duration> {
         self.duration
     }
 
@@ -54,20 +78,23 @@ impl ConnectionAcquisitionTelemetry {
 #[derive(Clone, Debug, Default)]
 #[non_exhaustive]
 pub struct HttpAttemptTelemetry {
-    acquisition: Option<ConnectionAcquisitionTelemetry>,
-    connection: Option<ConnectionMetadata>,
+    selection: Option<ConnectionSelection>,
     dispatch_duration: Option<Duration>,
 }
 
 impl HttpAttemptTelemetry {
     /// Returns completed connection-acquisition telemetry, when supplied.
     pub fn acquisition(&self) -> Option<&ConnectionAcquisitionTelemetry> {
-        self.acquisition.as_ref()
+        self.selection
+            .as_ref()
+            .map(|selection| &selection.acquisition)
     }
 
     /// Returns metadata for the connection that accepted the request, when supplied.
     pub fn connection(&self) -> Option<&ConnectionMetadata> {
-        self.connection.as_ref()
+        self.selection
+            .as_ref()
+            .map(|selection| &selection.connection)
     }
 
     /// Returns the complete HTTP connector call duration, when supplied.
@@ -79,11 +106,16 @@ impl HttpAttemptTelemetry {
     }
 }
 
+#[derive(Clone, Debug)]
+struct ConnectionSelection {
+    acquisition: ConnectionAcquisitionTelemetry,
+    connection: ConnectionMetadata,
+}
+
 /// Shared request extension used to capture HTTP-attempt telemetry.
 ///
-/// Recording is first-write-wins. This prevents retries inside an HTTP client
-/// from combining acquisition timing from one selection with metadata from a
-/// later selection.
+/// Each observation is recorded at most once. Acquisition timing and selected
+/// connection metadata are committed together.
 #[derive(Clone, Default)]
 pub struct CaptureHttpAttemptTelemetry {
     state: Arc<Mutex<HttpAttemptTelemetry>>,
@@ -112,7 +144,22 @@ impl CaptureHttpAttemptTelemetry {
         true
     }
 
-    /// Records the connection selection that Hyper accepted.
+    /// Records the complete HTTP connector call interval.
+    ///
+    /// Returns `false` without recording a value when `completed_at` precedes
+    /// `started_at` or a dispatch duration was already recorded.
+    pub fn record_dispatch_interval(
+        &self,
+        started_at: SystemTime,
+        completed_at: SystemTime,
+    ) -> bool {
+        let Ok(duration) = completed_at.duration_since(started_at) else {
+            return false;
+        };
+        self.record_dispatch_duration(duration)
+    }
+
+    /// Records the connection selection that accepted the request.
     ///
     /// Acquisition and connection metadata are committed together. Returns
     /// `true` when this call recorded the selection.
@@ -122,11 +169,13 @@ impl CaptureHttpAttemptTelemetry {
         connection: ConnectionMetadata,
     ) -> bool {
         let mut state = self.lock();
-        if state.acquisition.is_some() || state.connection.is_some() {
+        if state.selection.is_some() {
             return false;
         }
-        state.acquisition = Some(acquisition);
-        state.connection = Some(connection);
+        state.selection = Some(ConnectionSelection {
+            acquisition,
+            connection,
+        });
         true
     }
 
@@ -195,5 +244,37 @@ mod tests {
             telemetry.dispatch_duration(),
             Some(Duration::from_millis(4))
         );
+    }
+
+    #[test]
+    fn backwards_dispatch_interval_is_absent() {
+        let capture = CaptureHttpAttemptTelemetry::new();
+        let started_at = SystemTime::UNIX_EPOCH + Duration::from_secs(2);
+        let completed_at = SystemTime::UNIX_EPOCH + Duration::from_secs(1);
+
+        assert!(!capture.record_dispatch_interval(started_at, completed_at));
+        assert_eq!(capture.get().dispatch_duration(), None);
+    }
+
+    #[test]
+    fn backwards_acquisition_interval_retains_selection_facts() {
+        let started_at = SystemTime::UNIX_EPOCH + Duration::from_secs(2);
+        let completed_at = SystemTime::UNIX_EPOCH + Duration::from_secs(1);
+
+        let acquisition = ConnectionAcquisitionTelemetry::from_interval(
+            started_at,
+            completed_at,
+            ConnectionUsage::Fresh,
+        );
+        let capture = CaptureHttpAttemptTelemetry::new();
+        assert!(capture.record_connection_selection(acquisition, connection()));
+
+        let telemetry = capture.get();
+        assert_eq!(telemetry.acquisition().expect("selection").duration(), None);
+        assert_eq!(
+            telemetry.acquisition().expect("selection").usage(),
+            ConnectionUsage::Fresh
+        );
+        assert!(telemetry.connection().is_some());
     }
 }

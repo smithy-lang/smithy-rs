@@ -175,7 +175,10 @@ pub struct ConnectionEstablishmentStats {
 }
 
 impl ConnectionEstablishmentStats {
-    /// Returns elapsed time from establishment start through its terminal event.
+    /// Returns elapsed time through successful protocol installation or terminal failure.
+    ///
+    /// Successful measurements are frozen before the connection is published
+    /// to waiting pool demand.
     pub fn total_duration(&self) -> Duration {
         self.total_duration
     }
@@ -279,7 +282,7 @@ impl<'a> ConnectionOpened<'a> {
         self.establishment
     }
 
-    /// Returns measurements from the successful establishment.
+    /// Returns measurements frozen after protocol installation and before pool publication.
     pub fn stats(&self) -> &'a ConnectionEstablishmentStats {
         self.stats
     }
@@ -433,11 +436,6 @@ impl ConnectionEvents {
             successful_stats: None,
             connection_stats: Some(connection_stats),
         }
-    }
-
-    /// Returns the current pool clock value.
-    pub(super) fn now(&self) -> SystemTime {
-        self.time_source.now()
     }
 }
 

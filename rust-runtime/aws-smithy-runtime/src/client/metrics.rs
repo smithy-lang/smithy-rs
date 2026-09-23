@@ -9,7 +9,7 @@ use aws_smithy_observability::{
     ObservabilityError,
 };
 use aws_smithy_runtime_api::client::http::telemetry::{
-    CaptureHttpAttemptTelemetry, HttpAttemptTelemetry,
+    CaptureHttpAttemptTelemetry, ConnectionAcquisitionTelemetry, HttpAttemptTelemetry,
 };
 use aws_smithy_runtime_api::client::{
     interceptors::{
@@ -64,6 +64,7 @@ pub(crate) struct MeasurementsContainer {
     call_start: SystemTime,
     attempts: u32,
     attempt_start: SystemTime,
+    attempt_capture: Option<CaptureHttpAttemptTelemetry>,
 }
 
 impl Storable for MeasurementsContainer {
@@ -119,12 +120,12 @@ impl OperationTelemetry {
     }
 
     fn record_connection_acquisition(&self, telemetry: &HttpAttemptTelemetry) {
-        if let Some(acquisition) = telemetry.acquisition() {
-            self.connection_acquisition_duration.record(
-                acquisition.duration().as_secs_f64(),
-                None,
-                None,
-            );
+        if let Some(duration) = telemetry
+            .acquisition()
+            .and_then(ConnectionAcquisitionTelemetry::duration)
+        {
+            self.connection_acquisition_duration
+                .record(duration.as_secs_f64(), None, None);
         }
     }
 }
@@ -208,6 +209,7 @@ impl Intercept for MetricsInterceptor {
             call_start: self.time_source.now(),
             attempts: 0,
             attempt_start: SystemTime::UNIX_EPOCH,
+            attempt_capture: None,
         });
 
         Ok(())
@@ -255,6 +257,7 @@ impl Intercept for MetricsInterceptor {
 
         measurements.attempts += 1;
         measurements.attempt_start = self.time_source.now();
+        measurements.attempt_capture = None;
 
         Ok(())
     }
@@ -263,11 +266,33 @@ impl Intercept for MetricsInterceptor {
         &self,
         context: &mut BeforeTransmitInterceptorContextMut<'_>,
         _runtime_components: &aws_smithy_runtime_api::client::runtime_components::RuntimeComponents,
+        _cfg: &mut aws_smithy_types::config_bag::ConfigBag,
+    ) -> Result<(), aws_smithy_runtime_api::box_error::BoxError> {
+        if context
+            .request()
+            .extension::<CaptureHttpAttemptTelemetry>()
+            .is_none()
+        {
+            context
+                .request_mut()
+                .add_extension(CaptureHttpAttemptTelemetry::new());
+        }
+        Ok(())
+    }
+
+    fn read_before_transmit(
+        &self,
+        context: &aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextRef<'_>,
+        _runtime_components: &aws_smithy_runtime_api::client::runtime_components::RuntimeComponents,
         cfg: &mut aws_smithy_types::config_bag::ConfigBag,
     ) -> Result<(), aws_smithy_runtime_api::box_error::BoxError> {
-        let capture = CaptureHttpAttemptTelemetry::new();
-        context.request_mut().add_extension(capture.clone());
-        cfg.interceptor_state().store_put(capture);
+        let capture = context
+            .request()
+            .extension::<CaptureHttpAttemptTelemetry>()
+            .cloned();
+        cfg.get_mut::<MeasurementsContainer>()
+            .expect("set in `read_before_execution`")
+            .attempt_capture = capture;
         Ok(())
     }
 
@@ -277,13 +302,25 @@ impl Intercept for MetricsInterceptor {
         _runtime_components: &aws_smithy_runtime_api::client::runtime_components::RuntimeComponents,
         cfg: &mut aws_smithy_types::config_bag::ConfigBag,
     ) -> Result<(), aws_smithy_runtime_api::box_error::BoxError> {
-        let (measurements, instruments) = self.get_measurements_and_instruments(cfg);
-        let http_telemetry = cfg
-            .load::<CaptureHttpAttemptTelemetry>()
-            .map(CaptureHttpAttemptTelemetry::get);
+        let (attempts, attempt_start, http_telemetry) = {
+            let measurements = cfg
+                .get_mut::<MeasurementsContainer>()
+                .expect("set in `read_before_execution`");
+            (
+                measurements.attempts,
+                measurements.attempt_start,
+                measurements
+                    .attempt_capture
+                    .take()
+                    .map(|capture| capture.get()),
+            )
+        };
+        let instruments = cfg
+            .load::<OperationTelemetry>()
+            .expect("set in RuntimePlugin");
 
         let attempt_end = self.time_source.now();
-        let attempt_duration = attempt_end.duration_since(measurements.attempt_start);
+        let attempt_duration = attempt_end.duration_since(attempt_start);
         let attributes = self.get_attrs_from_cfg(cfg);
 
         if let Some(http_telemetry) = http_telemetry {
@@ -291,7 +328,7 @@ impl Intercept for MetricsInterceptor {
         }
 
         if let (Ok(elapsed), Some(mut attrs)) = (attempt_duration, attributes) {
-            attrs.set("attempt", AttributeValue::I64(measurements.attempts.into()));
+            attrs.set("attempt", AttributeValue::I64(attempts.into()));
 
             instruments
                 .attempt_duration
@@ -424,6 +461,10 @@ mod test {
             assert_eq!(records.len(), 1);
             records[0].clone()
         }
+
+        fn record_count(&self) -> usize {
+            self.records.lock().unwrap().len()
+        }
     }
 
     impl Histogram for RecordingHistogram {
@@ -476,15 +517,44 @@ mod test {
             .is_none());
     }
 
+    fn test_instruments(acquisition: Arc<RecordingHistogram>) -> OperationTelemetry {
+        let ignored: Arc<dyn Histogram> = Arc::new(RecordingHistogram::default());
+        OperationTelemetry {
+            operation_duration: ignored.clone(),
+            attempt_duration: ignored.clone(),
+            connection_acquisition_duration: acquisition,
+            request_body_size: ignored.clone(),
+            response_body_size: ignored,
+        }
+    }
+
+    fn install_measurements(cfg: &mut ConfigBag) {
+        cfg.interceptor_state().store_put(MeasurementsContainer {
+            call_start: SystemTime::UNIX_EPOCH,
+            attempts: 0,
+            attempt_start: SystemTime::UNIX_EPOCH,
+            attempt_capture: None,
+        });
+    }
+
     #[test]
-    fn before_transmit_installs_one_shared_attempt_capture() {
+    fn before_transmit_adopts_an_existing_attempt_capture() {
         let runtime_components = RuntimeComponentsBuilder::for_tests().build().unwrap();
         let mut context = InterceptorContext::new(Input::doesnt_matter());
         context.set_request(HttpRequest::empty());
         let mut cfg = cfg_with(Layer::new("test"));
+        install_measurements(&mut cfg);
+        let caller_capture = CaptureHttpAttemptTelemetry::new();
+        context
+            .request_mut()
+            .unwrap()
+            .add_extension(caller_capture.clone());
 
         interceptor()
             .modify_before_transmit(&mut (&mut context).into(), &runtime_components, &mut cfg)
+            .unwrap();
+        interceptor()
+            .read_before_transmit(&(&context).into(), &runtime_components, &mut cfg)
             .unwrap();
 
         let request_capture = context
@@ -494,25 +564,109 @@ mod test {
             .expect("request capture");
         request_capture.record_dispatch_duration(std::time::Duration::from_millis(4));
         assert_eq!(
-            cfg.load::<CaptureHttpAttemptTelemetry>()
-                .expect("interceptor-state capture")
+            cfg.load::<MeasurementsContainer>()
+                .and_then(|measurements| measurements.attempt_capture.as_ref())
+                .expect("attempt capture")
                 .get()
                 .dispatch_duration(),
             Some(std::time::Duration::from_millis(4))
+        );
+        assert_eq!(
+            caller_capture.get().dispatch_duration(),
+            Some(std::time::Duration::from_millis(4))
+        );
+    }
+
+    #[test]
+    fn before_transmit_adopts_the_final_replacement_capture() {
+        let runtime_components = RuntimeComponentsBuilder::for_tests().build().unwrap();
+        let mut context = InterceptorContext::new(Input::doesnt_matter());
+        context.set_request(HttpRequest::empty());
+        let mut cfg = cfg_with(Layer::new("test"));
+        install_measurements(&mut cfg);
+
+        interceptor()
+            .modify_before_transmit(&mut (&mut context).into(), &runtime_components, &mut cfg)
+            .unwrap();
+        let replacement = CaptureHttpAttemptTelemetry::new();
+        context
+            .request_mut()
+            .unwrap()
+            .add_extension(replacement.clone());
+        interceptor()
+            .read_before_transmit(&(&context).into(), &runtime_components, &mut cfg)
+            .unwrap();
+
+        replacement.record_dispatch_duration(std::time::Duration::from_millis(6));
+        assert_eq!(
+            cfg.load::<MeasurementsContainer>()
+                .and_then(|measurements| measurements.attempt_capture.as_ref())
+                .expect("attempt capture")
+                .get()
+                .dispatch_duration(),
+            Some(std::time::Duration::from_millis(6))
+        );
+    }
+
+    #[test]
+    fn attempt_capture_is_consumed_once_and_cleared_before_retry() {
+        let runtime_components = RuntimeComponentsBuilder::for_tests().build().unwrap();
+        let acquisition = Arc::new(RecordingHistogram::default());
+        let mut layer = Layer::new("test");
+        layer.store_put(Metadata::new("GetObject", "S3"));
+        layer.store_put(test_instruments(acquisition.clone()));
+        let mut cfg = cfg_with(layer);
+        install_measurements(&mut cfg);
+        let mut context = InterceptorContext::new(Input::doesnt_matter());
+        context.set_request(HttpRequest::empty());
+        let metrics = interceptor();
+
+        metrics
+            .read_before_attempt(&(&context).into(), &runtime_components, &mut cfg)
+            .unwrap();
+        metrics
+            .modify_before_transmit(&mut (&mut context).into(), &runtime_components, &mut cfg)
+            .unwrap();
+        metrics
+            .read_before_transmit(&(&context).into(), &runtime_components, &mut cfg)
+            .unwrap();
+        context
+            .request()
+            .unwrap()
+            .extension::<CaptureHttpAttemptTelemetry>()
+            .expect("request capture")
+            .record_connection_selection(
+                ConnectionAcquisitionTelemetry::new(
+                    std::time::Duration::from_millis(3),
+                    ConnectionUsage::Fresh,
+                ),
+                ConnectionMetadata::builder()
+                    .proxied(false)
+                    .poison_fn(|| {})
+                    .build(),
+            );
+        metrics
+            .read_after_attempt(&(&context).into(), &runtime_components, &mut cfg)
+            .unwrap();
+        assert_eq!(acquisition.record_count(), 1);
+
+        metrics
+            .read_before_attempt(&(&context).into(), &runtime_components, &mut cfg)
+            .unwrap();
+        metrics
+            .read_after_attempt(&(&context).into(), &runtime_components, &mut cfg)
+            .unwrap();
+        assert_eq!(
+            acquisition.record_count(),
+            1,
+            "a pre-transmit retry halt must not repeat the prior acquisition"
         );
     }
 
     #[test]
     fn records_connection_acquisition_without_attributes() {
         let acquisition = Arc::new(RecordingHistogram::default());
-        let ignored: Arc<dyn Histogram> = Arc::new(RecordingHistogram::default());
-        let instruments = OperationTelemetry {
-            operation_duration: ignored.clone(),
-            attempt_duration: ignored.clone(),
-            connection_acquisition_duration: acquisition.clone(),
-            request_body_size: ignored.clone(),
-            response_body_size: ignored,
-        };
+        let instruments = test_instruments(acquisition.clone());
         let capture = CaptureHttpAttemptTelemetry::new();
         capture.record_dispatch_duration(std::time::Duration::from_millis(7));
         capture.record_connection_selection(

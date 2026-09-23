@@ -642,12 +642,7 @@ where
             if let (Some(capture), Some((time_source, started_at))) =
                 (attempt_capture.as_ref(), dispatch_timing)
             {
-                capture.record_dispatch_duration(
-                    time_source
-                        .now()
-                        .duration_since(started_at)
-                        .unwrap_or_default(),
-                );
+                capture.record_dispatch_interval(started_at, time_source.now());
             }
             result
         })

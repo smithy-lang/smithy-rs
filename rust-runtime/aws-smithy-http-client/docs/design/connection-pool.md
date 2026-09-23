@@ -2021,12 +2021,14 @@ point.
 
 Request results do not reveal whether a request reused a connection, opened a
 new one, waited for capacity, or observed a connection closing. The pool exposes
-two complementary observations:
+three complementary observations:
 
+- request-attempt telemetry reports dispatch and connection selection facts
+  through an optional request extension;
 - lifecycle events report completed transitions; and
 - statistics report current origin or partition-origin state.
 
-Neither surface participates in admission, reuse, reclaim, or dispatch.
+None participates in admission, reuse, reclaim, or dispatch.
 
 #### Lifecycle events
 
@@ -2055,7 +2057,9 @@ handshake work.
 
 `Opened` is emitted after Hyper produces the protocol request handle and the
 connection is installed as pool supply. It carries the establishment
-observation and the installed connection's immutable `ConnectionInfo`:
+observation and the installed connection's immutable `ConnectionInfo`.
+Successful establishment measurements are frozen after protocol installation
+and before the connection is published to waiting demand:
 
 ```text
 ConnectionEstablishmentInfo
@@ -2219,8 +2223,10 @@ the pool catches and logs listener panics after the authoritative transition;
 the panic does not alter pool state or prevent required cleanup. Abort-on-panic
 builds retain their normal process-abort semantics.
 
-Installing no listener avoids event timing, establishment identity allocation,
-listener cloning, and callback work. Diagnostic connection counts remain
+Installing no listener avoids establishment identity allocation, listener
+cloning, and callback work. Successful establishment timing remains available
+as immutable connection metadata. Request-attempt timing is read only when the
+request carries its capture extension. Diagnostic connection counts remain
 available independently of event configuration.
 
 #### Obligations
