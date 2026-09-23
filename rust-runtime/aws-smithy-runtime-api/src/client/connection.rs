@@ -5,6 +5,10 @@
 
 //! Types related to connection monitoring and management.
 
+mod establishment;
+
+pub use establishment::{ConnectionEstablishmentMetadata, ConnectionEstablishmentMetadataBuilder};
+
 use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use std::fmt;
 use std::net::SocketAddr;
@@ -38,6 +42,7 @@ pub struct ConnectionMetadata {
     local_addr: Option<SocketAddr>,
     poison_fn: Arc<dyn Fn() + Send + Sync>,
     connection_id: Option<ConnectionId>,
+    establishment: Option<ConnectionEstablishmentMetadata>,
 }
 
 impl ConnectionMetadata {
@@ -67,6 +72,7 @@ impl ConnectionMetadata {
             local_addr: None,
             poison_fn: Arc::new(poison),
             connection_id: None,
+            establishment: None,
         }
     }
 
@@ -91,6 +97,14 @@ impl ConnectionMetadata {
     pub fn connection_id(&self) -> Option<ConnectionId> {
         self.connection_id
     }
+
+    /// Get measurements from the establishment that installed this connection.
+    ///
+    /// Clients that do not expose successful establishment measurements leave
+    /// this unset.
+    pub fn establishment(&self) -> Option<&ConnectionEstablishmentMetadata> {
+        self.establishment.as_ref()
+    }
 }
 
 impl fmt::Debug for ConnectionMetadata {
@@ -100,6 +114,7 @@ impl fmt::Debug for ConnectionMetadata {
             .field("remote_addr", &self.remote_addr)
             .field("local_addr", &self.local_addr)
             .field("connection_id", &self.connection_id)
+            .field("establishment", &self.establishment)
             .finish()
     }
 }
@@ -112,6 +127,7 @@ pub struct ConnectionMetadataBuilder {
     local_addr: Option<SocketAddr>,
     poison_fn: Option<Arc<dyn Fn() + Send + Sync>>,
     connection_id: Option<ConnectionId>,
+    establishment: Option<ConnectionEstablishmentMetadata>,
 }
 
 impl fmt::Debug for ConnectionMetadataBuilder {
@@ -121,6 +137,7 @@ impl fmt::Debug for ConnectionMetadataBuilder {
             .field("remote_addr", &self.remote_addr)
             .field("local_addr", &self.local_addr)
             .field("connection_id", &self.connection_id)
+            .field("establishment", &self.establishment)
             .finish()
     }
 }
@@ -179,6 +196,21 @@ impl ConnectionMetadataBuilder {
         self
     }
 
+    /// Sets measurements from the establishment that installed this connection.
+    pub fn establishment(mut self, establishment: ConnectionEstablishmentMetadata) -> Self {
+        self.set_establishment(Some(establishment));
+        self
+    }
+
+    /// Sets measurements from the establishment that installed this connection.
+    pub fn set_establishment(
+        &mut self,
+        establishment: Option<ConnectionEstablishmentMetadata>,
+    ) -> &mut Self {
+        self.establishment = establishment;
+        self
+    }
+
     /// Set a closure which will poison the associated connection.
     ///
     /// A poisoned connection will not be reused for subsequent requests by the pool
@@ -215,6 +247,7 @@ impl ConnectionMetadataBuilder {
                 .poison_fn
                 .expect("poison_fn should be set for ConnectionMetadata"),
             connection_id: self.connection_id,
+            establishment: self.establishment,
         }
     }
 }
@@ -270,6 +303,7 @@ mod tests {
     use std::{
         net::{IpAddr, Ipv6Addr},
         sync::Mutex,
+        time::Duration,
     };
 
     use super::*;
@@ -299,12 +333,22 @@ mod tests {
     #[test]
     fn builder_all_fields_successful() {
         let mutable_flag = Arc::new(Mutex::new(false));
+        let establishment = ConnectionEstablishmentMetadata::builder()
+            .total_duration(Duration::from_millis(13))
+            .transport_duration(Duration::from_millis(8))
+            .protocol_handshake_duration(Duration::from_millis(5))
+            .dns_duration(Duration::from_millis(1))
+            .socket_connect_duration(Duration::from_millis(2))
+            .proxy_duration(Duration::from_millis(3))
+            .tls_duration(Duration::from_millis(4))
+            .build();
 
         let connection_metadata = ConnectionMetadataBuilder::new()
             .proxied(true)
             .local_addr(TEST_SOCKET_ADDR)
             .remote_addr(TEST_SOCKET_ADDR)
             .connection_id(ConnectionId::new(17))
+            .establishment(establishment.clone())
             .poison_fn({
                 let mutable_flag = Arc::clone(&mutable_flag);
                 move || {
@@ -321,6 +365,23 @@ mod tests {
             connection_metadata.connection_id(),
             Some(ConnectionId::new(17))
         );
+        assert_eq!(connection_metadata.establishment(), Some(&establishment));
+        assert_eq!(establishment.total_duration(), Duration::from_millis(13));
+        assert_eq!(establishment.transport_duration(), Duration::from_millis(8));
+        assert_eq!(
+            establishment.protocol_handshake_duration(),
+            Some(Duration::from_millis(5))
+        );
+        assert_eq!(establishment.dns_duration(), Some(Duration::from_millis(1)));
+        assert_eq!(
+            establishment.socket_connect_duration(),
+            Some(Duration::from_millis(2))
+        );
+        assert_eq!(
+            establishment.proxy_duration(),
+            Some(Duration::from_millis(3))
+        );
+        assert_eq!(establishment.tls_duration(), Some(Duration::from_millis(4)));
         assert_eq!("17", ConnectionId::new(17).to_string());
         assert!(!(*mutable_flag.lock().unwrap()));
         connection_metadata.poison();
@@ -337,6 +398,7 @@ mod tests {
         assert_eq!(metadata1.local_addr(), None);
         assert_eq!(metadata1.remote_addr(), None);
         assert_eq!(metadata1.connection_id(), None);
+        assert_eq!(metadata1.establishment(), None);
 
         let metadata2 = ConnectionMetadataBuilder::new()
             .proxied(true)

@@ -21,6 +21,12 @@ impl Extensions {
         self.extensions_1x.insert(extension.clone());
         self.extensions_02x.insert(extension);
     }
+
+    pub(crate) fn get<T: Send + Sync + 'static>(&self) -> Option<&T> {
+        self.extensions_1x
+            .get()
+            .or_else(|| self.extensions_02x.get())
+    }
 }
 
 impl From<http_02x::Extensions> for Extensions {

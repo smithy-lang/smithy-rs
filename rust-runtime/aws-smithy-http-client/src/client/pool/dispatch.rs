@@ -37,11 +37,16 @@ use super::partition::DriverSpawner;
 use super::registry::PartitionState;
 use super::{ConnectionPool, PoolInner};
 use crate::sync::Arc;
+use aws_smithy_runtime_api::client::connection::ConnectionMetadata;
+use aws_smithy_runtime_api::client::http::telemetry::{
+    CaptureHttpAttemptTelemetry, ConnectionAcquisitionTelemetry, ConnectionUsage,
+};
 use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_types::body::SdkBody;
 use http_1x::{header, Method, Request, Response, Uri, Version};
 use std::future::poll_fn;
 use std::sync::Arc as StdArc;
+use std::time::SystemTime;
 
 /// Replacement selections allowed after the initial HTTP/2 dispatch attempt.
 const MAX_H2_REPLACEMENTS: usize = 2;
@@ -82,6 +87,69 @@ pub(super) struct AcquisitionContext {
     pub(super) owner_spawner: StdArc<dyn DriverSpawner>,
     /// Transport connection timeout configured for this operation.
     pub(super) connect_timeout: Option<TransportTimeout>,
+    /// Request-attempt observation retained until Hyper accepts a connection.
+    pub(super) attempt_telemetry: Option<AttemptTelemetry>,
+}
+
+/// Request-scoped capture and acquisition start time.
+///
+/// This value exists only when the request carries a telemetry capture, so an
+/// unobserved request does not read the clock.
+#[derive(Clone)]
+pub(super) struct AttemptTelemetry {
+    /// Shared attempt capture installed on the Smithy request.
+    capture: CaptureHttpAttemptTelemetry,
+    /// Time at which this request entered pool acquisition.
+    acquisition_started_at: SystemTime,
+}
+
+impl AcquisitionContext {
+    fn captures_connection_selection(&self) -> bool {
+        self.attempt_telemetry.is_some()
+    }
+
+    /// Freezes the time at which Hyper may retain the request.
+    ///
+    /// Protocol dispatch records the resulting telemetry only after the request
+    /// can no longer be returned to acquisition.
+    fn connection_selection_time(&self) -> Option<SystemTime> {
+        self.attempt_telemetry
+            .as_ref()
+            .map(|_| self.pool.connection_events.now())
+    }
+
+    /// Records the connection that accepted this request.
+    ///
+    /// Callers invoke this only after Hyper has retained the request. Rejected
+    /// dispatch attempts leave the capture untouched so a later selection may
+    /// record the authoritative connection.
+    fn record_connection_selection(
+        &self,
+        completed_at: Option<SystemTime>,
+        reused: bool,
+        metadata: Option<&ConnectionMetadata>,
+    ) {
+        let Some(telemetry) = &self.attempt_telemetry else {
+            return;
+        };
+        let completed_at =
+            completed_at.expect("attempt telemetry requires an acquisition completion time");
+        let metadata = metadata.expect("attempt telemetry requires selected connection metadata");
+        let duration = completed_at
+            .duration_since(telemetry.acquisition_started_at)
+            .unwrap_or_default();
+        telemetry.capture.record_connection_selection(
+            ConnectionAcquisitionTelemetry::new(
+                duration,
+                if reused {
+                    ConnectionUsage::Reused
+                } else {
+                    ConnectionUsage::Fresh
+                },
+            ),
+            metadata.clone(),
+        );
+    }
 }
 
 /// Resolves request-scoped pool state and runs acquisition through dispatch.
@@ -94,6 +162,14 @@ pub(super) async fn send(
     validate_request_before_acquisition(&request)
         .map_err(|error| ConnectorError::user(error.into()))?;
 
+    let attempt_telemetry = request
+        .extensions()
+        .get::<CaptureHttpAttemptTelemetry>()
+        .cloned()
+        .map(|capture| AttemptTelemetry {
+            capture,
+            acquisition_started_at: pool.inner.connection_events.now(),
+        });
     let absolute_uri = request.uri().clone();
     let cell = pool
         .inner
@@ -120,6 +196,7 @@ pub(super) async fn send(
         absolute_uri,
         owner_spawner,
         connect_timeout: options.connect_timeout,
+        attempt_telemetry,
     };
 
     acquire_and_dispatch(context, request).await

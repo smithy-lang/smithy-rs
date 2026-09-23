@@ -83,9 +83,8 @@ async fn run_h1_handshake(
         pool,
         partition,
         cell,
-        absolute_uri: _,
         owner_spawner,
-        connect_timeout: _,
+        ..
     } = context;
 
     let id = match next_connection_id(&pool) {
@@ -129,6 +128,7 @@ async fn run_h1_handshake(
         establishment.failed(&error);
         return Err(error);
     }
+    establishment.installed(&connection);
 
     let selection =
         OriginCell::insert_selected_h1(&cell, connection.clone(), H1Sender::from_hyper(sender));

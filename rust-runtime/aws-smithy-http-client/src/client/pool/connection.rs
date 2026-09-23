@@ -21,7 +21,9 @@ use super::stats::CellConnectionStats;
 use crate::client::connect::{ConnectPath, ConnectPathInner};
 use crate::sync::{Arc, Mutex};
 pub use aws_smithy_runtime_api::client::connection::ConnectionId;
-use aws_smithy_runtime_api::client::connection::ConnectionMetadata;
+use aws_smithy_runtime_api::client::connection::{
+    ConnectionEstablishmentMetadata, ConnectionMetadata,
+};
 use http_1x::Extensions;
 use hyper::rt::{Read, ReadBufCursor, Write};
 use hyper_util::client::legacy::connect::{Connected, Connection, HttpInfo};
@@ -30,6 +32,7 @@ use std::fmt;
 use std::io::{self, IoSlice};
 use std::net::SocketAddr;
 use std::pin::Pin;
+use std::sync::OnceLock;
 use std::task::{Context, Poll};
 
 /// Final protocol and ownership classification for a closed connection.
@@ -91,6 +94,8 @@ pub struct ConnectionInfo {
     connect_path: ConnectPathInner,
     /// Connector metadata copied into every response on this connection.
     connected: Connected,
+    /// Measurements frozen before this connection becomes visible to dispatch.
+    establishment: OnceLock<ConnectionEstablishmentMetadata>,
 }
 
 impl ConnectionInfo {
@@ -115,6 +120,7 @@ impl ConnectionInfo {
             remote_addr: http_info.map(HttpInfo::remote_addr),
             connect_path,
             connected,
+            establishment: OnceLock::new(),
         })
     }
 
@@ -158,6 +164,19 @@ impl ConnectionInfo {
         self.connect_path().is_proxied()
     }
 
+    /// Returns successful establishment measurements, when installation completed.
+    pub fn establishment(&self) -> Option<&ConnectionEstablishmentMetadata> {
+        self.establishment.get()
+    }
+
+    /// Freezes successful establishment measurements before pool publication.
+    pub(super) fn set_establishment(&self, metadata: ConnectionEstablishmentMetadata) {
+        assert!(
+            self.establishment.set(metadata).is_ok(),
+            "connection establishment metadata was set more than once"
+        );
+    }
+
     /// Returns connector-owned request-path state.
     pub(super) fn connect_path_inner(&self) -> &ConnectPathInner {
         &self.connect_path
@@ -178,7 +197,8 @@ impl ConnectionInfo {
             });
         builder
             .set_local_addr(self.local_addr)
-            .set_remote_addr(self.remote_addr);
+            .set_remote_addr(self.remote_addr)
+            .set_establishment(self.establishment().cloned());
         builder.build()
     }
 
@@ -192,7 +212,8 @@ impl ConnectionInfo {
             });
         builder
             .set_local_addr(self.local_addr)
-            .set_remote_addr(self.remote_addr);
+            .set_remote_addr(self.remote_addr)
+            .set_establishment(self.establishment().cloned());
         builder.build()
     }
 
@@ -1443,6 +1464,7 @@ mod tests {
         assert_eq!(None, connection.info().local_addr());
         assert_eq!(None, connection.info().remote_addr());
         assert_eq!(ConnectPath::ForwardProxy, connection.info().connect_path());
+        assert_eq!(None, connection.info().establishment());
         let mut extensions = Extensions::new();
         connection.info().apply_connector_extras(&mut extensions);
         assert_eq!(

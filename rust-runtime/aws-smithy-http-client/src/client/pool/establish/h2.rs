@@ -219,6 +219,7 @@ async fn drive_flight(
         fail_flight_establishment(&mut completion, establishment, error);
         return;
     }
+    establishment.installed(&connection);
 
     let installed = OriginCell::complete_h2_flight(
         &context.cell,

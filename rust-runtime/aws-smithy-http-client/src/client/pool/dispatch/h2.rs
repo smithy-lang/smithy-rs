@@ -31,6 +31,7 @@ use hyper::body::Body;
 use std::future::{poll_fn, Future};
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use std::time::SystemTime;
 
 /// Result of one checked HTTP/2 dispatch attempt.
 #[allow(
@@ -75,6 +76,8 @@ struct H2AcceptedDispatch {
     response_guard: H2ResponseGuard,
     /// Whether the generation accepted an earlier request.
     reused: bool,
+    /// Time at which Hyper first retained the request envelope.
+    acquisition_completed_at: Option<SystemTime>,
 }
 
 /// Dispatches one request through prospective H2 request authority.
@@ -90,16 +93,17 @@ pub(super) async fn dispatch(
     let connection = activation.connection().clone();
     let reused = activation.is_reused();
     let close = activation.close_handle();
-    let captured_metadata = request
+    let connection_capture = request
         .extensions()
         .get::<CaptureSmithyConnection>()
-        .cloned()
-        .map(|capture| {
-            let metadata = connection.info().h2_metadata(close.clone());
-            let captured = metadata.clone();
-            capture.set_connection_retriever(move || Some(captured.clone()));
-            metadata
-        });
+        .cloned();
+    let captured_metadata = (connection_capture.is_some()
+        || context.captures_connection_selection())
+    .then(|| connection.info().h2_metadata(close.clone()));
+    if let (Some(capture), Some(metadata)) = (connection_capture, &captured_metadata) {
+        let captured = metadata.clone();
+        capture.set_connection_retriever(move || Some(captured.clone()));
+    }
 
     let H2DispatchParts {
         mut sender,
@@ -154,8 +158,10 @@ pub(super) async fn dispatch(
         }
         Poll::Ready(result) => {
             activation.accept(dispatch);
+            let acquisition_completed_at = context.connection_selection_time();
             let sender_closed = sender.is_closed();
             resolve_h2_send(
+                context,
                 sender_closed,
                 result,
                 H2AcceptedDispatch {
@@ -164,14 +170,17 @@ pub(super) async fn dispatch(
                     captured_metadata,
                     response_guard: response,
                     reused,
+                    acquisition_completed_at,
                 },
             )
         }
         Poll::Pending => {
             activation.accept(dispatch);
+            let acquisition_completed_at = context.connection_selection_time();
             let result = send.await;
             let sender_closed = sender.is_closed();
             resolve_h2_send(
+                context,
                 sender_closed,
                 result,
                 H2AcceptedDispatch {
@@ -180,6 +189,7 @@ pub(super) async fn dispatch(
                     captured_metadata,
                     response_guard: response,
                     reused,
+                    acquisition_completed_at,
                 },
             )
         }
@@ -191,6 +201,7 @@ pub(super) async fn dispatch(
     reason = "ConnectorError preserves SDK classification and connection metadata"
 )]
 fn resolve_h2_send(
+    context: &AcquisitionContext,
     sender_closed: bool,
     result: Result<
         Response<hyper::body::Incoming>,
@@ -204,9 +215,15 @@ fn resolve_h2_send(
         captured_metadata,
         response_guard,
         reused,
+        acquisition_completed_at,
     } = accepted;
     match result {
         Ok(mut response) => {
+            context.record_connection_selection(
+                acquisition_completed_at,
+                reused,
+                captured_metadata.as_ref(),
+            );
             connection
                 .info()
                 .apply_connector_extras(response.extensions_mut());
@@ -240,6 +257,11 @@ fn resolve_h2_send(
                 close.close(CloseReason::ProtocolClosed);
             }
             drop(response_guard);
+            context.record_connection_selection(
+                acquisition_completed_at,
+                reused,
+                captured_metadata.as_ref(),
+            );
             let metadata =
                 captured_metadata.unwrap_or_else(|| connection.info().h2_metadata(close));
             Err(downcast_error(Box::new(error.into_error())).with_connection(metadata))

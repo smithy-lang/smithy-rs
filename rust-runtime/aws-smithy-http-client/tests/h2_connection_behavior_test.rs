@@ -21,6 +21,9 @@ use aws_smithy_http_client::tls;
 use aws_smithy_runtime_api::client::connection::{
     CaptureSmithyConnection, ConnectionMetadata as SmithyConnectionMetadata,
 };
+use aws_smithy_runtime_api::client::http::telemetry::{
+    CaptureHttpAttemptTelemetry, ConnectionUsage,
+};
 use aws_smithy_runtime_api::client::http::{SharedHttpClient, SharedHttpConnector};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use bytes::Bytes;
@@ -275,6 +278,129 @@ mod reuse_and_multiplexing {
 
 mod connection_metadata {
     use super::*;
+    use aws_smithy_async::test_util::ManualTimeSource;
+    use std::time::{Duration, UNIX_EPOCH};
+
+    async fn capture_attempt(
+        connector: &SharedHttpConnector,
+        url: &str,
+    ) -> aws_smithy_runtime_api::client::http::telemetry::HttpAttemptTelemetry {
+        let capture = CaptureHttpAttemptTelemetry::new();
+        let mut request = HttpRequest::get(url).expect("valid HTTP request");
+        request.add_extension(capture.clone());
+        let (status, body) = test_client::send_and_collect(connector, request).await;
+        assert_eq!((status, body.as_slice()), (200, b"ok".as_slice()));
+        capture.get()
+    }
+
+    async fn attempt_telemetry_matches_backend_capability(
+        backend: &dyn HttpsClientBackend,
+        captures_selection: bool,
+    ) {
+        let server = H2TestServer::builder()
+            .connections(H2ConnectionPlan::queue([
+                H2ConnectionScript::new().fallback(H2StreamScript::respond(H2Response::ok("ok")))
+            ]))
+            .start()
+            .await
+            .expect("H2 server should start");
+        let client = h2_client(backend);
+        let connector = test_client::connector(&client);
+
+        let first = capture_attempt(&connector, &server.url("/first")).await;
+        let second = capture_attempt(&connector, &server.url("/second")).await;
+        assert!(first.dispatch_duration().is_some());
+        assert!(second.dispatch_duration().is_some());
+
+        if captures_selection {
+            assert_eq!(
+                first.acquisition().expect("first acquisition").usage(),
+                ConnectionUsage::Fresh
+            );
+            assert_eq!(
+                second.acquisition().expect("second acquisition").usage(),
+                ConnectionUsage::Reused
+            );
+            let first_connection = first.connection().expect("first connection metadata");
+            let second_connection = second.connection().expect("second connection metadata");
+            assert_eq!(
+                first_connection.connection_id(),
+                second_connection.connection_id()
+            );
+            assert!(first_connection.establishment().is_some());
+        } else {
+            assert!(first.acquisition().is_none());
+            assert!(first.connection().is_none());
+            assert!(second.acquisition().is_none());
+            assert!(second.connection().is_none());
+        }
+
+        drop(connector);
+        drop(client);
+        server.shutdown().await.expect("clean H2 server shutdown");
+    }
+
+    #[tokio::test]
+    async fn test_attempt_telemetry_with_hyper_util_legacy_pool() {
+        attempt_telemetry_matches_backend_capability(&HyperUtilLegacyPool, false).await;
+    }
+
+    #[tokio::test]
+    async fn test_attempt_telemetry_with_partitioned_pool() {
+        attempt_telemetry_matches_backend_capability(&PartitionedConnectionPool, true).await;
+    }
+
+    #[tokio::test]
+    async fn h2_acquisition_ends_before_response_headers() {
+        let response_gate = ManualGate::new();
+        let server = H2TestServer::builder()
+            .connections(H2ConnectionPlan::queue([H2ConnectionScript::new()
+                .fallback(H2StreamScript::respond_after(
+                    H2Response::ok("ok"),
+                    response_gate.waiter(),
+                ))]))
+            .start()
+            .await
+            .expect("H2 server should start");
+        let time = ManualTimeSource::new(UNIX_EPOCH);
+        let pool = ConnectionPool::builder()
+            .tls_provider(rustls_aws_lc())
+            .tls_context(test_tls::SERVER_IDENTITY.client_context())
+            .time_source(time.clone())
+            .build_https()
+            .expect("valid partitioned HTTPS pool");
+        let client =
+            SharedHttpClient::new(PoolClient::new(&pool).expect("anonymous partition exists"));
+        let connector = test_client::connector(&client);
+        let capture = CaptureHttpAttemptTelemetry::new();
+        let mut request = HttpRequest::get(server.url("/gated")).expect("valid HTTP request");
+        request.add_extension(capture.clone());
+        let send = tokio::spawn({
+            let connector = connector.clone();
+            async move { test_client::send_and_collect(&connector, request).await }
+        });
+
+        response_gate
+            .wait_until_reached(test_client::WAIT)
+            .await
+            .expect("server should accept the H2 stream");
+        time.advance(Duration::from_secs(10));
+        response_gate.release();
+        let (status, body) = send.await.expect("request task");
+        assert_eq!((status, body.as_slice()), (200, b"ok".as_slice()));
+
+        let telemetry = capture.get();
+        assert_eq!(
+            telemetry.acquisition().expect("acquisition").duration(),
+            Duration::ZERO
+        );
+        assert_eq!(telemetry.dispatch_duration(), Some(Duration::from_secs(10)));
+
+        drop(connector);
+        drop(client);
+        drop(pool);
+        server.shutdown().await.expect("clean H2 server shutdown");
+    }
 
     /// Poisoning captured H2 connection metadata moves later streams to a new connection.
     async fn poisoned_connection_is_not_reused(backend: &dyn HttpsClientBackend) {
