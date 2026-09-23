@@ -404,6 +404,10 @@ mod loom_tests {
         }
     }
 
+    /// Races deadline publication with registration of the maintenance waker.
+    ///
+    /// A task that observes the old revision must either retry immediately or
+    /// receive exactly one wake after it parks.
     #[test]
     fn deadline_publication_wakes_a_registered_task() {
         loom::model(|| {
@@ -428,6 +432,10 @@ mod loom_tests {
         });
     }
 
+    /// Publishes an earlier maintenance deadline while a scan is being committed.
+    ///
+    /// The scan must retry or retain a revision that forces the next poll to
+    /// observe the concurrent publication.
     #[test]
     fn deadline_published_during_a_scan_forces_retry_or_wake() {
         loom::model(|| {
@@ -458,6 +466,10 @@ mod loom_tests {
         });
     }
 
+    /// Races shutdown with registration of the maintenance waker.
+    ///
+    /// A task that parks before shutdown must be woken and all later polls must
+    /// observe terminal shutdown.
     #[test]
     fn shutdown_wakes_a_registered_task() {
         loom::model(|| {

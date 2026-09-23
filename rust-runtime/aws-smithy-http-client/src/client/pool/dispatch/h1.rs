@@ -123,7 +123,6 @@ pub(super) async fn dispatch(
                 request_method,
                 exchange,
                 dispatch,
-                context.owner_spawner.clone(),
             )))
         }
         Err(mut error) => {
@@ -171,7 +170,6 @@ fn guard_h1_response(
     method: Method,
     exchange: H1Exchange,
     dispatch: DispatchGuard,
-    spawner: StdArc<dyn DriverSpawner>,
 ) -> Response<SdkBody> {
     let upgrade = response.status() == http_1x::StatusCode::SWITCHING_PROTOCOLS
         || (method == Method::CONNECT && response.status().is_success());
@@ -181,7 +179,7 @@ fn guard_h1_response(
         dispatch.release();
         return Response::from_parts(parts, SdkBody::from_body_1_x(body));
     }
-    let body = H1ResponseBody::new(body, exchange, dispatch, spawner);
+    let body = H1ResponseBody::new(body, exchange, dispatch);
     Response::from_parts(parts, SdkBody::from_body_1_x(body))
 }
 
@@ -199,12 +197,8 @@ struct H1ResponseBody {
 
 impl H1ResponseBody {
     /// Wraps a response and immediately completes a body already at end stream.
-    fn new(
-        inner: hyper::body::Incoming,
-        exchange: H1Exchange,
-        dispatch: DispatchGuard,
-        spawner: StdArc<dyn DriverSpawner>,
-    ) -> Self {
+    fn new(inner: hyper::body::Incoming, exchange: H1Exchange, dispatch: DispatchGuard) -> Self {
+        let spawner = exchange.connection().owner_spawner();
         let mut body = Self {
             inner,
             lifecycle: Some(H1ResponseLifecycle {
@@ -1554,6 +1548,9 @@ mod tests {
         assert!(error.is_timeout(), "unexpected connector error: {error:?}");
     }
 
+    /// Proves that a successful HTTP/1 upgrade transfers root I/O to the
+    /// response while retaining bounded capacity. The pool may establish a
+    /// replacement only after the caller drops the upgraded I/O.
     async fn assert_h1_upgrade_retains_capacity(
         method: Method,
         response_head: &'static [u8],

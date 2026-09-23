@@ -637,6 +637,20 @@ impl H1CellState {
         (self.records.len(), self.idle_order.len())
     }
 
+    /// Returns the synthetic identities of every idle sender.
+    #[cfg(all(test, smithy_http_client_loom))]
+    pub(super) fn idle_sender_ids(&self) -> Vec<u64> {
+        self.records
+            .values()
+            .filter_map(|record| match &record.sender_state {
+                H1SenderResidence::Idle { sender, .. } => Some(sender.test_id()),
+                H1SenderResidence::Selected
+                | H1SenderResidence::ReservedForPeer
+                | H1SenderResidence::Closing => None,
+            })
+            .collect()
+    }
+
     /// Returns the sole installed connection for focused dispatch tests.
     #[cfg(all(test, feature = "rt-tokio"))]
     pub(super) fn only_connection_for_test(&self) -> Arc<ConnectionState> {
@@ -954,6 +968,14 @@ pub(in crate::client::pool) struct H1Exchange {
 }
 
 impl H1Exchange {
+    /// Returns the installed connection that owns this exchange.
+    pub(in crate::client::pool) fn connection(&self) -> &Arc<ConnectionState> {
+        self.owner
+            .as_ref()
+            .expect("HTTP/1 exchange consumed more than once")
+            .connection()
+    }
+
     /// Returns whether Hyper already permits another request.
     pub(in crate::client::pool) fn is_ready(&self) -> bool {
         self.owner
@@ -1565,6 +1587,12 @@ impl OriginCell {
     #[cfg(test)]
     pub(super) fn h1_counts(&self) -> (usize, usize) {
         self.state.lock().h1.counts()
+    }
+
+    /// Returns the synthetic identities of every idle HTTP/1 sender.
+    #[cfg(all(test, smithy_http_client_loom))]
+    pub(super) fn h1_idle_sender_ids(&self) -> Vec<u64> {
+        self.state.lock().h1.idle_sender_ids()
     }
 
     /// Returns the sole installed HTTP/1 connection for focused dispatch tests.

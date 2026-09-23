@@ -16,7 +16,7 @@
 use super::admission::CapacityLease;
 use super::events::{LogicalCloseCause, SharedConnectionEventListener};
 use super::origin::OriginKey;
-use super::partition::PartitionId;
+use super::partition::{DriverSpawner, PartitionId};
 use super::stats::CellConnectionStats;
 use crate::client::connect::{ConnectPath, ConnectPathInner};
 use crate::sync::{Arc, Mutex};
@@ -32,7 +32,7 @@ use std::fmt;
 use std::io::{self, IoSlice};
 use std::net::SocketAddr;
 use std::pin::Pin;
-use std::sync::OnceLock;
+use std::sync::{Arc as StdArc, OnceLock};
 use std::task::{Context, Poll};
 
 /// Final protocol and ownership classification for a closed connection.
@@ -235,10 +235,23 @@ impl ConnectionInfo {
 pub(super) struct ConnectionState {
     /// Identity and transport facts shared with metadata and lifecycle events.
     info: Arc<ConnectionInfo>,
+    /// Runtime that owns protocol and follow-up work for this connection.
+    owner_spawner: StdArc<dyn DriverSpawner>,
     /// Cell-owned counts for connection lifetimes that outlive protocol records.
     stats: Arc<CellConnectionStats>,
     /// Dispatch, logical-close, and physical-connection completion state.
     lifecycle: Mutex<ConnectionLifecycle>,
+}
+
+#[cfg(test)]
+#[derive(Debug)]
+struct TestDriverSpawner;
+
+#[cfg(test)]
+impl DriverSpawner for TestDriverSpawner {
+    fn spawn(&self, driver: Pin<Box<dyn std::future::Future<Output = ()> + Send + 'static>>) {
+        drop(driver);
+    }
 }
 
 /// Connection lifetime state serialized with dispatch commitment and close.
@@ -471,11 +484,13 @@ impl ConnectionState {
     /// discoverable.
     pub(super) fn pending_open(
         info: Arc<ConnectionInfo>,
+        owner_spawner: StdArc<dyn DriverSpawner>,
         stats: Arc<CellConnectionStats>,
     ) -> (Arc<Self>, PhysicalConnectionGuard) {
         stats.physical_connection_started();
         let connection = Arc::new(Self {
             info,
+            owner_spawner,
             stats,
             lifecycle: Mutex::new(ConnectionLifecycle {
                 logical: LogicalState::PendingOpen,
@@ -496,7 +511,16 @@ impl ConnectionState {
     pub(super) fn pending_open_for_test(
         info: Arc<ConnectionInfo>,
     ) -> (Arc<Self>, PhysicalConnectionGuard) {
-        Self::pending_open(info, Arc::new(CellConnectionStats::default()))
+        Self::pending_open(
+            info,
+            StdArc::new(TestDriverSpawner),
+            Arc::new(CellConnectionStats::default()),
+        )
+    }
+
+    /// Returns the runtime that owns this installed connection.
+    pub(super) fn owner_spawner(&self) -> StdArc<dyn DriverSpawner> {
+        self.owner_spawner.clone()
     }
 
     /// Opens dispatch commitment and transfers optional bounded capacity.
@@ -1178,7 +1202,8 @@ mod tests {
             stats.clone(),
         );
         establishment.protocol_selected(ConnectionProtocol::Http1);
-        let (connection, physical) = ConnectionState::pending_open(test_info(1), stats);
+        let (connection, physical) =
+            ConnectionState::pending_open(test_info(1), StdArc::new(TestDriverSpawner), stats);
         connection.open(None).unwrap();
 
         establishment.opened(&connection);
@@ -1529,6 +1554,10 @@ mod loom_tests {
         ConnectionInfo::for_test(ConnectionId::new(id), PartitionId::from_index(0))
     }
 
+    /// Races request dispatch commitment with logical close.
+    ///
+    /// Dispatch either commits before close and drains afterward, or close
+    /// rejects it without incrementing the in-flight count.
     #[test]
     fn dispatch_commit_linearizes_against_close() {
         loom::model(|| {
@@ -1568,6 +1597,9 @@ mod loom_tests {
         });
     }
 
+    /// Races two independent logical-close signals for one bounded connection.
+    ///
+    /// Exactly one reason becomes authoritative and its capacity lease returns once.
     #[test]
     fn concurrent_logical_close_releases_one_capacity_lease() {
         loom::model(|| {
@@ -1591,6 +1623,51 @@ mod loom_tests {
                 reason,
                 CloseReason::Poisoned | CloseReason::PoolDropped
             ));
+        });
+    }
+
+    /// Races HTTP/1 upgrade classification with physical connection completion.
+    ///
+    /// The winning transition determines the final reason while both paths
+    /// converge on one capacity return and zero retained lifetime counts.
+    #[test]
+    fn h1_upgrade_classification_linearizes_against_physical_completion() {
+        loom::model(|| {
+            let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
+            let lease = OriginAdmission::lease_for_test(&origin);
+            let (connection, physical) = ConnectionState::bounded(test_info(1), lease);
+            let dispatch = ConnectionState::try_commit_dispatch(&connection)
+                .expect("open HTTP/1 connection rejected dispatch");
+            assert!(connection.logical_close(CloseReason::ProtocolClosed));
+
+            let classify_connection = connection.clone();
+            let classify = loom::thread::spawn(move || {
+                classify_connection.complete_h1_exchange(CloseReason::Upgraded)
+            });
+            let complete_physical = loom::thread::spawn(move || physical.release());
+
+            let classified_as_upgrade = classify.join().unwrap();
+            complete_physical.join().unwrap();
+            dispatch.release();
+
+            let probe = connection.probe();
+            assert_eq!(
+                Some(if classified_as_upgrade {
+                    CloseReason::Upgraded
+                } else {
+                    CloseReason::ProtocolClosed
+                }),
+                probe.close_reason
+            );
+            assert!(!probe.awaiting_h1_exchange);
+            assert_eq!(0, probe.in_flight);
+            assert!(probe.physical_connection_complete);
+            assert_eq!(1, origin.available_capacity_for_test());
+
+            let stats = connection.stats.snapshot(0, 0, 0, 0, 0);
+            assert_eq!(0, stats.h1().draining());
+            assert_eq!(0, stats.h1().upgraded());
+            assert_eq!(0, stats.physically_live_connections());
         });
     }
 

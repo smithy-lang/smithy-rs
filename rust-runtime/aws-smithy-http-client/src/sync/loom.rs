@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Loom-backed synchronization primitives used by focused model tests.
+//! Loom-backed synchronization primitives used to run production pool state
+//! machines under enumerated thread schedules.
 
 use ::std::ops::{Deref, DerefMut};
 
@@ -42,7 +43,7 @@ impl Drop for LockDepth {
 /// Loom substitute for a non-owning registry reference.
 ///
 /// Loom's modeled `Arc` has no weak-reference API. Keeping a strong reference
-/// in model tests preserves lookup behavior but cannot model target expiry.
+/// in Loom tests preserves lookup behavior but cannot model target expiry.
 /// Ordinary tests cover the expired-target delivery fallback.
 #[derive(Debug)]
 pub(crate) struct Weak<T>(Arc<T>);
