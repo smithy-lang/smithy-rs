@@ -11,16 +11,21 @@
 //! # Accepted input
 //!
 //! `FromStr` validates the *structure* of the input, not just its character
-//! set. The grammars are the JSON number grammar with one deliberate
-//! relaxation — leading zeros are accepted:
+//! set. `BigInteger` uses the JSON integer grammar with one deliberate
+//! relaxation (leading zeros), while `BigDecimal` accepts the forms supported
+//! by the CBOR decimal-fraction implementation:
 //!
 //! ```text
 //! BigInteger := '-'? DIGIT+
-//! BigDecimal := '-'? DIGIT+ ( '.' DIGIT+ )? ( ('e' | 'E') ('+' | '-')? DIGIT+ )?
+//! BigDecimal := ('+' | '-')? ( DIGIT+ ( '.' DIGIT* )? | '.' DIGIT+ )
+//!               ( ('e' | 'E') ('+' | '-')? DIGIT+ )?
 //! ```
 //!
-//! So `"-12"`, `"00123"`, `"1.23E-10"` parse, while `"+123"`, `".5"`, `"1."`,
-//! `"1.2.3"`, `"--5"`, `"1e"`, `"e10"` and `"-"` do not.
+//! Both types accept `"-12"` and `"00123"`; `BigDecimal` also accepts `"+5"`,
+//! `".5"`, `"5."`, and `"1.23E-10"`. Neither type accepts `"1.2.3"`, `"--5"`,
+//! `"1e"`, `"e10"`, or `"-"`.
+//! Decimal exponents and the resulting scale must also fit the supported range;
+//! otherwise parsing returns [`BigNumberError::ExponentOutOfRange`].
 //!
 //! Leading zeros are accepted because they have exactly one numeric reading and
 //! were accepted by previously released versions. They are *not* valid RFC 8259
@@ -33,12 +38,17 @@
 pub enum BigNumberError {
     /// The input string is not a valid number format.
     InvalidFormat(String),
+    /// The number's exponent is outside the supported range.
+    ExponentOutOfRange(String),
 }
 
 impl std::fmt::Display for BigNumberError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             BigNumberError::InvalidFormat(s) => write!(f, "invalid number format: {s}"),
+            BigNumberError::ExponentOutOfRange(s) => {
+                write!(f, "number exponent is outside the supported range: {s}")
+            }
         }
     }
 }
@@ -61,46 +71,51 @@ fn is_valid_big_integer(s: &str) -> bool {
     is_ascii_digits(s.strip_prefix('-').unwrap_or(s))
 }
 
-/// Validates that a string is a valid `BigDecimal`:
-/// `'-'? DIGIT+ ( '.' DIGIT+ )? ( ('e' | 'E') ('+' | '-')? DIGIT+ )?`.
+/// Validates that a string is a supported `BigDecimal`.
 ///
-/// Each separator that is present must be followed by a non-empty digit run, so
-/// `".5"`, `"1."`, `"1e"`, `"1e+"` and `"e10"` are rejected. A repeated
-/// separator leaves a non-digit in the following run (`"1.2.3"` leaves
-/// `"2.3"`), so it is rejected too. A leading `+` is not accepted.
+/// The coefficient accepts an optional leading sign and requires at least one
+/// digit across its integer and fractional parts. Consequently, `"+5"`,
+/// `".5"`, `"-.5"`, and `"5."` are valid, while `"."`, `"--5"`, and
+/// `"1.2.3"` are not. A scientific-notation exponent may also have a sign but
+/// must contain digits.
 ///
-/// Leading zeros (`"00123"`, `"00.1"`) are accepted — see the module docs.
-fn is_valid_big_decimal(s: &str) -> bool {
-    let rest = s.strip_prefix('-').unwrap_or(s);
+/// The exponent and the scale derived from the fraction length and exponent
+/// must fit the range supported by the CBOR decimal-fraction implementation.
+fn validate_big_decimal(s: &str) -> Result<(), BigNumberError> {
+    let invalid_format = || BigNumberError::InvalidFormat(s.to_string());
+    let exponent_out_of_range = || BigNumberError::ExponentOutOfRange(s.to_string());
 
-    // Split the exponent off first: 'e'/'E' cannot appear in the mantissa.
-    let (mantissa, exponent) = match rest.split_once(['e', 'E']) {
-        Some((mantissa, exponent)) => (mantissa, Some(exponent)),
-        None => (rest, None),
+    let (coefficient, exponent) = match s.split_once(['e', 'E']) {
+        Some((coefficient, exponent)) => match exponent.parse::<i128>() {
+            Ok(exponent) => (coefficient, exponent),
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    std::num::IntErrorKind::PosOverflow | std::num::IntErrorKind::NegOverflow
+                ) =>
+            {
+                return Err(exponent_out_of_range());
+            }
+            Err(_) => return Err(invalid_format()),
+        },
+        None => (s, 0),
     };
 
-    let (int_part, frac_part) = match mantissa.split_once('.') {
-        Some((int_part, frac_part)) => (int_part, Some(frac_part)),
-        None => (mantissa, None),
-    };
+    let coefficient = coefficient.strip_prefix(['-', '+']).unwrap_or(coefficient);
+    let (integer, fraction) = coefficient.split_once('.').unwrap_or((coefficient, ""));
 
-    // The integer digit run is mandatory and may not be empty.
-    if !is_ascii_digits(int_part) {
-        return false;
+    if (integer.is_empty() && fraction.is_empty())
+        || !integer
+            .bytes()
+            .chain(fraction.bytes())
+            .all(|byte| byte.is_ascii_digit())
+    {
+        return Err(invalid_format());
     }
 
-    // `'.' DIGIT+` — when the point is present the digit run may not be empty.
-    if let Some(frac) = frac_part {
-        if !is_ascii_digits(frac) {
-            return false;
-        }
-    }
-
-    // `('e' | 'E') ('+' | '-')? DIGIT+` — the sign is optional, the digits are
-    // not.
-    match exponent {
-        None => true,
-        Some(exponent) => is_ascii_digits(exponent.strip_prefix(['+', '-']).unwrap_or(exponent)),
+    match (fraction.len() as i128).checked_sub(exponent) {
+        Some(scale) if (-(i64::MAX as i128)..=i64::MAX as i128).contains(&scale) => Ok(()),
+        _ => Err(exponent_out_of_range()),
     }
 }
 
@@ -112,14 +127,21 @@ fn is_valid_big_decimal(s: &str) -> bool {
 /// See the [module docs](self) for the grammar accepted by `FromStr`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(
-    all(aws_sdk_unstable, feature = "serde-deserialize"),
-    derive(serde::Deserialize)
-)]
-#[cfg_attr(
     all(aws_sdk_unstable, feature = "serde-serialize"),
     derive(serde::Serialize)
 )]
 pub struct BigInteger(String);
+
+#[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
+impl<'de> serde::Deserialize<'de> for BigInteger {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = <String as serde::Deserialize>::deserialize(deserializer)?;
+        value.parse().map_err(serde::de::Error::custom)
+    }
+}
 
 impl Default for BigInteger {
     fn default() -> Self {
@@ -152,14 +174,21 @@ impl AsRef<str> for BigInteger {
 /// See the [module docs](self) for the grammar accepted by `FromStr`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(
-    all(aws_sdk_unstable, feature = "serde-deserialize"),
-    derive(serde::Deserialize)
-)]
-#[cfg_attr(
     all(aws_sdk_unstable, feature = "serde-serialize"),
     derive(serde::Serialize)
 )]
 pub struct BigDecimal(String);
+
+#[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
+impl<'de> serde::Deserialize<'de> for BigDecimal {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = <String as serde::Deserialize>::deserialize(deserializer)?;
+        value.parse().map_err(serde::de::Error::custom)
+    }
+}
 
 impl Default for BigDecimal {
     fn default() -> Self {
@@ -171,9 +200,7 @@ impl std::str::FromStr for BigDecimal {
     type Err = BigNumberError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if !is_valid_big_decimal(s) {
-            return Err(BigNumberError::InvalidFormat(s.to_string()));
-        }
+        validate_big_decimal(s)?;
         Ok(Self(s.to_string()))
     }
 }
@@ -232,6 +259,44 @@ mod tests {
     }
 
     #[test]
+    fn big_decimal_accepts_supported_formats() {
+        for value in ["0", "+5", "-0.0", ".5", "-.5", "5.", "1.5E+3"] {
+            assert!(BigDecimal::from_str(value).is_ok(), "{value}");
+        }
+    }
+
+    #[test]
+    fn big_decimal_rejects_malformed_values() {
+        for value in [
+            "1.2.3", "-", "+", ".", "e", "E", "1e", "1e+", "--5", "1-2", "12-34", "..", "1.2e3.4",
+            "+-1",
+        ] {
+            assert_eq!(
+                BigDecimal::from_str(value),
+                Err(BigNumberError::InvalidFormat(value.to_string())),
+                "{value}"
+            );
+        }
+    }
+
+    #[test]
+    fn big_decimal_rejects_out_of_range_exponents() {
+        for value in [
+            "1E99999999999999999999",
+            "1E-99999999999999999999",
+            "1e9223372036854775808",
+            "1e-9223372036854775808",
+            "1e999999999999999999999999999999999999999",
+        ] {
+            assert_eq!(
+                BigDecimal::from_str(value),
+                Err(BigNumberError::ExponentOutOfRange(value.to_string())),
+                "{value}"
+            );
+        }
+    }
+
+    #[test]
     fn big_integer_rejects_json_injection() {
         // Reject strings with JSON special characters
         assert!(BigInteger::from_str("123, \"injected\": true").is_err());
@@ -276,17 +341,14 @@ mod tests {
         assert!(BigDecimal::from_str("").is_err());
     }
 
-    // --- Structural grammar: only a leading '-' is a sign -----------------------
+    // --- Structural grammar -----------------------------------------------------
 
     #[test]
-    fn big_numbers_reject_a_leading_plus() {
-        // `+123` is not a JSON number and has no single canonical
-        // representation, so it is not accepted (a behavior change from
-        // 1.6.4, which validated only the character set).
+    fn big_integer_rejects_a_leading_plus() {
+        // `+123` is not a JSON integer and is not accepted by BigInteger.
+        // BigDecimal intentionally accepts a leading plus sign.
         assert!(BigInteger::from_str("+123").is_err());
         assert!(BigInteger::from_str("+0").is_err());
-        assert!(BigDecimal::from_str("+1.0").is_err());
-        assert!(BigDecimal::from_str("+1e3").is_err());
     }
 
     #[test]
@@ -304,11 +366,8 @@ mod tests {
     }
 
     #[test]
-    fn big_decimal_requires_digits_around_every_separator() {
+    fn big_decimal_rejects_malformed_separators_and_exponents() {
         for bad in [
-            ".5",     // no integer digits
-            "-.5",    // no integer digits after the sign
-            "1.",     // no fractional digits
             "1..2",   // repeated point
             "1.2.3",  // repeated point
             "0.0.0",  // repeated point
@@ -334,7 +393,7 @@ mod tests {
     }
 
     #[test]
-    fn big_decimal_accepts_the_full_json_number_grammar() {
+    fn big_decimal_accepts_additional_supported_formats() {
         for good in [
             "0",
             "-0",
@@ -403,5 +462,27 @@ mod tests {
         let err = BigInteger::from_str("+123").unwrap_err();
         assert_eq!(err, BigNumberError::InvalidFormat("+123".to_string()));
         assert!(err.to_string().contains("+123"));
+    }
+
+    #[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
+    #[test]
+    fn serde_deserialization_preserves_big_number_invariants() {
+        let integer: BigInteger = serde_json::from_str(r#""00123""#).unwrap();
+        assert_eq!(integer.as_ref(), "00123");
+        assert!(serde_json::from_str::<BigInteger>(r#""+123""#).is_err());
+
+        for value in ["+5", ".5", "-.5", "5.", "1.5E+3"] {
+            let json = format!(r#""{value}""#);
+            let decimal: BigDecimal = serde_json::from_str(&json).unwrap();
+            assert_eq!(decimal.as_ref(), value);
+        }
+
+        for value in ["1.2.3", "--5", "1e"] {
+            let json = format!(r#""{value}""#);
+            assert!(serde_json::from_str::<BigDecimal>(&json).is_err());
+        }
+
+        let error = serde_json::from_str::<BigDecimal>(r#""1E99999999999999999999""#).unwrap_err();
+        assert!(error.to_string().contains("outside the supported range"));
     }
 }

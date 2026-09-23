@@ -24,30 +24,21 @@ fn is_ascii_digits(s: &str) -> bool {
 /// `'-'? ('0' | [1-9][0-9]*) ('.' [0-9]+)? ([eE] [+-]? [0-9]+)?`.
 ///
 /// [`aws_smithy_types::BigInteger`] and [`aws_smithy_types::BigDecimal`]
-/// are string wrappers whose `FromStr` validates the *structure* of its
-/// input — `'-'? DIGIT+` and
-/// `'-'? DIGIT+ ('.' DIGIT+)? ([eE] [+-]? DIGIT+)?` respectively — so it
-/// already rejects `"+123"`, `"1.2.3"`, `"--5"`, `"1e"`, `".5"` and
-/// `"1."`. It deliberately does **not** reject leading zeros, because
-/// `"00123"` has exactly one numeric reading and parsed in previously
+/// are string wrappers whose `FromStr` implementations validate their own
+/// supported numeric grammars. `BigInteger` accepts `'-'? DIGIT+`, while
+/// `BigDecimal` also accepts forms such as `"+123"`, `".5"`, and `"1."`.
+/// Both deliberately accept leading zeros for compatibility with previously
 /// released versions.
 ///
-/// RFC 8259 is stricter on exactly that point: `int` is `'0'` or a
-/// nonzero digit followed by digits, so `"00123"`, `"007"`, `"-01"` and
-/// `"00.1"` are all constructible values that are not JSON numbers.
-/// Their stored text is emitted verbatim on the raw-number path, so it is
-/// checked here instead of being trusted — the alternative is JSON output
-/// that no parser accepts.
+/// Several of those valid arbitrary-precision representations are not valid
+/// RFC 8259 JSON numbers. The raw-number path emits the stored text verbatim,
+/// so this wire-format boundary must reject a leading `+`, an omitted integer
+/// or fractional digit run, and leading zeros rather than producing JSON that
+/// this codec cannot read back.
 ///
-/// This check is therefore the wire-format boundary, not a restatement of
-/// `FromStr`: the constraint here is the output format, and the codec's
-/// own deserializer already rejects a leading zero (`"01"`), so accepting
-/// one here would emit numbers this codec could not read back.
-///
-/// The remaining rejections (a leading `+`, an empty digit run) are kept
-/// as defense in depth: they are unreachable through `FromStr` today, but
-/// this function is the only thing standing between a value and the
-/// output buffer.
+/// This remains a complete grammar check, rather than assuming every value was
+/// constructed through `FromStr`, so malformed internal values cannot reach the
+/// output buffer either.
 fn is_json_number(text: &str) -> bool {
     let rest = text.strip_prefix('-').unwrap_or(text);
 

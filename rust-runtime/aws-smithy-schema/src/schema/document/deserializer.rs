@@ -374,12 +374,13 @@ fn is_ascii_digits(s: &str) -> bool {
 
 /// `true` iff `text` is a decimal number [`big_decimal_to_integer_string`]
 /// can read unambiguously:
-/// `'-'? digits ('.' digits)? (('e' | 'E') ('+' | '-')? digits)?`.
+/// `('+' | '-')? (digits ('.' digits*)? | '.' digits+)`
+/// `(('e' | 'E') ('+' | '-')? digits+)?`.
 ///
-/// This is the same grammar [`BigDecimal`]'s `FromStr` enforces, so a
-/// parsed `BigDecimal` always satisfies it. It is kept as an explicit
-/// precondition check because [`big_decimal_to_integer_string`] would
-/// return a silently wrong value rather than an error on text with no
+/// This is the same structural grammar [`BigDecimal`]'s `FromStr` enforces,
+/// including leading signs and omitted integer or fractional digit runs. It is
+/// kept as an explicit precondition check because [`big_decimal_to_integer_string`]
+/// would return a silently wrong value rather than an error on text with no
 /// single numeric reading (`"1.2.3"` would truncate to `"1"`), and its own
 /// guard is a `debug_assert!` that disappears in release builds.
 ///
@@ -389,7 +390,7 @@ fn is_ascii_digits(s: &str) -> bool {
 /// on the wire boundary in the JSON codec's serializer — there the
 /// constraint is the output format, not readability.)
 fn is_unambiguous_decimal(text: &str) -> bool {
-    let rest = text.strip_prefix('-').unwrap_or(text);
+    let rest = text.strip_prefix(['-', '+']).unwrap_or(text);
 
     let (mantissa, exponent) = match rest.split_once(['e', 'E']) {
         Some((mantissa, exponent)) => (mantissa, Some(exponent)),
@@ -397,7 +398,11 @@ fn is_unambiguous_decimal(text: &str) -> bool {
     };
 
     let mantissa_ok = match mantissa.split_once('.') {
-        Some((int_part, frac_part)) => is_ascii_digits(int_part) && is_ascii_digits(frac_part),
+        Some((int_part, frac_part)) => {
+            (!int_part.is_empty() || !frac_part.is_empty())
+                && int_part.bytes().all(|b| b.is_ascii_digit())
+                && frac_part.bytes().all(|b| b.is_ascii_digit())
+        }
         None => is_ascii_digits(mantissa),
     };
 
@@ -442,15 +447,16 @@ fn big_decimal_to_integer_string(bd: &BigDecimal) -> Option<String> {
     let text = bd.as_ref();
     let (negative, rest) = match text.strip_prefix('-') {
         Some(rest) => (true, rest),
-        None => (false, text),
+        None => (false, text.strip_prefix('+').unwrap_or(text)),
     };
 
     let (mantissa, exp) = match rest.split_once(['e', 'E']) {
         Some((mantissa, exp_str)) => match exp_str.parse::<i64>() {
             Ok(exp) => (mantissa, exp),
             // Exponent doesn't fit in i64: a huge positive exponent is
-            // too large to materialize; a huge negative one rounds to
-            // zero.
+            // too large to materialize. `BigDecimal::from_str`'s scale bound
+            // prevents an i64-underflowing negative exponent from reaching
+            // this branch today; retain the negative case as defense in depth.
             Err(_) => {
                 return if exp_str.starts_with('-') {
                     Some("0".to_string())
@@ -1399,6 +1405,11 @@ mod tests {
             ("5e-3", "0"), // 0.005 -> 0
             ("-1.23e10", "-12300000000"),
             ("10.0", "10"),
+            ("+123", "123"),            // explicit positive sign removed
+            (".5", "0"),                // omitted integer digit run
+            ("-.5", "0"),               // omitted integer digits, negative zero normalized
+            ("1.", "1"),                // omitted fractional digit run
+            ("+1.23e1", "12"),          // sign and exponent expansion
             ("00123", "123"),           // leading zeros normalized
             ("1.23E10", "12300000000"), // uppercase E
         ];
@@ -1420,18 +1431,15 @@ mod tests {
             big_decimal_to_integer_string(&BigDecimal::from_str("1e1000000000").unwrap()),
             None
         );
-        // Exponent overflows i64 entirely.
-        assert_eq!(
-            big_decimal_to_integer_string(&BigDecimal::from_str("1e99999999999999999999").unwrap()),
-            None
-        );
-        // A huge *negative* exponent rounds to zero with no allocation.
+        // The exponent overflows i64, while the fraction-adjusted scale is
+        // still within the range accepted by BigDecimal.
         assert_eq!(
             big_decimal_to_integer_string(
-                &BigDecimal::from_str("1e-99999999999999999999").unwrap()
-            )
-            .as_deref(),
-            Some("0")
+                &BigDecimal::from_str("1.0e9223372036854775808").unwrap()
+            ),
+            None
         );
+        // An i64-underflowing negative exponent cannot reach this helper:
+        // BigDecimal rejects it because its resulting scale is out of range.
     }
 }
