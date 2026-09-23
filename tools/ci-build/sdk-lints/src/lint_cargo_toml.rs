@@ -172,6 +172,12 @@ fn check_crate_author(package: Package) -> Result<Vec<LintError>> {
     Ok(errors)
 }
 
+/// Crates exempt from the `all-features = true` docs.rs convention.
+///
+/// Each of these has a `fips` feature that builds `aws-lc-fips-sys`, which cannot build on
+/// docs.rs, so they pin an explicit feature list instead.
+const DOCS_RS_ALL_FEATURES_EXEMPT: &[&str] = &["aws-smithy-http-client", "aws-smithy-checksums"];
+
 pub(crate) struct DocsRs;
 
 impl Lint for DocsRs {
@@ -181,8 +187,12 @@ impl Lint for DocsRs {
 
     fn files_to_check(&self) -> Result<Vec<PathBuf>> {
         Ok(all_cargo_tomls()?
-            // aws-lc-fips cannot build on docs.rs, grant an exception for this crate which does not follow the same cargo.toml w.r.t docs.rs
-            .filter(|path| !path.to_string_lossy().contains("aws-smithy-http-client"))
+            .filter(|path| {
+                let path = path.to_string_lossy();
+                !DOCS_RS_ALL_FEATURES_EXEMPT
+                    .iter()
+                    .any(|crate_name| path.contains(crate_name))
+            })
             .collect())
     }
 }

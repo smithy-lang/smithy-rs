@@ -16,12 +16,14 @@
 
 //! Checksum calculation and verification callbacks.
 
+use crate::crypto::Digest as _;
 use crate::error::UnknownChecksumAlgorithmError;
 
 use bytes::Bytes;
 use std::{fmt::Debug, str::FromStr};
 
 pub mod body;
+mod crypto;
 pub mod error;
 pub mod http;
 
@@ -255,24 +257,21 @@ impl Checksum for Crc64Nvme {
 
 #[derive(Debug, Default)]
 struct Sha1 {
-    hasher: sha1::Sha1,
+    hasher: crypto::Sha1,
 }
 
 impl Sha1 {
     fn update(&mut self, bytes: &[u8]) {
-        use sha1::Digest;
         self.hasher.update(bytes);
     }
 
     fn finalize(self) -> Bytes {
-        use sha1::Digest;
-        Bytes::copy_from_slice(self.hasher.finalize().as_ref())
+        self.hasher.finalize()
     }
 
     // Size of the checksum in bytes
     fn size() -> u64 {
-        use sha1::Digest;
-        sha1::Sha1::output_size() as u64
+        crypto::Sha1::output_size()
     }
 }
 
@@ -291,24 +290,21 @@ impl Checksum for Sha1 {
 
 #[derive(Debug, Default)]
 struct Sha256 {
-    hasher: sha2::Sha256,
+    hasher: crypto::Sha256,
 }
 
 impl Sha256 {
     fn update(&mut self, bytes: &[u8]) {
-        use sha2::Digest;
         self.hasher.update(bytes);
     }
 
     fn finalize(self) -> Bytes {
-        use sha2::Digest;
-        Bytes::copy_from_slice(self.hasher.finalize().as_ref())
+        self.hasher.finalize()
     }
 
     // Size of the checksum in bytes
     fn size() -> u64 {
-        use sha2::Digest;
-        sha2::Sha256::output_size() as u64
+        crypto::Sha256::output_size()
     }
 }
 
@@ -324,33 +320,35 @@ impl Checksum for Sha256 {
     }
 }
 
+// MD5 is deprecated (`ChecksumAlgorithm::Md5` resolves to CRC-32) and is only available on the
+// RustCrypto backend: aws-lc-rs doesn't expose MD5, and it isn't FIPS-approved.
+#[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
 #[allow(dead_code)]
 #[derive(Debug, Default)]
 struct Md5 {
-    hasher: md5::Md5,
+    hasher: crypto::Md5,
 }
 
+#[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
 impl Md5 {
     #[warn(dead_code)]
     fn update(&mut self, bytes: &[u8]) {
-        use md5::Digest;
         self.hasher.update(bytes);
     }
 
     #[warn(dead_code)]
     fn finalize(self) -> Bytes {
-        use md5::Digest;
-        Bytes::copy_from_slice(self.hasher.finalize().as_ref())
+        self.hasher.finalize()
     }
 
     // Size of the checksum in bytes
     #[warn(dead_code)]
     fn size() -> u64 {
-        use md5::Digest;
-        md5::Md5::output_size() as u64
+        crypto::Md5::output_size()
     }
 }
 
+#[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
 impl Checksum for Md5 {
     fn update(&mut self, bytes: &[u8]) {
         Self::update(self, bytes)
@@ -365,12 +363,11 @@ impl Checksum for Md5 {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+    use super::{http::MD5_HEADER_NAME, Md5};
     use super::{
-        http::{
-            CRC_32_C_HEADER_NAME, CRC_32_HEADER_NAME, MD5_HEADER_NAME, SHA_1_HEADER_NAME,
-            SHA_256_HEADER_NAME,
-        },
-        Crc32, Crc32c, Md5, Sha1, Sha256,
+        http::{CRC_32_C_HEADER_NAME, CRC_32_HEADER_NAME, SHA_1_HEADER_NAME, SHA_256_HEADER_NAME},
+        Crc32, Crc32c, Sha1, Sha256,
     };
 
     use crate::http::HttpChecksum;
@@ -466,6 +463,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
     fn test_md5_checksum() {
         let mut checksum = Md5::default();
         checksum.update(TEST_DATA.as_bytes());

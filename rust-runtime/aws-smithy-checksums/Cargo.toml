@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-checksums"
-version = "0.65.0"
+version = "0.65.1"
 authors = [
     "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
     "Zelda Hessler <zhessler@amazon.com>",
@@ -13,6 +13,30 @@ rust-version = "1.94.1"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = ["rustcrypto"]
+# Use the RustCrypto crates (`md-5`, `sha1`, `sha2`) for SHA-1/SHA-256/MD5 digests.
+# This is the default and is not FIPS-validated.
+rustcrypto = ["dep:md-5", "dep:sha1", "dep:sha2"]
+# Use aws-lc-rs for SHA-1/SHA-256 digests, backed by the non-FIPS AWS-LC build.
+#
+# This selects `aws-lc-sys` rather than aws-lc-rs's `non-fips` feature because `non-fips` and
+# `fips` are mutually exclusive there (aws-lc-rs fails its build if both are on), which would
+# make this feature and `fips` impossible to enable together — something `--all-features` and
+# feature unification across a workspace do routinely. With both on, aws-lc-rs uses the FIPS
+# build. This mirrors how rustls wires its `aws_lc_rs` and `fips` features.
+aws-lc-rs = ["__aws-lc-rs", "aws-lc-rs?/aws-lc-sys"]
+# Use aws-lc-rs for SHA-1/SHA-256 digests, backed by the FIPS 140-3 validated AWS-LC build.
+# Takes precedence over `aws-lc-rs` when both are enabled.
+#
+# Only available on platforms with a validated AWS-LC operating environment (Linux,
+# macOS, and Windows); notably unavailable on iOS and WASM. Requires a C compiler,
+# CMake, and Go at build time.
+fips = ["__aws-lc-rs", "aws-lc-rs?/fips"]
+# Internal: selects the aws-lc-rs digest backend. Do not enable directly; use
+# `aws-lc-rs` or `fips` instead so that an AWS-LC build is also selected.
+__aws-lc-rs = ["dep:aws-lc-rs"]
+
 [dependencies]
 aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-1-x"]}
@@ -23,11 +47,16 @@ hex = "0.4.3"
 http-1x = {package = "http", version = "1.3.1"}
 http-body-1x = {package = "http-body", version = "1.0.1"}
 http-body-util = "0.1.3"
-md-5 = "0.11"
 pin-project-lite = "0.2.14"
-sha1 = "0.11"
-sha2 = "0.11"
 tracing = "0.1.44"
+# RustCrypto digest backend (default); see the `rustcrypto` feature
+md-5 = { version = "0.11", optional = true }
+sha1 = { version = "0.11", optional = true }
+sha2 = { version = "0.11", optional = true }
+# aws-lc-rs digest backend; see the `aws-lc-rs` and `fips` features.
+# `default-features = false` so that the AWS-LC build (non-FIPS vs FIPS) is chosen
+# explicitly by those features rather than defaulting to the non-FIPS one.
+aws-lc-rs = { version = "1.18.1", optional = true, default-features = false, features = ["alloc"] }
 
 [dev-dependencies]
 bytes-utils = "0.1.2"
@@ -36,7 +65,10 @@ tokio = { version = "1.49.0", features = ["macros", "rt"] }
 tracing-test = "0.2.1"
 
 [package.metadata.docs.rs]
-all-features = true
+# `all-features` is off because the `fips` feature builds aws-lc-fips-sys, which can't build on
+# docs.rs. `sdk-lints` grants this crate an exception for that reason.
+all-features = false
+features = ["rustcrypto", "aws-lc-rs"]
 targets = ["x86_64-unknown-linux-gnu"]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 rustdoc-args = ["--cfg", "docsrs"]
