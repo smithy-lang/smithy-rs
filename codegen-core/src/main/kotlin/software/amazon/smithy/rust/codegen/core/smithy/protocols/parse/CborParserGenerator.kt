@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.parse
 
-import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.BigDecimalShape
 import software.amazon.smithy.model.shapes.BigIntegerShape
@@ -600,11 +599,7 @@ class CborParserGenerator(
                 is TimestampShape -> rust("decoder.timestamp()")
 
                 is BigIntegerShape -> rust("decoder.big_integer()")
-                is BigDecimalShape ->
-                    throw CodegenException(
-                        "BigDecimal is not supported with Concise Binary Object Representation (CBOR) protocol. " +
-                            "See https://github.com/smithy-lang/smithy-rs/issues/4473",
-                    )
+                is BigDecimalShape -> rust("decoder.big_decimal()")
 
                 // Aggregate shapes: https://smithy.io/2.0/spec/aggregate-types.html
                 is StructureShape -> deserializeStruct(target)
