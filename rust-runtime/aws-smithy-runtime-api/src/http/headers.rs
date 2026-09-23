@@ -791,6 +791,9 @@ mod tests {
     }
 
     // A lone 0xE9 is a valid HTTP header octet (obs-text per RFC 7230) but is not valid UTF-8.
+    // Every user of this fixture builds a `HeaderMap` from one of the `http` crates, so it is dead
+    // code when neither is enabled.
+    #[cfg(any(feature = "http-1x", feature = "http-02x"))]
     const NON_UTF8_VALUE: &[u8] = b"value-\xe9";
 
     #[cfg(feature = "http-1x")]
