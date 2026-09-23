@@ -22,7 +22,7 @@ aws-smithy-checksums = { version = "...", features = ["fips"] }
 Notes on the new features:
 
 - `fips` takes precedence over `aws-lc-rs`, and either takes precedence over `rustcrypto`, so enabling more than one (which Cargo feature unification does routinely) resolves to the strongest backend rather than failing to build.
-- FIPS is a per-target capability, not a universal one. `aws-lc-rs`'s `fips` feature builds `aws-lc-fips-sys`, which is only available on CMVP-validated operating environments — Linux, macOS, and Windows — and is unavailable on iOS and WASM (WASI and non-WASI). It also needs a C compiler, CMake, and Go at build time.
+- Both aws-lc-rs backends are a per-target capability, which is why `rustcrypto` stays the default — it is the only backend that builds everywhere the SDK does. `aws-lc-rs` needs a C/C++ compiler and works on every target [aws-lc-rs supports](https://aws.github.io/aws-lc-rs/platform_support.html); the only WASM target it supports is `wasm32-unknown-emscripten`, so `wasm32-unknown-unknown` and the WASI targets have to stay on `rustcrypto`. `fips` additionally needs CMake and Go, and covers a subset: Linux (gnu and musl), macOS, Windows MSVC, and FreeBSD — not iOS, not Android, not WASM.
 - TLS is a separate axis, already available: `aws-smithy-http-client`'s `rustls-aws-lc-fips` feature. A single top-level switch that turns on all three at once is still to come; see smithy-rs#4681.
 
 `aws-sigv4` specifics:

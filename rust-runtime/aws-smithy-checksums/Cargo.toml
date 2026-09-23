@@ -20,6 +20,12 @@ default = ["rustcrypto"]
 rustcrypto = ["dep:md-5", "dep:sha1", "dep:sha2"]
 # Use aws-lc-rs for SHA-1/SHA-256 digests, backed by the non-FIPS AWS-LC build.
 #
+# Needs a C/C++ compiler, and works on every target aws-lc-rs supports. That is most of what
+# the SDK supports, but not all of it: per
+# https://aws.github.io/aws-lc-rs/platform_support.html the only WASM target aws-lc-rs supports
+# is wasm32-unknown-emscripten, so `wasm32-unknown-unknown` and the WASI targets must stay on
+# `rustcrypto`. This is the reason `rustcrypto` remains the default rather than this feature.
+#
 # Two details about the spelling below, both consequences of `default-features = false` on the
 # dependency, which means the AWS-LC build has to be named explicitly:
 # - `fips` does not stack on this feature, so enabling `fips` alone compiles only
@@ -34,9 +40,9 @@ aws-lc-rs = ["__aws-lc-rs", "aws-lc-rs?/aws-lc-sys"]
 # Use aws-lc-rs for SHA-1/SHA-256 digests, backed by the FIPS 140-3 validated AWS-LC build.
 # Takes precedence over `aws-lc-rs` when both are enabled.
 #
-# Only available on platforms with a validated AWS-LC operating environment (Linux,
-# macOS, and Windows); notably unavailable on iOS and WASM. Requires a C compiler,
-# CMake, and Go at build time.
+# Supported on a subset of the targets above: Linux (gnu and musl), macOS, Windows MSVC, and
+# FreeBSD. Not iOS, not Android, not WASM. Requires a C/C++ compiler, CMake, and Go at build
+# time, plus bindgen on targets without pre-generated FIPS bindings (Windows).
 fips = ["__aws-lc-rs", "aws-lc-rs?/fips"]
 # Internal: selects the aws-lc-rs digest backend. Do not enable directly; use
 # `aws-lc-rs` or `fips` instead so that an AWS-LC build is also selected.

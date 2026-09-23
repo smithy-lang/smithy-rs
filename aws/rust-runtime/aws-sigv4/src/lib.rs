@@ -24,9 +24,20 @@
 //! enabling more than one — which Cargo feature unification does routinely — resolves to the
 //! strongest backend rather than failing to build.
 //!
-//! FIPS is a per-target capability. `fips` builds `aws-lc-fips-sys`, which is only available on
-//! CMVP-validated operating environments (Linux, macOS, and Windows) and is unavailable on iOS
-//! and WASM, and which needs a C compiler, CMake, and Go at build time.
+//! ## Platform support
+//!
+//! Both aws-lc-rs backends are a per-target capability, which is why `rustcrypto` is the default:
+//! it is the only backend that builds everywhere the SDK does.
+//!
+//! - `aws-lc-rs` needs a C/C++ compiler and works on every target
+//!   [aws-lc-rs supports](https://aws.github.io/aws-lc-rs/platform_support.html). The only WASM
+//!   target it supports is `wasm32-unknown-emscripten`, so `wasm32-unknown-unknown` and the WASI
+//!   targets have to stay on `rustcrypto`.
+//! - `fips` additionally needs CMake and Go, and covers a subset of those targets: Linux (gnu
+//!   and musl), macOS, Windows MSVC, and FreeBSD. Not iOS, not Android, not WASM.
+//!
+//! Enabling either feature on a target its AWS-LC build doesn't support fails while building
+//! `aws-lc-sys` or `aws-lc-fips-sys`, before this crate is reached.
 //!
 //! Two RustCrypto crates remain compiled in a `sigv4a` + `fips` build, neither of which performs
 //! FIPS-relevant cryptography:
