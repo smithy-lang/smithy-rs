@@ -86,8 +86,8 @@ where
     type Error = Error;
 
     fn match_route(&self, request: &http::Request<B>) -> Result<S, Self::Error> {
-        // The URI must be root,
-        if request.uri() != "/" {
+        // The URI path must be root,
+        if request.uri().path() != "/" {
             return Err(Error::NotRootUrl);
         }
 
