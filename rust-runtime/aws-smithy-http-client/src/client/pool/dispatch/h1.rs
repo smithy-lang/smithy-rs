@@ -22,7 +22,7 @@ use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_types::body::SdkBody;
 use http_1x::{Method, Request, Response, Uri, Version};
 use hyper::body::Body;
-use std::future::poll_fn;
+use std::future::{poll_fn, Future};
 use std::pin::Pin;
 use std::sync::Arc as StdArc;
 use std::task::{Context, Poll};
@@ -49,16 +49,17 @@ pub(super) async fn dispatch(
     let reused = selection.is_reused();
     let connection = selection.connection().clone();
     let close_handle = selection.close_handle();
-    let captured_metadata = request
+    let connection_capture = request
         .extensions()
         .get::<CaptureSmithyConnection>()
-        .cloned()
-        .map(|capture| {
-            let metadata = connection.info().metadata(close_handle.clone());
-            let captured = metadata.clone();
-            capture.set_connection_retriever(move || Some(captured.clone()));
-            metadata
-        });
+        .cloned();
+    let captured_metadata = (connection_capture.is_some()
+        || context.captures_connection_selection())
+    .then(|| connection.info().metadata(close_handle.clone()));
+    if let (Some(capture), Some(metadata)) = (connection_capture, &captured_metadata) {
+        let captured = metadata.clone();
+        capture.set_connection_retriever(move || Some(captured.clone()));
+    }
 
     if request.version() == Version::HTTP_2 {
         let metadata =
@@ -92,10 +93,25 @@ pub(super) async fn dispatch(
         return Ok(H1DispatchOutcome::NotAccepted(request));
     };
     let send = selection.sender_mut().hyper_mut().try_send_request(request);
-
     let exchange = selection.into_exchange();
-    match send.await {
+    let mut send = Box::pin(send);
+    // Freeze acquisition time when Hyper first retains the request. Publish it
+    // only after a later error can no longer return the request envelope.
+    let first = poll_fn(|cx| Poll::Ready(send.as_mut().poll(cx))).await;
+    let (result, acquisition_completed_at) = match first {
+        Poll::Ready(result) => (result, context.connection_selection_time()),
+        Poll::Pending => {
+            let completed_at = context.connection_selection_time();
+            (send.await, completed_at)
+        }
+    };
+    match result {
         Ok(mut response) => {
+            context.record_connection_selection(
+                acquisition_completed_at,
+                reused,
+                captured_metadata.as_ref(),
+            );
             // Response-body ownership keeps both the accepted dispatch
             // and exclusive request handle out of the pool until Hyper
             // proves a complete message boundary.
@@ -133,6 +149,11 @@ pub(super) async fn dispatch(
             }
             exchange.retire_connection(CloseReason::IncompleteH1Exchange);
             drop(dispatch);
+            context.record_connection_selection(
+                acquisition_completed_at,
+                reused,
+                captured_metadata.as_ref(),
+            );
             let metadata =
                 captured_metadata.unwrap_or_else(|| connection.info().metadata(close_handle));
             Err(downcast_error(Box::new(error.into_error())).with_connection(metadata))

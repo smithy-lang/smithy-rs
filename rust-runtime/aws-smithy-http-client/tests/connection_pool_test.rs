@@ -16,6 +16,7 @@ mod common {
     pub(crate) mod client;
 }
 
+use aws_smithy_async::test_util::ManualTimeSource;
 use aws_smithy_http_client::pool::{
     Client, ConnectPath, ConnectionEstablishmentId, ConnectionEstablishmentStage, ConnectionEvent,
     ConnectionPool, ConnectionProtocol, ConnectionReuseScope, OriginKey, Partition, PartitionId,
@@ -23,15 +24,18 @@ use aws_smithy_http_client::pool::{
 };
 use aws_smithy_http_client::test_util::wire::connection::{
     BodyPlan, ConnectionCloseReason, ConnectionEvent as WireConnectionEvent, ConnectionTestHarness,
-    EndpointPlan, Http1Response, Http1Script, ManualGate,
+    EndpointPlan, Http1Response, Http1Script, ManualGate, SocketScript,
 };
 use aws_smithy_runtime_api::client::connection::ConnectionId;
+use aws_smithy_runtime_api::client::http::telemetry::{
+    CaptureHttpAttemptTelemetry, ConnectionUsage,
+};
 use aws_smithy_runtime_api::client::http::{SharedHttpClient, SharedHttpConnector};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use common::client as test_client;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, UNIX_EPOCH};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
@@ -320,6 +324,114 @@ async fn custom_dns_resolver_is_used_for_explicit_partition_connections() {
 }
 
 #[tokio::test]
+async fn h1_attempt_telemetry_distinguishes_fresh_and_reused_connections() {
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            Http1Script::responses([
+                Http1Response::ok().body("first"),
+                Http1Response::ok().body("second"),
+            ]),
+        )
+        .build()
+        .await
+        .expect("harness should start");
+    let pool = ConnectionPool::builder().build_http().expect("valid pool");
+    let client = SharedHttpClient::new(Client::new(&pool).expect("anonymous partition"));
+    let connector = connector(&client);
+
+    let first_capture = CaptureHttpAttemptTelemetry::new();
+    let mut first = HttpRequest::get(harness.endpoint_url()).expect("valid request");
+    first.add_extension(first_capture.clone());
+    test_client::send_and_collect(&connector, first).await;
+
+    let second_capture = CaptureHttpAttemptTelemetry::new();
+    let mut second = HttpRequest::get(harness.endpoint_url()).expect("valid request");
+    second.add_extension(second_capture.clone());
+    test_client::send_and_collect(&connector, second).await;
+
+    let first = first_capture.get();
+    let second = second_capture.get();
+    assert!(first.dispatch_duration().is_some());
+    assert!(second.dispatch_duration().is_some());
+    assert_eq!(
+        first.acquisition().expect("first acquisition").usage(),
+        ConnectionUsage::Fresh
+    );
+    assert_eq!(
+        second.acquisition().expect("second acquisition").usage(),
+        ConnectionUsage::Reused
+    );
+    let first_connection = first.connection().expect("first connection metadata");
+    let second_connection = second.connection().expect("second connection metadata");
+    assert_eq!(
+        first_connection.connection_id(),
+        second_connection.connection_id()
+    );
+    assert!(first_connection.establishment().is_some());
+    assert_eq!(1, harness.tcp_accepted_count());
+
+    drop(connector);
+    drop(client);
+    drop(pool);
+    harness.shutdown().await.expect("clean harness shutdown");
+}
+
+#[tokio::test]
+async fn acquisition_duration_ends_when_hyper_accepts_the_request() {
+    let response_gate = ManualGate::new();
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            SocketScript::new()
+                .read_http1_request()
+                .wait(response_gate.waiter())
+                .write_all(
+                    "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok",
+                )
+                .await_client_close(),
+        )
+        .build()
+        .await
+        .expect("harness should start");
+    let time = ManualTimeSource::new(UNIX_EPOCH);
+    let pool = ConnectionPool::builder()
+        .time_source(time.clone())
+        .build_http()
+        .expect("valid pool");
+    let client = SharedHttpClient::new(Client::new(&pool).expect("anonymous partition"));
+    let connector = connector(&client);
+    let capture = CaptureHttpAttemptTelemetry::new();
+    let mut request = HttpRequest::get(harness.endpoint_url()).expect("valid request");
+    request.add_extension(capture.clone());
+
+    let send = tokio::spawn({
+        let connector = connector.clone();
+        async move { test_client::send_and_collect(&connector, request).await }
+    });
+    response_gate
+        .wait_until_reached(test_client::WAIT)
+        .await
+        .expect("server should receive the accepted request");
+    time.advance(Duration::from_secs(10));
+    response_gate.release();
+    let (status, body) = send.await.expect("request task");
+    assert_eq!((status, body.as_slice()), (200, b"ok".as_slice()));
+
+    let telemetry = capture.get();
+    assert_eq!(
+        telemetry.acquisition().expect("acquisition").duration(),
+        Duration::ZERO
+    );
+    assert_eq!(telemetry.dispatch_duration(), Some(Duration::from_secs(10)));
+
+    drop(connector);
+    drop(client);
+    drop(pool);
+    harness.shutdown().await.expect("clean harness shutdown");
+}
+
+#[tokio::test]
 async fn bounded_waiter_proceeds_after_the_active_h1_returns() {
     let body_gate = ManualGate::new();
     let harness = ConnectionTestHarness::builder()
@@ -337,8 +449,10 @@ async fn bounded_waiter_proceeds_after_the_active_h1_returns() {
         .build()
         .await
         .expect("harness should start");
+    let time = ManualTimeSource::new(UNIX_EPOCH);
     let pool = ConnectionPool::builder()
         .max_connections_per_host(1)
+        .time_source(time.clone())
         .build_http()
         .expect("valid pool");
     let client = SharedHttpClient::new(Client::new(&pool).expect("anonymous partition"));
@@ -355,12 +469,13 @@ async fn bounded_waiter_proceeds_after_the_active_h1_returns() {
         .await
         .expect("first response should reach its body gate");
 
+    let second_capture = CaptureHttpAttemptTelemetry::new();
+    let mut second_request = HttpRequest::get(harness.endpoint_url()).expect("valid request");
+    second_request.add_extension(second_capture.clone());
     let second_connector = connector.clone();
-    let second_url = harness.endpoint_url();
-    let mut second =
-        tokio::spawn(
-            async move { test_client::get_and_collect(&second_connector, &second_url).await },
-        );
+    let mut second = tokio::spawn(async move {
+        test_client::send_and_collect(&second_connector, second_request).await
+    });
     assert!(
         tokio::time::timeout(Duration::from_millis(100), &mut second)
             .await
@@ -369,12 +484,18 @@ async fn bounded_waiter_proceeds_after_the_active_h1_returns() {
     );
     assert_eq!(1, harness.tcp_accepted_count());
 
+    time.advance(Duration::from_secs(5));
     body_gate.release();
     let (status, body) = test_client::collect_response(first).await;
     assert_eq!((status, body.as_slice()), (200, b"first-body".as_slice()));
     let (status, body) = second.await.expect("second request task should not panic");
     assert_eq!((status, body.as_slice()), (200, b"second".as_slice()));
     assert_eq!(1, harness.tcp_accepted_count());
+    let telemetry = second_capture.get();
+    let acquisition = telemetry.acquisition().expect("second acquisition");
+    assert_eq!(acquisition.duration(), Duration::from_secs(5));
+    assert_eq!(acquisition.usage(), ConnectionUsage::Reused);
+    assert_eq!(telemetry.dispatch_duration(), Some(Duration::from_secs(5)));
 
     drop(connector);
     drop(client);

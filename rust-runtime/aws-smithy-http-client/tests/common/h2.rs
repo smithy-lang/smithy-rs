@@ -198,6 +198,11 @@ impl H2Response {
 #[derive(Clone, Debug)]
 pub(crate) enum H2StreamScript {
     Respond(H2Response),
+    /// Waits at the response-head boundary before sending the response.
+    RespondAfter {
+        response: H2Response,
+        send: GateWaiter,
+    },
     /// Sends the response before a gate permits the request body to be drained.
     RespondBeforeReceivingRequestBody {
         response: H2Response,
@@ -209,6 +214,11 @@ pub(crate) enum H2StreamScript {
 impl H2StreamScript {
     pub(crate) fn respond(response: H2Response) -> Self {
         Self::Respond(response)
+    }
+
+    /// Delays the response head until the gate is released.
+    pub(crate) fn respond_after(response: H2Response, send: GateWaiter) -> Self {
+        Self::RespondAfter { response, send }
     }
 
     /// Delays request-body reads until after the response and gate release.
@@ -881,6 +891,11 @@ async fn run_stream(
     state: Arc<SharedState>,
     held_request: Option<(RecvStream, GateWaiter)>,
 ) -> Result<(), H2HarnessError> {
+    if let H2StreamScript::RespondAfter { send, .. } = &script {
+        send.wait()
+            .await
+            .map_err(|err| H2HarnessError::new(format!("H2 response-head gate failed: {err}")))?;
+    }
     match script {
         H2StreamScript::Reset(reason) => {
             respond.send_reset(reason);
@@ -891,6 +906,7 @@ async fn run_stream(
             });
         }
         H2StreamScript::Respond(response)
+        | H2StreamScript::RespondAfter { response, send: _ }
         | H2StreamScript::RespondBeforeReceivingRequestBody {
             response,
             receive: _,

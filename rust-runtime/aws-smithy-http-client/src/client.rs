@@ -18,11 +18,13 @@ use crate::cfg::cfg_tls;
 use crate::tls::TlsContext;
 use aws_smithy_async::future::timeout::TimedOutError;
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
+use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::connection::CaptureSmithyConnection;
 use aws_smithy_runtime_api::client::connection::ConnectionMetadata;
 use aws_smithy_runtime_api::client::connector_metadata::ConnectorMetadata;
 use aws_smithy_runtime_api::client::dns::ResolveDnsError;
+use aws_smithy_runtime_api::client::http::telemetry::CaptureHttpAttemptTelemetry;
 use aws_smithy_runtime_api::client::http::{
     HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpClient,
     SharedHttpConnector,
@@ -112,6 +114,7 @@ impl HttpConnector for Connector {
 pub struct ConnectorBuilder<Tls = TlsUnset> {
     connector_settings: Option<HttpConnectorSettings>,
     sleep_impl: Option<SharedAsyncSleep>,
+    time_source: SharedTimeSource,
     client_builder: Option<hyper_util::client::legacy::Builder>,
     pool_idle_timeout: Option<Option<Duration>>,
     pool_max_idle_per_host: Option<usize>,
@@ -127,6 +130,7 @@ impl<Tls: Default> Default for ConnectorBuilder<Tls> {
         Self {
             connector_settings: None,
             sleep_impl: None,
+            time_source: SharedTimeSource::default(),
             client_builder: None,
             pool_idle_timeout: None,
             pool_max_idle_per_host: None,
@@ -163,6 +167,7 @@ impl ConnectorBuilder<TlsUnset> {
         ConnectorBuilder {
             connector_settings: self.connector_settings,
             sleep_impl: self.sleep_impl,
+            time_source: self.time_source,
             client_builder: self.client_builder,
             enable_tcp_nodelay: self.enable_tcp_nodelay,
             interface: self.interface,
@@ -256,6 +261,7 @@ impl<Any> ConnectorBuilder<Any> {
             adapter: Box::new(Adapter {
                 client: read_timeout,
                 proxy_matcher,
+                time_source: self.time_source,
             }),
         }
     }
@@ -293,6 +299,12 @@ impl<Any> ConnectorBuilder<Any> {
     /// [`default_async_sleep`].
     pub fn set_sleep_impl(&mut self, sleep_impl: Option<SharedAsyncSleep>) -> &mut Self {
         self.sleep_impl = sleep_impl;
+        self
+    }
+
+    /// Copies the runtime-component clock used for request telemetry.
+    fn set_time_source(&mut self, time_source: SharedTimeSource) -> &mut Self {
+        self.time_source = time_source;
         self
     }
 
@@ -500,6 +512,7 @@ struct Adapter<C> {
         hyper_util::client::legacy::Client<timeout::ConnectTimeout<C>, SdkBody>,
     >,
     proxy_matcher: Option<Matcher>,
+    time_source: SharedTimeSource,
 }
 
 impl<C> fmt::Debug for Adapter<C> {
@@ -597,6 +610,10 @@ where
     C::Error: Into<BoxError>,
 {
     fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
+        let attempt_capture = request.extension::<CaptureHttpAttemptTelemetry>().cloned();
+        let dispatch_timing = attempt_capture
+            .as_ref()
+            .map(|_| (self.time_source.clone(), self.time_source.now()));
         let mut request = match request.try_into_http1x() {
             Ok(request) => request,
             Err(err) => {
@@ -617,14 +634,22 @@ where
         use tower::Service;
         let fut = client.call(request);
         HttpConnectorFuture::new(async move {
-            let response = fut
-                .await
-                .map_err(downcast_error)?
-                .map(SdkBody::from_body_1_x);
-            match HttpResponse::try_from(response) {
-                Ok(response) => Ok(response),
-                Err(err) => Err(ConnectorError::other(err.into(), None)),
+            let result = match fut.await {
+                Ok(response) => HttpResponse::try_from(response.map(SdkBody::from_body_1_x))
+                    .map_err(|err| ConnectorError::other(err.into(), None)),
+                Err(err) => Err(downcast_error(err)),
+            };
+            if let (Some(capture), Some((time_source, started_at))) =
+                (attempt_capture.as_ref(), dispatch_timing)
+            {
+                capture.record_dispatch_duration(
+                    time_source
+                        .now()
+                        .duration_since(started_at)
+                        .unwrap_or_default(),
+                );
             }
+            result
         })
     }
 }
@@ -1140,6 +1165,9 @@ fn new_conn_builder(
     builder.set_connector_settings(settings.cloned());
     if let Some(components) = runtime_components {
         builder.set_sleep_impl(components.sleep_impl());
+        if let Some(time_source) = components.time_source() {
+            builder.set_time_source(time_source);
+        }
     }
     builder
 }
@@ -1155,11 +1183,13 @@ mod test {
     use crate::client::timeout::test::NeverConnects;
     use aws_smithy_async::assert_elapsed;
     use aws_smithy_async::rt::sleep::TokioSleep;
+    use aws_smithy_async::test_util::ManualTimeSource;
     use aws_smithy_async::time::SystemTimeSource;
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use http_1x::Uri;
     use hyper::rt::ReadBufCursor;
     use hyper_util::client::legacy::connect::Connected;
+    use std::time::UNIX_EPOCH;
 
     use super::*;
 
@@ -1221,20 +1251,29 @@ mod test {
 
     #[tokio::test]
     async fn hyper_io_error() {
+        let time = ManualTimeSource::new(UNIX_EPOCH);
         let connector = TestConnection {
-            inner: HangupStream,
+            inner: HangupStream { time: time.clone() },
         };
-        let adapter = Connector::builder().wrap_connector(connector).adapter;
-        let err = adapter
-            .call(HttpRequest::get("https://socket-hangup.com").unwrap())
-            .await
-            .expect_err("socket hangup");
+        let mut builder = Connector::builder();
+        builder.set_time_source(SharedTimeSource::new(time));
+        let adapter = builder.wrap_connector(connector).adapter;
+        let capture = CaptureHttpAttemptTelemetry::new();
+        let mut request = HttpRequest::get("https://socket-hangup.com").unwrap();
+        request.add_extension(capture.clone());
+        let err = adapter.call(request).await.expect_err("socket hangup");
         assert!(err.is_io(), "unexpected error type: {:?}", err);
+        assert_eq!(
+            capture.get().dispatch_duration(),
+            Some(Duration::from_secs(7))
+        );
     }
 
     // ---- machinery to make a Hyper connector that responds with an IO Error
     #[derive(Clone)]
-    struct HangupStream;
+    struct HangupStream {
+        time: ManualTimeSource,
+    }
 
     impl Connection for HangupStream {
         fn connected(&self) -> Connected {
@@ -1248,6 +1287,7 @@ mod test {
             _cx: &mut Context<'_>,
             _buf: ReadBufCursor<'_>,
         ) -> Poll<std::io::Result<()>> {
+            self.get_mut().time.advance(Duration::from_secs(7));
             Poll::Ready(Err(Error::new(
                 ErrorKind::ConnectionReset,
                 "connection reset",
