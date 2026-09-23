@@ -937,6 +937,8 @@ mod loom_tests {
             let second = second.join().unwrap();
             assert!(Arc::ptr_eq(&first, &second));
             assert_eq!(1, partition.cell_count());
+            drop((first, second));
+            partition.maintenance.clear_modeled_cells_for_test();
         });
     }
 }
