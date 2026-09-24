@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
@@ -53,6 +54,7 @@ class ProtocolParserGenerator(
     private val codegenScope =
         arrayOf(
             "Bytes" to RuntimeType.Bytes,
+            "ConfigBag" to RuntimeType.configBag(codegenContext.runtimeConfig),
             "Headers" to RuntimeType.headers(codegenContext.runtimeConfig),
             "Response" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig).resolve("http::Response"),
             "http" to RuntimeType.Http1x,
@@ -69,7 +71,7 @@ class ProtocolParserGenerator(
         return protocolFunctions.deserializeFn(operationShape, fnNameSuffix = "http_response") { fnName ->
             Attribute.AllowClippyUnnecessaryWraps.render(this)
             rustBlockTemplate(
-                "pub fn $fnName(_response_status: u16, _response_headers: &#{Headers}, _response_body: &[u8]) -> std::result::Result<#{O}, #{E}>",
+                "pub fn $fnName(_response_status: u16, _response_headers: &#{Headers}, _response_body: &[u8], _cfg: &#{ConfigBag}) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol,
@@ -97,7 +99,7 @@ class ProtocolParserGenerator(
         return protocolFunctions.deserializeFn(operationShape, fnNameSuffix = "http_error") { fnName ->
             Attribute.AllowClippyUnnecessaryWraps.render(this)
             rustBlockTemplate(
-                "pub fn $fnName(_response_status: u16, _response_headers: &#{Headers}, _response_body: &[u8]) -> std::result::Result<#{O}, #{E}>",
+                "pub fn $fnName(_response_status: u16, _response_headers: &#{Headers}, _response_body: &[u8], _cfg: &#{ConfigBag}) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol,
@@ -199,7 +201,7 @@ class ProtocolParserGenerator(
         return protocolFunctions.deserializeFn(operationShape, fnNameSuffix = "http_response") { fnName ->
             Attribute.AllowClippyUnnecessaryWraps.render(this)
             rustBlockTemplate(
-                "pub fn $fnName(response: &mut #{Response}) -> std::result::Result<#{O}, #{E}>",
+                "pub fn $fnName(response: &mut #{Response}, _cfg: &#{ConfigBag}) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol,
@@ -284,6 +286,61 @@ class ProtocolParserGenerator(
     }
 
     /**
+     * Parses a header-bound member, applying [NonUtf8HeaderHandling] when the value cannot be read.
+     *
+     * A header value may contain any octet in `0x80..=0xFF`, so it is not necessarily representable
+     * as a `String`. By default that is an error naming the member; `Skip` deserializes the member as
+     * if the header were absent. The header itself is untouched either way, so the octets remain
+     * readable via `Headers::get_bytes`.
+     *
+     * `Skip` yields `None` for the whole member, including for `@httpPrefixHeaders`: a partially
+     * populated map would read as complete and hide the values that were dropped.
+     *
+     * The decision scans the bound headers rather than inspecting the error, because parsing
+     * short-circuits at the first bad value and so which failure the error describes depends on the
+     * order the service sent them in. The consequence is that a header carrying an unreadable value
+     * is skipped even when it also carries a separately malformed one; a header with no unreadable
+     * value always reports its parse failure.
+     *
+     * [unreadableScan] must evaluate to a `bool`, true when any octet sequence bound to this member
+     * is not valid UTF-8.
+     */
+    private fun parseHeaderBinding(
+        deserializer: RuntimeType,
+        errorSymbol: Symbol,
+        errorMessage: String,
+        unreadableScan: Writable,
+    ): Writable =
+        writable {
+            rustTemplate(
+                """
+                match #{deserializer}(_response_headers) {
+                    #{Ok}(value) => value,
+                    #{Err}(err) => {
+                        let _ = &err;
+                        let has_unreadable_value = #{unreadable_scan:W};
+                        if has_unreadable_value
+                            && _cfg.load::<#{NonUtf8HeaderHandling}>()
+                                == #{Some}(&#{NonUtf8HeaderHandling}::Skip)
+                        {
+                            #{None}
+                        } else {
+                            return #{Err}(#{Error}::unhandled(${errorMessage.dq()}));
+                        }
+                    }
+                }
+                """,
+                *preludeScope,
+                "deserializer" to deserializer,
+                "Error" to errorSymbol,
+                "unreadable_scan" to unreadableScan,
+                "NonUtf8HeaderHandling" to
+                    RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
+                        .resolve("http::NonUtf8HeaderHandling"),
+            )
+        }
+
+    /**
      * Generate a parser & a parsed value converter for each output member of `operationShape`
      *
      * Returns a map with key = memberName, value = parsedValue
@@ -299,14 +356,20 @@ class ProtocolParserGenerator(
         return when (binding.location) {
             HttpLocation.HEADER ->
                 writable {
-                    val fnName = httpBindingGenerator.generateDeserializeHeaderFn(binding)
-                    rust(
-                        """
-                        #T(_response_headers)
-                            .map_err(|_|#T::unhandled("Failed to parse ${member.memberName} from header `${binding.locationName}"))?
-                        """,
-                        fnName, errorSymbol,
-                    )
+                    parseHeaderBinding(
+                        httpBindingGenerator.generateDeserializeHeaderFn(binding),
+                        errorSymbol,
+                        "Failed to parse ${member.memberName} from header `${binding.locationName}`",
+                        writable {
+                            rust(
+                                """
+                                _response_headers
+                                    .get_all_bytes(${binding.locationName.dq()})
+                                    .any(|value| std::str::from_utf8(value).is_err())
+                                """,
+                            )
+                        },
+                    )(this)
                 }
 
             HttpLocation.DOCUMENT -> {
@@ -339,15 +402,21 @@ class ProtocolParserGenerator(
             HttpLocation.PREFIX_HEADERS -> {
                 val sym = httpBindingGenerator.generateDeserializePrefixHeaderFn(binding)
                 writable {
-                    rustTemplate(
-                        """
-                        #{deser}(_response_headers)
-                             .map_err(|_|
-                                #{err}::unhandled("Failed to parse ${member.memberName} from prefix header `${binding.locationName}")
-                             )?
-                        """,
-                        "deser" to sym, "err" to errorSymbol,
-                    )
+                    parseHeaderBinding(
+                        sym,
+                        errorSymbol,
+                        "Failed to parse ${member.memberName} from prefix header `${binding.locationName}`",
+                        writable {
+                            rust(
+                                """
+                                _response_headers
+                                    .iter_bytes()
+                                    .filter(|(name, _)| name.starts_with(${binding.locationName.lowercase().dq()}))
+                                    .any(|(_, value)| std::str::from_utf8(value).is_err())
+                                """,
+                            )
+                        },
+                    )(this)
                 }
             }
 

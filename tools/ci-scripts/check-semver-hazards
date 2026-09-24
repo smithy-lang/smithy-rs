@@ -6,6 +6,13 @@
 
 # This script patches the new runtime crates into an old AWS SDK and runs tests
 # to check for semver hazards, such as a `Storable` being in an unstable runtime crate.
+#
+# The caller must explicitly authorize or reject compatibility transition mode.
+# Pull-request CI authorizes it only when the PR has the `breaking-change` label.
+# When authorized, the mode rewrites version requirements in the checked-out old
+# SDK release so that they accept the crate versions being patched in, routes
+# `aws-config` through that rewritten old SDK copy, and verifies that the expected
+# patch set was used. Without authorization, this runs the original strict check.
 
 C_YELLOW='\033[1;33m'
 C_RESET='\033[0m'
@@ -13,9 +20,48 @@ C_RESET='\033[0m'
 # shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/lib-doctest-helper.sh"
 
-if [ "$#" -ne 0 ]; then
-  echo "Unexpected arguments ignored"
+print_compatibility_transition_waiver() {
+  cat <<'EOF'
+================================================================================
+!! COMPATIBILITY TRANSITION WAIVER !!
+
+This job runs `runtime-versioner patch-runtime --allow-compatibility-transition`.
+
+It therefore exercises the COORDINATED POST-RELEASE dependency graph: the graph
+that exists only once every affected crate in this release has been published
+together. Version requirements in the old SDK release are rewritten to accept
+the crate versions being patched in, and `aws-config` is routed through that
+rewritten old SDK copy.
+
+It explicitly WAIVES compatibility with:
+  * the already-published old `aws-config`, which pins the previous
+    compatibility line of the patched runtime crates, and
+  * any partial update, where a consumer upgrades only some of these crates.
+
+A passing run does NOT claim that compatibility with those consumers has been
+restored. It only claims that the coordinated graph resolves, builds, and passes
+the old SDK's tests.
+================================================================================
+EOF
+}
+
+if [ "$#" -ne 1 ]; then
+  echo "Usage: $0 <allow-compatibility-transition: true|false>" >&2
+  exit 2
 fi
+
+case "$1" in
+  true)
+    allow_compatibility_transition=true
+    ;;
+  false)
+    allow_compatibility_transition=false
+    ;;
+  *)
+    echo "Expected true or false for compatibility-transition authorization, got: $1" >&2
+    exit 2
+    ;;
+esac
 
 # Need to allow warnings since there may be deprecations that the old SDK uses
 unset RUSTFLAGS
@@ -23,13 +69,65 @@ export RUST_BACKTRACE=1
 
 set -eux
 
-echo -e "${C_YELLOW}# Patching SDK...${C_RESET}"
-runtime-versioner patch-runtime \
-  --sdk-path "$(pwd)/aws-sdk-rust" \
-  --smithy-rs-path "$(pwd)/smithy-rs"
+if [[ "$allow_compatibility_transition" == "true" ]]; then
+  print_compatibility_transition_waiver
+  echo -e "${C_YELLOW}# Patching SDK in compatibility-transition mode...${C_RESET}"
+  runtime-versioner patch-runtime \
+    --sdk-path "$(pwd)/aws-sdk-rust" \
+    --smithy-rs-path "$(pwd)/smithy-rs" \
+    --allow-compatibility-transition
+else
+  echo -e "${C_YELLOW}# Compatibility transition not authorized; patching SDK in strict mode...${C_RESET}"
+  runtime-versioner patch-runtime \
+    --sdk-path "$(pwd)/aws-sdk-rust" \
+    --smithy-rs-path "$(pwd)/smithy-rs"
+fi
 
 echo -e "${C_YELLOW}# Copying the SDK lockfile to aws-sdk-rust...${C_RESET}"
 cp "$(pwd)/smithy-rs/aws/sdk/Cargo.lock" "$(pwd)/aws-sdk-rust/"
+
+if [[ "$allow_compatibility_transition" == "true" ]]; then
+  # `runtime-versioner` already verified the patch set against the lockfile that
+  # its own `cargo update` produced. Since the lockfile was just replaced,
+  # re-assert the `aws-config` routing against the final resolved graph.
+  # `aws-config` must come from the rewritten old SDK copy via
+  # `[patch.crates-io]`, never from a registry.
+  echo -e "${C_YELLOW}# Verifying aws-config is routed through the patched old SDK...${C_RESET}"
+  (
+    cd "$(pwd)/aws-sdk-rust"
+    cargo metadata --format-version 1 | python3 -c '
+import json, sys
+
+metadata = json.load(sys.stdin)
+sourced = [
+    (package["name"], package["version"], package["source"])
+    for package in metadata["packages"]
+    if package["name"] == "aws-config" and package["source"] is not None
+]
+if sourced:
+    for name, version, source in sourced:
+        print(f"ERROR: {name} {version} resolved from {source}", file=sys.stderr)
+    print(
+        "ERROR: aws-config must resolve only through [patch.crates-io] from the "
+        "rewritten old SDK copy",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+paths = [
+    package["manifest_path"]
+    for package in metadata["packages"]
+    if package["name"] == "aws-config"
+]
+if not paths:
+    print("ERROR: aws-config is not in the resolved graph at all", file=sys.stderr)
+    sys.exit(1)
+for path in paths:
+    print(f"aws-config resolved from {path}")
+'
+  )
+
+  print_compatibility_transition_waiver
+fi
 
 echo -e "${C_YELLOW}# Testing SDK...${C_RESET}"
 for sdk in aws-sdk-rust/sdk/*; do

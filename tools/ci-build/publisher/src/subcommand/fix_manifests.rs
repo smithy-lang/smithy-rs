@@ -179,6 +179,11 @@ fn fix_dep_set(versions: &VersionView, key: &str, metadata: &mut Value) -> Resul
 }
 
 // Update a version of `dep_name` that has a path dependency to be that appearing in `versions`.
+//
+// Note: this looks the version up by the manifest key rather than honoring `package = `,
+// so a renamed path dependency would fail to resolve. No runtime crate uses that form
+// today. `runtime-versioner audit` does resolve renames, so it will not let a renamed
+// path dependency's published requirement go stale unnoticed.
 fn update_dep(table: &mut Table, dep_name: &str, versions: &VersionView) -> Result<usize> {
     if !table.contains_key("path") {
         return Ok(0);
@@ -202,6 +207,9 @@ fn update_dep(table: &mut Table, dep_name: &str, versions: &VersionView) -> Resu
 }
 
 fn fix_dep_sets(versions: &VersionView, metadata: &mut toml::Value) -> Result<usize> {
+    // Note: only the top-level dependency tables are rewritten. A path dependency
+    // declared under `[target.<cfg>.dependencies]` would not get a version stamped into
+    // it. No runtime crate declares one today.
     let mut changed = fix_dep_set(versions, "dependencies", metadata)?;
     // allow dev dependencies to be unpublished
     changed += fix_dep_set(&versions.all_crates(), "dev-dependencies", metadata)?;

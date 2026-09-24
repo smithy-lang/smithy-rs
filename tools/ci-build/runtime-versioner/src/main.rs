@@ -20,7 +20,9 @@ mod command {
     pub use patch::{patch, patch_with};
 }
 
+mod manifest;
 mod repo;
+mod requirements;
 mod tag;
 mod util;
 
@@ -64,6 +66,23 @@ pub struct PatchRuntime {
     /// local changes in the SDK.
     #[arg(long)]
     no_checkout_sdk_release: bool,
+    /// Opt in to a coordinated compatibility transition (off by default).
+    ///
+    /// Without this flag, a runtime crate that moved to a new Cargo compatibility
+    /// line (for example `0.63.x` -> `0.64.x`) cannot be patched into the old SDK
+    /// release at all: Cargo ignores a `[patch.crates-io]` entry whose version
+    /// doesn't satisfy the requirement it is replacing.
+    ///
+    /// With this flag, the version requirements in the checked-out old SDK release
+    /// are rewritten to accept the versions being patched in, `aws-config` is routed
+    /// through that rewritten old SDK copy, and the resulting lockfile is verified to
+    /// actually use the patch set.
+    ///
+    /// This tests the coordinated post-release dependency graph. It explicitly
+    /// waives compatibility with the already-published old `aws-config` and with
+    /// partial updates, and does not restore it.
+    #[arg(long)]
+    allow_compatibility_transition: bool,
 
     /// Version number for stable crates.
     ///
@@ -100,6 +119,11 @@ pub struct PatchRuntimeWith {
     /// local changes in the SDK.
     #[arg(long)]
     no_checkout_sdk_release: bool,
+    /// Opt in to a coordinated compatibility transition (off by default).
+    ///
+    /// See `patch-runtime --help` for what this does and what it waives.
+    #[arg(long)]
+    allow_compatibility_transition: bool,
 }
 
 #[derive(clap::Parser, Clone)]
@@ -109,10 +133,19 @@ enum Command {
     ///
     /// Requires a full clone of smithy-rs. Will not work against shallow clones.
     ///
-    /// This audits that any runtime crate that has been changed since the last
+    /// This performs two checks.
+    ///
+    /// First, it audits that any runtime crate that has been changed since the last
     /// release has been version bumped. It's not smart enough to know if the version
     /// bump is correct in semver terms, but verifies that there was at least a
     /// bump. A human will still need to verify the semver correctness of that bump.
+    ///
+    /// Second, for each runtime crate whose current version is already published, it
+    /// audits that the dependency requirements published for that version still accept
+    /// the current versions of the runtime crates they point at. A dependency's version
+    /// bump changes files in the dependency's directory, not in its dependents', so the
+    /// first check can't see it. When a published requirement no longer matches, the
+    /// dependent needs a new version so that the updated requirement can be published.
     Audit(Audit),
 
     /// Outputs the previous release tag for the revision at HEAD.
