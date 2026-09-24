@@ -17,8 +17,11 @@ use std::sync::Arc;
 /// Declares where a client's connections are established and driven.
 #[derive(Clone)]
 pub struct Partition {
+    /// Stable identity used to resolve clients and index cells.
     id: PartitionId,
+    /// Runtime placement for connection-owned tasks.
     spawner: Arc<dyn DriverSpawner>,
+    /// Optional network-interface binding for new connections.
     interface: Option<Arc<str>>,
 }
 
@@ -38,7 +41,11 @@ impl Partition {
     /// Binds connections established by this partition to an interface.
     ///
     /// The binding is applied before connect. On Linux, using this setting
-    /// may require `CAP_NET_RAW` or root privileges.
+    /// sets `SO_BINDTODEVICE` and may require `CAP_NET_RAW` or root
+    /// privileges. Apple platforms, illumos, and Solaris use `IP_BOUND_IF`.
+    ///
+    /// This method is available on Linux and Android, Fuchsia, illumos,
+    /// Solaris, macOS, iOS, tvOS, visionOS, and watchOS.
     #[cfg(any(
         target_os = "android",
         target_os = "fuchsia",
@@ -51,9 +58,29 @@ impl Partition {
         target_os = "visionos",
         target_os = "watchos",
     ))]
+    #[cfg_attr(
+        docsrs,
+        doc(cfg(any(
+            target_os = "android",
+            target_os = "fuchsia",
+            target_os = "illumos",
+            target_os = "ios",
+            target_os = "linux",
+            target_os = "macos",
+            target_os = "solaris",
+            target_os = "tvos",
+            target_os = "visionos",
+            target_os = "watchos",
+        )))
+    )]
     pub fn interface(mut self, interface: impl Into<String>) -> Self {
         self.interface = Some(Arc::from(interface.into()));
         self
+    }
+
+    /// Returns the configured network-interface name for validation.
+    pub(super) fn interface_name(&self) -> Option<&str> {
+        self.interface.as_deref()
     }
 
     /// Returns this partition's declared identity.
@@ -99,9 +126,13 @@ impl PartitionId {
     }
 }
 
-/// Spawns protocol drivers on a partition's owning runtime.
+/// Spawns connection-owned work on a partition's runtime.
+///
+/// This includes protocol drivers and short-lived tasks that finish connection
+/// establishment, return, or maintenance without moving the underlying I/O to
+/// the requesting runtime.
 pub trait DriverSpawner: fmt::Debug + Send + Sync + 'static {
-    /// Spawns a protocol driver future.
+    /// Spawns connection-owned work on the partition's runtime.
     fn spawn(&self, driver: Pin<Box<dyn Future<Output = ()> + Send + 'static>>);
 }
 
@@ -110,6 +141,7 @@ pub trait DriverSpawner: fmt::Debug + Send + Sync + 'static {
 #[cfg_attr(docsrs, doc(cfg(feature = "rt-tokio")))]
 #[derive(Clone, Debug)]
 pub struct TokioDriverSpawner {
+    /// Runtime that receives connection-owned tasks.
     handle: tokio::runtime::Handle,
 }
 
@@ -133,13 +165,6 @@ impl TokioDriverSpawner {
 #[cfg(feature = "rt-tokio")]
 impl DriverSpawner for TokioDriverSpawner {
     fn spawn(&self, driver: Pin<Box<dyn Future<Output = ()> + Send + 'static>>) {
-        debug_assert_eq!(
-            tokio::runtime::Handle::try_current()
-                .ok()
-                .map(|current| current.id()),
-            Some(self.handle.id()),
-            "driver spawned outside the partition's declared runtime"
-        );
         drop(self.handle.spawn(driver));
     }
 }
@@ -227,20 +252,34 @@ mod tests {
         assert!(ran.load(Ordering::SeqCst));
     }
 
-    #[cfg(all(feature = "rt-tokio", debug_assertions))]
+    #[cfg(feature = "rt-tokio")]
     #[test]
-    #[should_panic(expected = "driver spawned outside the partition's declared runtime")]
-    fn tokio_spawner_diagnoses_foreign_runtime_use() {
+    fn tokio_spawner_accepts_work_from_a_foreign_runtime() {
         let owner = tokio::runtime::Builder::new_current_thread()
             .build()
             .unwrap();
         let foreign = tokio::runtime::Builder::new_current_thread()
             .build()
             .unwrap();
+        let owner_id = owner.handle().id();
+        let ran = Arc::new(AtomicBool::new(false));
+        let task_ran = ran.clone();
         let spawner = TokioDriverSpawner::from_handle(owner.handle().clone());
 
         foreign.block_on(async {
-            spawner.spawn(Box::pin(async {}));
+            spawner.spawn(Box::pin(async move {
+                assert_eq!(owner_id, tokio::runtime::Handle::current().id());
+                task_ran.store(true, Ordering::SeqCst);
+            }));
         });
+        owner.block_on(async {
+            for _ in 0..10 {
+                if ran.load(Ordering::SeqCst) {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        });
+        assert!(ran.load(Ordering::SeqCst));
     }
 }
