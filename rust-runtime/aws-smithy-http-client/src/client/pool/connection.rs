@@ -57,16 +57,12 @@ pub(super) enum NegotiatedProtocol {
     /// HTTP/1.1 with one exclusive request sender.
     Http1,
     /// HTTP/2 with a multiplexed request sender.
-    #[allow(
-        dead_code,
-        reason = "constructed once HTTP/2 generations are implemented"
-    )]
     Http2,
 }
 
 /// Immutable identity and transport facts shared by a connection's owners.
 ///
-/// The protocol record, request metadata, tracing, and future lifecycle events
+/// The protocol record, request metadata, tracing, and lifecycle events
 /// all retain this one allocation rather than reconstructing origin or address
 /// data at each transition.
 #[derive(Debug)]
@@ -78,10 +74,6 @@ pub(super) struct ConnectionInfo {
     /// Partition that retains the transport and protocol driver.
     owner_partition: PartitionId,
     /// Protocol selected by configuration or ALPN.
-    #[allow(
-        dead_code,
-        reason = "read when HTTP/2 generation selection is implemented"
-    )]
     protocol: NegotiatedProtocol,
     /// Local socket address reported by the connector, when available.
     local_addr: Option<SocketAddr>,
@@ -94,7 +86,7 @@ pub(super) struct ConnectionInfo {
 }
 
 impl ConnectionInfo {
-    /// Captures immutable facts when protocol establishment succeeds.
+    /// Captures immutable facts after transport negotiation selects a protocol.
     pub(super) fn new(
         id: ConnectionId,
         origin: OriginKey,
@@ -133,7 +125,6 @@ impl ConnectionInfo {
     }
 
     /// Returns the established HTTP protocol.
-    #[cfg(test)]
     pub(super) fn protocol(&self) -> NegotiatedProtocol {
         self.protocol
     }
@@ -160,8 +151,22 @@ impl ConnectionInfo {
         self.connected.get_extras(extensions);
     }
 
-    /// Builds Smithy metadata with close authority for this H1 generation.
+    /// Builds Smithy metadata with close authority for this H1 record.
     pub(super) fn metadata(&self, close: super::cell::h1::H1CloseHandle) -> ConnectionMetadata {
+        let mut builder = ConnectionMetadata::builder()
+            .proxied(self.proxied)
+            .connection_id(self.id)
+            .poison_fn(move || {
+                close.close(CloseReason::Poisoned);
+            });
+        builder
+            .set_local_addr(self.local_addr)
+            .set_remote_addr(self.remote_addr);
+        builder.build()
+    }
+
+    /// Builds Smithy metadata with close authority for this H2 generation.
+    pub(super) fn h2_metadata(&self, close: super::cell::h2::H2CloseHandle) -> ConnectionMetadata {
         let mut builder = ConnectionMetadata::builder()
             .proxied(self.proxied)
             .connection_id(self.id)
@@ -188,7 +193,7 @@ impl ConnectionInfo {
     }
 }
 
-/// Shared protocol-independent ownership for one installed connection.
+/// Shared connection ownership from negotiated transport through close.
 pub(super) struct ConnectionState {
     /// Identity and transport facts shared with metadata and lifecycle events.
     info: Arc<ConnectionInfo>,
@@ -210,6 +215,9 @@ struct LifecycleState {
 /// Whether a connection may accept dispatch and still owns bounded capacity.
 #[derive(Debug)]
 enum LogicalState {
+    /// The connector returned connected I/O and selected the HTTP protocol,
+    /// but Hyper has not produced the request handle required for dispatch.
+    PendingOpen,
     /// Dispatch may commit.
     Open {
         /// Bounded-origin slot released by logical close, when configured.
@@ -223,35 +231,19 @@ enum LogicalState {
 }
 
 impl ConnectionState {
-    /// Creates a connection whose origin has no admission bound.
+    /// Creates state after transport establishment and protocol selection.
     ///
-    /// The returned guard is the unique physical-lifetime owner and must move
-    /// with the root I/O task.
-    pub(super) fn unbounded(info: Arc<ConnectionInfo>) -> (Arc<Self>, PhysicalConnectionGuard) {
-        Self::new(info, None)
-    }
-
-    /// Creates a connection that takes ownership of one bounded-origin slot.
+    /// For TLS transports, the connector has completed TLS and ALPN before this
+    /// call. Hyper protocol setup and cell installation have not occurred.
     ///
-    /// The returned guard is the unique physical-lifetime owner and must move
-    /// with the root I/O task. Logical close returns `lease` independently of
-    /// that guard.
-    pub(super) fn bounded(
-        info: Arc<ConnectionInfo>,
-        lease: CapacityLease,
-    ) -> (Arc<Self>, PhysicalConnectionGuard) {
-        Self::new(info, Some(lease))
-    }
-
-    /// Builds shared connection state and its unique physical-lifetime guard.
-    fn new(
-        info: Arc<ConnectionInfo>,
-        lease: Option<CapacityLease>,
-    ) -> (Arc<Self>, PhysicalConnectionGuard) {
+    /// The returned guard is the unique physical-lifetime owner. After Hyper
+    /// returns a request handle, [`Self::open`] attaches optional bounded
+    /// capacity before cell installation makes the connection discoverable.
+    pub(super) fn pending_open(info: Arc<ConnectionInfo>) -> (Arc<Self>, PhysicalConnectionGuard) {
         let connection = Arc::new(Self {
             info,
             lifecycle: Mutex::new(LifecycleState {
-                logical: LogicalState::Open { lease },
+                logical: LogicalState::PendingOpen,
                 in_flight: 0,
                 physical_complete: false,
             }),
@@ -260,6 +252,52 @@ impl ConnectionState {
             connection: connection.clone(),
             active: true,
         };
+        (connection, physical)
+    }
+
+    /// Opens dispatch commitment and transfers optional bounded capacity.
+    ///
+    /// The caller performs this transition after Hyper protocol setup and
+    /// before publishing the connection through its cell. Opening first
+    /// ensures that a newly visible request handle can commit dispatch.
+    ///
+    /// Returns `lease` when logical close won before opening.
+    pub(super) fn open(&self, lease: Option<CapacityLease>) -> Result<(), Option<CapacityLease>> {
+        let mut lifecycle = self.lifecycle.lock();
+        if !matches!(lifecycle.logical, LogicalState::PendingOpen) {
+            return Err(lease);
+        }
+        lifecycle.logical = LogicalState::Open { lease };
+        Ok(())
+    }
+
+    /// Creates a connection whose origin has no admission bound.
+    ///
+    /// The returned guard is the unique physical-lifetime owner and must move
+    /// with the root I/O task.
+    #[cfg(test)]
+    pub(super) fn unbounded(info: Arc<ConnectionInfo>) -> (Arc<Self>, PhysicalConnectionGuard) {
+        let (connection, physical) = Self::pending_open(info);
+        connection
+            .open(None)
+            .expect("new unbounded connection could not open");
+        (connection, physical)
+    }
+
+    /// Creates a connection that takes ownership of one bounded-origin slot.
+    ///
+    /// The returned guard is the unique physical-lifetime owner and must move
+    /// with the root I/O task. Logical close returns `lease` independently of
+    /// that guard.
+    #[cfg(test)]
+    pub(super) fn bounded(
+        info: Arc<ConnectionInfo>,
+        lease: CapacityLease,
+    ) -> (Arc<Self>, PhysicalConnectionGuard) {
+        let (connection, physical) = Self::pending_open(info);
+        connection
+            .open(Some(lease))
+            .expect("new bounded connection could not open");
         (connection, physical)
     }
 
@@ -310,17 +348,24 @@ impl ConnectionState {
     pub(super) fn logical_close(&self, reason: CloseReason) -> bool {
         let lease = {
             let mut lifecycle = self.lifecycle.lock();
-            let LogicalState::Open { lease } = &mut lifecycle.logical else {
-                return false;
-            };
-            let lease = lease.take();
-            lifecycle.logical = LogicalState::Closed { reason };
-            lease
+            match &mut lifecycle.logical {
+                LogicalState::PendingOpen => {
+                    lifecycle.logical = LogicalState::Closed { reason };
+                    None
+                }
+                LogicalState::Open { lease } => {
+                    let lease = lease.take();
+                    lifecycle.logical = LogicalState::Closed { reason };
+                    lease
+                }
+                LogicalState::Closed { .. } => return false,
+            }
         };
         drop(lease);
         tracing::debug!(
             connection_id = %self.id(),
             connection_partition = ?self.owner_partition(),
+            protocol = ?self.info.protocol(),
             origin_scheme = %self.info.origin().scheme(),
             origin_host = self.info.origin().host(),
             origin_port = ?self.info.origin().port(),
@@ -371,6 +416,7 @@ impl ConnectionState {
     pub(super) fn debug_assert_close_reason(&self, expected: CloseReason) {
         let lifecycle = self.lifecycle.lock();
         let actual = match lifecycle.logical {
+            LogicalState::PendingOpen => None,
             LogicalState::Open { .. } => None,
             LogicalState::Closed { reason } => Some(reason),
         };
@@ -416,6 +462,7 @@ impl ConnectionState {
         let lifecycle = self.lifecycle.lock();
         ConnectionSnapshot {
             close_reason: match lifecycle.logical {
+                LogicalState::PendingOpen => None,
                 LogicalState::Open { .. } => None,
                 LogicalState::Closed { reason } => Some(reason),
             },

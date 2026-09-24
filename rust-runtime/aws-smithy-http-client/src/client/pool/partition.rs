@@ -105,7 +105,7 @@ impl fmt::Debug for Partition {
 }
 
 /// Identifies one declared connection partition.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct PartitionId(usize);
 
 impl PartitionId {
@@ -182,8 +182,13 @@ pub enum ConnectionReuseScope {
     Pool,
 }
 
-/// Identifies the exact set of partitions eligible to reuse a connection.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+/// Identifies the exact set of partitions allowed to share a connection.
+///
+/// The configured [`ConnectionReuseScope`] maps each partition to one group:
+/// partition-local scope creates a group for one partition, network-interface
+/// scope groups equal interface bindings, and pool scope creates one group for
+/// the whole pool.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) enum EligibilityGroup {
     /// Only the partition with this identity is eligible.
     Partition(PartitionId),

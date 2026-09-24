@@ -156,8 +156,8 @@ enum ClientBuildErrorKind {
 /// with that operation's timeout settings. Each call validates timeout timer
 /// availability, converts the Smithy request, and routes it through the shared
 /// pool. The connect timeout covers a newly started transport operation; the
-/// read timeout covers dispatch through response headers. The adapter neither
-/// creates another pool nor resolves the partition again.
+/// read timeout covers pool acquisition and dispatch through response headers.
+/// The adapter neither creates another pool nor resolves the partition again.
 struct PoolConnector {
     /// Shared pool used for acquisition and dispatch.
     pool: ConnectionPool,

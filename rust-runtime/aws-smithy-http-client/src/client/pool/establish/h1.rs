@@ -5,9 +5,9 @@
 
 //! HTTP/1 connection establishment.
 //!
-//! Establishment connects a transport, performs Hyper's client handshake,
-//! installs the resulting exclusive sender in the origin cell, and submits
-//! the protocol driver to the connection-owning partition.
+//! Establishment receives an already connected transport, performs Hyper's
+//! client handshake, installs the resulting exclusive sender in the origin
+//! cell, and submits the protocol driver to the connection-owning partition.
 
 use super::super::cell::h1::{H1CloseHandle, H1DriverGuard, H1Selection, H1Sender};
 use super::super::cell::{EstablishmentPermit, OriginCell};
@@ -16,12 +16,12 @@ use super::super::connection::{
 };
 use super::super::dispatch::AcquisitionContext;
 use super::next_connection_id;
+use crate::client::connect::BoxConn;
 use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_types::body::SdkBody;
-use std::error::Error;
-use std::fmt;
+use hyper_util::client::legacy::connect::Connected;
 
-/// Connects, handshakes, installs, and starts the owner-partition driver.
+/// Handshakes, installs, and starts the owner-partition driver.
 ///
 /// `permit` remains the sole owner of optional bounded capacity until the
 /// connection state is created. An earlier failure returns that capacity
@@ -31,6 +31,8 @@ use std::fmt;
 pub(in crate::client::pool) async fn establish_h1(
     context: AcquisitionContext,
     permit: EstablishmentPermit,
+    io: BoxConn,
+    connected: Connected,
 ) -> Result<H1Selection, ConnectorError> {
     let request_partition = context.partition.id();
     let connection_cell = context.cell.clone();
@@ -43,7 +45,7 @@ pub(in crate::client::pool) async fn establish_h1(
         "HTTP/1 connection establishment started"
     );
 
-    let result = connect_handshake_and_install_h1(context, permit).await;
+    let result = handshake_and_install_h1(context, permit, io, connected).await;
     match &result {
         Ok(selection) => {
             let connection = selection.connection();
@@ -70,29 +72,21 @@ pub(in crate::client::pool) async fn establish_h1(
     result
 }
 
-/// Connects, handshakes, and installs one HTTP/1 connection.
-async fn connect_handshake_and_install_h1(
+/// Handshakes and installs one already connected HTTP/1 transport.
+async fn handshake_and_install_h1(
     context: AcquisitionContext,
     permit: EstablishmentPermit,
+    io: BoxConn,
+    connected: Connected,
 ) -> Result<H1Selection, ConnectorError> {
     let AcquisitionContext {
         pool,
         partition,
         cell,
-        absolute_uri,
+        absolute_uri: _,
         owner_spawner,
-        connect_timeout,
+        connect_timeout: _,
     } = context;
-
-    let io = pool
-        .transport
-        .connect(&partition, absolute_uri, connect_timeout)
-        .await
-        .map_err(super::super::super::downcast_error)?;
-    let connected = io.connected();
-    if connected.is_negotiated_h2() {
-        return Err(ConnectorError::user(UnsupportedNegotiatedProtocol.into()));
-    }
 
     let id =
         next_connection_id(&pool).map_err(|error| ConnectorError::other(error.into(), None))?;
@@ -103,10 +97,7 @@ async fn connect_handshake_and_install_h1(
         NegotiatedProtocol::Http1,
         connected,
     );
-    let (connection, physical) = match permit.into_lease() {
-        Some(lease) => ConnectionState::bounded(info, lease),
-        None => ConnectionState::unbounded(info),
-    };
+    let (connection, physical) = ConnectionState::pending_open(info);
     let io = ConnectionIo::new(io, physical);
 
     let (sender, driver) = match hyper::client::conn::http1::Builder::new()
@@ -119,6 +110,14 @@ async fn connect_handshake_and_install_h1(
             return Err(super::super::super::downcast_error(Box::new(error)));
         }
     };
+
+    if let Err(lease) = connection.open(permit.into_lease()) {
+        drop(lease);
+        connection.logical_close(CloseReason::ProtocolClosed);
+        return Err(ConnectorError::io(
+            "HTTP/1 connection closed before installation".into(),
+        ));
+    }
 
     let selection =
         OriginCell::install_selected_h1(&cell, connection.clone(), H1Sender::from_hyper(sender));
@@ -141,15 +140,3 @@ async fn connect_handshake_and_install_h1(
     }));
     Ok(selection)
 }
-
-/// The cleartext HTTP/1 path rejected a connector-selected HTTP/2 transport.
-#[derive(Debug)]
-struct UnsupportedNegotiatedProtocol;
-
-impl fmt::Display for UnsupportedNegotiatedProtocol {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("the HTTP/1 pool path cannot install an HTTP/2 transport")
-    }
-}
-
-impl Error for UnsupportedNegotiatedProtocol {}

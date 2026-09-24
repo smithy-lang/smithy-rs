@@ -51,9 +51,12 @@
 //! temporarily be the ready result in that same cell; cell teardown makes the
 //! fallback close the connection directly.
 
-use super::super::admission::reuse::ReuseId;
+use super::super::admission::reuse::{
+    H1AvailabilitySnapshot, PreparedReuseInstall, ReuseCandidate, ReuseId, ReuseInstallResult,
+};
+use super::super::admission::{AdmissionAction, OriginAdmission};
 use super::super::connection::{CloseReason, ConnectionState};
-use super::OriginCell;
+use super::{AcquisitionResult, OriginCell, ReuseInstall};
 use crate::sync::{Arc, Weak};
 use aws_smithy_runtime_api::client::connection::ConnectionId;
 use std::collections::{HashMap, VecDeque};
@@ -250,11 +253,16 @@ impl H1ReuseReservation {
     /// Checks relationships that are not already encoded by the state enum.
     pub(super) fn assert_consistent(&self, _supports_installed_reuse: bool) {
         #[cfg(debug_assertions)]
-        if matches!(self.state, H1ReuseReservationState::Installed(_)) {
-            assert!(
-                _supports_installed_reuse,
-                "installed HTTP/1 reuse operation had no externally owned connection-owning cell record to settle it"
-            );
+        {
+            if std::thread::panicking() {
+                return;
+            }
+            if matches!(self.state, H1ReuseReservationState::Installed(_)) {
+                assert!(
+                    _supports_installed_reuse,
+                    "installed HTTP/1 reuse operation had no externally owned connection-owning cell record to settle it"
+                );
+            }
         }
     }
 
@@ -611,6 +619,9 @@ impl H1Records {
     pub(super) fn assert_consistent(&self) {
         #[cfg(debug_assertions)]
         {
+            if std::thread::panicking() {
+                return;
+            }
             let idle_records = self
                 .records
                 .values()
@@ -1008,7 +1019,7 @@ impl Drop for ProvisionalH1 {
     }
 }
 
-/// Non-retaining authority to retire one installed H1 generation.
+/// Non-retaining authority to retire one installed H1 record.
 #[derive(Clone, Debug)]
 pub(in crate::client::pool) struct H1CloseHandle {
     /// Connection-owning cell used to remove dispatch eligibility before
@@ -1044,7 +1055,7 @@ impl H1CloseHandle {
     }
 }
 
-/// Driver-owned fallback that closes its H1 generation on termination.
+/// Driver-owned fallback that closes its H1 record on termination.
 #[derive(Debug)]
 pub(in crate::client::pool) struct H1DriverGuard {
     /// Non-retaining generation close authority.
@@ -1054,7 +1065,7 @@ pub(in crate::client::pool) struct H1DriverGuard {
 }
 
 impl H1DriverGuard {
-    /// Arms driver-lifecycle cleanup for an installed H1 generation.
+    /// Arms driver-lifecycle cleanup for an installed H1 record.
     pub(in crate::client::pool) fn new(close: H1CloseHandle) -> Self {
         Self {
             close,
@@ -1074,6 +1085,463 @@ impl Drop for H1DriverGuard {
         if self.active {
             self.close.close(CloseReason::OwnerRuntimeShutdown);
         }
+    }
+}
+
+impl OriginCell {
+    /// Installs a fresh H1 record selected by its launching request.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this cell already contains the connection identity.
+    pub(in crate::client::pool) fn install_selected_h1(
+        cell: &Arc<Self>,
+        connection: Arc<ConnectionState>,
+        sender: H1Sender,
+    ) -> H1Selection {
+        let (installed, availability) = {
+            let mut state = cell.state.lock();
+            let installed = state.h1.install_selected(connection, sender);
+            state.assert_consistent();
+            (installed, state.take_h1_availability_update())
+        };
+        cell.publish_h1_availability(availability);
+        match installed {
+            Ok(owner) => H1Selection::new(cell, owner),
+            Err(owner) => {
+                owner
+                    .connection()
+                    .logical_close(CloseReason::ProtocolClosed);
+                drop(owner);
+                panic!("duplicate HTTP/1 connection identity installed in one cell");
+            }
+        }
+    }
+
+    /// Installs an H1 record whose launching acquisition already completed.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this cell already contains the connection identity.
+    #[cfg(test)]
+    pub(in crate::client::pool) fn install_idle_h1(
+        cell: &Arc<Self>,
+        connection: Arc<ConnectionState>,
+        sender: H1Sender,
+    ) {
+        let deadline = cell.idle_deadline();
+        let (installed, availability) = {
+            let mut state = cell.state.lock();
+            let installed = state.h1.install_idle(connection, sender, deadline);
+            state.assert_consistent();
+            (installed, state.take_h1_availability_update())
+        };
+        cell.publish_h1_availability(availability);
+        if let Err(owner) = installed {
+            owner
+                .connection()
+                .logical_close(CloseReason::ProtocolClosed);
+            drop(owner);
+            panic!("duplicate HTTP/1 connection identity installed in one cell");
+        }
+        cell.notify_maintenance(deadline);
+    }
+
+    /// Selects the newest reusable H1 sender without origin-wide coordination.
+    pub(in crate::client::pool) fn select_h1(cell: &Arc<Self>) -> Option<H1Selection> {
+        let (owner, availability) = {
+            let mut state = cell.state.lock();
+            let owner = state.h1.select_idle();
+            if owner.is_some() {
+                state.reuse.consume_local_turn();
+            }
+            state.assert_consistent();
+            let availability = cell
+                .admission
+                .as_ref()
+                .and_then(|_| state.take_h1_availability_update());
+            (owner, availability)
+        };
+        cell.publish_h1_availability(availability);
+        let owner = owner?;
+        Some(H1Selection::new(cell, owner))
+    }
+
+    /// Reserves this cell's selected connection for one peer reuse operation.
+    pub(in crate::client::pool) fn install_h1_reuse(
+        cell: &Arc<Self>,
+        origin: Arc<OriginAdmission>,
+        prepared: PreparedReuseInstall,
+    ) -> Option<AdmissionAction> {
+        let decision = {
+            let mut state = cell.state.lock();
+            state.install_reuse(prepared.id)
+        };
+
+        let result = match decision {
+            ReuseInstall::Installed => ReuseInstallResult::Installed,
+            ReuseInstall::Candidate(owner) => {
+                let provisional = ProvisionalH1::new(cell, owner);
+                ReuseInstallResult::Candidate(ReuseCandidate::new(
+                    origin.clone(),
+                    prepared.id,
+                    cell.id.partition(),
+                    provisional,
+                ))
+            }
+            ReuseInstall::Rejected(availability) => ReuseInstallResult::Rejected(availability),
+        };
+        OriginAdmission::finish_h1_reuse_install(&origin, prepared.id, cell.id.partition(), result)
+    }
+
+    /// Clears an installed or resolving reservation after request cancellation.
+    pub(in crate::client::pool) fn cancel_h1_reuse(
+        &self,
+        reuse_id: ReuseId,
+    ) -> H1AvailabilitySnapshot {
+        self.state.lock().cancel_reuse(reuse_id)
+    }
+
+    /// Returns a rejected provisional sender through ordinary connection-owning cell handling.
+    pub(in crate::client::pool) fn reject_h1_reuse_candidate(
+        cell: &Arc<Self>,
+        reuse_id: ReuseId,
+        provisional: ProvisionalH1,
+    ) -> H1AvailabilitySnapshot {
+        {
+            let mut state = cell.state.lock();
+            state.reject_reuse_candidate(reuse_id);
+        }
+        drop(provisional);
+        let mut state = cell.state.lock();
+        state.assert_consistent();
+        state.report_h1_availability()
+    }
+
+    /// Revalidates a reuse operation and commits its provisional sender for dispatch.
+    pub(in crate::client::pool) fn commit_h1_reuse(
+        cell: &Arc<Self>,
+        reuse_id: ReuseId,
+        provisional: ProvisionalH1,
+    ) -> Result<H1Selection, ProvisionalH1> {
+        let (connection_cell, owner) = provisional.into_parts();
+        let committed = cell.state.lock().commit_reuse(reuse_id, &owner);
+        if committed {
+            Ok(H1Selection::new(cell, owner))
+        } else {
+            Err(ProvisionalH1::from_parts(connection_cell, owner))
+        }
+    }
+
+    /// Closes a selected sender and records fairness only if close wins.
+    pub(in crate::client::pool) fn reclaim_h1_reuse(
+        cell: &Arc<Self>,
+        reuse_id: ReuseId,
+        provisional: ProvisionalH1,
+    ) -> Result<(H1AvailabilitySnapshot, bool), ProvisionalH1> {
+        let (connection_cell, owner) = provisional.into_parts();
+        if !cell.state.lock().reuse.names(reuse_id) {
+            return Err(ProvisionalH1::from_parts(connection_cell, owner));
+        }
+
+        let close_won = Self::retire_h1_owner(cell, owner, CloseReason::Reclaimed);
+        let availability = {
+            let mut state = cell.state.lock();
+            let availability = state.finish_reuse(reuse_id, close_won);
+            state.assert_consistent();
+            availability
+        };
+        Ok((availability, close_won))
+    }
+
+    /// Completes local reuse state after a requesting cell accepts the sender.
+    pub(in crate::client::pool) fn complete_h1_reuse(
+        &self,
+        reuse_id: ReuseId,
+        transferred: bool,
+    ) -> H1AvailabilitySnapshot {
+        self.state.lock().finish_reuse(reuse_id, transferred)
+    }
+
+    /// Publishes this cell's HTTP/1 availability when the origin is bounded.
+    pub(super) fn publish_h1_availability(&self, availability: Option<H1AvailabilitySnapshot>) {
+        if let (Some(admission), Some(availability)) = (&self.admission, availability) {
+            OriginAdmission::update_h1_availability(
+                admission,
+                self.id.partition(),
+                self.eligibility_group.clone(),
+                availability,
+            );
+        }
+    }
+
+    /// Returns a reusable sender to the oldest compatible waiter or idle set.
+    ///
+    /// Demand publication, task wakeup, and any rejected-result fallback all
+    /// run after the cell lock is released. `owner` remains outside the locked
+    /// scope so sender or connection drop cannot run while the cell guard is
+    /// live.
+    fn return_h1_owner(cell: &Arc<Self>, owner: OwnedH1) {
+        let connection_id = owner.id();
+        let mut owner = Some(owner);
+        let mut installation = None;
+        let mut intercepted = None;
+        let mut rejected_reuse = None;
+        let idle_deadline = cell.idle_deadline();
+        let should_retire = {
+            let mut state = cell.state.lock();
+            let returnable = state
+                .h1
+                .accepts_return(owner.as_ref().expect("HTTP/1 owner disappeared"));
+            if !returnable {
+                if let Some(reuse_id) = state.reuse.intercept_return() {
+                    let snapshot = state.finish_reuse(reuse_id, false);
+                    rejected_reuse = Some((reuse_id, snapshot));
+                } else {
+                    state.assert_consistent();
+                }
+                true
+            } else if let Some(reuse_id) = state.reuse.intercept_return() {
+                if state
+                    .h1
+                    .reserve_for_reuse(owner.as_ref().expect("HTTP/1 owner disappeared"))
+                {
+                    state.assert_consistent();
+                    intercepted = Some((
+                        reuse_id,
+                        ProvisionalH1::new(cell, owner.take().expect("HTTP/1 owner disappeared")),
+                    ));
+                    false
+                } else {
+                    let snapshot = state.finish_reuse(reuse_id, false);
+                    rejected_reuse = Some((reuse_id, snapshot));
+                    true
+                }
+            } else if state.waiters.can_accept_h1()
+                && state
+                    .h1
+                    .commit_return_to_waiter(owner.as_ref().expect("HTTP/1 owner disappeared"))
+            {
+                state.reuse.consume_local_turn();
+                state.assert_consistent();
+                let mut returned = owner.take().expect("HTTP/1 owner disappeared");
+                returned.mark_reused();
+                installation = Some(state.waiters.install_returned_h1(
+                    || AcquisitionResult::H1(H1Selection::new(cell, returned)),
+                    &cell.eligibility_group,
+                ));
+                let install = installation
+                    .as_mut()
+                    .expect("HTTP/1 installation disappeared");
+                if let Some(waiter) = install.waiter {
+                    state.h2.cancel_pending_waiter(waiter);
+                }
+                install.demand_updates =
+                    state.publishable_demand_updates(std::mem::take(&mut install.demand_updates));
+                false
+            } else {
+                let returned = state.h1.return_idle(
+                    owner.take().expect("HTTP/1 owner disappeared"),
+                    idle_deadline,
+                );
+                match returned {
+                    Ok(()) => {
+                        state.assert_consistent();
+                        false
+                    }
+                    Err(returned) => {
+                        owner = Some(returned);
+                        true
+                    }
+                }
+            }
+        };
+
+        if should_retire {
+            if tracing::level_enabled!(tracing::Level::TRACE) {
+                trace_h1_return(cell, connection_id, H1ReturnTrace::Rejected);
+            }
+            if let Some((reuse_id, snapshot)) = rejected_reuse {
+                let admission = cell
+                    .admission
+                    .as_ref()
+                    .expect("an HTTP/1 reuse operation requires bounded admission");
+                OriginAdmission::reject_returned_h1_reuse(
+                    admission,
+                    reuse_id,
+                    cell.id.partition(),
+                    snapshot,
+                );
+            }
+            Self::retire_h1_owner(
+                cell,
+                owner.take().expect("retired HTTP/1 owner disappeared"),
+                CloseReason::ProtocolClosed,
+            );
+            return;
+        }
+
+        if let Some((reuse_id, provisional)) = intercepted {
+            if tracing::level_enabled!(tracing::Level::TRACE) {
+                trace_h1_return(cell, connection_id, H1ReturnTrace::ReuseIntercepted);
+            }
+            let admission = cell
+                .admission
+                .as_ref()
+                .expect("an HTTP/1 reuse operation requires bounded admission");
+            let candidate = ReuseCandidate::new(
+                admission.clone(),
+                reuse_id,
+                cell.id.partition(),
+                provisional,
+            );
+            let action = OriginAdmission::resolve_h1_reuse(admission, reuse_id, candidate);
+            OriginAdmission::drive(action);
+            return;
+        }
+
+        let Some(installation) = installation else {
+            if tracing::level_enabled!(tracing::Level::TRACE) {
+                trace_h1_return(cell, connection_id, H1ReturnTrace::Idle);
+            }
+            cell.notify_maintenance(idle_deadline);
+            if cell.admission.is_some() {
+                let availability = cell.state.lock().take_h1_availability_update();
+                cell.publish_h1_availability(availability);
+            }
+            return;
+        };
+        if tracing::level_enabled!(tracing::Level::TRACE) {
+            trace_h1_return(cell, connection_id, H1ReturnTrace::LocalDemand);
+        }
+        if let Some(admission) = &cell.admission {
+            for snapshot in installation.demand_updates.into_iter().flatten() {
+                OriginAdmission::publish_demand(admission, cell.id.partition(), snapshot);
+            }
+        }
+        drop(installation.returned_event);
+        if let Some(waker) = installation.waker {
+            waker.wake();
+        }
+        if cell.admission.is_some() {
+            let availability = cell.state.lock().take_h1_availability_update();
+            cell.publish_h1_availability(availability);
+        }
+    }
+
+    /// Retires an externally owned H1 sender and removes its connection-owning cell record.
+    ///
+    /// Returns whether this path won the connection's logical-close race.
+    fn retire_h1_owner(cell: &Arc<Self>, owner: OwnedH1, reason: CloseReason) -> bool {
+        let should_close = {
+            let mut state = cell.state.lock();
+            let should_close = state.h1.close_owned(&owner);
+            state.assert_consistent();
+            should_close
+        };
+
+        let id = owner.id();
+        let won = should_close && owner.connection().logical_close(reason);
+        drop(owner);
+
+        let mut state = cell.state.lock();
+        state.h1.finish_close(id);
+        state.assert_consistent();
+        let availability = state.take_h1_availability_update();
+        drop(state);
+        cell.publish_h1_availability(availability);
+        won
+    }
+
+    /// Begins close for an installed H1 record named without its sender.
+    ///
+    /// Returns whether this signal won the connection's logical-close race.
+    pub(super) fn close_h1(cell: &Arc<Self>, id: ConnectionId, reason: CloseReason) -> bool {
+        let Some((close, availability)) = ({
+            let mut state = cell.state.lock();
+            let close = state.h1.begin_close(id);
+            state.assert_consistent();
+            close.map(|close| (close, state.take_h1_availability_update()))
+        }) else {
+            return false;
+        };
+
+        cell.publish_h1_availability(availability);
+        let remove_record = close.sender.is_some();
+        let won = close.connection.logical_close(reason);
+        drop(close.sender);
+        if remove_record {
+            let mut state = cell.state.lock();
+            state.h1.finish_close(id);
+            state.assert_consistent();
+        }
+        won
+    }
+
+    /// Returns H1 record counts for focused ownership tests.
+    #[cfg(test)]
+    pub(super) fn h1_counts(&self) -> (usize, usize) {
+        self.state.lock().h1.counts()
+    }
+
+    /// Returns the sole installed HTTP/1 connection for focused dispatch tests.
+    #[cfg(all(test, feature = "rt-tokio"))]
+    pub(in crate::client::pool) fn only_h1_connection_for_test(&self) -> Arc<ConnectionState> {
+        self.state.lock().h1.only_connection_for_test()
+    }
+}
+
+/// Terminal outcome for one reusable HTTP/1 sender return.
+enum H1ReturnTrace {
+    /// The owning cell no longer accepts the sender.
+    Rejected,
+    /// Origin admission reserved the sender for peer demand.
+    ReuseIntercepted,
+    /// No compatible demand exists, so the sender became idle.
+    Idle,
+    /// A waiter in the owning cell accepted the sender.
+    LocalDemand,
+}
+
+/// Emits a committed HTTP/1 return outcome outside the cell lock.
+// Keep field formatting out of a return transition that can synchronously
+// enter admission and sender fallbacks.
+#[inline(never)]
+fn trace_h1_return(cell: &OriginCell, connection_id: ConnectionId, outcome: H1ReturnTrace) {
+    match outcome {
+        H1ReturnTrace::Rejected => tracing::trace!(
+            connection_id = %connection_id,
+            connection_partition = ?cell.id.partition(),
+            origin_scheme = %cell.id.origin().scheme(),
+            origin_host = cell.id.origin().host(),
+            origin_port = ?cell.id.origin().port(),
+            "HTTP/1 return was rejected by its connection-owning cell"
+        ),
+        H1ReturnTrace::ReuseIntercepted => tracing::trace!(
+            connection_id = %connection_id,
+            connection_partition = ?cell.id.partition(),
+            origin_scheme = %cell.id.origin().scheme(),
+            origin_host = cell.id.origin().host(),
+            origin_port = ?cell.id.origin().port(),
+            "HTTP/1 return was intercepted by a cross-cell reuse operation"
+        ),
+        H1ReturnTrace::Idle => tracing::trace!(
+            connection_id = %connection_id,
+            connection_partition = ?cell.id.partition(),
+            origin_scheme = %cell.id.origin().scheme(),
+            origin_host = cell.id.origin().host(),
+            origin_port = ?cell.id.origin().port(),
+            "HTTP/1 connection returned to idle storage"
+        ),
+        H1ReturnTrace::LocalDemand => tracing::trace!(
+            connection_id = %connection_id,
+            request_partition = ?cell.id.partition(),
+            connection_partition = ?cell.id.partition(),
+            origin_scheme = %cell.id.origin().scheme(),
+            origin_host = cell.id.origin().host(),
+            origin_port = ?cell.id.origin().port(),
+            "HTTP/1 return satisfied local demand"
+        ),
     }
 }
 
