@@ -1,6 +1,6 @@
 [package]
 name = "aws-config"
-version = "1.12.0"
+version = "1.13.0"
 authors = [
     "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
     "Russell Cohen <rcoh@amazon.com>",
@@ -39,6 +39,19 @@ credentials-login = [
     "p256?/pem",
     "dep:rand",
 ]
+# Route the SDK's cryptography through the FIPS 140-3 validated build of AWS-LC, in one place,
+# for applications that configure through this crate: TLS for the default HTTPS client, and
+# SigV4/SigV4a request signing. Request checksums are reached from the generated service crates
+# instead, since `aws-smithy-checksums` is not a dependency of this crate.
+#
+# Two things this crate does itself are NOT covered, because they use RustCrypto directly and
+# have no aws-lc-rs path yet (see smithy-rs#4681):
+# - `credentials-login` signs DPoP (RFC 9449) proof JWTs with `p256` ECDSA in `login/dpop.rs`.
+#   That is a real signature in the credential-acquisition path, so a FIPS deployment that uses
+#   `credentials-login` is not fully covered by this feature.
+# - `sso` and `credentials-login` hash a start URL / session string with SHA-1 and SHA-256 to
+#   name a cache file (`sso/cache.rs`, `login/cache.rs`). Those are not security functions.
+fips = ["aws-runtime/fips", "aws-smithy-runtime/crypto-fips"]
 test-util = ["aws-runtime/test-util"]
 
 # deprecated: this feature does nothing

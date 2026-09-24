@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-runtime"
-version = "1.15.0"
+version = "1.16.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Zelda Hessler <zhessler@amazon.com>"]
 description = "The new smithy runtime crate"
 edition = "2021"
@@ -31,6 +31,18 @@ http-02x = [
 connector-hyper-0-14-x = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/hyper-014", "aws-smithy-types/http-body-0-4-x"]
 tls-rustls = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/legacy-rustls-ring", "connector-hyper-0-14-x", "aws-smithy-runtime-api/legacy-client"]
 default-https-client = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/rustls-aws-lc"]
+# Route the default HTTPS client's TLS through the FIPS 140-3 validated build of AWS-LC.
+#
+# This is the TLS arm of the top-level `fips` feature on generated SDK crates and on
+# `aws-config`. Signing and checksums are reached by other routes: signing lives in the AWS
+# layer (`aws-runtime` -> `aws-sigv4`), and `aws-smithy-checksums` isn't a dependency of this
+# crate, so neither can be brokered from here.
+#
+# The dependency reference is weak on purpose: this makes the TLS of an `aws-smithy-http-client`
+# build FIPS, and does not install that client if a consumer chose a different one. A build
+# whose TLS comes from somewhere else -- `s2n-tls`, the legacy `tls-rustls` feature (which is
+# ring-backed), or a custom connector -- is unaffected by this feature, and its TLS is not FIPS.
+crypto-fips = ["aws-smithy-http-client?/rustls-aws-lc-fips"]
 rt-tokio = ["tokio/rt"]
 
 # Features for testing
