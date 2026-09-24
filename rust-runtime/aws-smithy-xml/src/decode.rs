@@ -251,6 +251,11 @@ impl<'inp> Document<'inp> {
             terminated: false,
         }
     }
+
+    /// Byte offset into the document of the first byte the tokenizer has not yet consumed.
+    fn offset(&self) -> usize {
+        self.tokenizer.stream().pos()
+    }
 }
 
 /// A new-type wrapper around `Token` to prevent the wrapped third party type from showing up in
@@ -322,6 +327,17 @@ impl<'inp> ScopedDecoder<'inp, '_> {
     /// The start element for this scope
     pub fn start_el<'a>(&'a self) -> &'a StartEl<'inp> {
         &self.start_el
+    }
+
+    /// Consume the rest of this scope and return the byte offset just past the element's close
+    /// tag (or past `/>` for a self-closing element).
+    ///
+    /// The offset comes from the tokenizer itself, so comments, CDATA, processing instructions and
+    /// attribute values can never be mistaken for markup. If the document ends or fails to
+    /// tokenize before the close tag, this is where the tokenizer stopped.
+    pub(crate) fn end_offset(mut self) -> usize {
+        for _ in &mut self {}
+        self.doc.offset()
     }
 
     /// Returns the next top-level tag in this scope

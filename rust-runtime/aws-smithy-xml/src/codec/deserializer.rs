@@ -184,133 +184,32 @@ impl<'a> XmlDeserializer<'a> {
         })
     }
 
-    /// Find the byte slice in `input` that contains the element whose local name
-    /// pointer `el_local` points into `input`. Uses pointer arithmetic to locate
-    /// the `<` before the element name, then scans forward for the matching close
-    /// tag with depth tracking. Returns the sub-slice `<tag...>...</tag>`.
+    /// Byte offset of the `<` that opens the element whose local name
+    /// `el_local` borrows from `input` (xmlparser hands out names as borrows
+    /// into the document). Only the element's own `prefix:` sits between that
+    /// `<` and the name, so a short backwards search finds it.
     ///
-    /// Operates purely on byte slices — `<`, `>`, `/`, and `?` are all single-
-    /// byte ASCII characters, so the byte-level scanning we do here is correct
-    /// regardless of the multi-byte UTF-8 sequences that may appear in element
-    /// content (e.g. attribute values, text nodes containing non-ASCII chars).
-    /// Previous versions converted to `&str` and panicked on
-    /// `start byte index N is not a char boundary` when a byte-level `pos += 1`
-    /// landed inside a multi-byte sequence; sticking to bytes throughout
-    /// avoids the issue.
-    /// If the element name beginning at `after` (the bytes immediately after
-    /// `<` or `</`) has local name `local` — ignoring any XML namespace
-    /// `prefix:` — return the length of the qname; otherwise `None`. The qname
-    /// runs up to the first whitespace, `/`, or `>`, and its local part is
-    /// whatever follows the last `:`.
-    ///
-    /// This is what lets `find_element_slice` match a prefixed element such as
-    /// `<a:flatList>` by its `flatList` local name. Matching on the raw prefixed
-    /// bytes would fail, sending the scan into the "rest of document" fallback —
-    /// which, under a flattened list, copies the remaining document per item and
-    /// blows memory/CPU up quadratically.
-    fn qname_local_len(after: &[u8], local: &[u8]) -> Option<usize> {
-        let qname_len = after
-            .iter()
-            .position(|&b| matches!(b, b' ' | b'\t' | b'\r' | b'\n' | b'/' | b'>'))
-            .unwrap_or(after.len());
-        let qname = &after[..qname_len];
-        let local_part = match qname.iter().rposition(|&b| b == b':') {
-            Some(i) => &qname[i + 1..],
-            None => qname,
-        };
-        (local_part == local).then_some(qname_len)
-    }
-
-    pub(crate) fn find_element_slice(input: &'a [u8], el_local: &str) -> &'a [u8] {
-        // Invariant: `el_local` must be a sub-slice of `input` (typically
-        // returned by xmlparser as a borrow into the underlying bytes).
-        // The pointer-arithmetic below assumes containment; passing a
-        // separately-allocated `String` would compute a meaningless
-        // offset. Caught by `.saturating_sub.min` clamping at runtime
-        // (so we don't UB) but the result is silently wrong. The assert
-        // surfaces the misuse in debug builds.
-        debug_assert!(
-            {
-                let lo = input.as_ptr() as usize;
-                let hi = lo + input.len();
-                let p = el_local.as_ptr() as usize;
-                p >= lo && p + el_local.len() <= hi
-            },
-            "find_element_slice: el_local must point into input"
-        );
-        let name_ptr = el_local.as_ptr() as usize;
+    /// The matching end offset is *not* computed here: callers take it from
+    /// [`ScopedDecoder::end_offset`](decode::ScopedDecoder::end_offset), which
+    /// runs the tokenizer through the matching close tag. Taking both ends from the
+    /// tokenizer means comments, CDATA, processing instructions and `>` in
+    /// attribute values are handled exactly as the parser sees them, and each
+    /// input byte belongs to at most one sibling slice. An earlier byte
+    /// scanner disagreed with the tokenizer on such input, fell back to "rest
+    /// of document" for every sibling, and made flattened lists quadratic in
+    /// memory and CPU.
+    fn element_start(input: &[u8], el_local: &str) -> usize {
         let input_start = input.as_ptr() as usize;
+        let name_ptr = el_local.as_ptr() as usize;
+        debug_assert!(
+            name_ptr >= input_start && name_ptr + el_local.len() <= input_start + input.len(),
+            "element_start: el_local must point into input"
+        );
         let name_offset = name_ptr.saturating_sub(input_start).min(input.len());
-
-        // The element name is inside the input. Find the `<` immediately
-        // preceding it.
-        let el_start = input[..name_offset]
+        input[..name_offset]
             .iter()
             .rposition(|&b| b == b'<')
-            .unwrap_or(0);
-
-        // Scan forward, byte by byte, tracking nesting of elements with the
-        // same local name. `<`, `>`, `/`, `?` are single-byte ASCII so the
-        // byte-level cursor is always at the start of a UTF-8 char.
-        let tag_name = el_local.as_bytes();
-        let remaining = &input[el_start..];
-        let mut depth = 0i32;
-        let mut pos = 0;
-        while pos < remaining.len() {
-            if remaining[pos..].starts_with(b"</") {
-                // Close tag — match by local name (ignoring any `prefix:`) and
-                // allow optional whitespace before `>` (e.g. `</flatList >`).
-                let after_slash = pos + 2;
-                let after = &remaining[after_slash..];
-                if let Some(qlen) = Self::qname_local_len(after, tag_name) {
-                    let mut j = qlen;
-                    while matches!(after.get(j), Some(&(b' ' | b'\t' | b'\r' | b'\n'))) {
-                        j += 1;
-                    }
-                    if after.get(j) == Some(&b'>') {
-                        depth -= 1;
-                        if depth == 0 {
-                            let end = el_start + after_slash + j + 1;
-                            return &input[el_start..end];
-                        }
-                    }
-                }
-                pos = after_slash;
-            } else if remaining[pos] == b'<'
-                && remaining.get(pos + 1) != Some(&b'/')
-                && remaining.get(pos + 1) != Some(&b'?')
-            {
-                // Open tag — check if self-closing or matches our name.
-                if let Some(gt) = remaining[pos..].iter().position(|&b| b == b'>') {
-                    let tag_content = &remaining[pos + 1..pos + gt];
-                    let is_self_closing = tag_content.last() == Some(&b'/');
-                    // Match by local name, ignoring any namespace `prefix:`.
-                    let opens_our_tag = Self::qname_local_len(tag_content, tag_name).is_some();
-                    if opens_our_tag && is_self_closing && depth == 0 {
-                        // The target element is itself self-closing (e.g.
-                        // `<Foo/>`) — there is no matching close tag, so the
-                        // element slice ends just past this `>`.
-                        let end = el_start + pos + gt + 1;
-                        return &input[el_start..end];
-                    }
-                    if opens_our_tag && !is_self_closing {
-                        depth += 1;
-                    }
-                    pos += gt + 1;
-                } else {
-                    pos += 1;
-                }
-            } else {
-                // Any other byte (text content, attribute byte, multi-byte
-                // UTF-8 lead/continuation, etc.) — advance by one byte. This
-                // is correct because we never `&str`-index into `remaining`,
-                // only byte-slice it, and byte slicing on a `&[u8]` accepts
-                // any offset.
-                pos += 1;
-            }
-        }
-        // Fallback: return from el_start to end
-        &input[el_start..]
+            .unwrap_or(0)
     }
 
     fn resolve_timestamp_format(&self, schema: &Schema<'_>) -> TimestampFormat {
@@ -365,8 +264,9 @@ pub fn find_depth2_element_slice_by(
         let local = tag.start_el().local();
         if predicate(local) {
             // `local` is a `&str` borrowed from `body`, satisfying the
-            // pointer-containment invariant of `find_element_slice`.
-            return Some(XmlDeserializer::find_element_slice(body, local));
+            // pointer-containment invariant of `element_start`.
+            let start = XmlDeserializer::element_start(body, local);
+            return Some(&body[start..tag.end_offset()]);
         }
     }
     None
@@ -419,27 +319,20 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
             // `S3UnwrappedXmlOutputTrait` AWS customization; non-XML codecs
             // ignore the field, preserving runtime protocol-swap compatibility.
             if schema.xml_unwrapped_output() {
-                // Capture the local element name and find its byte range
-                // BEFORE dropping `root` / `doc`, because:
-                //   - `find_element_slice`'s pointer-arithmetic invariant
-                //     requires `el_local` to be a sub-slice of `input`;
-                //     `root.start_el().local()` returns exactly that.
-                //   - The owned `String` is only used by `resolve_member`,
-                //     after the parser borrows are released. A previous
-                //     version of this code passed the owned `String` to
-                //     `find_element_slice`, silently producing offset=0;
-                //     correct only by happy accident when the input
-                //     buffer started with the target element.
+                // Capture the element's start offset BEFORE consuming `root`:
+                // `element_start`'s pointer-arithmetic invariant requires
+                // `el_local` to be a sub-slice of `input`, which
+                // `root.start_el().local()` is. A previous version passed an
+                // owned `String` here, silently producing offset=0; correct
+                // only by happy accident when the input buffer started with
+                // the target element.
                 let el_local = root.start_el().local();
-                let sub = Self::find_element_slice(input, el_local);
+                let start = Self::element_start(input, el_local);
                 let local = el_local.to_owned();
-                // Release the iterator borrow on `doc` so we can mutate `self`.
-                // `root` is a `ScopedDecoder` (whose `Drop` advances the tokenizer
-                // past the close tag) and is dropped explicitly. `doc` is a
-                // `decode::Document` which has no `Drop` impl; binding to `_`
-                // consumes it without firing clippy's `drop_non_drop` lint.
-                drop(root);
-                let _ = doc;
+                // Dropping `root` (a `ScopedDecoder`) advances the tokenizer
+                // past the close tag, which gives the end offset and releases
+                // the iterator borrow on `doc` so we can mutate `self`.
+                let sub = &input[start..root.end_offset()];
                 if let Some(member) = Self::resolve_member(schema, &local) {
                     self.dispatch_subslice(sub, |this| consumer(member, this))?;
                 }
@@ -482,16 +375,14 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                 // For scalars (including flattened scalars), extract text inline.
                 let is_aggregate = member.shape_type().is_aggregate();
                 if is_aggregate && !member.xml_flattened() {
-                    let el_local = child_scope.start_el().local();
-                    let sub = Self::find_element_slice(input, el_local);
-                    drop(child_scope);
+                    let start = Self::element_start(input, child_scope.start_el().local());
+                    let sub = &input[start..child_scope.end_offset()];
                     self.dispatch_subslice(sub, |this| consumer(member, this))?;
                 } else if is_aggregate {
                     // Flattened aggregate: capture this sibling's slice; dispatch
                     // the merged group below.
-                    let el_local = child_scope.start_el().local();
-                    let sub = Self::find_element_slice(input, el_local);
-                    drop(child_scope);
+                    let start = Self::element_start(input, child_scope.start_el().local());
+                    let sub = &input[start..child_scope.end_offset()];
                     let idx = member.member_index().unwrap_or(usize::MAX);
                     let entry = flattened_groups
                         .entry(idx)
@@ -551,9 +442,8 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
             // elements (e.g. list-of-lists, list-of-structs) without per-element
             // type sniffing.
             while let Some(child_scope) = root.next_tag() {
-                let el_local = child_scope.start_el().local();
-                let sub = Self::find_element_slice(input, el_local);
-                drop(child_scope);
+                let start = Self::element_start(input, child_scope.start_el().local());
+                let sub = &input[start..child_scope.end_offset()];
                 self.dispatch_subslice(sub, |this| consumer(this))?;
             }
             Ok(())
@@ -609,9 +499,8 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                         key = Some(text.into_owned());
                     } else if local == value_name {
                         if value_is_aggregate {
-                            let el_local = field_scope.start_el().local();
-                            let sub = Self::find_element_slice(input, el_local);
-                            drop(field_scope);
+                            let start = Self::element_start(input, field_scope.start_el().local());
+                            let sub = &input[start..field_scope.end_offset()];
                             value_slice = Some(sub);
                         } else {
                             let text = decode::try_data(&mut field_scope)
@@ -1222,6 +1111,98 @@ mod tests {
         assert_eq!(items, vec!["a", "b"]);
     }
 
+    /// Regression (proofs 51/52): markup-like text in comments, CDATA,
+    /// processing instructions and attribute values inside a flattened list,
+    /// a list of structs and a map with struct values must not change what is
+    /// decoded. Values follow `try_data`: the first text node wins, and CDATA
+    /// is skipped (matching the legacy decoder).
+    #[test]
+    fn read_struct_ignores_markup_in_comments_cdata_pi_attrs() {
+        static S_ITEMS: Schema<'static> =
+            Schema::new_member(shape_id!("test", "S$items"), ShapeType::List, "items", 0)
+                .with_xml_flattened()
+                .with_xml_name("item");
+        static S_PEOPLE: Schema<'static> =
+            Schema::new_member(shape_id!("test", "S$people"), ShapeType::List, "people", 1);
+        static S_MAP: Schema<'static> =
+            Schema::new_member(shape_id!("test", "S$m"), ShapeType::Map, "m", 2);
+        static S_SCHEMA: Schema<'static> = Schema::new_struct(
+            shape_id!("test", "S"),
+            ShapeType::Structure,
+            &[&S_ITEMS, &S_PEOPLE, &S_MAP],
+        );
+        static PEOPLE_MEMBER: Schema<'static> = Schema::new_member(
+            shape_id!("test", "People$member"),
+            ShapeType::Structure,
+            "member",
+            0,
+        );
+        static PEOPLE_SCHEMA: Schema<'static> =
+            Schema::new_list(shape_id!("test", "People"), &PEOPLE_MEMBER);
+        static MAP_KEY: Schema<'static> =
+            Schema::new_member(shape_id!("test", "M$key"), ShapeType::String, "key", 0);
+        static MAP_VALUE: Schema<'static> = Schema::new_member(
+            shape_id!("test", "M$value"),
+            ShapeType::Structure,
+            "value",
+            1,
+        );
+        static MAP_SCHEMA: Schema<'static> =
+            Schema::new_map(shape_id!("test", "M"), &MAP_KEY, &MAP_VALUE);
+
+        let xml = concat!(
+            "<S>",
+            "<item><!--><item>-->a</item>",
+            "<item><![CDATA[><item>]]></item>",
+            "<item><?pi <item>?>c</item>",
+            r#"<item x="/>">d</item>"#,
+            "<people>",
+            "<member><!--><member>--><name>p1</name></member>",
+            r#"<member x="/>"><![CDATA[<member>]]><name>p2</name></member>"#,
+            "</people>",
+            "<m><entry><key>k</key><value><!--><value>--><name>v</name></value></entry></m>",
+            "</S>",
+        );
+        let mut deser = XmlDeserializer::new(xml.as_bytes(), Arc::new(XmlCodecSettings::default()));
+
+        fn read_name(d: &mut dyn ShapeDeserializer) -> Result<String, SerdeError> {
+            let mut name = String::new();
+            d.read_struct(&PERSON_SCHEMA, &mut |member, d| {
+                if member.member_name() == Some("name") {
+                    name = d.read_string(member)?;
+                }
+                Ok(())
+            })?;
+            Ok(name)
+        }
+
+        let (mut items, mut people, mut map) = (Vec::new(), Vec::new(), Vec::new());
+        deser
+            .read_struct(&S_SCHEMA, &mut |member, d| {
+                match member.member_name().unwrap() {
+                    "items" => d.read_list(member, &mut |d| {
+                        items.push(d.read_string(member)?);
+                        Ok(())
+                    })?,
+                    "people" => d.read_list(&PEOPLE_SCHEMA, &mut |d| {
+                        people.push(read_name(d)?);
+                        Ok(())
+                    })?,
+                    "m" => d.read_map(&MAP_SCHEMA, &mut |k, d| {
+                        map.push((k, read_name(d)?));
+                        Ok(())
+                    })?,
+                    _ => {}
+                }
+                Ok(())
+            })
+            .unwrap();
+
+        assert_eq!(items, vec!["a", "", "c", "d"]);
+        assert_eq!(people, vec!["p1", "p2"]);
+        assert_eq!(map, vec![("k".to_owned(), "v".to_owned())]);
+    }
+
     #[test]
     fn read_struct_flattened_list_intermixed() {
         // Flattened list elements intermixed with other members.
@@ -1601,7 +1582,7 @@ mod tests {
     #[test]
     fn read_struct_unwrapped_output_with_prolog() {
         // Regression: in the unwrapped-output path of `read_struct`, an
-        // earlier version called `find_element_slice` with a heap-allocated
+        // earlier version called the element-slicing helper with a heap-allocated
         // `String` instead of a `&str` borrowing from `input`. The
         // pointer-arithmetic invariant broke; only the
         // `.saturating_sub.min` clamping prevented UB. The result was
@@ -1610,8 +1591,8 @@ mod tests {
         //
         // Constructing a payload with an XML prolog (so the element is NOT
         // at offset 0) verifies the fixed code passes a real sub-slice of
-        // `input` to `find_element_slice`. The `debug_assert!` in
-        // `find_element_slice` would also fire under the old code in
+        // `input` to `element_start`. The `debug_assert!` in
+        // `element_start` would also fire under the old code in
         // debug builds.
         static MEMBER: Schema<'static> = Schema::new_member(
             shape_id!("test", "U$location"),
@@ -1636,7 +1617,8 @@ mod tests {
         assert_eq!(got, "us-west-2");
     }
 
-    /// Regression test for a UTF-8 char-boundary panic in `find_element_slice`.
+    /// Regression test for a UTF-8 char-boundary panic in an earlier byte
+    /// scanner that located element boundaries.
     ///
     /// Found via `schema_xml_roundtrip` fuzz target on input
     /// `StringStringMap([("Б", "")])`. The serialized payload contains a
@@ -1644,11 +1626,11 @@ mod tests {
     /// previous implementation operated on `&str` and advanced its scan
     /// cursor by one byte per non-`<` character, which landed mid-char on
     /// the second byte of `Б` and panicked with
-    /// `start byte index N is not a char boundary`. The fix moves all
-    /// scanning to byte slices since `<`, `>`, `/`, and `?` are single-byte
-    /// ASCII and the multi-byte content is opaque to the search.
+    /// `start byte index N is not a char boundary`. Element boundaries now
+    /// come from the tokenizer's offsets, which always land on a `<` or just
+    /// past a `>`.
     #[test]
-    fn find_element_slice_handles_multibyte_utf8() {
+    fn element_slicing_handles_multibyte_utf8() {
         // Build a struct-with-map XML payload containing Cyrillic text in a
         // map-key element. The exact wire form matches what `XmlSerializer`
         // emits for `StringStringMap([("Б", "")])` wrapped in
@@ -1686,55 +1668,72 @@ mod tests {
         assert_eq!(entries, vec![("Б".to_owned(), String::new())]);
     }
 
-    /// Regression: `find_element_slice` must locate a namespace-prefixed
-    /// element by its local name. Previously the `a:` prefix defeated both the
-    /// open- and close-tag matches, so the scan fell through to the
-    /// "rest of document" fallback and returned everything from the element to
-    /// the end of the buffer. Under a flattened list that fallback is copied
-    /// per item, turning a small body into quadratic memory/CPU (a DoS).
-    #[test]
-    fn find_element_slice_matches_prefixed_element() {
-        // `el_local` must point INTO `input` (see the fn's debug_assert), so
-        // slice the local name straight out of the buffer.
-        fn local_in<'a>(input: &'a [u8], open: &[u8]) -> &'a str {
-            let at = input.windows(open.len()).position(|w| w == open).unwrap();
-            // `open` is `<prefix:` — the local name starts right after it.
-            let start = at + open.len();
-            let end = start
-                + input[start..]
-                    .iter()
-                    .position(|&b| matches!(b, b' ' | b'>' | b'/'))
-                    .unwrap();
-            std::str::from_utf8(&input[start..end]).unwrap()
+    /// Slice each child of the root element the way the aggregate readers do:
+    /// start from `element_start`, end at the child scope's `end_offset`.
+    fn child_slices(input: &[u8]) -> Vec<&[u8]> {
+        let mut doc = Document::try_from(input).unwrap();
+        let mut root = doc.root_element().unwrap();
+        let mut out = Vec::new();
+        while let Some(child) = root.next_tag() {
+            let start = XmlDeserializer::element_start(input, child.start_el().local());
+            out.push(&input[start..child.end_offset()]);
         }
+        out
+    }
 
-        // Two prefixed siblings; locating the first must yield ONLY the first,
-        // not the tail through the second.
+    /// Element slices must match the element exactly for prefixed names,
+    /// whitespace in tags, and mismatched prefixes on the close tag.
+    #[test]
+    fn element_slices_prefixed_and_whitespace() {
         let input = br#"<Root><a:flatList xmlns:a="u">x</a:flatList><a:flatList xmlns:a="u">y</a:flatList></Root>"#;
-        let el_local = local_in(input, b"<a:");
-        assert_eq!(el_local, "flatList");
         assert_eq!(
-            XmlDeserializer::find_element_slice(input, el_local),
-            &br#"<a:flatList xmlns:a="u">x</a:flatList>"#[..],
-            "prefixed element must be sliced by local name, not fall back to rest-of-document",
+            child_slices(input),
+            vec![
+                &br#"<a:flatList xmlns:a="u">x</a:flatList>"#[..],
+                &br#"<a:flatList xmlns:a="u">y</a:flatList>"#[..],
+            ],
         );
+        let ws = b"<Root><flatList >x</flatList ><flatList>y</flatList></Root>";
+        assert_eq!(
+            child_slices(ws),
+            vec![
+                &b"<flatList >x</flatList >"[..],
+                &b"<flatList>y</flatList>"[..]
+            ],
+        );
+        let empty = b"<Root><a/><b x=\"1\" /></Root>";
+        assert_eq!(
+            child_slices(empty),
+            vec![&b"<a/>"[..], &b"<b x=\"1\" />"[..]]
+        );
+    }
 
-        // Whitespace before the close `>` (`</flatList >`) must still match.
-        let ws = b"<flatList >x</flatList ><flatList>y</flatList>";
-        let el_local = local_in(ws, b"<");
-        assert_eq!(
-            XmlDeserializer::find_element_slice(ws, el_local),
-            &b"<flatList >x</flatList >"[..],
-            "trailing whitespace in tags must not defeat the match",
-        );
-
-        // A different prefix on the close tag still matches by local name.
-        let mixed = br#"<a:flatList xmlns:a="u">x</a:flatList>tail"#;
-        let el_local = local_in(mixed, b"<a:");
-        assert_eq!(
-            XmlDeserializer::find_element_slice(mixed, el_local),
-            &br#"<a:flatList xmlns:a="u">x</a:flatList>"#[..],
-        );
+    /// Regression (proofs 51/52): markup-like text inside comments, CDATA,
+    /// processing instructions and attribute values must not shift element
+    /// boundaries. The old byte scanner saw `<flatList>` inside `<!-- -->` as
+    /// an open tag, never found the matching close, and returned the rest of
+    /// the document for every sibling (quadratic memory and CPU).
+    #[test]
+    fn element_slices_ignore_markup_in_comments_cdata_pi_attrs() {
+        for item in [
+            &b"<flatList><!--><flatList>--></flatList>"[..],
+            b"<flatList><![CDATA[><flatList>]]></flatList>",
+            b"<flatList><?pi <flatList>?>x</flatList>",
+            b"<flatList a=\"/>\">x</flatList>",
+            b"<flatList><!-- </flatList> -->x</flatList>",
+        ] {
+            let mut input = b"<Root>".to_vec();
+            for _ in 0..3 {
+                input.extend_from_slice(item);
+            }
+            input.extend_from_slice(b"</Root>");
+            assert_eq!(
+                child_slices(&input),
+                vec![item; 3],
+                "{}",
+                String::from_utf8_lossy(item)
+            );
+        }
     }
 
     #[test]
@@ -1936,7 +1935,7 @@ mod tests {
     // on a non-text token) and (b) on text containing `&` or `<` (because
     // unescape ran before re-emitting into fabricated tags, producing
     // invalid XML on re-parse). Our deserializer propagates raw byte slices
-    // for aggregate sub-trees via `find_element_slice` and `dispatch_subslice`,
+    // for aggregate sub-trees via `element_start` and `dispatch_subslice`,
     // so neither bug should reproduce — these tests lock that in.
     #[test]
     fn nested_struct_three_levels_deep() {
