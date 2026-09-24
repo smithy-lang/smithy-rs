@@ -212,6 +212,13 @@ impl<'a> XmlDeserializer<'a> {
             .unwrap_or(0)
     }
 
+    /// Surface any well-formedness violation recorded by a document in
+    /// checking mode (see [`Document::check_well_formedness`]).
+    fn finish_well_formed(doc: &mut Document<'_>) -> Result<(), SerdeError> {
+        doc.finish_well_formed()
+            .map_err(|e| SerdeError::invalid_input(format!("ill-formed XML: {e}")))
+    }
+
     fn resolve_timestamp_format(&self, schema: &Schema<'_>) -> TimestampFormat {
         schema
             .timestamp_format()
@@ -291,12 +298,22 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
             // (via `dispatch_*`) for child-consumer dispatches without fighting
             // a long-lived borrow on `self.state`.
             let input = self.input;
+            // The top-level struct of a strict (server) read owns the whole
+            // body: it rejects ill-formed XML rather than recovering from it,
+            // so nothing in front of the service can read the bytes
+            // differently from the handler. Every byte of the body passes
+            // through this `doc`'s tokenizer (child elements are drained
+            // through it), so checking here covers nested content too.
+            let top_level_strict = self.settings.enforce_strictness && self.depth == 1;
             let mut doc = self.document()?;
+            if top_level_strict {
+                doc.check_well_formedness();
+            }
             let mut root = doc
                 .root_element()
                 .map_err(|e| SerdeError::custom(e.to_string()))?;
 
-            if self.settings.enforce_strictness && self.depth == 1 {
+            if top_level_strict {
                 let expected = schema
                     .xml_name()
                     .map(|t| t.value())
@@ -329,10 +346,13 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                 let el_local = root.start_el().local();
                 let start = Self::element_start(input, el_local);
                 let local = el_local.to_owned();
-                // Dropping `root` (a `ScopedDecoder`) advances the tokenizer
-                // past the close tag, which gives the end offset and releases
-                // the iterator borrow on `doc` so we can mutate `self`.
+                // Consuming `root` advances the tokenizer past the close tag,
+                // which gives the end offset and releases the iterator borrow
+                // on `doc` so we can mutate `self`.
                 let sub = &input[start..root.end_offset()];
+                if top_level_strict {
+                    Self::finish_well_formed(&mut doc)?;
+                }
                 if let Some(member) = Self::resolve_member(schema, &local) {
                     self.dispatch_subslice(sub, |this| consumer(member, this))?;
                 }
@@ -394,6 +414,10 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                     drop(child_scope);
                     self.dispatch_text(text, |this| consumer(member, this))?;
                 }
+            }
+            drop(root);
+            if top_level_strict {
+                Self::finish_well_formed(&mut doc)?;
             }
 
             // Dispatch each accumulated flattened-aggregate group as a single call.
@@ -883,6 +907,80 @@ mod tests {
             .unwrap();
 
         assert_eq!(name, "Bob");
+    }
+
+    #[test]
+    fn strict_read_rejects_ill_formed_xml() {
+        static P_STRING: Schema<'static> =
+            Schema::new_member(shape_id!("test", "P$s"), ShapeType::String, "s", 0);
+        static P_LIST: Schema<'static> =
+            Schema::new_member(shape_id!("test", "P$list"), ShapeType::List, "list", 1);
+        static P_FLAT: Schema<'static> =
+            Schema::new_member(shape_id!("test", "P$flat"), ShapeType::List, "flat", 2)
+                .with_xml_flattened();
+        static P_MAP: Schema<'static> =
+            Schema::new_member(shape_id!("test", "P$map"), ShapeType::Map, "map", 3);
+        static P_SCHEMA: Schema<'static> = Schema::new_struct(
+            shape_id!("test", "P"),
+            ShapeType::Structure,
+            &[&P_STRING, &P_LIST, &P_FLAT, &P_MAP],
+        );
+        static MAP_KEY: Schema<'static> =
+            Schema::new_member(shape_id!("test", "M$key"), ShapeType::String, "key", 0);
+        static MAP_VALUE: Schema<'static> =
+            Schema::new_member(shape_id!("test", "M$value"), ShapeType::String, "value", 1);
+        static MAP_SCHEMA: Schema<'static> =
+            Schema::new_map(shape_id!("test", "M"), &MAP_KEY, &MAP_VALUE);
+
+        fn read(input: &str, strict: bool) -> Result<(), SerdeError> {
+            let settings = Arc::new(
+                XmlCodecSettings::builder()
+                    .enforce_strictness(strict)
+                    .build(),
+            );
+            XmlDeserializer::new(input.as_bytes(), settings).read_struct(&P_SCHEMA, &mut |m, d| {
+                match m.member_name().unwrap() {
+                    "s" => d.read_string(m).map(|_| ()),
+                    "list" | "flat" => d.read_list(m, &mut |d| d.read_string(m).map(|_| ())),
+                    _ => d.read_map(&MAP_SCHEMA, &mut |_, d| d.read_string(m).map(|_| ())),
+                }
+            })
+        }
+
+        for ok in [
+            "<P><s>x</s><list><member>a</member></list><flat>b</flat><flat>c</flat></P>",
+            "<?xml version=\"1.0\"?><!-- c --><P><s><![CDATA[<x>]]></s></P>\n<!-- trailing -->",
+            r#"<a:P xmlns:a="u"><a:s>x</a:s><list ><member/></list ></a:P>"#,
+            "<P><unknown><deep/></unknown><map><entry><key>k</key><value>v</value></entry></map></P>",
+            "<P/>",
+        ] {
+            read(ok, true).unwrap_or_else(|e| panic!("well-formed {ok:?} rejected: {e}"));
+        }
+
+        for bad in [
+            // proof 55: mismatched end tags
+            "<P><map><gntry><key>k</key><value>v</value></entry></map><s>s</s></P>",
+            "<P><list><member>a</member></l><member>b</member></list></P>",
+            // mismatched end tag inside a flattened member / an unknown member
+            "<P><flat>a</flatx><flat>b</flat></P>",
+            "<P><unknown><deep></unknown></P>",
+            // prefix must match too
+            r#"<P xmlns:a="u" xmlns:b="v"><a:s>x</b:s></P>"#,
+            r#"<P xmlns:a="u"><s>x</a:s></P>"#,
+            r#"<P xmlns:a="u"><a:s>x</s></P>"#,
+            // unclosed root, unclosed child
+            "<P><s>x</s>",
+            "<P><s>x</P>",
+            // stray close tag after the root, second root
+            "<P><s>x</s></P></P>",
+            "<P></P><P></P>",
+        ] {
+            assert!(read(bad, true).is_err(), "ill-formed {bad:?} accepted");
+            // The lenient (client) read still recovers as before.
+            let _ = read(bad, false);
+        }
+        // Lenient reads keep recovering rather than rejecting.
+        read("<P><s>x</s>", false).expect("lenient read accepts an unclosed root");
     }
 
     #[test]
