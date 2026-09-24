@@ -445,10 +445,13 @@ fn rewrite_h1_request_target(request: &mut Request<SdkBody>, is_proxied: bool) {
 mod tests {
     use super::*;
     use crate::client::connect::ConnectPathInner;
+    use crate::client::pool::admission::{OriginAdmission, ProtocolRequirement};
     use crate::client::pool::cell::h1::H1Sender;
-    use crate::client::pool::cell::OriginCell;
+    use crate::client::pool::cell::{AcquisitionOutcome, AcquisitionStep, OriginCell};
     use crate::client::pool::connection::ConnectionInfo;
     use crate::client::pool::dispatch::RequestOptions;
+    use crate::client::pool::origin::OriginKey;
+    use crate::client::pool::partition::EligibilityGroup;
     use crate::client::pool::registry::PartitionState;
     use crate::client::pool::stats::CellConnectionStats;
     use crate::client::pool::{
@@ -462,11 +465,13 @@ mod tests {
     use aws_smithy_runtime_api::client::http::{HttpClient, HttpConnector, HttpConnectorSettings};
     use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
+    use http_1x::uri::Scheme;
     use http_body_util::BodyExt;
     use hyper_util::client::legacy::connect::{Connected, Connection};
     use hyper_util::rt::TokioIo;
     use std::future::Future;
     use std::io::{self, IoSlice};
+    use std::num::NonZeroUsize;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::task::{Context, Poll};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -1025,30 +1030,60 @@ mod tests {
     }
 
     #[test]
-    fn pending_sender_readiness_uses_the_connection_owner_spawner() {
-        let pool = ConnectionPool::builder()
-            .idle_timeout(None)
-            .build_http()
-            .unwrap();
-        let partition = anonymous_partition(&pool);
-        let uri = "http://example.com/".parse().unwrap();
-        let cell = pool.inner.registry.resolve_cell(&partition, &uri).unwrap();
+    fn borrowed_pending_sender_readiness_uses_the_supplier_runtime() {
+        let owner_partition = PartitionId::from_index(1);
+        let requester_partition = PartitionId::from_index(2);
+        let admission = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
+        let origin = OriginKey::from_parts(Scheme::HTTPS, "example.com", None).unwrap();
+        let owner_cell = OriginAdmission::register_cell(
+            &admission,
+            Arc::new(OriginCell::new(
+                owner_partition,
+                origin.clone(),
+                EligibilityGroup::Pool,
+                Some(admission.clone()),
+                None,
+            )),
+        );
+        let requester_cell = OriginAdmission::register_cell(
+            &admission,
+            Arc::new(OriginCell::new(
+                requester_partition,
+                origin,
+                EligibilityGroup::Pool,
+                Some(admission.clone()),
+                None,
+            )),
+        );
         let submitted = StdArc::new(AtomicUsize::new(0));
         let owner_spawner: StdArc<dyn DriverSpawner> = StdArc::new(CountingDroppingSpawner {
             submitted: submitted.clone(),
         });
         let (connection, _physical) = ConnectionState::pending_open(
-            ConnectionInfo::for_test(ConnectionId::new(1), PartitionId::ANONYMOUS),
-            owner_spawner,
-            Arc::new(CellConnectionStats::default()),
+            ConnectionInfo::for_test(ConnectionId::new(1), owner_partition),
+            owner_spawner.clone(),
+            owner_cell.connection_stats(),
         );
-        connection.open(None).unwrap();
-        let selection =
-            OriginCell::insert_selected_h1(&cell, connection.clone(), H1Sender::pending_test(11));
+        connection
+            .open(Some(OriginAdmission::lease_for_test(&admission)))
+            .unwrap();
+        OriginCell::insert_idle_h1(&owner_cell, connection.clone(), H1Sender::pending_test(11));
+
+        let waiter =
+            OriginCell::register_waiter(&requester_cell, ProtocolRequirement::H1Compatible);
+        let selection = match requester_cell
+            .poll_waiter(waiter, &mut Context::from_waker(std::task::Waker::noop()))
+        {
+            Poll::Ready(AcquisitionStep::Resolved(AcquisitionOutcome::H1(selection))) => selection,
+            other => panic!("peer demand did not borrow the pending HTTP/1 sender: {other:?}"),
+        };
+        assert_eq!(owner_partition, selection.connection().owner_partition());
         let dispatch =
             ConnectionState::try_commit_dispatch(&connection).expect("connection should be open");
 
-        H1ResponseLifecycle::new(selection.into_exchange(), dispatch).resolve(None);
+        let lifecycle = H1ResponseLifecycle::new(selection.into_exchange(), dispatch);
+        assert!(StdArc::ptr_eq(&owner_spawner, &lifecycle.spawner));
+        lifecycle.resolve(None);
 
         assert_eq!(1, submitted.load(Ordering::SeqCst));
         assert_eq!(

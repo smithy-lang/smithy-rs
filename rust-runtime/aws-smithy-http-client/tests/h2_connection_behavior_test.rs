@@ -311,8 +311,8 @@ mod connection_metadata {
 
         let first = capture_attempt(&connector, &server.url("/first")).await;
         let second = capture_attempt(&connector, &server.url("/second")).await;
-        assert!(first.dispatch_duration().is_some());
-        assert!(second.dispatch_duration().is_some());
+        assert!(first.connector_call_duration().is_some());
+        assert!(second.connector_call_duration().is_some());
 
         if captures_selection {
             assert_eq!(
@@ -401,7 +401,10 @@ mod connection_metadata {
             telemetry.acquisition().expect("acquisition").duration(),
             Some(Duration::ZERO)
         );
-        assert_eq!(telemetry.dispatch_duration(), Some(Duration::from_secs(10)));
+        assert_eq!(
+            telemetry.connector_call_duration(),
+            Some(Duration::from_secs(10))
+        );
 
         drop(connector);
         drop(client);

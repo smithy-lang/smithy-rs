@@ -562,17 +562,17 @@ mod test {
             .unwrap()
             .extension::<CaptureHttpAttemptTelemetry>()
             .expect("request capture");
-        request_capture.record_dispatch_duration(std::time::Duration::from_millis(4));
+        request_capture.record_connector_call_duration(std::time::Duration::from_millis(4));
         assert_eq!(
             cfg.load::<MeasurementsContainer>()
                 .and_then(|measurements| measurements.attempt_capture.as_ref())
                 .expect("attempt capture")
                 .get()
-                .dispatch_duration(),
+                .connector_call_duration(),
             Some(std::time::Duration::from_millis(4))
         );
         assert_eq!(
-            caller_capture.get().dispatch_duration(),
+            caller_capture.get().connector_call_duration(),
             Some(std::time::Duration::from_millis(4))
         );
     }
@@ -597,13 +597,13 @@ mod test {
             .read_before_transmit(&(&context).into(), &runtime_components, &mut cfg)
             .unwrap();
 
-        replacement.record_dispatch_duration(std::time::Duration::from_millis(6));
+        replacement.record_connector_call_duration(std::time::Duration::from_millis(6));
         assert_eq!(
             cfg.load::<MeasurementsContainer>()
                 .and_then(|measurements| measurements.attempt_capture.as_ref())
                 .expect("attempt capture")
                 .get()
-                .dispatch_duration(),
+                .connector_call_duration(),
             Some(std::time::Duration::from_millis(6))
         );
     }
@@ -668,7 +668,7 @@ mod test {
         let acquisition = Arc::new(RecordingHistogram::default());
         let instruments = test_instruments(acquisition.clone());
         let capture = CaptureHttpAttemptTelemetry::new();
-        capture.record_dispatch_duration(std::time::Duration::from_millis(7));
+        capture.record_connector_call_duration(std::time::Duration::from_millis(7));
         capture.record_connection_selection(
             ConnectionAcquisitionTelemetry::new(
                 std::time::Duration::from_millis(3),
