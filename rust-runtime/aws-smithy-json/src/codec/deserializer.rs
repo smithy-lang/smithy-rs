@@ -737,31 +737,16 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                 // Parse a JSON number into [`Document::Number`].
                 // Range determines which `Number` variant carries it
                 // (PosInt / NegInt / Float).
-                if self.settings.enforce_strictness {
-                    let start = self.position;
-                    self.consume_number()?;
-                    self.position = start;
-                }
-                let rem = self.remaining();
-                let mut len = 0;
-                let mut is_float = false;
-                let mut is_negative = false;
-                for (i, &b) in rem.iter().enumerate() {
-                    if b == b'-' && i == 0 {
-                        is_negative = true;
-                        len += 1;
-                    } else if b.is_ascii_digit() || b == b'+' {
-                        len += 1;
-                    } else if b == b'.' || b == b'e' || b == b'E' {
-                        is_float = true;
-                        len += 1;
-                    } else {
-                        break;
-                    }
-                }
+                //
+                // The token's extent comes from the codec's number lexer
+                // (strict JSON grammar when `enforce_strictness` is set), so
+                // an exponent sign such as `1e-5` stays part of the number.
                 let pos = self.position;
-                self.advance_by(len);
-                let s = std::str::from_utf8(&self.input[pos..pos + len])
+                self.consume_number()?;
+                let token = &self.input[pos..self.position];
+                let is_negative = token.first() == Some(&b'-');
+                let is_float = token.iter().any(|b| matches!(b, b'.' | b'e' | b'E'));
+                let s = std::str::from_utf8(token)
                     .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
                 // Number variant selection follows the SEP "Reporting
                 // `Document` ambiguous shape types" guidance: pick the
@@ -2820,6 +2805,62 @@ mod tests {
         match deser.read_document(dummy_schema()).unwrap() {
             Document::Number(Number::Float(f)) => assert_eq!(f, 1.5),
             other => panic!("expected Number::Float(1.5), got {other:?}"),
+        }
+    }
+
+    /// Regression (proof 54): exponent signs are part of a document number.
+    /// The number's extent used to come from a scanner that accepted `-`
+    /// only at index 0, so `1e-5` was cut to `1e` and rejected.
+    #[test]
+    fn read_document_reads_signed_exponents() {
+        for strict in [false, true] {
+            let settings = Arc::new(
+                JsonCodecSettings::builder()
+                    .enforce_strictness(strict)
+                    .build(),
+            );
+            for (input, expected) in [
+                ("1e-5", 1e-5),
+                ("-2e-1", -2e-1),
+                ("1.5E-3", 1.5e-3),
+                ("1e-0", 1.0),
+                ("1e+2", 100.0),
+                ("1E+2", 100.0),
+                ("-0.0", -0.0),
+            ] {
+                let mut deser = JsonDeserializer::new(input.as_bytes(), settings.clone());
+                match deser.read_document(dummy_schema()) {
+                    Ok(Document::Number(Number::Float(f))) => {
+                        assert_eq!(f, expected, "{input} (strict={strict})");
+                        assert_eq!(f.is_sign_negative(), expected.is_sign_negative(), "{input}");
+                    }
+                    other => panic!("{input} (strict={strict}): expected Float, got {other:?}"),
+                }
+            }
+            // Followed by other tokens: the number ends exactly at its last character.
+            let mut deser = JsonDeserializer::new(b"[1e-5,-2E+1 ,3]", settings.clone());
+            assert_eq!(
+                deser.read_document(dummy_schema()).unwrap(),
+                Document::Array(vec![
+                    Document::Number(Number::Float(1e-5)),
+                    Document::Number(Number::Float(-20.0)),
+                    Document::Number(Number::PosInt(3)),
+                ]),
+                "strict={strict}"
+            );
+        }
+        // Strict mode still rejects malformed numbers.
+        let strict = Arc::new(
+            JsonCodecSettings::builder()
+                .enforce_strictness(true)
+                .build(),
+        );
+        for bad in ["1e", "1e-", "1-2", "01", "1.", "1e+-2", "--1"] {
+            let mut deser = JsonDeserializer::new(bad.as_bytes(), strict.clone());
+            assert!(
+                deser.read_document(dummy_schema()).is_err(),
+                "strict mode accepted {bad:?}"
+            );
         }
     }
 
