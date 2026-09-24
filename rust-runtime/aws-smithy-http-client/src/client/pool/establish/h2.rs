@@ -136,6 +136,19 @@ pub(super) async fn establish_h2(
                 drop(permit);
                 return EstablishmentOutcome::Transferred;
             }
+            H2FlightInstall::WaiterCompleted => {
+                tracing::trace!(
+                    request_partition = ?context.partition.id(),
+                    connection_partition = ?context.cell.id().partition(),
+                    origin_scheme = %context.cell.id().origin().scheme(),
+                    origin_host = context.cell.id().origin().host(),
+                    origin_port = ?context.cell.id().origin().port(),
+                    "HTTP/2 establishment waiter already completed"
+                );
+                drop(io);
+                drop(permit);
+                return EstablishmentOutcome::Transferred;
+            }
             H2FlightInstall::Driver(flight) => {
                 tracing::trace!(
                     request_partition = ?context.partition.id(),

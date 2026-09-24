@@ -284,9 +284,7 @@ impl OriginAdmission {
             match state.cells.get(&partition).and_then(Weak::upgrade) {
                 Some(existing) => Some(existing),
                 None => {
-                    state
-                        .cells
-                        .insert(partition, Weak::from_arc(&candidate));
+                    state.cells.insert(partition, Weak::from_arc(&candidate));
                     None
                 }
             }
@@ -1060,12 +1058,9 @@ mod tests {
 
         let (_waiter, snapshot) =
             candidate.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
-        let mut delivery = OriginAdmission::publish_without_driving(
-            &origin,
-            candidate.id().partition(),
-            snapshot,
-        )
-        .expect("candidate demand did not reserve capacity");
+        let mut delivery =
+            OriginAdmission::publish_without_driving(&origin, candidate.id().partition(), snapshot)
+                .expect("candidate demand did not reserve capacity");
         assert!(delivery.materialize_for_test());
         assert!(OriginCell::receive_delivery(&candidate, delivery).is_none());
         assert_eq!(0, origin.available_capacity_for_test());

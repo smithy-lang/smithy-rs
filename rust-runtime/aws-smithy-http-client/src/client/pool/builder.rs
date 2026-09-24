@@ -335,6 +335,10 @@ crate::cfg::cfg_tls! {
 
 impl Builder<TlsUnset> {
     /// Builds a pool for cleartext HTTP connections.
+    ///
+    /// This method remains public for explicit cleartext endpoints and tests,
+    /// but is hidden from generated documentation because HTTPS with automatic
+    /// ALPN negotiation is the intended production entry point.
     #[doc(hidden)]
     pub fn build_http(self) -> Result<ConnectionPool, BuildError> {
         validate_default_connector_interfaces(self.partitions.as_deref())?;

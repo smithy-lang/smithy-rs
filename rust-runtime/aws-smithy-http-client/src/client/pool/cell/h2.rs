@@ -407,6 +407,8 @@ pub(in crate::client::pool) enum H2FlightInstall {
     Joined,
     /// The caller owns the task that must drive this new flight.
     Driver(H2FlightId),
+    /// Another transition already installed or retired the waiter's result.
+    WaiterCompleted,
 }
 
 /// Result of joining an accepting generation after ALPN selected HTTP/2.
@@ -2093,6 +2095,9 @@ impl OriginCell {
         waiter: WaiterId,
     ) -> H2FlightInstall {
         let mut state = self.state.lock();
+        if !state.waiters.is_launching_h2_candidate(waiter) {
+            return H2FlightInstall::WaiterCompleted;
+        }
         let result = state.h2.install_or_join_flight(waiter);
         state.assert_consistent();
         result
@@ -2414,6 +2419,20 @@ mod tests {
     }
 
     #[test]
+    fn flight_convergence_does_not_retain_a_cancelled_waiter() {
+        let cell = cell();
+        let waiter = begin_waiter(&cell);
+
+        assert!(OriginCell::cancel_waiter(&cell, waiter));
+        assert!(matches!(
+            cell.install_or_join_h2_flight(waiter),
+            H2FlightInstall::WaiterCompleted
+        ));
+        assert!(cell.state.lock().h2.flight.is_none());
+        assert_eq!(0, cell.retained_waiters_for_test());
+    }
+
+    #[test]
     fn generation_join_does_not_retain_a_waiter_already_served_by_the_gate() {
         let cell = cell();
         let first = begin_waiter(&cell);
@@ -2435,6 +2454,16 @@ mod tests {
             H2GenerationJoin::WaiterCompleted,
             OriginCell::join_h2_generation(&cell, first, generation)
         );
+        assert!(OriginCell::close_h2(
+            &cell,
+            generation,
+            CloseReason::PoolDropped,
+        ));
+        assert!(matches!(
+            cell.install_or_join_h2_flight(first),
+            H2FlightInstall::WaiterCompleted
+        ));
+        assert!(cell.state.lock().h2.flight.is_none());
         let super::super::AcquisitionEvent::Complete(super::super::AcquisitionResult::H2(
             activation,
         )) = cell
@@ -2444,11 +2473,6 @@ mod tests {
             panic!("first waiter received a non-H2 result");
         };
 
-        assert!(OriginCell::close_h2(
-            &cell,
-            generation,
-            CloseReason::PoolDropped,
-        ));
         drop(activation);
         assert!(matches!(
             cell.take_ready_event(second),
