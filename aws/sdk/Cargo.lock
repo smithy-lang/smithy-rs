@@ -1333,7 +1333,7 @@ version = "0.3.0"
 
 [[package]]
 name = "aws-smithy-http"
-version = "0.64.0"
+version = "0.64.1"
 dependencies = [
  "async-stream",
  "aws-smithy-eventstream",
@@ -1411,7 +1411,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-legacy-http"
-version = "0.63.0"
+version = "0.63.1"
 dependencies = [
  "async-stream",
  "aws-smithy-eventstream",
@@ -1532,7 +1532,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api-macros",
