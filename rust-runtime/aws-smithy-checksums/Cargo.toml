@@ -75,6 +75,12 @@ pretty_assertions = "1.3"
 tokio = { version = "1.49.0", features = ["macros", "rt"] }
 tracing-test = "0.2.1"
 
+# These are the RustCrypto backend, and they are genuinely unused whenever an AWS-LC arm wins the
+# cfg -- which `--all-features` does, since Cargo features are additive and `rustcrypto` stays on.
+# They are used in a default build, so the dependencies are not dead; only that configuration is.
+[package.metadata.cargo-udeps.ignore]
+normal = ["md-5", "sha1", "sha2"]
+
 [package.metadata.docs.rs]
 # `all-features` is off because the `fips` feature builds aws-lc-fips-sys, which can't build on
 # docs.rs. `sdk-lints` grants this crate an exception for that reason.

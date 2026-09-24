@@ -111,6 +111,14 @@ name = "sigv4a"
 harness = false
 required-features = ["sigv4a"]
 
+# These three are the RustCrypto backend, and they are genuinely unused whenever an AWS-LC arm wins
+# the cfg -- which `--all-features` does, since Cargo features are additive and `rustcrypto` stays
+# on. They are used in a default build, so the dependencies are not dead; only that configuration
+# is. `p256` is additionally used by the test-side SigV4a verifier on both backends, which doesn't
+# save it here because cargo-udeps only inspects the lib target.
+[package.metadata.cargo-udeps.ignore]
+normal = ["hmac", "sha2", "p256"]
+
 [package.metadata.docs.rs]
 # `all-features` is off because the `fips` feature builds aws-lc-fips-sys, which can't build on
 # docs.rs. `sdk-lints` grants this crate an exception for that reason.
