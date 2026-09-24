@@ -50,23 +50,26 @@
 //!         |-- PartitionState per partition
 //!         |   |-- runtime placement and idle maintenance
 //!         |   `-- OriginCell per canonical origin
-//!         |       |-- acquisition queue
-//!         |       `-- protocol connection records
+//!         |       |-- acquisition queue and supply revisions
+//!         |       |-- H1 connection ownership
+//!         |       `-- H2 flights, generations, routes, and gates
 //!         `-- OriginAdmission per bounded origin
-//!             |-- connection permits
-//!             |-- cross-cell demand order
-//!             `-- peer reuse indexes
+//!             |-- capacity budget
+//!             |-- demand schedule
+//!             |-- H1 supply index and retained matches
+//!             `-- H2 supply index and route/reclaim state
 //! ```
 //!
-//! One `OriginCell` lock owns local acquisition order and protocol residence.
+//! One `OriginCell` lock owns local acquisition order and protocol state.
 //! For a bounded origin, `OriginAdmission` separately owns the origin-wide
-//! connection limit and cross-cell scheduling. An H2 request-lease lock owns
-//! its two endpoint bits. `ConnectionState` owns logical connection lifetime,
-//! and partition maintenance owns its scheduler state.
+//! connection limit and cross-cell matching. An H2 request-claim lock records
+//! independent upload and response completion. `ConnectionState` owns logical
+//! connection lifetime, and partition maintenance owns its timer state.
 //!
-//! No two pool locks are held together. Delivery and publication guards carry
-//! payload or identity between cell and admission scopes. H2 lease completion
-//! detaches its dispatch guard before entering connection or cell state.
+//! No two pool locks are held together. Demand snapshots and supply revisions
+//! move cell state into admission. Assignments and detached guards carry one
+//! selected payload or route back toward a cell. H2 claim completion detaches
+//! its dispatch guard before entering connection or cell state.
 //! Maintenance detaches cells and wakers before expiration or wake callbacks.
 //!
 //! # HTTP/1 request lifecycle
@@ -125,31 +128,32 @@
 //!             |-- HTTP/2 -> join or drive one flight -> H2Activation
 //!             `-- HTTP/1 -> H1Selection or incompatible-version error
 //!
-//! H2Activation -- Hyper accepts request --> accepted request lease
-//! accepted request lease
-//!     |-- request body ends or drops -----> send endpoint complete
-//!     `-- response body ends or drops ----> receive endpoint complete
-//! both endpoints complete ----------------> release generation request count
+//! H2Activation -- Hyper accepts request --> H2RequestClaim
+//! H2RequestClaim
+//!     |-- request body ends or drops -----> upload side complete
+//!     `-- response body ends or drops ----> response side complete
+//! both sides complete --------------------> release generation request count
 //! ```
 //!
 //! `H2Activation` reserves pool accounting for a prospective stream on one
 //! exact generation. It is not yet an HTTP/2 stream. Dropping it before Hyper
 //! accepts the request returns its generation-gate turn and request count.
-//! Acceptance creates two independent endpoints because an upload and response
+//! Acceptance creates two independent completion sides because upload and response
 //! can finish in either order. Logical close stops new activations and releases
 //! bounded capacity; accepted streams retain the draining generation until
-//! both endpoints end. Hyper remains responsible for stream identifiers,
+//! both sides end. Hyper remains responsible for stream identifiers,
 //! stream credit, and flow control.
 //!
-//! Peer publication moves only route identity. The socket, protocol driver,
+//! A peer route moves only generation identity. The socket, protocol driver,
 //! request handle, and capacity remain with the connection-owning partition.
 //!
 //! `ConnectionState` separates logical close, accepted-request accounting, and
-//! root-I/O ownership. Logical close rejects new dispatch and releases bounded
-//! capacity. `DispatchGuard` follows an accepted request, while
-//! `PhysicalConnectionGuard` follows root I/O until the pool no longer owns
-//! that transport; neither describes the operating system TCP state. All
-//! connection-owned work runs through the partition [`DriverSpawner`].
+//! physical connection ownership. Logical close rejects new dispatch and
+//! releases bounded capacity. `DispatchGuard` follows an accepted request,
+//! while `PhysicalConnectionGuard` follows root I/O until the client releases
+//! its transport handle. The operating system may continue TCP teardown
+//! afterward. All connection-owned work runs through the partition
+//! [`DriverSpawner`].
 
 #![cfg_attr(
     smithy_http_client_loom,
@@ -180,8 +184,11 @@ pub use partition::TokioDriverSpawner;
 pub use partition::{ConnectionReuseScope, DriverSpawner, Partition, PartitionId};
 
 use crate::sync::Arc;
+use aws_smithy_runtime_api::client::result::ConnectorError;
+use aws_smithy_types::body::SdkBody;
 use establish::TransportFactory;
-use registry::PartitionRegistry;
+use http_1x::{Request, Response};
+use registry::{PartitionRegistry, PartitionState};
 use std::fmt;
 use std::num::NonZeroUsize;
 use std::sync::atomic::AtomicU64;
@@ -208,6 +215,16 @@ impl ConnectionPool {
     /// Returns a builder for a new connection pool.
     pub fn builder() -> Builder<super::TlsUnset> {
         Builder::default()
+    }
+
+    /// Routes one request from its selected partition through pool dispatch.
+    pub(in crate::client::pool) async fn send_request(
+        &self,
+        partition: Arc<PartitionState>,
+        request: Request<SdkBody>,
+        options: dispatch::RequestOptions,
+    ) -> Result<Response<SdkBody>, ConnectorError> {
+        dispatch::send(self, partition, request, options).await
     }
 }
 
@@ -240,7 +257,7 @@ struct PoolConfig {
 struct PoolInner {
     /// Immutable settings shared by pool operations.
     config: PoolConfig,
-    /// Fixed partitions and lazily published per-origin state.
+    /// Fixed partitions and lazily created per-origin state.
     registry: PartitionRegistry,
     /// Type-erased construction of one partition-bound transport.
     transport: StdArc<dyn TransportFactory>,
