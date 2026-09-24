@@ -116,18 +116,17 @@ on first use of that pair.
   runtime 1, eth1     │  idle H1 · H2 gen│  │  (never used)    │
                       └──────────────────┘  └──────────────────┘
 
-  bounded only        OriginState(s3)       OriginState(dynamodb)
-  spans partitions    admission · orders    admission · orders
-                      peer-cell index        peer-cell index
+  bounded only        OriginAdmission(s3)      OriginAdmission(dynamodb)
+  spans partitions    admission · orders       admission · orders
+                      peer-cell index           peer-cell index
 ```
 
 Because the partition set is fixed and the origin set is not, partitions are the outer level: each partition
 owns its own map from origin to cell, so the structure that grows is always inside one partition. A cell that
 no request has asked for does not exist.
 
-An **`OriginState`** holds what all partitions sharing an origin must agree on — the connection budget when
-one is configured, and an index of which partitions hold cells for that origin. Nothing else spans
-partitions.
+An **`OriginAdmission`** holds what all partitions sharing a bounded origin must agree on: its connection
+budget, cross-cell demand order, and index of cells for that origin. Nothing else spans partitions.
 
 #### Ownership and lifetime
 
@@ -135,29 +134,28 @@ partitions.
 ConnectionPool                         config and fixed partition set
 |-- Partition[]                        driver spawner, optional interface
 |   `-- OriginCell by OriginKey        H1 records, H2 generation, local waiters
-`-- OriginState by bounded OriginKey   admission, cross-cell orders, peer-cell index
+`-- OriginAdmission by OriginKey       permits, cross-cell orders, peer-cell index
 
 Client ------------------------------> ConnectionPool + one resolved Partition
 ```
 
-| Type             | Created                                | Destroyed                                     | Shared across partitions |
-| ---------------- | -------------------------------------- | --------------------------------------------- | ------------------------ |
-| `ConnectionPool` | by the builder                         | when the last `Client` and request release it | —                        |
-| `Partition`      | at construction, from the declared set | at pool drop                                  | no                       |
-| `OriginCell`     | first request for (partition, origin)  | not while the origin is live                  | no                       |
-| `OriginState`    | first request for a *bounded* origin   | not while the pool lives                      | yes                      |
-| `Client`         | by the caller, freely                  | by the caller                                 | —                        |
+| Type              | Created                                | Destroyed                                     | Shared across partitions |
+| ----------------- | -------------------------------------- | --------------------------------------------- | ------------------------ |
+| `ConnectionPool`  | by the builder                         | when the last `Client` and request release it | —                        |
+| `Partition`       | at construction, from the declared set | at pool drop                                  | no                       |
+| `OriginCell`      | first request for (partition, origin)  | not while the origin is live                  | no                       |
+| `OriginAdmission` | first request for a *bounded* origin   | not while the pool lives                      | yes                      |
+| `Client`          | by the caller, freely                  | by the caller                                 | —                        |
 
 `Client` is what a caller holds and what implements the smithy runtime's `HttpClient`. It pairs the pool with
 one resolved partition, so a request never searches for its partition — the handle already names it.
 
-An origin's shared state is built only for the features a caller configured. `OriginState` — the
-`OriginAdmission`, the cross-cell order, and the peer index — exists only for a bounded origin. Those parts
-have work to do only when a bound can force borrow or reclaim: on a local miss a partition establishes its own
-connection, and it borrows a peer's dispatch handle only when it *cannot* establish, capacity being bounded
-and no permit free. An unbounded origin never borrows or reclaims, so it has no `OriginState` and no
-cross-partition structure at all; its cells are the whole of it. Reuse scope governs which cells may relieve
-one another's admission pressure, so it has no effect until a bound makes that pressure possible.
+An `OriginAdmission` exists only for a bounded origin. It has work to do only when a bound can force borrow or
+reclaim: on a local miss a partition establishes its own connection, and it borrows a peer's dispatch handle
+only when it *cannot* establish, capacity being bounded and no permit free. An unbounded origin never borrows
+or reclaims, so it has no origin-wide admission or cross-partition structure; its cells are the whole of it.
+Reuse scope governs which cells may relieve one another's admission pressure, so it has no effect until a
+bound makes that pressure possible.
 
 The tree above shows where state is stored. Pool retention and post-header protocol ownership are distinct from
 bounded-origin capacity ownership:
@@ -396,6 +394,9 @@ bound against a host that sees one. Canonicalization elides the scheme's default
 Host comparison is already ASCII-case-insensitive. Two spellings are deliberately *not* unified: an
 internationalized host and its punycode form (the connector resolves what it is given; equating them would
 pull in Unicode normalization), and a fully-qualified name with a trailing dot, which is a distinct DNS name.
+IPv6 literals are parsed and normalized to the standard compressed spelling so equivalent address text has
+one identity. A URI zone identifier remains case-sensitive and is retained exactly; it is an opaque
+interface-scoped value rather than a DNS name. Unknown IP-literal forms are not case-folded.
 
 The request path does not construct an owned `OriginKey` merely to probe a partition's origin map. It first
 builds a private canonical lookup key that borrows the URI host when its bytes already have canonical form and
@@ -419,6 +420,11 @@ statistics sample. It validates the host with the structured HTTP authority pars
 scheme other than HTTP or HTTPS, an invalid host or port, and any input that does not name an origin.
 `InvalidOrigin` carries the offending component and source error for diagnostics, implements `Error`, and
 exposes no second, less strict public key representation.
+
+The implementation reads explicit port text from the already-validated `Authority` rather than relying only
+on `Authority::port_u16()`. That accessor returns `None` for both an absent port and text that cannot be
+represented as a nonzero `u16`; preserving the distinction prevents malformed, zero, or out-of-range ports
+from aliasing the scheme's default-port origin.
 
 The request's HTTP version is deliberately absent. A request marked HTTP/1.1 may dispatch on an HTTP/2
 connection, so version is a dispatch-eligibility question decided per connection, not an identity question
@@ -503,7 +509,7 @@ Client(pool, partition P): HttpClient
   `-- http_connector(settings B, components B) -> PoolConnector(pool, P, policy B)
                                                         |
                                                         `-- one ConnectionPool
-                                                            `-- one OriginState per bounded origin
+                                                            `-- one OriginAdmission per bounded origin
 ```
 
 The facade clones the complete non-exhaustive `HttpConnectorSettings` and extracts the operation components
@@ -548,7 +554,7 @@ request on partition P for origin O
 ```
 
 That is the entire path for a reuse hit. It performs no origin-wide coordination, reads no other partition's
-state, and touches no `OriginState`, admission, or peer index — its synchronization is the requesting
+state, and touches no `OriginAdmission` or peer index — its synchronization is the requesting
 partition's own cell lock. A peer can acquire that same lock when the origin is bounded and under pressure, to
 borrow a handle or claim a connection as it returns, so the lock can be contended; what the hit never does is
 consult state shared across the origin. So a pool with one partition and a pool with ninety-six do the same
@@ -629,10 +635,13 @@ travel freely across worker threads of one multithreaded runtime, which share it
 independent runtime instances. An **explicit partition** names a specific runtime through its
 `DriverSpawner`, and its client must be driven from that runtime; a thread-per-core service that pins a
 runtime per core holds each partition's client on its core, so the precondition costs nothing. Driving either
-kind of partition's client from a different runtime contradicts its placement. For an explicit partition,
-`TokioDriverSpawner` debug-asserts that the spawning runtime matches the one it named, turning the misuse into
-a test failure; the assertion is a diagnostic, not enforcement, since the socket is created before the driver
-is spawned.
+kind of partition's client from a different runtime contradicts its placement.
+
+`TokioDriverSpawner` always submits the driver to its captured handle and debug-asserts that the current
+runtime's stable `Handle::id()` matches the captured handle. The assertion turns foreign-runtime use into a
+test or debug-build failure; it is a diagnostic rather than enforcement because the socket is created before
+the driver is spawned. Tokio may reuse an ID after its runtime is dropped, so the check is not a persistent
+runtime identity or a substitute for the placement ownership rule.
 
 Hyper spawns work of its own, and it follows the connection. An HTTP/2 connection hands Hyper a connection
 task at handshake and per-stream and upgrade tasks as it runs, through an
@@ -850,19 +859,18 @@ enum DemandState {
 }
 
 struct DemandSnapshot {
-    revision: DemandRevision,
-    version: DemandVersion,
+    id: DemandId,
+    version: SnapshotVersion,
     state: DemandState,
 }
 ```
 
-A `DemandRevision` names one episode for the cell's current queue head and may receive at most one terminal
+A `DemandId` names one episode for the cell's current queue head and may receive at most one terminal
 acquisition outcome. Its protocol requirement is stable. Serving or cancelling that head terminates the
-revision; if useful demand remains, the cell creates a successor revision for the new head. A complete snapshot
-version replaces every older version for the same revision, so a delayed active publication cannot overwrite
-retirement. An inactive snapshot retires the revision. When it must queue, each active revision joins the
-applicable scheduling orders at their tails; checked identity allocation does not reuse a revision after
-wraparound.
+demand; if useful demand remains, the cell creates a successor ID for the new head. `SnapshotVersion` orders
+complete replacements for the same ID, so a delayed active publication cannot overwrite retirement. An
+inactive snapshot retires the demand. When it must queue, each active demand joins the applicable scheduling
+orders at their tails; checked identity allocation does not reuse a demand ID after wraparound.
 
 #### Bounded miss
 
@@ -1009,7 +1017,7 @@ struct ReturnClaim {
     id: ClaimId,
     source: CellId,
     target: CellId,
-    demand: DemandRevision,
+    demand: DemandId,
     mode: ClaimMode,
     phase: ClaimPhase,
     source_endpoint: ClaimEndpoint,
@@ -1135,6 +1143,13 @@ action only after releasing the previous lock, and each action retains an idempo
 domain owns the terminal state. The chain performs no await, retry loop, connector or protocol work, or work
 proportional to waiter or partition count, and schedules wakes or callbacks only after releasing its lock.
 
+Pool coordination uses a crate-level synchronization facade so production and Loom tests compile the same
+lock-bearing code. Production lock wrappers retain access to guarded state after standard-library poisoning so
+poisoning alone cannot prevent a later `Drop` fallback from returning a permit or closing a delivery fence.
+This does not make an interrupted state transition valid: code under a pool lock still preserves its
+invariants without relying on poison recovery. Test builds also assert that a thread holds at most one pool
+lock, turning the no-nesting rule into an executable check across the ordinary suite.
+
 Both stay within one origin, and neither moves a driver, so the I/O-placement guarantee from
 [Connection placement follows declared topology](#connection-placement-follows-declared-topology)
 holds under both. This is why `max_connections_per_host` below the partition count is valid rather than an
@@ -1149,7 +1164,7 @@ Within a cell, its queue orders requests. Across cells competing for one origin,
 episodes at two scopes because resources do not all reach the same targets:
 
 ```text
-OriginState(O)
+OriginAdmission(O)
   origin capacity order (all heads):
     oldest -> C2/R8(H1) -> C0/R3(H2) -> C3/R5(H2) -> C1/R9(H1)
 
@@ -1248,7 +1263,7 @@ enum TargetAckResult {
 struct DeliveryGuard {
     delivery: DeliveryId,
     target: CellId,
-    demand: DemandRevision,
+    demand: DemandId,
     state: DeliveryGuardState,
 }
 
@@ -1264,7 +1279,7 @@ enum DeliveryGuardState {
 struct PublicationGuard {
     delivery: DeliveryId,
     target: CellId,
-    demand: DemandRevision,
+    demand: DemandId,
     source: CellId,
     generation: GenerationId,
     state: PublicationGuardState,
@@ -2153,7 +2168,7 @@ already admitted.
 
 **Origins are total and canonical.** Every dispatched request maps to exactly one origin, and equivalent
 spellings of one server map to one origin. *Rules out:* a request with no cell to resolve to; one server
-splitting into two `OriginState`s whose admissions each admit the full bound. *Enforced by:* Key totality,
+splitting into two `OriginAdmission`s that each admit the full bound. *Enforced by:* Key totality,
 Canonical key, and Version independence.
 
 **Cell identity is stable.** A cell is never destroyed while its origin is reachable, and at most one cell
@@ -2419,14 +2434,17 @@ aws-smithy-http-client/src/client/
     builder.rs         — Builder typestate, validation, connector assembly
     client.rs          — Client, PoolConnector, and InvalidPartition
     partition.rs       — partition declarations and runtime/interface placement
-    origin.rs          — owned OriginKey, borrowed lookup, and stable origin registry
+    origin.rs          — owned OriginKey, borrowed lookup, and canonicalization
+    registry.rs        — PartitionRegistry, PartitionState, and stable cell publication
     cell.rs            — OriginCell, local selection, waiters, H1/H2 residency
-    admission/         — permits, demand orders, return claims, delivery
+    admission.rs       — permits, demand orders, return claims, delivery
     handshake.rs       — HTTP/1 attempts, HTTP/2 flights, ALPN convergence
     dispatch.rs        — request preparation, Hyper dispatch, response guards
     connection.rs      — records, leases, logical close, physical completion
     events.rs          — listener and lifecycle event types
     stats.rs           — origin/partition snapshots and lifecycle gauges
+aws-smithy-http-client/src/sync/
+                       — standard-library and Loom synchronization facade
 ```
 
 The inventory describes ownership boundaries, not implementation order. The `pool` module re-exports every

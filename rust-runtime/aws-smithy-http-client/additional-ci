@@ -17,3 +17,7 @@ cargo test --no-default-features --features default-client --test proxy_tests --
 echo "### Testing unstable custom rustls crypto provider"
 # Enabling ring because the tests use it as the "custom" provider, and it transitively enables __rustls
 RUSTFLAGS="--cfg aws_sdk_unstable" cargo test --features rustls-ring
+
+echo "### Running connection pool Loom models"
+RUSTFLAGS="--cfg smithy_http_client_loom" \
+    cargo test --lib --features default-client,rt-tokio
