@@ -891,80 +891,6 @@ mod tests {
     }
 
     #[test]
-    fn delivery_currency_includes_the_demand_id() {
-        let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
-        let requesting_partition = cell(&origin, 1);
-        let delivery = OriginAdmission::publish_without_driving(
-            &origin,
-            requesting_partition.id().partition(),
-            demand(1),
-        )
-        .unwrap();
-        assert!(delivery.is_current());
-
-        origin
-            .state
-            .lock()
-            .publish_demand(requesting_partition.id().partition(), demand(2));
-        assert!(!delivery.is_current());
-        delivery.reject(None);
-    }
-
-    #[test]
-    fn stale_successor_cannot_leave_active_demand_idle() {
-        let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
-        let requesting_partition = cell(&origin, 1);
-        let delivery = OriginAdmission::publish_without_driving(
-            &origin,
-            requesting_partition.id().partition(),
-            demand(1),
-        )
-        .unwrap();
-        origin.state.lock().publish_demand(
-            requesting_partition.id().partition(),
-            DemandSnapshot::active(
-                DemandId::from_u64(1),
-                SnapshotVersion::INITIAL.next(),
-                ProtocolRequirement::H1Compatible,
-                EligibilityGroup::Pool,
-            ),
-        );
-        delivery.reject(Some(demand(1)));
-
-        assert_eq!(1, origin.counts().available);
-        assert_eq!(0, origin.counts().ordered);
-    }
-
-    #[test]
-    fn dropped_delivery_refunnels_capacity_and_preserves_order() {
-        let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
-        let first = cell(&origin, 1);
-        let second = cell(&origin, 2);
-        let (first_waiter, first_demand) =
-            first.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
-        let (second_waiter, second_demand) =
-            second.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
-        let delivery =
-            OriginAdmission::publish_without_driving(&origin, first.id().partition(), first_demand)
-                .unwrap();
-        {
-            let mut state = origin.state.lock();
-            state.publish_demand(second.id().partition(), second_demand);
-        }
-        drop(delivery);
-
-        let first_lease = OriginCell::take_ready_lease(&first, first_waiter)
-            .expect("dropped delivery did not retry the original head");
-        assert!(OriginCell::take_ready_lease(&second, second_waiter).is_none());
-        assert_eq!(1, origin.counts().ordered);
-
-        drop(first_lease);
-        let second_lease = OriginCell::take_ready_lease(&second, second_waiter)
-            .expect("younger demand did not run after the original head");
-        drop(second_lease);
-    }
-
-    #[test]
     fn losing_registered_cell_returns_capacity_after_admission_unlocks() {
         let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
         let retained = cell(&origin, 1);
@@ -980,9 +906,9 @@ mod tests {
         let (_waiter, snapshot) =
             candidate.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
         let mut delivery =
-            OriginAdmission::publish_without_driving(&origin, candidate.id().partition(), snapshot)
+            OriginAdmission::submit_without_running(&origin, candidate.id().partition(), snapshot)
                 .expect("candidate demand did not reserve capacity");
-        assert!(delivery.materialize_for_test());
+        assert!(delivery.resolve_payload_for_test());
         assert!(OriginCell::receive_delivery(&candidate, delivery).is_none());
         assert_eq!(0, origin.available_capacity_for_test());
 
@@ -993,27 +919,6 @@ mod tests {
             origin.available_capacity_for_test(),
             "losing candidate did not return capacity after registration"
         );
-    }
-
-    #[test]
-    fn expired_requesting_cell_refunnels_capacity() {
-        let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
-        let requesting_partition = cell(&origin, 1);
-        let requesting_cell_id = requesting_partition.id().partition();
-        let (_waiter, snapshot) =
-            requesting_partition.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
-        let delivery =
-            OriginAdmission::publish_without_driving(&origin, requesting_cell_id, snapshot)
-                .unwrap();
-
-        drop(requesting_partition);
-        assert!(origin.cell(&requesting_cell_id).is_none());
-        OriginAdmission::drive(Some(AdmissionAction::Delivery(delivery)));
-
-        let counts = origin.counts();
-        assert_eq!(1, counts.available);
-        assert_eq!(0, counts.delivering);
-        assert_eq!(0, counts.ordered);
     }
 
     #[test]

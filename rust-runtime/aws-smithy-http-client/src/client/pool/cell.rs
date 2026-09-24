@@ -1926,7 +1926,7 @@ mod tests {
 
         let (stale_waiter, stale_demand) =
             stale.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
-        let mut delivery = OriginAdmission::publish_without_driving(
+        let mut delivery = OriginAdmission::submit_without_running(
             &admission,
             stale.id().partition(),
             stale_demand,
@@ -1934,19 +1934,19 @@ mod tests {
         .expect("stale demand did not reserve capacity");
         let (target_waiter, target_demand) =
             target.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
-        OriginAdmission::publish_demand(&admission, target.id().partition(), target_demand);
+        OriginAdmission::submit_demand_snapshot(&admission, target.id().partition(), target_demand);
 
         // Model cancellation winning in the cell before its retirement
         // publication reaches admission.
         let cancelled = stale
             .state
             .lock()
-            .waiters
+            .acquisitions
             .cancel_waiter(stale_waiter, &stale.eligibility_group)
             .expect("stale waiter was not cancelled");
-        drop(cancelled.returned_events);
+        drop(cancelled.returned_steps);
 
-        assert!(delivery.materialize_for_test());
+        assert!(delivery.resolve_payload_for_test());
         let next = OriginCell::receive_delivery(&stale, delivery)
             .expect("stale rejection did not return the successor delivery");
         assert!(
@@ -1954,7 +1954,7 @@ mod tests {
             "stale rejection recursively drove its successor"
         );
 
-        OriginAdmission::drive(Some(next));
+        OriginAdmission::run_action_chain(Some(next));
         drop(
             OriginCell::take_ready_lease(&target, target_waiter)
                 .expect("existing driver did not deliver the successor"),
