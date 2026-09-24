@@ -44,8 +44,13 @@ credentials-login = [
 # SigV4/SigV4a request signing. Request checksums are reached from the generated service crates
 # instead, since `aws-smithy-checksums` is not a dependency of this crate.
 #
-# Two things this crate does itself are NOT covered, because they use RustCrypto directly and
-# have no aws-lc-rs path yet (see smithy-rs#4681):
+# The TLS half reaches the hyper 1.x client only. A `BehaviorVersion` older than v2026_01_12
+# selects the legacy client instead, whose TLS is rustls 0.21 on `ring`, leaving FIPS signing over
+# non-FIPS TLS; `aws-smithy-runtime` logs a warning for that combination. An HTTP client installed
+# explicitly is likewise untouched -- see `aws-smithy-runtime`'s `crypto-fips` feature.
+#
+# Two things this crate does itself are NOT covered either, because they use RustCrypto directly
+# and have no aws-lc-rs path yet (see smithy-rs#4681):
 # - `credentials-login` signs DPoP (RFC 9449) proof JWTs with `p256` ECDSA in `login/dpop.rs`.
 #   That is a real signature in the credential-acquisition path, so a FIPS deployment that uses
 #   `credentials-login` is not fully covered by this feature.
