@@ -73,14 +73,16 @@ pub struct PatchRuntime {
     /// release at all: Cargo ignores a `[patch.crates-io]` entry whose version
     /// doesn't satisfy the requirement it is replacing.
     ///
-    /// With this flag, the version requirements in the checked-out old SDK release
-    /// are rewritten to accept the versions being patched in, `aws-config` is routed
-    /// through that rewritten old SDK copy, and the resulting lockfile is verified to
-    /// actually use the patch set.
+    /// With this flag, dependency requirements in the checked-out old SDK's
+    /// `aws-config` are rewritten to accept the versions being patched in, that local
+    /// `aws-config` is routed through the patch table, and the resulting lockfile is
+    /// verified to actually use the expected patch set. Generated SDK clients retain
+    /// their published requirements so they are not forced onto incompatible APIs.
     ///
-    /// This tests the coordinated post-release dependency graph. It explicitly
-    /// waives compatibility with the already-published old `aws-config` and with
-    /// partial updates, and does not restore it.
+    /// This tests the transitioned runtime and configuration graph alongside old
+    /// generated clients. It explicitly waives compatibility with the
+    /// already-published old `aws-config` and with partial runtime/configuration
+    /// updates, and does not restore it.
     #[arg(long)]
     allow_compatibility_transition: bool,
 

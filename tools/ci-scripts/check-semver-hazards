@@ -9,10 +9,11 @@
 #
 # The caller must explicitly authorize or reject compatibility transition mode.
 # Pull-request CI authorizes it only when the PR has the `breaking-change` label.
-# When authorized, the mode rewrites version requirements in the checked-out old
-# SDK release so that they accept the crate versions being patched in, routes
-# `aws-config` through that rewritten old SDK copy, and verifies that the expected
-# patch set was used. Without authorization, this runs the original strict check.
+# When authorized, the mode rewrites incompatible requirements only in the
+# checked-out old SDK's local `aws-config`, routes that crate through the patch
+# table, and verifies both those rewritten edges and compatible old SDK edges.
+# Generated clients retain incompatible published requirements. Without
+# authorization, this runs the original strict check.
 
 C_YELLOW='\033[1;33m'
 C_RESET='\033[0m'
@@ -27,20 +28,19 @@ print_compatibility_transition_waiver() {
 
 This job runs `runtime-versioner patch-runtime --allow-compatibility-transition`.
 
-It therefore exercises the COORDINATED POST-RELEASE dependency graph: the graph
-that exists only once every affected crate in this release has been published
-together. Version requirements in the old SDK release are rewritten to accept
-the crate versions being patched in, and `aws-config` is routed through that
-rewritten old SDK copy.
+It exercises the updated runtime and `aws-config` dependency graph while keeping
+old generated SDK clients on the runtime compatibility lines they were generated
+against. Only requirements in the old SDK's local `aws-config` are rewritten;
+that crate is then routed through the patch table.
 
 It explicitly WAIVES compatibility with:
   * the already-published old `aws-config`, which pins the previous
     compatibility line of the patched runtime crates, and
-  * any partial update, where a consumer upgrades only some of these crates.
+  * partial updates among runtime and configuration crates that must move together.
 
-A passing run does NOT claim that compatibility with those consumers has been
-restored. It only claims that the coordinated graph resolves, builds, and passes
-the old SDK's tests.
+A passing run does NOT claim that every partial update is compatible. It claims
+that the transitioned runtime and `aws-config` graph can coexist with the old SDK
+clients and that those clients' tests pass.
 ================================================================================
 EOF
 }

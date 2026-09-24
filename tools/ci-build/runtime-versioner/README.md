@@ -84,40 +84,45 @@ previous line, and the patch silently goes unused.
 With `--allow-compatibility-transition`, after `sdk-versioner` converts the
 checked-out old SDK to version-only dependencies, `patch-runtime`:
 
-1. Walks `sdk/**/Cargo.toml` in the old SDK, excluding nested workspace roots
-   (such as fuzz crates) that do not consume the root patch table, and inspects
-   the normal, `dev`, `build`, and `target.<cfg>.*` dependency tables, honoring
-   `package = "..."` aliases. For every dependency that targets a crate being
-   patched in, a version requirement that does **not** accept the patched
-   version is rewritten to that version. Requirements that already accept it are
-   left alone, and `features`, `default-features`, `optional`, and `package` are
-   preserved. Every rewrite is reported.
-2. Routes `aws-config` through the rewritten old SDK crate (`sdk/aws-config`) by
-   adding it to `[patch.crates-io]`. The smithy-rs copy of `aws-config` is never
-   used as a patch source, because it depends on generated SDK crates that do
-   not exist in this workspace.
-3. After `cargo update`, parses the resulting `Cargo.lock` and fails if any
-   expected patched crate is missing as an unsourced (path) package. For
-   `aws-config` it also fails if any registry-resolved copy remains, regardless
-   of version. Patches with no old SDK dependency edge (for example the DNS and
-   OpenTelemetry integrations, which nothing in the SDK depends on) are
-   legitimately unused and are not required.
+1. Scans `sdk/**/Cargo.toml` in the old SDK, excluding `target/` directories
+   and nested workspace roots that do not consume the root patch table. It checks
+   normal, `dev`, `build`, and `target.<cfg>.*` dependency tables and honors
+   `package = "..."` aliases.
+   Requirements that already accept a patched version remain unchanged and make
+   that patch part of the verified set. An incompatible requirement is rewritten
+   only in `sdk/aws-config/Cargo.toml`, because transition mode explicitly
+   supplies that crate. Generated SDK client manifests are deliberately not
+   rewritten: their source may target an intentionally incompatible older `0.x`
+   runtime API, so they retain their published requirements and Cargo may resolve
+   both compatibility lines. Rewrites preserve `features`, `default-features`,
+   `optional`, and `package`, and every rewrite is reported.
+2. Routes that rewritten old SDK `aws-config` through `[patch.crates-io]`. The
+   smithy-rs copy of `aws-config` is never used as a patch source, because it
+   depends on generated SDK crates that do not exist in this workspace.
+3. After `cargo update`, parses the resulting `Cargo.lock` and fails if an
+   expected patch used by `aws-config` or accepted by an old SDK requirement is
+   missing as an unsourced (path) package. It also fails if any registry-resolved
+   `aws-config` copy remains, regardless of version. Other patches may
+   legitimately go unused when they have no old SDK edge, are referenced only
+   by optional dependencies, or are referenced only by incompatible published
+   requirements that remain on the old line.
 
 ### What this does and does not prove
 
-This mode exercises the **coordinated post-release dependency graph**: the graph
-that exists only once every affected crate in the release has been published
-together.
+This mode exercises the updated runtime and `aws-config` dependency graph while
+keeping the previous release's generated client source on the runtime
+compatibility lines it was generated against.
 
 It explicitly **waives** compatibility with:
 
 - the already-published old `aws-config`, which pins the previous compatibility
   line of the patched runtime crates, and
-- any partial update, where a consumer upgrades only some of these crates.
+- partial updates among runtime and configuration crates that must move together.
 
-A passing run does not claim that compatibility with those consumers has been
-restored. It only claims that the coordinated graph resolves, builds, and passes
-the old SDK's tests. The command prints this waiver before and after it runs.
+A passing run does not claim that every partial update is compatible. It claims
+that the transitioned runtime and `aws-config` graph can coexist with the old
+SDK clients and that those clients' tests still pass. The command prints this
+waiver before and after it runs.
 
 `check-semver-hazards` requires an explicit `true` or `false` authorization
 argument. Pull-request CI queries the current PR labels and passes `true` only

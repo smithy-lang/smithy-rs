@@ -30,7 +30,7 @@ use toml_edit::{DocumentMut, InlineTable, Item, Table, TableLike, Value};
 /// underneath a `[target.<cfg>]` table.
 const DEPENDENCY_TABLES: &[&str] = &["dependencies", "dev-dependencies", "build-dependencies"];
 
-/// The crate that is routed through the (rewritten) old SDK release rather than smithy-rs.
+/// The old SDK crate that transition mode supplies and may therefore rewrite.
 const AWS_CONFIG: &str = "aws-config";
 
 pub fn patch(args: PatchRuntime) -> Result<()> {
@@ -102,9 +102,10 @@ pub fn patch_with(args: PatchRuntimeWith) -> Result<()> {
             return Ok(Vec::new());
         }
 
-        // Transition mode: the old SDK release pins the _previous_ compatibility
-        // line of some of the crates being patched in, so those requirements have
-        // to be rewritten before Cargo will use the patch at all.
+        // Transition mode supplies the old SDK's local aws-config through the patch
+        // table. Rewrite incompatible requirements only in that supplied crate:
+        // generated clients retain requirements for intentionally incompatible APIs,
+        // while compatible generated-client edges are still checked below.
         let scan = rewrite_old_sdk_requirements(aws_sdk_rust.root.as_std_path(), &crates_to_patch)?;
         report_rewrites(&scan);
         let old_aws_config = old_sdk_aws_config(&aws_sdk_rust)?;
@@ -140,22 +141,23 @@ fn print_compatibility_transition_waiver() {
     eprintln!("{WAIVER_RULE}");
     eprintln!("!! COMPATIBILITY TRANSITION MODE -- --allow-compatibility-transition !!");
     eprintln!();
-    eprintln!("This run rewrites version requirements in the checked-out old SDK release so");
-    eprintln!("that they accept the crate versions being patched in, and routes `aws-config`");
-    eprintln!("through that rewritten old SDK copy.");
+    eprintln!("This run rewrites version requirements only in the checked-out old SDK's");
+    eprintln!("`aws-config`, then routes that crate through the patch table.");
     eprintln!();
-    eprintln!("It therefore exercises the COORDINATED POST-RELEASE dependency graph: the");
-    eprintln!("graph that exists only once every affected crate in this release has been");
-    eprintln!("published together.");
+    eprintln!("Generated SDK clients retain their published requirements. Intentionally");
+    eprintln!("incompatible runtime lines may therefore coexist in the resolved graph while");
+    eprintln!("the updated runtime and aws-config dependency graph is tested.");
     eprintln!();
     eprintln!("It explicitly WAIVES compatibility with:");
     eprintln!("  * the already-published old `aws-config`, which pins the previous");
     eprintln!("    compatibility line of the patched runtime crates, and");
-    eprintln!("  * any partial update, where a consumer upgrades only some of these crates.");
+    eprintln!(
+        "  * partial updates among runtime and configuration crates that must move together."
+    );
     eprintln!();
-    eprintln!("A passing run does NOT claim that compatibility with those consumers has been");
-    eprintln!("restored. It only claims that the coordinated graph resolves, builds, and");
-    eprintln!("passes the old SDK's tests.");
+    eprintln!("A passing run does NOT claim that every partial update is compatible. It claims");
+    eprintln!("that the transitioned runtime and aws-config graph can coexist with the old SDK");
+    eprintln!("clients and that those clients' tests pass.");
     eprintln!("{WAIVER_RULE}");
 }
 
@@ -486,15 +488,17 @@ impl RequirementRewrite {
     }
 }
 
-/// The result of scanning (and rewriting) the old SDK's manifests.
+/// The result of scanning the old SDK and rewriting its supplied `aws-config`.
 #[derive(Debug, Default, Eq, PartialEq)]
 struct OldSdkScan {
     /// Every requirement that was rewritten, in manifest order.
     rewrites: Vec<RequirementRewrite>,
-    /// Patched crates that the old SDK depends on unconditionally.
+    /// Patched crates referenced by a compatible or rewritten non-optional requirement.
     required: BTreeSet<String>,
-    /// Patched crates that the old SDK only depends on via `optional = true` entries.
+    /// Patched crates referenced by compatible or rewritten optional requirements.
     optional_only: BTreeSet<String>,
+    /// Patched crates referenced by incompatible requirements that were preserved.
+    preserved_incompatible: BTreeSet<String>,
 }
 
 impl OldSdkScan {
@@ -507,16 +511,28 @@ impl OldSdkScan {
             .map(String::as_str)
             .collect()
     }
+
+    /// Crates referenced only by incompatible requirements that remain on their
+    /// published compatibility line.
+    fn incompatible_only_names(&self) -> BTreeSet<&str> {
+        self.preserved_incompatible
+            .iter()
+            .filter(|name| !self.required.contains(*name))
+            .filter(|name| !self.optional_only.contains(*name))
+            .map(String::as_str)
+            .collect()
+    }
 }
 
-/// Rewrites version requirements in the old SDK that would prevent the patch from being used.
+/// Scans old SDK requirements and rewrites only the incompatible requirements
+/// in its locally supplied `aws-config`.
 ///
-/// `sdk-versioner` has already converted every SDK/Smithy dependency in the old
-/// SDK to a version-only dependency, so at this point each of those entries carries
-/// the version that was published with the old release. Cargo ignores a
-/// `[patch.crates-io]` entry whose version doesn't satisfy the requirement it is
-/// meant to replace, so any requirement that rejects the version being patched in
-/// is rewritten to that version. Requirements that already accept it are untouched.
+/// Requirements that already accept a patched version are recorded so patch
+/// verification continues to cover compatible updates used by generated clients.
+/// An incompatible generated-client requirement is preserved because its source may
+/// target an intentionally incompatible older `0.x` API. Incompatible requirements
+/// are rewritten only for `aws-config`, which transition mode explicitly supplies
+/// through `[patch.crates-io]`.
 fn rewrite_old_sdk_requirements(
     aws_sdk_rust_root: &Path,
     crates_to_patch: &[Package],
@@ -525,9 +541,18 @@ fn rewrite_old_sdk_requirements(
         .iter()
         .map(|c| (c.handle.name.clone(), c.handle.expect_version().clone()))
         .collect();
-
+    let aws_config_manifest = aws_sdk_rust_root
+        .join("sdk")
+        .join(AWS_CONFIG)
+        .join("Cargo.toml");
     let mut manifest_paths = Vec::new();
     discover_manifests(&mut manifest_paths, &aws_sdk_rust_root.join("sdk"))?;
+    if !manifest_paths.contains(&aws_config_manifest) {
+        bail!(
+            "expected transition rewrite target at {}, but it was not discovered as an old SDK package manifest",
+            aws_config_manifest.display()
+        );
+    }
     manifest_paths.sort();
 
     let mut scan = OldSdkScan::default();
@@ -542,7 +567,14 @@ fn rewrite_old_sdk_requirements(
         let mut manifest = contents
             .parse::<DocumentMut>()
             .with_context(|| format!("failed to parse {manifest_path:?}"))?;
-        if rewrite_manifest_requirements(&label, &mut manifest, &patched_versions, &mut scan)? {
+        let rewrite_incompatible = manifest_path == aws_config_manifest;
+        if rewrite_manifest_requirements(
+            &label,
+            &mut manifest,
+            &patched_versions,
+            &mut scan,
+            rewrite_incompatible,
+        )? {
             fs::write(&manifest_path, manifest.to_string())
                 .with_context(|| format!("failed to write {manifest_path:?}"))?;
         }
@@ -555,8 +587,7 @@ fn rewrite_old_sdk_requirements(
 ///
 /// A nested manifest with its own `[workspace]` table is a separate workspace
 /// root. Neither it nor anything below it consumes the old SDK root's
-/// `[patch.crates-io]`, so rewriting it would create requirements that the
-/// transition patches cannot satisfy.
+/// `[patch.crates-io]`, so it must not influence transition patch verification.
 fn discover_manifests(manifests: &mut Vec<PathBuf>, dir: &Path) -> Result<()> {
     let manifest_path = dir.join("Cargo.toml");
     if manifest_path.is_file() {
@@ -587,12 +618,17 @@ fn discover_manifests(manifests: &mut Vec<PathBuf>, dir: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Rewrites incompatible requirements in one manifest. Returns true if it changed.
+/// Scans requirements in one manifest and returns true if it changed.
+///
+/// When `rewrite_incompatible` is false, incompatible requirements are preserved
+/// and excluded from the expected patch set. Compatible requirements are always
+/// tracked so the patch verifier still checks SemVer-compatible updates.
 fn rewrite_manifest_requirements(
     manifest_label: &str,
     manifest: &mut DocumentMut,
     patched_versions: &BTreeMap<String, Version>,
     scan: &mut OldSdkScan,
+    rewrite_incompatible: bool,
 ) -> Result<bool> {
     let mut changed = false;
     for table_name in DEPENDENCY_TABLES {
@@ -606,6 +642,7 @@ fn rewrite_manifest_requirements(
                 table,
                 patched_versions,
                 scan,
+                rewrite_incompatible,
             )?;
         }
     }
@@ -631,6 +668,7 @@ fn rewrite_manifest_requirements(
                         table,
                         patched_versions,
                         scan,
+                        rewrite_incompatible,
                     )?;
                 }
             }
@@ -645,6 +683,7 @@ fn rewrite_dependency_table(
     dependencies: &mut dyn TableLike,
     patched_versions: &BTreeMap<String, Version>,
     scan: &mut OldSdkScan,
+    rewrite_incompatible: bool,
 ) -> Result<bool> {
     let mut changed = false;
     for (key, value) in dependencies.iter_mut() {
@@ -655,12 +694,7 @@ fn rewrite_dependency_table(
             // Not a crate we're patching in.
             None => continue,
         };
-        if is_optional(value) {
-            scan.optional_only.insert(package.clone());
-        } else {
-            scan.required.insert(package.clone());
-        }
-
+        let optional = is_optional(value);
         let location = format!("`{table_label}.{dependency}` in {manifest_label}");
         let slot = requirement_slot(value, &location)?.with_context(|| {
             format!(
@@ -671,7 +705,17 @@ fn rewrite_dependency_table(
             .as_str()
             .with_context(|| format!("{location} has a non-string `version`"))?
             .to_string();
-        if requirement_accepts(&current, intended, &location)? {
+        let accepts_patch = requirement_accepts(&current, intended, &location)?;
+        if !accepts_patch && !rewrite_incompatible {
+            scan.preserved_incompatible.insert(package);
+            continue;
+        }
+        if optional {
+            scan.optional_only.insert(package.clone());
+        } else {
+            scan.required.insert(package.clone());
+        }
+        if accepts_patch {
             continue;
         }
         let replacement = intended.to_string();
@@ -753,12 +797,12 @@ fn set_string_preserving_decor(slot: &mut Value, new_value: &str) {
 fn report_rewrites(scan: &OldSdkScan) {
     if scan.rewrites.is_empty() {
         tracing::info!(
-            "no old SDK version requirements needed rewriting for the compatibility transition"
+            "no old SDK aws-config requirements needed rewriting for the compatibility transition"
         );
         return;
     }
     tracing::warn!(
-        "rewrote {} old SDK version requirement(s) for the compatibility transition:",
+        "rewrote {} old SDK aws-config requirement(s) for the compatibility transition:",
         scan.rewrites.len()
     );
     for rewrite in &scan.rewrites {
@@ -786,10 +830,10 @@ struct ExpectedPatch {
 
 /// Selects the patch entries that must be used by the resolved graph.
 ///
-/// A patched crate is only expected when the old SDK actually depends on it. Crates
-/// with no old SDK dependency edge (for example the optional observability and DNS
-/// integrations, which nothing in the SDK depends on) are legitimately unused, and
-/// Cargo will report them as unused patches.
+/// A patched crate is expected when `aws-config` was rewritten to use it or an old
+/// SDK requirement already accepts it. Crates referenced only by preserved
+/// incompatible requirements, crates referenced only optionally, and crates with no
+/// old SDK edge may legitimately remain unused.
 fn select_expected_patches(
     crates_to_patch: &[Package],
     scan: &OldSdkScan,
@@ -811,13 +855,29 @@ fn select_expected_patches(
     }
     if !unreferenced.is_empty() {
         let optional_only = scan.optional_only_names();
-        let (optional, unused): (Vec<_>, Vec<_>) = unreferenced
-            .into_iter()
-            .partition(|name| optional_only.contains(name));
+        let incompatible_only = scan.incompatible_only_names();
+        let mut optional = Vec::new();
+        let mut incompatible = Vec::new();
+        let mut unused = Vec::new();
+        for name in unreferenced {
+            if optional_only.contains(name) {
+                optional.push(name);
+            } else if incompatible_only.contains(name) {
+                incompatible.push(name);
+            } else {
+                unused.push(name);
+            }
+        }
         if !unused.is_empty() {
             tracing::info!(
                 "these patched crates have no old SDK dependency edge and may go unused: {}",
                 unused.join(", ")
+            );
+        }
+        if !incompatible.is_empty() {
+            tracing::info!(
+                "these patched crates are referenced only by preserved incompatible old SDK requirements and may go unused: {}",
+                incompatible.join(", ")
             );
         }
         if !optional.is_empty() {
@@ -994,6 +1054,7 @@ mod tests {
             &mut doc,
             patched_versions,
             &mut scan,
+            true,
         )
         .expect("rewrite succeeds");
         assert_eq!(changed, !scan.rewrites.is_empty());
@@ -1172,6 +1233,42 @@ aws-smithy-json = "0.64.0"
     }
 
     #[test]
+    fn preserves_incompatible_root_and_target_requirements_without_expecting_patches() {
+        let manifest = r#"[dependencies]
+aws-smithy-json = "0.63.0"
+
+[target."cfg(unix)".dependencies]
+aws-smithy-schema = { version = "0.2.1" }
+"#;
+        let mut doc = manifest.parse::<DocumentMut>().expect("valid toml");
+        let mut scan = OldSdkScan::default();
+        let changed = rewrite_manifest_requirements(
+            "sdk/polly/Cargo.toml",
+            &mut doc,
+            &patched(&[
+                ("aws-smithy-json", "0.64.0"),
+                ("aws-smithy-schema", "0.4.0"),
+            ]),
+            &mut scan,
+            false,
+        )
+        .expect("scan succeeds");
+
+        assert!(!changed);
+        assert_eq!(manifest, doc.to_string());
+        assert!(scan.rewrites.is_empty());
+        assert!(scan.required.is_empty());
+        assert!(scan.optional_only.is_empty());
+        assert_eq!(
+            BTreeSet::from([
+                "aws-smithy-json".to_string(),
+                "aws-smithy-schema".to_string(),
+            ]),
+            scan.preserved_incompatible
+        );
+    }
+
+    #[test]
     fn leaves_compatible_and_unrelated_requirements_alone() {
         let manifest = r#"[dependencies]
 # a caret requirement already accepts 0.63.1
@@ -1217,6 +1314,7 @@ aws-smithy-json = "not a version req"
             &mut doc,
             &patched(&[("aws-smithy-json", "0.64.0")]),
             &mut OldSdkScan::default(),
+            true,
         )
         .expect_err("a malformed requirement fails");
         let message = format!("{error:#}");
@@ -1242,6 +1340,7 @@ aws-smithy-json = { workspace = true }
             &mut doc,
             &patched(&[("aws-smithy-json", "0.64.0")]),
             &mut OldSdkScan::default(),
+            true,
         )
         .expect_err("a versionless patched dependency fails");
         let message = format!("{error:#}");
@@ -1483,7 +1582,31 @@ members = ["sdk/aws-config"]
     }
 
     #[test]
-    fn rewrites_old_sdk_manifests_but_skips_nested_workspaces() {
+    fn rejects_a_missing_aws_config_rewrite_target() {
+        let sdk_root = tempfile::tempdir().expect("temp dir");
+        let client_manifest = sdk_root.path().join("sdk/polly/Cargo.toml");
+        std::fs::create_dir_all(client_manifest.parent().expect("has a parent")).expect("mkdir");
+        std::fs::write(
+            client_manifest,
+            r#"[dependencies]
+aws-smithy-json = "0.63.0"
+"#,
+        )
+        .expect("write");
+
+        let error = rewrite_old_sdk_requirements(
+            sdk_root.path(),
+            &[test_package("aws-smithy-json", "0.64.0")],
+        )
+        .expect_err("a missing aws-config manifest must fail closed");
+        assert!(
+            format!("{error:#}").contains("expected transition rewrite target"),
+            "unexpected error: {error:#}"
+        );
+    }
+
+    #[test]
+    fn rewrites_only_aws_config_but_tracks_compatible_client_requirements() {
         let sdk_root = tempfile::tempdir().expect("temp dir");
         let sdk_root = sdk_root.path();
         let write = |relative: &str, contents: &str| {
@@ -1492,62 +1615,110 @@ members = ["sdk/aws-config"]
             std::fs::write(&path, contents).expect("write");
             path
         };
-        let client = write(
-            "sdk/s3/Cargo.toml",
+        let aws_config = write(
+            "sdk/aws-config/Cargo.toml",
             r#"[dependencies]
 aws-smithy-json = "0.63.0"
+aws-smithy-schema = "0.2.1"
 "#,
         );
-        // Fuzz crates and similar nested workspace roots do not consume the
-        // root SDK workspace's patch table, so neither they nor their children
-        // may be rewritten.
+        // Old generated source is coupled to the runtime API it was generated
+        // against. Its incompatible schema and CBOR requirements stay unchanged,
+        // while its compatible runtime requirement still makes that patch expected.
+        let polly = write(
+            "sdk/polly/Cargo.toml",
+            r#"[dependencies]
+aws-smithy-cbor = "0.62.1"
+aws-smithy-runtime = "1.10.0"
+aws-smithy-schema = "0.2.1"
+"#,
+        );
         let nested_workspace = write(
-            "sdk/s3/fuzz/Cargo.toml",
+            "sdk/polly/fuzz/Cargo.toml",
             r#"[workspace]
 members = ["."]
 
 [dependencies]
-aws-smithy-json = { version = "0.63.0" }
+aws-smithy-types = "0.1.0"
 "#,
         );
         let nested_workspace_child = write(
-            "sdk/s3/fuzz/fixture/Cargo.toml",
-            r#"[dev-dependencies]
-aws-smithy-json = "0.63.0"
-"#,
-        );
-        // Build output is not part of the workspace scan.
-        let ignored = write(
-            "sdk/s3/target/package/other/Cargo.toml",
+            "sdk/polly/fuzz/fixture/Cargo.toml",
             r#"[dependencies]
-aws-smithy-json = "0.63.0"
+aws-smithy-mocks = "0.1.0"
 "#,
         );
-        // A manifest outside of `sdk/` is not touched either.
-        let outside = write(
+        let target_output = write(
+            "sdk/polly/target/package/fixture/Cargo.toml",
+            r#"[dependencies]
+aws-smithy-query = "0.62.1"
+"#,
+        );
+        let outside_sdk = write(
             "examples/Cargo.toml",
             r#"[dependencies]
-aws-smithy-json = "0.63.0"
+aws-smithy-xml = "0.62.1"
 "#,
         );
 
-        let scan =
-            rewrite_old_sdk_requirements(sdk_root, &[test_package("aws-smithy-json", "0.64.0")])
-                .expect("scan succeeds");
+        let scan = rewrite_old_sdk_requirements(
+            sdk_root,
+            &[
+                test_package("aws-smithy-cbor", "0.64.0"),
+                test_package("aws-smithy-json", "0.64.0"),
+                test_package("aws-smithy-runtime", "1.10.1"),
+                test_package("aws-smithy-schema", "0.4.0"),
+                test_package("aws-smithy-types", "1.3.1"),
+                test_package("aws-smithy-mocks", "0.3.0"),
+                test_package("aws-smithy-query", "0.64.0"),
+                test_package("aws-smithy-xml", "0.64.0"),
+            ],
+        )
+        .expect("scan succeeds");
 
-        assert_eq!(1, scan.rewrites.len());
+        assert_eq!(2, scan.rewrites.len());
+        assert!(scan
+            .rewrites
+            .iter()
+            .all(|rewrite| rewrite.manifest.replace('\\', "/") == "sdk/aws-config/Cargo.toml"));
         assert_eq!(
-            vec!["sdk/s3/Cargo.toml"],
-            scan.rewrites
-                .iter()
-                .map(|rewrite| rewrite.manifest.replace('\\', "/"))
-                .collect::<Vec<_>>()
+            BTreeSet::from([
+                "aws-smithy-json".to_string(),
+                "aws-smithy-runtime".to_string(),
+                "aws-smithy-schema".to_string(),
+            ]),
+            scan.required
+        );
+        assert_eq!(
+            BTreeSet::from([
+                "aws-smithy-cbor".to_string(),
+                "aws-smithy-schema".to_string(),
+            ]),
+            scan.preserved_incompatible
+        );
+        assert_eq!(
+            BTreeSet::from(["aws-smithy-cbor"]),
+            scan.incompatible_only_names()
         );
         let read = |path: &std::path::Path| std::fs::read_to_string(path).expect("read");
-        assert!(read(&client).contains(r#"aws-smithy-json = "0.64.0""#));
-        assert!(read(&nested_workspace).contains(r#"{ version = "0.63.0" }"#));
-        assert!(read(&nested_workspace_child).contains(r#"aws-smithy-json = "0.63.0""#));
-        assert!(read(&ignored).contains(r#"aws-smithy-json = "0.63.0""#));
-        assert!(read(&outside).contains(r#"aws-smithy-json = "0.63.0""#));
+        assert!(read(&aws_config).contains(r#"aws-smithy-json = "0.64.0""#));
+        assert!(read(&aws_config).contains(r#"aws-smithy-schema = "0.4.0""#));
+        assert!(read(&polly).contains(r#"aws-smithy-cbor = "0.62.1""#));
+        assert!(read(&polly).contains(r#"aws-smithy-runtime = "1.10.0""#));
+        assert!(read(&polly).contains(r#"aws-smithy-schema = "0.2.1""#));
+        assert!(read(&nested_workspace).contains(r#"aws-smithy-types = "0.1.0""#));
+        assert!(read(&nested_workspace_child).contains(r#"aws-smithy-mocks = "0.1.0""#));
+        assert!(read(&target_output).contains(r#"aws-smithy-query = "0.62.1""#));
+        assert!(read(&outside_sdk).contains(r#"aws-smithy-xml = "0.62.1""#));
+        for excluded in [
+            "aws-smithy-types",
+            "aws-smithy-mocks",
+            "aws-smithy-query",
+            "aws-smithy-xml",
+        ] {
+            assert!(!scan.required.contains(excluded));
+            assert!(!scan.optional_only.contains(excluded));
+            assert!(!scan.preserved_incompatible.contains(excluded));
+        }
     }
 }
