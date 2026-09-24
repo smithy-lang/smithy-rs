@@ -53,9 +53,8 @@ impl<S> RestRouter<S> {
     /// Applies type erasure to the inner route using [`Route::new`].
     pub fn boxed<B>(self) -> RestRouter<Route<B>>
     where
-        B: 'static,
         S: Service<http::Request<B>, Response = http::Response<BoxBody>, Error = Infallible>,
-        S: Send + Sync + Clone + 'static,
+        S: Send + Clone + 'static,
         S::Future: Send + 'static,
     {
         RestRouter {

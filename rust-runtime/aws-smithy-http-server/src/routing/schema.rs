@@ -10,7 +10,7 @@
 //! request and dispatches to the first that does; a request no protocol claims is answered with a
 //! bare `400`.
 
-use super::Route;
+use super::SyncRoute;
 use crate::{
     body::BoxBody,
     error::BoxError,
@@ -55,11 +55,11 @@ impl OperationIndex {
 /// A protocol-independent operation and its HTTP handler, generic over the transport body `B`.
 pub struct OperationHandlerBinding<B = hyper::body::Incoming> {
     operation: &'static OperationSchema<'static>,
-    route: Route<crate::body::SchemaBody<B>>,
+    route: SyncRoute<crate::body::SchemaBody<B>>,
 }
 impl<B> OperationHandlerBinding<B> {
     /// Binds an operation to a handler, without assigning any protocol-specific routing rule.
-    pub fn new(operation: &'static OperationSchema<'static>, route: Route<crate::body::SchemaBody<B>>) -> Self {
+    pub fn new(operation: &'static OperationSchema<'static>, route: SyncRoute<crate::body::SchemaBody<B>>) -> Self {
         Self { operation, route }
     }
 }
@@ -235,7 +235,7 @@ impl SharedProtocolRouter {
 struct BoundHandler<B> {
     operation: &'static OperationSchema<'static>,
     request_body: RequestBodyCollectionConfig,
-    route: Route<crate::body::SchemaBody<B>>,
+    route: SyncRoute<crate::body::SchemaBody<B>>,
 }
 impl<B> Clone for BoundHandler<B> {
     fn clone(&self) -> Self {
@@ -381,7 +381,7 @@ where
         selected: OperationIndex,
         protocol: usize,
         mut request: Request<crate::body::SchemaBody<B>>,
-    ) -> super::route::RouteFuture<crate::body::SchemaBody<B>> {
+    ) -> super::route::SyncRouteFuture<crate::body::SchemaBody<B>> {
         let binding = &self.bindings[selected.index];
         debug_assert!(
             std::ptr::eq(binding.operation, selected.operation),
@@ -486,7 +486,7 @@ pin_project_lite::pin_project! {
         },
         Handling {
             #[pin]
-            future: super::route::RouteFuture<crate::body::SchemaBody<B>>,
+            future: super::route::SyncRouteFuture<crate::body::SchemaBody<B>>,
         },
         Rejected {
             response: Option<Response<BoxBody>>,
@@ -711,7 +711,7 @@ impl<B> SchemaRoutingService<B> {
     pub fn layer<L>(mut self, layer: &L) -> Self
     where
         B: 'static,
-        L: tower::Layer<Route<crate::body::SchemaBody<B>>>,
+        L: tower::Layer<SyncRoute<crate::body::SchemaBody<B>>>,
         L::Service: Service<Request<crate::body::SchemaBody<B>>, Response = Response<BoxBody>, Error = Infallible>
             + Clone
             + Send
@@ -727,7 +727,7 @@ impl<B> SchemaRoutingService<B> {
             .map(|binding| BoundHandler {
                 operation: binding.operation,
                 request_body: binding.request_body,
-                route: Route::new(layer.layer(binding.route)),
+                route: SyncRoute::new(layer.layer(binding.route)),
             })
             .collect();
         self

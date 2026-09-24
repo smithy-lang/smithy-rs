@@ -170,7 +170,7 @@ fn registration() -> ProtocolRegistration {
 fn binding(operation: &'static OperationSchema<'static>) -> OperationHandlerBinding {
     OperationHandlerBinding::new(
         operation,
-        Route::new(tower::service_fn(move |request: Request<Body>| async move {
+        SyncRoute::new(tower::service_fn(move |request: Request<Body>| async move {
             let selected = request
                 .extensions()
                 .get::<SelectedProtocolOperation>()
@@ -421,7 +421,7 @@ async fn all_builtins_route_without_polling_body_and_preserve_fallback_errors() 
     ] {
         let bindings = OPERATIONS
             .iter()
-            .map(|op| OperationHandlerBinding::new(op, Route::new(crate::operation::SchemaMissingFailure)));
+            .map(|op| OperationHandlerBinding::new(op, SyncRoute::new(crate::operation::SchemaMissingFailure)));
         let app = SchemaRoutingService::from_operation_handler_bindings(schema, [], bindings).unwrap();
         let expected = app
             .inner
@@ -546,7 +546,7 @@ async fn layers_see_selection_and_do_not_observe_routing_rejections() {
     use std::sync::atomic::{AtomicUsize, Ordering};
     let calls = Arc::new(AtomicUsize::new(0));
     let counter = calls.clone();
-    let layer = tower::layer::layer_fn(move |inner: Route<Body>| {
+    let layer = tower::layer::layer_fn(move |inner: SyncRoute<Body>| {
         let counter = counter.clone();
         tower::service_fn(move |request: Request<Body>| {
             assert!(request.extensions().get::<SelectedProtocolOperation>().is_some());
@@ -685,7 +685,7 @@ async fn shared_handlers_preserve_readiness_and_clone_only_the_selected_route() 
         let bindings = OPERATIONS.iter().map(|op| {
             OperationHandlerBinding::new(
                 op,
-                Route::new(Handler {
+                SyncRoute::new(Handler {
                     clones: clones.clone(),
                     ready: AtomicBool::new(false),
                 }),
@@ -759,7 +759,7 @@ async fn body_routing_leaves_streaming_operations_unrouted() {
 async fn buffered_content_is_reused_and_replacements_and_wrappers_are_read() {
     let original = Bytes::from_static(b"first\npayload");
     let mut app =
-        service(RoutingOptions::default()).layer(&tower::layer::layer_fn(move |_inner: Route<Body>| {
+        service(RoutingOptions::default()).layer(&tower::layer::layer_fn(move |_inner: SyncRoute<Body>| {
             let original = original.clone();
             tower::service_fn(move |request: Request<Body>| {
                 let original = original.clone();

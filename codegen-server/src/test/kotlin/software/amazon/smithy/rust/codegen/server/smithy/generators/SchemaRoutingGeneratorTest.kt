@@ -168,7 +168,7 @@ class SchemaRoutingGeneratorTest {
                         let calls = ::std::sync::Arc::new(::std::sync::atomic::AtomicUsize::new(0));
                         for checked in [false, true] {
                             let calls = calls.clone();
-                            let layer = #{Tower}::layer::layer_fn(move |inner: #{Server}::routing::Route<#{Server}::body::Body>| {
+                            let layer = #{Tower}::layer::layer_fn(move |inner: #{Server}::routing::SyncRoute<#{Server}::body::Body>| {
                                 let calls = calls.clone();
                                 #{Tower}::service_fn(move |request: #{Http}::Request<#{Server}::body::Body>| {
                                     assert!(request.extensions().get::<#{Server}::schema::SelectedProtocolOperation>().is_some());

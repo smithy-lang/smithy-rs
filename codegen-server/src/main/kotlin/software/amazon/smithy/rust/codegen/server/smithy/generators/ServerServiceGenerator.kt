@@ -64,6 +64,14 @@ class ServerServiceGenerator(
     private val builderName = "${serviceName}Builder"
     private val schemaSerde = codegenContext.usesSchemaHttpSerde
 
+    /**
+     * The erased per-operation handler type. The schema router shares one handler set across
+     * threads, so its routes (and everything wrapped into them) must be `Sync`; the legacy protocol
+     * routers keep the non-`Sync` [`Route`] so existing handlers, plugins and layers still compile.
+     */
+    private val routeType = if (schemaSerde) "#{SmithyHttpServer}::routing::SyncRoute" else "#{SmithyHttpServer}::routing::Route"
+    private val syncBound = if (schemaSerde) " + Sync" else ""
+
     private fun streams(operation: OperationShape): Boolean =
         operation.inputShape(model).findStreamingMember(model) != null ||
             operation.outputShape(model).findStreamingMember(model) != null
@@ -94,7 +102,7 @@ class ServerServiceGenerator(
 
     /** A `Writable` block of "field: Type" for the builder. */
     private val builderFields =
-        builderFieldNames.values.map { name -> "$name: Option<#{SmithyHttpServer}::routing::Route<Body>>" }
+        builderFieldNames.values.map { name -> "$name: Option<$routeType<Body>>" }
 
     /** The name of the local private module containing the functions that return the request for each operation */
     private val requestSpecsModuleName = "request_specs"
@@ -257,7 +265,7 @@ class ServerServiceGenerator(
                             >::Output
                         >,
 
-                        HttpPl::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + Sync + 'static,
+                        HttpPl::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send$syncBound + 'static,
                         <HttpPl::Output as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
 
                     {
@@ -319,7 +327,7 @@ class ServerServiceGenerator(
                             >::Output
                         >,
 
-                        HttpPl::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + Sync + 'static,
+                        HttpPl::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send$syncBound + 'static,
                         <HttpPl::Output as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
 
                     {
@@ -334,10 +342,10 @@ class ServerServiceGenerator(
                     /// not constrained by the Smithy contract.
                     ${if (schemaSerde) "pub " else ""}fn ${fieldName}_custom<S>(mut self, svc: S) -> Self
                     where
-                        S: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + Sync + 'static,
+                        S: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send$syncBound + 'static,
                         S::Future: Send + 'static,
                     {
-                        self.$fieldName = Some(#{SmithyHttpServer}::routing::Route::new(svc));
+                        self.$fieldName = Some($routeType::new(svc));
                         self
                     }
                     """,
@@ -568,8 +576,7 @@ class ServerServiceGenerator(
                     ${if (schemaSerde) "routing_options: #{SmithyHttpServer}::routing::RoutingOptions," else ""}
                 }
 
-                // `Route::new` requires a `'static` body; legacy builders are generic over it.
-                impl<$builderGenerics> $builderName<$builderGenerics> ${if (schemaSerde) "" else "where Body: 'static"} {
+                impl<$builderGenerics> $builderName<$builderGenerics> {
                     #{Setters:W}
                 }
 
@@ -769,13 +776,12 @@ class ServerServiceGenerator(
                             >,
                         >
                         where
-                            B: 'static,
                             S: #{Tower}::Service<
                                 #{Http}::Request<B>,
                                 Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>,
                                 Error = std::convert::Infallible,
                             >,
-                            S: Clone + Send + Sync + 'static,
+                            S: Clone + Send + 'static,
                             S::Future: Send + 'static,
                         {
                             self.layer(&::tower::layer::layer_fn(
@@ -830,7 +836,7 @@ class ServerServiceGenerator(
                     writable {
                         val field = builderFieldNames.getValue(operation)
                         val name = operationStructNames.getValue(operation)
-                        val handler = if (unchecked) "self.$field.unwrap_or_else(|| #{SmithyHttpServer}::routing::Route::new(#{SmithyHttpServer}::operation::SchemaMissingFailure))" else "self.$field.expect(\"handler checked above\")"
+                        val handler = if (unchecked) "self.$field.unwrap_or_else(|| #{SmithyHttpServer}::routing::SyncRoute::new(#{SmithyHttpServer}::operation::SchemaMissingFailure))" else "self.$field.expect(\"handler checked above\")"
                         rustTemplate("#{SmithyHttpServer}::routing::OperationHandlerBinding::new(<crate::operation_shape::$name as #{SmithyHttpServer}::operation::SchemaOperationShape>::SCHEMA, $handler)", *codegenScope)
                     }
                 }.join(",")
@@ -846,7 +852,7 @@ class ServerServiceGenerator(
                 /// ${if (unchecked) "Panics on invalid routing configuration, such as contradictory protocol ordering." else "Returns an error for missing handlers or invalid routing configuration."}
                 pub fn $name(self) -> $result
                 where
-                    L: #{Tower}::Layer<#{SmithyHttpServer}::routing::Route<Body>>,
+                    L: #{Tower}::Layer<#{SmithyHttpServer}::routing::SyncRoute<Body>>,
                     L::Service: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + Sync + 'static,
                     <L::Service as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
                 {
@@ -953,7 +959,7 @@ class ServerServiceGenerator(
                     /// Applies a layer after routing to each operation handler.
                     pub fn layer<L>(self, layer: &L) -> Self
                     where
-                        L: #{Tower}::Layer<#{SmithyHttpServer}::routing::Route<Body>>,
+                        L: #{Tower}::Layer<#{SmithyHttpServer}::routing::SyncRoute<Body>>,
                         L::Service: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + Sync + 'static,
                         <L::Service as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
                     { Self { svc: self.svc.layer(layer) } }

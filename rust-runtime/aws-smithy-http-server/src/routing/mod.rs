@@ -61,7 +61,7 @@ pub use self::lambda_handler::LambdaHandler;
 pub use self::{
     into_make_service::IntoMakeService,
     into_make_service_with_connect_info::{Connected, IntoMakeServiceWithConnectInfo},
-    route::Route,
+    route::{Route, SyncRoute},
 };
 
 pub(crate) const UNKNOWN_OPERATION_EXCEPTION: &str = "UnknownOperationException";

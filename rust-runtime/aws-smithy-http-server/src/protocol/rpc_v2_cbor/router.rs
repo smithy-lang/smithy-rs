@@ -112,9 +112,8 @@ impl<S> RpcV2CborRouter<S> {
 
     pub fn boxed<B>(self) -> RpcV2CborRouter<Route<B>>
     where
-        B: 'static,
         S: Service<http::Request<B>, Response = http::Response<BoxBody>, Error = Infallible>,
-        S: Send + Sync + Clone + 'static,
+        S: Send + Clone + 'static,
         S::Future: Send + 'static,
     {
         RpcV2CborRouter {
