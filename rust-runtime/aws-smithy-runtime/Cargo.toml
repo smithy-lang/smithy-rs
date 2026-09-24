@@ -49,7 +49,7 @@ default-https-client = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/r
 #   explicit HTTP client. Note it is AWS-LC-based already: `s2n-tls`'s own `fips` feature is
 #   `aws-lc-rs/fips`, the same validated module, so such a build can be FIPS -- but only if the
 #   consumer enables that feature themselves, since `aws-smithy-http-client` does not forward it
-#   (see the TODO on its `s2n-tls` feature).
+#   (see the `TODO(hyper1)` note on its `s2n-tls` feature).
 crypto-fips = ["aws-smithy-http-client?/rustls-aws-lc-fips"]
 rt-tokio = ["tokio/rt"]
 
