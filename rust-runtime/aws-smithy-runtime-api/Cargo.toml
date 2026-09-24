@@ -14,6 +14,22 @@ rust-version = "1.94.1"
 default = []
 client = []
 http-auth = ["dep:zeroize"]
+# Deprecated no-op, kept only for compatibility with already-released crates. It gated the
+# pre-`v2026_01_12` behavior versions, which no longer need gating now that they fall back to the
+# `hyper` 1.x client, so nothing in this repo enables or reads it.
+#
+# It cannot be deleted yet: `aws-sdk-rust`'s released `aws-smithy-runtime` still lists
+# `aws-smithy-runtime-api/legacy-client` in its `tls-rustls`, and `check-semver-hazards` patches
+# these crates into that release and resolves it, so removing the feature fails the build with
+# "does not have that feature". `aws-smithy-runtime` here has already dropped the reference, so
+# the next `aws-sdk-rust` release generated from this repo will not name it.
+#
+# Safe to delete once this prints nothing:
+#     git -C aws-sdk-rust show <latest-release-tag>:sdk/aws-smithy-runtime/Cargo.toml | grep legacy-client
+#
+# Kept as `["client"]` rather than `[]` deliberately: `tls-rustls` never listed `client` itself, so
+# this was the only thing giving `client` to a build that enabled `tls-rustls` alone. Emptying it
+# would be a silent behavior change for those consumers.
 legacy-client = ["client"]
 test-util = ["aws-smithy-types/test-util", "http-1x"]
 http-02x = ["dep:http-02x"]
