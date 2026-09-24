@@ -159,6 +159,40 @@ class SchemaRoutingGeneratorTest {
                         *scope,
                     )
                 }
+                tokioTest("http_plugin_that_replaces_the_selection_cannot_lift_the_body_limit") {
+                    rustTemplate(
+                        """
+                        use #{Tower}::ServiceExt;
+                        // Middleware can only re-insert the routed selection through `with_protocol`, which
+                        // keeps the operation's body limit; `SelectedProtocolOperation::new` is crate-private.
+                        let layer = #{Tower}::layer::layer_fn(|inner| {
+                            #{Tower}::ServiceBuilder::new().map_request(|mut request: #{Http}::Request<#{Server}::body::Body>| {
+                                let selected = request.extensions().get::<#{Server}::schema::SelectedProtocolOperation>().unwrap();
+                                assert_eq!(selected.request_body_config().max_bytes, ::std::num::NonZeroUsize::new(1));
+                                let replaced = selected.with_protocol(selected.protocol().clone());
+                                request.extensions_mut().insert(replaced);
+                                request
+                            }).service(inner)
+                        });
+                        let limit = #{Server}::schema::ServiceRequestBodyConfig {
+                            global: #{Server}::schema::RequestBodyCollectionConfig {
+                                max_bytes: ::std::num::NonZeroUsize::new(1), read_timeout: #{None},
+                            },
+                            per_operation: ::std::collections::HashMap::new(),
+                        };
+                        let config = crate::ExampleConfig::builder().http_plugin(#{Server}::plugin::LayerPlugin(layer)).build();
+                        let service = crate::Example::builder(config)
+                            // A request that reached the handler would get 200.
+                            .ping(|_input: crate::input::PingInput| async { crate::output::PingOutput {} })
+                            .request_body_config(limit)
+                            .build_unchecked();
+                        let request = #{Http}::Request::builder().method("POST").uri("/ping").header("content-type", "application/json")
+                            .body(#{Server}::body::Body::from_bytes(r##"{"message":"hello"}"##.into())).unwrap();
+                        assert_eq!(service.oneshot(request).await.unwrap().status(), 400);
+                        """,
+                        *scope,
+                    )
+                }
                 tokioTest("checked_and_unchecked_builders_preserve_handlers_and_layer_selection") {
                     rustTemplate(
                         """

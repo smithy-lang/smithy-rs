@@ -15,11 +15,13 @@ are stored as the new `aws_smithy_http_server::routing::SyncRoute`, which, unlik
 - Generated schema-path service builders require handlers, HTTP plugin outputs and layers
   (`build`, `build_unchecked`, `layer`, `*_custom`) to be `Send + Sync`.
 - `OperationHandlerBinding::new` and `SchemaRoutingService::layer` take and produce `SyncRoute`.
-- The operation's request-body limits now travel with the routed request:
-  `SelectedProtocolOperation::new` takes the operation's `RequestBodyCollectionConfig` as a third
-  argument (read it back with `request_body_config()`), and `DynUpgradePlugin::new()` /
-  `StreamingUpgradePlugin::new()` no longer take a config argument. An HTTP plugin that re-inserts
-  `SelectedProtocolOperation` should carry the existing `request_body_config()` over.
+- The operation's request-body limits now travel with the routed request in
+  `SelectedProtocolOperation` (read them with `request_body_config()`), and
+  `DynUpgradePlugin::new()` / `StreamingUpgradePlugin::new()` no longer take a config argument.
+  Only the router can create a `SelectedProtocolOperation`: its constructor is crate-private, so
+  middleware cannot replace the limits. Middleware that routes an operation through another
+  protocol uses `SelectedProtocolOperation::with_protocol`, which keeps the operation and its
+  limits.
 - `aws-smithy-http-server` now depends on `tower` 0.5 (for `BoxCloneSyncService`). The `Service`
   and `Layer` traits are the same `tower-service` / `tower-layer` traits as before.
 

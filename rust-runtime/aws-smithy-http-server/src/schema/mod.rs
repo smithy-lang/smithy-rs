@@ -37,7 +37,11 @@ pub struct SelectedProtocolOperation {
 }
 
 impl SelectedProtocolOperation {
-    pub fn new(
+    /// Only the router creates this extension. Keeping construction crate-private means middleware
+    /// cannot replace the operation's request-body limits (for example with the unlimited
+    /// `RequestBodyCollectionConfig::default()`); to route through another protocol, use
+    /// [`with_protocol`](Self::with_protocol), which keeps them.
+    pub(crate) fn new(
         protocol: SharedServerProtocol,
         operation: &'static OperationSchema<'static>,
         request_body: RequestBodyCollectionConfig,
@@ -46,6 +50,16 @@ impl SelectedProtocolOperation {
             protocol,
             operation,
             request_body,
+        }
+    }
+
+    /// The same routed operation served through `protocol`. The operation and its request-body
+    /// limits are kept, so middleware that swaps the protocol cannot loosen them.
+    pub fn with_protocol(&self, protocol: SharedServerProtocol) -> Self {
+        Self {
+            protocol,
+            operation: self.operation,
+            request_body: self.request_body,
         }
     }
 
