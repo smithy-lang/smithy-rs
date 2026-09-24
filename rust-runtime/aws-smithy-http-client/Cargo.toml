@@ -31,6 +31,8 @@ default-client = [
     "dep:rustls-native-certs"
 ]
 
+rt-tokio = ["tokio/rt"]
+
 wire-mock = [
     "test-util",
     "default-client",
@@ -139,6 +141,9 @@ rustls-pki-types = { version = "1.12.0", features = ["std"] }
 tokio = { version = "1.49.0", features = ["macros", "rt", "rt-multi-thread", "test-util", "full"] }
 tokio-rustls = "0.26.2"
 
+[target.'cfg(smithy_http_client_loom)'.dev-dependencies]
+loom = "0.7.2"
+
 
 [[example]]
 name = "client-ring"
@@ -167,6 +172,7 @@ stable = true
 all-features = false
 features = [
     "default-client ",
+    "rt-tokio",
     "wire-mock",
     "test-util",
     "rustls-ring",
@@ -179,4 +185,4 @@ rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(aws_sdk_unstable)'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(aws_sdk_unstable)', 'cfg(smithy_http_client_loom)'] }
