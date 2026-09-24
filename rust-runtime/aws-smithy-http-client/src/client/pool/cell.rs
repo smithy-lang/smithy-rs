@@ -2070,6 +2070,36 @@ mod tests {
     }
 
     #[test]
+    fn prepared_h2_route_executes_and_settles_assignment() {
+        let (admission, connection_cell, requesting_cell) =
+            bounded_peer_cells(1, EligibilityGroup::Pool, EligibilityGroup::Pool);
+        let (generation, _connection, _physical) =
+            install_bounded_h2(&admission, &connection_cell, 1);
+        let (waiter, demand) =
+            requesting_cell.register_waiter_without_publish(ProtocolRequirement::H2Required);
+        let action = OriginAdmission::submit_action_without_running(
+            &admission,
+            requesting_cell.id().partition(),
+            demand,
+        )
+        .expect("peer demand did not prepare an HTTP/2 route");
+
+        OriginAdmission::run_action_chain(Some(action));
+        let activation = take_ready_h2(&requesting_cell, waiter);
+        assert_eq!(generation, activation.generation());
+        drop(activation);
+
+        assert_eq!(0, requesting_cell.probe().retained);
+        assert_eq!(0, admission.ordered_demand_count_for_test());
+        assert!(OriginCell::close_h2(
+            &connection_cell,
+            generation,
+            CloseReason::PoolDropped,
+        ));
+        assert_eq!(1, admission.available_capacity_for_test());
+    }
+
+    #[test]
     fn peer_h2_route_respects_eligibility_group() {
         let groups = [
             (
@@ -2819,52 +2849,6 @@ mod loom_tests {
             deliver.join().unwrap();
             cancel.join().unwrap();
 
-            assert_eq!(1, admission.available_capacity_for_test());
-            admission.clear_modeled_cells_for_test();
-        });
-    }
-
-    /// Executes production route preparation, attachment, and settlement.
-    ///
-    /// The accepted assignment must deliver one activation, leave no retained
-    /// demand, and preserve the installed generation until explicit close.
-    #[test]
-    fn prepared_h2_route_executes_and_settles_assignment() {
-        loom::model(|| {
-            let (admission, connection_cell, requesting_cell) =
-                bounded_peer_cells(EligibilityGroup::Pool, EligibilityGroup::Pool);
-            let lease = OriginAdmission::lease_for_test(&admission);
-            let (connection, _physical) = ConnectionState::bounded(connection_info(1), lease);
-            let generation = OriginCell::install_h2_for_test(&connection_cell, connection, 1, None);
-            let (waiter, demand) =
-                requesting_cell.register_waiter_without_publish(ProtocolRequirement::H2Required);
-            let action = OriginAdmission::submit_action_without_running(
-                &admission,
-                requesting_cell.id().partition(),
-                demand,
-            )
-            .expect("peer demand did not prepare an HTTP/2 route");
-
-            assert!(
-                action.run_once_for_test().is_none(),
-                "single route assignment prepared an unexpected successor"
-            );
-            let activation = match requesting_cell
-                .take_ready_event(waiter)
-                .expect("accepted route did not activate its waiter")
-            {
-                AcquisitionStep::Resolved(AcquisitionOutcome::H2(activation)) => activation,
-                _ => panic!("accepted route produced a non-HTTP/2 result"),
-            };
-            drop(activation);
-
-            assert_eq!(0, requesting_cell.probe().retained);
-            assert_eq!(0, admission.ordered_demand_count_for_test());
-            assert!(OriginCell::close_h2(
-                &connection_cell,
-                generation,
-                CloseReason::PoolDropped,
-            ));
             assert_eq!(1, admission.available_capacity_for_test());
             admission.clear_modeled_cells_for_test();
         });

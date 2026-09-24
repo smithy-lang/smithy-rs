@@ -369,8 +369,8 @@ async fn h1_attempt_telemetry_distinguishes_fresh_and_reused_connections() {
 
     let first = first_capture.get();
     let second = second_capture.get();
-    assert!(first.dispatch_duration().is_some());
-    assert!(second.dispatch_duration().is_some());
+    assert!(first.connector_call_duration().is_some());
+    assert!(second.connector_call_duration().is_some());
     assert_eq!(
         first.acquisition().expect("first acquisition").usage(),
         ConnectionUsage::Fresh
@@ -472,7 +472,10 @@ async fn acquisition_duration_ends_when_hyper_accepts_the_request() {
         telemetry.acquisition().expect("acquisition").duration(),
         Some(Duration::ZERO)
     );
-    assert_eq!(telemetry.dispatch_duration(), Some(Duration::from_secs(10)));
+    assert_eq!(
+        telemetry.connector_call_duration(),
+        Some(Duration::from_secs(10))
+    );
 
     drop(connector);
     drop(client);
@@ -543,7 +546,10 @@ async fn bounded_waiter_proceeds_after_the_active_h1_returns() {
     let acquisition = telemetry.acquisition().expect("second acquisition");
     assert_eq!(acquisition.duration(), Some(Duration::from_secs(5)));
     assert_eq!(acquisition.usage(), ConnectionUsage::Reused);
-    assert_eq!(telemetry.dispatch_duration(), Some(Duration::from_secs(5)));
+    assert_eq!(
+        telemetry.connector_call_duration(),
+        Some(Duration::from_secs(5))
+    );
 
     drop(connector);
     drop(client);

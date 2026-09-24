@@ -55,7 +55,36 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::sync::RwLock;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
+
+/// Optional timing for one complete HTTP connector call.
+pub(crate) struct ConnectorCallTimer {
+    capture: CaptureHttpAttemptTelemetry,
+    time_source: SharedTimeSource,
+    started_at: SystemTime,
+}
+
+impl ConnectorCallTimer {
+    /// Starts timing when the request asks the connector to capture telemetry.
+    pub(crate) fn start(request: &HttpRequest, time_source: &SharedTimeSource) -> Option<Self> {
+        let capture = request.extension::<CaptureHttpAttemptTelemetry>()?.clone();
+        let time_source = time_source.clone();
+        let started_at = time_source.now();
+        Some(Self {
+            capture,
+            time_source,
+            started_at,
+        })
+    }
+
+    /// Records the interval when the connector call returns.
+    pub(crate) fn finish(self) {
+        let Ok(duration) = self.time_source.now().duration_since(self.started_at) else {
+            return;
+        };
+        self.capture.record_connector_call_duration(duration);
+    }
+}
 
 /// Given `HttpConnectorSettings` and an `SharedAsyncSleep`, create a `SharedHttpConnector` from defaults depending on what cargo features are activated.
 pub fn default_connector(
@@ -610,10 +639,7 @@ where
     C::Error: Into<BoxError>,
 {
     fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
-        let attempt_capture = request.extension::<CaptureHttpAttemptTelemetry>().cloned();
-        let dispatch_timing = attempt_capture
-            .as_ref()
-            .map(|_| (self.time_source.clone(), self.time_source.now()));
+        let connector_call_timer = ConnectorCallTimer::start(&request, &self.time_source);
         let mut request = match request.try_into_http1x() {
             Ok(request) => request,
             Err(err) => {
@@ -639,10 +665,8 @@ where
                     .map_err(|err| ConnectorError::other(err.into(), None)),
                 Err(err) => Err(downcast_error(err)),
             };
-            if let (Some(capture), Some((time_source, started_at))) =
-                (attempt_capture.as_ref(), dispatch_timing)
-            {
-                capture.record_dispatch_interval(started_at, time_source.now());
+            if let Some(timer) = connector_call_timer {
+                timer.finish();
             }
             result
         })
@@ -1186,6 +1210,21 @@ mod test {
     use hyper_util::client::legacy::connect::Connected;
     use std::time::UNIX_EPOCH;
 
+    #[test]
+    fn connector_call_timer_ignores_a_backwards_clock() {
+        let capture = CaptureHttpAttemptTelemetry::new();
+        let time_source = SharedTimeSource::new(ManualTimeSource::new(SystemTime::UNIX_EPOCH));
+
+        ConnectorCallTimer {
+            capture: capture.clone(),
+            time_source,
+            started_at: SystemTime::UNIX_EPOCH + Duration::from_secs(1),
+        }
+        .finish();
+
+        assert_eq!(None, capture.get().connector_call_duration());
+    }
+
     use super::*;
 
     #[tokio::test]
@@ -1259,7 +1298,7 @@ mod test {
         let err = adapter.call(request).await.expect_err("socket hangup");
         assert!(err.is_io(), "unexpected error type: {:?}", err);
         assert_eq!(
-            capture.get().dispatch_duration(),
+            capture.get().connector_call_duration(),
             Some(Duration::from_secs(7))
         );
     }

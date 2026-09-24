@@ -8,8 +8,8 @@
 use super::partition::PartitionId;
 use super::registry::PartitionState;
 use super::ConnectionPool;
-use crate::client::downcast_error;
 use crate::client::timeout::{self, TimeoutKind};
+use crate::client::{downcast_error, ConnectorCallTimer};
 use crate::sync::Arc;
 use aws_smithy_async::rt::sleep::{default_async_sleep, SharedAsyncSleep};
 use aws_smithy_async::time::SharedTimeSource;
@@ -239,11 +239,7 @@ async fn send_pool_request(
 impl HttpConnector for PoolConnector {
     fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
         let attempt_capture = request.extension::<CaptureHttpAttemptTelemetry>().cloned();
-        let dispatch_timing = attempt_capture.as_ref().map(|_| {
-            let time_source = self.time_source.clone();
-            let started_at = time_source.now();
-            (time_source, started_at)
-        });
+        let connector_call_timer = ConnectorCallTimer::start(&request, &self.time_source);
         let attempt_telemetry = attempt_capture.as_ref().map(|capture| {
             super::dispatch::AttemptTelemetryInput::new(capture.clone(), self.time_source.clone())
         });
@@ -263,10 +259,8 @@ impl HttpConnector for PoolConnector {
                 attempt_telemetry,
             )
             .await;
-            if let (Some(capture), Some((time_source, started_at))) =
-                (attempt_capture.as_ref(), dispatch_timing)
-            {
-                capture.record_dispatch_interval(started_at, time_source.now());
+            if let Some(timer) = connector_call_timer {
+                timer.finish();
             }
             result
         })

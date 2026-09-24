@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::client::ConnectorCallTimer;
 use crate::hyper_legacy::timeout_middleware::HttpTimeoutError;
 use aws_smithy_async::future::timeout::TimedOutError;
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
@@ -11,7 +12,6 @@ use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::connection::CaptureSmithyConnection;
 use aws_smithy_runtime_api::client::connection::ConnectionMetadata;
 use aws_smithy_runtime_api::client::connector_metadata::ConnectorMetadata;
-use aws_smithy_runtime_api::client::http::telemetry::CaptureHttpAttemptTelemetry;
 use aws_smithy_runtime_api::client::http::{
     HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpClient,
     SharedHttpConnector,
@@ -360,10 +360,7 @@ where
     fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
         use hyper_0_14::service::Service;
 
-        let attempt_capture = request.extension::<CaptureHttpAttemptTelemetry>().cloned();
-        let dispatch_timing = attempt_capture
-            .as_ref()
-            .map(|_| (self.time_source.clone(), self.time_source.now()));
+        let connector_call_timer = ConnectorCallTimer::start(&request, &self.time_source);
         let mut request = match request.try_into_http02x() {
             Ok(request) => request,
             Err(err) => {
@@ -385,10 +382,8 @@ where
                     .map_err(|err| ConnectorError::other(err.into(), None)),
                 Err(err) => Err(downcast_error(err)),
             };
-            if let (Some(capture), Some((time_source, started_at))) =
-                (attempt_capture.as_ref(), dispatch_timing)
-            {
-                capture.record_dispatch_interval(started_at, time_source.now());
+            if let Some(timer) = connector_call_timer {
+                timer.finish();
             }
             result
         })

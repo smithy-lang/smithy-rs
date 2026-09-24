@@ -79,7 +79,7 @@ impl ConnectionAcquisitionTelemetry {
 #[non_exhaustive]
 pub struct HttpAttemptTelemetry {
     selection: Option<ConnectionSelection>,
-    dispatch_duration: Option<Duration>,
+    connector_call_duration: Option<Duration>,
 }
 
 impl HttpAttemptTelemetry {
@@ -101,8 +101,8 @@ impl HttpAttemptTelemetry {
     ///
     /// This ends when the connector returns a response head or terminal error.
     /// It does not measure response-body transfer or time to first response byte.
-    pub fn dispatch_duration(&self) -> Option<Duration> {
-        self.dispatch_duration
+    pub fn connector_call_duration(&self) -> Option<Duration> {
+        self.connector_call_duration
     }
 }
 
@@ -135,28 +135,13 @@ impl CaptureHttpAttemptTelemetry {
     /// Records the complete HTTP connector call duration.
     ///
     /// Returns `true` when this call recorded the value.
-    pub fn record_dispatch_duration(&self, duration: Duration) -> bool {
+    pub fn record_connector_call_duration(&self, duration: Duration) -> bool {
         let mut state = self.lock();
-        if state.dispatch_duration.is_some() {
+        if state.connector_call_duration.is_some() {
             return false;
         }
-        state.dispatch_duration = Some(duration);
+        state.connector_call_duration = Some(duration);
         true
-    }
-
-    /// Records the complete HTTP connector call interval.
-    ///
-    /// Returns `false` without recording a value when `completed_at` precedes
-    /// `started_at` or a dispatch duration was already recorded.
-    pub fn record_dispatch_interval(
-        &self,
-        started_at: SystemTime,
-        completed_at: SystemTime,
-    ) -> bool {
-        let Ok(duration) = completed_at.duration_since(started_at) else {
-            return false;
-        };
-        self.record_dispatch_duration(duration)
     }
 
     /// Records the connection selection that accepted the request.
@@ -209,18 +194,18 @@ mod tests {
     }
 
     #[test]
-    fn records_dispatch_and_selection_independently() {
+    fn records_connector_call_and_selection_independently() {
         let capture = CaptureHttpAttemptTelemetry::new();
         let acquisition =
             ConnectionAcquisitionTelemetry::new(Duration::from_millis(3), ConnectionUsage::Fresh);
 
         assert!(capture.record_connection_selection(acquisition, connection()));
-        assert!(capture.record_dispatch_duration(Duration::from_millis(7)));
+        assert!(capture.record_connector_call_duration(Duration::from_millis(7)));
 
         let telemetry = capture.get();
         assert_eq!(telemetry.acquisition(), Some(&acquisition));
         assert_eq!(
-            telemetry.dispatch_duration(),
+            telemetry.connector_call_duration(),
             Some(Duration::from_millis(7))
         );
         assert!(telemetry.connection().is_some());
@@ -235,25 +220,15 @@ mod tests {
             ConnectionAcquisitionTelemetry::new(Duration::from_millis(9), ConnectionUsage::Reused);
         assert!(capture.record_connection_selection(first, connection()));
         assert!(!capture.record_connection_selection(second, connection()));
-        assert!(capture.record_dispatch_duration(Duration::from_millis(4)));
-        assert!(!capture.record_dispatch_duration(Duration::from_millis(8)));
+        assert!(capture.record_connector_call_duration(Duration::from_millis(4)));
+        assert!(!capture.record_connector_call_duration(Duration::from_millis(8)));
 
         let telemetry = capture.get();
         assert_eq!(telemetry.acquisition(), Some(&first));
         assert_eq!(
-            telemetry.dispatch_duration(),
+            telemetry.connector_call_duration(),
             Some(Duration::from_millis(4))
         );
-    }
-
-    #[test]
-    fn backwards_dispatch_interval_is_absent() {
-        let capture = CaptureHttpAttemptTelemetry::new();
-        let started_at = SystemTime::UNIX_EPOCH + Duration::from_secs(2);
-        let completed_at = SystemTime::UNIX_EPOCH + Duration::from_secs(1);
-
-        assert!(!capture.record_dispatch_interval(started_at, completed_at));
-        assert_eq!(capture.get().dispatch_duration(), None);
     }
 
     #[test]
