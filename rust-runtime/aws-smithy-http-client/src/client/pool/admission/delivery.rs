@@ -410,6 +410,22 @@ enum DeliveryKind {
 }
 
 impl DeliveryAck {
+    /// Avoids republishing a successor already covered by visible HTTP/2 state.
+    ///
+    /// Capacity or HTTP/1 delivery may reveal another waiter after the
+    /// requesting cell already gained a local generation or peer route. That
+    /// visible HTTP/2 state can serve an H2-compatible successor directly. If
+    /// it later closes, its close path publishes the cell's current demand.
+    pub(in crate::client::pool) fn suppress_h2_successor(&mut self) {
+        if self
+            .successor
+            .as_ref()
+            .is_some_and(DemandSnapshot::accepts_h2)
+        {
+            self.successor = None;
+        }
+    }
+
     /// Acknowledges that requesting cell state accepted the acquisition event.
     pub(in crate::client::pool) fn accept(mut self) -> Option<AdmissionAction> {
         let kind = self
