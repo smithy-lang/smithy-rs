@@ -105,19 +105,19 @@ fn warn_legacy_client_default_is_changing(behavior_version: BehaviorVersion) {
 
 /// Say so when a FIPS build resolves to the legacy TLS stack, which is not FIPS.
 ///
-/// `crypto-fips` routes the default HTTPS client's TLS through the FIPS 140-3 validated build of
+/// `aws-lc-fips` routes the default HTTPS client's TLS through the FIPS 140-3 validated build of
 /// AWS-LC, but it can only do that for the hyper 1.x client. The legacy client's TLS is
 /// `rustls` 0.21 on `ring`, so a build that resolves to it has FIPS signing and checksums over
 /// non-FIPS TLS — and would otherwise have no way to find that out.
 ///
 /// Called at the same points as [`warn_legacy_client_default_is_changing`], since the condition is
 /// the same: the legacy client is what got selected.
-#[cfg(all(feature = "connector-hyper-0-14-x", feature = "crypto-fips"))]
+#[cfg(all(feature = "connector-hyper-0-14-x", feature = "aws-lc-fips"))]
 fn warn_legacy_client_is_not_fips(behavior_version: BehaviorVersion) {
     let emit = || {
         tracing::warn!(
             behavior_version = ?behavior_version,
-            "`crypto-fips` is enabled, but this build resolves to the legacy hyper 0.14.x HTTP \
+            "`aws-lc-fips` is enabled, but this build resolves to the legacy hyper 0.14.x HTTP \
              client, whose TLS is rustls 0.21 on ring rather than the FIPS 140-3 validated build \
              of AWS-LC. Request signing and checksums are still FIPS; TLS is not, so this build \
              is not end-to-end FIPS. Use `BehaviorVersion::v2026_01_12()` or later to select the \
@@ -137,7 +137,7 @@ fn warn_legacy_client_is_not_fips(behavior_version: BehaviorVersion) {
     emit();
 }
 
-#[cfg(all(feature = "connector-hyper-0-14-x", not(feature = "crypto-fips")))]
+#[cfg(all(feature = "connector-hyper-0-14-x", not(feature = "aws-lc-fips")))]
 fn warn_legacy_client_is_not_fips(_behavior_version: BehaviorVersion) {}
 
 /// Runtime plugin that provides a default HTTPS connector.
@@ -883,13 +883,13 @@ mod tests {
     }
 
     /// A FIPS build that resolves to the legacy client has non-FIPS TLS, which must not be silent:
-    /// the whole point of `crypto-fips` is a claim the caller then makes to an auditor.
+    /// the whole point of `aws-lc-fips` is a claim the caller then makes to an auditor.
     ///
     /// Gated like the sibling test: `tls-rustls` is what makes the legacy client yield something.
     #[test]
     #[traced_test]
     #[expect(deprecated)]
-    #[cfg(all(feature = "tls-rustls", feature = "crypto-fips"))]
+    #[cfg(all(feature = "tls-rustls", feature = "aws-lc-fips"))]
     fn a_fips_build_resolving_to_the_legacy_client_warns_that_tls_is_not_fips() {
         let old = default_http_client_plugin_v2(BehaviorVersion::v2024_03_28());
         assert!(old.is_some(), "the legacy client should have been selected");
@@ -903,11 +903,11 @@ mod tests {
         );
     }
 
-    /// The converse: on a behavior version that selects the hyper 1.x client, `crypto-fips` does
+    /// The converse: on a behavior version that selects the hyper 1.x client, `aws-lc-fips` does
     /// reach TLS, so there is nothing to warn about.
     #[test]
     #[traced_test]
-    #[cfg(all(feature = "default-https-client", feature = "crypto-fips"))]
+    #[cfg(all(feature = "default-https-client", feature = "aws-lc-fips"))]
     fn a_fips_build_on_the_hyper_1x_client_does_not_warn() {
         let latest = default_http_client_plugin_v2(BehaviorVersion::latest());
         assert!(latest.is_some(), "the latest version should get a client");
@@ -917,18 +917,18 @@ mod tests {
         );
     }
 
-    /// The warning belongs to `crypto-fips`. A build that never asked for FIPS resolving to the
+    /// The warning belongs to `aws-lc-fips`. A build that never asked for FIPS resolving to the
     /// legacy client is simply the default, and must not be told it failed a claim it never made.
     #[test]
     #[traced_test]
     #[expect(deprecated)]
-    #[cfg(all(feature = "tls-rustls", not(feature = "crypto-fips")))]
+    #[cfg(all(feature = "tls-rustls", not(feature = "aws-lc-fips")))]
     fn a_non_fips_build_on_the_legacy_client_does_not_warn_about_fips() {
         let old = default_http_client_plugin_v2(BehaviorVersion::v2024_03_28());
         assert!(old.is_some(), "the legacy client should have been selected");
         assert!(
             !logs_contain("is not end-to-end FIPS"),
-            "a build without `crypto-fips` must not get a FIPS warning"
+            "a build without `aws-lc-fips` must not get a FIPS warning"
         );
     }
 

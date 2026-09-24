@@ -463,9 +463,9 @@ jobs:
       # We exclude `aws-smithy-http-client` due to FIPS related feature flags and aws-lc-fips target support
       # `--all-features` turns on every FIPS feature too, and `aws-lc-fips-sys` only builds on the platforms the
       # validated module supports (x86_64/aarch64 Linux), so on the `--all-features` legs we also exclude the
-      # crates that carry one: `aws-smithy-checksums` and `aws-sigv4` own an AWS-LC backend, and
-      # `aws-smithy-runtime`/`aws-runtime` forward to one. Excluding a crate drops it from the selected set, which
-      # is what keeps `--all-features` from reaching its FIPS feature.
+      # crates that carry one: `aws-smithy-checksums` and `aws-sigv4` own an AWS-LC backend (`aws-lc-rs-fips`), and
+      # `aws-smithy-runtime`/`aws-runtime` forward to one (`aws-lc-fips`). Excluding a crate drops it from the
+      # selected set, which is what keeps `--all-features` from reaching its FIPS feature.
       # We exclude `aws-smithy-wasm` because it is only meant to build for WASM targets
       matrix:
         include:

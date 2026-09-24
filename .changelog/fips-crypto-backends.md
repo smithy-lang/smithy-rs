@@ -15,15 +15,15 @@ Nothing changes unless you ask for it: the new `rustcrypto` feature is on by def
 aws-sigv4 = { version = "...", features = ["aws-lc-rs"] }
 aws-smithy-checksums = { version = "...", features = ["aws-lc-rs"] }
 # FIPS 140-3 validated AWS-LC
-aws-sigv4 = { version = "...", features = ["fips"] }
-aws-smithy-checksums = { version = "...", features = ["fips"] }
+aws-sigv4 = { version = "...", features = ["aws-lc-rs-fips"] }
+aws-smithy-checksums = { version = "...", features = ["aws-lc-rs-fips"] }
 ```
 
 Notes on the new features:
 
-- `fips` takes precedence over `aws-lc-rs`, and either takes precedence over `rustcrypto`, so enabling more than one (which Cargo feature unification does routinely) resolves to the strongest backend rather than failing to build.
-- Both aws-lc-rs backends are a per-target capability, which is why `rustcrypto` stays the default — it is the only backend that builds everywhere the SDK does. `aws-lc-rs` needs a C/C++ compiler and works on every target [aws-lc-rs supports](https://aws.github.io/aws-lc-rs/platform_support.html); the only WASM target it supports is `wasm32-unknown-emscripten`, so `wasm32-unknown-unknown` and the WASI targets have to stay on `rustcrypto`. `fips` additionally needs CMake and Go, and covers a subset: Linux (gnu and musl), macOS, Windows MSVC, and FreeBSD — not iOS, not Android, not WASM.
-- You usually don't need to set these per crate. Generated SDK crates and `aws-config` now carry a single `fips` feature that turns on all of it at once — see below.
+- `aws-lc-rs-fips` takes precedence over `aws-lc-rs`, and either takes precedence over `rustcrypto`, so enabling more than one (which Cargo feature unification does routinely) resolves to the strongest backend rather than failing to build.
+- Both aws-lc-rs backends are a per-target capability, which is why `rustcrypto` stays the default — it is the only backend that builds everywhere the SDK does. `aws-lc-rs` needs a C/C++ compiler and works on every target [aws-lc-rs supports](https://aws.github.io/aws-lc-rs/platform_support.html); the only WASM target it supports is `wasm32-unknown-emscripten`, so `wasm32-unknown-unknown` and the WASI targets have to stay on `rustcrypto`. `aws-lc-rs-fips` additionally needs CMake and Go, and covers a subset: Linux (gnu and musl), macOS, Windows MSVC, and FreeBSD — not iOS, not Android, not WASM.
+- You usually don't need to set these per crate. Generated SDK crates and `aws-config` now carry a single `aws-lc-fips` feature that turns on all of it at once — see below.
 
 `aws-sigv4` specifics:
 
@@ -36,15 +36,15 @@ Notes on the new features:
 
 ## One switch for end-to-end FIPS
 
-Generated SDK crates and `aws-config` have a new opt-in `fips` feature that routes **TLS, request signing, and request checksums** through the FIPS 140-3 validated build of AWS-LC together, instead of requiring you to align a feature on each runtime crate by hand:
+Generated SDK crates and `aws-config` have a new opt-in `aws-lc-fips` feature that routes **TLS, request signing, and request checksums** through the FIPS 140-3 validated build of AWS-LC together, instead of requiring you to align a feature on each runtime crate by hand:
 
 ```toml
-aws-sdk-s3 = { version = "...", features = ["fips"] }
+aws-sdk-s3 = { version = "...", features = ["aws-lc-fips"] }
 # or, for applications that configure through aws-config:
-aws-config = { version = "...", features = ["fips"] }
+aws-config = { version = "...", features = ["aws-lc-fips"] }
 ```
 
-The three paths reach a service crate by different routes, so enabling this feature fans out to `aws-smithy-runtime/crypto-fips` (TLS, via `aws-smithy-http-client`'s `rustls-aws-lc-fips`), `aws-runtime/fips` (signing, via `aws-sigv4/fips`), and `aws-smithy-checksums/fips`. The checksums arm is only present on service crates that have checksum operations, so a service without them doesn't gain the dependency. Two intermediate features are new and can also be used directly: `aws-runtime/fips` and `aws-smithy-runtime/crypto-fips`.
+The three paths reach a service crate by different routes, so enabling this feature fans out to `aws-smithy-runtime/aws-lc-fips` (TLS, via `aws-smithy-http-client`'s `rustls-aws-lc-fips`), `aws-runtime/aws-lc-fips` (signing, via `aws-sigv4/aws-lc-rs-fips`), and `aws-smithy-checksums/aws-lc-rs-fips`. The checksums arm is only present on service crates that have checksum operations, so a service without them doesn't gain the dependency. Two intermediate features are new and can also be used directly: `aws-runtime/aws-lc-fips` and `aws-smithy-runtime/aws-lc-fips`.
 
 What this feature does not cover:
 
@@ -53,4 +53,4 @@ What this feature does not cover:
   - **An HTTP client installed explicitly** — `s2n-tls` or a custom connector — is unaffected, since this feature does not install a client for you. That case can't be detected and isn't warned about. If you use `s2n-tls`, note it is AWS-LC-based already and its own `fips` feature selects the same validated module, so enabling `s2n-tls`'s `fips` feature in your manifest does give you FIPS TLS; `aws-smithy-http-client` does not forward it for you.
 - `aws-config`'s `credentials-login` feature signs DPoP (RFC 9449) proof JWTs with `p256` ECDSA itself, and that is not routed through AWS-LC. A FIPS deployment using `credentials-login` is not fully covered.
 - `aws-config`'s `sso` and `credentials-login` features hash a start URL or session string with SHA-1 and SHA-256 to name a cache file. Those are RustCrypto and stay that way; they are not security functions.
-- A build with `fips` also contains the non-validated `aws-lc-sys`, because rustls's own `fips` feature stacks on its `aws_lc_rs` feature. Both AWS-LC builds are compiled; aws-lc-rs uses the validated one, so the crypto in use is the validated module.
+- A build with `aws-lc-fips` also contains the non-validated `aws-lc-sys`, because rustls's own `fips` feature stacks on its `aws_lc_rs` feature. Both AWS-LC builds are compiled; aws-lc-rs uses the validated one, so the crypto in use is the validated module.

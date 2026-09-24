@@ -25,11 +25,11 @@
 //! |---|---|---|
 //! | `rustcrypto` (default) | the [RustCrypto](https://github.com/RustCrypto/hashes) hashers | no |
 //! | `aws-lc-rs` | [aws-lc-rs](https://github.com/aws/aws-lc-rs) on the standard AWS-LC build | no |
-//! | `fips` | aws-lc-rs on the FIPS build of AWS-LC | yes |
+//! | `aws-lc-rs-fips` | aws-lc-rs on the FIPS build of AWS-LC | yes |
 //!
-//! `fips` takes precedence over `aws-lc-rs`, and either takes precedence over `rustcrypto`, so
-//! enabling more than one — which Cargo feature unification does routinely — resolves to the
-//! strongest backend rather than failing to build.
+//! `aws-lc-rs-fips` takes precedence over `aws-lc-rs`, and either takes precedence over
+//! `rustcrypto`, so enabling more than one — which Cargo feature unification does routinely —
+//! resolves to the strongest backend rather than failing to build.
 //!
 //! ## Platform support
 //!
@@ -40,8 +40,8 @@
 //!   [aws-lc-rs supports](https://aws.github.io/aws-lc-rs/platform_support.html). The only WASM
 //!   target it supports is `wasm32-unknown-emscripten`, so `wasm32-unknown-unknown` and the WASI
 //!   targets have to stay on `rustcrypto`.
-//! - `fips` additionally needs CMake and Go, and covers a subset of those targets: Linux (gnu
-//!   and musl), macOS, Windows MSVC, and FreeBSD. Not iOS, not Android, not WASM.
+//! - `aws-lc-rs-fips` additionally needs CMake and Go, and covers a subset of those targets:
+//!   Linux (gnu and musl), macOS, Windows MSVC, and FreeBSD. Not iOS, not Android, not WASM.
 //!
 //! Enabling either feature on a target its AWS-LC build doesn't support fails while building
 //! `aws-lc-sys` or `aws-lc-fips-sys`, before this crate is reached.

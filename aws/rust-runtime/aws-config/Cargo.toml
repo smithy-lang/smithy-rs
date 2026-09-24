@@ -44,10 +44,14 @@ credentials-login = [
 # SigV4/SigV4a request signing. Request checksums are reached from the generated service crates
 # instead, since `aws-smithy-checksums` is not a dependency of this crate.
 #
+# Named for the module it selects rather than `fips`, to keep it distinct from `use_fips` /
+# `AWS_USE_FIPS_ENDPOINT`, which select a FIPS-compliant *endpoint* and say nothing about which
+# implementation performs the cryptography.
+#
 # The TLS half reaches the hyper 1.x client only. A `BehaviorVersion` older than v2026_01_12
 # selects the legacy client instead, whose TLS is rustls 0.21 on `ring`, leaving FIPS signing over
 # non-FIPS TLS; `aws-smithy-runtime` logs a warning for that combination. An HTTP client installed
-# explicitly is likewise untouched -- see `aws-smithy-runtime`'s `crypto-fips` feature.
+# explicitly is likewise untouched -- see `aws-smithy-runtime`'s `aws-lc-fips` feature.
 #
 # Two things this crate does itself are NOT covered either, because they use RustCrypto directly
 # and have no aws-lc-rs path yet (see smithy-rs#4681):
@@ -56,7 +60,7 @@ credentials-login = [
 #   `credentials-login` is not fully covered by this feature.
 # - `sso` and `credentials-login` hash a start URL / session string with SHA-1 and SHA-256 to
 #   name a cache file (`sso/cache.rs`, `login/cache.rs`). Those are not security functions.
-fips = ["aws-runtime/fips", "aws-smithy-runtime/crypto-fips"]
+aws-lc-fips = ["aws-runtime/aws-lc-fips", "aws-smithy-runtime/aws-lc-fips"]
 test-util = ["aws-runtime/test-util"]
 
 # deprecated: this feature does nothing

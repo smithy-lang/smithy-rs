@@ -5,8 +5,8 @@
 
 //! [aws-lc-rs](https://github.com/aws/aws-lc-rs) crypto backend.
 //!
-//! With the `fips` feature, these operations are performed by the FIPS 140-3 validated build of
-//! AWS-LC. With `aws-lc-rs` alone they are performed by the same implementations in a build that
+//! With the `aws-lc-rs-fips` feature, these operations are performed by the FIPS 140-3 validated
+//! build of AWS-LC. With `aws-lc-rs` alone they are performed by the same implementations in a build that
 //! is not operating in FIPS mode.
 
 use super::SHA256_OUTPUT_SIZE;

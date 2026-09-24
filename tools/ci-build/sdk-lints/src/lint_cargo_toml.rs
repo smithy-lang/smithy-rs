@@ -174,7 +174,7 @@ fn check_crate_author(package: Package) -> Result<Vec<LintError>> {
 
 /// Crates exempt from the `all-features = true` docs.rs convention.
 ///
-/// Each of these has a `fips` feature that builds `aws-lc-fips-sys`, which cannot build on
+/// Each of these has a FIPS feature that builds `aws-lc-fips-sys`, which cannot build on
 /// docs.rs, so they pin an explicit feature list instead.
 const DOCS_RS_ALL_FEATURES_EXEMPT: &[&str] = &[
     "aws-smithy-http-client",

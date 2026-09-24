@@ -9,8 +9,8 @@
 //! Two backends are supported, selected at compile time:
 //! - [RustCrypto](https://github.com/RustCrypto/hashes) (`rustcrypto`, enabled by default). Not
 //!   FIPS-validated.
-//! - [aws-lc-rs](https://github.com/aws/aws-lc-rs) (`aws-lc-rs`, or `fips` for the FIPS 140-3
-//!   validated build of AWS-LC; `fips` wins if both are enabled).
+//! - [aws-lc-rs](https://github.com/aws/aws-lc-rs) (`aws-lc-rs`, or `aws-lc-rs-fips` for the
+//!   FIPS 140-3 validated build of AWS-LC; `aws-lc-rs-fips` wins if both are enabled).
 //!
 //! If the features for both backends are enabled, aws-lc-rs is selected. MD5 is only available
 //! on the RustCrypto backend: aws-lc-rs does not expose it, and it is not a FIPS-approved
@@ -23,7 +23,7 @@ use std::fmt::Debug;
 #[cfg(not(any(feature = "rustcrypto", feature = "__aws-lc-rs")))]
 compile_error!(
     "aws-smithy-checksums requires a digest backend: enable the `rustcrypto` (default), \
-     `aws-lc-rs`, or `fips` feature."
+     `aws-lc-rs`, or `aws-lc-rs-fips` feature."
 );
 
 /// A streaming message digest.
@@ -84,12 +84,13 @@ mod tests {
         assert_eq!(32, Sha256::output_size());
     }
 
-    // The `fips` feature is only meaningful if the AWS-LC build it selects is actually the
-    // validated one, which is a property of the linked C library rather than of this crate.
+    // The `aws-lc-rs-fips` feature is only meaningful if the AWS-LC build it selects is actually
+    // the validated one, which is a property of the linked C library rather than of this crate.
     #[test]
-    #[cfg(feature = "fips")]
+    #[cfg(feature = "aws-lc-rs-fips")]
     fn fips_module_is_active() {
-        aws_lc_rs::try_fips_mode().expect("the `fips` feature must link the FIPS AWS-LC build");
+        aws_lc_rs::try_fips_mode()
+            .expect("the `aws-lc-rs-fips` feature must link the FIPS AWS-LC build");
     }
 
     // Whenever the aws-lc-rs feature is enabled it must win, even if `rustcrypto` is also

@@ -28,24 +28,28 @@ rustcrypto = ["dep:md-5", "dep:sha1", "dep:sha2"]
 #
 # Two details about the spelling below, both consequences of `default-features = false` on the
 # dependency, which means the AWS-LC build has to be named explicitly:
-# - `fips` does not stack on this feature, so enabling `fips` alone compiles only
-#   `aws-lc-fips-sys`, not both AWS-LC builds. (rustls stacks its `fips` on its `aws_lc_rs`
+# - `aws-lc-rs-fips` does not stack on this feature, so enabling `aws-lc-rs-fips` alone compiles
+#   only `aws-lc-fips-sys`, not both AWS-LC builds. (rustls stacks its `fips` on its `aws_lc_rs`
 #   feature and so always builds both.)
 # - This names aws-lc-rs's `aws-lc-sys` feature rather than its `non-fips` feature, because
 #   `non-fips` and `fips` are mutually exclusive there — aws-lc-rs fails its build if both are
-#   on — and that would make this feature and `fips` impossible to enable together, something
-#   `--all-features` and feature unification across a workspace do routinely. With both on,
-#   both AWS-LC builds compile and aws-lc-rs uses the FIPS one.
+#   on — and that would make this feature and `aws-lc-rs-fips` impossible to enable together,
+#   something `--all-features` and feature unification across a workspace do routinely. With both
+#   on, both AWS-LC builds compile and aws-lc-rs uses the FIPS one.
 aws-lc-rs = ["__aws-lc-rs", "aws-lc-rs?/aws-lc-sys"]
 # Use aws-lc-rs for SHA-1/SHA-256 digests, backed by the FIPS 140-3 validated AWS-LC build.
 # Takes precedence over `aws-lc-rs` when both are enabled.
 #
+# Named for the backend it selects, as its `aws-lc-rs` sibling is, rather than `fips`: on a
+# generated SDK crate a bare `fips` would sit next to `Config::use_fips`, which selects a
+# FIPS-compliant *endpoint* and is unrelated to which module performs the cryptography.
+#
 # Supported on a subset of the targets above: Linux (gnu and musl), macOS, Windows MSVC, and
 # FreeBSD. Not iOS, not Android, not WASM. Requires a C/C++ compiler, CMake, and Go at build
 # time, plus bindgen on targets without pre-generated FIPS bindings (Windows).
-fips = ["__aws-lc-rs", "aws-lc-rs?/fips"]
+aws-lc-rs-fips = ["__aws-lc-rs", "aws-lc-rs?/fips"]
 # Internal: selects the aws-lc-rs digest backend. Do not enable directly; use
-# `aws-lc-rs` or `fips` instead so that an AWS-LC build is also selected.
+# `aws-lc-rs` or `aws-lc-rs-fips` instead so that an AWS-LC build is also selected.
 __aws-lc-rs = ["dep:aws-lc-rs"]
 
 [dependencies]
@@ -64,7 +68,7 @@ tracing = "0.1.44"
 md-5 = { version = "0.11", optional = true }
 sha1 = { version = "0.11", optional = true }
 sha2 = { version = "0.11", optional = true }
-# aws-lc-rs digest backend; see the `aws-lc-rs` and `fips` features.
+# aws-lc-rs digest backend; see the `aws-lc-rs` and `aws-lc-rs-fips` features.
 # `default-features = false` so that the AWS-LC build (non-FIPS vs FIPS) is chosen
 # explicitly by those features rather than defaulting to the non-FIPS one.
 aws-lc-rs = { version = "1.18.1", optional = true, default-features = false }
@@ -82,8 +86,8 @@ tracing-test = "0.2.1"
 normal = ["md-5", "sha1", "sha2"]
 
 [package.metadata.docs.rs]
-# `all-features` is off because the `fips` feature builds aws-lc-fips-sys, which can't build on
-# docs.rs. `sdk-lints` grants this crate an exception for that reason.
+# `all-features` is off because the `aws-lc-rs-fips` feature builds aws-lc-fips-sys, which can't
+# build on docs.rs. `sdk-lints` grants this crate an exception for that reason.
 all-features = false
 features = ["rustcrypto", "aws-lc-rs"]
 targets = ["x86_64-unknown-linux-gnu"]

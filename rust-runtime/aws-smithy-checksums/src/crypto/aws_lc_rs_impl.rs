@@ -5,7 +5,8 @@
 
 //! [aws-lc-rs](https://github.com/aws/aws-lc-rs) digest backend.
 //!
-//! With the `fips` feature, these digests are computed by the FIPS 140-3 validated build of
+//! With the `aws-lc-rs-fips` feature, these digests are computed by the FIPS 140-3 validated
+//! build of
 //! AWS-LC. With `aws-lc-rs` alone they are computed by the same implementations in a build that
 //! is not operating in FIPS mode.
 

@@ -92,20 +92,25 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
         // which `aws-smithy-runtime` sits below), and checksums directly, since `aws-smithy-checksums` is a
         // dependency of neither.
         //
+        // Named for the module it selects rather than `fips`, because a bare `fips` on a generated crate would sit
+        // alongside `Config::use_fips`, which selects a FIPS-compliant *endpoint* and says nothing about which
+        // implementation performs the cryptography. The two are independent, and a customer pursuing FedRAMP is
+        // exactly the person likely to read one as the other.
+        //
         // Not a default feature: the validated AWS-LC build is unavailable on some targets the SDK supports (no
         // WASM, no iOS, no Android) and needs CMake and Go at build time.
         val fipsDeps =
             mutableListOf(
-                "aws-smithy-runtime/crypto-fips",
-                "aws-runtime/fips",
+                "aws-smithy-runtime/aws-lc-fips",
+                "aws-runtime/aws-lc-fips",
             )
         // Only name the checksums crate for services that actually have checksum operations. Naming it
         // unconditionally would make Cargo add `aws-smithy-checksums` to every service crate, including the ones
         // that never otherwise depend on it.
         if (serviceHasHttpChecksumOperation(codegenContext)) {
-            fipsDeps += "aws-smithy-checksums/fips"
+            fipsDeps += "aws-smithy-checksums/aws-lc-rs-fips"
         }
-        rustCrate.mergeFeature(Feature("fips", default = false, fipsDeps))
+        rustCrate.mergeFeature(Feature("aws-lc-fips", default = false, fipsDeps))
     }
 
     override fun libRsCustomizations(

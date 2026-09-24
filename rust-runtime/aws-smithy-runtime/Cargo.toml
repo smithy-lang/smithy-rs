@@ -33,10 +33,14 @@ tls-rustls = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/legacy-rust
 default-https-client = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/rustls-aws-lc"]
 # Route the default HTTPS client's TLS through the FIPS 140-3 validated build of AWS-LC.
 #
-# This is the TLS arm of the top-level `fips` feature on generated SDK crates and on
+# This is the TLS arm of the top-level `aws-lc-fips` feature on generated SDK crates and on
 # `aws-config`. Signing and checksums are reached by other routes: signing lives in the AWS
 # layer (`aws-runtime` -> `aws-sigv4`), and `aws-smithy-checksums` isn't a dependency of this
 # crate, so neither can be brokered from here.
+#
+# Named for the module it selects rather than `fips`, so that it does not read as a sibling of
+# `Config::use_fips` on a generated SDK crate, which selects a FIPS-compliant *endpoint* and says
+# nothing about which implementation performs the cryptography.
 #
 # The dependency reference is weak on purpose: this makes the TLS of an `aws-smithy-http-client`
 # build FIPS, and does not install that client if a consumer chose a different one.
@@ -50,7 +54,7 @@ default-https-client = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/r
 #   `aws-lc-rs/fips`, the same validated module, so such a build can be FIPS -- but only if the
 #   consumer enables that feature themselves, since `aws-smithy-http-client` does not forward it
 #   (see the `TODO(hyper1)` note on its `s2n-tls` feature).
-crypto-fips = ["aws-smithy-http-client?/rustls-aws-lc-fips"]
+aws-lc-fips = ["aws-smithy-http-client?/rustls-aws-lc-fips"]
 rt-tokio = ["tokio/rt"]
 
 # Features for testing

@@ -8,8 +8,8 @@
 //! Two backends are supported, selected at compile time:
 //! - [RustCrypto](https://github.com/RustCrypto) (`rustcrypto`, enabled by default). Not
 //!   FIPS-validated.
-//! - [aws-lc-rs](https://github.com/aws/aws-lc-rs) (`aws-lc-rs`, or `fips` for the FIPS 140-3
-//!   validated build of AWS-LC; `fips` wins if both are enabled).
+//! - [aws-lc-rs](https://github.com/aws/aws-lc-rs) (`aws-lc-rs`, or `aws-lc-rs-fips` for the
+//!   FIPS 140-3 validated build of AWS-LC; `aws-lc-rs-fips` wins if both are enabled).
 //!
 //! If the features for both backends are enabled, aws-lc-rs is selected.
 //!
@@ -24,7 +24,7 @@ pub(crate) const SHA256_OUTPUT_SIZE: usize = 32;
 #[cfg(not(any(feature = "rustcrypto", feature = "__aws-lc-rs")))]
 compile_error!(
     "aws-sigv4 requires a crypto backend: enable the `rustcrypto` (default), `aws-lc-rs`, or \
-     `fips` feature."
+     `aws-lc-rs-fips` feature."
 );
 
 #[cfg(feature = "__aws-lc-rs")]
@@ -124,11 +124,12 @@ mod tests {
         }
     }
 
-    // The `fips` feature is only meaningful if the AWS-LC build it selects is actually the
-    // validated one, which is a property of the linked C library rather than of this crate.
+    // The `aws-lc-rs-fips` feature is only meaningful if the AWS-LC build it selects is actually
+    // the validated one, which is a property of the linked C library rather than of this crate.
     #[test]
-    #[cfg(feature = "fips")]
+    #[cfg(feature = "aws-lc-rs-fips")]
     fn fips_module_is_active() {
-        aws_lc_rs::try_fips_mode().expect("the `fips` feature must link the FIPS AWS-LC build");
+        aws_lc_rs::try_fips_mode()
+            .expect("the `aws-lc-rs-fips` feature must link the FIPS AWS-LC build");
     }
 }

@@ -18,10 +18,14 @@ test-util = ["dep:regex-lite"]
 sigv4a = ["aws-sigv4/sigv4a"]
 # Route SigV4/SigV4a signing through the FIPS 140-3 validated build of AWS-LC.
 #
-# This is the signing arm of the top-level `fips` feature on generated SDK crates and on
+# This is the signing arm of the top-level `aws-lc-fips` feature on generated SDK crates and on
 # `aws-config`; TLS and checksums are reached by other routes, since neither is a dependency
-# of this crate. See `aws-sigv4`'s `fips` feature for the platform requirements.
-fips = ["aws-sigv4/fips"]
+# of this crate. See `aws-sigv4`'s `aws-lc-rs-fips` feature for the platform requirements.
+#
+# Named for the module it selects rather than `fips`, so that it does not read as a sibling of
+# `Config::use_fips` on a generated SDK crate, which selects a FIPS-compliant *endpoint* and says
+# nothing about which implementation performs the cryptography.
+aws-lc-fips = ["aws-sigv4/aws-lc-rs-fips"]
 
 [dependencies]
 aws-credential-types = { path = "../aws-credential-types" }

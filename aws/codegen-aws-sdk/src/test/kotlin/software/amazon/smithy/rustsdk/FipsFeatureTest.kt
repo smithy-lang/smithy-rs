@@ -11,10 +11,14 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import kotlin.io.path.readText
 
 /**
- * The generated `fips` feature is the single switch that routes a service crate's cryptography
- * through the FIPS 140-3 validated build of AWS-LC. It fans out to three runtime crates, and the
- * checksums arm has to be scoped: naming `aws-smithy-checksums/fips` unconditionally would make
- * Cargo add that crate to every service crate, including the ones that never otherwise use it.
+ * The generated `aws-lc-fips` feature is the single switch that routes a service crate's
+ * cryptography through the FIPS 140-3 validated build of AWS-LC. It fans out to three runtime
+ * crates, and the checksums arm has to be scoped: naming `aws-smithy-checksums/aws-lc-rs-fips`
+ * unconditionally would make Cargo add that crate to every service crate, including the ones that
+ * never otherwise use it.
+ *
+ * The name is deliberately not `fips`: that would sit alongside `Config::use_fips`, which selects
+ * a FIPS-compliant endpoint and is unrelated to which module performs the cryptography.
  */
 internal class FipsFeatureTest {
     companion object {
@@ -88,7 +92,7 @@ internal class FipsFeatureTest {
     }
 
     @Test
-    fun `fips feature covers tls signing and checksums for a service with checksum operations`() {
+    fun `aws-lc-fips feature covers tls signing and checksums for a service with checksum operations`() {
         // The `http_request_checksum` inlineable refers to `crate::presigning`, which is `#[cfg]`-gated on
         // `http-02x`. `AwsPresigningDecorator` declares that feature only for models with presignable shapes,
         // so declare it here to keep the generated crate compiling. See `InlineableTestDependenciesTest`.
@@ -102,19 +106,19 @@ internal class FipsFeatureTest {
 
         assert(
             cargoToml.contains(
-                """fips = ["aws-smithy-runtime/crypto-fips", "aws-runtime/fips", "aws-smithy-checksums/fips"]""",
+                """aws-lc-fips = ["aws-smithy-runtime/aws-lc-fips", "aws-runtime/aws-lc-fips", "aws-smithy-checksums/aws-lc-rs-fips"]""",
             ),
         ) {
-            "Expected a `fips` feature fanning out to all three crypto paths.\n$cargoToml"
+            "Expected an `aws-lc-fips` feature fanning out to all three crypto paths.\n$cargoToml"
         }
     }
 
     @Test
-    fun `fips feature omits checksums for a service without checksum operations`() {
+    fun `aws-lc-fips feature omits checksums for a service without checksum operations`() {
         val cargoToml = awsSdkIntegrationTest(plainModel).resolve("Cargo.toml").readText()
 
-        assert(cargoToml.contains("""fips = ["aws-smithy-runtime/crypto-fips", "aws-runtime/fips"]""")) {
-            "Expected a `fips` feature covering TLS and signing only.\n$cargoToml"
+        assert(cargoToml.contains("""aws-lc-fips = ["aws-smithy-runtime/aws-lc-fips", "aws-runtime/aws-lc-fips"]""")) {
+            "Expected an `aws-lc-fips` feature covering TLS and signing only.\n$cargoToml"
         }
         // The arm is scoped by whether the crate is a dependency at all, so the crate's absence is
         // what makes omitting it correct rather than a missed case.
@@ -124,14 +128,14 @@ internal class FipsFeatureTest {
     }
 
     @Test
-    fun `fips is not a default feature`() {
+    fun `aws-lc-fips is not a default feature`() {
         val cargoToml = awsSdkIntegrationTest(plainModel).resolve("Cargo.toml").readText()
 
         // The validated AWS-LC build is unavailable on some targets the SDK supports and needs
         // CMake and Go at build time, so it can only ever be opt-in.
         val defaultFeatures = cargoToml.lines().first { it.startsWith("default = [") }
-        assert(!defaultFeatures.contains("\"fips\"")) {
-            "`fips` must not be a default feature, but default was: $defaultFeatures"
+        assert(!defaultFeatures.contains("\"aws-lc-fips\"")) {
+            "`aws-lc-fips` must not be a default feature, but default was: $defaultFeatures"
         }
     }
 }
