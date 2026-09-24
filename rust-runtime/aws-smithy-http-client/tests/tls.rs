@@ -10,6 +10,8 @@ mod common {
 }
 
 use aws_smithy_async::time::SystemTimeSource;
+#[cfg(all(feature = "rustls-aws-lc", feature = "rt-tokio"))]
+use aws_smithy_http_client::pool::{Client as PoolClient, ConnectionPool};
 use aws_smithy_http_client::tls;
 #[cfg(any(feature = "rustls-aws-lc", feature = "s2n-tls"))]
 use aws_smithy_http_client::tls::{ServerName, TlsContext};
@@ -50,12 +52,16 @@ impl TestServer {
 }
 
 async fn server() -> Result<TestServer, BoxError> {
+    server_with_alpn(&[b"h2", b"http/1.1", b"http/1.0"]).await
+}
+
+async fn server_with_alpn(alpn_protocols: &[&[u8]]) -> Result<TestServer, BoxError> {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
 
     debug!("Starting to serve on https://{}", addr);
 
-    let tls_acceptor = test_tls::server_tls_acceptor(&[b"h2", b"http/1.1", b"http/1.0"])?;
+    let tls_acceptor = test_tls::server_tls_acceptor(alpn_protocols)?;
     let service = service_fn(echo);
 
     let conn_count = Arc::new(());
@@ -141,6 +147,77 @@ async fn test_rustls_aws_lc_custom_ca() {
         .build_https();
 
     run_tls_test(&client).await.unwrap()
+}
+
+#[cfg(all(feature = "rustls-aws-lc", feature = "rt-tokio"))]
+#[tokio::test]
+async fn partitioned_pool_falls_back_to_h1_after_alpn() {
+    let server = server_with_alpn(&[b"http/1.1"]).await.unwrap();
+    let pool = ConnectionPool::builder()
+        .tls_provider(tls::Provider::Rustls(
+            tls::rustls_provider::CryptoMode::AwsLc,
+        ))
+        .tls_context(test_tls::server_tls_context())
+        .build_https()
+        .expect("valid HTTPS pool");
+    let client = PoolClient::new(&pool).expect("anonymous partition exists");
+    let connector_settings = HttpConnectorSettings::builder().build();
+    let runtime_components = RuntimeComponentsBuilder::for_tests()
+        .with_time_source(Some(SystemTimeSource::new()))
+        .build()
+        .unwrap();
+    let connector = client.http_connector(&connector_settings, &runtime_components);
+    let endpoint = format!("https://localhost:{}/", server.listen_addr.port());
+
+    for _ in 0..2 {
+        let mut response = connector
+            .call(HttpRequest::get(&endpoint).unwrap())
+            .await
+            .expect("HTTP/1 request over TLS should succeed");
+        let body = ByteStream::new(response.take_body())
+            .collect()
+            .await
+            .expect("response body should be readable")
+            .into_bytes();
+        assert_eq!(b"Hello TLS!", &body[..]);
+    }
+    assert_eq!(1, server.conn_count());
+}
+
+#[cfg(all(feature = "rustls-aws-lc", feature = "rt-tokio"))]
+#[tokio::test]
+async fn partitioned_pool_narrows_alpn_for_h1_required_request() {
+    let server = server_with_alpn(&[b"h2", b"http/1.1"]).await.unwrap();
+    let pool = ConnectionPool::builder()
+        .tls_provider(tls::Provider::Rustls(
+            tls::rustls_provider::CryptoMode::AwsLc,
+        ))
+        .tls_context(test_tls::server_tls_context())
+        .build_https()
+        .expect("valid HTTPS pool");
+    let client = PoolClient::new(&pool).expect("anonymous partition exists");
+    let connector_settings = HttpConnectorSettings::builder().build();
+    let runtime_components = RuntimeComponentsBuilder::for_tests()
+        .with_time_source(Some(SystemTimeSource::new()))
+        .build()
+        .unwrap();
+    let connector = client.http_connector(&connector_settings, &runtime_components);
+    let endpoint = format!("https://localhost:{}/", server.listen_addr.port());
+    let mut request = HttpRequest::new(ByteStream::default().into_inner());
+    request
+        .set_method("CONNECT")
+        .expect("CONNECT is a valid HTTP method");
+    request
+        .set_uri(endpoint.as_str())
+        .expect("valid server URI");
+
+    let response = connector
+        .call(request)
+        .await
+        .expect("HTTP/1-required request should narrow the ALPN offer");
+
+    assert_eq!(StatusCode::NOT_FOUND.as_u16(), response.status().as_u16());
+    assert_eq!(1, server.conn_count());
 }
 
 #[cfg(feature = "rustls-aws-lc")]

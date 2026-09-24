@@ -37,6 +37,8 @@ pub(crate) struct PartitionRegistry {
     reuse_scope: ConnectionReuseScope,
     /// Optional origin-wide bound used when admission is first created.
     max_connections_per_host: Option<NonZeroUsize>,
+    /// Whether admission may close idle H2 capacity for H1-required demand.
+    allow_h2_reclaim_for_h1: bool,
     /// Admission authorities retained by canonical origin.
     bounded_origins: Mutex<HashMap<OriginKey, Arc<OriginAdmission>>>,
 }
@@ -47,6 +49,7 @@ impl PartitionRegistry {
         partitions: Option<Vec<Partition>>,
         reuse_scope: ConnectionReuseScope,
         max_connections_per_host: Option<NonZeroUsize>,
+        allow_h2_reclaim_for_h1: bool,
         maintenance: MaintenanceConfig,
     ) -> Result<Self, PartitionRegistryError> {
         let Some(partitions) = partitions else {
@@ -57,6 +60,7 @@ impl PartitionRegistry {
                 partitions,
                 reuse_scope,
                 max_connections_per_host,
+                allow_h2_reclaim_for_h1,
                 bounded_origins: Mutex::new(HashMap::new()),
             });
         };
@@ -86,6 +90,7 @@ impl PartitionRegistry {
             partitions: by_id,
             reuse_scope,
             max_connections_per_host,
+            allow_h2_reclaim_for_h1,
             bounded_origins: Mutex::new(HashMap::new()),
         })
     }
@@ -135,7 +140,9 @@ impl PartitionRegistry {
             let mut origins = self.bounded_origins.lock();
             origins
                 .entry(origin.clone())
-                .or_insert_with(|| OriginAdmission::new(origin.clone(), limit))
+                .or_insert_with(|| {
+                    OriginAdmission::new(origin.clone(), limit, self.allow_h2_reclaim_for_h1)
+                })
                 .clone()
         };
         Some(admission)
@@ -163,7 +170,7 @@ impl PartitionRegistry {
             .flat_map(|partition| partition.cells())
             .collect::<Vec<_>>();
         for cell in cells {
-            OriginCell::close_all_h1(&cell, reason);
+            OriginCell::close_all(&cell, reason);
         }
     }
 }
@@ -425,6 +432,7 @@ mod tests {
             None,
             reuse_scope,
             max_connections_per_host,
+            true,
             MaintenanceConfig::default(),
         )
         .unwrap()
@@ -439,6 +447,7 @@ mod tests {
             Some(partitions.into_iter().collect()),
             reuse_scope,
             max_connections_per_host,
+            true,
             MaintenanceConfig::default(),
         )
     }
@@ -722,7 +731,7 @@ mod tests {
             .all(|cell| Arc::ptr_eq(&cells[0], cell)));
         assert_eq!(1, partition.cell_count());
 
-        let waiter = cells[0].register_waiter(ProtocolRequirement::H1Compatible);
+        let waiter = OriginCell::register_waiter(&cells[0], ProtocolRequirement::H1Compatible);
         let lease = OriginCell::take_ready_lease(&cells[0], waiter)
             .expect("admission targeted a different cell than the registry retained");
         drop(lease);
@@ -753,6 +762,7 @@ mod loom_tests {
             Some(partitions.into_iter().collect()),
             reuse_scope,
             max_connections_per_host,
+            true,
             MaintenanceConfig::default(),
         )
     }

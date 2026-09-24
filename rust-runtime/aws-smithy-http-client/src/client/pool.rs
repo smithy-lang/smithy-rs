@@ -14,6 +14,31 @@
 //! maintenance. [`ConnectionReuseScope`] controls whether another partition may
 //! dispatch through those connections. Reuse transfers protocol dispatch
 //! authority; it never moves the socket, driver, or capacity accounting.
+//! Partitions in the same eligibility group are exactly those whose configured
+//! reuse scope permits them to share a connection.
+//!
+//! Connection establishment and installed connection lifetime are separate
+//! ownership phases:
+//!
+//! ```text
+//! establishment task
+//!     |-- DNS, socket, proxy, TLS, and ALPN
+//!     `-- negotiated transport
+//!             `-- PendingOpen
+//!                     |-- Hyper protocol setup
+//!                     `-- Open
+//!                             `-- pool installation
+//!                                     `-- discoverable -> draining -> closed
+//! ```
+//!
+//! The establishment task and its permit represent work that may fail before a
+//! physical connection exists. `ConnectionState` begins only after the
+//! connector returns connected I/O and selects HTTP/1 or HTTP/2. For TLS, that
+//! boundary follows TLS and ALPN. Hyper protocol setup moves the state from
+//! `PendingOpen` to `Open`; cell installation then makes the connection
+//! discoverable. Establishment and connection events can therefore be observed
+//! independently without representing failed attempts as installed
+//! connections.
 //!
 //! # State ownership
 //!
@@ -35,9 +60,14 @@
 //!
 //! One `OriginCell` lock owns local acquisition order and protocol residence.
 //! For a bounded origin, `OriginAdmission` separately owns the origin-wide
-//! connection limit and cross-cell scheduling. Delivery values carry their own
-//! payload and cancellation fallback between those lock domains; cell and
-//! admission locks are never held together.
+//! connection limit and cross-cell scheduling. An H2 request-lease lock owns
+//! its two endpoint bits. `ConnectionState` owns logical connection lifetime,
+//! and partition maintenance owns its scheduler state.
+//!
+//! No two pool locks are held together. Delivery and publication guards carry
+//! payload or identity between cell and admission scopes. H2 lease completion
+//! detaches its dispatch guard before entering connection or cell state.
+//! Maintenance detaches cells and wakers before expiration or wake callbacks.
 //!
 //! # HTTP/1 request lifecycle
 //!
@@ -71,6 +101,48 @@
 //! Once accepted, the response lifecycle retains the sender until Hyper proves
 //! a complete reusable message boundary. Failure retires the connection, and
 //! an upgrade closes the pool record before exposing upgraded root I/O.
+//!
+//! # HTTP/2 request lifecycle
+//!
+//! One HTTP/2 connection carries many concurrent request streams. The pool
+//! calls one installed incarnation of that connection a generation. A
+//! replacement connection receives a new generation identity so delayed
+//! close, route, and completion work cannot affect it.
+//!
+//! The connection-owning cell retains the generation's authoritative Hyper
+//! request handle and capacity. A requesting cell may retain only a route that
+//! names the owning cell and one exact accepting generation. Each use
+//! revalidates that route before cloning a transient request handle.
+//!
+//! ```text
+//! Client(partition, request)
+//! `-- OriginCell(partition, origin)
+//!     |-- local accepting generation ----------------> H2Activation
+//!     `-- acquisition queue
+//!         |-- local flight result --------------------> H2Activation
+//!         |-- eligible peer generation route --------> H2Activation
+//!         `-- capacity permit -> connect + ALPN
+//!             |-- HTTP/2 -> join or drive one flight -> H2Activation
+//!             `-- HTTP/1 -> H1Selection or incompatible-version error
+//!
+//! H2Activation -- Hyper accepts request --> accepted request lease
+//! accepted request lease
+//!     |-- request body ends or drops -----> send endpoint complete
+//!     `-- response body ends or drops ----> receive endpoint complete
+//! both endpoints complete ----------------> release generation request count
+//! ```
+//!
+//! `H2Activation` reserves pool accounting for a prospective stream on one
+//! exact generation. It is not yet an HTTP/2 stream. Dropping it before Hyper
+//! accepts the request returns its generation-gate turn and request count.
+//! Acceptance creates two independent endpoints because an upload and response
+//! can finish in either order. Logical close stops new activations and releases
+//! bounded capacity; accepted streams retain the draining generation until
+//! both endpoints end. Hyper remains responsible for stream identifiers,
+//! stream credit, and flow control.
+//!
+//! Peer publication moves only route identity. The socket, protocol driver,
+//! request handle, and capacity remain with the connection-owning partition.
 //!
 //! `ConnectionState` separates logical close, accepted-request accounting, and
 //! root-I/O ownership. Logical close rejects new dispatch and releases bounded
