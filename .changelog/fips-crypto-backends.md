@@ -48,7 +48,9 @@ The three paths reach a service crate by different routes, so enabling this feat
 
 What this feature does not cover:
 
-- TLS is only made FIPS for the `aws-smithy-http-client`-based client. A build whose TLS comes from elsewhere — `s2n-tls`, the legacy ring-backed `tls-rustls` feature, or a custom connector — is unaffected, and its TLS is not FIPS. The feature does not install an HTTP client for you, so this is silent; check your client configuration.
+- TLS is only made FIPS for the hyper 1.x client from `aws-smithy-http-client`. Two ways a build can miss it:
+  - **A `BehaviorVersion` older than `v2026_01_12`** selects the legacy hyper 0.14.x client, whose TLS is `rustls` 0.21 on `ring`. Signing and checksums are still FIPS, but TLS is not, so the build is not end-to-end FIPS. This combination now logs a warning naming the behavior version to move to; use `BehaviorVersion::v2026_01_12()` or later, or drop the legacy stack, to get FIPS TLS.
+  - **A client from somewhere else** — `s2n-tls` or a custom connector — is unaffected by this feature, since it does not install an HTTP client for you. That case cannot be detected and is not warned about.
 - `aws-config`'s `credentials-login` feature signs DPoP (RFC 9449) proof JWTs with `p256` ECDSA itself, and that is not routed through AWS-LC. A FIPS deployment using `credentials-login` is not fully covered.
 - `aws-config`'s `sso` and `credentials-login` features hash a start URL or session string with SHA-1 and SHA-256 to name a cache file. Those are RustCrypto and stay that way; they are not security functions.
 - A build with `fips` also contains the non-validated `aws-lc-sys`, because rustls's own `fips` feature stacks on its `aws_lc_rs` feature. Both AWS-LC builds are compiled; aws-lc-rs uses the validated one, so the crypto in use is the validated module.
