@@ -7,6 +7,7 @@
 
 use ::std::ops::{Deref, DerefMut};
 
+pub(crate) use loom::sync::atomic::{AtomicBool, Ordering};
 pub(crate) use loom::sync::Arc;
 
 loom::thread_local! {
