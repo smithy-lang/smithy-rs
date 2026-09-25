@@ -15,8 +15,8 @@ use crate::{
     body::BoxBody,
     error::BoxError,
     schema::{
-        ProtocolOrder, ProtocolRegistration, ProtocolRegistry, RequestBodyCollectionConfig,
-        SelectedProtocolOperation, ServiceRequestBodyConfig, SharedServerProtocol,
+        ProtocolOrder, ProtocolRegistration, ProtocolRegistry, RequestBodyCollectionConfig, SelectedProtocolOperation,
+        ServiceRequestBodyConfig, SharedServerProtocol,
     },
 };
 use aws_smithy_schema::{OperationSchema, ServiceSchema};
@@ -306,7 +306,9 @@ impl<B> Clone for SchemaRoutingService<B> {
 }
 impl<B> fmt::Debug for SchemaRoutingService<B> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("SchemaRoutingService").field("inner", &self.inner).finish()
+        f.debug_struct("SchemaRoutingService")
+            .field("inner", &self.inner)
+            .finish()
     }
 }
 
@@ -356,7 +358,9 @@ fn claim_chain(protocols: Arc<[ProtocolRoute]>, start: usize, request: Request<B
                         Some(request) => request.map(|body| {
                             crate::body::boxed(crate::body::SchemaBody::<BoxBody>::buffered(body.bytes, body.trailers))
                         }),
-                        None => unread.take().expect("the first body-first router reads the transport body"),
+                        None => unread
+                            .take()
+                            .expect("the first body-first router reads the transport body"),
                     };
                     match router.clone().claim(request).await {
                         AsyncRouteClaim::Matched(selected, request) => return Ok((index, selected, request)),
@@ -514,8 +518,8 @@ where
                 StateProj::Routing { future, dispatch } => match future.as_mut().poll(cx) {
                     Poll::Ready(Ok((selected, request))) => {
                         let dispatch = dispatch.take().expect("routing resolves once");
-                        let request =
-                            request.map(|collected| crate::body::SchemaBody::buffered(collected.bytes, collected.trailers));
+                        let request = request
+                            .map(|collected| crate::body::SchemaBody::buffered(collected.bytes, collected.trailers));
                         let future = dispatch.handle(selected, 0, request);
                         this.inner.set(State::Handling { future });
                     }
@@ -525,8 +529,8 @@ where
                 StateProj::Claiming { future, dispatch } => match future.as_mut().poll(cx) {
                     Poll::Ready(Ok((protocol, selected, request))) => {
                         let dispatch = dispatch.take().expect("claiming resolves once");
-                        let request =
-                            request.map(|collected| crate::body::SchemaBody::buffered(collected.bytes, collected.trailers));
+                        let request = request
+                            .map(|collected| crate::body::SchemaBody::buffered(collected.bytes, collected.trailers));
                         let future = dispatch.handle(selected, protocol, request);
                         this.inner.set(State::Handling { future });
                     }
@@ -944,7 +948,11 @@ impl ProtocolRouter for RpcV2CborProtocolRouter {
 }
 
 /// Sizes a per-operation table to cover every target index.
-fn per_target<T>(targets: &[OperationIndex], default: impl Fn() -> T, mut value: impl FnMut(OperationIndex) -> T) -> Vec<T> {
+fn per_target<T>(
+    targets: &[OperationIndex],
+    default: impl Fn() -> T,
+    mut value: impl FnMut(OperationIndex) -> T,
+) -> Vec<T> {
     let len = targets.iter().map(|target| target.index + 1).max().unwrap_or(0);
     let mut table: Vec<T> = (0..len).map(|_| default()).collect();
     for target in targets {
@@ -1068,12 +1076,14 @@ pub(crate) fn rpc_v2_cbor_router(ctx: &RouterBuildContext<'_>) -> Result<SharedP
         ctx.targets,
         || false,
         |target| {
-            [target.operation.input(), target.operation.output()].iter().any(|schema| {
-                schema
-                    .members()
-                    .iter()
-                    .any(|member| member.streaming() && member.shape_type() == aws_smithy_schema::ShapeType::Blob)
-            })
+            [target.operation.input(), target.operation.output()]
+                .iter()
+                .any(|schema| {
+                    schema
+                        .members()
+                        .iter()
+                        .any(|member| member.streaming() && member.shape_type() == aws_smithy_schema::ShapeType::Blob)
+                })
         },
     );
     Ok(SharedProtocolRouter::new(RpcV2CborProtocolRouter {

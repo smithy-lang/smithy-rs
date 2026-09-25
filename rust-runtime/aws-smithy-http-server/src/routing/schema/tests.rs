@@ -420,9 +420,7 @@ async fn all_builtins_route_without_polling_body_and_preserve_fallback_errors() 
             .iter()
             .map(|op| OperationHandlerBinding::new(op, SyncRoute::new(crate::operation::SchemaMissingFailure)));
         let app = SchemaRoutingService::from_operation_handler_bindings(schema, [], bindings).unwrap();
-        let expected = app
-            .inner
-            .protocols[0]
+        let expected = app.inner.protocols[0]
             .protocol
             .serialize_rejection(DeserializeError::InternalFailure(Error::new(String::from(
                 "the operation has not been set",
@@ -819,9 +817,12 @@ fn body_routing_protocol_cannot_offer_event_streams() {
             })
         })
     });
-    let error =
-        SchemaRoutingService::from_operation_handler_bindings(&SERVICE, [registration], [binding(&FIRST), binding(&SECOND)])
-            .unwrap_err();
+    let error = SchemaRoutingService::from_operation_handler_bindings(
+        &SERVICE,
+        [registration],
+        [binding(&FIRST), binding(&SECOND)],
+    )
+    .unwrap_err();
     assert!(matches!(error, RouterBuildError::BodyRoutedEventStream { protocol } if protocol == "test#bodyRouting"));
 }
 
@@ -851,7 +852,10 @@ mod multi_protocol {
     static WITH_BODY_ROUTING: ServiceSchema<'static> = ServiceSchema::new(
         &SERVICE_SHAPE,
         None,
-        &[shape_id!("test", "bodyRouting"), shape_id!("aws.protocols", "restJson1")],
+        &[
+            shape_id!("test", "bodyRouting"),
+            shape_id!("aws.protocols", "restJson1"),
+        ],
         OPS,
     );
 
@@ -909,10 +913,18 @@ mod multi_protocol {
             .collect()
     }
 
-    async fn send(app: &SchemaRoutingService, request: http::request::Builder, body: &'static str) -> (StatusCode, String) {
+    async fn send(
+        app: &SchemaRoutingService,
+        request: http::request::Builder,
+        body: &'static str,
+    ) -> (StatusCode, String) {
         let response = app
             .clone()
-            .oneshot(request.body(Body::from_bytes(Bytes::from_static(body.as_bytes()))).unwrap())
+            .oneshot(
+                request
+                    .body(Body::from_bytes(Bytes::from_static(body.as_bytes())))
+                    .unwrap(),
+            )
             .await
             .unwrap();
         let status = response.status();
@@ -988,11 +1000,7 @@ mod multi_protocol {
             Request::builder().method("GET").uri("/nowhere"),
         ];
         for request in unclaimed {
-            let response = app
-                .clone()
-                .oneshot(request.body(Body::empty()).unwrap())
-                .await
-                .unwrap();
+            let response = app.clone().oneshot(request.body(Body::empty()).unwrap()).await.unwrap();
             assert_eq!(response.status(), StatusCode::BAD_REQUEST);
             assert!(response.headers().is_empty());
             assert!(response.into_body().collect().await.unwrap().to_bytes().is_empty());
@@ -1017,9 +1025,10 @@ mod multi_protocol {
 
     #[tokio::test]
     async fn rpc_v2_cbor_rejects_streaming_blobs_while_rest_serves_them() {
-        static DATA: Schema<'static> = Schema::new_member(shape_id!("test", "Upload", "data"), ShapeType::Blob, "data", 0)
-            .with_streaming()
-            .with_http_payload();
+        static DATA: Schema<'static> =
+            Schema::new_member(shape_id!("test", "Upload", "data"), ShapeType::Blob, "data", 0)
+                .with_streaming()
+                .with_http_payload();
         static UPLOAD_MEMBERS: [&Schema<'static>; 1] = [&DATA];
         static UPLOAD: Schema<'static> =
             Schema::new_struct(shape_id!("test", "Upload"), ShapeType::Structure, &UPLOAD_MEMBERS)
@@ -1028,7 +1037,10 @@ mod multi_protocol {
         static BOTH: ServiceSchema<'static> = ServiceSchema::new(
             &SERVICE_SHAPE,
             None,
-            &[shape_id!("smithy.protocols", "rpcv2Cbor"), shape_id!("aws.protocols", "restJson1")],
+            &[
+                shape_id!("smithy.protocols", "rpcv2Cbor"),
+                shape_id!("aws.protocols", "restJson1"),
+            ],
             &[&STREAMING],
         );
         static CBOR_ONLY: ServiceSchema<'static> = ServiceSchema::new(
@@ -1043,7 +1055,10 @@ mod multi_protocol {
             assert_eq!(status, StatusCode::NOT_FOUND, "{:?}", service.protocols());
         }
         let (status, text) = send(&app(&BOTH, []), post("/first"), "").await;
-        assert_eq!((status, text.as_str()), (StatusCode::OK, "aws.protocols#restJson1 first "));
+        assert_eq!(
+            (status, text.as_str()),
+            (StatusCode::OK, "aws.protocols#restJson1 first ")
+        );
     }
 
     #[tokio::test]
@@ -1070,11 +1085,24 @@ mod multi_protocol {
         let app = app(&WITH_BODY_ROUTING, [body_routing(FIRST)]);
         assert_eq!(priority(&app), ["test#bodyRouting", "aws.protocols#restJson1"]);
         assert_eq!(
-            send(&app, post("/first").header("content-type", "application/json"), "{\"name\":\"n\"}").await,
-            (StatusCode::OK, "aws.protocols#restJson1 first {\"name\":\"n\"}".to_owned())
+            send(
+                &app,
+                post("/first").header("content-type", "application/json"),
+                "{\"name\":\"n\"}"
+            )
+            .await,
+            (
+                StatusCode::OK,
+                "aws.protocols#restJson1 first {\"name\":\"n\"}".to_owned()
+            )
         );
         assert_eq!(
-            send(&app, post("/first").header("content-type", "application/json"), "second\n").await,
+            send(
+                &app,
+                post("/first").header("content-type", "application/json"),
+                "second\n"
+            )
+            .await,
             (StatusCode::OK, "test#bodyRouting second second\n".to_owned())
         );
     }
