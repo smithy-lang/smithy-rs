@@ -102,8 +102,8 @@ data class ServerRustSettings(
  *   values). Default is `0` (no limit) for backwards compatibility.
  * [rpcV2CborAddCapitalizedRoute]: When false (default), the RPCv2 CBOR server router registers
  *   only the spec-compliant verbatim route derived from the Smithy operation shape name
- *   (e.g., `Example.getFoo`). When true, an additional legacy alias with the first character
- *   capitalized is also registered (e.g., `Example.GetFoo`) for operations whose Rust symbol
+ *   (e.g., `Example/operation/getFoo`). When true, an additional legacy alias with the first
+ *   character capitalized is also registered (e.g., `Example/operation/GetFoo`) for operations whose Rust symbol
  *   name differs from the verbatim Smithy operation name. Set this to `true` to preserve
  *   compatibility with clients that were previously reaching the server via the capitalized URI
  *   (which was the only route the server registered before the fix for

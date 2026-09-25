@@ -365,9 +365,13 @@ class ServerRpcV2CborProtocol(
             .resolve("protocol::rpc_v2_cbor::router::RpcV2CborRouter")
 
     /**
-     * The RPC v2 CBOR router keys its map by `"{service}.{operationName}"`, where `operationName`
-     * is the verbatim Smithy operation shape name (e.g. `getFoo`) - matching the URI that the
-     * spec-compliant client generates. See https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html.
+     * The RPC v2 CBOR router keys its map by `"{service}/operation/{operationName}"`, where
+     * `operationName` is the verbatim Smithy operation shape name (e.g. `getFoo`) - matching the
+     * URI that the spec-compliant client generates.
+     * See https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html.
+     *
+     * Matching the URI tail allows the runtime router to borrow the lookup key directly from the
+     * request path without composing or allocating a key per request.
      */
     override fun serverRouterRequestSpec(
         operationShape: OperationShape,
@@ -375,7 +379,7 @@ class ServerRpcV2CborProtocol(
         serviceName: String,
         requestSpecModule: RuntimeType,
     ) = writable {
-        rust("$serviceName.${operationShape.id.name}".dq())
+        rust("$serviceName/operation/${operationShape.id.name}".dq())
     }
 
     /**
@@ -406,7 +410,7 @@ class ServerRpcV2CborProtocol(
         if (verbatimOperationName == capitalizedOperationName) {
             return emptyList()
         }
-        return listOf(writable { rust("$serviceName.$capitalizedOperationName".dq()) })
+        return listOf(writable { rust("$serviceName/operation/$capitalizedOperationName".dq()) })
     }
 
     override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType = RuntimeType.StaticStr
