@@ -102,7 +102,7 @@ impl RegistryEntry {
     }
 
     /// The static schema for this entry's shape.
-    pub fn schema(&self) -> &Schema<'_> {
+    pub fn schema(&self) -> &'static Schema<'static> {
         self.schema
     }
 

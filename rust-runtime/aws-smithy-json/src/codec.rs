@@ -699,4 +699,46 @@ mod tests {
             other => panic!("expected DocumentError::InvalidInput, got {other:?}"),
         }
     }
+
+    #[test]
+    fn to_builder_round_trips_every_setting() {
+        // Regression guard: `to_builder` names each field explicitly, so a
+        // setting added later is silently reset to its default here while still
+        // compiling. That is how a codec rebuilt by a protocol wrapper (see
+        // `protocol::codec_with_bag_namespace`, which overrides only
+        // `default_namespace`) can lose strictness. Every setting below is set
+        // to the OPPOSITE of its default so a dropped field fails this test.
+        let original = JsonCodecSettings::builder()
+            .use_json_name(false)
+            .default_timestamp_format(TimestampFormat::HttpDate)
+            .max_depth(7)
+            .protocol_id(shape_id!("aws.protocols", "restJson1"))
+            .use_string_for_arbitrary_precision(true)
+            .default_namespace("com.example")
+            .enforce_strictness(true)
+            .allow_integral_float_numbers(true)
+            .strict_timestamp_formats(true)
+            .build();
+
+        let round_tripped = original.to_builder().build();
+
+        assert!(matches!(
+            round_tripped.field_mapper,
+            JsonFieldMapper::UseMemberName
+        ));
+        assert_eq!(
+            round_tripped.default_timestamp_format(),
+            TimestampFormat::HttpDate
+        );
+        assert_eq!(round_tripped.max_depth(), 7);
+        assert_eq!(
+            DocumentSettings::protocol_id(&round_tripped),
+            "aws.protocols#restJson1"
+        );
+        assert!(round_tripped.use_string_for_arbitrary_precision());
+        assert_eq!(round_tripped.default_namespace(), Some("com.example"));
+        assert!(round_tripped.enforce_strictness);
+        assert!(round_tripped.allow_integral_float_numbers);
+        assert!(round_tripped.strict_timestamp_formats());
+    }
 }

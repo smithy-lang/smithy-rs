@@ -141,10 +141,14 @@ impl ShapeDeserializer for CborDeserializer<'_> {
             } else if let Some(member_schema) = schema.member_schema(&key) {
                 consumer(member_schema, self)?;
             } else if &*key == "__type" || self.is_null() {
+                // A protocol discriminator is never a member, and a `null` value is an
+                // absent member. Neither is reported.
                 self.decoder.skip().map_err(deser_err)?;
             } else {
-                // Let the consumer decide how to handle an unknown member. If it
-                // leaves the value unread, skip it here.
+                // Report the unknown key so a union consumer can act on it: the prelude
+                // `DOCUMENT` schema has no member index, so generated code lands in its
+                // fallthrough arm. The consumer may read the value with a typed read; if
+                // it does not, the position is unchanged and the value is skipped here.
                 let start = self.decoder.position();
                 consumer(&aws_smithy_schema::prelude::DOCUMENT, self)?;
                 if self.decoder.position() == start {

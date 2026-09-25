@@ -1537,11 +1537,13 @@ mod tests {
                 "{input}"
             );
         }
-        assert!(
+        // With defaults, an integer member rejects a floating-point value as a
+        // type mismatch instead of truncating it.
+        assert!(matches!(
             JsonDeserializer::new(b"1.0", Arc::new(JsonCodecSettings::default()))
-                .read_long(dummy_schema())
-                .is_err()
-        );
+                .read_long(dummy_schema()),
+            Err(SerdeError::TypeMismatch { .. })
+        ));
         assert_eq!(
             JsonDeserializer::new(b"12.", Arc::new(JsonCodecSettings::default()))
                 .read_double(dummy_schema())

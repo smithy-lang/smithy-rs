@@ -183,3 +183,46 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod codec_rebuild_tests {
+    use super::*;
+    use crate::codec::{JsonCodec, JsonCodecSettings};
+    use aws_smithy_schema::codec::Codec;
+    use aws_smithy_schema::protocol::ServiceShapeNamespace;
+    use aws_smithy_schema::serde::ShapeDeserializer;
+
+    /// `codec_with_bag_namespace` rebuilds the codec's settings to inject the
+    /// service namespace. It must override *only* that, carrying every other
+    /// setting through — otherwise selecting a protocol at runtime silently
+    /// resets strictness on a codec the caller configured. Verified through
+    /// observable behavior rather than the private fields: with
+    /// `allow_integral_float_numbers`, `1.0` reads as a long; without it, the
+    /// integer path rejects a floating-point value.
+    #[test]
+    fn bag_namespace_rebuild_preserves_other_settings() {
+        for flag in [false, true] {
+            let codec = JsonCodec::new(
+                JsonCodecSettings::builder()
+                    .allow_integral_float_numbers(flag)
+                    .build(),
+            );
+            let mut cfg = ConfigBag::base();
+            cfg.interceptor_state()
+                .store_put(ServiceShapeNamespace::new("com.example"));
+
+            let rebuilt = codec_with_bag_namespace(&codec, &cfg)
+                .expect("namespace is absent from the codec, so it must be rebuilt");
+
+            assert_eq!(rebuilt.settings().default_namespace(), Some("com.example"));
+            assert_eq!(
+                rebuilt
+                    .create_deserializer(b"1.0")
+                    .read_long(&aws_smithy_schema::prelude::LONG)
+                    .is_ok(),
+                flag,
+                "allow_integral_float_numbers({flag}) must survive the rebuild"
+            );
+        }
+    }
+}

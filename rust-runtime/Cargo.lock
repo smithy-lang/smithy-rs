@@ -384,10 +384,10 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-cbor"
-version = "0.62.1"
+version = "0.63.0"
 dependencies = [
  "aws-smithy-runtime-api 1.16.1",
- "aws-smithy-schema 0.2.1",
+ "aws-smithy-schema 0.3.0",
  "aws-smithy-types 1.7.0",
  "criterion 0.8.2",
  "minicbor",
@@ -587,13 +587,13 @@ dependencies = [
 name = "aws-smithy-http-server"
 version = "0.67.1"
 dependencies = [
- "aws-smithy-cbor 0.62.1",
+ "aws-smithy-cbor 0.63.0",
  "aws-smithy-http 0.64.0",
- "aws-smithy-json 0.63.1",
+ "aws-smithy-json 0.64.0",
  "aws-smithy-runtime-api 1.16.1",
- "aws-smithy-schema 0.2.1",
+ "aws-smithy-schema 0.3.0",
  "aws-smithy-types 1.7.0",
- "aws-smithy-xml 0.62.1",
+ "aws-smithy-xml 0.63.0",
  "bytes",
  "criterion 0.8.2",
  "form_urlencoded",
@@ -660,10 +660,10 @@ name = "aws-smithy-http-server-python"
 version = "0.68.2"
 dependencies = [
  "aws-smithy-http 0.64.0",
- "aws-smithy-json 0.63.1",
+ "aws-smithy-json 0.64.0",
  "aws-smithy-legacy-http-server",
  "aws-smithy-types 1.7.0",
- "aws-smithy-xml 0.62.1",
+ "aws-smithy-xml 0.63.0",
  "bytes",
  "futures",
  "futures-util",
@@ -705,10 +705,10 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-json"
-version = "0.63.1"
+version = "0.64.0"
 dependencies = [
  "aws-smithy-runtime-api 1.16.1",
- "aws-smithy-schema 0.2.1",
+ "aws-smithy-schema 0.3.0",
  "aws-smithy-types 1.7.0",
  "proptest",
  "serde_json",
@@ -743,12 +743,12 @@ dependencies = [
 name = "aws-smithy-legacy-http-server"
 version = "0.66.1"
 dependencies = [
- "aws-smithy-cbor 0.62.1",
- "aws-smithy-json 0.63.1",
+ "aws-smithy-cbor 0.63.0",
+ "aws-smithy-json 0.64.0",
  "aws-smithy-legacy-http",
  "aws-smithy-runtime-api 1.16.1",
  "aws-smithy-types 1.7.0",
- "aws-smithy-xml 0.62.1",
+ "aws-smithy-xml 0.63.0",
  "bytes",
  "futures-util",
  "http 0.2.12",
@@ -825,12 +825,12 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-query"
-version = "0.62.1"
+version = "0.63.0"
 dependencies = [
  "aws-smithy-runtime-api 1.16.1",
- "aws-smithy-schema 0.2.1",
+ "aws-smithy-schema 0.3.0",
  "aws-smithy-types 1.7.0",
- "aws-smithy-xml 0.62.1",
+ "aws-smithy-xml 0.63.0",
  "criterion 0.5.1",
  "urlencoding",
 ]
@@ -845,7 +845,7 @@ dependencies = [
  "aws-smithy-http-client",
  "aws-smithy-observability",
  "aws-smithy-runtime-api 1.16.1",
- "aws-smithy-schema 0.2.1",
+ "aws-smithy-schema 0.3.0",
  "aws-smithy-types 1.7.0",
  "bytes",
  "fastrand 2.5.0",
@@ -932,7 +932,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-schema"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "aws-smithy-runtime-api 1.16.1",
  "aws-smithy-schema-derive",
@@ -1046,11 +1046,11 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-xml"
-version = "0.62.1"
+version = "0.63.0"
 dependencies = [
  "aws-smithy-protocol-test",
  "aws-smithy-runtime-api 1.16.1",
- "aws-smithy-schema 0.2.1",
+ "aws-smithy-schema 0.3.0",
  "aws-smithy-types 1.7.0",
  "base64 0.13.1",
  "proptest",
@@ -2568,15 +2568,15 @@ dependencies = [
 name = "inlineable"
 version = "0.1.0"
 dependencies = [
- "aws-smithy-cbor 0.62.1",
+ "aws-smithy-cbor 0.63.0",
  "aws-smithy-compression",
  "aws-smithy-http 0.64.0",
- "aws-smithy-json 0.63.1",
+ "aws-smithy-json 0.64.0",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api 1.16.1",
- "aws-smithy-schema 0.2.1",
+ "aws-smithy-schema 0.3.0",
  "aws-smithy-types 1.7.0",
- "aws-smithy-xml 0.62.1",
+ "aws-smithy-xml 0.63.0",
  "bytes",
  "fastrand 2.5.0",
  "futures-util",
