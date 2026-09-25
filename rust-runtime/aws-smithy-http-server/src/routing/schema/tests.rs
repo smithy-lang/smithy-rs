@@ -863,7 +863,7 @@ mod multi_protocol {
     fn echo(operation: &'static OperationSchema<'static>) -> OperationHandlerBinding {
         OperationHandlerBinding::new(
             operation,
-            Route::new(tower::service_fn(move |request: Request<Body>| async move {
+            SyncRoute::new(tower::service_fn(move |request: Request<Body>| async move {
                 let selected = request
                     .extensions()
                     .get::<SelectedProtocolOperation>()
