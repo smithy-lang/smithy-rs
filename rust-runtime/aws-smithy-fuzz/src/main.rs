@@ -16,6 +16,8 @@ use std::process::{Child, Command, Stdio};
 use std::time::SystemTime;
 use std::{env, fs};
 
+mod semantic;
+
 use clap::{Parser, Subcommand};
 use tera::{Context, Tera};
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
@@ -747,7 +749,7 @@ fn enter_fuzz_loop(libraries: Vec<FuzzTarget>, mut log: Option<BufWriter<fs::Fil
                     .unwrap();
                 });
                 for result in &results {
-                    if result.response != results[0].response {
+                    if !semantic::results_agree(result, &results[0]) {
                         if check_for_nondeterminism(data, &libraries) {
                             break;
                         }

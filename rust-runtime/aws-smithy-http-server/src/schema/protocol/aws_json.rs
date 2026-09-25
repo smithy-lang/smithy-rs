@@ -79,7 +79,7 @@ macro_rules! aws_json_protocol {
                 &self,
                 ctx: crate::routing::RouterBuildContext<'_>,
             ) -> Result<crate::routing::SharedProtocolRouter, crate::routing::RouterBuildError> {
-                crate::routing::schema::aws_json_router::<$marker>(&ctx)
+                crate::routing::schema::aws_json_router::<$marker>(&ctx, $content_type)
             }
             fn protocol_id(&self) -> &'static ShapeId<'static> {
                 static PROTOCOL_ID: ShapeId<'static> = $protocol_id;

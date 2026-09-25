@@ -89,6 +89,14 @@ impl<S> AwsJsonRouter<S> {
     }
 }
 
+impl<S: Clone> AwsJsonRouter<S> {
+    /// Looks up the route the `x-amz-target` header names, without checking the method or URI.
+    pub(crate) fn match_target<B>(&self, request: &http::Request<B>) -> Option<S> {
+        let target = request.headers().get("x-amz-target")?.to_str().ok()?;
+        self.routes.get(target).cloned()
+    }
+}
+
 impl<B, S> Router<B> for AwsJsonRouter<S>
 where
     S: Clone,

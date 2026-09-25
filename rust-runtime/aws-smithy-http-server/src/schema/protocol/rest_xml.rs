@@ -53,7 +53,7 @@ impl ServerProtocol for RestXmlProtocol {
         &self,
         ctx: crate::routing::RouterBuildContext<'_>,
     ) -> Result<crate::routing::SharedProtocolRouter, crate::routing::RouterBuildError> {
-        crate::routing::schema::rest_router::<RestXml>(ctx.targets)
+        crate::routing::schema::rest_router::<RestXml>(ctx.targets, CONTENT_TYPE)
     }
     fn protocol_id(&self) -> &'static ShapeId<'static> {
         &PROTOCOL_ID

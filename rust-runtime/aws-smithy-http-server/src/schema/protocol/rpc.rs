@@ -19,7 +19,7 @@ use crate::schema::DeserializeError;
 use super::request::{
     accept_permits, check_accept, has_streaming_payload, rpc_request_deserializer, EVENT_STREAM_CONTENT_TYPE,
 };
-use super::response::{assemble_response, assemble_streaming_response, resolve_status};
+use super::response::{assemble_response, assemble_streaming_response};
 use super::ServerRequest;
 
 /// Determines which RPC operations advertise a response entity to the `Accept` gate.
@@ -137,7 +137,9 @@ impl<C: Codec> RpcProtocol<C> {
             ResponseBindings::BodyOnly,
             ResponseValueKind::OperationOutput { empty_document: true },
         )?;
-        let status = resolve_status(parts.status, output.http());
+        // RPC protocols ignore `@http` and `@httpResponseCode`: a model serving REST protocols
+        // alongside this one carries them, and they must not change this protocol's wire.
+        let status = 200;
         let content_type = if output.original_name().is_some() {
             Some(self.content_type)
         } else {
@@ -159,7 +161,7 @@ impl<C: Codec> RpcProtocol<C> {
             ResponseBindings::BodyOnly,
             ResponseValueKind::StreamingOutput,
         )?;
-        let status = resolve_status(None, output.http());
+        let status = 200;
         assemble_streaming_response(parts, status, Some(self.streaming_content_type()), body)
     }
 }

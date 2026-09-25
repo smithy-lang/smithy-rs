@@ -68,6 +68,12 @@ data class TargetCrate(
         return packageSection.firstOrNull { it.startsWith("name =") }?.let { it.split("=")[1].trim() }?.trim('"')
             ?: throw Exception("no package name")
     }
+
+    /** Whether the target server routes through the schema-serde path rather than a per-protocol router. */
+    fun isSchemaServer(): Boolean =
+        Path.of(relativePath).resolve("src/service.rs").toFile().let {
+            it.exists() && it.readText().contains("routing::SchemaRoutingService")
+        }
 }
 
 data class FuzzSettings(

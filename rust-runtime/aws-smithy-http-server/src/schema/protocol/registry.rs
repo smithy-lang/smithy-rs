@@ -8,10 +8,34 @@
 //! Generated service builders resolve their protocol through a [`ProtocolRegistry`] instead of
 //! naming a concrete protocol struct, so a protocol implemented outside this crate joins the
 //! schema-serde path by contributing a [`ProtocolRegistration`].
+//!
+//! A service declaring several protocols is served by all of them. The routing service asks them
+//! in priority order: the built-ins as [`BUILTIN_PRIORITY`] lists them, other protocols after the
+//! built-ins, and protocols that read the body to route after those that route on metadata alone.
+//! A registration moves its protocol relative to another with [`ProtocolOrder`].
 
 use aws_smithy_schema::ServiceSchema;
 
 use super::SharedServerProtocol;
+
+/// The built-in protocols in the order a multi-protocol service asks them to claim a request.
+pub(crate) const BUILTIN_PRIORITY: [&str; 5] = [
+    "smithy.protocols#rpcv2Cbor",
+    "aws.protocols#awsJson1_0",
+    "aws.protocols#awsJson1_1",
+    "aws.protocols#restJson1",
+    "aws.protocols#restXml",
+];
+
+/// Places a protocol relative to another protocol, by shape ID, in a multi-protocol service's
+/// priority order. A constraint naming a protocol the service does not serve is ignored.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProtocolOrder {
+    /// Ask this protocol before the named one.
+    Before(&'static str),
+    /// Ask this protocol after the named one.
+    After(&'static str),
+}
 
 /// A single protocol's entry in a [`ProtocolRegistry`].
 ///
@@ -20,12 +44,23 @@ use super::SharedServerProtocol;
 #[derive(Clone, Copy)]
 pub struct ProtocolRegistration {
     build: fn(&'static ServiceSchema<'static>) -> Option<SharedServerProtocol>,
+    order: &'static [ProtocolOrder],
 }
 
 impl ProtocolRegistration {
     /// Creates a protocol registration.
     pub const fn new(build: fn(&'static ServiceSchema<'static>) -> Option<SharedServerProtocol>) -> Self {
-        Self { build }
+        Self { build, order: &[] }
+    }
+
+    /// Constrains where the protocol sits in a multi-protocol service's priority order.
+    pub const fn with_order(mut self, order: &'static [ProtocolOrder]) -> Self {
+        self.order = order;
+        self
+    }
+
+    pub(crate) fn order(&self) -> &'static [ProtocolOrder] {
+        self.order
     }
 
     fn resolve(&self, service_schema: &'static ServiceSchema<'static>) -> Option<SharedServerProtocol> {
@@ -76,6 +111,41 @@ impl ProtocolRegistry {
         self.registrations
             .iter()
             .find_map(|registration| registration.resolve(service_schema))
+    }
+
+    /// Resolves the protocol with shape ID `protocol_id` for `service_schema`, honoring overrides
+    /// the same way [`Self::resolve`] does.
+    pub fn resolve_id(
+        &self,
+        service_schema: &'static ServiceSchema<'static>,
+        protocol_id: &str,
+    ) -> Option<SharedServerProtocol> {
+        self.registrations
+            .iter()
+            .filter_map(|registration| registration.resolve(service_schema))
+            .find(|protocol| protocol.protocol_id().as_str() == protocol_id)
+    }
+
+    /// Resolves every protocol the registrations recognize on `service_schema`, each with its
+    /// registration's ordering constraints. When several registrations produce the same protocol,
+    /// the first one wins, as in [`Self::resolve`].
+    pub(crate) fn resolve_all(
+        &self,
+        service_schema: &'static ServiceSchema<'static>,
+    ) -> Vec<(SharedServerProtocol, &'static [ProtocolOrder])> {
+        let mut resolved: Vec<(SharedServerProtocol, &'static [ProtocolOrder])> = Vec::new();
+        for registration in &self.registrations {
+            let Some(protocol) = registration.resolve(service_schema) else {
+                continue;
+            };
+            if !resolved
+                .iter()
+                .any(|(existing, _)| existing.protocol_id() == protocol.protocol_id())
+            {
+                resolved.push((protocol, registration.order()));
+            }
+        }
+        resolved
     }
 }
 

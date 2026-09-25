@@ -517,7 +517,7 @@ fn provided_methods_collect_the_body_and_gate_nothing() {
             &self,
             ctx: crate::routing::RouterBuildContext<'_>,
         ) -> Result<crate::routing::SharedProtocolRouter, crate::routing::RouterBuildError> {
-            crate::routing::schema::rest_router::<crate::protocol::rest_json_1::RestJson1>(ctx.targets)
+            crate::routing::schema::rest_router::<crate::protocol::rest_json_1::RestJson1>(ctx.targets, "application/json")
         }
         fn protocol_id(&self) -> &'static aws_smithy_schema::ShapeId<'static> {
             static ID: aws_smithy_schema::ShapeId<'static> = shape_id!("test", "minimal");
@@ -1015,12 +1015,14 @@ async fn middleware_structs_are_framed_like_operation_outputs() {
             let (parts, body) = response.into_parts();
             (parts.status, parts.headers, body.collect().await.unwrap().to_bytes())
         };
-        assert_eq!(status, http::StatusCode::IM_A_TEAPOT, "{id}");
         assert!(!body.is_empty(), "{id}");
         assert!(headers.contains_key("content-type"), "{id}");
         if id.starts_with("aws.protocols#rest") {
+            assert_eq!(status, http::StatusCode::IM_A_TEAPOT, "{id}");
             assert_eq!(headers.get("x-tag").unwrap(), "brewing", "{id}");
         } else {
+            // RPC protocols ignore HTTP bindings, `@http` status codes included.
+            assert_eq!(status, http::StatusCode::OK, "{id}");
             assert!(!headers.contains_key("x-tag"), "{id}");
         }
 

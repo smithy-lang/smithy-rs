@@ -21,6 +21,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.ShapeVisitor
 import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.shapes.StringShape
@@ -118,6 +119,10 @@ open class ServerCodegenVisitor(
     protected var model: Model
     protected var codegenContext: ServerCodegenContext
     protected var protocolGeneratorFactory: ProtocolGeneratorFactory<ServerProtocolGenerator, ServerCodegenContext>
+
+    /** Every protocol code generation supports for this service, keyed by protocol trait ID. */
+    protected var protocolGeneratorFactories:
+        Map<ShapeId, ProtocolGeneratorFactory<ServerProtocolGenerator, ServerCodegenContext>>
     protected var protocolGenerator: ServerProtocolGenerator
     protected var validationExceptionConversionGenerator: ValidationExceptionConversionGenerator
 
@@ -143,19 +148,18 @@ open class ServerCodegenVisitor(
                 codegenDecorator,
                 RustServerCodegenPlugin::baseSymbolProvider,
             )
-        val (protocolShape, protocolGeneratorFactory) =
-            ServerProtocolLoader(
-                codegenDecorator.protocols(
-                    service.id,
-                    ServerProtocolLoader.defaultProtocols { it ->
-                        codegenDecorator.httpCustomizations(
-                            serverSymbolProviders.symbolProvider,
-                            it,
-                        )
-                    },
-                ),
+        protocolGeneratorFactories =
+            codegenDecorator.protocols(
+                service.id,
+                ServerProtocolLoader.defaultProtocols { it ->
+                    codegenDecorator.httpCustomizations(
+                        serverSymbolProviders.symbolProvider,
+                        it,
+                    )
+                },
             )
-                .protocolFor(context.model, service)
+        val (protocolShape, protocolGeneratorFactory) =
+            ServerProtocolLoader(protocolGeneratorFactories).protocolFor(context.model, service)
         codegenContext =
             ServerCodegenContext(
                 model,
@@ -245,6 +249,10 @@ open class ServerCodegenVisitor(
         logger.warning(
             "[rust-server-codegen] Generating Rust server for service $service, protocol ${codegenContext.protocol}",
         )
+
+        if (codegenContext.usesSchemaHttpSerde) {
+            validateServedProtocols(service, codegenContext.servedProtocols, protocolGeneratorFactories.keys)
+        }
 
         val validationExceptionShapeId = validationExceptionConversionGenerator.shapeId
         for (validationResult in listOf(
@@ -686,14 +694,19 @@ open class ServerCodegenVisitor(
         writer: RustWriter,
         shape: OperationShape,
     ) {
-        codegenDecorator.protocolTestGenerator(
-            codegenContext,
-            ServerProtocolTestGenerator(
-                codegenContext,
-                protocolGeneratorFactory.support(),
-                shape,
-            ),
-        ).render(writer)
+        // The schema path serves every declared protocol, so it runs every declared protocol's tests.
+        for (protocol in codegenContext.servedProtocols) {
+            val protocolContext = codegenContext.copy(protocol = protocol)
+            codegenDecorator.protocolTestGenerator(
+                protocolContext,
+                ServerProtocolTestGenerator(
+                    protocolContext,
+                    protocolGeneratorFactories.getValue(protocol).support(),
+                    shape,
+                    multiProtocol = codegenContext.servedProtocols.size > 1,
+                ),
+            ).render(writer)
+        }
     }
 
     /**

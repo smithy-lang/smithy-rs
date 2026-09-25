@@ -27,7 +27,7 @@ pub(super) const OCTET_STREAM_CONTENT_TYPE: &str = "application/octet-stream";
 
 /// What the `Content-Type` header must look like for a request with this input.
 #[derive(Debug)]
-pub(super) enum ExpectedContentType {
+pub(crate) enum ExpectedContentType {
     /// Do not look at the header.
     Skip,
     /// The header must be absent.
@@ -58,7 +58,7 @@ pub(super) fn has_streaming_payload(schema: &Schema<'_>) -> bool {
 /// must have no `Content-Type` at all, unless the input was modeled by the user (the schema then
 /// carries an original name) in which case the header is ignored. Otherwise the codec's type is
 /// expected when any member is bound to the body.
-pub(super) fn expected_request_content_type(
+pub(crate) fn expected_request_content_type(
     input: &Schema<'_>,
     codec_content_type: &'static str,
 ) -> ExpectedContentType {

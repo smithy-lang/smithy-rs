@@ -60,7 +60,7 @@ data class ClientTest(
     private fun imports(): List<String> = dependsOn.map { "../codegen-core/common-test-models/$it" }
 }
 
-val allCodegenTests = listOf(
+val allCodegenTests = (listOf(
     ClientTest("com.amazonaws.simple#SimpleService", "simple", dependsOn = listOf("simple.smithy")),
     ClientTest("com.amazonaws.bignumbers#BigNumberService", "big_numbers", dependsOn = listOf("big-numbers.smithy")),
     ClientTest("com.amazonaws.dynamodb#DynamoDB_20120810", "dynamo"),
@@ -125,7 +125,14 @@ val allCodegenTests = listOf(
         dependsOn = listOf("pokemon-awsjson.smithy", "pokemon-common.smithy"),
     ),
     ClientTest("aws.protocoltests.misc#QueryCompatService", "query-compat-test", dependsOn = listOf("aws-json-query-compat.smithy")),
-).map(ClientTest::toCodegenTest)
+) + listOf("rpcv2cbor", "awsjson10", "awsjson11", "restjson", "restxml").map { protocol ->
+    // One client per protocol of the multi-protocol service; see `examples/multi-protocol`.
+    ClientTest(
+        "com.example.multiprotocol#MultiProtocolService",
+        "multi-protocol-client-$protocol",
+        dependsOn = listOf("multi-protocol-$protocol.smithy", "multi-protocol-common.smithy"),
+    )
+}).map(ClientTest::toCodegenTest)
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)

@@ -843,7 +843,7 @@ class ServerServiceGenerator(
                 """
                 /// Builds the service. ${if (unchecked) "Missing handlers return the protocol's internal failure response when called." else "Every operation must have a handler."}
                 /// Configured layers run after routing, with the selected operation in request extensions.
-                /// ${if (unchecked) "Panics on invalid routing configuration, including body-first routing with streaming operations." else "Returns an error for missing handlers or invalid routing configuration."}
+                /// ${if (unchecked) "Panics on invalid routing configuration, such as contradictory protocol ordering." else "Returns an error for missing handlers or invalid routing configuration."}
                 pub fn $name(self) -> $result
                 where
                     L: #{Tower}::Layer<#{SmithyHttpServer}::routing::Route<Body>>,

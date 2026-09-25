@@ -196,7 +196,7 @@ class SchemaRoutingGeneratorTest {
     }
 
     @Test
-    fun `both builders reject body routing for generated streaming operations`() {
+    fun `both builders accept body routing alongside generated streaming operations`() {
         val model =
             """
             namespace test
@@ -224,15 +224,16 @@ class SchemaRoutingGeneratorTest {
                                     """
                                     {
                                         use #{Server}::schema::{ServerProtocol, SharedServerProtocol, ProtocolRegistration};
-                                        use #{Server}::routing::{AsyncProtocolRouter, ProtocolRouteFuture, SharedProtocolRouter, RouterBuildContext, RouterBuildError};
+                                        use #{Server}::routing::{AsyncProtocolRouter, ProtocolClaimFuture, ProtocolRouteFuture, SharedProtocolRouter, RouterBuildContext, RouterBuildError};
                                         use #{Server}::body::BoxBody;
                                         use #{Schema}::{Schema, ShapeId};
                                         use #{Http}::{Request, Response};
                                         ##[derive(Debug)]
                                         struct BodyRouter;
                                         impl AsyncProtocolRouter for BodyRouter {
-                                            // Construction rejects streaming operations before any request routes.
+                                            // The test only builds the service; no request routes.
                                             fn route(self: ::std::sync::Arc<Self>, _: Request<BoxBody>) -> ProtocolRouteFuture { unreachable!() }
+                                            fn claim(self: ::std::sync::Arc<Self>, _: Request<BoxBody>) -> ProtocolClaimFuture { unreachable!() }
                                         }
                                         ##[derive(Debug)]
                                         struct TestProtocol;
@@ -275,7 +276,7 @@ class SchemaRoutingGeneratorTest {
                 testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
             ) { context, crate ->
                 crate.testModule {
-                    tokioTest("streaming_validation_preserves_checked_errors_and_unchecked_panics") {
+                    tokioTest("streaming_operations_do_not_fail_either_builder") {
                         rustTemplate(
                             """
                             let builder = || crate::Example::builder(crate::ExampleConfig::builder().build());
@@ -285,18 +286,10 @@ class SchemaRoutingGeneratorTest {
                             let checked = builder().stream_custom(#{Tower}::service_fn(|_: #{Http}::Request<#{Server}::body::Body>| async {
                                 #{Ok}::<_, ::std::convert::Infallible>(#{Http}::Response::new(#{Server}::body::empty()))
                             })).build();
-                            if $bodyRouting {
-                                let panic = unchecked.expect_err("unchecked construction must panic");
-                                let message = panic.downcast_ref::<#{String}>().expect("panic message");
-                                assert!(message.contains("invalid schema routing configuration"));
-                                assert!(message.contains("test##bodyRouting"));
-                                assert!(message.contains("test##Stream"));
-                                assert!(matches!(checked, #{Err}(crate::BuildError::Routing(#{Server}::routing::RouterBuildError::StreamingBodyRouting { protocol, operation }))
-                                    if protocol == "test##bodyRouting" && operation == "test##Stream"));
-                            } else {
-                                assert!(unchecked.is_ok());
-                                assert!(checked.is_ok());
-                            }
+                            // A body-first protocol leaves streaming operations out of its routing table
+                            // rather than failing the build.
+                            assert!(unchecked.is_ok());
+                            assert!(checked.is_ok());
                             """,
                             "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
                             "Http" to RuntimeType.http(context.runtimeConfig),

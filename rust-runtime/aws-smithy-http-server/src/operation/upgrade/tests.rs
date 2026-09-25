@@ -21,7 +21,7 @@ impl ServerProtocol for HttpOnly {
         &self,
         ctx: crate::routing::RouterBuildContext<'_>,
     ) -> Result<crate::routing::SharedProtocolRouter, crate::routing::RouterBuildError> {
-        crate::routing::schema::rest_router::<crate::protocol::rest_json_1::RestJson1>(ctx.targets)
+        crate::routing::schema::rest_router::<crate::protocol::rest_json_1::RestJson1>(ctx.targets, "application/json")
     }
     fn protocol_id(&self) -> &'static aws_smithy_schema::ShapeId<'static> {
         static ID: aws_smithy_schema::ShapeId<'static> = shape_id!("test", "httpOnly");

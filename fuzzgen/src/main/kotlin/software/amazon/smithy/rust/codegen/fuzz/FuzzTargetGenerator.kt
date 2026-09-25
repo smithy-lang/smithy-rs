@@ -9,8 +9,17 @@ import software.amazon.smithy.build.FileManifest
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.knowledge.TopDownIndex
+import software.amazon.smithy.model.shapes.BooleanShape
+import software.amazon.smithy.model.shapes.EnumShape
+import software.amazon.smithy.model.shapes.IntEnumShape
+import software.amazon.smithy.model.shapes.ListShape
+import software.amazon.smithy.model.shapes.MapShape
+import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.StringShape
+import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Local
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
@@ -101,6 +110,10 @@ class FuzzTargetGenerator(private val context: FuzzTargetContext) {
 
     private val serviceName = context.fuzzSettings.service.name.toPascalCase()
 
+    // A schema-serde server's builder is not generic over the request body, so it takes no `Body` type argument.
+    private val builderGenerics =
+        if (context.target.isSchemaServer()) "" else "::<#{Body}, _, _, _>"
+
     fun generateFuzzTarget() {
         context.rustCrate.lib {
             rustTemplate(
@@ -108,7 +121,7 @@ class FuzzTargetGenerator(private val context: FuzzTargetContext) {
                 #{fuzz_harness}!(|tx| {
                     let config = #{target}::${serviceName}Config::builder().build();
                     #{tx_clones}
-                    #{target}::$serviceName::builder::<#{Body}, _, _, _>(config)#{all_operations}.build_unchecked()
+                    #{target}::$serviceName::builder$builderGenerics(config)#{all_operations}.build_unchecked()
                 });
 
                 """,
@@ -132,8 +145,28 @@ class FuzzTargetGenerator(private val context: FuzzTargetContext) {
                             .hasStreamingMember(model)
                 ) &&
                 // TODO(fuzzing): it should be possible to work backwards from constraints to satisfy them in most cases.
-                !(operationShape.outputShape(model).isDirectlyConstrained(symbolProvider))
+                (
+                    !operationShape.outputShape(model).isDirectlyConstrained(symbolProvider) ||
+                        requiredOutputMembers(operationShape).all { canDefault(it) }
+                )
         }.toList()
+    }
+
+    private fun requiredOutputMembers(operation: OperationShape): List<MemberShape> =
+        operation.outputShape(model).members().filter { it.isRequired }
+
+    /** Whether the member's Rust type implements `Default`, so a handler can satisfy `@required` with it. */
+    private fun canDefault(member: MemberShape): Boolean {
+        val target = model.expectShape(member.target)
+        if (target.isDirectlyConstrained(symbolProvider)) {
+            return false
+        }
+        return when (target) {
+            is EnumShape, is IntEnumShape -> false
+            is StringShape -> !target.hasTrait(EnumTrait::class.java)
+            is NumberShape, is BooleanShape, is ListShape, is MapShape -> true
+            else -> false
+        }
     }
 
     private fun allTxs(): Writable =
@@ -153,11 +186,17 @@ class FuzzTargetGenerator(private val context: FuzzTargetContext) {
                     op.contextName(serviceShape).toSnakeCase().let { RustReservedWords.escapeIfNeeded(it) }
                 val output =
                     writable {
-                        val outputSymbol = symbolProvider.toSymbol(op.outputShape(model))
+                        val outputShape = op.outputShape(model)
+                        val outputSymbol = symbolProvider.toSymbol(outputShape)
+                        val setters =
+                            requiredOutputMembers(op).joinToString("") {
+                                ".${symbolProvider.toMemberName(it)}(Default::default())"
+                            }
+                        val unwrap = if (outputShape.isDirectlyConstrained(symbolProvider)) ".unwrap()" else ""
                         if (op.errors.isEmpty()) {
-                            rust("#T::builder().build()", outputSymbol)
+                            rust("#T::builder()$setters.build()$unwrap", outputSymbol)
                         } else {
-                            rust("Ok(#T::builder().build())", outputSymbol)
+                            rust("Ok(#T::builder()$setters.build()$unwrap)", outputSymbol)
                         }
                     }
                 rustTemplate(

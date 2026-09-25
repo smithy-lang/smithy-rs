@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
-import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.UnionShape
@@ -33,6 +32,14 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
+
+/**
+ * The event payload content type handed to the shared frame generators.
+ *
+ * Unused: [ServerEventStreamSerdeCustomization] labels and encodes each payload with the protocol selected
+ * at runtime, so no protocol's content type is fixed at code generation time.
+ */
+private const val RUNTIME_PAYLOAD_CONTENT_TYPE = ""
 
 /**
  * Renders the `StreamingOperationShape` implementation of an operation whose input or output carries an
@@ -295,10 +302,7 @@ class ServerStreamingOperationGenerator(
                 return@writable
             }
             val unionShape = model.expectShape(member.target, UnionShape::class.java)
-            val payloadContentType =
-                protocol.httpBindingResolver.eventStreamMessageContentType(member)
-                    ?: throw CodegenException("event streams must set a content type")
-            val marshallerGenerator = marshallerGenerator(unionShape, payloadContentType)
+            val marshallerGenerator = marshallerGenerator(unionShape, RUNTIME_PAYLOAD_CONTENT_TYPE)
             // Whether an `initial-response` frame precedes the events is a service-level codegen setting, as
             // on the legacy path; whether the protocol frames initial messages at all is the protocol's answer
             // at runtime.
@@ -342,7 +346,7 @@ class ServerStreamingOperationGenerator(
                 """,
                 *codegenScope,
                 "marshaller" to marshallerGenerator.render(),
-                "error_marshaller" to errorMarshaller(unionShape, payloadContentType),
+                "error_marshaller" to errorMarshaller(unionShape, RUNTIME_PAYLOAD_CONTENT_TYPE),
             )
         }
 

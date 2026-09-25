@@ -20,9 +20,9 @@ mod route;
 pub(crate) mod schema;
 
 pub use schema::{
-    AsyncProtocolRouter, CollectedBody, OperationHandlerBinding, OperationIndex, ProtocolRouteFuture, ProtocolRouter,
-    RouterBuildContext, RouterBuildError, RoutingOptions, SchemaRoutingFuture, SchemaRoutingService,
-    SharedProtocolRouter,
+    AsyncProtocolRouter, AsyncRouteClaim, CollectedBody, OperationHandlerBinding, OperationIndex, ProtocolClaimFuture,
+    ProtocolRouteFuture, ProtocolRouter, RouteClaim, RouterBuildContext, RouterBuildError, RoutingOptions,
+    SchemaRoutingFuture, SchemaRoutingService, SharedProtocolRouter,
 };
 #[doc(hidden)]
 pub use schema::aws_json_router;

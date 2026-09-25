@@ -116,8 +116,7 @@ class ServerServiceSchemaGenerator(
     }
 
     private fun renderService(writer: RustWriter) {
-        val protocols =
-            shapeIdExpr(codegenContext.protocol)
+        val protocols = codegenContext.servedProtocols.joinToString(", ") { shapeIdExpr(it) }
         val operationRefs = operations.joinToString(", ") { "&super::operations::${operationConstName(it)}" }
         val version = service.version.takeIf { it.isNotEmpty() }?.let { "Some(${it.dq()})" } ?: "None"
         writer.rustTemplate(

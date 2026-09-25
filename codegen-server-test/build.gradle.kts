@@ -202,6 +202,13 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
                 imports = listOf("custom-test-models/rest-xml-server-tests.smithy"),
                 extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
             ),
+            // One service serving every built-in protocol; `examples/multi-protocol` drives a client per protocol against it.
+            CodegenTest(
+                "com.example.multiprotocol#MultiProtocolService",
+                "multi-protocol-server-sdk",
+                imports = listOf("$commonModels/multi-protocol.smithy", "$commonModels/multi-protocol-common.smithy"),
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
+            ),
         )
 }
 // When iterating on protocol tests use this to speed up codegen:

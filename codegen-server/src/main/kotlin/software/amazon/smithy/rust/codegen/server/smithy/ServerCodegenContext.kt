@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -48,6 +49,20 @@ data class ServerCodegenContext(
      */
     val usesSchemaHttpSerde: Boolean
         get() = settings.codegenConfig.schemaSerde && runtimeConfig.httpVersion == HttpVersion.Http1x
+
+    /**
+     * The protocols the generated service serves.
+     *
+     * The schema path serves every protocol the service declares, asking them in priority order at
+     * runtime to claim each request; the legacy path serves [protocol] alone.
+     */
+    val servedProtocols: List<ShapeId>
+        get() =
+            if (usesSchemaHttpSerde) {
+                ServiceIndex.of(model).getProtocols(serviceShape).keys.sorted()
+            } else {
+                listOf(protocol)
+            }
 
     override fun builderInstantiator(): BuilderInstantiator {
         return ServerBuilderInstantiator(symbolProvider, returnSymbolToParseFn(this))

@@ -24,7 +24,7 @@ mod aws_json;
 #[doc(hidden)]
 pub mod discriminator;
 mod registry;
-mod request;
+pub(crate) mod request;
 #[doc(hidden)]
 pub mod response;
 pub(crate) mod rest;
@@ -50,7 +50,8 @@ use bytes::Bytes;
 use crate::body::{collect_body_limited, BoxBody, CollectBodyError, HttpBody};
 use crate::response::Response;
 
-pub use registry::{ProtocolRegistration, ProtocolRegistry};
+pub(crate) use registry::BUILTIN_PRIORITY;
+pub use registry::{ProtocolOrder, ProtocolRegistration, ProtocolRegistry};
 
 use super::{DeserializeError, HttpModeledError};
 

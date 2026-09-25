@@ -75,10 +75,16 @@ abstract class ProtocolTestGenerator {
     private val serviceShapeId: ShapeId
         get() = codegenContext.serviceShape.id
 
+    /**
+     * Appended to the test module name; lets one operation carry a test module per protocol when the
+     * service is generated for several.
+     */
+    protected open val protocolTestsModuleSuffix: String = ""
+
     /** The Rust module in which we should generate the protocol tests for [operationShape]. */
     private fun protocolTestsModule(): RustModule.LeafModule {
         val operationName = codegenContext.symbolProvider.toSymbol(operationShape).name
-        val testModuleName = "${operationName.toSnakeCase()}_test"
+        val testModuleName = "${operationName.toSnakeCase()}_test$protocolTestsModuleSuffix"
         val additionalAttributes = listOf(Attribute(allow("unreachable_code", "unused_variables")))
         return RustModule.inlineTests(testModuleName, additionalAttributes = additionalAttributes)
     }

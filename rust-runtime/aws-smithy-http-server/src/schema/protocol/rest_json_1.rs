@@ -54,7 +54,7 @@ impl ServerProtocol for RestJson1Protocol {
         &self,
         ctx: crate::routing::RouterBuildContext<'_>,
     ) -> Result<crate::routing::SharedProtocolRouter, crate::routing::RouterBuildError> {
-        crate::routing::schema::rest_router::<RestJson1>(ctx.targets)
+        crate::routing::schema::rest_router::<RestJson1>(ctx.targets, CONTENT_TYPE)
     }
     fn protocol_id(&self) -> &'static ShapeId<'static> {
         &PROTOCOL_ID

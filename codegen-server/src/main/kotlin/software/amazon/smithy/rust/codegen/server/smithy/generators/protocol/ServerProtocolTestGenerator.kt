@@ -66,7 +66,12 @@ class ServerProtocolTestGenerator(
     override val codegenContext: CodegenContext,
     override val protocolSupport: ProtocolSupport,
     override val operationShape: OperationShape,
+    /** Whether the service serves several protocols, each generating its own tests for [operationShape]. */
+    private val multiProtocol: Boolean = false,
 ) : ProtocolTestGenerator() {
+    override val protocolTestsModuleSuffix: String =
+        if (multiProtocol) "_${codegenContext.protocol.name.toSnakeCase()}" else ""
+
     /** Whether the generated service runs the schema-driven request and response path. */
     private val schemaSerde =
         (codegenContext as? ServerCodegenContext)?.usesSchemaHttpSerde == true
@@ -434,8 +439,8 @@ class ServerProtocolTestGenerator(
             rustTemplate(
                 """
                 let protocol = #{SmithyHttpServer}::schema::ProtocolRegistry::builtin()
-                    .resolve(&$serviceSchema)
-                    .expect("no protocol registered for the service's protocol traits");
+                    .resolve_id(&$serviceSchema, ${codegenContext.protocol.toString().replace("#", "##").dq()})
+                    .expect("no protocol registered for the protocol under test");
                 let http_response = #{Serialize:W};
                 """,
                 *codegenScope,

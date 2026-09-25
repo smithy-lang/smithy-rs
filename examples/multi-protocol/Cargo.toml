@@ -1,0 +1,26 @@
+# Runs a Rust client per protocol against one server serving every built-in protocol.
+#
+# `make codegen` generates the crates this depends on; see the Makefile.
+[workspace]
+resolver = "2"
+
+[package]
+name = "multi-protocol"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "A multi-protocol smithy-rs server exercised by a generated Rust client for each of its protocols."
+
+[dependencies]
+futures-util = "0.3"
+tokio = { version = "1.26.0", features = ["rt-multi-thread", "macros", "net"] }
+multi-protocol-server-sdk = { path = "../../codegen-server-test/build/smithyprojections/codegen-server-test/multi-protocol-server-sdk/rust-server-codegen" }
+
+[dev-dependencies]
+futures-util = "0.3"
+aws-smithy-types = { path = "../../rust-runtime/aws-smithy-types" }
+multi-protocol-client-rpcv2cbor = { path = "../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-rpcv2cbor/rust-client-codegen", features = ["behavior-version-latest"] }
+multi-protocol-client-awsjson10 = { path = "../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-awsjson10/rust-client-codegen", features = ["behavior-version-latest"] }
+multi-protocol-client-awsjson11 = { path = "../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-awsjson11/rust-client-codegen", features = ["behavior-version-latest"] }
+multi-protocol-client-restjson = { path = "../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-restjson/rust-client-codegen", features = ["behavior-version-latest"] }
+multi-protocol-client-restxml = { path = "../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-restxml/rust-client-codegen", features = ["behavior-version-latest"] }
