@@ -113,16 +113,13 @@ open class ServerOperationErrorGenerator(
             val schema = RuntimeType.smithySchema(runtimeConfig)
             val serializable = schema.resolve("serde::SerializableStruct")
             val server = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
-            val modeledError = server.resolve("schema::ModeledError")
             val httpModeledError = server.resolve("schema::HttpModeledError")
             writer.rustBlock("impl #T for ${errorSymbol.name}", serializable) {
+                rustBlock("fn schema(&self) -> &#T<'_>", schema.resolve("Schema")) {
+                    delegateToVariants(errors, errorSymbol) { rust("#T::schema(_inner)", serializable) }
+                }
                 rustBlock("fn serialize_members(&self, serializer: &mut dyn #T) -> #T<(), #T>", schema.resolve("serde::ShapeSerializer"), RuntimeType.std.resolve("result::Result"), schema.resolve("serde::SerdeError")) {
                     delegateToVariants(errors, errorSymbol) { rust("#T::serialize_members(_inner, serializer)", serializable) }
-                }
-            }
-            writer.rustBlock("impl #T for ${errorSymbol.name}", modeledError) {
-                rustBlock("fn schema(&self) -> &#T<'_>", schema.resolve("Schema")) {
-                    delegateToVariants(errors, errorSymbol) { rust("#T::schema(_inner)", modeledError) }
                 }
             }
             writer.rustBlock("impl #T for ${errorSymbol.name}", httpModeledError) {

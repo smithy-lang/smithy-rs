@@ -375,16 +375,11 @@ open class ServerCodegenVisitor(
                             ?: if (errorTrait.isClientError) 400 else 500
                     rustTemplate(
                         """
-                        impl #{ModeledError} for ${codegenContext.symbolProvider.toSymbol(shape).name} {
-                            fn schema(&self) -> &#{Schema}<'_> { Self::SCHEMA }
-                        }
                         impl #{HttpModeledError} for ${codegenContext.symbolProvider.toSymbol(shape).name} {
                             fn status_code(&self) -> u16 { $status }
                         }
                         """,
-                        "ModeledError" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType().resolve("schema::ModeledError"),
                         "HttpModeledError" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType().resolve("schema::HttpModeledError"),
-                        "Schema" to RuntimeType.smithySchema(codegenContext.runtimeConfig).resolve("Schema"),
                     )
                 }
             }

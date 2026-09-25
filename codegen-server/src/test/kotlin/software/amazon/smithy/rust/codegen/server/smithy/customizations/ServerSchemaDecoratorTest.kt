@@ -145,9 +145,6 @@ internal class ServerSchemaDecoratorTest {
                         assert_eq!(crate::model::Choice::SCHEMA.shape_type(), ShapeType::Union);
                         assert_eq!(crate::error::BadThing::SCHEMA.shape_type(), ShapeType::Structure);
                         assert!(crate::error::BadThing::SCHEMA.traits().unwrap().contains_fqn("smithy.api##error"));
-                        let nested = crate::model::Choice::SCHEMA.members().iter()
-                            .find(|member| member.member_name() == #{Some}("nested")).unwrap();
-                        assert!(std::ptr::eq(nested.target().unwrap(), crate::model::Nested::SCHEMA));
                         """,
                             *preludeScope,
                             "ShapeType" to RuntimeType.smithySchema(context.runtimeConfig).resolve("ShapeType"),

@@ -5,9 +5,7 @@
 use super::*;
 use crate::body::Body;
 use crate::error::Error;
-use crate::schema::{
-    DeserializeError, HttpModeledError, RequestBodyCollectionConfig, ServerProtocol, ServerRequest,
-};
+use crate::schema::{DeserializeError, HttpModeledError, RequestBodyCollectionConfig, ServerProtocol, ServerRequest};
 use aws_smithy_schema::serde::{SerializableStruct, ShapeDeserializer};
 use aws_smithy_schema::{shape_id, traits::HttpTrait, Schema, ShapeId, ShapeType};
 use http::{HeaderMap, HeaderValue, StatusCode};
@@ -233,10 +231,7 @@ async fn malformed_and_unknown_operation_are_terminal_rejections() {
         (Bytes::from_static(b"\xff\n"), StatusCode::BAD_REQUEST),
         (Bytes::from_static(b"unknown\n"), StatusCode::NOT_FOUND),
     ] {
-        let response = service(RoutingOptions::default())
-            .oneshot(request(body))
-            .await
-            .unwrap();
+        let response = service(RoutingOptions::default()).oneshot(request(body)).await.unwrap();
         assert_eq!(response.status(), status);
     }
 }
@@ -269,7 +264,9 @@ async fn provisional_maximum_caps_collection_and_is_the_only_routing_limit() {
         .oneshot(request(format!("first\n{}", "x".repeat(100))))
         .await
         .unwrap();
-    assert!(rejection_message(response).await.contains("exceeded the configured maximum"));
+    assert!(rejection_message(response)
+        .await
+        .contains("exceeded the configured maximum"));
 }
 
 #[tokio::test]
@@ -514,7 +511,11 @@ async fn rpc_capitalized_alias_is_a_protocol_setting() {
                 .header("smithy-protocol", "rpc-v2-cbor")
                 .body(Body::empty())
                 .unwrap();
-            assert_eq!(app.clone().oneshot(req).await.unwrap().status(), status, "{settings} {path}");
+            assert_eq!(
+                app.clone().oneshot(req).await.unwrap().status(),
+                status,
+                "{settings} {path}"
+            );
         }
     }
 }
@@ -612,10 +613,7 @@ async fn immediate_routing_uses_ready_future_and_rejects_unknown_routes() {
     let req = Request::builder().method("POST").uri("/first").body(()).unwrap();
     assert_eq!(router.route(&req).unwrap().index(), 0);
     let req = Request::builder().method("GET").uri("/first").body(()).unwrap();
-    assert_eq!(
-        router.route(&req).unwrap_err().status(),
-        StatusCode::METHOD_NOT_ALLOWED
-    );
+    assert_eq!(router.route(&req).unwrap_err().status(), StatusCode::METHOD_NOT_ALLOWED);
 }
 
 #[cfg(debug_assertions)]
@@ -758,22 +756,21 @@ async fn body_routing_leaves_streaming_operations_unrouted() {
 #[tokio::test]
 async fn buffered_content_is_reused_and_replacements_and_wrappers_are_read() {
     let original = Bytes::from_static(b"first\npayload");
-    let mut app =
-        service(RoutingOptions::default()).layer(&tower::layer::layer_fn(move |_inner: SyncRoute<Body>| {
+    let mut app = service(RoutingOptions::default()).layer(&tower::layer::layer_fn(move |_inner: SyncRoute<Body>| {
+        let original = original.clone();
+        tower::service_fn(move |request: Request<Body>| {
             let original = original.clone();
-            tower::service_fn(move |request: Request<Body>| {
-                let original = original.clone();
-                async move {
-                    // Selection has already consumed the read budget. Untouched buffered content
-                    // uses its allocation directly, even with a zero timeout at the upgrade.
-                    let bytes = crate::schema::collect_request_body(request.into_body(), &config(100, 0))
-                        .await
-                        .unwrap();
-                    assert_eq!(bytes, original);
-                    Ok::<_, Infallible>(Response::new(crate::body::from_bytes(bytes)))
-                }
-            })
-        }));
+            async move {
+                // Selection has already consumed the read budget. Untouched buffered content
+                // uses its allocation directly, even with a zero timeout at the upgrade.
+                let bytes = crate::schema::collect_request_body(request.into_body(), &config(100, 0))
+                    .await
+                    .unwrap();
+                assert_eq!(bytes, original);
+                Ok::<_, Infallible>(Response::new(crate::body::from_bytes(bytes)))
+            }
+        })
+    }));
     let response = app.call(request("first\npayload")).await.unwrap();
     assert_eq!(
         response.into_body().collect().await.unwrap().to_bytes(),

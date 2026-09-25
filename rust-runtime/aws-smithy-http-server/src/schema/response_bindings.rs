@@ -322,7 +322,7 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
                 }) =>
             {
                 let mut serializer = codec.create_serializer();
-                serializer.write_struct(schema, &EmptyDocument)?;
+                serializer.write_struct(schema, &EmptyDocument(schema))?;
                 serializer.finish()
             }
             None => Vec::new(),
@@ -348,10 +348,14 @@ pub(crate) fn has_output_body_members(schema: &Schema<'_>, bindings: ResponseBin
         .any(|m| m.http_header().is_none() && m.http_prefix_headers().is_none() && m.http_response_code().is_none())
 }
 
-/// Writes no members: the codec's empty document.
-struct EmptyDocument;
+/// Writes no members of the given struct: the codec's empty document.
+struct EmptyDocument<'s>(&'s Schema<'s>);
 
-impl SerializableStruct for EmptyDocument {
+impl SerializableStruct for EmptyDocument<'_> {
+    fn schema(&self) -> &Schema<'_> {
+        self.0
+    }
+
     fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         Ok(())
     }
@@ -376,6 +380,10 @@ struct SplitBindings<'a, C> {
 }
 
 impl<C: Codec> SerializableStruct for SplitBindings<'_, C> {
+    fn schema(&self) -> &Schema<'_> {
+        self.inner.schema()
+    }
+
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         let mut splitter = ResponseBindingSplitter {
             body: serializer,
@@ -870,6 +878,10 @@ mod tests {
 
     struct Out;
     impl SerializableStruct for Out {
+        fn schema(&self) -> &Schema<'_> {
+            &OUT_SCHEMA
+        }
+
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_integer(&CODE_MEMBER, 202)?;
             s.write_string(&HDR_MEMBER, "hval")?;
@@ -941,6 +953,10 @@ mod tests {
 
     struct EmptyOut;
     impl SerializableStruct for EmptyOut {
+        fn schema(&self) -> &Schema<'_> {
+            &EMPTY_OUT_SCHEMA
+        }
+
         fn serialize_members(&self, _s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             Ok(())
         }
@@ -1018,6 +1034,10 @@ mod tests {
 
     struct StreamOut;
     impl SerializableStruct for StreamOut {
+        fn schema(&self) -> &Schema<'_> {
+            &STREAM_OUT_SCHEMA
+        }
+
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             // Generated outputs skip their streaming member.
             s.write_integer(&CODE_MEMBER, 202)?;
@@ -1120,6 +1140,10 @@ mod tests {
 
     struct BlobOut(Option<Vec<u8>>);
     impl SerializableStruct for BlobOut {
+        fn schema(&self) -> &Schema<'_> {
+            &BLOB_OUT_SCHEMA
+        }
+
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             if let Some(bytes) = &self.0 {
                 s.write_blob(&BLOB_PAYLOAD_MEMBER, aws_smithy_types::Blob::new(bytes.clone()))?;
@@ -1157,6 +1181,10 @@ mod tests {
         // one (restJson1's legacy serializer writes `{}`), an empty body elsewhere.
         struct Unset;
         impl SerializableStruct for Unset {
+            fn schema(&self) -> &Schema<'_> {
+                &STRUCT_OUT_SCHEMA
+            }
+
             fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 Ok(())
             }
@@ -1207,9 +1235,17 @@ mod tests {
 
     struct StructOut;
     impl SerializableStruct for StructOut {
+        fn schema(&self) -> &Schema<'_> {
+            &STRUCT_OUT_SCHEMA
+        }
+
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             struct Nested;
             impl SerializableStruct for Nested {
+                fn schema(&self) -> &Schema<'_> {
+                    &STRUCT_PAYLOAD_TARGET
+                }
+
                 fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                     static F: Schema<'static> = Schema::new_member(
                         ShapeId::from_parts("test#Nested$f", "test", "Nested"),

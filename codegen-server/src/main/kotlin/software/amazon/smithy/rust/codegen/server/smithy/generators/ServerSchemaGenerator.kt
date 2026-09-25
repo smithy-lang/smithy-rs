@@ -250,6 +250,7 @@ class ServerSchemaGenerator(
                 "SerializableStruct" to smithySchema.resolve("serde::SerializableStruct"),
                 "ShapeSerializer" to smithySchema.resolve("serde::ShapeSerializer"),
                 "SerdeError" to smithySchema.resolve("serde::SerdeError"),
+                "Schema" to smithySchema.resolve("Schema"),
             )
         val members = (shape as StructureShape).allMembers.values.toList()
 
@@ -288,6 +289,10 @@ class ServerSchemaGenerator(
         writer.rustTemplate(
             """
             impl #{SerializableStruct} for $structName {
+                fn schema(&self) -> &#{Schema}<'_> {
+                    Self::SCHEMA
+                }
+
                 ##[allow(unused_variables, clippy::diverging_sub_expression)]
                 fn serialize_members(&self, ser: &mut dyn #{ShapeSerializer}) -> ::std::result::Result<(), #{SerdeError}> {
                     #{memberWrites}
@@ -310,6 +315,8 @@ class ServerSchemaGenerator(
                 "SerializableStruct" to smithySchema.resolve("serde::SerializableStruct"),
                 "ShapeSerializer" to smithySchema.resolve("serde::ShapeSerializer"),
                 "SerdeError" to smithySchema.resolve("serde::SerdeError"),
+                "Schema" to smithySchema.resolve("Schema"),
+                "UNIT" to smithySchema.resolve("prelude::UNIT"),
             )
         val union = shape as UnionShape
         val members = union.allMembers.values.toList()
@@ -329,6 +336,7 @@ class ServerSchemaGenerator(
                             Self::$variantName => {
                                 struct Empty;
                                 impl #{SerializableStruct} for Empty {
+                                    fn schema(&self) -> &#{Schema}<'_> { &#{UNIT} }
                                     fn serialize_members(&self, _ser: &mut dyn #{ShapeSerializer}) -> #{Result}<(), #{SerdeError}> { #{Ok}(()) }
                                 }
                                 ser.write_struct(&$memberSchemaRef, &Empty)?;
@@ -349,6 +357,10 @@ class ServerSchemaGenerator(
         writer.rustTemplate(
             """
             impl #{SerializableStruct} for $unionName {
+                fn schema(&self) -> &#{Schema}<'_> {
+                    Self::SCHEMA
+                }
+
                 ##[allow(unused_variables, clippy::diverging_sub_expression)]
                 fn serialize_members(&self, ser: &mut dyn #{ShapeSerializer}) -> ::std::result::Result<(), #{SerdeError}> {
                     match self {
@@ -1063,14 +1075,7 @@ class ServerSchemaGenerator(
             } else {
                 ""
             }
-        // Function references avoid static initialization cycles for recursive models.
-        val targetSchema =
-            if ((target is StructureShape || target is UnionShape) && !member.isTargetUnit()) {
-                "\n    .with_target(|| ${templateEscape(symbolProvider.toSymbol(target).fullName)}::SCHEMA)"
-            } else {
-                ""
-            }
-        return baseChain + targetTimestampFormat + targetMediaType + targetStreaming + targetSchema
+        return baseChain + targetTimestampFormat + targetMediaType + targetStreaming
     }
 
     /**
