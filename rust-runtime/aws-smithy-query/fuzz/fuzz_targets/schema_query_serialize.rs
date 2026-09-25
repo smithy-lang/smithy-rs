@@ -53,6 +53,10 @@ struct FuzzInput {
 struct FuzzStruct<'a>(&'a FuzzInput);
 
 impl SerializableStruct for FuzzStruct<'_> {
+    fn schema(&self) -> &Schema<'_> {
+        &SCHEMA
+    }
+
     fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         let input = self.0;
         s.write_string(&STR_MEMBER, &input.str_val)?;

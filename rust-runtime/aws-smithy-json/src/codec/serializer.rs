@@ -755,6 +755,15 @@ mod tests {
 
         struct TestObject;
         impl SerializableStruct for TestObject {
+            fn schema(&self) -> &Schema<'_> {
+                static SCHEMA: Schema<'static> = Schema::new_struct(
+                    aws_smithy_schema::shape_id!("test", "Struct"),
+                    aws_smithy_schema::ShapeType::Structure,
+                    &[&ACTIVE_MEMBER, &NAME_MEMBER, &COUNT_MEMBER, &PRICE_MEMBER, &ITEMS_MEMBER],
+                );
+                &SCHEMA
+            }
+
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_boolean(&ACTIVE_MEMBER, true)?;
                 s.write_string(&NAME_MEMBER, "test")?;
@@ -868,6 +877,15 @@ mod tests {
 
         struct AddressStruct;
         impl SerializableStruct for AddressStruct {
+            fn schema(&self) -> &Schema<'_> {
+                static SCHEMA: Schema<'static> = Schema::new_struct(
+                    aws_smithy_schema::shape_id!("test", "Address"),
+                    aws_smithy_schema::ShapeType::Structure,
+                    &[&STREET, &CITY, &ZIP],
+                );
+                &SCHEMA
+            }
+
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&STREET, "123 Main St")?;
                 s.write_string(&CITY, "Seattle")?;
@@ -883,6 +901,15 @@ mod tests {
             active: bool,
         }
         impl SerializableStruct for CompanyStruct {
+            fn schema(&self) -> &Schema<'_> {
+                static SCHEMA: Schema<'static> = Schema::new_struct(
+                    aws_smithy_schema::shape_id!("test", "Company"),
+                    aws_smithy_schema::ShapeType::Structure,
+                    &[&COMP_NAME, &EMPLOYEES, &METADATA, &ACTIVE],
+                );
+                &SCHEMA
+            }
+
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&COMP_NAME, self.name)?;
                 s.write_list(&EMPLOYEES, &|s| {
@@ -905,6 +932,15 @@ mod tests {
 
         struct UserStruct;
         impl SerializableStruct for UserStruct {
+            fn schema(&self) -> &Schema<'_> {
+                static SCHEMA: Schema<'static> = Schema::new_struct(
+                    aws_smithy_schema::shape_id!("test", "User"),
+                    aws_smithy_schema::ShapeType::Structure,
+                    &[&ID, &NAME, &SCORES, &ADDRESS, &COMPANIES, &TAGS],
+                );
+                &SCHEMA
+            }
+
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_long(&ID, 12345)?;
                 s.write_string(&NAME, "John Doe")?;
@@ -984,6 +1020,15 @@ mod tests {
 
         struct TestStruct;
         impl SerializableStruct for TestStruct {
+            fn schema(&self) -> &Schema<'_> {
+                static SCHEMA: Schema<'static> = Schema::new_struct(
+                    aws_smithy_schema::shape_id!("test", "MyStruct"),
+                    aws_smithy_schema::ShapeType::Structure,
+                    &[&FOO_MEMBER, &BAR_MEMBER],
+                );
+                &SCHEMA
+            }
+
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&FOO_MEMBER, "hello")?;
                 s.write_integer(&BAR_MEMBER, 42)?;
@@ -1033,22 +1078,36 @@ mod tests {
         )
         .with_json_name(&arena[1]);
 
-        struct RuntimeStruct<'a>(&'a Schema<'a>);
-        impl SerializableStruct for RuntimeStruct<'_> {
-            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
-                s.write_integer(self.0, 42)
-            }
-        }
-
-        let struct_schema = Schema::new(
+        // The struct schema is runtime-built too, so the value reports it by borrowing.
+        let members = [&bar_member];
+        let struct_schema = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "MyStruct"),
             aws_smithy_schema::ShapeType::Structure,
+            &members,
         );
+
+        struct RuntimeStruct<'a> {
+            schema: &'a Schema<'a>,
+            member: &'a Schema<'a>,
+        }
+        impl SerializableStruct for RuntimeStruct<'_> {
+            fn schema(&self) -> &Schema<'_> {
+                self.schema
+            }
+
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_integer(self.member, 42)
+            }
+        }
+        let value = RuntimeStruct {
+            schema: &struct_schema,
+            member: &bar_member,
+        };
+        assert!(std::ptr::eq(value.schema(), &struct_schema));
 
         // The runtime @jsonName must win over the runtime member name.
         let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
-        ser.write_struct(&struct_schema, &RuntimeStruct(&bar_member))
-            .unwrap();
+        ser.write_struct(&struct_schema, &value).unwrap();
         let output = String::from_utf8(ser.finish()).unwrap();
         assert_eq!(output, r#"{"RuntimeBaz":42}"#);
 
@@ -1056,8 +1115,7 @@ mod tests {
         let mut ser = JsonSerializer::new(Arc::new(
             JsonCodecSettings::builder().use_json_name(false).build(),
         ));
-        ser.write_struct(&struct_schema, &RuntimeStruct(&bar_member))
-            .unwrap();
+        ser.write_struct(&struct_schema, &value).unwrap();
         let output = String::from_utf8(ser.finish()).unwrap();
         assert_eq!(output, r#"{"bar":42}"#);
     }
@@ -1083,6 +1141,10 @@ mod tests {
 
         struct Inner;
         impl SerializableStruct for Inner {
+            fn schema(&self) -> &Schema<'_> {
+                &INNER_SCHEMA
+            }
+
             fn serialize_members(
                 &self,
                 ser: &mut dyn ShapeSerializer,
@@ -1231,6 +1293,15 @@ mod tests {
 
         struct Outer;
         impl SerializableStruct for Outer {
+            fn schema(&self) -> &Schema<'_> {
+                static SCHEMA: Schema<'static> = Schema::new_struct(
+                    aws_smithy_schema::shape_id!("test", "Outer"),
+                    aws_smithy_schema::ShapeType::Structure,
+                    &[&A, &B, &C],
+                );
+                &SCHEMA
+            }
+
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&A, "1")?;
                 s.write_map(&B, &|s| {
@@ -1526,6 +1597,15 @@ mod tests {
         enabled: bool,
     }
     impl SerializableStruct for ConnectionDraining {
+        fn schema(&self) -> &Schema<'_> {
+            static SCHEMA: Schema<'static> = Schema::new_struct(
+                aws_smithy_schema::shape_id!("test", "ConnectionDraining"),
+                aws_smithy_schema::ShapeType::Structure,
+                &[&CD_ENABLED],
+            );
+            &SCHEMA
+        }
+
         fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             // Non-optional value-type member: unconditional write (mirrors codegen).
             let val = &self.enabled;
@@ -1536,6 +1616,10 @@ mod tests {
         connection_draining: ConnectionDraining,
     }
     impl SerializableStruct for LoadBalancerAttributes {
+        fn schema(&self) -> &Schema<'_> {
+            &LBA_SCHEMA
+        }
+
         fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             ser.write_struct(&LBA_CD, &self.connection_draining)
         }
@@ -1609,6 +1693,15 @@ mod tests {
             name: &'static str,
         }
         impl SerializableStruct for EndpointConfig {
+            fn schema(&self) -> &Schema<'_> {
+                static SCHEMA: Schema<'static> = Schema::new_struct(
+                    aws_smithy_schema::shape_id!("test", "EndpointConfig"),
+                    aws_smithy_schema::ShapeType::Structure,
+                    &[&EC_NAME],
+                );
+                &SCHEMA
+            }
+
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&EC_NAME, self.name)
             }
@@ -1618,6 +1711,10 @@ mod tests {
             Config(EndpointConfig),
         }
         impl SerializableStruct for Endpoint {
+            fn schema(&self) -> &Schema<'_> {
+                &ENDPOINT_SCHEMA
+            }
+
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 match self {
                     Endpoint::Arn(v) => s.write_string(&EP_ARN, v),
@@ -1630,6 +1727,10 @@ mod tests {
             remote: Endpoint,
         }
         impl SerializableStruct for Input {
+            fn schema(&self) -> &Schema<'_> {
+                &INPUT_SCHEMA
+            }
+
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_struct(&CC_ATTACH, &self.attach)?;
                 s.write_struct(&CC_REMOTE, &self.remote)

@@ -80,6 +80,10 @@ struct OrderingProbe {
 }
 
 impl SerializableStruct for OrderingProbe {
+    fn schema(&self) -> &Schema<'_> {
+        &PROBE_SCHEMA
+    }
+
     fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         ser.write_boolean(&M_A, self.a)?;
         ser.write_integer(&M_B, self.b)?;
