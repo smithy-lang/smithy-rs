@@ -27,7 +27,9 @@ metrique = { version = "0.1.17", features = ["emf"] }
 metrique-writer = "0.1.17"
 
 # Local paths
-aws-smithy-schema = { path = "../../rust-runtime/aws-smithy-schema" }
+aws-smithy-schema = { path = "../../rust-runtime/aws-smithy-schema", features = [
+    "derive",
+] }
 pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/", features = [
     "request-id",
 ] }
