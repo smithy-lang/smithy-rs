@@ -759,7 +759,13 @@ mod tests {
                 static SCHEMA: Schema<'static> = Schema::new_struct(
                     aws_smithy_schema::shape_id!("test", "Struct"),
                     aws_smithy_schema::ShapeType::Structure,
-                    &[&ACTIVE_MEMBER, &NAME_MEMBER, &COUNT_MEMBER, &PRICE_MEMBER, &ITEMS_MEMBER],
+                    &[
+                        &ACTIVE_MEMBER,
+                        &NAME_MEMBER,
+                        &COUNT_MEMBER,
+                        &PRICE_MEMBER,
+                        &ITEMS_MEMBER,
+                    ],
                 );
                 &SCHEMA
             }

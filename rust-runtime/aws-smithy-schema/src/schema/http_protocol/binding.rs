@@ -2495,12 +2495,7 @@ mod tests {
         assert!(std::ptr::eq(input.schema(), &schema));
 
         let request = make_protocol()
-            .serialize_request(
-                &input,
-                &schema,
-                "https://example.com",
-                &ConfigBag::base(),
-            )
+            .serialize_request(&input, &schema, "https://example.com", &ConfigBag::base())
             .unwrap();
 
         assert_eq!(
