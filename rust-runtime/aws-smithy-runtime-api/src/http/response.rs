@@ -239,14 +239,14 @@ impl<B> TryFrom<http_1x::Response<B>> for Response<B> {
     }
 }
 
-#[cfg(all(test, feature = "http-02x", feature = "http-1x"))]
+#[cfg(all(test, feature = "http-1x"))]
 mod test {
     use super::*;
     use aws_smithy_types::body::SdkBody;
 
     #[test]
     fn non_ascii_responses() {
-        let response = http_02x::Response::builder()
+        let response = http_1x::Response::builder()
             .status(200)
             .header("k", "😹")
             .body(SdkBody::empty())
@@ -257,9 +257,36 @@ mod test {
         assert_eq!(response.headers().get("k"), Some("😹"))
     }
 
+    // A response carrying a header value that is not valid UTF-8 must convert successfully, and
+    // converting back out must reproduce the original octets rather than a re-encoded string.
+    #[test]
+    fn non_utf8_header_values_round_trip_byte_for_byte() {
+        // A lone 0xE9 is a valid HTTP header octet (obs-text per RFC 7230) but not valid UTF-8.
+        const NON_UTF8_VALUE: &[u8] = b"value-\xe9";
+
+        let response = http_1x::Response::builder()
+            .status(200)
+            .header(
+                "k",
+                http_1x::HeaderValue::from_bytes(NON_UTF8_VALUE).expect("valid header octets"),
+            )
+            .body(SdkBody::empty())
+            .unwrap();
+
+        let response: Response = response.try_into().expect("non-UTF-8 values are admitted");
+        assert_eq!(Some(NON_UTF8_VALUE), response.headers().get_bytes("k"));
+        assert_eq!(None, response.headers().get("k"));
+
+        let round_tripped = response.try_into_http1x().expect("converts back");
+        assert_eq!(
+            NON_UTF8_VALUE,
+            round_tripped.headers().get("k").unwrap().as_bytes()
+        );
+    }
+
     #[test]
     fn response_can_be_created() {
-        let req = http_02x::Response::builder()
+        let req = http_1x::Response::builder()
             .status(200)
             .body(SdkBody::from("hello"))
             .unwrap();
@@ -268,8 +295,23 @@ mod test {
         assert_eq!("b", rsp.headers().get("a").unwrap());
         rsp.headers_mut().append("a", "c");
         assert_eq!("b", rsp.headers().get("a").unwrap());
-        let http0 = rsp.try_into_http02x().unwrap();
-        assert_eq!(200, http0.status().as_u16());
+        let http1 = rsp.try_into_http1x().unwrap();
+        assert_eq!(200, http1.status().as_u16());
+    }
+
+    #[test]
+    #[should_panic]
+    fn header_panics() {
+        let res = http_1x::Response::builder()
+            .status(200)
+            .body(SdkBody::from("hello"))
+            .unwrap();
+        let mut res = Response::try_from(res).unwrap();
+        let _ = res
+            .headers_mut()
+            .try_insert("a\nb", "a\nb")
+            .expect_err("invalid header");
+        let _ = res.headers_mut().insert("a\nb", "a\nb");
     }
 
     #[test]
@@ -286,6 +328,12 @@ mod test {
         // A type that was never inserted returns None.
         assert_eq!(rsp.extension::<u64>(), None);
     }
+}
+
+#[cfg(all(test, feature = "http-02x", feature = "http-1x"))]
+mod cross_version_test {
+    use super::*;
+    use aws_smithy_types::body::SdkBody;
 
     macro_rules! resp_eq {
         ($a: expr, $b: expr) => {{
@@ -332,21 +380,6 @@ mod test {
                 .unwrap()
         };
         check_roundtrip(response);
-    }
-
-    #[test]
-    #[should_panic]
-    fn header_panics() {
-        let res = http_02x::Response::builder()
-            .status(200)
-            .body(SdkBody::from("hello"))
-            .unwrap();
-        let mut res = Response::try_from(res).unwrap();
-        let _ = res
-            .headers_mut()
-            .try_insert("a\nb", "a\nb")
-            .expect_err("invalid header");
-        let _ = res.headers_mut().insert("a\nb", "a\nb");
     }
 
     #[test]

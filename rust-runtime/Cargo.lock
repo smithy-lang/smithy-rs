@@ -375,11 +375,12 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-cbor"
-version = "0.62.1"
+version = "0.62.2"
 dependencies = [
- "aws-smithy-runtime-api 1.16.2",
+ "aws-smithy-runtime-api 1.18.0",
  "aws-smithy-schema 0.2.1",
- "aws-smithy-types 1.6.4",
+ "aws-smithy-types 1.8.1",
+ "bigdecimal",
  "criterion",
  "minicbor",
  "num-bigint",
@@ -389,8 +390,8 @@ dependencies = [
 name = "aws-smithy-checksums"
 version = "0.65.0"
 dependencies = [
- "aws-smithy-http 0.64.0",
- "aws-smithy-types 1.6.4",
+ "aws-smithy-http 0.64.1",
+ "aws-smithy-types 1.8.1",
  "bytes",
  "bytes-utils",
  "crc-fast",
@@ -412,8 +413,8 @@ dependencies = [
 name = "aws-smithy-compression"
 version = "0.2.0"
 dependencies = [
- "aws-smithy-runtime-api 1.16.2",
- "aws-smithy-types 1.6.4",
+ "aws-smithy-runtime-api 1.18.0",
+ "aws-smithy-types 1.8.1",
  "bytes",
  "bytes-utils",
  "flate2",
@@ -431,7 +432,7 @@ dependencies = [
 name = "aws-smithy-dns"
 version = "0.2.2"
 dependencies = [
- "aws-smithy-runtime-api 1.16.2",
+ "aws-smithy-runtime-api 1.18.0",
  "criterion",
  "hickory-resolver",
  "tokio",
@@ -442,7 +443,7 @@ name = "aws-smithy-eventstream"
 version = "0.61.4"
 dependencies = [
  "arbitrary",
- "aws-smithy-types 1.6.4",
+ "aws-smithy-types 1.8.1",
  "bytes",
  "bytes-utils",
  "crc32fast",
@@ -479,12 +480,12 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http"
-version = "0.64.0"
+version = "0.64.1"
 dependencies = [
  "async-stream",
  "aws-smithy-eventstream",
- "aws-smithy-runtime-api 1.16.2",
- "aws-smithy-types 1.6.4",
+ "aws-smithy-runtime-api 1.18.0",
+ "aws-smithy-types 1.8.1",
  "bytes",
  "bytes-utils",
  "futures-core",
@@ -507,8 +508,8 @@ version = "1.4.2"
 dependencies = [
  "aws-smithy-async 1.3.0",
  "aws-smithy-protocol-test",
- "aws-smithy-runtime-api 1.16.2",
- "aws-smithy-types 1.6.4",
+ "aws-smithy-runtime-api 1.18.0",
+ "aws-smithy-types 1.8.1",
  "base64 0.22.1",
  "bytes",
  "h2 0.3.27",
@@ -578,11 +579,11 @@ dependencies = [
 name = "aws-smithy-http-server"
 version = "0.67.1"
 dependencies = [
- "aws-smithy-cbor 0.62.1",
- "aws-smithy-http 0.64.0",
+ "aws-smithy-cbor 0.62.2",
+ "aws-smithy-http 0.64.1",
  "aws-smithy-json 0.63.1",
- "aws-smithy-runtime-api 1.16.2",
- "aws-smithy-types 1.6.4",
+ "aws-smithy-runtime-api 1.18.0",
+ "aws-smithy-types 1.8.1",
  "aws-smithy-xml 0.62.1",
  "bytes",
  "futures-util",
@@ -646,10 +647,10 @@ dependencies = [
 name = "aws-smithy-http-server-python"
 version = "0.68.3"
 dependencies = [
- "aws-smithy-http 0.64.0",
+ "aws-smithy-http 0.64.1",
  "aws-smithy-json 0.63.1",
  "aws-smithy-legacy-http-server",
- "aws-smithy-types 1.6.4",
+ "aws-smithy-types 1.8.1",
  "aws-smithy-xml 0.62.1",
  "bytes",
  "futures",
@@ -694,22 +695,22 @@ dependencies = [
 name = "aws-smithy-json"
 version = "0.63.1"
 dependencies = [
- "aws-smithy-runtime-api 1.16.2",
+ "aws-smithy-runtime-api 1.18.0",
  "aws-smithy-schema 0.2.1",
- "aws-smithy-types 1.6.4",
+ "aws-smithy-types 1.8.1",
  "proptest",
  "serde_json",
 ]
 
 [[package]]
 name = "aws-smithy-legacy-http"
-version = "0.63.0"
+version = "0.63.1"
 dependencies = [
  "async-stream",
  "aws-smithy-eventstream",
- "aws-smithy-http 0.64.0",
- "aws-smithy-runtime-api 1.16.2",
- "aws-smithy-types 1.6.4",
+ "aws-smithy-http 0.64.1",
+ "aws-smithy-runtime-api 1.18.0",
+ "aws-smithy-types 1.8.1",
  "bytes",
  "bytes-utils",
  "futures-core",
@@ -730,11 +731,11 @@ dependencies = [
 name = "aws-smithy-legacy-http-server"
 version = "0.66.1"
 dependencies = [
- "aws-smithy-cbor 0.62.1",
+ "aws-smithy-cbor 0.62.2",
  "aws-smithy-json 0.63.1",
  "aws-smithy-legacy-http",
- "aws-smithy-runtime-api 1.16.2",
- "aws-smithy-types 1.6.4",
+ "aws-smithy-runtime-api 1.18.0",
+ "aws-smithy-types 1.8.1",
  "aws-smithy-xml 0.62.1",
  "bytes",
  "futures-util",
@@ -763,8 +764,8 @@ dependencies = [
  "aws-smithy-async 1.3.0",
  "aws-smithy-http-client",
  "aws-smithy-runtime",
- "aws-smithy-runtime-api 1.16.2",
- "aws-smithy-types 1.6.4",
+ "aws-smithy-runtime-api 1.18.0",
+ "aws-smithy-types 1.8.1",
  "http 1.5.0",
  "tokio",
 ]
@@ -773,7 +774,7 @@ dependencies = [
 name = "aws-smithy-observability"
 version = "0.3.0"
 dependencies = [
- "aws-smithy-runtime-api 1.16.2",
+ "aws-smithy-runtime-api 1.18.0",
  "serial_test",
 ]
 
@@ -797,7 +798,7 @@ name = "aws-smithy-protocol-test"
 version = "0.64.0"
 dependencies = [
  "assert-json-diff",
- "aws-smithy-runtime-api 1.16.2",
+ "aws-smithy-runtime-api 1.18.0",
  "base64-simd",
  "cbor-diag",
  "ciborium",
@@ -814,9 +815,9 @@ dependencies = [
 name = "aws-smithy-query"
 version = "0.62.1"
 dependencies = [
- "aws-smithy-runtime-api 1.16.2",
+ "aws-smithy-runtime-api 1.18.0",
  "aws-smithy-schema 0.2.1",
- "aws-smithy-types 1.6.4",
+ "aws-smithy-types 1.8.1",
  "aws-smithy-xml 0.62.1",
  "criterion",
  "urlencoding",
@@ -824,16 +825,16 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.14.2"
+version = "1.15.0"
 dependencies = [
  "approx",
  "aws-smithy-async 1.3.0",
- "aws-smithy-http 0.64.0",
+ "aws-smithy-http 0.64.1",
  "aws-smithy-http-client",
  "aws-smithy-observability",
- "aws-smithy-runtime-api 1.16.2",
+ "aws-smithy-runtime-api 1.18.0",
  "aws-smithy-schema 0.2.1",
- "aws-smithy-types 1.6.4",
+ "aws-smithy-types 1.8.1",
  "bytes",
  "fastrand 2.5.0",
  "futures-util",
@@ -871,11 +872,11 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.16.2"
+version = "1.18.0"
 dependencies = [
  "aws-smithy-async 1.3.0",
  "aws-smithy-runtime-api-macros 1.1.0",
- "aws-smithy-types 1.6.4",
+ "aws-smithy-types 1.8.1",
  "bytes",
  "http 0.2.12",
  "http 1.5.0",
@@ -921,8 +922,8 @@ dependencies = [
 name = "aws-smithy-schema"
 version = "0.2.1"
 dependencies = [
- "aws-smithy-runtime-api 1.16.2",
- "aws-smithy-types 1.6.4",
+ "aws-smithy-runtime-api 1.18.0",
+ "aws-smithy-types 1.8.1",
  "http 1.5.0",
 ]
 
@@ -955,7 +956,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.6.4"
+version = "1.8.1"
 dependencies = [
  "base64 0.13.1",
  "base64-simd",
@@ -992,7 +993,7 @@ name = "aws-smithy-types-convert"
 version = "0.61.1"
 dependencies = [
  "aws-smithy-async 1.3.0",
- "aws-smithy-types 1.6.4",
+ "aws-smithy-types 1.8.1",
  "chrono",
  "futures-core",
  "time",
@@ -1003,8 +1004,8 @@ name = "aws-smithy-wasm"
 version = "0.2.0"
 dependencies = [
  "aws-smithy-async 1.3.0",
- "aws-smithy-runtime-api 1.16.2",
- "aws-smithy-types 1.6.4",
+ "aws-smithy-runtime-api 1.18.0",
+ "aws-smithy-types 1.8.1",
  "http-body-util",
  "sync_wrapper",
  "wstd",
@@ -1024,9 +1025,9 @@ name = "aws-smithy-xml"
 version = "0.62.1"
 dependencies = [
  "aws-smithy-protocol-test",
- "aws-smithy-runtime-api 1.16.2",
+ "aws-smithy-runtime-api 1.18.0",
  "aws-smithy-schema 0.2.1",
- "aws-smithy-types 1.6.4",
+ "aws-smithy-types 1.8.1",
  "base64 0.13.1",
  "proptest",
  "xmlparser",
@@ -1096,6 +1097,19 @@ checksum = "339abbe78e73178762e23bea9dfd08e697eb3f3301cd4be981c0f78ba5859195"
 dependencies = [
  "outref",
  "vsimd",
+]
+
+[[package]]
+name = "bigdecimal"
+version = "0.4.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4d6867f1565b3aad85681f1015055b087fcfd840d6aeee6eee7f2da317603695"
+dependencies = [
+ "autocfg",
+ "libm",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
 ]
 
 [[package]]
@@ -2521,14 +2535,14 @@ dependencies = [
 name = "inlineable"
 version = "0.1.0"
 dependencies = [
- "aws-smithy-cbor 0.62.1",
+ "aws-smithy-cbor 0.62.2",
  "aws-smithy-compression",
- "aws-smithy-http 0.64.0",
+ "aws-smithy-http 0.64.1",
  "aws-smithy-json 0.63.1",
  "aws-smithy-runtime",
- "aws-smithy-runtime-api 1.16.2",
+ "aws-smithy-runtime-api 1.18.0",
  "aws-smithy-schema 0.2.1",
- "aws-smithy-types 1.6.4",
+ "aws-smithy-types 1.8.1",
  "aws-smithy-xml 0.62.1",
  "bytes",
  "fastrand 2.5.0",
@@ -2829,6 +2843,12 @@ dependencies = [
  "cfg-if",
  "windows-link",
 ]
+
+[[package]]
+name = "libm"
+version = "0.2.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
 name = "libmimalloc-sys"

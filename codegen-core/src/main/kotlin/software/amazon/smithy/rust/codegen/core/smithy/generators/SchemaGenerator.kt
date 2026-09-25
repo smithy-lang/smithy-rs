@@ -1134,7 +1134,16 @@ class SchemaGenerator(
             "Headers" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("http::Headers"),
         )
 
-        // Read headers directly
+        // TODO(schema-serde): this block reads headers with the string accessors on `Headers`, which
+        //  skip values that are not valid UTF-8. A header the peer actually sent is therefore dropped
+        //  with no error, where the legacy path reports a `ParseError` naming the member. See
+        //  https://github.com/smithy-lang/smithy-rs/pull/4868.
+        //
+        //  More broadly, this reimplements `aws_smithy_http::header` with lossier semantics: scalars
+        //  use `.ok()`, list elements use `filter_map(..ok())`, and the quoted-string splitting below
+        //  is a second copy of that crate's `read_value`. Failures are swallowed rather than reported,
+        //  which is a regression in error experience against the legacy path. Reuse those helpers,
+        //  including their `_bytes` variants, before schema-serde is enabled for any protocol.
         for (hm in headerMembers) {
             val parseExpr =
                 when (hm.target) {
@@ -1305,6 +1314,9 @@ class SchemaGenerator(
         }
 
         if (prefixMember != null) {
+            // TODO(schema-serde): `headers.iter()` skips values that are not valid UTF-8, so a single
+            //  unreadable entry yields a map that silently omits it rather than reporting a failure.
+            //  See the note above and https://github.com/smithy-lang/smithy-rs/pull/4868.
             writer.rust(
                 """
                 {
