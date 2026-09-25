@@ -48,6 +48,19 @@ impl<'a> CborDeserializer<'a> {
         Ok(())
     }
 
+    /// How many elements to pre-allocate for a container that declares `declared` of them,
+    /// with `remaining` input bytes left after its header. Each element takes at least
+    /// `min_bytes_per_element` bytes, so a truncated input that declares a huge count reserves
+    /// only as much as it could actually hold.
+    fn prealloc(declared: u64, remaining: usize, min_bytes_per_element: usize) -> usize {
+        let declared = usize::try_from(declared).unwrap_or(usize::MAX);
+        capped_container_size(declared.min(remaining / min_bytes_per_element))
+    }
+
+    fn remaining(&self) -> usize {
+        self.input_len.saturating_sub(self.decoder.position())
+    }
+
     fn check_depth(&mut self) -> Result<(), SerdeError> {
         self.depth += 1;
         if self.depth > self.max_depth {
@@ -76,7 +89,7 @@ impl<'a> CborDeserializer<'a> {
         let len = self.decoder.list().map_err(deser_err)?;
         let is_indefinite = len.is_none();
         let count = len.unwrap_or(0) as usize;
-        let mut out = Vec::with_capacity(capped_container_size(count));
+        let mut out = Vec::with_capacity(Self::prealloc(len.unwrap_or(0), self.remaining(), 1));
         let mut i = 0;
         loop {
             if !is_indefinite && i >= count {
@@ -268,15 +281,13 @@ impl ShapeDeserializer for CborDeserializer<'_> {
 
     fn container_size(&self) -> Option<usize> {
         let mut peek = self.decoder.clone();
-        match peek.datatype().ok()? {
-            Type::Array | Type::ArrayIndef => {
-                peek.list().ok()?.map(|n| capped_container_size(n as usize))
-            }
-            Type::Map | Type::MapIndef => {
-                peek.map().ok()?.map(|n| capped_container_size(n as usize))
-            }
-            _ => None,
-        }
+        let (declared, min_bytes_per_element) = match peek.datatype().ok()? {
+            Type::Array | Type::ArrayIndef => (peek.list().ok()??, 1),
+            Type::Map | Type::MapIndef => (peek.map().ok()??, 2),
+            _ => return None,
+        };
+        let remaining = self.input_len.saturating_sub(peek.position());
+        Some(Self::prealloc(declared, remaining, min_bytes_per_element))
     }
 
     fn read_string_list(&mut self, _schema: &Schema<'_>) -> Result<Vec<String>, SerdeError> {
@@ -303,7 +314,11 @@ impl ShapeDeserializer for CborDeserializer<'_> {
         let len = self.decoder.map().map_err(deser_err)?;
         let is_indefinite = len.is_none();
         let count = len.unwrap_or(0) as usize;
-        let mut out = std::collections::HashMap::with_capacity(capped_container_size(count));
+        let mut out = std::collections::HashMap::with_capacity(Self::prealloc(
+            len.unwrap_or(0),
+            self.remaining(),
+            2,
+        ));
         let mut i = 0;
         loop {
             if !is_indefinite && i >= count {
@@ -352,6 +367,42 @@ mod tests {
         let mut ser = codec.create_serializer();
         f(&mut ser);
         ser.finish()
+    }
+
+    /// Regression (worklist item 9): a declared container length is untrusted. A truncated
+    /// container that declares 2^64 - 1 elements must not reserve space for them.
+    #[test]
+    fn container_preallocation_is_bounded_by_remaining_input() {
+        // Array / map with an 8-byte length of u64::MAX and no elements.
+        for (header, element_bytes) in [(0x9bu8, 1usize), (0xbb, 2)] {
+            let mut bytes = vec![header];
+            bytes.extend_from_slice(&u64::MAX.to_be_bytes());
+            let de = CborDeserializer::new(&bytes, 128);
+            assert_eq!(de.container_size(), Some(0), "header {header:#x}");
+            // With 10 bytes after the header, at most 10 / element_bytes elements fit.
+            bytes.extend_from_slice(&[0u8; 10]);
+            let de = CborDeserializer::new(&bytes, 128);
+            assert_eq!(
+                de.container_size(),
+                Some(10 / element_bytes),
+                "header {header:#x}"
+            );
+        }
+        // A well-formed container still reports its declared size.
+        let mut enc = crate::Encoder::new(Vec::new());
+        enc.array(3);
+        for i in 0..3 {
+            enc.integer(i);
+        }
+        let bytes = enc.into_writer();
+        let de = CborDeserializer::new(&bytes, 128);
+        assert_eq!(de.container_size(), Some(3));
+        // The fast list path still decodes and rejects the truncated input.
+        let mut truncated = vec![0x9b];
+        truncated.extend_from_slice(&u64::MAX.to_be_bytes());
+        let mut de = CborDeserializer::new(&truncated, 128);
+        assert!(de.read_integer_list(&INTEGER).is_err());
+        assert_eq!(CborDeserializer::prealloc(u64::MAX, usize::MAX, 1), 10_000);
     }
 
     #[test]
@@ -638,6 +689,9 @@ mod tests {
     fn test_container_size_definite() {
         let mut enc = crate::Encoder::new(Vec::new());
         enc.array(5);
+        for i in 0..5 {
+            enc.integer(i);
+        }
         let bytes = enc.into_writer();
         let de = CborDeserializer::new(&bytes, 128);
         assert_eq!(de.container_size(), Some(5));
