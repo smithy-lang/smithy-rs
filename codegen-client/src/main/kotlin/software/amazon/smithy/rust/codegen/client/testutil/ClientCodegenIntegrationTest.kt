@@ -11,6 +11,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.RustClientCodegenPlugin
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.codegenIntegrationTest
@@ -37,6 +38,11 @@ fun clientIntegrationTest(
                     codegenContext: ClientCodegenContext,
                     rustCrate: RustCrate,
                 ) {
+                    // A number of test fixtures build requests/responses directly, as `http_1x::…`.
+                    // Generated crates don't take `http` as a non-optional dependency, so declare it
+                    // in dev scope for the generated test crate instead of relying on it incidentally
+                    // being present.
+                    rustCrate.lib { addDependency(CargoDependency.Http1x.toDevDependency()) }
                     test(codegenContext, rustCrate)
                 }
             }

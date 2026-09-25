@@ -327,7 +327,7 @@ class ResponseDeserializerGenerator(
         val successCode = httpBindingResolver.httpTrait(operationShape).code
         rustTemplate(
             """
-            fn deserialize_streaming(&self, response: &mut #{HttpResponse}) -> #{Option}<#{OutputOrError}> {
+            fn deserialize_streaming_with_config(&self, response: &mut #{HttpResponse}, _cfg: &#{ConfigBag}) -> #{Option}<#{OutputOrError}> {
                 ##[allow(unused_mut)]
                 let mut force_error = false;
                 #{BeforeParseResponse}
@@ -336,7 +336,7 @@ class ResponseDeserializerGenerator(
                 if (!response.status().is_success() && response.status().as_u16() != $successCode) || force_error {
                     return #{None};
                 }
-                #{Some}(#{type_erase_result}(#{parse_streaming_response}(response)))
+                #{Some}(#{type_erase_result}(#{parse_streaming_response}(response, _cfg)))
             }
             """,
             *codegenScope,
@@ -383,7 +383,7 @@ class ResponseDeserializerGenerator(
                 """
                 // For streaming operations, we only hit this case if its an error
                 let body = response.body().bytes().expect("body loaded");
-                #{type_erase_result}(#{parse_error}(response.status().as_u16(), response.headers(), body))
+                #{type_erase_result}(#{parse_error}(response.status().as_u16(), response.headers(), body, _cfg))
                 """,
                 *codegenScope,
                 "parse_error" to parserGenerator.parseErrorFn(operationShape, customizations),
@@ -645,9 +645,9 @@ class ResponseDeserializerGenerator(
             let mut force_error = false;
             #{BeforeParseResponse}
             let parse_result = if !success && status != $successCode || force_error {
-                #{parse_error}(status, headers, body)
+                #{parse_error}(status, headers, body, _cfg)
             } else {
-                #{parse_response}(status, headers, body)
+                #{parse_response}(status, headers, body, _cfg)
             };
             #{type_erase_result}(parse_result)
             """,

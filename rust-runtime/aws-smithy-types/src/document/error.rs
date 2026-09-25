@@ -3,22 +3,24 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Error type for [`Document`](super::Document) accessor and coercion
+//! Error type for [`Document`](super::Document)-shaped coercion
 //! operations.
 //!
-//! `DocumentError` is returned by methods on `Document` that may fail —
-//! the numeric coercion accessors ([`Document::as_byte`](super::Document::as_byte)
-//! and friends), the arbitrary-precision coercion accessors
-//! ([`Document::coerce_big_integer`](super::Document::coerce_big_integer),
-//! [`Document::coerce_big_decimal`](super::Document::coerce_big_decimal)),
-//! and any future Document operation that needs to surface a typed
-//! failure.
+//! `DocumentError` is returned by the format-aware coercion accessors on
+//! [`DiscriminatedDocument`](super::DiscriminatedDocument)
+//! ([`as_blob`](super::DiscriminatedDocument::as_blob),
+//! [`as_timestamp`](super::DiscriminatedDocument::as_timestamp)) and by
+//! the [`DocumentSettings`](super::DocumentSettings) coercion hooks they
+//! dispatch through.
 //!
-//! Type-checking accessors that simply test the variant
-//! (`Document::as_string`, `Document::as_blob`, etc.) return
+//! [`Document`](super::Document) itself has no fallible accessors: it is
+//! exactly the released type, whose variant-testing accessors
+//! (`Document::as_string`, `Document::as_object`, etc.) return
 //! `Option<_>` rather than `Result<_, DocumentError>` — there is no
 //! error condition for "this isn't the variant you asked for" beyond
-//! the absent value itself.
+//! the absent value itself. Schema-driven numeric and
+//! arbitrary-precision coercion lives in `aws-smithy-schema`'s
+//! `DocumentShapeDeserializer` and reports through its `SerdeError`.
 //!
 //! `DocumentError` is intentionally narrower than the schema crate's
 //! `aws_smithy_schema::serde::SerdeError`. `DocumentError` covers
@@ -30,8 +32,8 @@
 
 use std::fmt;
 
-/// Error returned by [`Document`](super::Document) accessor and
-/// coercion methods.
+/// Error returned by [`Document`](super::Document)-shaped coercion
+/// operations.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum DocumentError {
@@ -39,8 +41,9 @@ pub enum DocumentError {
     /// for, and no coercion is defined between the actual and the
     /// requested type.
     ///
-    /// Example: calling [`Document::as_byte`](super::Document::as_byte)
-    /// on a `Document::String(_)`.
+    /// Example: calling
+    /// [`DiscriminatedDocument::as_blob`](super::DiscriminatedDocument::as_blob)
+    /// on a `Document::Number(_)`.
     #[non_exhaustive]
     TypeMismatch {
         /// Description of what was expected vs. what was found.
@@ -49,9 +52,8 @@ pub enum DocumentError {
     /// A numeric coercion overflowed the target type's representable
     /// range.
     ///
-    /// Emitted by [`Document::as_byte`](super::Document::as_byte) (and
-    /// the other narrow numeric accessors) when the source value is
-    /// outside the target's `[min, max]` range.
+    /// Emitted when a source value is outside the target's
+    /// `[min, max]` range.
     #[non_exhaustive]
     NumericCoercionOverflow {
         /// Target type name (e.g. `"byte"`, `"integer"`, `"long"`).
@@ -64,9 +66,8 @@ pub enum DocumentError {
     /// representation. Distinct from `TypeMismatch`: the variants
     /// match, but the underlying string is malformed.
     ///
-    /// Example: a [`Document::BigDecimal`](super::Document::BigDecimal)
-    /// whose internal string isn't parseable as `f64` when calling
-    /// [`Document::as_double`](super::Document::as_double).
+    /// Example: a [`Document::String`](super::Document::String) whose
+    /// text isn't valid base64 when coercing to a blob.
     #[non_exhaustive]
     InvalidInput {
         /// Description of the problem.
@@ -80,12 +81,9 @@ pub enum DocumentError {
     },
     /// The operation is not supported on this document. Used by
     /// [`DiscriminatedDocument`](super::DiscriminatedDocument)'s
-    /// format-aware coercion accessors when no protocol settings are
-    /// attached, and by
+    /// format-aware coercion accessors, and by
     /// [`DocumentSettings`](super::DocumentSettings) trait default
-    /// methods that a particular protocol doesn't support (e.g.
-    /// CBOR's `coerce_string_to_blob`, since CBOR has native byte
-    /// strings).
+    /// methods for a coercion a particular protocol doesn't support.
     #[non_exhaustive]
     UnsupportedOperation {
         /// Description of which operation isn't supported and why.

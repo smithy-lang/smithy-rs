@@ -64,7 +64,7 @@ fn everything() -> Everything {
     }
 }
 
-fn members(doc: &DiscriminatedDocument) -> &aws_smithy_types::document::DocumentObject {
+fn members(doc: &DiscriminatedDocument) -> &HashMap<String, Document> {
     match doc.document() {
         Document::Object(map) => map,
         other => panic!("expected object document, got {other:?}"),

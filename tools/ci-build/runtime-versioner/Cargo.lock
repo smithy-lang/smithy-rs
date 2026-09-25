@@ -986,6 +986,7 @@ dependencies = [
  "crates-index",
  "indicatif",
  "reqwest",
+ "semver",
  "smithy-rs-tool-common",
  "tempfile",
  "test-common",

@@ -55,9 +55,10 @@ pub enum SerdeError {
     /// A numeric coercion overflowed the target type's representable
     /// range.
     ///
-    /// Emitted by [`Document::as_byte`](aws_smithy_types::Document::as_byte)
-    /// (and the other narrow numeric accessors) when the source value
-    /// is outside the target's `[min, max]` range.
+    /// Emitted by the narrow numeric reads on
+    /// [`ShapeDeserializer`](crate::serde::ShapeDeserializer)
+    /// (`read_byte`, `read_short`, `read_integer`, `read_long`) when the
+    /// source value is outside the target's `[min, max]` range.
     #[non_exhaustive]
     NumericCoercionOverflow {
         /// Target type name (e.g. `"byte"`, `"integer"`, `"long"`).
@@ -69,12 +70,11 @@ pub enum SerdeError {
     /// A numeric coercion would lose precision in a context where
     /// precision loss is not acceptable.
     ///
-    /// **Not currently emitted by `Document::as_*` accessors.** Per the
+    /// **Not currently emitted by the standard numeric reads.** Per the
     /// SEP "Number coercion" rules, precision loss is silently ignored
-    /// on the standard Document accessor path. This variant is
-    /// reserved for callers (e.g. strict deserializers, customer code
-    /// using a custom accessor) that choose to enforce lossless
-    /// coercion.
+    /// on the standard coercion path. This variant is reserved for
+    /// callers (e.g. strict deserializers, customer code using a custom
+    /// accessor) that choose to enforce lossless coercion.
     #[non_exhaustive]
     NumericCoercionLossy {
         /// Target type name.
@@ -234,9 +234,11 @@ impl SerdeError {
     }
 }
 
-/// Lift a [`DocumentError`](aws_smithy_types::DocumentError) coming
-/// out of the [`Document`](aws_smithy_types::Document)'s
-/// numeric / coercion accessors into the schema crate's broader
+/// Lift a [`DocumentError`](aws_smithy_types::DocumentError) coming out
+/// of the format-aware coercion accessors on
+/// [`DiscriminatedDocument`](aws_smithy_types::DiscriminatedDocument)
+/// and the [`DocumentSettings`](aws_smithy_types::DocumentSettings)
+/// hooks they dispatch through, into the schema crate's broader
 /// [`SerdeError`].
 ///
 /// The variant shapes line up one-to-one — `DocumentError` is a

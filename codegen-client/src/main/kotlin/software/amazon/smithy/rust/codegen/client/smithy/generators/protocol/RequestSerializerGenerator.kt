@@ -563,7 +563,7 @@ class RequestSerializerGenerator(
                     ).map_err(#{BoxError}::from)?;
                     if let #{Some}(payload) = payload {
                         let mut json = String::new();
-                        ::aws_smithy_json::serialize::JsonValueWriter::new(&mut json).document(&payload, &::aws_smithy_json::codec::JsonCodecSettings::default()).map_err(#{BoxError}::from)?;
+                        ::aws_smithy_json::serialize::JsonValueWriter::new(&mut json).document(&payload);
                         *request.body_mut() = #{SdkBody}::from(json.into_bytes());
                         let _hss = _cfg
                             .load::<#{HeaderSerializationSettings}>()

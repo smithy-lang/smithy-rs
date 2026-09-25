@@ -198,6 +198,15 @@ class AwsPresigningDecorator internal constructor(
                     listOf("aws-smithy-runtime-api/http-1x"),
                 ),
             )
+            // The deprecated `PresignedRequest::{make,into}_http_02x_request` methods are opt-in so
+            // that http 0.2.x stays out of the default dependency tree.
+            rustCrate.mergeFeature(
+                Feature(
+                    "http-02x",
+                    default = false,
+                    listOf("dep:http", "aws-smithy-runtime-api/http-02x"),
+                ),
+            )
         }
     }
 
@@ -228,11 +237,11 @@ class AwsPresignedFluentBuilderMethod(
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
         )
 
-    // Presigning requires both http version features since it pub exposes into_http_02x_request
-    // and into_http_1x_request functions
+    // Presigning pub exposes into_http_1x_request, so http-1x is always required. The http 0.2.x
+    // equivalents are opt-in via the generated crate's `http-02x` feature, which turns on
+    // `aws-smithy-runtime-api/http-02x`.
     private val smithyRuntimeApi =
         CargoDependency.smithyRuntimeApiClient(codegenContext.runtimeConfig)
-            .withFeature("http-02x")
             .withFeature("http-1x")
             .toType()
 

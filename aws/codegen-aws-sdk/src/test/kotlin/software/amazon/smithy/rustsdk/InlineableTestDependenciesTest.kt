@@ -110,11 +110,16 @@ internal class InlineableTestDependenciesTest {
     /**
      * `http_request_checksum` refers to `crate::presigning::PresigningMarker`, which these models
      * don't wire up. Naming the type in a comment is enough to pull the inlineable in, and it needs
-     * the `http-1x` feature alongside it.
+     * the `http-1x` and `http-02x` features alongside it: `presigning.rs` is `#[cfg]`-gated on
+     * `http-02x` for the deprecated http 0.2.x conversions. `AwsPresigningDecorator` normally
+     * declares both, but only when the model has presignable shapes.
      */
     private fun withPresigning(): (Any, RustCrate) -> Unit =
         { _, rustCrate ->
             rustCrate.mergeFeature(Feature("http-1x", default = false, listOf("aws-smithy-runtime-api/http-1x")))
+            rustCrate.mergeFeature(
+                Feature("http-02x", default = false, listOf("dep:http", "aws-smithy-runtime-api/http-02x")),
+            )
             rustCrate.integrationTest("presigning_marker") {
                 rustTemplate(
                     "//#{PresigningMarker};",

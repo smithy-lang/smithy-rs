@@ -185,7 +185,7 @@ private fun RuntimeConfig.awsChunked() =
             CargoDependency.HttpBody1x,
             CargoDependency.Tracing,
             CargoDependency.HttpBodyUtil01x.toDevDependency(),
-            AwsCargoDependency.awsRuntime(this).withFeature("http-02x"),
+            AwsCargoDependency.awsRuntime(this).withFeature("http-1x"),
             CargoDependency.smithyRuntimeApiClient(this),
             CargoDependency.smithyTypes(this),
             AwsCargoDependency.awsSigv4(this),

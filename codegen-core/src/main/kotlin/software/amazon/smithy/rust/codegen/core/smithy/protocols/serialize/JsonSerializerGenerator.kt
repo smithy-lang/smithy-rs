@@ -307,7 +307,7 @@ class JsonSerializerGenerator(
                 """
                 pub fn $fnName(input: &#{Document}) -> std::result::Result<#{ByteSlab}, #{Error}> {
                     let mut out = String::new();
-                    #{JsonValueWriter}::new(&mut out).document(input, &#{JsonCodecSettings}::default())?;
+                    #{JsonValueWriter}::new(&mut out).document(input);
                     Ok(out.into_bytes())
                 }
                 """,
@@ -484,11 +484,7 @@ class JsonSerializerGenerator(
                     serializeUnion(Context(objectName, value, target))
                 }
 
-            is DocumentShape ->
-                rustTemplate(
-                    "$writer.document(${value.asRef()}, &#{JsonCodecSettings}::default())?;",
-                    *codegenScope,
-                )
+            is DocumentShape -> rust("$writer.document(${value.asRef()});")
             else -> TODO(target.toString())
         }
     }

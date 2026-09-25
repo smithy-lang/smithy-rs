@@ -16,7 +16,7 @@ use pokemon_service_server_sdk::{
 };
 use tower::{Layer, Service};
 
-use aws_smithy_runtime::client::http::test_util::capture_request;
+use aws_smithy_http_client::test_util::capture_request;
 use pokemon_service_client::{Client, Config};
 use pokemon_service_common::do_nothing;
 

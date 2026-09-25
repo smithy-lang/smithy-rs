@@ -233,10 +233,42 @@ jobs:
         repository: awslabs/aws-sdk-rust
         path: aws-sdk-rust
         fetch-depth: 0
+    - name: Determine compatibility-transition authorization
+      id: compatibility-transition
+      uses: actions/github-script@v7
+      with:
+        script: |
+          // Pull requests must carry the same explicit breaking-change authorization
+          // used by the cargo-semver-checks job. Query the API rather than trusting
+          // the event payload so label changes made after the workflow started are
+          // observed. Do not catch lookup errors: authorization must fail closed.
+          if (context.eventName === 'pull_request') {
+            const response = await github.rest.pulls.get({
+              pull_number: context.payload.pull_request.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            const labels = response.data.labels.map(label => label.name);
+            const allowed = labels.includes('breaking-change');
+            core.setOutput('allowed', allowed ? 'true' : 'false');
+            core.info(
+              allowed
+                ? 'breaking-change label present; enabling compatibility-transition mode'
+                : 'breaking-change label absent; running the strict semver-hazard check'
+            );
+            return;
+          }
+
+          // A merged commit has no PR label context. At that point the breaking
+          // transition has already passed PR authorization, so main, scheduled,
+          // and explicit manual CI continue to test the coordinated graph.
+          core.setOutput('allowed', 'true');
+          core.info('non-PR CI run; enabling the accepted compatibility transition');
     - name: Run check-semver-hazards
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: check-semver-hazards
+        action-arguments: ${{ steps.compatibility-transition.outputs.allowed }}
 
   # Test all the things that require generated code. Note: the Rust runtimes require codegen
   # to be checked since `aws-config` depends on the generated STS client.

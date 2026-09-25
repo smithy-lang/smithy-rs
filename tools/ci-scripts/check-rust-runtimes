@@ -59,6 +59,18 @@ do
         # nextest does not run doctests, so run them separately (only where a lib target exists)
         run_doctests_if_lib ""
 
+        # `--all-features` cannot exercise the default-HTTP-client fallback for behavior versions
+        # older than v2026_01_12. That fallback only branches when the legacy connector yields no
+        # client, and under `--all-features` `tls-rustls` gives it a TLS implementation so it always
+        # yields one. Run the combination that does: the legacy connector compiled in *without* a
+        # TLS implementation, alongside the hyper 1.x client.
+        if [[ "${runtime_path}" == "rust-runtime" ]]; then
+            echo -e "## ${C_YELLOW}Running 'cargo nextest run' on aws-smithy-runtime with the legacy connector but no legacy TLS...${C_RESET}"
+            cargo nextest run --no-tests=pass -p aws-smithy-runtime --lib \
+                --no-default-features \
+                --features client,connector-hyper-0-14-x,default-https-client
+        fi
+
         echo -e "## ${C_YELLOW}Running 'cargo doc' on ${runtime_path}...${C_RESET}"
 
         RUSTDOCFLAGS="--cfg docsrs -Dwarnings" cargo +"${RUST_NIGHTLY_VERSION}" doc --no-deps --document-private-items --all-features

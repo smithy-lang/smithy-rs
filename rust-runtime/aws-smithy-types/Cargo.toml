@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-types"
-version = "1.7.0"
+version = "1.9.0"
 authors = [
     "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
     "Russell Cohen <rcoh@amazon.com>",
@@ -14,10 +14,10 @@ rust-version = "1.94.1"
 [features]
 byte-stream-poll-next = []
 http-body-0-4-x = ["dep:http-body-0-4", "dep:http"]
-http-body-1-x = ["dep:http-body-1-0", "dep:http-body-util", "dep:http-body-0-4", "dep:http"]
+http-body-1-x = ["dep:http-body-1-0", "dep:http-body-util"]
 hyper-0-14-x = ["dep:hyper-0-14"]
 rt-tokio = [
-    "dep:http-body-0-4",
+    "http-body-1-x",
     "dep:tokio-util",
     "dep:tokio",
     "tokio?/rt",
@@ -25,7 +25,6 @@ rt-tokio = [
     "tokio?/io-util",
     "tokio-util?/io",
     "dep:futures-core",
-    "dep:http"
 ]
 test-util = []
 serde-serialize = []
@@ -41,7 +40,6 @@ http-body-0-4 = { package = "http-body", version = "0.4.6", optional = true }
 http-body-1-0 = { package = "http-body", version = "1.0.1", optional = true }
 http-body-util = { version = "0.1.3", optional = true }
 hyper-0-14 = { package = "hyper", version = "0.14.26", optional = true }
-indexmap = "2.14.0"
 itoa = "1.0.17"
 num-integer = "0.1.46"
 pin-project-lite = "0.2.14"
@@ -74,8 +72,6 @@ tokio-stream = "0.1.5"
 tempfile = "3.16.0"
 
 criterion = "0.8.2"
-
-trybuild = "=1.0.117"
 
 [package.metadata.docs.rs]
 all-features = true

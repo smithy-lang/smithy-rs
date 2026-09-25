@@ -49,15 +49,16 @@ pub enum ShapeType {
     /// Union type
     Union,
 
-    // Service types
+    // Member
+    /// Member shape
+    Member,
+
+    // Service types. Declared after `Member` so the discriminants of the
+    // variants that predate them do not change.
     /// Service type
     Service,
     /// Operation type
     Operation,
-
-    // Member
-    /// Member shape
-    Member,
 }
 
 impl ShapeType {
