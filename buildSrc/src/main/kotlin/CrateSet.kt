@@ -31,6 +31,7 @@ object CrateSet {
             "aws-smithy-runtime-api-macros",
             "aws-smithy-runtime",
             "aws-smithy-schema",
+            "aws-smithy-schema-derive",
             "aws-smithy-types",
             "aws-smithy-http-client",
         )
@@ -76,6 +77,7 @@ object CrateSet {
             "aws-smithy-runtime-api",
             "aws-smithy-runtime-api-macros",
             "aws-smithy-schema",
+            "aws-smithy-schema-derive",
             "aws-smithy-types",
             "aws-smithy-types-convert",
             "aws-smithy-wasm",

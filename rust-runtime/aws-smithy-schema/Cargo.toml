@@ -10,8 +10,12 @@ license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
 rust-version = "1.94.1"
 
+[features]
+derive = ["dep:aws-smithy-schema-derive"]
+
 [dependencies]
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client"] }
+aws-smithy-schema-derive = { path = "../aws-smithy-schema-derive", optional = true }
 aws-smithy-types = { path = "../aws-smithy-types", default-features = false }
 http = "1.3.1"
 
