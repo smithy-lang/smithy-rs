@@ -12,3 +12,7 @@ bug_fix: false
 union itself. Generated structures and unions implement it by returning their
 `SCHEMA`. Hand-written implementations must add it. `prelude::UNIT` provides a
 schema for `smithy.api#Unit`.
+
+`Schema::streaming()` reports whether a shape has the `@streaming` trait, and
+`std::convert::Infallible` implements `SerializableStruct` so an operation with
+no errors can use it as its error type.

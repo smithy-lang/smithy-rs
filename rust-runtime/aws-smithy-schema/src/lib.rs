@@ -706,6 +706,11 @@ impl<'a> Schema<'a> {
         self.http.as_ref()
     }
 
+    /// Returns `true` if this shape has the Smithy `@streaming` trait.
+    pub fn streaming(&self) -> bool {
+        self.streaming.is_some()
+    }
+
     // -- Const setters for builder-style construction in generated code --
 
     /// Sets the original (pre-synthesis) shape name for synthetic operation
@@ -1086,6 +1091,13 @@ mod test {
         fn as_any(&self) -> &dyn std::any::Any {
             self
         }
+    }
+
+    #[test]
+    fn test_streaming_accessor() {
+        let plain = Schema::new(shape_id!("test", "Blob"), ShapeType::Blob);
+        assert!(!plain.streaming());
+        assert!(plain.with_streaming().streaming());
     }
 
     #[test]

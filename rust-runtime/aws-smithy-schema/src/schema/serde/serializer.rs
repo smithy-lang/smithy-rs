@@ -270,3 +270,14 @@ impl<T: SerializableStruct + ?Sized> SerializableStruct for Box<T> {
         (**self).serialize_members(serializer)
     }
 }
+
+// An infallible operation still satisfies generic serialization bounds; there is no value to serialize.
+impl SerializableStruct for std::convert::Infallible {
+    fn schema(&self) -> &Schema<'_> {
+        match *self {}
+    }
+
+    fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+        match *self {}
+    }
+}
