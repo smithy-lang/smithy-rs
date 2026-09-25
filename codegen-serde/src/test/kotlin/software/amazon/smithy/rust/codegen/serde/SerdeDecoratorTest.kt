@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
@@ -565,7 +566,7 @@ class SerdeDecoratorTest {
     }
 
     @Test
-    fun `all-required structure round trips through bincode`() {
+    fun `structures round trip through bincode`() {
         val model =
             """
             namespace com.example
@@ -583,6 +584,7 @@ class SerdeDecoratorTest {
 
             structure PutInput {
                 record: BincodeRecord
+                optionalRecord: OptionalRecord
             }
 
             @serde(serialize: true, deserialize: true)
@@ -603,6 +605,12 @@ class SerdeDecoratorTest {
                 kind: Kind
                 @required
                 choice: Choice
+            }
+
+            @serde(serialize: true, deserialize: true)
+            structure OptionalRecord {
+                text: String
+                count: Integer
             }
 
             structure Nested {
@@ -644,6 +652,9 @@ class SerdeDecoratorTest {
                 arrayOf(
                     "crate" to RustType.Opaque(ctx.moduleUseName()),
                     "bincode" to CargoDependency("bincode", CratesIo("1")).toDevDependency().toType(),
+                    "ciborium" to CargoDependency.Ciborium.toType(),
+                    "serde_json" to CargoDependency.SerdeJson.toDevDependency().toType(),
+                    *RuntimeType.preludeScope,
                 )
 
             crate.integrationTest("test_bincode_deserialization") {
@@ -686,6 +697,47 @@ class SerdeDecoratorTest {
 
                         round_trip(record(Choice::Text("payload".to_string())));
                         round_trip(record(Choice::Empty));
+                        """,
+                        *codegenScope,
+                    )
+                }
+
+                unitTest("unset_fields_round_trip_when_configured") {
+                    rustTemplate(
+                        """
+                        use #{crate}::serde::{SerializationSettings, SerializeConfigured};
+                        use #{crate}::types::OptionalRecord;
+
+                        let value = OptionalRecord::builder().build();
+
+                        let default_settings = SerializationSettings::default();
+                        let json = #{serde_json}::to_string(
+                            &value.serialize_ref(&default_settings)
+                        ).expect("record should serialize with default settings");
+                        assert_eq!(json, "{}");
+
+                        let mut settings = SerializationSettings::default();
+                        settings.serialize_unset_fields = true;
+                        let json = #{serde_json}::to_string(
+                            &value.serialize_ref(&settings)
+                        ).expect("record should serialize unset fields");
+                        assert_eq!(json, r##"{"text":null,"count":null}"##);
+
+                        let encoded = #{bincode}::serialize(&value.serialize_ref(&settings))
+                            .expect("record should serialize to bincode");
+                        let decoded: OptionalRecord = #{bincode}::deserialize(&encoded)
+                            .expect("record should deserialize from bincode");
+                        assert_eq!(decoded, value);
+
+                        let mut encoded = #{Vec}::new();
+                        #{ciborium}::ser::into_writer(
+                            &value.serialize_ref(&settings),
+                            &mut encoded,
+                        ).expect("record should serialize to CBOR");
+                        let decoded: OptionalRecord =
+                            #{ciborium}::de::from_reader(encoded.as_slice())
+                                .expect("record should deserialize from CBOR");
+                        assert_eq!(decoded, value);
                         """,
                         *codegenScope,
                     )
