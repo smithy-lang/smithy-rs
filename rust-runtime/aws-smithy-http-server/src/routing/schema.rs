@@ -19,7 +19,7 @@ use crate::{
         ServiceRequestBodyConfig, SharedServerProtocol,
     },
 };
-use aws_smithy_schema::{OperationSchema, ServiceSchema};
+use crate::schema::{OperationSchema, ServiceSchema};
 use aws_smithy_types::Document;
 use bytes::Bytes;
 use http::{Request, Response};
@@ -972,7 +972,7 @@ where
     let entries = targets
         .iter()
         .map(|target| {
-            let http = target.operation.schema().http().ok_or_else(|| {
+            let http = target.operation.http().ok_or_else(|| {
                 RouterBuildError::Configuration(format!("missing HTTP trait on {}", target.operation.shape_id()))
             })?;
             let method = http
@@ -1028,7 +1028,7 @@ where
 }
 
 /// Builds the awsJson-style target router (`Service.Operation`, honoring
-/// [`compat_name`](aws_smithy_schema::schema::OperationSchema::compat_name)) for any protocol
+/// [`compat_name`](crate::schema::OperationSchema::compat_name)) for any protocol
 /// marker `P` whose rejections convert like awsJson's. Exposed for out-of-tree protocols that
 /// route on the same key. Among several protocols, the router claims `POST /` requests whose
 /// `Content-Type` is `content_type`.

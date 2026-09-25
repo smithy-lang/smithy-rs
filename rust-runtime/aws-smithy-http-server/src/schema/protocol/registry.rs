@@ -14,7 +14,7 @@
 //! built-ins, and protocols that read the body to route after those that route on metadata alone.
 //! A registration moves its protocol relative to another with [`ProtocolOrder`].
 
-use aws_smithy_schema::ServiceSchema;
+use crate::schema::ServiceSchema;
 
 use super::SharedServerProtocol;
 
@@ -183,11 +183,12 @@ fn rpc_v2_cbor_registration(service_schema: &'static ServiceSchema<'static>) -> 
 
 #[cfg(test)]
 mod tests {
-    use aws_smithy_schema::{shape_id, Schema, ServiceSchema, ShapeId, ShapeType};
+    use crate::schema::ServiceSchema;
+    use aws_smithy_schema::{shape_id, ShapeId};
 
     use super::*;
 
-    static SERVICE_SHAPE: Schema<'static> = Schema::new(shape_id!("example", "Service"), ShapeType::Service);
+    const SERVICE_ID: ShapeId<'static> = shape_id!("example", "Service");
 
     static REST_JSON_1: [ShapeId<'static>; 1] = [shape_id!("aws.protocols", "restJson1")];
     static REST_XML: [ShapeId<'static>; 1] = [shape_id!("aws.protocols", "restXml")];
@@ -196,12 +197,12 @@ mod tests {
     static RPC_V2_CBOR: [ShapeId<'static>; 1] = [shape_id!("smithy.protocols", "rpcv2Cbor")];
     static UNKNOWN: [ShapeId<'static>; 1] = [shape_id!("example.protocols", "myProtocol")];
 
-    static REST_JSON_1_SERVICE: ServiceSchema<'static> = ServiceSchema::new(&SERVICE_SHAPE, None, &REST_JSON_1, &[]);
-    static REST_XML_SERVICE: ServiceSchema<'static> = ServiceSchema::new(&SERVICE_SHAPE, None, &REST_XML, &[]);
-    static AWS_JSON_10_SERVICE: ServiceSchema<'static> = ServiceSchema::new(&SERVICE_SHAPE, None, &AWS_JSON_10, &[]);
-    static AWS_JSON_11_SERVICE: ServiceSchema<'static> = ServiceSchema::new(&SERVICE_SHAPE, None, &AWS_JSON_11, &[]);
-    static RPC_V2_CBOR_SERVICE: ServiceSchema<'static> = ServiceSchema::new(&SERVICE_SHAPE, None, &RPC_V2_CBOR, &[]);
-    static UNKNOWN_SERVICE: ServiceSchema<'static> = ServiceSchema::new(&SERVICE_SHAPE, None, &UNKNOWN, &[]);
+    static REST_JSON_1_SERVICE: ServiceSchema<'static> = ServiceSchema::new(SERVICE_ID, None, &REST_JSON_1, &[]);
+    static REST_XML_SERVICE: ServiceSchema<'static> = ServiceSchema::new(SERVICE_ID, None, &REST_XML, &[]);
+    static AWS_JSON_10_SERVICE: ServiceSchema<'static> = ServiceSchema::new(SERVICE_ID, None, &AWS_JSON_10, &[]);
+    static AWS_JSON_11_SERVICE: ServiceSchema<'static> = ServiceSchema::new(SERVICE_ID, None, &AWS_JSON_11, &[]);
+    static RPC_V2_CBOR_SERVICE: ServiceSchema<'static> = ServiceSchema::new(SERVICE_ID, None, &RPC_V2_CBOR, &[]);
+    static UNKNOWN_SERVICE: ServiceSchema<'static> = ServiceSchema::new(SERVICE_ID, None, &UNKNOWN, &[]);
 
     #[test]
     fn builtin_resolves_each_builtin_protocol() {

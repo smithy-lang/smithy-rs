@@ -11,7 +11,10 @@ import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegen
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceSchemaGenerator
 
 /**
- * Generates the `crate::schema` service and operation descriptors when the `schemaSerde` codegen setting is on.
+ * Generates the `crate::schema` service and operation descriptors for the schema request path.
+ *
+ * The descriptors are `aws-smithy-http-server` types read by its schema router, so they are only generated when
+ * the service is built on that path (the `schemaSerde` codegen setting on HTTP 1.x).
  */
 class ServerSchemaDecorator : ServerCodegenDecorator {
     override val name: String = "ServerSchemaDecorator"
@@ -21,7 +24,7 @@ class ServerSchemaDecorator : ServerCodegenDecorator {
         codegenContext: ServerCodegenContext,
         rustCrate: RustCrate,
     ) {
-        if (codegenContext.settings.codegenConfig.schemaSerde) {
+        if (codegenContext.usesSchemaHttpSerde) {
             ServerServiceSchemaGenerator(codegenContext).render(rustCrate)
         }
     }

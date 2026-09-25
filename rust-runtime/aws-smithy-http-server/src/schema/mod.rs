@@ -8,6 +8,7 @@ mod modeled_error;
 pub mod protocol;
 pub(crate) mod request_bindings;
 pub(crate) mod response_bindings;
+mod service;
 
 pub use deserialize::{DeserializableShape, DeserializeError};
 pub use modeled_error::HttpModeledError;
@@ -18,7 +19,7 @@ pub use protocol::{
     ServerProtocol, ServerRequest, ServiceRequestBodyConfig, SharedServerProtocol,
 };
 
-use aws_smithy_schema::OperationSchema;
+pub use service::{OperationSchema, ServiceSchema};
 
 /// The protocol and the operation selected by routing, with the operation's request-body limits,
 /// stored in the request extensions.

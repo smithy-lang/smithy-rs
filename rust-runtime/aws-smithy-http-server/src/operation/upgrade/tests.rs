@@ -6,7 +6,8 @@
 use super::*;
 use crate::schema::{HttpModeledError, ServerProtocol, SharedServerProtocol};
 use aws_smithy_schema::serde::ShapeDeserializer;
-use aws_smithy_schema::{shape_id, OperationSchema, Schema, ShapeType};
+use crate::schema::OperationSchema;
+use aws_smithy_schema::{shape_id, Schema, ShapeType};
 use bytes::Bytes;
 use http_body_util::BodyExt;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -63,7 +64,6 @@ static EVENTS: Schema<'static> = Schema::new_struct(shape_id!("test", "Events"),
 static BLOB: Schema<'static> =
     Schema::new_member(shape_id!("test", "Blob", "blob"), ShapeType::Blob, "blob", 0).with_streaming();
 static BLOBS: Schema<'static> = Schema::new_struct(shape_id!("test", "Blob"), ShapeType::Structure, &[&BLOB]);
-static OP: Schema<'static> = Schema::new(shape_id!("test", "Operation"), ShapeType::Operation);
 
 macro_rules! operation {
     ($name:ident, $input:ident, $output:ident) => {
@@ -76,7 +76,7 @@ macro_rules! operation {
         }
         impl SchemaOperationShape for $name {
             const SCHEMA: &'static OperationSchema<'static> = {
-                static SCHEMA: OperationSchema<'static> = OperationSchema::new(&OP, &$input, &$output, &[]);
+                static SCHEMA: OperationSchema<'static> = OperationSchema::new(shape_id!("test", "Operation"), &$input, &$output, &[]);
                 &SCHEMA
             };
         }

@@ -16,42 +16,45 @@ use std::time::Duration;
 use tower::ServiceExt;
 
 static UNIT: Schema<'static> = Schema::new(shape_id!("test", "Unit"), ShapeType::Structure);
-static FIRST_SHAPE: Schema<'static> = Schema::new(shape_id!("test", "first"), ShapeType::Operation)
+// Codegen records an operation's `@http` binding on its input schema.
+static FIRST_INPUT: Schema<'static> = Schema::new(shape_id!("test", "firstInput"), ShapeType::Structure)
     .with_http(HttpTrait::new("POST", "/first", Some(200)));
-static SECOND_SHAPE: Schema<'static> = Schema::new(shape_id!("test", "second"), ShapeType::Operation)
+static SECOND_INPUT: Schema<'static> = Schema::new(shape_id!("test", "secondInput"), ShapeType::Structure)
     .with_http(HttpTrait::new("POST", "/second", Some(200)));
-static FIRST: OperationSchema<'static> = OperationSchema::new(&FIRST_SHAPE, &UNIT, &UNIT, &[]);
-static SECOND: OperationSchema<'static> = OperationSchema::new(&SECOND_SHAPE, &UNIT, &UNIT, &[]);
-static SERVICE_SHAPE: Schema<'static> = Schema::new(shape_id!("test", "Service"), ShapeType::Service);
+const FIRST_ID: ShapeId<'static> = shape_id!("test", "first");
+const SECOND_ID: ShapeId<'static> = shape_id!("test", "second");
+const SERVICE_ID: ShapeId<'static> = shape_id!("test", "Service");
+static FIRST: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &FIRST_INPUT, &UNIT, &[]);
+static SECOND: OperationSchema<'static> = OperationSchema::new(SECOND_ID, &SECOND_INPUT, &UNIT, &[]);
 static OPERATIONS: &[&OperationSchema<'static>] = &[&FIRST, &SECOND];
 static PROTOCOLS: &[ShapeId<'static>] = &[shape_id!("test", "bodyRouting")];
-static SERVICE: ServiceSchema<'static> = ServiceSchema::new(&SERVICE_SHAPE, None, PROTOCOLS, OPERATIONS);
+static SERVICE: ServiceSchema<'static> = ServiceSchema::new(SERVICE_ID, None, PROTOCOLS, OPERATIONS);
 static REST_JSON: ServiceSchema<'static> = ServiceSchema::new(
-    &SERVICE_SHAPE,
+    SERVICE_ID,
     None,
     &[shape_id!("aws.protocols", "restJson1")],
     OPERATIONS,
 );
 static REST_XML: ServiceSchema<'static> = ServiceSchema::new(
-    &SERVICE_SHAPE,
+    SERVICE_ID,
     None,
     &[shape_id!("aws.protocols", "restXml")],
     OPERATIONS,
 );
 static AWS_JSON_10: ServiceSchema<'static> = ServiceSchema::new(
-    &SERVICE_SHAPE,
+    SERVICE_ID,
     None,
     &[shape_id!("aws.protocols", "awsJson1_0")],
     OPERATIONS,
 );
 static AWS_JSON_11: ServiceSchema<'static> = ServiceSchema::new(
-    &SERVICE_SHAPE,
+    SERVICE_ID,
     None,
     &[shape_id!("aws.protocols", "awsJson1_1")],
     OPERATIONS,
 );
 static RPC: ServiceSchema<'static> = ServiceSchema::new(
-    &SERVICE_SHAPE,
+    SERVICE_ID,
     None,
     &[shape_id!("smithy.protocols", "rpcv2Cbor")],
     OPERATIONS,
@@ -379,9 +382,9 @@ fn binding_and_protocol_validation() {
         SchemaRoutingService::from_operation_handler_bindings(&SERVICE, [], [binding(&FIRST), binding(&SECOND)]),
         Err(RouterBuildError::UnknownProtocol)
     ));
-    static NONE: ServiceSchema<'static> = ServiceSchema::new(&SERVICE_SHAPE, None, &[], OPERATIONS);
+    static NONE: ServiceSchema<'static> = ServiceSchema::new(SERVICE_ID, None, &[], OPERATIONS);
     static MANY: ServiceSchema<'static> = ServiceSchema::new(
-        &SERVICE_SHAPE,
+        SERVICE_ID,
         None,
         &[
             shape_id!("aws.protocols", "restJson1"),
@@ -396,7 +399,7 @@ fn binding_and_protocol_validation() {
     let many = SchemaRoutingService::from_operation_handler_bindings(&MANY, [], [binding(&FIRST), binding(&SECOND)])
         .expect("every declared protocol is served");
     assert_eq!(many.inner.protocols.len(), 2);
-    static COPY: OperationSchema<'static> = OperationSchema::new(&FIRST_SHAPE, &UNIT, &UNIT, &[]);
+    static COPY: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &FIRST_INPUT, &UNIT, &[]);
     assert!(matches!(
         SchemaRoutingService::from_operation_handler_bindings(
             &SERVICE,
@@ -448,10 +451,10 @@ async fn all_builtins_route_without_polling_body_and_preserve_fallback_errors() 
 #[tokio::test]
 async fn aws_json_routes_on_the_schema_compat_name() {
     static FIRST_COMPAT: OperationSchema<'static> =
-        OperationSchema::new(&FIRST_SHAPE, &UNIT, &UNIT, &[]).with_compat_name("FirstSymbol");
+        OperationSchema::new(FIRST_ID, &FIRST_INPUT, &UNIT, &[]).with_compat_name("FirstSymbol");
     static COMPAT_OPERATIONS: &[&OperationSchema<'static>] = &[&FIRST_COMPAT, &SECOND];
     static AWS_JSON_11_COMPAT: ServiceSchema<'static> = ServiceSchema::new(
-        &SERVICE_SHAPE,
+        SERVICE_ID,
         None,
         &[shape_id!("aws.protocols", "awsJson1_1")],
         COMPAT_OPERATIONS,
@@ -716,19 +719,20 @@ async fn body_routing_leaves_streaming_operations_unrouted() {
     static STREAM_MEMBER: Schema<'static> =
         Schema::new_member(shape_id!("test", "Input", "data"), ShapeType::Blob, "data", 0).with_streaming();
     static STREAM: Schema<'static> =
-        Schema::new_struct(shape_id!("test", "Input"), ShapeType::Structure, &[&STREAM_MEMBER]);
-    static INPUT: OperationSchema<'static> = OperationSchema::new(&FIRST_SHAPE, &STREAM, &UNIT, &[]);
-    static OUTPUT: OperationSchema<'static> = OperationSchema::new(&FIRST_SHAPE, &UNIT, &STREAM, &[]);
-    static BODY_INPUT: ServiceSchema<'static> = ServiceSchema::new(&SERVICE_SHAPE, None, PROTOCOLS, &[&INPUT]);
-    static BODY_OUTPUT: ServiceSchema<'static> = ServiceSchema::new(&SERVICE_SHAPE, None, PROTOCOLS, &[&OUTPUT]);
+        Schema::new_struct(shape_id!("test", "Input"), ShapeType::Structure, &[&STREAM_MEMBER])
+            .with_http(HttpTrait::new("POST", "/first", Some(200)));
+    static INPUT: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &STREAM, &UNIT, &[]);
+    static OUTPUT: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &FIRST_INPUT, &STREAM, &[]);
+    static BODY_INPUT: ServiceSchema<'static> = ServiceSchema::new(SERVICE_ID, None, PROTOCOLS, &[&INPUT]);
+    static BODY_OUTPUT: ServiceSchema<'static> = ServiceSchema::new(SERVICE_ID, None, PROTOCOLS, &[&OUTPUT]);
     static META_INPUT: ServiceSchema<'static> = ServiceSchema::new(
-        &SERVICE_SHAPE,
+        SERVICE_ID,
         None,
         &[shape_id!("aws.protocols", "restJson1")],
         &[&INPUT],
     );
     static META_OUTPUT: ServiceSchema<'static> = ServiceSchema::new(
-        &SERVICE_SHAPE,
+        SERVICE_ID,
         None,
         &[shape_id!("aws.protocols", "restJson1")],
         &[&OUTPUT],
@@ -831,14 +835,19 @@ mod multi_protocol {
 
     static NAME: Schema<'static> = Schema::new_member(shape_id!("test", "In", "name"), ShapeType::String, "name", 0);
     static IN_MEMBERS: [&Schema<'static>; 1] = [&NAME];
-    static IN: Schema<'static> =
-        Schema::new_struct(shape_id!("test", "In"), ShapeType::Structure, &IN_MEMBERS).with_original_name("In");
-    static FIRST_OP: OperationSchema<'static> = OperationSchema::new(&FIRST_SHAPE, &IN, &UNIT, &[]);
-    static SECOND_OP: OperationSchema<'static> = OperationSchema::new(&SECOND_SHAPE, &IN, &UNIT, &[]);
+    // Both operations take the same input shape; each input schema carries its operation's `@http`.
+    static FIRST_IN: Schema<'static> = Schema::new_struct(shape_id!("test", "In"), ShapeType::Structure, &IN_MEMBERS)
+        .with_original_name("In")
+        .with_http(HttpTrait::new("POST", "/first", Some(200)));
+    static SECOND_IN: Schema<'static> = Schema::new_struct(shape_id!("test", "In"), ShapeType::Structure, &IN_MEMBERS)
+        .with_original_name("In")
+        .with_http(HttpTrait::new("POST", "/second", Some(200)));
+    static FIRST_OP: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &FIRST_IN, &UNIT, &[]);
+    static SECOND_OP: OperationSchema<'static> = OperationSchema::new(SECOND_ID, &SECOND_IN, &UNIT, &[]);
     static OPS: &[&OperationSchema<'static>] = &[&FIRST_OP, &SECOND_OP];
     /// Every built-in, declared in the reverse of their priority order.
     static BUILTINS: ServiceSchema<'static> = ServiceSchema::new(
-        &SERVICE_SHAPE,
+        SERVICE_ID,
         None,
         &[
             shape_id!("aws.protocols", "restXml"),
@@ -850,7 +859,7 @@ mod multi_protocol {
         OPS,
     );
     static WITH_BODY_ROUTING: ServiceSchema<'static> = ServiceSchema::new(
-        &SERVICE_SHAPE,
+        SERVICE_ID,
         None,
         &[
             shape_id!("test", "bodyRouting"),
@@ -1032,10 +1041,11 @@ mod multi_protocol {
         static UPLOAD_MEMBERS: [&Schema<'static>; 1] = [&DATA];
         static UPLOAD: Schema<'static> =
             Schema::new_struct(shape_id!("test", "Upload"), ShapeType::Structure, &UPLOAD_MEMBERS)
-                .with_original_name("Upload");
-        static STREAMING: OperationSchema<'static> = OperationSchema::new(&FIRST_SHAPE, &UPLOAD, &UNIT, &[]);
+                .with_original_name("Upload")
+                .with_http(HttpTrait::new("POST", "/first", Some(200)));
+        static STREAMING: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &UPLOAD, &UNIT, &[]);
         static BOTH: ServiceSchema<'static> = ServiceSchema::new(
-            &SERVICE_SHAPE,
+            SERVICE_ID,
             None,
             &[
                 shape_id!("smithy.protocols", "rpcv2Cbor"),
@@ -1044,7 +1054,7 @@ mod multi_protocol {
             &[&STREAMING],
         );
         static CBOR_ONLY: ServiceSchema<'static> = ServiceSchema::new(
-            &SERVICE_SHAPE,
+            SERVICE_ID,
             None,
             &[shape_id!("smithy.protocols", "rpcv2Cbor")],
             &[&STREAMING],

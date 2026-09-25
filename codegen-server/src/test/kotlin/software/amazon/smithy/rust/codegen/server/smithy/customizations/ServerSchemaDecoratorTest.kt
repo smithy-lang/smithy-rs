@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
@@ -99,12 +100,14 @@ internal class ServerSchemaDecoratorTest {
         val servers =
             serverIntegrationTest(model, schemaSerdeParams) { context, rustCrate ->
                 rustCrate.testModule {
-                    unitTest("operation_descriptor_reports_the_modeled_http_binding") {
-                        rust(
-                            """
+                    // The descriptors belong to the schema router, which only HTTP 1.x services use.
+                    if (context.runtimeConfig.httpVersion == HttpVersion.Http1x) {
+                        unitTest("operation_descriptor_reports_the_modeled_http_binding") {
+                            rust(
+                                """
                         let echo = &crate::schema::operations::ECHO;
                         assert_eq!(echo.shape_id().as_str(), "com.aws.example.schema##Echo");
-                        let http = echo.schema().http().expect("`@http` on the operation shape");
+                        let http = echo.http().expect("`@http` recorded on the operation input");
                         assert_eq!(http.method(), "POST");
                         assert_eq!(http.uri(), "/echo/{name}");
                         assert_eq!(http.code(), 201);
@@ -115,11 +118,11 @@ internal class ServerSchemaDecoratorTest {
                         assert!(std::ptr::eq(echo.errors()[0], crate::error::BadThing::SCHEMA));
                         assert!(std::ptr::eq(echo.errors()[1], crate::error::ValidationException::SCHEMA));
                         """,
-                        )
-                    }
-                    unitTest("service_descriptor_lists_protocols_and_operations") {
-                        rust(
-                            """
+                            )
+                        }
+                        unitTest("service_descriptor_lists_protocols_and_operations") {
+                            rust(
+                                """
                         let service = &crate::schema::service::SCHEMA_SERVICE;
                         assert_eq!(service.shape_id().as_str(), "com.aws.example.schema##SchemaService");
                         assert_eq!(service.version(), Some("2024-08-29"));
@@ -129,10 +132,11 @@ internal class ServerSchemaDecoratorTest {
                         let ping = service
                             .operation(&::aws_smithy_schema::shape_id!("com.aws.example.schema", "Ping"))
                             .expect("bound operation");
-                        assert_eq!(ping.schema().http().map(|http| http.uri()), Some("/ping"));
+                        assert_eq!(ping.http().map(|http| http.uri()), Some("/ping"));
                         assert!(ping.errors().is_empty());
                         """,
-                        )
+                            )
+                        }
                     }
                     unitTest("shape_schemas_sit_next_to_their_types") {
                         rustTemplate(
@@ -155,6 +159,7 @@ internal class ServerSchemaDecoratorTest {
         servers.forEach { server ->
             val src = server.path.resolve("src")
             src.resolve("protocol_serde").toFile().exists() shouldBe (server.httpVersion == HttpTestVersion.HTTP_0_X)
+            src.resolve("schema").toFile().exists() shouldBe (server.httpVersion == HttpTestVersion.HTTP_1_X)
             if (server.httpVersion == HttpTestVersion.HTTP_1_X) {
                 val service = src.resolve("service.rs").readText()
                 service shouldContain "from_operation_handler_bindings_with_options"

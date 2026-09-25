@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
@@ -90,10 +89,9 @@ class ServerOperationGenerator(
             writer.rustTemplate(
                 """
                 impl #{SmithyHttpServer}::operation::SchemaOperationShape for $operationName {
-                    const SCHEMA: &'static #{OperationSchema}<'static> = &crate::schema::operations::${operationName.toSnakeCase().uppercase()};
+                    const SCHEMA: &'static #{SmithyHttpServer}::schema::OperationSchema<'static> = &crate::schema::operations::${operationName.toSnakeCase().uppercase()};
                 }
                 """,
-                "OperationSchema" to RuntimeType.smithySchema(runtimeConfig).resolve("OperationSchema"),
                 *codegenScope,
             )
         }

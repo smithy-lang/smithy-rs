@@ -6,8 +6,7 @@
 /// Enumeration of Smithy shape types.
 ///
 /// This represents the core shape types from the Smithy specification,
-/// including simple types, aggregate types, the service types (service and
-/// operation), and the special member type.
+/// including simple types, aggregate types, and the special member type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum ShapeType {
@@ -52,13 +51,6 @@ pub enum ShapeType {
     // Member
     /// Member shape
     Member,
-
-    // Service types. Declared after `Member` so the discriminants of the
-    // variants that predate them do not change.
-    /// Service type
-    Service,
-    /// Operation type
-    Operation,
 }
 
 impl ShapeType {
@@ -87,12 +79,6 @@ impl ShapeType {
     #[inline]
     pub fn is_aggregate(&self) -> bool {
         matches!(self, Self::List | Self::Map | Self::Structure | Self::Union)
-    }
-
-    /// Returns true if this is a service type (service or operation).
-    #[inline]
-    pub fn is_service(&self) -> bool {
-        matches!(self, Self::Service | Self::Operation)
     }
 
     /// Returns true if this is a member type.
