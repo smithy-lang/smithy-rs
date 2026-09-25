@@ -572,14 +572,28 @@ impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
     }
 
     fn read_string(&mut self, schema: &Schema<'_>) -> Result<String, SerdeError> {
+        // `@mediaType` on a header-bound string travels base64-encoded.
+        let media_typed = schema.media_type().is_some() || self.member.media_type().is_some();
         let raw = match self.cursor {
             Some(_) => self.next_text()?,
-            // Scalar strings use the full single value (no comma splitting),
+            // Like legacy, a scalar `@mediaType` string is tokenized as a list
+            // (`read_many_from_str`: quote-aware, so `"eyJ..."` is unquoted) and
+            // must be exactly one item.
+            None if media_typed => {
+                let mut tokens = aws_smithy_http::header::read_many_from_str::<String>(self.values.iter().copied())
+                    .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
+                if tokens.len() != 1 {
+                    return Err(SerdeError::invalid_input(format!(
+                        "expected one item but found {}",
+                        tokens.len()
+                    )));
+                }
+                tokens.remove(0)
+            }
+            // Other scalar strings use the full single value (no comma splitting),
             // trimmed — matching `one_or_none::<String>`.
             None => self.single_value()?.trim().to_string(),
         };
-        // `@mediaType` on a header-bound string travels base64-encoded.
-        let media_typed = schema.media_type().is_some() || self.member.media_type().is_some();
         if media_typed {
             let decoded = aws_smithy_types::base64::decode(&raw)
                 .map_err(|err| SerdeError::invalid_input(format!("invalid base64: {err}")))?;
@@ -1744,6 +1758,26 @@ mod tests {
             BindingLocation::Label,
         );
         assert!(deser.read_integer(&AGE_MEMBER).is_err());
+    }
+
+    /// A scalar `@mediaType` header is tokenized like legacy's `read_many_from_str`: a quoted
+    /// value is unquoted before base64 decoding, and more than one item is rejected.
+    #[test]
+    fn media_type_header_is_tokenized_like_legacy() {
+        let read =
+            |values: Vec<&str>| HeaderValuesDeserializer::new(values, &HP_JSON_MEMBER).read_string(&HP_JSON_MEMBER);
+        assert_eq!(read(vec!["e30="]).unwrap(), "{}");
+        assert_eq!(read(vec!["\"e30=\""]).unwrap(), "{}");
+        for values in [vec!["e30=, e30="], vec!["e30=", "e30="], vec!["\"e3,0=\""]] {
+            assert!(read(values.clone()).is_err(), "{values:?}");
+        }
+        // A plain string header keeps the whole value, quotes and commas included.
+        assert_eq!(
+            HeaderValuesDeserializer::new(vec!["\"a, b\""], &TOKEN_MEMBER)
+                .read_string(&TOKEN_MEMBER)
+                .unwrap(),
+            "\"a, b\""
+        );
     }
 
     #[test]
