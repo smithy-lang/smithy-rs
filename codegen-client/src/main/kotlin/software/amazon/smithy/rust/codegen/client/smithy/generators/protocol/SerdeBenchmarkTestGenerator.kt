@@ -233,14 +233,14 @@ class SerdeBenchmarkTestGenerator(
                         protocol == software.amazon.smithy.aws.traits.protocols.RestJson1Trait.ID ->
                             smithyJson.resolve("protocol::aws_rest_json_1::AwsRestJsonProtocol") to "new()"
                         protocol == software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait.ID ->
-                            smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_0(${serviceShapeName.dq()})"
+                            smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_0().with_target_prefix(${serviceShapeName.dq()})"
                         protocol == software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait.ID ->
-                            smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_1(${serviceShapeName.dq()})"
+                            smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_1().with_target_prefix(${serviceShapeName.dq()})"
                         protocol == software.amazon.smithy.aws.traits.protocols.RestXmlTrait.ID ->
                             smithyXml.resolve("protocol::aws_rest_xml::AwsRestXmlProtocol") to "new()"
                         protocol == software.amazon.smithy.aws.traits.protocols.AwsQueryTrait.ID -> {
                             val smithyQuery = CargoDependency.smithyQuery(codegenContext.runtimeConfig).toType()
-                            smithyQuery.resolve("protocol::AwsQueryProtocol") to "new(${codegenContext.serviceShape.version.dq()})"
+                            smithyQuery.resolve("protocol::AwsQueryProtocol") to "new().with_service_version(${codegenContext.serviceShape.version.dq()})"
                         }
                         protocol == software.amazon.smithy.protocol.traits.Rpcv2CborTrait.ID ->
                             smithyCbor.resolve("protocol::RpcV2CborProtocol") to "new()"
