@@ -21,7 +21,7 @@ impl GetServerStatisticsOutput {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1496 */
+/* ServerSchemaGenerator.kt:1501 */
 static GETSERVERSTATISTICSOUTPUT_MEMBER_CALLS_COUNT: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -33,7 +33,7 @@ static GETSERVERSTATISTICSOUTPUT_MEMBER_CALLS_COUNT: ::aws_smithy_schema::Schema
         "calls_count",
         0,
     );
-/* ServerSchemaGenerator.kt:1416 */
+/* ServerSchemaGenerator.kt:1421 */
 static GETSERVERSTATISTICSOUTPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -54,8 +54,12 @@ impl crate::output::GetServerStatisticsOutput {
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> =
         &GETSERVERSTATISTICSOUTPUT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:288 */
+/* ServerSchemaGenerator.kt:289 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::GetServerStatisticsOutput {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -68,7 +72,7 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::GetServer
         Ok(())
     }
 }
-/* ServerCodegenVisitor.kt:404 */
+/* ServerCodegenVisitor.kt:399 */
 impl GetServerStatisticsOutput {
     /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`GetServerStatisticsOutput`](crate::output::GetServerStatisticsOutput).
     /* ServerBuilderGenerator.kt:304 */
@@ -77,7 +81,7 @@ impl GetServerStatisticsOutput {
         crate::output::get_server_statistics_output::Builder::default()
         /* ServerBuilderGenerator.kt:304 */
     }
-    /* ServerCodegenVisitor.kt:404 */
+    /* ServerCodegenVisitor.kt:399 */
 }
 
 /* StructureGenerator.kt:197 */
@@ -87,7 +91,7 @@ impl GetServerStatisticsOutput {
     ::std::clone::Clone, ::std::cmp::Eq, ::std::cmp::PartialEq, ::std::fmt::Debug, ::std::hash::Hash,
 )]
 pub /* StructureGenerator.kt:201 */ struct DoNothingOutput {/* StructureGenerator.kt:201 */}
-/* ServerSchemaGenerator.kt:1416 */
+/* ServerSchemaGenerator.kt:1421 */
 static DONOTHINGOUTPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -109,8 +113,12 @@ impl crate::output::DoNothingOutput {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &DONOTHINGOUTPUT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:288 */
+/* ServerSchemaGenerator.kt:289 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::DoNothingOutput {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -119,7 +127,7 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::DoNothing
         Ok(())
     }
 }
-/* ServerCodegenVisitor.kt:404 */
+/* ServerCodegenVisitor.kt:399 */
 impl DoNothingOutput {
     /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`DoNothingOutput`](crate::output::DoNothingOutput).
     /* ServerBuilderGenerator.kt:304 */
@@ -128,7 +136,7 @@ impl DoNothingOutput {
         crate::output::do_nothing_output::Builder::default()
         /* ServerBuilderGenerator.kt:304 */
     }
-    /* ServerCodegenVisitor.kt:404 */
+    /* ServerCodegenVisitor.kt:399 */
 }
 
 /* StructureGenerator.kt:197 */
@@ -161,7 +169,7 @@ impl CapturePokemonOutput {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1496 */
+/* ServerSchemaGenerator.kt:1501 */
 static CAPTUREPOKEMONOUTPUT_MEMBER_EVENTS: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -174,9 +182,8 @@ static CAPTUREPOKEMONOUTPUT_MEMBER_EVENTS: ::aws_smithy_schema::Schema<'static> 
         0,
     )
     .with_http_payload()
-    .with_streaming()
-    .with_target(|| crate::model::CapturePokemonEvents::SCHEMA);
-/* ServerSchemaGenerator.kt:1416 */
+    .with_streaming();
+/* ServerSchemaGenerator.kt:1421 */
 static CAPTUREPOKEMONOUTPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -198,8 +205,12 @@ impl crate::output::CapturePokemonOutput {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &CAPTUREPOKEMONOUTPUT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:288 */
+/* ServerSchemaGenerator.kt:289 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::CapturePokemonOutput {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -208,7 +219,7 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::CapturePo
         Ok(())
     }
 }
-/* ServerCodegenVisitor.kt:404 */
+/* ServerCodegenVisitor.kt:399 */
 impl CapturePokemonOutput {
     /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`CapturePokemonOutput`](crate::output::CapturePokemonOutput).
     /* ServerBuilderGenerator.kt:304 */
@@ -217,7 +228,7 @@ impl CapturePokemonOutput {
         crate::output::capture_pokemon_output::Builder::default()
         /* ServerBuilderGenerator.kt:304 */
     }
-    /* ServerCodegenVisitor.kt:404 */
+    /* ServerCodegenVisitor.kt:399 */
 }
 
 /* StructureGenerator.kt:197 */
@@ -227,7 +238,7 @@ impl CapturePokemonOutput {
     ::std::clone::Clone, ::std::cmp::Eq, ::std::cmp::PartialEq, ::std::fmt::Debug, ::std::hash::Hash,
 )]
 pub /* StructureGenerator.kt:201 */ struct CheckHealthOutput {/* StructureGenerator.kt:201 */}
-/* ServerSchemaGenerator.kt:1416 */
+/* ServerSchemaGenerator.kt:1421 */
 static CHECKHEALTHOUTPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -246,8 +257,12 @@ impl crate::output::CheckHealthOutput {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &CHECKHEALTHOUTPUT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:288 */
+/* ServerSchemaGenerator.kt:289 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::CheckHealthOutput {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -256,7 +271,7 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::CheckHeal
         Ok(())
     }
 }
-/* ServerCodegenVisitor.kt:404 */
+/* ServerCodegenVisitor.kt:399 */
 impl CheckHealthOutput {
     /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`CheckHealthOutput`](crate::output::CheckHealthOutput).
     /* ServerBuilderGenerator.kt:304 */
@@ -265,7 +280,7 @@ impl CheckHealthOutput {
         crate::output::check_health_output::Builder::default()
         /* ServerBuilderGenerator.kt:304 */
     }
-    /* ServerCodegenVisitor.kt:404 */
+    /* ServerCodegenVisitor.kt:399 */
 }
 
 /* StructureGenerator.kt:197 */
@@ -290,7 +305,7 @@ impl StreamPokemonRadioOutput {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1496 */
+/* ServerSchemaGenerator.kt:1501 */
 static STREAMPOKEMONRADIOOUTPUT_MEMBER_DATA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -304,7 +319,7 @@ static STREAMPOKEMONRADIOOUTPUT_MEMBER_DATA: ::aws_smithy_schema::Schema<'static
     )
     .with_http_payload()
     .with_streaming();
-/* ServerSchemaGenerator.kt:1416 */
+/* ServerSchemaGenerator.kt:1421 */
 static STREAMPOKEMONRADIOOUTPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -325,8 +340,12 @@ impl crate::output::StreamPokemonRadioOutput {
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> =
         &STREAMPOKEMONRADIOOUTPUT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:288 */
+/* ServerSchemaGenerator.kt:289 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::StreamPokemonRadioOutput {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -335,7 +354,7 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::StreamPok
         Ok(())
     }
 }
-/* ServerCodegenVisitor.kt:404 */
+/* ServerCodegenVisitor.kt:399 */
 impl StreamPokemonRadioOutput {
     /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`StreamPokemonRadioOutput`](crate::output::StreamPokemonRadioOutput).
     /* ServerBuilderGenerator.kt:304 */
@@ -344,7 +363,7 @@ impl StreamPokemonRadioOutput {
         crate::output::stream_pokemon_radio_output::Builder::default()
         /* ServerBuilderGenerator.kt:304 */
     }
-    /* ServerCodegenVisitor.kt:404 */
+    /* ServerCodegenVisitor.kt:399 */
 }
 
 /* StructureGenerator.kt:197 */
@@ -380,7 +399,7 @@ impl GetPokemonSpeciesOutput {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1496 */
+/* ServerSchemaGenerator.kt:1501 */
 static GETPOKEMONSPECIESOUTPUT_MEMBER_NAME: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -392,7 +411,7 @@ static GETPOKEMONSPECIESOUTPUT_MEMBER_NAME: ::aws_smithy_schema::Schema<'static>
         "name",
         0,
     );
-/* ServerSchemaGenerator.kt:1277 */
+/* ServerSchemaGenerator.kt:1282 */
 static GETPOKEMONSPECIESOUTPUT_MEMBER_FLAVOR_TEXT_ENTRIES_MEMBER: ::aws_smithy_schema::Schema<
     'static,
 > = ::aws_smithy_schema::Schema::new_member(
@@ -404,9 +423,8 @@ static GETPOKEMONSPECIESOUTPUT_MEMBER_FLAVOR_TEXT_ENTRIES_MEMBER: ::aws_smithy_s
     ::aws_smithy_schema::ShapeType::Structure,
     "member",
     0,
-)
-.with_target(|| crate::model::FlavorText::SCHEMA);
-/* ServerSchemaGenerator.kt:1496 */
+);
+/* ServerSchemaGenerator.kt:1501 */
 static GETPOKEMONSPECIESOUTPUT_MEMBER_FLAVOR_TEXT_ENTRIES: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -419,7 +437,7 @@ static GETPOKEMONSPECIESOUTPUT_MEMBER_FLAVOR_TEXT_ENTRIES: ::aws_smithy_schema::
         1,
     )
     .with_list_member(&GETPOKEMONSPECIESOUTPUT_MEMBER_FLAVOR_TEXT_ENTRIES_MEMBER);
-/* ServerSchemaGenerator.kt:1416 */
+/* ServerSchemaGenerator.kt:1421 */
 static GETPOKEMONSPECIESOUTPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -445,8 +463,12 @@ impl crate::output::GetPokemonSpeciesOutput {
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> =
         &GETPOKEMONSPECIESOUTPUT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:288 */
+/* ServerSchemaGenerator.kt:289 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::GetPokemonSpeciesOutput {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -472,7 +494,7 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::GetPokemo
         Ok(())
     }
 }
-/* ServerCodegenVisitor.kt:404 */
+/* ServerCodegenVisitor.kt:399 */
 impl GetPokemonSpeciesOutput {
     /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`GetPokemonSpeciesOutput`](crate::output::GetPokemonSpeciesOutput).
     /* ServerBuilderGenerator.kt:304 */
@@ -481,7 +503,7 @@ impl GetPokemonSpeciesOutput {
         crate::output::get_pokemon_species_output::Builder::default()
         /* ServerBuilderGenerator.kt:304 */
     }
-    /* ServerCodegenVisitor.kt:404 */
+    /* ServerCodegenVisitor.kt:399 */
 }
 
 /// /* StructureGenerator.kt:197 */Contents of the Pokémon storage.
@@ -506,7 +528,7 @@ impl GetStorageOutput {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1277 */
+/* ServerSchemaGenerator.kt:1282 */
 static GETSTORAGEOUTPUT_MEMBER_COLLECTION_MEMBER: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -518,7 +540,7 @@ static GETSTORAGEOUTPUT_MEMBER_COLLECTION_MEMBER: ::aws_smithy_schema::Schema<'s
         "member",
         0,
     );
-/* ServerSchemaGenerator.kt:1496 */
+/* ServerSchemaGenerator.kt:1501 */
 static GETSTORAGEOUTPUT_MEMBER_COLLECTION: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -531,7 +553,7 @@ static GETSTORAGEOUTPUT_MEMBER_COLLECTION: ::aws_smithy_schema::Schema<'static> 
         0,
     )
     .with_list_member(&GETSTORAGEOUTPUT_MEMBER_COLLECTION_MEMBER);
-/* ServerSchemaGenerator.kt:1416 */
+/* ServerSchemaGenerator.kt:1421 */
 static GETSTORAGEOUTPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -553,8 +575,12 @@ impl crate::output::GetStorageOutput {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &GETSTORAGEOUTPUT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:288 */
+/* ServerSchemaGenerator.kt:289 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::GetStorageOutput {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -576,7 +602,7 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::GetStorag
         Ok(())
     }
 }
-/* ServerCodegenVisitor.kt:404 */
+/* ServerCodegenVisitor.kt:399 */
 impl GetStorageOutput {
     /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`GetStorageOutput`](crate::output::GetStorageOutput).
     /* ServerBuilderGenerator.kt:304 */
@@ -585,7 +611,7 @@ impl GetStorageOutput {
         crate::output::get_storage_output::Builder::default()
         /* ServerBuilderGenerator.kt:304 */
     }
-    /* ServerCodegenVisitor.kt:404 */
+    /* ServerCodegenVisitor.kt:399 */
 }
 /// /* ServerBuilderGenerator.kt:173 */See [`GetServerStatisticsOutput`](crate::output::GetServerStatisticsOutput).
 pub mod get_server_statistics_output {

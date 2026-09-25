@@ -6,7 +6,7 @@
     ::std::clone::Clone, ::std::cmp::Eq, ::std::cmp::PartialEq, ::std::fmt::Debug, ::std::hash::Hash,
 )]
 pub /* StructureGenerator.kt:201 */ struct GetServerStatisticsInput {/* StructureGenerator.kt:201 */}
-/* ServerSchemaGenerator.kt:1416 */
+/* ServerSchemaGenerator.kt:1421 */
 static GETSERVERSTATISTICSINPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -28,8 +28,12 @@ impl crate::input::GetServerStatisticsInput {
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> =
         &GETSERVERSTATISTICSINPUT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:288 */
+/* ServerSchemaGenerator.kt:289 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::input::GetServerStatisticsInput {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -75,7 +79,7 @@ impl ::aws_smithy_http_server::schema::DeserializableShape for GetServerStatisti
         Ok(value)
     }
 }
-/* ServerCodegenVisitor.kt:404 */
+/* ServerCodegenVisitor.kt:399 */
 impl GetServerStatisticsInput {
     /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`GetServerStatisticsInput`](crate::input::GetServerStatisticsInput).
     /* ServerBuilderGenerator.kt:304 */
@@ -84,7 +88,7 @@ impl GetServerStatisticsInput {
         crate::input::get_server_statistics_input::Builder::default()
         /* ServerBuilderGenerator.kt:304 */
     }
-    /* ServerCodegenVisitor.kt:404 */
+    /* ServerCodegenVisitor.kt:399 */
 }
 /* ServerStructureConstrainedTraitImpl.kt:21 */
 impl crate::constrained::Constrained for crate::input::GetServerStatisticsInput {
@@ -98,7 +102,7 @@ impl crate::constrained::Constrained for crate::input::GetServerStatisticsInput 
     ::std::clone::Clone, ::std::cmp::Eq, ::std::cmp::PartialEq, ::std::fmt::Debug, ::std::hash::Hash,
 )]
 pub /* StructureGenerator.kt:201 */ struct DoNothingInput {/* StructureGenerator.kt:201 */}
-/* ServerSchemaGenerator.kt:1416 */
+/* ServerSchemaGenerator.kt:1421 */
 static DONOTHINGINPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -121,8 +125,12 @@ impl crate::input::DoNothingInput {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &DONOTHINGINPUT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:288 */
+/* ServerSchemaGenerator.kt:289 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::input::DoNothingInput {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -166,7 +174,7 @@ impl ::aws_smithy_http_server::schema::DeserializableShape for DoNothingInput {
         Ok(value)
     }
 }
-/* ServerCodegenVisitor.kt:404 */
+/* ServerCodegenVisitor.kt:399 */
 impl DoNothingInput {
     /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`DoNothingInput`](crate::input::DoNothingInput).
     /* ServerBuilderGenerator.kt:304 */
@@ -175,7 +183,7 @@ impl DoNothingInput {
         crate::input::do_nothing_input::Builder::default()
         /* ServerBuilderGenerator.kt:304 */
     }
-    /* ServerCodegenVisitor.kt:404 */
+    /* ServerCodegenVisitor.kt:399 */
 }
 /* ServerStructureConstrainedTraitImpl.kt:21 */
 impl crate::constrained::Constrained for crate::input::DoNothingInput {
@@ -224,7 +232,7 @@ impl CapturePokemonInput {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1496 */
+/* ServerSchemaGenerator.kt:1501 */
 static CAPTUREPOKEMONINPUT_MEMBER_EVENTS: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -237,9 +245,8 @@ static CAPTUREPOKEMONINPUT_MEMBER_EVENTS: ::aws_smithy_schema::Schema<'static> =
         0,
     )
     .with_http_payload()
-    .with_streaming()
-    .with_target(|| crate::model::AttemptCapturingPokemonEvent::SCHEMA);
-/* ServerSchemaGenerator.kt:1496 */
+    .with_streaming();
+/* ServerSchemaGenerator.kt:1501 */
 static CAPTUREPOKEMONINPUT_MEMBER_REGION: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -252,7 +259,7 @@ static CAPTUREPOKEMONINPUT_MEMBER_REGION: ::aws_smithy_schema::Schema<'static> =
         1,
     )
     .with_http_label();
-/* ServerSchemaGenerator.kt:1416 */
+/* ServerSchemaGenerator.kt:1421 */
 static CAPTUREPOKEMONINPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -277,8 +284,12 @@ impl crate::input::CapturePokemonInput {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &CAPTUREPOKEMONINPUT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:288 */
+/* ServerSchemaGenerator.kt:289 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::input::CapturePokemonInput {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -318,7 +329,7 @@ impl CapturePokemonInput {
         Ok(())
     }
 }
-/* ServerCodegenVisitor.kt:404 */
+/* ServerCodegenVisitor.kt:399 */
 impl CapturePokemonInput {
     /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`CapturePokemonInput`](crate::input::CapturePokemonInput).
     /* ServerBuilderGenerator.kt:304 */
@@ -327,7 +338,7 @@ impl CapturePokemonInput {
         crate::input::capture_pokemon_input::Builder::default()
         /* ServerBuilderGenerator.kt:304 */
     }
-    /* ServerCodegenVisitor.kt:404 */
+    /* ServerCodegenVisitor.kt:399 */
 }
 /* ServerStructureConstrainedTraitImpl.kt:21 */
 impl crate::constrained::Constrained for crate::input::CapturePokemonInput {
@@ -341,7 +352,7 @@ impl crate::constrained::Constrained for crate::input::CapturePokemonInput {
     ::std::clone::Clone, ::std::cmp::Eq, ::std::cmp::PartialEq, ::std::fmt::Debug, ::std::hash::Hash,
 )]
 pub /* StructureGenerator.kt:201 */ struct CheckHealthInput {/* StructureGenerator.kt:201 */}
-/* ServerSchemaGenerator.kt:1416 */
+/* ServerSchemaGenerator.kt:1421 */
 static CHECKHEALTHINPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -361,8 +372,12 @@ impl crate::input::CheckHealthInput {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &CHECKHEALTHINPUT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:288 */
+/* ServerSchemaGenerator.kt:289 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::input::CheckHealthInput {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -406,7 +421,7 @@ impl ::aws_smithy_http_server::schema::DeserializableShape for CheckHealthInput 
         Ok(value)
     }
 }
-/* ServerCodegenVisitor.kt:404 */
+/* ServerCodegenVisitor.kt:399 */
 impl CheckHealthInput {
     /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`CheckHealthInput`](crate::input::CheckHealthInput).
     /* ServerBuilderGenerator.kt:304 */
@@ -415,7 +430,7 @@ impl CheckHealthInput {
         crate::input::check_health_input::Builder::default()
         /* ServerBuilderGenerator.kt:304 */
     }
-    /* ServerCodegenVisitor.kt:404 */
+    /* ServerCodegenVisitor.kt:399 */
 }
 /* ServerStructureConstrainedTraitImpl.kt:21 */
 impl crate::constrained::Constrained for crate::input::CheckHealthInput {
@@ -429,7 +444,7 @@ impl crate::constrained::Constrained for crate::input::CheckHealthInput {
     ::std::clone::Clone, ::std::cmp::Eq, ::std::cmp::PartialEq, ::std::fmt::Debug, ::std::hash::Hash,
 )]
 pub /* StructureGenerator.kt:201 */ struct StreamPokemonRadioInput {/* StructureGenerator.kt:201 */}
-/* ServerSchemaGenerator.kt:1416 */
+/* ServerSchemaGenerator.kt:1421 */
 static STREAMPOKEMONRADIOINPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -450,8 +465,12 @@ impl crate::input::StreamPokemonRadioInput {
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> =
         &STREAMPOKEMONRADIOINPUT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:288 */
+/* ServerSchemaGenerator.kt:289 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::input::StreamPokemonRadioInput {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -497,7 +516,7 @@ impl ::aws_smithy_http_server::schema::DeserializableShape for StreamPokemonRadi
         Ok(value)
     }
 }
-/* ServerCodegenVisitor.kt:404 */
+/* ServerCodegenVisitor.kt:399 */
 impl StreamPokemonRadioInput {
     /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`StreamPokemonRadioInput`](crate::input::StreamPokemonRadioInput).
     /* ServerBuilderGenerator.kt:304 */
@@ -506,7 +525,7 @@ impl StreamPokemonRadioInput {
         crate::input::stream_pokemon_radio_input::Builder::default()
         /* ServerBuilderGenerator.kt:304 */
     }
-    /* ServerCodegenVisitor.kt:404 */
+    /* ServerCodegenVisitor.kt:399 */
 }
 /* ServerStructureConstrainedTraitImpl.kt:21 */
 impl crate::constrained::Constrained for crate::input::StreamPokemonRadioInput {
@@ -538,7 +557,7 @@ impl GetPokemonSpeciesInput {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1496 */
+/* ServerSchemaGenerator.kt:1501 */
 static GETPOKEMONSPECIESINPUT_MEMBER_NAME: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -551,7 +570,7 @@ static GETPOKEMONSPECIESINPUT_MEMBER_NAME: ::aws_smithy_schema::Schema<'static> 
         0,
     )
     .with_http_label();
-/* ServerSchemaGenerator.kt:1416 */
+/* ServerSchemaGenerator.kt:1421 */
 static GETPOKEMONSPECIESINPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -575,8 +594,12 @@ impl crate::input::GetPokemonSpeciesInput {
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> =
         &GETPOKEMONSPECIESINPUT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:288 */
+/* ServerSchemaGenerator.kt:289 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::input::GetPokemonSpeciesInput {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -633,7 +656,7 @@ impl ::aws_smithy_http_server::schema::DeserializableShape for GetPokemonSpecies
         })
     }
 }
-/* ServerCodegenVisitor.kt:404 */
+/* ServerCodegenVisitor.kt:399 */
 impl GetPokemonSpeciesInput {
     /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`GetPokemonSpeciesInput`](crate::input::GetPokemonSpeciesInput).
     /* ServerBuilderGenerator.kt:304 */
@@ -642,7 +665,7 @@ impl GetPokemonSpeciesInput {
         crate::input::get_pokemon_species_input::Builder::default()
         /* ServerBuilderGenerator.kt:304 */
     }
-    /* ServerCodegenVisitor.kt:404 */
+    /* ServerCodegenVisitor.kt:399 */
 }
 /* ServerStructureConstrainedTraitImpl.kt:21 */
 impl crate::constrained::Constrained for crate::input::GetPokemonSpeciesInput {
@@ -699,7 +722,7 @@ impl ::std::fmt::Debug for GetStorageInput {
     }
     /* StructureGenerator.kt:101 */
 }
-/* ServerSchemaGenerator.kt:1496 */
+/* ServerSchemaGenerator.kt:1501 */
 static GETSTORAGEINPUT_MEMBER_USER: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -712,7 +735,7 @@ static GETSTORAGEINPUT_MEMBER_USER: ::aws_smithy_schema::Schema<'static> =
         0,
     )
     .with_http_label();
-/* ServerSchemaGenerator.kt:1496 */
+/* ServerSchemaGenerator.kt:1501 */
 static GETSTORAGEINPUT_MEMBER_PASSCODE: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -725,7 +748,7 @@ static GETSTORAGEINPUT_MEMBER_PASSCODE: ::aws_smithy_schema::Schema<'static> =
         1,
     )
     .with_http_header("passcode");
-/* ServerSchemaGenerator.kt:1416 */
+/* ServerSchemaGenerator.kt:1421 */
 static GETSTORAGEINPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -752,8 +775,12 @@ impl crate::input::GetStorageInput {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &GETSTORAGEINPUT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:288 */
+/* ServerSchemaGenerator.kt:289 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::input::GetStorageInput {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -817,7 +844,7 @@ impl ::aws_smithy_http_server::schema::DeserializableShape for GetStorageInput {
         })
     }
 }
-/* ServerCodegenVisitor.kt:404 */
+/* ServerCodegenVisitor.kt:399 */
 impl GetStorageInput {
     /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`GetStorageInput`](crate::input::GetStorageInput).
     /* ServerBuilderGenerator.kt:304 */
@@ -826,7 +853,7 @@ impl GetStorageInput {
         crate::input::get_storage_input::Builder::default()
         /* ServerBuilderGenerator.kt:304 */
     }
-    /* ServerCodegenVisitor.kt:404 */
+    /* ServerCodegenVisitor.kt:399 */
 }
 /* ServerStructureConstrainedTraitImpl.kt:21 */
 impl crate::constrained::Constrained for crate::input::GetStorageInput {

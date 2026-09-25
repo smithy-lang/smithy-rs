@@ -32,43 +32,43 @@ pub /* ServerOperationErrorGenerator.kt:70 */ enum CapturePokemonError {
 impl ::std::fmt::Display for CapturePokemonError {
     /* ServerOperationErrorGenerator.kt:80 */
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        /* ServerOperationErrorGenerator.kt:166 */
+        /* ServerOperationErrorGenerator.kt:163 */
         match &self {
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             CapturePokemonError::UnsupportedRegionError(_inner) =>
             /* ServerOperationErrorGenerator.kt:82 */
             {
                 _inner.fmt(f)
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             CapturePokemonError::ThrottlingError(_inner) =>
             /* ServerOperationErrorGenerator.kt:82 */
             {
                 _inner.fmt(f)
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             CapturePokemonError::ValidationException(_inner) =>
             /* ServerOperationErrorGenerator.kt:82 */
             {
                 _inner.fmt(f)
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             CapturePokemonError::MasterBallUnsuccessful(_inner) =>
             /* ServerOperationErrorGenerator.kt:82 */
             {
                 _inner.fmt(f)
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             CapturePokemonError::InvalidPokeballError(_inner) =>
             /* ServerOperationErrorGenerator.kt:82 */
             {
                 _inner.fmt(f)
             }
-            /* ServerOperationErrorGenerator.kt:166 */
+            /* ServerOperationErrorGenerator.kt:163 */
         }
         /* ServerOperationErrorGenerator.kt:80 */
     }
@@ -120,43 +120,43 @@ impl CapturePokemonError {
     /// Returns the error name string by matching the correct variant.
     /* ServerOperationErrorGenerator.kt:97 */
     pub fn name(&self) -> &'static str {
-        /* ServerOperationErrorGenerator.kt:166 */
+        /* ServerOperationErrorGenerator.kt:163 */
         match &self {
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             CapturePokemonError::UnsupportedRegionError(_inner) =>
             /* ServerOperationErrorGenerator.kt:99 */
             {
                 _inner.name()
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             CapturePokemonError::ThrottlingError(_inner) =>
             /* ServerOperationErrorGenerator.kt:99 */
             {
                 _inner.name()
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             CapturePokemonError::ValidationException(_inner) =>
             /* ServerOperationErrorGenerator.kt:99 */
             {
                 _inner.name()
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             CapturePokemonError::MasterBallUnsuccessful(_inner) =>
             /* ServerOperationErrorGenerator.kt:99 */
             {
                 _inner.name()
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             CapturePokemonError::InvalidPokeballError(_inner) =>
             /* ServerOperationErrorGenerator.kt:99 */
             {
                 _inner.name()
             }
-            /* ServerOperationErrorGenerator.kt:166 */
+            /* ServerOperationErrorGenerator.kt:163 */
         }
         /* ServerOperationErrorGenerator.kt:97 */
     }
@@ -166,254 +166,250 @@ impl CapturePokemonError {
 impl ::std::error::Error for CapturePokemonError {
     /* ServerOperationErrorGenerator.kt:105 */
     fn source(&self) -> std::option::Option<&(dyn ::std::error::Error + 'static)> {
-        /* ServerOperationErrorGenerator.kt:166 */
+        /* ServerOperationErrorGenerator.kt:163 */
         match &self {
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             CapturePokemonError::UnsupportedRegionError(_inner) =>
             /* ServerOperationErrorGenerator.kt:107 */
             {
                 Some(_inner)
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             CapturePokemonError::ThrottlingError(_inner) =>
             /* ServerOperationErrorGenerator.kt:107 */
             {
                 Some(_inner)
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             CapturePokemonError::ValidationException(_inner) =>
             /* ServerOperationErrorGenerator.kt:107 */
             {
                 Some(_inner)
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             CapturePokemonError::MasterBallUnsuccessful(_inner) =>
             /* ServerOperationErrorGenerator.kt:107 */
             {
                 Some(_inner)
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             CapturePokemonError::InvalidPokeballError(_inner) =>
             /* ServerOperationErrorGenerator.kt:107 */
             {
                 Some(_inner)
             }
-            /* ServerOperationErrorGenerator.kt:166 */
+            /* ServerOperationErrorGenerator.kt:163 */
         }
         /* ServerOperationErrorGenerator.kt:105 */
     }
     /* ServerOperationErrorGenerator.kt:104 */
 }
-/* ServerOperationErrorGenerator.kt:118 */
+/* ServerOperationErrorGenerator.kt:117 */
 impl ::aws_smithy_schema::serde::SerializableStruct for CapturePokemonError {
-    /* ServerOperationErrorGenerator.kt:119 */
+    /* ServerOperationErrorGenerator.kt:118 */
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        /* ServerOperationErrorGenerator.kt:163 */
+        match &self {
+            /* ServerOperationErrorGenerator.kt:166 */
+            CapturePokemonError::UnsupportedRegionError(_inner) =>
+            /* ServerOperationErrorGenerator.kt:119 */
+            {
+                ::aws_smithy_schema::serde::SerializableStruct::schema(_inner)
+            }
+            ,
+            /* ServerOperationErrorGenerator.kt:166 */
+            CapturePokemonError::ThrottlingError(_inner) =>
+            /* ServerOperationErrorGenerator.kt:119 */
+            {
+                ::aws_smithy_schema::serde::SerializableStruct::schema(_inner)
+            }
+            ,
+            /* ServerOperationErrorGenerator.kt:166 */
+            CapturePokemonError::ValidationException(_inner) =>
+            /* ServerOperationErrorGenerator.kt:119 */
+            {
+                ::aws_smithy_schema::serde::SerializableStruct::schema(_inner)
+            }
+            ,
+            /* ServerOperationErrorGenerator.kt:166 */
+            CapturePokemonError::MasterBallUnsuccessful(_inner) =>
+            /* ServerOperationErrorGenerator.kt:119 */
+            {
+                ::aws_smithy_schema::serde::SerializableStruct::schema(_inner)
+            }
+            ,
+            /* ServerOperationErrorGenerator.kt:166 */
+            CapturePokemonError::InvalidPokeballError(_inner) =>
+            /* ServerOperationErrorGenerator.kt:119 */
+            {
+                ::aws_smithy_schema::serde::SerializableStruct::schema(_inner)
+            }
+            /* ServerOperationErrorGenerator.kt:163 */
+        }
+        /* ServerOperationErrorGenerator.kt:118 */
+    }
+    /* ServerOperationErrorGenerator.kt:121 */
     fn serialize_members(
         &self,
         serializer: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer,
     ) -> ::std::result::Result<(), ::aws_smithy_schema::serde::SerdeError> {
-        /* ServerOperationErrorGenerator.kt:166 */
+        /* ServerOperationErrorGenerator.kt:163 */
         match &self {
-            /* ServerOperationErrorGenerator.kt:169 */
-            CapturePokemonError::UnsupportedRegionError(_inner) =>
-            /* ServerOperationErrorGenerator.kt:120 */
-            {
-                ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
-                    _inner, serializer,
-                )
-            }
-            ,
-            /* ServerOperationErrorGenerator.kt:169 */
-            CapturePokemonError::ThrottlingError(_inner) =>
-            /* ServerOperationErrorGenerator.kt:120 */
-            {
-                ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
-                    _inner, serializer,
-                )
-            }
-            ,
-            /* ServerOperationErrorGenerator.kt:169 */
-            CapturePokemonError::ValidationException(_inner) =>
-            /* ServerOperationErrorGenerator.kt:120 */
-            {
-                ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
-                    _inner, serializer,
-                )
-            }
-            ,
-            /* ServerOperationErrorGenerator.kt:169 */
-            CapturePokemonError::MasterBallUnsuccessful(_inner) =>
-            /* ServerOperationErrorGenerator.kt:120 */
-            {
-                ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
-                    _inner, serializer,
-                )
-            }
-            ,
-            /* ServerOperationErrorGenerator.kt:169 */
-            CapturePokemonError::InvalidPokeballError(_inner) =>
-            /* ServerOperationErrorGenerator.kt:120 */
-            {
-                ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
-                    _inner, serializer,
-                )
-            }
             /* ServerOperationErrorGenerator.kt:166 */
-        }
-        /* ServerOperationErrorGenerator.kt:119 */
-    }
-    /* ServerOperationErrorGenerator.kt:118 */
-}
-/* ServerOperationErrorGenerator.kt:123 */
-impl ::aws_smithy_http_server::schema::ModeledError for CapturePokemonError {
-    /* ServerOperationErrorGenerator.kt:124 */
-    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
-        /* ServerOperationErrorGenerator.kt:166 */
-        match &self {
-            /* ServerOperationErrorGenerator.kt:169 */
             CapturePokemonError::UnsupportedRegionError(_inner) =>
-            /* ServerOperationErrorGenerator.kt:125 */
+            /* ServerOperationErrorGenerator.kt:122 */
             {
-                ::aws_smithy_http_server::schema::ModeledError::schema(_inner)
+                ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
+                    _inner, serializer,
+                )
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
-            CapturePokemonError::ThrottlingError(_inner) =>
-            /* ServerOperationErrorGenerator.kt:125 */
-            {
-                ::aws_smithy_http_server::schema::ModeledError::schema(_inner)
-            }
-            ,
-            /* ServerOperationErrorGenerator.kt:169 */
-            CapturePokemonError::ValidationException(_inner) =>
-            /* ServerOperationErrorGenerator.kt:125 */
-            {
-                ::aws_smithy_http_server::schema::ModeledError::schema(_inner)
-            }
-            ,
-            /* ServerOperationErrorGenerator.kt:169 */
-            CapturePokemonError::MasterBallUnsuccessful(_inner) =>
-            /* ServerOperationErrorGenerator.kt:125 */
-            {
-                ::aws_smithy_http_server::schema::ModeledError::schema(_inner)
-            }
-            ,
-            /* ServerOperationErrorGenerator.kt:169 */
-            CapturePokemonError::InvalidPokeballError(_inner) =>
-            /* ServerOperationErrorGenerator.kt:125 */
-            {
-                ::aws_smithy_http_server::schema::ModeledError::schema(_inner)
-            }
             /* ServerOperationErrorGenerator.kt:166 */
+            CapturePokemonError::ThrottlingError(_inner) =>
+            /* ServerOperationErrorGenerator.kt:122 */
+            {
+                ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
+                    _inner, serializer,
+                )
+            }
+            ,
+            /* ServerOperationErrorGenerator.kt:166 */
+            CapturePokemonError::ValidationException(_inner) =>
+            /* ServerOperationErrorGenerator.kt:122 */
+            {
+                ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
+                    _inner, serializer,
+                )
+            }
+            ,
+            /* ServerOperationErrorGenerator.kt:166 */
+            CapturePokemonError::MasterBallUnsuccessful(_inner) =>
+            /* ServerOperationErrorGenerator.kt:122 */
+            {
+                ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
+                    _inner, serializer,
+                )
+            }
+            ,
+            /* ServerOperationErrorGenerator.kt:166 */
+            CapturePokemonError::InvalidPokeballError(_inner) =>
+            /* ServerOperationErrorGenerator.kt:122 */
+            {
+                ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
+                    _inner, serializer,
+                )
+            }
+            /* ServerOperationErrorGenerator.kt:163 */
         }
-        /* ServerOperationErrorGenerator.kt:124 */
+        /* ServerOperationErrorGenerator.kt:121 */
     }
-    /* ServerOperationErrorGenerator.kt:123 */
+    /* ServerOperationErrorGenerator.kt:117 */
 }
-/* ServerOperationErrorGenerator.kt:128 */
+/* ServerOperationErrorGenerator.kt:125 */
 impl ::aws_smithy_http_server::schema::HttpModeledError for CapturePokemonError {
-    /* ServerOperationErrorGenerator.kt:129 */
+    /* ServerOperationErrorGenerator.kt:126 */
     fn status_code(&self) -> u16 {
-        /* ServerOperationErrorGenerator.kt:166 */
+        /* ServerOperationErrorGenerator.kt:163 */
         match &self {
-            /* ServerOperationErrorGenerator.kt:169 */
-            CapturePokemonError::UnsupportedRegionError(_inner) =>
-            /* ServerOperationErrorGenerator.kt:130 */
-            {
-                ::aws_smithy_http_server::schema::HttpModeledError::status_code(_inner)
-            }
-            ,
-            /* ServerOperationErrorGenerator.kt:169 */
-            CapturePokemonError::ThrottlingError(_inner) =>
-            /* ServerOperationErrorGenerator.kt:130 */
-            {
-                ::aws_smithy_http_server::schema::HttpModeledError::status_code(_inner)
-            }
-            ,
-            /* ServerOperationErrorGenerator.kt:169 */
-            CapturePokemonError::ValidationException(_inner) =>
-            /* ServerOperationErrorGenerator.kt:130 */
-            {
-                ::aws_smithy_http_server::schema::HttpModeledError::status_code(_inner)
-            }
-            ,
-            /* ServerOperationErrorGenerator.kt:169 */
-            CapturePokemonError::MasterBallUnsuccessful(_inner) =>
-            /* ServerOperationErrorGenerator.kt:130 */
-            {
-                ::aws_smithy_http_server::schema::HttpModeledError::status_code(_inner)
-            }
-            ,
-            /* ServerOperationErrorGenerator.kt:169 */
-            CapturePokemonError::InvalidPokeballError(_inner) =>
-            /* ServerOperationErrorGenerator.kt:130 */
-            {
-                ::aws_smithy_http_server::schema::HttpModeledError::status_code(_inner)
-            }
             /* ServerOperationErrorGenerator.kt:166 */
+            CapturePokemonError::UnsupportedRegionError(_inner) =>
+            /* ServerOperationErrorGenerator.kt:127 */
+            {
+                ::aws_smithy_http_server::schema::HttpModeledError::status_code(_inner)
+            }
+            ,
+            /* ServerOperationErrorGenerator.kt:166 */
+            CapturePokemonError::ThrottlingError(_inner) =>
+            /* ServerOperationErrorGenerator.kt:127 */
+            {
+                ::aws_smithy_http_server::schema::HttpModeledError::status_code(_inner)
+            }
+            ,
+            /* ServerOperationErrorGenerator.kt:166 */
+            CapturePokemonError::ValidationException(_inner) =>
+            /* ServerOperationErrorGenerator.kt:127 */
+            {
+                ::aws_smithy_http_server::schema::HttpModeledError::status_code(_inner)
+            }
+            ,
+            /* ServerOperationErrorGenerator.kt:166 */
+            CapturePokemonError::MasterBallUnsuccessful(_inner) =>
+            /* ServerOperationErrorGenerator.kt:127 */
+            {
+                ::aws_smithy_http_server::schema::HttpModeledError::status_code(_inner)
+            }
+            ,
+            /* ServerOperationErrorGenerator.kt:166 */
+            CapturePokemonError::InvalidPokeballError(_inner) =>
+            /* ServerOperationErrorGenerator.kt:127 */
+            {
+                ::aws_smithy_http_server::schema::HttpModeledError::status_code(_inner)
+            }
+            /* ServerOperationErrorGenerator.kt:163 */
         }
-        /* ServerOperationErrorGenerator.kt:129 */
+        /* ServerOperationErrorGenerator.kt:126 */
     }
-    /* ServerOperationErrorGenerator.kt:128 */
+    /* ServerOperationErrorGenerator.kt:125 */
 }
-/* ServerOperationErrorGenerator.kt:137 */
+/* ServerOperationErrorGenerator.kt:134 */
 impl ::std::convert::From<crate::error::UnsupportedRegionError>
     for crate::error::CapturePokemonError
 {
-    /* ServerOperationErrorGenerator.kt:138 */
+    /* ServerOperationErrorGenerator.kt:135 */
     fn from(variant: crate::error::UnsupportedRegionError) -> crate::error::CapturePokemonError {
-        /* ServerOperationErrorGenerator.kt:139 */
+        /* ServerOperationErrorGenerator.kt:136 */
         Self::UnsupportedRegionError(variant)
-        /* ServerOperationErrorGenerator.kt:138 */
+        /* ServerOperationErrorGenerator.kt:135 */
     }
-    /* ServerOperationErrorGenerator.kt:137 */
+    /* ServerOperationErrorGenerator.kt:134 */
 }
-/* ServerOperationErrorGenerator.kt:137 */
+/* ServerOperationErrorGenerator.kt:134 */
 impl ::std::convert::From<crate::error::ThrottlingError> for crate::error::CapturePokemonError {
-    /* ServerOperationErrorGenerator.kt:138 */
+    /* ServerOperationErrorGenerator.kt:135 */
     fn from(variant: crate::error::ThrottlingError) -> crate::error::CapturePokemonError {
-        /* ServerOperationErrorGenerator.kt:139 */
+        /* ServerOperationErrorGenerator.kt:136 */
         Self::ThrottlingError(variant)
-        /* ServerOperationErrorGenerator.kt:138 */
+        /* ServerOperationErrorGenerator.kt:135 */
     }
-    /* ServerOperationErrorGenerator.kt:137 */
+    /* ServerOperationErrorGenerator.kt:134 */
 }
-/* ServerOperationErrorGenerator.kt:137 */
+/* ServerOperationErrorGenerator.kt:134 */
 impl ::std::convert::From<crate::error::ValidationException> for crate::error::CapturePokemonError {
-    /* ServerOperationErrorGenerator.kt:138 */
+    /* ServerOperationErrorGenerator.kt:135 */
     fn from(variant: crate::error::ValidationException) -> crate::error::CapturePokemonError {
-        /* ServerOperationErrorGenerator.kt:139 */
+        /* ServerOperationErrorGenerator.kt:136 */
         Self::ValidationException(variant)
-        /* ServerOperationErrorGenerator.kt:138 */
+        /* ServerOperationErrorGenerator.kt:135 */
     }
-    /* ServerOperationErrorGenerator.kt:137 */
+    /* ServerOperationErrorGenerator.kt:134 */
 }
-/* ServerOperationErrorGenerator.kt:137 */
+/* ServerOperationErrorGenerator.kt:134 */
 impl ::std::convert::From<crate::error::MasterBallUnsuccessful>
     for crate::error::CapturePokemonError
 {
-    /* ServerOperationErrorGenerator.kt:138 */
+    /* ServerOperationErrorGenerator.kt:135 */
     fn from(variant: crate::error::MasterBallUnsuccessful) -> crate::error::CapturePokemonError {
-        /* ServerOperationErrorGenerator.kt:139 */
+        /* ServerOperationErrorGenerator.kt:136 */
         Self::MasterBallUnsuccessful(variant)
-        /* ServerOperationErrorGenerator.kt:138 */
+        /* ServerOperationErrorGenerator.kt:135 */
     }
-    /* ServerOperationErrorGenerator.kt:137 */
+    /* ServerOperationErrorGenerator.kt:134 */
 }
-/* ServerOperationErrorGenerator.kt:137 */
+/* ServerOperationErrorGenerator.kt:134 */
 impl ::std::convert::From<crate::error::InvalidPokeballError>
     for crate::error::CapturePokemonError
 {
-    /* ServerOperationErrorGenerator.kt:138 */
+    /* ServerOperationErrorGenerator.kt:135 */
     fn from(variant: crate::error::InvalidPokeballError) -> crate::error::CapturePokemonError {
-        /* ServerOperationErrorGenerator.kt:139 */
+        /* ServerOperationErrorGenerator.kt:136 */
         Self::InvalidPokeballError(variant)
-        /* ServerOperationErrorGenerator.kt:138 */
+        /* ServerOperationErrorGenerator.kt:135 */
     }
-    /* ServerOperationErrorGenerator.kt:137 */
+    /* ServerOperationErrorGenerator.kt:134 */
 }
 
 /* StructureGenerator.kt:197 */
@@ -441,7 +437,7 @@ impl UnsupportedRegionError {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1496 */
+/* ServerSchemaGenerator.kt:1501 */
 static UNSUPPORTEDREGIONERROR_MEMBER_REGION: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -453,7 +449,7 @@ static UNSUPPORTEDREGIONERROR_MEMBER_REGION: ::aws_smithy_schema::Schema<'static
         "region",
         0,
     );
-/* ServerSchemaGenerator.kt:1397 */
+/* ServerSchemaGenerator.kt:1402 */
 static UNSUPPORTEDREGIONERROR_TRAITS: std::sync::LazyLock<::aws_smithy_schema::TraitMap> =
     std::sync::LazyLock::new(|| {
         let mut map = ::aws_smithy_schema::TraitMap::new();
@@ -482,8 +478,12 @@ impl crate::error::UnsupportedRegionError {
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> =
         &UNSUPPORTEDREGIONERROR_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:288 */
+/* ServerSchemaGenerator.kt:289 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::error::UnsupportedRegionError {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -521,17 +521,12 @@ impl ::std::fmt::Display for UnsupportedRegionError {
 /* ErrorImplGenerator.kt:180 */
 impl ::std::error::Error for UnsupportedRegionError {}
 /* ServerCodegenVisitor.kt:368 */
-impl ::aws_smithy_http_server::schema::ModeledError for UnsupportedRegionError {
-    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
-        Self::SCHEMA
-    }
-}
 impl ::aws_smithy_http_server::schema::HttpModeledError for UnsupportedRegionError {
     fn status_code(&self) -> u16 {
         500
     }
 }
-/* ServerCodegenVisitor.kt:404 */
+/* ServerCodegenVisitor.kt:399 */
 impl UnsupportedRegionError {
     /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`UnsupportedRegionError`](crate::error::UnsupportedRegionError).
     /* ServerBuilderGenerator.kt:304 */
@@ -540,7 +535,7 @@ impl UnsupportedRegionError {
         crate::error::unsupported_region_error::Builder::default()
         /* ServerBuilderGenerator.kt:304 */
     }
-    /* ServerCodegenVisitor.kt:404 */
+    /* ServerCodegenVisitor.kt:399 */
 }
 
 /* StructureGenerator.kt:197 */
@@ -550,7 +545,7 @@ impl UnsupportedRegionError {
     ::std::clone::Clone, ::std::cmp::Eq, ::std::cmp::PartialEq, ::std::fmt::Debug, ::std::hash::Hash,
 )]
 pub /* StructureGenerator.kt:201 */ struct ThrottlingError {/* StructureGenerator.kt:201 */}
-/* ServerSchemaGenerator.kt:1397 */
+/* ServerSchemaGenerator.kt:1402 */
 static THROTTLINGERROR_TRAITS: std::sync::LazyLock<::aws_smithy_schema::TraitMap> =
     std::sync::LazyLock::new(|| {
         let mut map = ::aws_smithy_schema::TraitMap::new();
@@ -578,8 +573,12 @@ impl crate::error::ThrottlingError {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &THROTTLINGERROR_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:288 */
+/* ServerSchemaGenerator.kt:289 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::error::ThrottlingError {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -613,17 +612,12 @@ impl ::std::fmt::Display for ThrottlingError {
 /* ErrorImplGenerator.kt:180 */
 impl ::std::error::Error for ThrottlingError {}
 /* ServerCodegenVisitor.kt:368 */
-impl ::aws_smithy_http_server::schema::ModeledError for ThrottlingError {
-    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
-        Self::SCHEMA
-    }
-}
 impl ::aws_smithy_http_server::schema::HttpModeledError for ThrottlingError {
     fn status_code(&self) -> u16 {
         400
     }
 }
-/* ServerCodegenVisitor.kt:404 */
+/* ServerCodegenVisitor.kt:399 */
 impl ThrottlingError {
     /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`ThrottlingError`](crate::error::ThrottlingError).
     /* ServerBuilderGenerator.kt:304 */
@@ -632,7 +626,7 @@ impl ThrottlingError {
         crate::error::throttling_error::Builder::default()
         /* ServerBuilderGenerator.kt:304 */
     }
-    /* ServerCodegenVisitor.kt:404 */
+    /* ServerCodegenVisitor.kt:399 */
 }
 
 /// /* StructureGenerator.kt:197 */A standard error for input validation failures. This should be thrown by services when a member of the input structure falls outside of the modeled or documented constraints.
@@ -658,7 +652,7 @@ impl ValidationException {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1496 */
+/* ServerSchemaGenerator.kt:1501 */
 static VALIDATIONEXCEPTION_MEMBER_MESSAGE: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -670,7 +664,7 @@ static VALIDATIONEXCEPTION_MEMBER_MESSAGE: ::aws_smithy_schema::Schema<'static> 
         "message",
         0,
     );
-/* ServerSchemaGenerator.kt:1277 */
+/* ServerSchemaGenerator.kt:1282 */
 static VALIDATIONEXCEPTION_MEMBER_FIELD_LIST_MEMBER: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -681,9 +675,8 @@ static VALIDATIONEXCEPTION_MEMBER_FIELD_LIST_MEMBER: ::aws_smithy_schema::Schema
         ::aws_smithy_schema::ShapeType::Structure,
         "member",
         0,
-    )
-    .with_target(|| crate::model::ValidationExceptionField::SCHEMA);
-/* ServerSchemaGenerator.kt:1496 */
+    );
+/* ServerSchemaGenerator.kt:1501 */
 static VALIDATIONEXCEPTION_MEMBER_FIELD_LIST: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -696,7 +689,7 @@ static VALIDATIONEXCEPTION_MEMBER_FIELD_LIST: ::aws_smithy_schema::Schema<'stati
         1,
     )
     .with_list_member(&VALIDATIONEXCEPTION_MEMBER_FIELD_LIST_MEMBER);
-/* ServerSchemaGenerator.kt:1397 */
+/* ServerSchemaGenerator.kt:1402 */
 static VALIDATIONEXCEPTION_TRAITS: std::sync::LazyLock<::aws_smithy_schema::TraitMap> =
     std::sync::LazyLock::new(|| {
         let mut map = ::aws_smithy_schema::TraitMap::new();
@@ -727,8 +720,12 @@ impl crate::error::ValidationException {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &VALIDATIONEXCEPTION_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:288 */
+/* ServerSchemaGenerator.kt:289 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::error::ValidationException {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -788,17 +785,12 @@ impl ::std::fmt::Display for ValidationException {
 /* ErrorImplGenerator.kt:180 */
 impl ::std::error::Error for ValidationException {}
 /* ServerCodegenVisitor.kt:368 */
-impl ::aws_smithy_http_server::schema::ModeledError for ValidationException {
-    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
-        Self::SCHEMA
-    }
-}
 impl ::aws_smithy_http_server::schema::HttpModeledError for ValidationException {
     fn status_code(&self) -> u16 {
         400
     }
 }
-/* ServerCodegenVisitor.kt:404 */
+/* ServerCodegenVisitor.kt:399 */
 impl ValidationException {
     /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`ValidationException`](crate::error::ValidationException).
     /* ServerBuilderGenerator.kt:304 */
@@ -807,7 +799,7 @@ impl ValidationException {
         crate::error::validation_exception::Builder::default()
         /* ServerBuilderGenerator.kt:304 */
     }
-    /* ServerCodegenVisitor.kt:404 */
+    /* ServerCodegenVisitor.kt:399 */
 }
 
 /* StructureGenerator.kt:197 */
@@ -822,7 +814,7 @@ pub /* StructureGenerator.kt:201 */ struct MasterBallUnsuccessful {
     pub message: ::std::option::Option<::std::string::String>,
     /* StructureGenerator.kt:201 */
 }
-/* ServerSchemaGenerator.kt:1496 */
+/* ServerSchemaGenerator.kt:1501 */
 static MASTERBALLUNSUCCESSFUL_MEMBER_MESSAGE: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -834,7 +826,7 @@ static MASTERBALLUNSUCCESSFUL_MEMBER_MESSAGE: ::aws_smithy_schema::Schema<'stati
         "message",
         0,
     );
-/* ServerSchemaGenerator.kt:1397 */
+/* ServerSchemaGenerator.kt:1402 */
 static MASTERBALLUNSUCCESSFUL_TRAITS: std::sync::LazyLock<::aws_smithy_schema::TraitMap> =
     std::sync::LazyLock::new(|| {
         let mut map = ::aws_smithy_schema::TraitMap::new();
@@ -863,8 +855,12 @@ impl crate::error::MasterBallUnsuccessful {
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> =
         &MASTERBALLUNSUCCESSFUL_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:288 */
+/* ServerSchemaGenerator.kt:289 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::error::MasterBallUnsuccessful {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -951,17 +947,12 @@ impl ::std::fmt::Display for MasterBallUnsuccessful {
 /* ErrorImplGenerator.kt:180 */
 impl ::std::error::Error for MasterBallUnsuccessful {}
 /* ServerCodegenVisitor.kt:368 */
-impl ::aws_smithy_http_server::schema::ModeledError for MasterBallUnsuccessful {
-    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
-        Self::SCHEMA
-    }
-}
 impl ::aws_smithy_http_server::schema::HttpModeledError for MasterBallUnsuccessful {
     fn status_code(&self) -> u16 {
         500
     }
 }
-/* ServerCodegenVisitor.kt:404 */
+/* ServerCodegenVisitor.kt:399 */
 impl MasterBallUnsuccessful {
     /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`MasterBallUnsuccessful`](crate::error::MasterBallUnsuccessful).
     /* ServerBuilderGenerator.kt:304 */
@@ -970,7 +961,7 @@ impl MasterBallUnsuccessful {
         crate::error::master_ball_unsuccessful::Builder::default()
         /* ServerBuilderGenerator.kt:304 */
     }
-    /* ServerCodegenVisitor.kt:404 */
+    /* ServerCodegenVisitor.kt:399 */
 }
 /* ServerStructureConstrainedTraitImpl.kt:21 */
 impl crate::constrained::Constrained for crate::error::MasterBallUnsuccessful {
@@ -1002,7 +993,7 @@ impl InvalidPokeballError {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1496 */
+/* ServerSchemaGenerator.kt:1501 */
 static INVALIDPOKEBALLERROR_MEMBER_POKEBALL: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -1014,7 +1005,7 @@ static INVALIDPOKEBALLERROR_MEMBER_POKEBALL: ::aws_smithy_schema::Schema<'static
         "pokeball",
         0,
     );
-/* ServerSchemaGenerator.kt:1397 */
+/* ServerSchemaGenerator.kt:1402 */
 static INVALIDPOKEBALLERROR_TRAITS: std::sync::LazyLock<::aws_smithy_schema::TraitMap> =
     std::sync::LazyLock::new(|| {
         let mut map = ::aws_smithy_schema::TraitMap::new();
@@ -1042,8 +1033,12 @@ impl crate::error::InvalidPokeballError {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &INVALIDPOKEBALLERROR_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:288 */
+/* ServerSchemaGenerator.kt:289 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::error::InvalidPokeballError {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -1081,17 +1076,12 @@ impl ::std::fmt::Display for InvalidPokeballError {
 /* ErrorImplGenerator.kt:180 */
 impl ::std::error::Error for InvalidPokeballError {}
 /* ServerCodegenVisitor.kt:368 */
-impl ::aws_smithy_http_server::schema::ModeledError for InvalidPokeballError {
-    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
-        Self::SCHEMA
-    }
-}
 impl ::aws_smithy_http_server::schema::HttpModeledError for InvalidPokeballError {
     fn status_code(&self) -> u16 {
         400
     }
 }
-/* ServerCodegenVisitor.kt:404 */
+/* ServerCodegenVisitor.kt:399 */
 impl InvalidPokeballError {
     /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`InvalidPokeballError`](crate::error::InvalidPokeballError).
     /* ServerBuilderGenerator.kt:304 */
@@ -1100,7 +1090,7 @@ impl InvalidPokeballError {
         crate::error::invalid_pokeball_error::Builder::default()
         /* ServerBuilderGenerator.kt:304 */
     }
-    /* ServerCodegenVisitor.kt:404 */
+    /* ServerCodegenVisitor.kt:399 */
 }
 
 /* ServerOperationErrorGenerator.kt:67 */
@@ -1123,22 +1113,22 @@ pub /* ServerOperationErrorGenerator.kt:70 */ enum GetPokemonSpeciesError {
 impl ::std::fmt::Display for GetPokemonSpeciesError {
     /* ServerOperationErrorGenerator.kt:80 */
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        /* ServerOperationErrorGenerator.kt:166 */
+        /* ServerOperationErrorGenerator.kt:163 */
         match &self {
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             GetPokemonSpeciesError::ResourceNotFoundException(_inner) =>
             /* ServerOperationErrorGenerator.kt:82 */
             {
                 _inner.fmt(f)
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             GetPokemonSpeciesError::ValidationException(_inner) =>
             /* ServerOperationErrorGenerator.kt:82 */
             {
                 _inner.fmt(f)
             }
-            /* ServerOperationErrorGenerator.kt:166 */
+            /* ServerOperationErrorGenerator.kt:163 */
         }
         /* ServerOperationErrorGenerator.kt:80 */
     }
@@ -1166,22 +1156,22 @@ impl GetPokemonSpeciesError {
     /// Returns the error name string by matching the correct variant.
     /* ServerOperationErrorGenerator.kt:97 */
     pub fn name(&self) -> &'static str {
-        /* ServerOperationErrorGenerator.kt:166 */
+        /* ServerOperationErrorGenerator.kt:163 */
         match &self {
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             GetPokemonSpeciesError::ResourceNotFoundException(_inner) =>
             /* ServerOperationErrorGenerator.kt:99 */
             {
                 _inner.name()
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             GetPokemonSpeciesError::ValidationException(_inner) =>
             /* ServerOperationErrorGenerator.kt:99 */
             {
                 _inner.name()
             }
-            /* ServerOperationErrorGenerator.kt:166 */
+            /* ServerOperationErrorGenerator.kt:163 */
         }
         /* ServerOperationErrorGenerator.kt:97 */
     }
@@ -1191,134 +1181,130 @@ impl GetPokemonSpeciesError {
 impl ::std::error::Error for GetPokemonSpeciesError {
     /* ServerOperationErrorGenerator.kt:105 */
     fn source(&self) -> std::option::Option<&(dyn ::std::error::Error + 'static)> {
-        /* ServerOperationErrorGenerator.kt:166 */
+        /* ServerOperationErrorGenerator.kt:163 */
         match &self {
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             GetPokemonSpeciesError::ResourceNotFoundException(_inner) =>
             /* ServerOperationErrorGenerator.kt:107 */
             {
                 Some(_inner)
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             GetPokemonSpeciesError::ValidationException(_inner) =>
             /* ServerOperationErrorGenerator.kt:107 */
             {
                 Some(_inner)
             }
-            /* ServerOperationErrorGenerator.kt:166 */
+            /* ServerOperationErrorGenerator.kt:163 */
         }
         /* ServerOperationErrorGenerator.kt:105 */
     }
     /* ServerOperationErrorGenerator.kt:104 */
 }
-/* ServerOperationErrorGenerator.kt:118 */
+/* ServerOperationErrorGenerator.kt:117 */
 impl ::aws_smithy_schema::serde::SerializableStruct for GetPokemonSpeciesError {
-    /* ServerOperationErrorGenerator.kt:119 */
+    /* ServerOperationErrorGenerator.kt:118 */
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        /* ServerOperationErrorGenerator.kt:163 */
+        match &self {
+            /* ServerOperationErrorGenerator.kt:166 */
+            GetPokemonSpeciesError::ResourceNotFoundException(_inner) =>
+            /* ServerOperationErrorGenerator.kt:119 */
+            {
+                ::aws_smithy_schema::serde::SerializableStruct::schema(_inner)
+            }
+            ,
+            /* ServerOperationErrorGenerator.kt:166 */
+            GetPokemonSpeciesError::ValidationException(_inner) =>
+            /* ServerOperationErrorGenerator.kt:119 */
+            {
+                ::aws_smithy_schema::serde::SerializableStruct::schema(_inner)
+            }
+            /* ServerOperationErrorGenerator.kt:163 */
+        }
+        /* ServerOperationErrorGenerator.kt:118 */
+    }
+    /* ServerOperationErrorGenerator.kt:121 */
     fn serialize_members(
         &self,
         serializer: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer,
     ) -> ::std::result::Result<(), ::aws_smithy_schema::serde::SerdeError> {
-        /* ServerOperationErrorGenerator.kt:166 */
+        /* ServerOperationErrorGenerator.kt:163 */
         match &self {
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             GetPokemonSpeciesError::ResourceNotFoundException(_inner) =>
-            /* ServerOperationErrorGenerator.kt:120 */
+            /* ServerOperationErrorGenerator.kt:122 */
             {
                 ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
                     _inner, serializer,
                 )
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             GetPokemonSpeciesError::ValidationException(_inner) =>
-            /* ServerOperationErrorGenerator.kt:120 */
+            /* ServerOperationErrorGenerator.kt:122 */
             {
                 ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
                     _inner, serializer,
                 )
             }
-            /* ServerOperationErrorGenerator.kt:166 */
+            /* ServerOperationErrorGenerator.kt:163 */
         }
-        /* ServerOperationErrorGenerator.kt:119 */
+        /* ServerOperationErrorGenerator.kt:121 */
     }
-    /* ServerOperationErrorGenerator.kt:118 */
+    /* ServerOperationErrorGenerator.kt:117 */
 }
-/* ServerOperationErrorGenerator.kt:123 */
-impl ::aws_smithy_http_server::schema::ModeledError for GetPokemonSpeciesError {
-    /* ServerOperationErrorGenerator.kt:124 */
-    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
-        /* ServerOperationErrorGenerator.kt:166 */
-        match &self {
-            /* ServerOperationErrorGenerator.kt:169 */
-            GetPokemonSpeciesError::ResourceNotFoundException(_inner) =>
-            /* ServerOperationErrorGenerator.kt:125 */
-            {
-                ::aws_smithy_http_server::schema::ModeledError::schema(_inner)
-            }
-            ,
-            /* ServerOperationErrorGenerator.kt:169 */
-            GetPokemonSpeciesError::ValidationException(_inner) =>
-            /* ServerOperationErrorGenerator.kt:125 */
-            {
-                ::aws_smithy_http_server::schema::ModeledError::schema(_inner)
-            }
-            /* ServerOperationErrorGenerator.kt:166 */
-        }
-        /* ServerOperationErrorGenerator.kt:124 */
-    }
-    /* ServerOperationErrorGenerator.kt:123 */
-}
-/* ServerOperationErrorGenerator.kt:128 */
+/* ServerOperationErrorGenerator.kt:125 */
 impl ::aws_smithy_http_server::schema::HttpModeledError for GetPokemonSpeciesError {
-    /* ServerOperationErrorGenerator.kt:129 */
+    /* ServerOperationErrorGenerator.kt:126 */
     fn status_code(&self) -> u16 {
-        /* ServerOperationErrorGenerator.kt:166 */
+        /* ServerOperationErrorGenerator.kt:163 */
         match &self {
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             GetPokemonSpeciesError::ResourceNotFoundException(_inner) =>
-            /* ServerOperationErrorGenerator.kt:130 */
+            /* ServerOperationErrorGenerator.kt:127 */
             {
                 ::aws_smithy_http_server::schema::HttpModeledError::status_code(_inner)
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             GetPokemonSpeciesError::ValidationException(_inner) =>
-            /* ServerOperationErrorGenerator.kt:130 */
+            /* ServerOperationErrorGenerator.kt:127 */
             {
                 ::aws_smithy_http_server::schema::HttpModeledError::status_code(_inner)
             }
-            /* ServerOperationErrorGenerator.kt:166 */
+            /* ServerOperationErrorGenerator.kt:163 */
         }
-        /* ServerOperationErrorGenerator.kt:129 */
+        /* ServerOperationErrorGenerator.kt:126 */
     }
-    /* ServerOperationErrorGenerator.kt:128 */
+    /* ServerOperationErrorGenerator.kt:125 */
 }
-/* ServerOperationErrorGenerator.kt:137 */
+/* ServerOperationErrorGenerator.kt:134 */
 impl ::std::convert::From<crate::error::ResourceNotFoundException>
     for crate::error::GetPokemonSpeciesError
 {
-    /* ServerOperationErrorGenerator.kt:138 */
+    /* ServerOperationErrorGenerator.kt:135 */
     fn from(
         variant: crate::error::ResourceNotFoundException,
     ) -> crate::error::GetPokemonSpeciesError {
-        /* ServerOperationErrorGenerator.kt:139 */
+        /* ServerOperationErrorGenerator.kt:136 */
         Self::ResourceNotFoundException(variant)
-        /* ServerOperationErrorGenerator.kt:138 */
+        /* ServerOperationErrorGenerator.kt:135 */
     }
-    /* ServerOperationErrorGenerator.kt:137 */
+    /* ServerOperationErrorGenerator.kt:134 */
 }
-/* ServerOperationErrorGenerator.kt:137 */
+/* ServerOperationErrorGenerator.kt:134 */
 impl ::std::convert::From<crate::error::ValidationException>
     for crate::error::GetPokemonSpeciesError
 {
-    /* ServerOperationErrorGenerator.kt:138 */
+    /* ServerOperationErrorGenerator.kt:135 */
     fn from(variant: crate::error::ValidationException) -> crate::error::GetPokemonSpeciesError {
-        /* ServerOperationErrorGenerator.kt:139 */
+        /* ServerOperationErrorGenerator.kt:136 */
         Self::ValidationException(variant)
-        /* ServerOperationErrorGenerator.kt:138 */
+        /* ServerOperationErrorGenerator.kt:135 */
     }
-    /* ServerOperationErrorGenerator.kt:137 */
+    /* ServerOperationErrorGenerator.kt:134 */
 }
 
 /* ServerOperationErrorGenerator.kt:67 */
@@ -1344,29 +1330,29 @@ pub /* ServerOperationErrorGenerator.kt:70 */ enum GetStorageError {
 impl ::std::fmt::Display for GetStorageError {
     /* ServerOperationErrorGenerator.kt:80 */
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        /* ServerOperationErrorGenerator.kt:166 */
+        /* ServerOperationErrorGenerator.kt:163 */
         match &self {
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             GetStorageError::ResourceNotFoundException(_inner) =>
             /* ServerOperationErrorGenerator.kt:82 */
             {
                 _inner.fmt(f)
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             GetStorageError::StorageAccessNotAuthorized(_inner) =>
             /* ServerOperationErrorGenerator.kt:82 */
             {
                 _inner.fmt(f)
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             GetStorageError::ValidationException(_inner) =>
             /* ServerOperationErrorGenerator.kt:82 */
             {
                 _inner.fmt(f)
             }
-            /* ServerOperationErrorGenerator.kt:166 */
+            /* ServerOperationErrorGenerator.kt:163 */
         }
         /* ServerOperationErrorGenerator.kt:80 */
     }
@@ -1402,29 +1388,29 @@ impl GetStorageError {
     /// Returns the error name string by matching the correct variant.
     /* ServerOperationErrorGenerator.kt:97 */
     pub fn name(&self) -> &'static str {
-        /* ServerOperationErrorGenerator.kt:166 */
+        /* ServerOperationErrorGenerator.kt:163 */
         match &self {
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             GetStorageError::ResourceNotFoundException(_inner) =>
             /* ServerOperationErrorGenerator.kt:99 */
             {
                 _inner.name()
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             GetStorageError::StorageAccessNotAuthorized(_inner) =>
             /* ServerOperationErrorGenerator.kt:99 */
             {
                 _inner.name()
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             GetStorageError::ValidationException(_inner) =>
             /* ServerOperationErrorGenerator.kt:99 */
             {
                 _inner.name()
             }
-            /* ServerOperationErrorGenerator.kt:166 */
+            /* ServerOperationErrorGenerator.kt:163 */
         }
         /* ServerOperationErrorGenerator.kt:97 */
     }
@@ -1434,172 +1420,168 @@ impl GetStorageError {
 impl ::std::error::Error for GetStorageError {
     /* ServerOperationErrorGenerator.kt:105 */
     fn source(&self) -> std::option::Option<&(dyn ::std::error::Error + 'static)> {
-        /* ServerOperationErrorGenerator.kt:166 */
+        /* ServerOperationErrorGenerator.kt:163 */
         match &self {
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             GetStorageError::ResourceNotFoundException(_inner) =>
             /* ServerOperationErrorGenerator.kt:107 */
             {
                 Some(_inner)
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             GetStorageError::StorageAccessNotAuthorized(_inner) =>
             /* ServerOperationErrorGenerator.kt:107 */
             {
                 Some(_inner)
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             GetStorageError::ValidationException(_inner) =>
             /* ServerOperationErrorGenerator.kt:107 */
             {
                 Some(_inner)
             }
-            /* ServerOperationErrorGenerator.kt:166 */
+            /* ServerOperationErrorGenerator.kt:163 */
         }
         /* ServerOperationErrorGenerator.kt:105 */
     }
     /* ServerOperationErrorGenerator.kt:104 */
 }
-/* ServerOperationErrorGenerator.kt:118 */
+/* ServerOperationErrorGenerator.kt:117 */
 impl ::aws_smithy_schema::serde::SerializableStruct for GetStorageError {
-    /* ServerOperationErrorGenerator.kt:119 */
+    /* ServerOperationErrorGenerator.kt:118 */
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        /* ServerOperationErrorGenerator.kt:163 */
+        match &self {
+            /* ServerOperationErrorGenerator.kt:166 */
+            GetStorageError::ResourceNotFoundException(_inner) =>
+            /* ServerOperationErrorGenerator.kt:119 */
+            {
+                ::aws_smithy_schema::serde::SerializableStruct::schema(_inner)
+            }
+            ,
+            /* ServerOperationErrorGenerator.kt:166 */
+            GetStorageError::StorageAccessNotAuthorized(_inner) =>
+            /* ServerOperationErrorGenerator.kt:119 */
+            {
+                ::aws_smithy_schema::serde::SerializableStruct::schema(_inner)
+            }
+            ,
+            /* ServerOperationErrorGenerator.kt:166 */
+            GetStorageError::ValidationException(_inner) =>
+            /* ServerOperationErrorGenerator.kt:119 */
+            {
+                ::aws_smithy_schema::serde::SerializableStruct::schema(_inner)
+            }
+            /* ServerOperationErrorGenerator.kt:163 */
+        }
+        /* ServerOperationErrorGenerator.kt:118 */
+    }
+    /* ServerOperationErrorGenerator.kt:121 */
     fn serialize_members(
         &self,
         serializer: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer,
     ) -> ::std::result::Result<(), ::aws_smithy_schema::serde::SerdeError> {
-        /* ServerOperationErrorGenerator.kt:166 */
+        /* ServerOperationErrorGenerator.kt:163 */
         match &self {
-            /* ServerOperationErrorGenerator.kt:169 */
-            GetStorageError::ResourceNotFoundException(_inner) =>
-            /* ServerOperationErrorGenerator.kt:120 */
-            {
-                ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
-                    _inner, serializer,
-                )
-            }
-            ,
-            /* ServerOperationErrorGenerator.kt:169 */
-            GetStorageError::StorageAccessNotAuthorized(_inner) =>
-            /* ServerOperationErrorGenerator.kt:120 */
-            {
-                ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
-                    _inner, serializer,
-                )
-            }
-            ,
-            /* ServerOperationErrorGenerator.kt:169 */
-            GetStorageError::ValidationException(_inner) =>
-            /* ServerOperationErrorGenerator.kt:120 */
-            {
-                ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
-                    _inner, serializer,
-                )
-            }
             /* ServerOperationErrorGenerator.kt:166 */
-        }
-        /* ServerOperationErrorGenerator.kt:119 */
-    }
-    /* ServerOperationErrorGenerator.kt:118 */
-}
-/* ServerOperationErrorGenerator.kt:123 */
-impl ::aws_smithy_http_server::schema::ModeledError for GetStorageError {
-    /* ServerOperationErrorGenerator.kt:124 */
-    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
-        /* ServerOperationErrorGenerator.kt:166 */
-        match &self {
-            /* ServerOperationErrorGenerator.kt:169 */
             GetStorageError::ResourceNotFoundException(_inner) =>
-            /* ServerOperationErrorGenerator.kt:125 */
+            /* ServerOperationErrorGenerator.kt:122 */
             {
-                ::aws_smithy_http_server::schema::ModeledError::schema(_inner)
+                ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
+                    _inner, serializer,
+                )
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
-            GetStorageError::StorageAccessNotAuthorized(_inner) =>
-            /* ServerOperationErrorGenerator.kt:125 */
-            {
-                ::aws_smithy_http_server::schema::ModeledError::schema(_inner)
-            }
-            ,
-            /* ServerOperationErrorGenerator.kt:169 */
-            GetStorageError::ValidationException(_inner) =>
-            /* ServerOperationErrorGenerator.kt:125 */
-            {
-                ::aws_smithy_http_server::schema::ModeledError::schema(_inner)
-            }
             /* ServerOperationErrorGenerator.kt:166 */
+            GetStorageError::StorageAccessNotAuthorized(_inner) =>
+            /* ServerOperationErrorGenerator.kt:122 */
+            {
+                ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
+                    _inner, serializer,
+                )
+            }
+            ,
+            /* ServerOperationErrorGenerator.kt:166 */
+            GetStorageError::ValidationException(_inner) =>
+            /* ServerOperationErrorGenerator.kt:122 */
+            {
+                ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
+                    _inner, serializer,
+                )
+            }
+            /* ServerOperationErrorGenerator.kt:163 */
         }
-        /* ServerOperationErrorGenerator.kt:124 */
+        /* ServerOperationErrorGenerator.kt:121 */
     }
-    /* ServerOperationErrorGenerator.kt:123 */
+    /* ServerOperationErrorGenerator.kt:117 */
 }
-/* ServerOperationErrorGenerator.kt:128 */
+/* ServerOperationErrorGenerator.kt:125 */
 impl ::aws_smithy_http_server::schema::HttpModeledError for GetStorageError {
-    /* ServerOperationErrorGenerator.kt:129 */
+    /* ServerOperationErrorGenerator.kt:126 */
     fn status_code(&self) -> u16 {
-        /* ServerOperationErrorGenerator.kt:166 */
+        /* ServerOperationErrorGenerator.kt:163 */
         match &self {
-            /* ServerOperationErrorGenerator.kt:169 */
-            GetStorageError::ResourceNotFoundException(_inner) =>
-            /* ServerOperationErrorGenerator.kt:130 */
-            {
-                ::aws_smithy_http_server::schema::HttpModeledError::status_code(_inner)
-            }
-            ,
-            /* ServerOperationErrorGenerator.kt:169 */
-            GetStorageError::StorageAccessNotAuthorized(_inner) =>
-            /* ServerOperationErrorGenerator.kt:130 */
-            {
-                ::aws_smithy_http_server::schema::HttpModeledError::status_code(_inner)
-            }
-            ,
-            /* ServerOperationErrorGenerator.kt:169 */
-            GetStorageError::ValidationException(_inner) =>
-            /* ServerOperationErrorGenerator.kt:130 */
-            {
-                ::aws_smithy_http_server::schema::HttpModeledError::status_code(_inner)
-            }
             /* ServerOperationErrorGenerator.kt:166 */
+            GetStorageError::ResourceNotFoundException(_inner) =>
+            /* ServerOperationErrorGenerator.kt:127 */
+            {
+                ::aws_smithy_http_server::schema::HttpModeledError::status_code(_inner)
+            }
+            ,
+            /* ServerOperationErrorGenerator.kt:166 */
+            GetStorageError::StorageAccessNotAuthorized(_inner) =>
+            /* ServerOperationErrorGenerator.kt:127 */
+            {
+                ::aws_smithy_http_server::schema::HttpModeledError::status_code(_inner)
+            }
+            ,
+            /* ServerOperationErrorGenerator.kt:166 */
+            GetStorageError::ValidationException(_inner) =>
+            /* ServerOperationErrorGenerator.kt:127 */
+            {
+                ::aws_smithy_http_server::schema::HttpModeledError::status_code(_inner)
+            }
+            /* ServerOperationErrorGenerator.kt:163 */
         }
-        /* ServerOperationErrorGenerator.kt:129 */
+        /* ServerOperationErrorGenerator.kt:126 */
     }
-    /* ServerOperationErrorGenerator.kt:128 */
+    /* ServerOperationErrorGenerator.kt:125 */
 }
-/* ServerOperationErrorGenerator.kt:137 */
+/* ServerOperationErrorGenerator.kt:134 */
 impl ::std::convert::From<crate::error::ResourceNotFoundException>
     for crate::error::GetStorageError
 {
-    /* ServerOperationErrorGenerator.kt:138 */
+    /* ServerOperationErrorGenerator.kt:135 */
     fn from(variant: crate::error::ResourceNotFoundException) -> crate::error::GetStorageError {
-        /* ServerOperationErrorGenerator.kt:139 */
+        /* ServerOperationErrorGenerator.kt:136 */
         Self::ResourceNotFoundException(variant)
-        /* ServerOperationErrorGenerator.kt:138 */
+        /* ServerOperationErrorGenerator.kt:135 */
     }
-    /* ServerOperationErrorGenerator.kt:137 */
+    /* ServerOperationErrorGenerator.kt:134 */
 }
-/* ServerOperationErrorGenerator.kt:137 */
+/* ServerOperationErrorGenerator.kt:134 */
 impl ::std::convert::From<crate::error::StorageAccessNotAuthorized>
     for crate::error::GetStorageError
 {
-    /* ServerOperationErrorGenerator.kt:138 */
+    /* ServerOperationErrorGenerator.kt:135 */
     fn from(variant: crate::error::StorageAccessNotAuthorized) -> crate::error::GetStorageError {
-        /* ServerOperationErrorGenerator.kt:139 */
+        /* ServerOperationErrorGenerator.kt:136 */
         Self::StorageAccessNotAuthorized(variant)
-        /* ServerOperationErrorGenerator.kt:138 */
+        /* ServerOperationErrorGenerator.kt:135 */
     }
-    /* ServerOperationErrorGenerator.kt:137 */
+    /* ServerOperationErrorGenerator.kt:134 */
 }
-/* ServerOperationErrorGenerator.kt:137 */
+/* ServerOperationErrorGenerator.kt:134 */
 impl ::std::convert::From<crate::error::ValidationException> for crate::error::GetStorageError {
-    /* ServerOperationErrorGenerator.kt:138 */
+    /* ServerOperationErrorGenerator.kt:135 */
     fn from(variant: crate::error::ValidationException) -> crate::error::GetStorageError {
-        /* ServerOperationErrorGenerator.kt:139 */
+        /* ServerOperationErrorGenerator.kt:136 */
         Self::ValidationException(variant)
-        /* ServerOperationErrorGenerator.kt:138 */
+        /* ServerOperationErrorGenerator.kt:135 */
     }
-    /* ServerOperationErrorGenerator.kt:137 */
+    /* ServerOperationErrorGenerator.kt:134 */
 }
 
 /* StructureGenerator.kt:197 */
@@ -1614,7 +1596,7 @@ pub /* StructureGenerator.kt:201 */ struct ResourceNotFoundException {
     pub message: ::std::string::String,
     /* StructureGenerator.kt:201 */
 }
-/* ServerSchemaGenerator.kt:1496 */
+/* ServerSchemaGenerator.kt:1501 */
 static RESOURCENOTFOUNDEXCEPTION_MEMBER_MESSAGE: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -1626,7 +1608,7 @@ static RESOURCENOTFOUNDEXCEPTION_MEMBER_MESSAGE: ::aws_smithy_schema::Schema<'st
         "message",
         0,
     );
-/* ServerSchemaGenerator.kt:1397 */
+/* ServerSchemaGenerator.kt:1402 */
 static RESOURCENOTFOUNDEXCEPTION_TRAITS: std::sync::LazyLock<::aws_smithy_schema::TraitMap> =
     std::sync::LazyLock::new(|| {
         let mut map = ::aws_smithy_schema::TraitMap::new();
@@ -1655,8 +1637,12 @@ impl crate::error::ResourceNotFoundException {
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> =
         &RESOURCENOTFOUNDEXCEPTION_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:288 */
+/* ServerSchemaGenerator.kt:289 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::error::ResourceNotFoundException {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -1705,17 +1691,12 @@ impl ::std::fmt::Display for ResourceNotFoundException {
 /* ErrorImplGenerator.kt:180 */
 impl ::std::error::Error for ResourceNotFoundException {}
 /* ServerCodegenVisitor.kt:368 */
-impl ::aws_smithy_http_server::schema::ModeledError for ResourceNotFoundException {
-    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
-        Self::SCHEMA
-    }
-}
 impl ::aws_smithy_http_server::schema::HttpModeledError for ResourceNotFoundException {
     fn status_code(&self) -> u16 {
         404
     }
 }
-/* ServerCodegenVisitor.kt:404 */
+/* ServerCodegenVisitor.kt:399 */
 impl ResourceNotFoundException {
     /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`ResourceNotFoundException`](crate::error::ResourceNotFoundException).
     /* ServerBuilderGenerator.kt:304 */
@@ -1724,7 +1705,7 @@ impl ResourceNotFoundException {
         crate::error::resource_not_found_exception::Builder::default()
         /* ServerBuilderGenerator.kt:304 */
     }
-    /* ServerCodegenVisitor.kt:404 */
+    /* ServerCodegenVisitor.kt:399 */
 }
 
 /// /* StructureGenerator.kt:197 */Not authorized to access Pokémon storage.
@@ -1733,7 +1714,7 @@ impl ResourceNotFoundException {
     ::std::clone::Clone, ::std::cmp::Eq, ::std::cmp::PartialEq, ::std::fmt::Debug, ::std::hash::Hash,
 )]
 pub /* StructureGenerator.kt:201 */ struct StorageAccessNotAuthorized {/* StructureGenerator.kt:201 */}
-/* ServerSchemaGenerator.kt:1397 */
+/* ServerSchemaGenerator.kt:1402 */
 static STORAGEACCESSNOTAUTHORIZED_TRAITS: std::sync::LazyLock<::aws_smithy_schema::TraitMap> =
     std::sync::LazyLock::new(|| {
         let mut map = ::aws_smithy_schema::TraitMap::new();
@@ -1762,8 +1743,12 @@ impl crate::error::StorageAccessNotAuthorized {
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> =
         &STORAGEACCESSNOTAUTHORIZED_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:288 */
+/* ServerSchemaGenerator.kt:289 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::error::StorageAccessNotAuthorized {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -1797,17 +1782,12 @@ impl ::std::fmt::Display for StorageAccessNotAuthorized {
 /* ErrorImplGenerator.kt:180 */
 impl ::std::error::Error for StorageAccessNotAuthorized {}
 /* ServerCodegenVisitor.kt:368 */
-impl ::aws_smithy_http_server::schema::ModeledError for StorageAccessNotAuthorized {
-    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
-        Self::SCHEMA
-    }
-}
 impl ::aws_smithy_http_server::schema::HttpModeledError for StorageAccessNotAuthorized {
     fn status_code(&self) -> u16 {
         401
     }
 }
-/* ServerCodegenVisitor.kt:404 */
+/* ServerCodegenVisitor.kt:399 */
 impl StorageAccessNotAuthorized {
     /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`StorageAccessNotAuthorized`](crate::error::StorageAccessNotAuthorized).
     /* ServerBuilderGenerator.kt:304 */
@@ -1816,7 +1796,7 @@ impl StorageAccessNotAuthorized {
         crate::error::storage_access_not_authorized::Builder::default()
         /* ServerBuilderGenerator.kt:304 */
     }
-    /* ServerCodegenVisitor.kt:404 */
+    /* ServerCodegenVisitor.kt:399 */
 }
 
 /* ServerOperationErrorGenerator.kt:67 */
@@ -1836,15 +1816,15 @@ pub /* ServerOperationErrorGenerator.kt:70 */ enum AttemptCapturingPokemonEventE
 impl ::std::fmt::Display for AttemptCapturingPokemonEventError {
     /* ServerOperationErrorGenerator.kt:80 */
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        /* ServerOperationErrorGenerator.kt:166 */
+        /* ServerOperationErrorGenerator.kt:163 */
         match &self {
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             AttemptCapturingPokemonEventError::MasterBallUnsuccessful(_inner) =>
             /* ServerOperationErrorGenerator.kt:82 */
             {
                 _inner.fmt(f)
             }
-            /* ServerOperationErrorGenerator.kt:166 */
+            /* ServerOperationErrorGenerator.kt:163 */
         }
         /* ServerOperationErrorGenerator.kt:80 */
     }
@@ -1867,15 +1847,15 @@ impl AttemptCapturingPokemonEventError {
     /// Returns the error name string by matching the correct variant.
     /* ServerOperationErrorGenerator.kt:97 */
     pub fn name(&self) -> &'static str {
-        /* ServerOperationErrorGenerator.kt:166 */
+        /* ServerOperationErrorGenerator.kt:163 */
         match &self {
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             AttemptCapturingPokemonEventError::MasterBallUnsuccessful(_inner) =>
             /* ServerOperationErrorGenerator.kt:99 */
             {
                 _inner.name()
             }
-            /* ServerOperationErrorGenerator.kt:166 */
+            /* ServerOperationErrorGenerator.kt:163 */
         }
         /* ServerOperationErrorGenerator.kt:97 */
     }
@@ -1885,33 +1865,33 @@ impl AttemptCapturingPokemonEventError {
 impl ::std::error::Error for AttemptCapturingPokemonEventError {
     /* ServerOperationErrorGenerator.kt:105 */
     fn source(&self) -> std::option::Option<&(dyn ::std::error::Error + 'static)> {
-        /* ServerOperationErrorGenerator.kt:166 */
+        /* ServerOperationErrorGenerator.kt:163 */
         match &self {
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             AttemptCapturingPokemonEventError::MasterBallUnsuccessful(_inner) =>
             /* ServerOperationErrorGenerator.kt:107 */
             {
                 Some(_inner)
             }
-            /* ServerOperationErrorGenerator.kt:166 */
+            /* ServerOperationErrorGenerator.kt:163 */
         }
         /* ServerOperationErrorGenerator.kt:105 */
     }
     /* ServerOperationErrorGenerator.kt:104 */
 }
-/* ServerOperationErrorGenerator.kt:137 */
+/* ServerOperationErrorGenerator.kt:134 */
 impl ::std::convert::From<crate::error::MasterBallUnsuccessful>
     for crate::error::AttemptCapturingPokemonEventError
 {
-    /* ServerOperationErrorGenerator.kt:138 */
+    /* ServerOperationErrorGenerator.kt:135 */
     fn from(
         variant: crate::error::MasterBallUnsuccessful,
     ) -> crate::error::AttemptCapturingPokemonEventError {
-        /* ServerOperationErrorGenerator.kt:139 */
+        /* ServerOperationErrorGenerator.kt:136 */
         Self::MasterBallUnsuccessful(variant)
-        /* ServerOperationErrorGenerator.kt:138 */
+        /* ServerOperationErrorGenerator.kt:135 */
     }
-    /* ServerOperationErrorGenerator.kt:137 */
+    /* ServerOperationErrorGenerator.kt:134 */
 }
 
 /* ServerOperationErrorGenerator.kt:67 */
@@ -1935,22 +1915,22 @@ pub /* ServerOperationErrorGenerator.kt:70 */ enum CapturePokemonEventsError {
 impl ::std::fmt::Display for CapturePokemonEventsError {
     /* ServerOperationErrorGenerator.kt:80 */
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        /* ServerOperationErrorGenerator.kt:166 */
+        /* ServerOperationErrorGenerator.kt:163 */
         match &self {
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             CapturePokemonEventsError::InvalidPokeballError(_inner) =>
             /* ServerOperationErrorGenerator.kt:82 */
             {
                 _inner.fmt(f)
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             CapturePokemonEventsError::ThrottlingError(_inner) =>
             /* ServerOperationErrorGenerator.kt:82 */
             {
                 _inner.fmt(f)
             }
-            /* ServerOperationErrorGenerator.kt:166 */
+            /* ServerOperationErrorGenerator.kt:163 */
         }
         /* ServerOperationErrorGenerator.kt:80 */
     }
@@ -1978,22 +1958,22 @@ impl CapturePokemonEventsError {
     /// Returns the error name string by matching the correct variant.
     /* ServerOperationErrorGenerator.kt:97 */
     pub fn name(&self) -> &'static str {
-        /* ServerOperationErrorGenerator.kt:166 */
+        /* ServerOperationErrorGenerator.kt:163 */
         match &self {
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             CapturePokemonEventsError::InvalidPokeballError(_inner) =>
             /* ServerOperationErrorGenerator.kt:99 */
             {
                 _inner.name()
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             CapturePokemonEventsError::ThrottlingError(_inner) =>
             /* ServerOperationErrorGenerator.kt:99 */
             {
                 _inner.name()
             }
-            /* ServerOperationErrorGenerator.kt:166 */
+            /* ServerOperationErrorGenerator.kt:163 */
         }
         /* ServerOperationErrorGenerator.kt:97 */
     }
@@ -2003,52 +1983,52 @@ impl CapturePokemonEventsError {
 impl ::std::error::Error for CapturePokemonEventsError {
     /* ServerOperationErrorGenerator.kt:105 */
     fn source(&self) -> std::option::Option<&(dyn ::std::error::Error + 'static)> {
-        /* ServerOperationErrorGenerator.kt:166 */
+        /* ServerOperationErrorGenerator.kt:163 */
         match &self {
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             CapturePokemonEventsError::InvalidPokeballError(_inner) =>
             /* ServerOperationErrorGenerator.kt:107 */
             {
                 Some(_inner)
             }
             ,
-            /* ServerOperationErrorGenerator.kt:169 */
+            /* ServerOperationErrorGenerator.kt:166 */
             CapturePokemonEventsError::ThrottlingError(_inner) =>
             /* ServerOperationErrorGenerator.kt:107 */
             {
                 Some(_inner)
             }
-            /* ServerOperationErrorGenerator.kt:166 */
+            /* ServerOperationErrorGenerator.kt:163 */
         }
         /* ServerOperationErrorGenerator.kt:105 */
     }
     /* ServerOperationErrorGenerator.kt:104 */
 }
-/* ServerOperationErrorGenerator.kt:137 */
+/* ServerOperationErrorGenerator.kt:134 */
 impl ::std::convert::From<crate::error::InvalidPokeballError>
     for crate::error::CapturePokemonEventsError
 {
-    /* ServerOperationErrorGenerator.kt:138 */
+    /* ServerOperationErrorGenerator.kt:135 */
     fn from(
         variant: crate::error::InvalidPokeballError,
     ) -> crate::error::CapturePokemonEventsError {
-        /* ServerOperationErrorGenerator.kt:139 */
+        /* ServerOperationErrorGenerator.kt:136 */
         Self::InvalidPokeballError(variant)
-        /* ServerOperationErrorGenerator.kt:138 */
+        /* ServerOperationErrorGenerator.kt:135 */
     }
-    /* ServerOperationErrorGenerator.kt:137 */
+    /* ServerOperationErrorGenerator.kt:134 */
 }
-/* ServerOperationErrorGenerator.kt:137 */
+/* ServerOperationErrorGenerator.kt:134 */
 impl ::std::convert::From<crate::error::ThrottlingError>
     for crate::error::CapturePokemonEventsError
 {
-    /* ServerOperationErrorGenerator.kt:138 */
+    /* ServerOperationErrorGenerator.kt:135 */
     fn from(variant: crate::error::ThrottlingError) -> crate::error::CapturePokemonEventsError {
-        /* ServerOperationErrorGenerator.kt:139 */
+        /* ServerOperationErrorGenerator.kt:136 */
         Self::ThrottlingError(variant)
-        /* ServerOperationErrorGenerator.kt:138 */
+        /* ServerOperationErrorGenerator.kt:135 */
     }
-    /* ServerOperationErrorGenerator.kt:137 */
+    /* ServerOperationErrorGenerator.kt:134 */
 }
 /// /* ServerBuilderGenerator.kt:173 */See [`UnsupportedRegionError`](crate::error::UnsupportedRegionError).
 pub mod unsupported_region_error {

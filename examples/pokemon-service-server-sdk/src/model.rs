@@ -38,7 +38,7 @@ impl AttemptCapturingPokemonEvent {
     }
     /* UnionGenerator.kt:111 */
 }
-/* ServerSchemaGenerator.kt:1496 */
+/* ServerSchemaGenerator.kt:1501 */
 static ATTEMPTCAPTURINGPOKEMONEVENT_MEMBER_EVENT: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -49,9 +49,8 @@ static ATTEMPTCAPTURINGPOKEMONEVENT_MEMBER_EVENT: ::aws_smithy_schema::Schema<'s
         ::aws_smithy_schema::ShapeType::Structure,
         "event",
         0,
-    )
-    .with_target(|| crate::model::CapturingEvent::SCHEMA);
-/* ServerSchemaGenerator.kt:1416 */
+    );
+/* ServerSchemaGenerator.kt:1421 */
 static ATTEMPTCAPTURINGPOKEMONEVENT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -69,8 +68,12 @@ impl crate::model::AttemptCapturingPokemonEvent {
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> =
         &ATTEMPTCAPTURINGPOKEMONEVENT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:349 */
+/* ServerSchemaGenerator.kt:357 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::model::AttemptCapturingPokemonEvent {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -124,7 +127,7 @@ impl CapturePokemonEvents {
     }
     /* UnionGenerator.kt:111 */
 }
-/* ServerSchemaGenerator.kt:1496 */
+/* ServerSchemaGenerator.kt:1501 */
 static CAPTUREPOKEMONEVENTS_MEMBER_EVENT: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -135,9 +138,8 @@ static CAPTUREPOKEMONEVENTS_MEMBER_EVENT: ::aws_smithy_schema::Schema<'static> =
         ::aws_smithy_schema::ShapeType::Structure,
         "event",
         0,
-    )
-    .with_target(|| crate::model::CaptureEvent::SCHEMA);
-/* ServerSchemaGenerator.kt:1416 */
+    );
+/* ServerSchemaGenerator.kt:1421 */
 static CAPTUREPOKEMONEVENTS_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -154,8 +156,12 @@ impl crate::model::CapturePokemonEvents {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &CAPTUREPOKEMONEVENTS_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:349 */
+/* ServerSchemaGenerator.kt:357 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::model::CapturePokemonEvents {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -194,7 +200,7 @@ impl CapturingEvent {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1496 */
+/* ServerSchemaGenerator.kt:1501 */
 static CAPTURINGEVENT_MEMBER_PAYLOAD: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -206,9 +212,8 @@ static CAPTURINGEVENT_MEMBER_PAYLOAD: ::aws_smithy_schema::Schema<'static> =
         "payload",
         0,
     )
-    .with_event_payload()
-    .with_target(|| crate::model::CapturingPayload::SCHEMA);
-/* ServerSchemaGenerator.kt:1416 */
+    .with_event_payload();
+/* ServerSchemaGenerator.kt:1421 */
 static CAPTURINGEVENT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -224,8 +229,12 @@ impl crate::model::CapturingEvent {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &CAPTURINGEVENT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:288 */
+/* ServerSchemaGenerator.kt:289 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::model::CapturingEvent {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -271,7 +280,7 @@ impl CapturingEvent {
         Ok(builder.build())
     }
 }
-/* ServerCodegenVisitor.kt:404 */
+/* ServerCodegenVisitor.kt:399 */
 impl CapturingEvent {
     /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`CapturingEvent`](crate::model::CapturingEvent).
     /* ServerBuilderGenerator.kt:304 */
@@ -280,7 +289,7 @@ impl CapturingEvent {
         crate::model::capturing_event::Builder::default()
         /* ServerBuilderGenerator.kt:304 */
     }
-    /* ServerCodegenVisitor.kt:404 */
+    /* ServerCodegenVisitor.kt:399 */
 }
 /* ServerStructureConstrainedTraitImpl.kt:21 */
 impl crate::constrained::Constrained for crate::model::CapturingEvent {
@@ -344,7 +353,7 @@ impl CaptureEvent {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1496 */
+/* ServerSchemaGenerator.kt:1501 */
 static CAPTUREEVENT_MEMBER_NAME: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -357,7 +366,7 @@ static CAPTUREEVENT_MEMBER_NAME: ::aws_smithy_schema::Schema<'static> =
         0,
     )
     .with_event_header();
-/* ServerSchemaGenerator.kt:1496 */
+/* ServerSchemaGenerator.kt:1501 */
 static CAPTUREEVENT_MEMBER_CAPTURED: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -370,7 +379,7 @@ static CAPTUREEVENT_MEMBER_CAPTURED: ::aws_smithy_schema::Schema<'static> =
         1,
     )
     .with_event_header();
-/* ServerSchemaGenerator.kt:1496 */
+/* ServerSchemaGenerator.kt:1501 */
 static CAPTUREEVENT_MEMBER_SHINY: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -383,7 +392,7 @@ static CAPTUREEVENT_MEMBER_SHINY: ::aws_smithy_schema::Schema<'static> =
         2,
     )
     .with_event_header();
-/* ServerSchemaGenerator.kt:1496 */
+/* ServerSchemaGenerator.kt:1501 */
 static CAPTUREEVENT_MEMBER_POKEDEX_UPDATE: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -396,7 +405,7 @@ static CAPTUREEVENT_MEMBER_POKEDEX_UPDATE: ::aws_smithy_schema::Schema<'static> 
         3,
     )
     .with_event_payload();
-/* ServerSchemaGenerator.kt:1416 */
+/* ServerSchemaGenerator.kt:1421 */
 static CAPTUREEVENT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -417,8 +426,12 @@ impl crate::model::CaptureEvent {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &CAPTUREEVENT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:288 */
+/* ServerSchemaGenerator.kt:289 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::model::CaptureEvent {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -439,7 +452,7 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::model::CaptureEve
         Ok(())
     }
 }
-/* ServerCodegenVisitor.kt:404 */
+/* ServerCodegenVisitor.kt:399 */
 impl CaptureEvent {
     /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`CaptureEvent`](crate::model::CaptureEvent).
     /* ServerBuilderGenerator.kt:304 */
@@ -448,7 +461,7 @@ impl CaptureEvent {
         crate::model::capture_event::Builder::default()
         /* ServerBuilderGenerator.kt:304 */
     }
-    /* ServerCodegenVisitor.kt:404 */
+    /* ServerCodegenVisitor.kt:399 */
 }
 
 /// /* StructureGenerator.kt:197 */Describes one specific validation failure for an input member.
@@ -483,7 +496,7 @@ impl ValidationExceptionField {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1496 */
+/* ServerSchemaGenerator.kt:1501 */
 static VALIDATIONEXCEPTIONFIELD_MEMBER_PATH: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -495,7 +508,7 @@ static VALIDATIONEXCEPTIONFIELD_MEMBER_PATH: ::aws_smithy_schema::Schema<'static
         "path",
         0,
     );
-/* ServerSchemaGenerator.kt:1496 */
+/* ServerSchemaGenerator.kt:1501 */
 static VALIDATIONEXCEPTIONFIELD_MEMBER_MESSAGE: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -507,7 +520,7 @@ static VALIDATIONEXCEPTIONFIELD_MEMBER_MESSAGE: ::aws_smithy_schema::Schema<'sta
         "message",
         1,
     );
-/* ServerSchemaGenerator.kt:1416 */
+/* ServerSchemaGenerator.kt:1421 */
 static VALIDATIONEXCEPTIONFIELD_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -527,8 +540,12 @@ impl crate::model::ValidationExceptionField {
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> =
         &VALIDATIONEXCEPTIONFIELD_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:288 */
+/* ServerSchemaGenerator.kt:289 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::model::ValidationExceptionField {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -545,7 +562,7 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::model::Validation
         Ok(())
     }
 }
-/* ServerCodegenVisitor.kt:404 */
+/* ServerCodegenVisitor.kt:399 */
 impl ValidationExceptionField {
     /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`ValidationExceptionField`](crate::model::ValidationExceptionField).
     /* ServerBuilderGenerator.kt:304 */
@@ -554,7 +571,7 @@ impl ValidationExceptionField {
         crate::model::validation_exception_field::Builder::default()
         /* ServerBuilderGenerator.kt:304 */
     }
-    /* ServerCodegenVisitor.kt:404 */
+    /* ServerCodegenVisitor.kt:399 */
 }
 
 /* StructureGenerator.kt:197 */
@@ -589,7 +606,7 @@ impl FlavorText {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1496 */
+/* ServerSchemaGenerator.kt:1501 */
 static FLAVORTEXT_MEMBER_FLAVOR_TEXT: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -601,7 +618,7 @@ static FLAVORTEXT_MEMBER_FLAVOR_TEXT: ::aws_smithy_schema::Schema<'static> =
         "flavorText",
         0,
     );
-/* ServerSchemaGenerator.kt:1496 */
+/* ServerSchemaGenerator.kt:1501 */
 static FLAVORTEXT_MEMBER_LANGUAGE: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -613,7 +630,7 @@ static FLAVORTEXT_MEMBER_LANGUAGE: ::aws_smithy_schema::Schema<'static> =
         "language",
         1,
     );
-/* ServerSchemaGenerator.kt:1416 */
+/* ServerSchemaGenerator.kt:1421 */
 static FLAVORTEXT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -629,8 +646,12 @@ impl crate::model::FlavorText {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &FLAVORTEXT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:288 */
+/* ServerSchemaGenerator.kt:289 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::model::FlavorText {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -647,7 +668,7 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::model::FlavorText
         Ok(())
     }
 }
-/* ServerCodegenVisitor.kt:404 */
+/* ServerCodegenVisitor.kt:399 */
 impl FlavorText {
     /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`FlavorText`](crate::model::FlavorText).
     /* ServerBuilderGenerator.kt:304 */
@@ -656,7 +677,7 @@ impl FlavorText {
         crate::model::flavor_text::Builder::default()
         /* ServerBuilderGenerator.kt:304 */
     }
-    /* ServerCodegenVisitor.kt:404 */
+    /* ServerCodegenVisitor.kt:399 */
 }
 
 /* StructureGenerator.kt:197 */
@@ -694,7 +715,7 @@ impl CapturingPayload {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1496 */
+/* ServerSchemaGenerator.kt:1501 */
 static CAPTURINGPAYLOAD_MEMBER_NAME: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -706,7 +727,7 @@ static CAPTURINGPAYLOAD_MEMBER_NAME: ::aws_smithy_schema::Schema<'static> =
         "name",
         0,
     );
-/* ServerSchemaGenerator.kt:1496 */
+/* ServerSchemaGenerator.kt:1501 */
 static CAPTURINGPAYLOAD_MEMBER_POKEBALL: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -718,7 +739,7 @@ static CAPTURINGPAYLOAD_MEMBER_POKEBALL: ::aws_smithy_schema::Schema<'static> =
         "pokeball",
         1,
     );
-/* ServerSchemaGenerator.kt:1416 */
+/* ServerSchemaGenerator.kt:1421 */
 static CAPTURINGPAYLOAD_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -737,8 +758,12 @@ impl crate::model::CapturingPayload {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &CAPTURINGPAYLOAD_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:288 */
+/* ServerSchemaGenerator.kt:289 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::model::CapturingPayload {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -793,7 +818,7 @@ impl CapturingPayload {
         Ok(builder.build())
     }
 }
-/* ServerCodegenVisitor.kt:404 */
+/* ServerCodegenVisitor.kt:399 */
 impl CapturingPayload {
     /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`CapturingPayload`](crate::model::CapturingPayload).
     /* ServerBuilderGenerator.kt:304 */
@@ -802,7 +827,7 @@ impl CapturingPayload {
         crate::model::capturing_payload::Builder::default()
         /* ServerBuilderGenerator.kt:304 */
     }
-    /* ServerCodegenVisitor.kt:404 */
+    /* ServerCodegenVisitor.kt:399 */
 }
 /* ServerStructureConstrainedTraitImpl.kt:21 */
 impl crate::constrained::Constrained for crate::model::CapturingPayload {
