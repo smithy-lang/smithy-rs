@@ -515,6 +515,10 @@ mod tests {
 
         struct TestStruct;
         impl SerializableStruct for TestStruct {
+            fn schema(&self) -> &Schema<'_> {
+                &SCHEMA
+            }
+
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&NAME, "Bob")?;
                 s.write_integer(&AGE, 25)?;
@@ -1110,6 +1114,10 @@ mod tests {
         enabled: bool,
     }
     impl SerializableStruct for BConnectionDraining {
+        fn schema(&self) -> &Schema<'_> {
+            &B_CD_SCHEMA
+        }
+
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             let val = &self.enabled;
             s.write_boolean(&B_CD_ENABLED, *val)
@@ -1119,6 +1127,10 @@ mod tests {
         connection_draining: BConnectionDraining,
     }
     impl SerializableStruct for BLoadBalancerAttributes {
+        fn schema(&self) -> &Schema<'_> {
+            &B_LBA_SCHEMA
+        }
+
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_struct(&B_LBA_CD, &self.connection_draining)
         }

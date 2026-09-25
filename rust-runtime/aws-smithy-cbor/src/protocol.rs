@@ -424,6 +424,10 @@ mod tests {
     /// A minimal input with no members, enough to drive `serialize_request`.
     struct EmptyInput;
     impl aws_smithy_schema::serde::SerializableStruct for EmptyInput {
+        fn schema(&self) -> &Schema<'_> {
+            &INPUT_SCHEMA
+        }
+
         fn serialize_members(
             &self,
             _: &mut dyn aws_smithy_schema::serde::ShapeSerializer,

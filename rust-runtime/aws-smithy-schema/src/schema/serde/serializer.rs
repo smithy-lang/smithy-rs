@@ -239,6 +239,10 @@ pub trait ShapeSerializer {
 ///
 /// ```ignore
 /// impl SerializableStruct for MyStruct {
+///     fn schema(&self) -> &Schema<'_> {
+///         &MY_STRUCT_SCHEMA
+///     }
+///
 ///     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
 ///         serializer.write_string(&NAME_SCHEMA, &self.name)?;
 ///         serializer.write_integer(&AGE_SCHEMA, self.age)?;
@@ -247,12 +251,33 @@ pub trait ShapeSerializer {
 /// }
 /// ```
 pub trait SerializableStruct {
+    /// Returns the schema of this structure or union itself, not of a member targeting it.
+    ///
+    /// Borrowed from `self` so a value can report a schema built at runtime; generated
+    /// types return their `'static` schema, which coerces to the shorter lifetime.
+    fn schema(&self) -> &Schema<'_>;
+
     /// Serializes this structure's members using the provided serializer.
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError>;
 }
 
 impl<T: SerializableStruct + ?Sized> SerializableStruct for Box<T> {
+    fn schema(&self) -> &Schema<'_> {
+        (**self).schema()
+    }
+
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         (**self).serialize_members(serializer)
+    }
+}
+
+// An infallible operation still satisfies generic serialization bounds; there is no value to serialize.
+impl SerializableStruct for std::convert::Infallible {
+    fn schema(&self) -> &Schema<'_> {
+        match *self {}
+    }
+
+    fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+        match *self {}
     }
 }

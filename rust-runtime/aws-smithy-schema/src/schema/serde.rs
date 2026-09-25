@@ -309,6 +309,15 @@ mod test {
         // A simple struct that serializes two fields
         struct TestStruct;
         impl SerializableStruct for TestStruct {
+            fn schema(&self) -> &Schema<'_> {
+                static SCHEMA: Schema<'static> = Schema::new_struct(
+                    crate::shape_id!("test", "TestStruct"),
+                    crate::ShapeType::Structure,
+                    &[],
+                );
+                &SCHEMA
+            }
+
             fn serialize_members(
                 &self,
                 serializer: &mut dyn ShapeSerializer,

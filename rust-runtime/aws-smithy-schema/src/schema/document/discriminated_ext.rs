@@ -250,6 +250,10 @@ mod tests {
     }
 
     impl SerializableStruct for Person {
+        fn schema(&self) -> &Schema<'_> {
+            &PERSON_SCHEMA
+        }
+
         fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             if let Some(n) = &self.name {
                 ser.write_string(&PERSON_NAME_MEMBER, n)?;
@@ -381,6 +385,10 @@ mod tests {
             data: Vec<u8>,
         }
         impl SerializableStruct for Blobby {
+            fn schema(&self) -> &Schema<'_> {
+                &BLOBBY_SCHEMA
+            }
+
             fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 ser.write_blob(
                     &BLOBBY_DATA_MEMBER,

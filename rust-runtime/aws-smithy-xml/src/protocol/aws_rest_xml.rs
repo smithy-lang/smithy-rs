@@ -401,6 +401,10 @@ mod tests {
 
     struct TestInput;
     impl SerializableStruct for TestInput {
+        fn schema(&self) -> &Schema<'_> {
+            &OP_SCHEMA
+        }
+
         fn serialize_members(
             &self,
             ser: &mut dyn ShapeSerializer,
