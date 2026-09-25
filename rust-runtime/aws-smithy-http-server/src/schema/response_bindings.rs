@@ -32,7 +32,8 @@ type CapturedHeaders = RefCell<Vec<(http::HeaderName, http::HeaderValue)>>;
 /// The pieces of a serialized response body, before assembly.
 #[derive(Debug)]
 pub(crate) struct ResponseParts {
-    pub(crate) body: Vec<u8>,
+    /// `Bytes` so a blob payload moves into the response without being copied.
+    pub(crate) body: bytes::Bytes,
     pub(crate) headers: Vec<(http::HeaderName, http::HeaderValue)>,
     /// Captured `@httpResponseCode` member value, if bound and set.
     pub(crate) status: Option<u16>,
@@ -258,7 +259,7 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
             value.serialize_members(&mut splitter)?;
         }
         return Ok(ResponseParts {
-            body: Vec::new(),
+            body: bytes::Bytes::new(),
             headers: headers.into_inner(),
             status: status.get(),
         });
@@ -268,7 +269,7 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
         let mut serializer = codec.create_serializer();
         serializer.write_struct(schema, value)?;
         return Ok(ResponseParts {
-            body: serializer.finish(),
+            body: serializer.finish().into(),
             headers: Vec::new(),
             status: None,
         });
@@ -294,7 +295,7 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
             plan,
         };
         value.serialize_members(&mut splitter)?;
-        Vec::new()
+        bytes::Bytes::new()
     } else {
         let mut body_serializer = codec.create_serializer();
         {
@@ -308,7 +309,7 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
             };
             body_serializer.write_struct(schema, &wrapper)?;
         }
-        body_serializer.finish()
+        body_serializer.finish().into()
     };
 
     // An unset payload member is an empty body, except an unset structure payload on the protocols
@@ -323,9 +324,9 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
             {
                 let mut serializer = codec.create_serializer();
                 serializer.write_struct(schema, &EmptyDocument(schema))?;
-                serializer.finish()
+                serializer.finish().into()
             }
-            None => Vec::new(),
+            None => bytes::Bytes::new(),
         }
     } else {
         body
@@ -363,7 +364,7 @@ impl SerializableStruct for EmptyDocument<'_> {
 
 /// A captured `@httpPayload` member value.
 struct CapturedPayload {
-    bytes: Vec<u8>,
+    bytes: bytes::Bytes,
 }
 
 /// Wrapper diverting bound top-level members into their sinks while
@@ -494,8 +495,8 @@ impl<C: Codec> ResponseBindingSplitter<'_, C> {
         Ok(())
     }
 
-    fn capture_payload(&self, bytes: Vec<u8>) {
-        *self.payload.borrow_mut() = Some(CapturedPayload { bytes });
+    fn capture_payload(&self, bytes: impl Into<bytes::Bytes>) {
+        *self.payload.borrow_mut() = Some(CapturedPayload { bytes: bytes.into() });
     }
 }
 
@@ -606,7 +607,7 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
 
     fn write_string(&mut self, schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
         if let ResponseMemberPlan::Payload { raw: true } = self.plan.member(schema) {
-            self.capture_payload(value.as_bytes().to_vec());
+            self.capture_payload(bytes::Bytes::copy_from_slice(value.as_bytes()));
             return Ok(());
         }
         if let ResponseMemberPlan::Header { name, media_type, .. } = self.plan.member(schema) {
@@ -622,7 +623,9 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
 
     fn write_blob(&mut self, schema: &Schema<'_>, value: aws_smithy_types::Blob) -> Result<(), SerdeError> {
         if let ResponseMemberPlan::Payload { raw: true } = self.plan.member(schema) {
-            self.capture_payload(value.into_inner());
+            // `into_bytes` hands over the blob's `Bytes` (a reference count); `into_inner` would
+            // copy the whole payload into a `Vec`.
+            self.capture_payload(value.into_bytes());
             return Ok(());
         }
         if let ResponseMemberPlan::Header { name, .. } = self.plan.member(schema) {
@@ -910,7 +913,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(split.status, Some(202));
-        assert_eq!(String::from_utf8(split.body.clone()).unwrap(), r#"{"msg":"hello"}"#);
+        assert_eq!(String::from_utf8(split.body.to_vec()).unwrap(), r#"{"msg":"hello"}"#);
         let headers: Vec<(String, String)> = split
             .headers
             .iter()
@@ -938,7 +941,7 @@ mod tests {
         .unwrap();
         assert_eq!(split.status, None);
         assert!(split.headers.is_empty());
-        let body = String::from_utf8(split.body).unwrap();
+        let body = String::from_utf8(split.body.to_vec()).unwrap();
         assert!(body.contains("\"code\":202"));
         assert!(body.contains("\"hdr\":\"hval\""));
         assert!(body.contains("\"msg\":\"hello\""));
@@ -993,7 +996,7 @@ mod tests {
         for bindings in [ResponseBindings::Rest, ResponseBindings::BodyOnly] {
             let split =
                 serialize_response_parts(&codec, &MODELED_EMPTY_OUT_SCHEMA, &EmptyOut, bindings, OUTPUT).unwrap();
-            assert_eq!(String::from_utf8(split.body).unwrap(), "{}");
+            assert_eq!(String::from_utf8(split.body.to_vec()).unwrap(), "{}");
         }
         let split = serialize_response_parts(
             &codec,
@@ -1014,7 +1017,7 @@ mod tests {
             ResponseValueKind::ModeledError,
         )
         .unwrap();
-        assert_eq!(String::from_utf8(split.body).unwrap(), "{}");
+        assert_eq!(String::from_utf8(split.body.to_vec()).unwrap(), "{}");
     }
 
     static EVENTS_MEMBER: Schema<'static> = Schema::new_member(
@@ -1152,6 +1155,35 @@ mod tests {
         }
     }
 
+    /// Regression (proof 31): a blob payload moves into the response body without a copy. The
+    /// body must be the blob's own memory, not a copy made by `Blob::into_inner`.
+    #[test]
+    fn blob_payload_body_shares_the_blob_bytes() {
+        // Like generated output structs: holds a `Blob` and clones it (a reference count).
+        struct SharedBlobOut(aws_smithy_types::Blob);
+        impl SerializableStruct for SharedBlobOut {
+            fn schema(&self) -> &Schema<'_> {
+                &BLOB_OUT_SCHEMA
+            }
+
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_blob(&BLOB_PAYLOAD_MEMBER, self.0.clone())
+            }
+        }
+
+        let payload = bytes::Bytes::from(vec![7u8; 1 << 16]);
+        let split = serialize_response_parts(
+            &json_codec(),
+            &BLOB_OUT_SCHEMA,
+            &SharedBlobOut(aws_smithy_types::Blob::from_maybe_shared(payload.clone())),
+            ResponseBindings::Rest,
+            ResponseValueKind::ModeledError,
+        )
+        .unwrap();
+        assert_eq!(split.body, payload);
+        assert_eq!(split.body.as_ptr(), payload.as_ptr(), "the payload was copied");
+    }
+
     #[test]
     fn payload_bodies() {
         // Blob payload: raw bytes.
@@ -1191,7 +1223,7 @@ mod tests {
         }
         let split =
             serialize_response_parts(&codec, &STRUCT_OUT_SCHEMA, &Unset, ResponseBindings::Rest, OUTPUT).unwrap();
-        assert_eq!(String::from_utf8(split.body).unwrap(), "{}");
+        assert_eq!(String::from_utf8(split.body.to_vec()).unwrap(), "{}");
         let split = serialize_response_parts(
             &codec,
             &STRUCT_OUT_SCHEMA,
@@ -1212,7 +1244,7 @@ mod tests {
             ResponseValueKind::ModeledError,
         )
         .unwrap();
-        assert_eq!(String::from_utf8(split.body).unwrap(), r#"{"f":"v"}"#);
+        assert_eq!(String::from_utf8(split.body.to_vec()).unwrap(), r#"{"f":"v"}"#);
     }
 
     static STRUCT_PAYLOAD_TARGET: Schema<'static> = Schema::new(
