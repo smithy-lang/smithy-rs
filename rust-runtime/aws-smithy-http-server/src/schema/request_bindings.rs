@@ -1138,6 +1138,13 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
                         // the member unset.
                         if !self.body.is_empty() {
                             let mut deser = self.codec.create_deserializer(self.body);
+                            // The generated member consumer reads `null` as unset, which is right
+                            // for a body member but not for a whole structure/union payload:
+                            // legacy rejects it. A `null` document payload stays a value.
+                            if matches!(member.shape_type(), ShapeType::Structure | ShapeType::Union) && deser.is_null()
+                            {
+                                return Err(SerdeError::invalid_input("expected payload member value"));
+                            }
                             if let Some(name) = member.xml_name() {
                                 let mut payload = StructuredPayloadDeserializer {
                                     inner: &mut deser,
@@ -1621,6 +1628,78 @@ mod tests {
             ]),
             owned(&[("list", "2"), ("timestamps", "1"), ("json", "{}"), ("prefix", "1")])
         );
+    }
+
+    static SP_TARGET_MEMBERS: [&Schema<'static>; 0] = [];
+    static SP_STRUCT_MEMBER: Schema<'static> = Schema::new_member(
+        ShapeId::from_parts("test#SpInput$nested", "test", "SpInput"),
+        ShapeType::Structure,
+        "nested",
+        0,
+    )
+    .with_http_payload();
+    static SP_DOC_MEMBER: Schema<'static> = Schema::new_member(
+        ShapeId::from_parts("test#SpDocInput$doc", "test", "SpDocInput"),
+        ShapeType::Document,
+        "doc",
+        0,
+    )
+    .with_http_payload();
+    static SP_MEMBERS: [&Schema<'static>; 1] = [&SP_STRUCT_MEMBER];
+    static SP_DOC_MEMBERS: [&Schema<'static>; 1] = [&SP_DOC_MEMBER];
+    static SP_INPUT: Schema<'static> = Schema::new_struct(
+        ShapeId::from_parts("test#SpInput", "test", "SpInput"),
+        ShapeType::Structure,
+        &SP_MEMBERS,
+    )
+    .with_http(HttpTrait::new("POST", "/sp", Some(200)));
+    static SP_DOC_INPUT: Schema<'static> = Schema::new_struct(
+        ShapeId::from_parts("test#SpDocInput", "test", "SpDocInput"),
+        ShapeType::Structure,
+        &SP_DOC_MEMBERS,
+    )
+    .with_http(HttpTrait::new("POST", "/sp", Some(200)));
+    static SP_TARGET: Schema<'static> = Schema::new_struct(
+        ShapeId::from_parts("test#Nested", "test", "Nested"),
+        ShapeType::Structure,
+        &SP_TARGET_MEMBERS,
+    );
+
+    /// Reads a payload the way generated code does (`null` → unset). `Ok(Some(true))` = set.
+    fn read_payload(input: &Schema<'_>, body: &[u8]) -> Result<Option<bool>, SerdeError> {
+        let codec = json_codec();
+        let (uri, headers) = request_parts("/sp", &[]);
+        let mut deser = RestRequestDeserializer::new(&codec, &uri, &headers, body);
+        let mut set = None;
+        deser.read_struct(input, &mut |member, d| {
+            if d.is_null() {
+                d.read_null()?;
+            } else if member.shape_type() == ShapeType::Document {
+                d.read_document(member)?;
+                set = Some(true);
+            } else {
+                d.read_struct(&SP_TARGET, &mut |_, _| Ok(()))?;
+                set = Some(true);
+            }
+            Ok(())
+        })?;
+        Ok(set)
+    }
+
+    /// Legacy rejects a structure/union `@httpPayload` whose body is `null` ("expected payload
+    /// member value"); a `null` document payload is a value, and an empty body leaves it unset.
+    #[test]
+    fn null_struct_payload_is_rejected_like_legacy() {
+        for body in [&b"null"[..], b" null", b"\n null \n"] {
+            assert!(
+                read_payload(&SP_INPUT, body).is_err(),
+                "{:?}",
+                std::str::from_utf8(body)
+            );
+        }
+        assert_eq!(read_payload(&SP_INPUT, b"").unwrap(), None);
+        assert_eq!(read_payload(&SP_INPUT, b"{}").unwrap(), Some(true));
+        assert!(read_payload(&SP_DOC_INPUT, b"null").is_ok());
     }
 
     #[test]
