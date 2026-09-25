@@ -129,6 +129,37 @@ pub trait ListenerExt: Listener + Sized {
 
 impl<L: Listener> ListenerExt for L {}
 
+#[derive(Debug)]
+pub(super) struct ConnectionLimit {
+    sem: Arc<Semaphore>,
+    max: usize,
+}
+
+impl ConnectionLimit {
+    pub(super) fn new(max: usize) -> Self {
+        Self {
+            sem: Arc::new(Semaphore::new(max)),
+            max,
+        }
+    }
+
+    pub(super) fn max(&self) -> usize {
+        self.max
+    }
+
+    pub(super) fn available_permits(&self) -> usize {
+        self.sem.available_permits()
+    }
+
+    pub(super) async fn acquire(&self) -> OwnedSemaphorePermit {
+        self.sem
+            .clone()
+            .acquire_owned()
+            .await
+            .expect("semaphore should never be closed")
+    }
+}
+
 /// Return type of [`ListenerExt::limit_connections`].
 ///
 /// See that method for details.
