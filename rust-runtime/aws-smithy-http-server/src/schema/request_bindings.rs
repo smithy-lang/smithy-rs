@@ -22,6 +22,7 @@
 //! internal builder exactly as any nested structure's walker would.
 
 use std::borrow::Cow;
+use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 use aws_smithy_runtime_api::http::{Headers, Uri};
 use aws_smithy_schema::codec::Codec;
@@ -1025,11 +1026,17 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
             } else if member.http_query_params().is_some() {
                 // Servers put ALL query parameters in the map, including ones
                 // also bound to explicit `@httpQuery` members.
+                // Grouped in order of first appearance. The index keeps this linear: a search of
+                // `entries` per pair made many distinct keys quadratic.
                 let mut entries: Vec<(String, Vec<String>)> = Vec::new();
+                let mut index: HashMap<&str, usize> = HashMap::new();
                 for (k, v) in &query_pairs {
-                    match entries.iter_mut().find(|(key, _)| key == k) {
-                        Some((_, values)) => values.push(v.clone()),
-                        None => entries.push((k.clone(), vec![v.clone()])),
+                    match index.entry(k.as_str()) {
+                        Entry::Occupied(slot) => entries[*slot.get()].1.push(v.clone()),
+                        Entry::Vacant(slot) => {
+                            slot.insert(entries.len());
+                            entries.push((k.clone(), vec![v.clone()]));
+                        }
                     }
                 }
                 let mut deser = StringMapDeserializer::new(entries);
@@ -1070,8 +1077,9 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
                 // Each header name once, in order of first appearance (`Headers::iter` yields
                 // one entry per value).
                 let mut names: Vec<&str> = Vec::new();
+                let mut seen: HashSet<&str> = HashSet::new();
                 for (name, _) in self.headers.iter() {
-                    if !names.contains(&name) {
+                    if seen.insert(name) {
                         names.push(name);
                     }
                 }
@@ -1376,6 +1384,67 @@ mod tests {
             aws_smithy_runtime_api::http::Request::try_from(builder.body(()).unwrap()).expect("valid test request");
         let parts = request.into_parts();
         (parts.uri, parts.headers)
+    }
+
+    static QUERY_PARAMS_MEMBER: Schema<'static> = Schema::new_member(
+        ShapeId::from_parts("test#QpInput$params", "test", "QpInput"),
+        ShapeType::Map,
+        "params",
+        0,
+    )
+    .with_http_query_params();
+    static QUERY_PARAMS_MEMBERS: [&Schema<'static>; 1] = [&QUERY_PARAMS_MEMBER];
+    static QUERY_PARAMS_INPUT: Schema<'static> = Schema::new_struct(
+        ShapeId::from_parts("test#QpInput", "test", "QpInput"),
+        ShapeType::Structure,
+        &QUERY_PARAMS_MEMBERS,
+    )
+    .with_http(HttpTrait::new("GET", "/qp", Some(200)));
+
+    /// `@httpQueryParams` groups every value per key, keys in order of first appearance.
+    #[test]
+    fn query_params_group_values_in_first_seen_order() {
+        let codec = json_codec();
+        let collect_params = |uri: &str| {
+            let (uri, headers) = request_parts(uri, &[]);
+            let mut deser = RestRequestDeserializer::new(&codec, &uri, &headers, b"");
+            let mut params: Vec<(String, Vec<String>)> = Vec::new();
+            deser
+                .read_struct(&QUERY_PARAMS_INPUT, &mut |member, d| {
+                    d.read_map(member, &mut |key, d| {
+                        let mut values = Vec::new();
+                        d.read_list(member, &mut |element| {
+                            values.push(element.read_string(member)?);
+                            Ok(())
+                        })?;
+                        params.push((key, values));
+                        Ok(())
+                    })
+                })
+                .unwrap();
+            params
+        };
+        let owned = |pairs: &[(&str, &[&str])]| -> Vec<(String, Vec<String>)> {
+            pairs
+                .iter()
+                .map(|(k, vs)| (k.to_string(), vs.iter().map(|v| v.to_string()).collect()))
+                .collect()
+        };
+        assert_eq!(
+            collect_params("/qp?b=1&a=2&b=3&c=&a=4"),
+            owned(&[("b", &["1", "3"]), ("a", &["2", "4"]), ("c", &[""])])
+        );
+        // Many distinct keys keep their order (and stay linear to group).
+        let uri = format!(
+            "/qp?{}",
+            (0..5000).map(|i| format!("k{i}={i}")).collect::<Vec<_>>().join("&")
+        );
+        let params = collect_params(&uri);
+        assert_eq!(params.len(), 5000);
+        assert!(params
+            .iter()
+            .enumerate()
+            .all(|(i, (k, vs))| *k == format!("k{i}") && *vs == [i.to_string()]));
     }
 
     #[test]
