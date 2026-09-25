@@ -70,9 +70,21 @@ pub(crate) fn parse_query_pairs(query: Option<&str>) -> Vec<(String, String)> {
 // URI label extraction
 // ============================================================================
 
+/// The value a `@httpLabel` member reads from its raw path segment. Like legacy
+/// (`ServerHttpBoundProtocolGenerator.generateParseStrFn`), string (and enum) and timestamp labels
+/// are percent-decoded, while number and boolean labels are parsed from the raw segment, so
+/// `%37` is not the integer 7.
+pub(crate) fn label_value(member: &Schema<'_>, raw: &str) -> Result<String, SerdeError> {
+    match member.shape_type() {
+        ShapeType::String | ShapeType::Timestamp => percent_decode(raw),
+        _ => Ok(raw.to_string()),
+    }
+}
+
 /// Extracts `@httpLabel` values from `path` by matching it against the
 /// `@http` URI `template` (path portion only — any query-literal portion of
-/// the template is ignored). Values are percent-decoded.
+/// the template is ignored). Values are returned raw, as they appear in the path: the reader
+/// percent-decodes them only for members that legacy decodes (see [`label_value`]).
 ///
 /// This is a re-match: the router has already accepted the request, so a
 /// mismatch here indicates a schema/routing inconsistency and is an error.
@@ -117,7 +129,7 @@ pub(crate) fn extract_labels<'t>(template: &'t str, path: &str) -> Result<Vec<(&
                             return Err(mismatch());
                         }
                     }
-                    Seg::Label(name) => labels.push((*name, percent_decode(value)?)),
+                    Seg::Label(name) => labels.push((*name, value.to_string())),
                     Seg::Greedy(_) => unreachable!(),
                 }
             }
@@ -137,7 +149,7 @@ pub(crate) fn extract_labels<'t>(template: &'t str, path: &str) -> Result<Vec<(&
                             return Err(mismatch());
                         }
                     }
-                    Seg::Label(name) => labels.push((*name, percent_decode(value)?)),
+                    Seg::Label(name) => labels.push((*name, value.to_string())),
                     Seg::Greedy(_) => unreachable!(),
                 }
             }
@@ -149,7 +161,7 @@ pub(crate) fn extract_labels<'t>(template: &'t str, path: &str) -> Result<Vec<(&
                             return Err(mismatch());
                         }
                     }
-                    Seg::Label(name) => labels.push((*name, percent_decode(value)?)),
+                    Seg::Label(name) => labels.push((*name, value.to_string())),
                     Seg::Greedy(_) => {
                         return Err(SerdeError::invalid_input(
                             "`@http` URI pattern cannot contain more than one greedy label",
@@ -159,7 +171,7 @@ pub(crate) fn extract_labels<'t>(template: &'t str, path: &str) -> Result<Vec<(&
             }
             let greedy_value = path_segs[pos..tail_start].join("/");
             if let Seg::Greedy(name) = template_segs[pos] {
-                labels.push((name, percent_decode(&greedy_value)?));
+                labels.push((name, greedy_value));
             }
         }
     }
@@ -1007,10 +1019,10 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
                 let value = labels
                     .iter()
                     .find(|(name, _)| name.as_ref() == member_name)
-                    .map(|(_, v)| v.clone())
+                    .map(|(_, raw)| label_value(member, raw))
                     .ok_or_else(|| {
                         SerdeError::invalid_input(format!("no `{{{member_name}}}` label in the `@http` URI pattern"))
-                    })?;
+                    })??;
                 let mut deser = DecodedValuesDeserializer::new(vec![Cow::Owned(value)], member, BindingLocation::Label);
                 consumer(member, &mut deser)?;
             } else if let Some(query) = member.http_query() {
@@ -1264,11 +1276,11 @@ mod tests {
         );
         assert!(parse_query_pairs(None).is_empty());
 
-        // Labels: plain (decoded), greedy (keeps slashes), greedy with a
-        // literal suffix, query-literal templates ignored, mismatches error.
+        // Labels: plain (raw; decoded per member by `label_value`), greedy (keeps slashes),
+        // greedy with a literal suffix, query-literal templates ignored, mismatches error.
         assert_eq!(
             extract_labels("/pets/{name}/{age}", "/pets/rex%20jr/7").unwrap(),
-            vec![("name", "rex jr".to_string()), ("age", "7".to_string())]
+            vec![("name", "rex%20jr".to_string()), ("age", "7".to_string())]
         );
         assert_eq!(
             extract_labels("/data/{key+}/meta", "/data/a/b/meta").unwrap(),
@@ -1700,6 +1712,38 @@ mod tests {
         assert_eq!(read_payload(&SP_INPUT, b"").unwrap(), None);
         assert_eq!(read_payload(&SP_INPUT, b"{}").unwrap(), Some(true));
         assert!(read_payload(&SP_DOC_INPUT, b"null").is_ok());
+    }
+
+    /// Legacy percent-decodes string and timestamp labels but parses number and boolean labels
+    /// from the raw segment: `/pets/%37` is the name "7", but `%37` is not the age 7.
+    #[test]
+    fn only_string_and_timestamp_labels_are_percent_decoded() {
+        assert_eq!(label_value(&NAME_MEMBER, "rex%20jr").unwrap(), "rex jr");
+        assert_eq!(label_value(&NAME_MEMBER, "%37").unwrap(), "7");
+        assert!(label_value(&NAME_MEMBER, "%FF").is_err());
+        let ts = Schema::new_member(
+            ShapeId::from_parts("test#Input$ts", "test", "Input"),
+            ShapeType::Timestamp,
+            "ts",
+            0,
+        );
+        assert_eq!(
+            label_value(&ts, "2020-01-01T00%3A00%3A00Z").unwrap(),
+            "2020-01-01T00:00:00Z"
+        );
+        for raw in ["%37", "%2D1", "tru%65"] {
+            assert_eq!(label_value(&AGE_MEMBER, raw).unwrap(), raw);
+        }
+
+        // End to end: a string label decodes; an integer label is parsed raw and rejected.
+        let (uri, headers) = request_parts("/pets/%37", &[]);
+        assert_eq!(collect(&uri, &headers, b"").unwrap().name.as_deref(), Some("7"));
+        let mut deser = DecodedValuesDeserializer::new(
+            vec![Cow::Owned(label_value(&AGE_MEMBER, "%37").unwrap())],
+            &AGE_MEMBER,
+            BindingLocation::Label,
+        );
+        assert!(deser.read_integer(&AGE_MEMBER).is_err());
     }
 
     #[test]
