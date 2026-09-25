@@ -157,10 +157,7 @@ fun renderClientEventStreamBody(
     val serializerGenerator = protocol.structuredDataSerializer()
     val errorMarshallerConstructorFn =
         software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.EventStreamErrorMarshallerGenerator(
-            model,
-            software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget.CLIENT,
-            codegenContext.runtimeConfig,
-            symbolProvider,
+            codegenContext,
             unionShape,
             serializerGenerator,
             payloadContentType,
@@ -168,10 +165,7 @@ fun renderClientEventStreamBody(
         ).render()
     val eventStreamMarshallerGenerator =
         software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.EventStreamMarshallerGenerator(
-            model,
-            software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget.CLIENT,
-            codegenContext.runtimeConfig,
-            symbolProvider,
+            codegenContext,
             unionShape,
             serializerGenerator,
             payloadContentType,

@@ -627,7 +627,7 @@ class ResponseDeserializerGenerator(
     }
 
     private fun typeEraseResult(): RuntimeType =
-        ProtocolFunctions.crossOperationFn("type_erase_result") { fnName ->
+        ProtocolFunctions.crossOperationFn(codegenContext, "type_erase_result") { fnName ->
             rustTemplate(
                 """
                 pub(crate) fn $fnName<O, E>(result: #{Result}<O, E>) -> #{Result}<#{Output}, #{OrchestratorError}<#{Error}>>
