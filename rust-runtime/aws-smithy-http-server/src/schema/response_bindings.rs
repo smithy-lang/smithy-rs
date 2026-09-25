@@ -774,10 +774,8 @@ impl ShapeSerializer for PrefixHeaderCollector<'_> {
                 Ok(())
             }
             Some(key) => {
-                // Mirror the header skip-empty rule.
-                if value.is_empty() {
-                    return Ok(());
-                }
+                // An empty value is still sent (`x-p-empty:`), as legacy does: unlike bound
+                // headers, prefix headers have no skip-empty rule.
                 let name = http::HeaderName::try_from(format!("{}{}", self.prefix, key)).map_err(|err| {
                     SerdeError::custom(format!(
                         "`{}{}` cannot be used as a header name: {err}",

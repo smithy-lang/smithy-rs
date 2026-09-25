@@ -1044,24 +1044,39 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
             } else if let Some(header) = member.http_header() {
                 let values = self.header_values(header.value());
                 if !values.is_empty() {
-                    if matches!(
-                        member.shape_type(),
+                    // Legacy parses these through `read_many_*` / `many_dates` and leaves the
+                    // member unset when that yields no tokens (e.g. `x-list:`). A `@mediaType`
+                    // string takes the same path, unlike a plain string (`one_or_none`).
+                    let list_element = match member.shape_type() {
+                        ShapeType::List => member.member(),
+                        _ => None,
+                    };
+                    let date_element = match list_element {
+                        Some(element) if element.shape_type() == ShapeType::Timestamp => Some(element),
+                        None if member.shape_type() == ShapeType::Timestamp => Some(*member),
+                        _ => None,
+                    };
+                    let text_tokens = match member.shape_type() {
                         ShapeType::Boolean
-                            | ShapeType::Byte
-                            | ShapeType::Short
-                            | ShapeType::Integer
-                            | ShapeType::Long
-                            | ShapeType::Float
-                            | ShapeType::Double
-                    ) {
+                        | ShapeType::Byte
+                        | ShapeType::Short
+                        | ShapeType::Integer
+                        | ShapeType::Long
+                        | ShapeType::Float
+                        | ShapeType::Double => true,
+                        ShapeType::String => member.media_type().is_some(),
+                        ShapeType::List => date_element.is_none(),
+                        _ => false,
+                    };
+                    if text_tokens {
                         let tokens = aws_smithy_http::header::read_many_from_str::<String>(values.iter().copied())
                             .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
                         if tokens.is_empty() {
                             continue;
                         }
                     }
-                    if member.shape_type() == ShapeType::Timestamp {
-                        let format = resolve_timestamp_format(member, member, BindingLocation::Header);
+                    if let Some(element) = date_element {
+                        let format = resolve_timestamp_format(element, member, BindingLocation::Header);
                         if aws_smithy_http::header::many_dates(values.iter().copied(), format)
                             .map_err(|e| SerdeError::invalid_input(e.to_string()))?
                             .is_empty()
@@ -1099,10 +1114,9 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
                         entries.push((suffix.to_string(), values));
                     }
                 }
-                if !entries.is_empty() {
-                    let mut deser = StringMapDeserializer::new(entries);
-                    consumer(member, &mut deser)?;
-                }
+                // Always set, even with no matching header: legacy servers yield `Some({})`.
+                let mut deser = StringMapDeserializer::new(entries);
+                consumer(member, &mut deser)?;
             } else if member.http_payload().is_some() {
                 // A streaming payload is never collected: the generated streaming glue attaches
                 // the live body after the walker has run.
@@ -1487,6 +1501,128 @@ mod tests {
         let (uri, headers) = request_parts("/pets/rex?age=notanumber", &[]);
         assert!(collect(&uri, &headers, b"").is_err());
     }
+    static HP_STRING: Schema<'static> = Schema::new(
+        ShapeId::from_parts("smithy.api#String", "smithy.api", "String"),
+        ShapeType::String,
+    );
+    static HP_TIMESTAMP: Schema<'static> = Schema::new(
+        ShapeId::from_parts("smithy.api#Timestamp", "smithy.api", "Timestamp"),
+        ShapeType::Timestamp,
+    );
+    static HP_LIST_MEMBER: Schema<'static> = Schema::new_member(
+        ShapeId::from_parts("test#HpInput$list", "test", "HpInput"),
+        ShapeType::List,
+        "list",
+        0,
+    )
+    .with_list_member(&HP_STRING)
+    .with_http_header("x-list");
+    static HP_TIMESTAMPS_MEMBER: Schema<'static> = Schema::new_member(
+        ShapeId::from_parts("test#HpInput$timestamps", "test", "HpInput"),
+        ShapeType::List,
+        "timestamps",
+        1,
+    )
+    .with_list_member(&HP_TIMESTAMP)
+    .with_http_header("x-tl");
+    static HP_JSON_MEMBER: Schema<'static> = Schema::new_member(
+        ShapeId::from_parts("test#HpInput$json", "test", "HpInput"),
+        ShapeType::String,
+        "json",
+        2,
+    )
+    .with_media_type("application/json")
+    .with_http_header("x-json");
+    static HP_PREFIX_MEMBER: Schema<'static> = Schema::new_member(
+        ShapeId::from_parts("test#HpInput$prefix", "test", "HpInput"),
+        ShapeType::Map,
+        "prefix",
+        3,
+    )
+    .with_http_prefix_headers("x-foo-");
+    static HP_MEMBERS: [&Schema<'static>; 4] = [
+        &HP_LIST_MEMBER,
+        &HP_TIMESTAMPS_MEMBER,
+        &HP_JSON_MEMBER,
+        &HP_PREFIX_MEMBER,
+    ];
+    static HP_INPUT: Schema<'static> = Schema::new_struct(
+        ShapeId::from_parts("test#HpInput", "test", "HpInput"),
+        ShapeType::Structure,
+        &HP_MEMBERS,
+    )
+    .with_http(HttpTrait::new("GET", "/hp", Some(200)));
+
+    /// Which header-bound members get set, and to how many list items / map entries (or the
+    /// string value). Legacy leaves a list or `@mediaType` header with no tokens unset, and
+    /// always sets `@httpPrefixHeaders` (possibly empty).
+    fn header_presence(headers: &[(&'static str, &str)]) -> Vec<(String, String)> {
+        let codec = json_codec();
+        let (uri, headers) = request_parts("/hp", headers);
+        let mut deser = RestRequestDeserializer::new(&codec, &uri, &headers, b"");
+        let mut set = Vec::new();
+        deser
+            .read_struct(&HP_INPUT, &mut |member, d| {
+                let summary = match member.member_index() {
+                    Some(0) | Some(1) => {
+                        let mut n = 0;
+                        d.read_list(member, &mut |element| {
+                            match member.member().map(|m| m.shape_type()) {
+                                Some(ShapeType::Timestamp) => {
+                                    element.read_timestamp(member.member().unwrap())?;
+                                }
+                                _ => {
+                                    element.read_string(member)?;
+                                }
+                            }
+                            n += 1;
+                            Ok(())
+                        })?;
+                        n.to_string()
+                    }
+                    Some(2) => d.read_string(member)?,
+                    Some(3) => {
+                        let mut n = 0;
+                        d.read_map(member, &mut |_, value| {
+                            value.read_string(member)?;
+                            n += 1;
+                            Ok(())
+                        })?;
+                        n.to_string()
+                    }
+                    _ => return Ok(()),
+                };
+                set.push((member.member_name().unwrap().to_string(), summary));
+                Ok(())
+            })
+            .unwrap();
+        set
+    }
+
+    #[test]
+    fn empty_header_presence_matches_legacy() {
+        let owned = |pairs: &[(&str, &str)]| -> Vec<(String, String)> {
+            pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+        };
+        // No headers: only the prefix map is set (empty).
+        assert_eq!(header_presence(&[]), owned(&[("prefix", "0")]));
+        // Empty list and `@mediaType` headers leave the member unset.
+        assert_eq!(
+            header_presence(&[("x-list", ""), ("x-tl", ""), ("x-json", "")]),
+            owned(&[("prefix", "0")])
+        );
+        // Non-empty values are still read.
+        assert_eq!(
+            header_presence(&[
+                ("x-list", "a, b"),
+                ("x-tl", "Thu, 01 Jan 1970 00:00:00 GMT"),
+                ("x-json", "e30="),
+                ("x-foo-a", ""),
+            ]),
+            owned(&[("list", "2"), ("timestamps", "1"), ("json", "{}"), ("prefix", "1")])
+        );
+    }
+
     #[test]
     fn prefix_repeats_reject_but_scalar_query_keeps_first() {
         let (uri, headers) = request_parts("/pets/rex", &[("x-meta-color", "red"), ("x-meta-color", "blue")]);
