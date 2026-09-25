@@ -7,19 +7,19 @@ description = "test"
 edition = "2021"
 
 [package.metadata.smithy]
-codegen-version = "unknown"
+codegen-version = "2ef67c4135fcb9e83082c61010acc35a2a5be1b5"
 protocol = "aws.protocols#restJson1"
 [dependencies.aws-smithy-eventstream]
-path = "/home/fahad/decoupled/smithy-rs-fable-clean/rust-runtime/aws-smithy-eventstream"
+path = "/home/fahad/decoupled/smithy-rs-fable-clean-multi/rust-runtime/aws-smithy-eventstream"
 [dependencies.aws-smithy-http]
-path = "/home/fahad/decoupled/smithy-rs-fable-clean/rust-runtime/aws-smithy-http"
+path = "/home/fahad/decoupled/smithy-rs-fable-clean-multi/rust-runtime/aws-smithy-http"
 features = ["event-stream"]
 [dependencies.aws-smithy-http-server]
-path = "/home/fahad/decoupled/smithy-rs-fable-clean/rust-runtime/aws-smithy-http-server"
+path = "/home/fahad/decoupled/smithy-rs-fable-clean-multi/rust-runtime/aws-smithy-http-server"
 [dependencies.aws-smithy-schema]
-path = "/home/fahad/decoupled/smithy-rs-fable-clean/rust-runtime/aws-smithy-schema"
+path = "/home/fahad/decoupled/smithy-rs-fable-clean-multi/rust-runtime/aws-smithy-schema"
 [dependencies.aws-smithy-types]
-path = "/home/fahad/decoupled/smithy-rs-fable-clean/rust-runtime/aws-smithy-types"
+path = "/home/fahad/decoupled/smithy-rs-fable-clean-multi/rust-runtime/aws-smithy-types"
 features = ["http-body-1-x"]
 [dependencies.bytes]
 version = "1.4.0"
