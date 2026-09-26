@@ -1,0 +1,57 @@
+---
+applies_to: ["client", "aws-sdk-rust"]
+authors: ["yychen23"]
+references: ["smithy-rs#4681"]
+breaking: false
+new_feature: true
+bug_fix: false
+---
+`aws-sigv4` and `aws-smithy-checksums` can now perform their cryptography with [aws-lc-rs](https://github.com/aws/aws-lc-rs) instead of the RustCrypto crates, including the FIPS 140-3 validated build of AWS-LC. That covers SigV4 HMAC-SHA256 signing, SigV4a ECDSA-P256 signing, and SHA-1/SHA-256 request checksums.
+
+Nothing changes unless you ask for it. The RustCrypto crates stay unconditional dependencies and remain the backend unless you select an AWS-LC one, so a default build behaves exactly as before, byte for byte. Selecting AWS-LC changes which implementation runs; it does not remove RustCrypto from the dependency tree.
+
+```toml
+# non-FIPS AWS-LC
+aws-sigv4 = { version = "...", features = ["aws-lc-rs"] }
+aws-smithy-checksums = { version = "...", features = ["aws-lc-rs"] }
+# FIPS 140-3 validated AWS-LC
+aws-sigv4 = { version = "...", features = ["aws-lc-rs-fips"] }
+aws-smithy-checksums = { version = "...", features = ["aws-lc-rs-fips"] }
+```
+
+Notes on the new features:
+
+- `aws-lc-rs-fips` takes precedence over `aws-lc-rs`, and either takes precedence over `rustcrypto`, so enabling more than one (which Cargo feature unification does routinely) resolves to the strongest backend rather than failing to build.
+- The `aws-lc-rs` floor is 1.17.0, chosen for the AWS-LC module versions it reaches rather than for its API. `aws-lc-rs` 1.17.x resolves `aws-lc-fips-sys` 0.13.x — the AWS-LC-FIPS 3.x line, which holds a CMVP certificate — whereas 1.18.x resolves `aws-lc-fips-sys` 0.14.x, which is AWS-LC-FIPS 4.1.0 and still in-process rather than certificated. 1.17.0 is the lowest floor that reaches the certificated line *and* a patched `aws-lc-sys`: 1.16.x pins `aws-lc-sys` to the 0.38.x line, which RUSTSEC-2026-0044 and RUSTSEC-2026-0048 patch only in 0.39.0, with no 0.38.x fix. Note Cargo resolves to the highest compatible version, so a fresh lockfile still takes 1.18.x and therefore the in-process module — if you need a certificated module today, pin `aws-lc-rs` to `~1.17` yourself.
+- Both aws-lc-rs backends are a per-target capability, which is why `rustcrypto` stays the default — it is the only backend that builds everywhere the SDK does. `aws-lc-rs` needs a C/C++ compiler and works on every target [aws-lc-rs supports](https://aws.github.io/aws-lc-rs/platform_support.html); the only WASM target it supports is `wasm32-unknown-emscripten`, so `wasm32-unknown-unknown` and the WASI targets have to stay on `rustcrypto`. `aws-lc-rs-fips` additionally needs CMake and Go, and covers a subset: Linux (gnu and musl), macOS, Windows MSVC, and FreeBSD — not iOS, not Android, not WASM.
+- You usually don't need to set these per crate. Generated SDK crates and `aws-config` now carry a single `aws-lc-fips` feature that turns on all of it at once — see below.
+
+`aws-sigv4` specifics:
+
+- SigV4a signatures are non-deterministic, so switching the ECDSA implementation does not change any verifiable output. The signing key derivation is unchanged, and its 256-bit integer math stays on `crypto-bigint` in a FIPS build: that math is the key derivation the signing spec defines, not a cryptographic primitive, so it is not a gap in the FIPS story.
+- With `sigv4a` and an aws-lc-rs backend both enabled, the `p256` crate is still compiled even though signing no longer calls it. Cargo features are additive, so `sigv4a` cannot declare `p256` only for the `rustcrypto` case. It carries no FIPS-relevant work in that configuration, and the test suite uses it to verify AWS-LC's signatures independently.
+
+`aws-smithy-checksums` specifics:
+
+- MD5 is only available on the RustCrypto backend. aws-lc-rs does not expose MD5 and it is not FIPS-approved. This is not a behavior change: `ChecksumAlgorithm::Md5` is deprecated and already resolves to CRC-32, so no public API reaches MD5.
+
+## One switch for end-to-end FIPS
+
+Generated SDK crates and `aws-config` have a new opt-in `aws-lc-fips` feature that routes **TLS, request signing, and request checksums** through the FIPS 140-3 validated build of AWS-LC together, instead of requiring you to align a feature on each runtime crate by hand:
+
+```toml
+aws-sdk-s3 = { version = "...", features = ["aws-lc-fips"] }
+# or, for applications that configure through aws-config:
+aws-config = { version = "...", features = ["aws-lc-fips"] }
+```
+
+The three paths reach a service crate by different routes, so enabling this feature fans out to `aws-smithy-runtime/aws-lc-fips` (TLS, via `aws-smithy-http-client`'s `rustls-aws-lc-fips`), `aws-runtime/aws-lc-fips` (signing, via `aws-sigv4/aws-lc-rs-fips`), and `aws-smithy-checksums/aws-lc-rs-fips`. The checksums arm is only present on service crates that have checksum operations, so a service without them doesn't gain the dependency. Two intermediate features are new and can also be used directly: `aws-runtime/aws-lc-fips` and `aws-smithy-runtime/aws-lc-fips`.
+
+What this feature does not cover:
+
+- TLS is only made FIPS for the hyper 1.x client from `aws-smithy-http-client`. Two ways a build can miss it:
+  - **A `BehaviorVersion` older than `v2026_01_12`** selects the legacy hyper 0.14.x client, whose TLS is `rustls` 0.21 on `ring`. Signing and checksums are still FIPS, but TLS is not, so the build is not end-to-end FIPS. This combination now logs a warning naming the behavior version to move to; use `BehaviorVersion::v2026_01_12()` or later, or drop the legacy stack, to get FIPS TLS.
+  - **An HTTP client installed explicitly** — `s2n-tls` or a custom connector — is unaffected, since this feature does not install a client for you. That case can't be detected and isn't warned about. If you use `s2n-tls`, note it is AWS-LC-based already and its own `fips` feature selects the same validated module, so enabling `s2n-tls`'s `fips` feature in your manifest does give you FIPS TLS; `aws-smithy-http-client` does not forward it for you.
+- `aws-config`'s `credentials-login` feature signs DPoP (RFC 9449) proof JWTs with `p256` ECDSA itself, and that is not routed through AWS-LC. A FIPS deployment using `credentials-login` is not fully covered.
+- `aws-config`'s `sso` and `credentials-login` features hash a start URL or session string with SHA-1 and SHA-256 to name a cache file. Those are RustCrypto and stay that way; they are not security functions.
+- A build with `aws-lc-fips` also contains the non-validated `aws-lc-sys`, because rustls's own `fips` feature stacks on its `aws_lc_rs` feature. Both AWS-LC builds are compiled; aws-lc-rs uses the validated one, so the crypto in use is the validated module.
