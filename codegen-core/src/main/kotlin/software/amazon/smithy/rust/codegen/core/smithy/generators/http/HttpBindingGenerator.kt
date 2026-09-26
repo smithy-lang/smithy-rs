@@ -14,19 +14,16 @@ import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.DocumentShape
-import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.model.shapes.SimpleShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
@@ -37,7 +34,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -137,6 +133,13 @@ class HttpBindingGenerator(
     private val index = HttpBindingIndex.of(model)
     private val headerUtil = RuntimeType.smithyHttp(runtimeConfig).resolve("header")
     private val defaultTimestampFormat = TimestampFormatTrait.Format.EPOCH_SECONDS
+    private val headerValueParser =
+        HttpHeaderValueParserGenerator(
+            codegenContext,
+            symbolProvider,
+            defaultTimestampFormat,
+            customizations,
+        )
     private val protocolFunctions = ProtocolFunctions(codegenContext)
     private val serializerUtil = SerializerUtil(model, symbolProvider)
 
@@ -390,117 +393,8 @@ class HttpBindingGenerator(
         targetShape: Shape,
         memberShape: MemberShape,
     ) {
-        val rustType = symbolProvider.toSymbol(targetShape).rustType().stripOuter<RustType.Option>()
-        // Normally, we go through a flow that looks for `,`s but that's wrong if the output
-        // is just a single string (which might include `,`s.).
-        // MediaType doesn't include `,` since it's base64, send that through the normal path
-        if (targetShape is StringShape && !targetShape.hasTrait<MediaTypeTrait>()) {
-            rust("#T::one_or_none_bytes(headers)", headerUtil)
-            return
-        }
-        val (coreType, coreShape) =
-            if (targetShape is CollectionShape) {
-                val coreShape = model.expectShape(targetShape.member.target)
-                symbolProvider.toSymbol(coreShape).rustType() to coreShape
-            } else {
-                rustType to targetShape
-            }
-        val parsedValue = safeName()
-        if (coreShape.isTimestampShape()) {
-            val timestampFormat =
-                index.determineTimestampFormat(
-                    memberShape,
-                    HttpBinding.Location.HEADER,
-                    defaultTimestampFormat,
-                )
-            val timestampFormatType = RuntimeType.parseTimestampFormat(codegenTarget, runtimeConfig, timestampFormat)
-            rust(
-                "let $parsedValue: Vec<${coreType.render()}> = #T::many_dates_bytes(headers, #T)?",
-                headerUtil,
-                timestampFormatType,
-            )
-            for (customization in customizations) {
-                customization.section(HttpBindingSection.AfterDeserializingIntoADateTimeOfHttpHeaders(memberShape))(this)
-            }
-            rust(";")
-        } else if (coreShape.isPrimitive()) {
-            rust(
-                "let $parsedValue = #T::read_many_primitive_bytes::<${coreType.render()}>(headers)?;",
-                headerUtil,
-            )
-        } else {
-            rust(
-                "let $parsedValue: Vec<${coreType.render()}> = #T::read_many_from_str_bytes(headers)?;",
-                headerUtil,
-            )
-            if (coreShape.hasTrait<MediaTypeTrait>()) {
-                rustTemplate(
-                    """
-                    let $parsedValue: std::result::Result<Vec<_>, _> = $parsedValue
-                        .iter().map(|s|
-                            #{base_64_decode}(s).map_err(|_|#{header}::ParseError::new("failed to decode base64"))
-                            .and_then(|bytes|String::from_utf8(bytes).map_err(|_|#{header}::ParseError::new("base64 encoded data was not valid utf-8")))
-                        ).collect();
-                    """,
-                    "base_64_decode" to RuntimeType.base64Decode(runtimeConfig),
-                    "header" to headerUtil,
-                )
-                rust("let $parsedValue = $parsedValue?;")
-            }
-        }
-        when (rustType) {
-            is RustType.Vec ->
-                rust(
-                    """
-                    Ok(if !$parsedValue.is_empty() {
-                        Some($parsedValue)
-                    } else {
-                        None
-                    })
-                    """,
-                )
-
-            is RustType.HashSet ->
-                rust(
-                    """
-                    Ok(if !$parsedValue.is_empty() {
-                        Some($parsedValue.into_iter().collect())
-                    } else {
-                        None
-                    })
-                    """,
-                )
-
-            else -> {
-                if (targetShape is ListShape) {
-                    // This is a constrained list shape and we must therefore be generating a server SDK.
-                    check(codegenTarget == CodegenTarget.SERVER)
-                    check(rustType is RustType.Opaque)
-                    rust(
-                        """
-                        Ok(if !$parsedValue.is_empty() {
-                            Some(#T($parsedValue))
-                        } else {
-                            None
-                        })
-                        """,
-                        symbolProvider.toSymbol(targetShape),
-                    )
-                } else {
-                    check(targetShape is SimpleShape)
-                    rustTemplate(
-                        """
-                        if $parsedValue.len() > 1 {
-                            Err(#{header_util}::ParseError::new(format!("expected one item but found {}", $parsedValue.len())))
-                        } else {
-                            let mut $parsedValue = $parsedValue;
-                            Ok($parsedValue.pop())
-                        }
-                        """,
-                        "header_util" to headerUtil,
-                    )
-                }
-            }
+        with(headerValueParser) {
+            renderHeaderValueParser(targetShape, memberShape)
         }
     }
 

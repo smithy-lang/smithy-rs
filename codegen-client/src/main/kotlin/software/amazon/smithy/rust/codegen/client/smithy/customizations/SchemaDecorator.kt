@@ -61,6 +61,9 @@ object SchemaSerdeAllowlist {
             // awsJson1_1 — first service on the schema path. Its model lives at
             // `aws/sdk/aws-models/ssm.json` so CI generates and tests it.
             "com.amazonaws.ssm",
+            // Dedicated namespace for tests that must exercise schema-exclusive generation
+            // independently of production service and protocol rollout state.
+            "smithy.rust.codegen.test.schemaheaders",
             // Test model namespaces, listed explicitly until protocols are fully enabled.
             // restJson1
             // "aws.protocoltests.restjson",  // RestJson, RestJsonExtras

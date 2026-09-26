@@ -38,10 +38,13 @@ import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpHeaderValueParserGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.http.nonUtf8HeaderShouldBeSkipped
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
@@ -982,6 +985,42 @@ class SchemaGenerator(
     }
 
     /**
+     * Retains the original generated response-deserialization API while giving in-tree client
+     * callers a ConfigBag-aware variant for response header policy. An empty bag preserves the
+     * default reject behavior for existing direct callers.
+     */
+    private fun renderDeserializeWithResponseCompatibility(
+        writer: RustWriter,
+        structName: String,
+    ) {
+        writer.rustTemplate(
+            """
+            impl $structName {
+                /// Deserializes this structure from a body deserializer and HTTP response.
+                pub fn deserialize_with_response(
+                    deserializer: &mut dyn #{ShapeDeserializer},
+                    headers: &#{Headers},
+                    status: u16,
+                    body: &[u8],
+                ) -> ::std::result::Result<Self, #{SerdeError}> {
+                    Self::deserialize_with_response_with_config(
+                        deserializer,
+                        headers,
+                        status,
+                        body,
+                        &#{ConfigBag}::base(),
+                    )
+                }
+            }
+            """,
+            "ShapeDeserializer" to smithySchema.resolve("serde::ShapeDeserializer"),
+            "SerdeError" to smithySchema.resolve("serde::SerdeError"),
+            "Headers" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("http::Headers"),
+            "ConfigBag" to RuntimeType.configBag(runtimeConfig),
+        )
+    }
+
+    /**
      * Generates a `deserialize_http_headers` method on the output type that reads
      * `@httpHeader`, `@httpResponseCode`, and `@httpPrefixHeaders` members directly
      * from the HTTP response. This is called by the generated `deserialize_nonstreaming`
@@ -998,11 +1037,11 @@ class SchemaGenerator(
         val structShape = shape as StructureShape
         val members = structShape.allMembers.values.toList()
 
-        data class HeaderMember(val memberName: String, val headerName: String, val isBool: Boolean, val target: Shape?, val member: MemberShape? = null, val hasMediaType: Boolean = false)
+        data class HeaderMember(val memberName: String, val headerName: String, val target: Shape?, val member: MemberShape? = null)
 
         data class StatusMember(val memberName: String)
 
-        data class PrefixMember(val memberName: String, val prefix: String)
+        data class PrefixMember(val memberName: String, val prefix: String, val target: MapShape, val member: MemberShape)
 
         val headerMembers = mutableListOf<HeaderMember>()
         var statusMember: StatusMember? = null
@@ -1016,20 +1055,23 @@ class SchemaGenerator(
             val target = model.expectShape(member.target)
 
             if (httpHeader.isPresent) {
-                val hasMediaType =
-                    target.hasTrait(software.amazon.smithy.model.traits.MediaTypeTrait::class.java) ||
-                        member.hasTrait(software.amazon.smithy.model.traits.MediaTypeTrait::class.java)
-                headerMembers.add(HeaderMember(memberName, httpHeader.get().value, target is BooleanShape, target, member, hasMediaType))
+                headerMembers.add(HeaderMember(memberName, httpHeader.get().value, target, member))
             } else if (httpResponseCode.isPresent) {
                 statusMember = StatusMember(memberName)
             } else if (httpPrefixHeaders.isPresent) {
-                prefixMember = PrefixMember(memberName, httpPrefixHeaders.get().value)
+                check(target is MapShape)
+                prefixMember = PrefixMember(memberName, httpPrefixHeaders.get().value, target, member)
             }
         }
 
         // Also check synthetic members
         for (synth in syntheticMembers) {
-            headerMembers.add(HeaderMember(synth.fieldName, synth.httpHeaderName, false, null))
+            headerMembers.add(HeaderMember(synth.fieldName, synth.httpHeaderName, null))
+        }
+
+        val hasModeledHeaderMembers = headerMembers.any { it.member != null } || prefixMember != null
+        if (hasModeledHeaderMembers) {
+            renderDeserializeWithResponseCompatibility(writer, structName)
         }
 
         // Detect @httpPayload member early — needed for both early-return and main paths
@@ -1154,6 +1196,9 @@ class SchemaGenerator(
         }
 
         val headersParam = if (headerMembers.isNotEmpty() || prefixMember != null) "headers" else "_headers"
+        val responseMethodName =
+            if (hasModeledHeaderMembers) "deserialize_with_response_with_config" else "deserialize_with_response"
+        val configParam = if (hasModeledHeaderMembers) "cfg: &#{ConfigBag}," else ""
         // Check if there are any body members (non-HTTP-bound, non-synthetic, non-streaming)
         val hasBodyMembers =
             structShape.allMembers.values.any { member ->
@@ -1179,11 +1224,12 @@ class SchemaGenerator(
                 /// Deserializes this structure from a body deserializer and HTTP response headers.
                 /// Header-bound members are read directly from headers, avoiding runtime
                 /// member iteration overhead. Body members are read via the deserializer.
-                pub fn deserialize_with_response(
+                pub fn $responseMethodName(
                     $deserializerParam: &mut dyn #{ShapeDeserializer},
                     $headersParam: &#{Headers},
                     _status: u16,
                     $bodyParam: &[u8],
+                    $configParam
                 ) -> ::std::result::Result<Self, #{SerdeError}> {
                     ##[allow(unused_variables, unused_mut)]
                     let mut builder = Self::builder();
@@ -1191,180 +1237,71 @@ class SchemaGenerator(
             "ShapeDeserializer" to smithySchema.resolve("serde::ShapeDeserializer"),
             "SerdeError" to smithySchema.resolve("serde::SerdeError"),
             "Headers" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("http::Headers"),
+            "ConfigBag" to RuntimeType.configBag(runtimeConfig),
         )
 
-        // TODO(schema-serde): this block reads headers with the string accessors on `Headers`, which
-        //  skip values that are not valid UTF-8. A header the peer actually sent is therefore dropped
-        //  with no error, where the legacy path reports a `ParseError` naming the member. See
-        //  https://github.com/smithy-lang/smithy-rs/pull/4868.
-        //
-        //  More broadly, this reimplements `aws_smithy_http::header` with lossier semantics: scalars
-        //  use `.ok()`, list elements use `filter_map(..ok())`, and the quoted-string splitting below
-        //  is a second copy of that crate's `read_value`. Failures are swallowed rather than reported,
-        //  which is a regression in error experience against the legacy path. Reuse those helpers,
-        //  including their `_bytes` variants, before schema-serde is enabled for any protocol.
+        val headerValueParser = HttpHeaderValueParserGenerator(codegenContext)
+        val displayErrorContext = RuntimeType.smithyTypes(runtimeConfig).resolve("error::display::DisplayErrorContext")
+
         for (hm in headerMembers) {
-            val parseExpr =
-                when (hm.target) {
-                    is BooleanShape -> "val.parse::<bool>().ok()"
-                    is ByteShape -> "val.parse::<i8>().ok()"
-                    is ShortShape -> "val.parse::<i16>().ok()"
-                    is IntegerShape -> "val.parse::<i32>().ok()"
-                    is LongShape -> "val.parse::<i64>().ok()"
-                    is FloatShape -> "val.parse::<f32>().ok()"
-                    is DoubleShape -> "val.parse::<f64>().ok()"
-                    is TimestampShape -> {
-                        // Check @timestampFormat on member or target; default to HttpDate for headers
-                        val tsFormatOpt =
-                            hm.member?.getTrait(TimestampFormatTrait::class.java)
-                                ?.let { if (it.isPresent) it else hm.target?.getTrait(TimestampFormatTrait::class.java) }
-                                ?: hm.target?.getTrait(TimestampFormatTrait::class.java)
-                        val format =
-                            if (tsFormatOpt?.isPresent == true) {
-                                when (tsFormatOpt.get().format.toString()) {
-                                    "epoch-seconds" -> "EpochSeconds"
-                                    "date-time" -> "DateTime"
-                                    else -> "HttpDate"
-                                }
-                            } else {
-                                "HttpDate"
-                            }
-                        if (format == "EpochSeconds") {
-                            "val.parse::<f64>().ok().map(::aws_smithy_types::DateTime::from_secs_f64)"
-                        } else {
-                            "::aws_smithy_types::DateTime::from_str(val, ::aws_smithy_types::date_time::Format::$format).ok()"
-                        }
+            // Synthetic request IDs are not modeled members. Keep their existing best-effort
+            // string read: an unreadable unmodeled header must not fail the whole response.
+            if (hm.member == null || hm.target == null) {
+                writer.rust(
+                    """
+                    if let Some(val) = headers.get(${hm.headerName.dq()}) {
+                        builder.${hm.memberName} = Some(val.to_string());
                     }
-                    is EnumShape -> {
-                        val enumName = symbolProvider.toSymbol(hm.target).rustType().qualifiedName()
-                        "Some($enumName::from(val))"
-                    }
-                    is IntEnumShape -> {
-                        val enumName = symbolProvider.toSymbol(hm.target).rustType().qualifiedName()
-                        "val.parse::<i32>().ok().map($enumName::from)"
-                    }
-                    is StringShape -> {
-                        if (hm.hasMediaType) {
-                            // @mediaType on header: base64-decode the value
-                            "::aws_smithy_types::base64::decode(val).ok().and_then(|b| String::from_utf8(b).ok())"
-                        } else if (hm.target.hasTrait(EnumTrait::class.java)) {
-                            val enumName = symbolProvider.toSymbol(hm.target).rustType().qualifiedName()
-                            "Some($enumName::from(val))"
-                        } else {
-                            "Some(val.to_string())"
-                        }
-                    }
-                    is ListShape -> {
-                        val elementTarget = model.expectShape((hm.target as ListShape).member.target)
-                        if (elementTarget is TimestampShape) {
-                            // HTTP-date contains commas — split on ", " followed by day-of-week
-                            val listMember = (hm.target as ListShape).member
-                            val tsFormatOpt =
-                                listMember.getTrait(TimestampFormatTrait::class.java)
-                                    .let { if (it.isPresent) it else elementTarget.getTrait(TimestampFormatTrait::class.java) }
-                            val format =
-                                if (tsFormatOpt.isPresent) {
-                                    when (tsFormatOpt.get().format.toString()) {
-                                        "epoch-seconds" -> "EpochSeconds"
-                                        "date-time" -> "DateTime"
-                                        else -> "HttpDate"
-                                    }
-                                } else {
-                                    "HttpDate"
-                                }
-                            if (format == "HttpDate") {
-                                // HTTP-date values are separated by ", " but also contain internal commas.
-                                // Each HTTP-date is exactly 29 chars. Split by regex for day-of-week boundary.
-                                """
-                                {
-                                    let mut timestamps = Vec::new();
-                                    let re_split: Vec<&str> = val.split(", ").collect();
-                                    let mut i = 0;
-                                    while i < re_split.len() {
-                                        if i + 1 < re_split.len() {
-                                            let combined = format!("{}, {}", re_split[i], re_split[i + 1]);
-                                            if let Ok(ts) = ::aws_smithy_types::DateTime::from_str(&combined, ::aws_smithy_types::date_time::Format::HttpDate) {
-                                                timestamps.push(ts);
-                                                i += 2;
-                                                continue;
-                                            }
-                                        }
-                                        if let Ok(ts) = ::aws_smithy_types::DateTime::from_str(re_split[i].trim(), ::aws_smithy_types::date_time::Format::HttpDate) {
-                                            timestamps.push(ts);
-                                        }
-                                        i += 1;
-                                    }
-                                    Some(timestamps)
-                                }
-                                """.trimIndent()
-                            } else if (format == "EpochSeconds") {
-                                "Some(val.split(',').filter_map(|s| s.trim().parse::<f64>().ok().map(::aws_smithy_types::DateTime::from_secs_f64)).collect())"
-                            } else {
-                                "Some(val.split(',').filter_map(|s| ::aws_smithy_types::DateTime::from_str(s.trim(), ::aws_smithy_types::date_time::Format::$format).ok()).collect())"
-                            }
-                        } else {
-                            val isPlainString = elementTarget is StringShape && !elementTarget.hasTrait(EnumTrait::class.java) && elementTarget !is EnumShape
-                            if (isPlainString) {
-                                // String lists need quoted-string-aware parsing (RFC 7230)
-                                """
-                                {
-                                    let mut items = Vec::new();
-                                    let mut chars = val.chars().peekable();
-                                    while chars.peek().is_some() {
-                                        // Skip whitespace
-                                        while chars.peek() == Some(&' ') { chars.next(); }
-                                        if chars.peek() == Some(&'"') {
-                                            chars.next(); // skip opening quote
-                                            let mut s = String::new();
-                                            while let Some(&c) = chars.peek() {
-                                                if c == '\\' { chars.next(); if let Some(escaped) = chars.next() { s.push(escaped); } }
-                                                else if c == '"' { chars.next(); break; }
-                                                else { s.push(c); chars.next(); }
-                                            }
-                                            items.push(s);
-                                        } else {
-                                            let s: String = chars.by_ref().take_while(|&c| c != ',').collect();
-                                            let trimmed = s.trim();
-                                            if !trimmed.is_empty() { items.push(trimmed.to_string()); }
-                                        }
-                                        // Skip comma separator
-                                        while chars.peek() == Some(&',') || chars.peek() == Some(&' ') { chars.next(); }
-                                    }
-                                    Some(items)
-                                }
-                                """.trimIndent()
-                            } else {
-                                val mapExpr =
-                                    when {
-                                        elementTarget is EnumShape -> {
-                                            val enumName = symbolProvider.toSymbol(elementTarget).rustType().qualifiedName()
-                                            ".map(|s| $enumName::from(s.trim()))"
-                                        }
-                                        elementTarget is StringShape && elementTarget.hasTrait(EnumTrait::class.java) -> {
-                                            val enumName = symbolProvider.toSymbol(elementTarget).rustType().qualifiedName()
-                                            ".map(|s| $enumName::from(s.trim()))"
-                                        }
-                                        elementTarget is BooleanShape -> ".filter_map(|s| s.trim().parse::<bool>().ok())"
-                                        elementTarget is ByteShape -> ".filter_map(|s| s.trim().parse::<i8>().ok())"
-                                        elementTarget is ShortShape -> ".filter_map(|s| s.trim().parse::<i16>().ok())"
-                                        elementTarget is IntegerShape -> ".filter_map(|s| s.trim().parse::<i32>().ok())"
-                                        elementTarget is LongShape -> ".filter_map(|s| s.trim().parse::<i64>().ok())"
-                                        elementTarget is FloatShape -> ".filter_map(|s| s.trim().parse::<f32>().ok())"
-                                        elementTarget is DoubleShape -> ".filter_map(|s| s.trim().parse::<f64>().ok())"
-                                        else -> ".map(|s| s.trim().to_string())"
-                                    }
-                                "Some(val.split(',')$mapExpr.collect())"
-                            }
-                        }
-                    }
-                    else -> "Some(val.to_string())"
+                    """,
+                )
+                continue
+            }
+
+            val parsedValue = writer.safeName()
+            writer.withBlockTemplate(
+                "let $parsedValue = (|| -> std::result::Result<#{Output}, #{ParseError}> {",
+                "})();",
+                "Output" to headerValueParser.outputType(hm.member),
+                "ParseError" to headerValueParser.parseError,
+            ) {
+                rust("let header_values = headers.get_all_bytes(${hm.headerName.dq()});")
+                with(headerValueParser) {
+                    renderHeaderValueParser(hm.target, hm.member, "header_values")
                 }
-            writer.rust(
+            }
+            writer.rustTemplate(
                 """
-                if let Some(val) = headers.get(${hm.headerName.dq()}) {
-                    builder.${hm.memberName} = $parseExpr;
+                match $parsedValue {
+                    Ok(value) => builder.${hm.memberName} = value,
+                    Err(err) => {
+                        if #{ShouldSkip:W} {
+                            // Header parsing happens before body member parsing, which skips
+                            // HTTP-bound members. Leaving the field untouched means absent.
+                        } else {
+                            return Err(#{SerdeError}::invalid_input(format!(
+                                "failed to parse ${hm.memberName} from header `${hm.headerName}`: {}",
+                                #{DisplayErrorContext}(&err),
+                            )));
+                        }
+                    }
                 }
                 """,
+                "ShouldSkip" to
+                    nonUtf8HeaderShouldBeSkipped(
+                        runtimeConfig,
+                        "cfg",
+                        writable {
+                            rust(
+                                """
+                                headers
+                                    .get_all_bytes(${hm.headerName.dq()})
+                                    .any(|value| std::str::from_utf8(value).is_err())
+                                """,
+                            )
+                        },
+                    ),
+                "SerdeError" to smithySchema.resolve("serde::SerdeError"),
+                "DisplayErrorContext" to displayErrorContext,
             )
         }
 
@@ -1373,25 +1310,78 @@ class SchemaGenerator(
         }
 
         if (prefixMember != null) {
-            // TODO(schema-serde): `headers.iter()` skips values that are not valid UTF-8, so a single
-            //  unreadable entry yields a map that silently omits it rather than reporting a failure.
-            //  See the note above and https://github.com/smithy-lang/smithy-rs/pull/4868.
+            val pm = prefixMember
+            val parsedValue = writer.safeName()
+            val headerUtil = RuntimeType.smithyHttp(runtimeConfig).resolve("header")
+            writer.rust(
+                "let $parsedValue: std::result::Result<#T, #T> = (|| {",
+                headerValueParser.outputType(pm.member),
+                headerValueParser.parseError,
+            )
             writer.rust(
                 """
-                {
-                    let mut map = ::std::collections::HashMap::new();
-                    for (key, val) in headers.iter() {
-                        if let Some(suffix) = key.strip_prefix(${prefixMember.prefix.dq()}) {
-                            map.insert(suffix.to_string(), val.to_string());
+                let prefix_headers = #T::headers_for_prefix(
+                    headers.iter_bytes().map(|(name, _)| name),
+                    ${pm.prefix.dq()},
+                );
+                let out: std::result::Result<_, _> = prefix_headers.map(|(key, header_name)| {
+                    let header_values = headers.get_all_bytes(header_name);
+                """,
+                headerUtil,
+            )
+            writer.rust(
+                "let value = (|| -> std::result::Result<#T, #T> {",
+                headerValueParser.outputType(pm.target.value),
+                headerValueParser.parseError,
+            )
+            with(headerValueParser) {
+                writer.renderHeaderValueParser(model.expectShape(pm.target.value.target), pm.member, "header_values")
+            }
+            writer.rust(
+                """
+                })()?;
+                Ok((key.to_string(), value.expect(
+                    "we have checked there is at least one value for this header name; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues"
+                )))
+                }).collect();
+                out.map(Some)
+                })();
+                """,
+            )
+            writer.rustTemplate(
+                """
+                match $parsedValue {
+                    Ok(value) => builder.${pm.memberName} = value,
+                    Err(err) => {
+                        if #{ShouldSkip:W} {
+                            // A partial prefix map would conceal dropped entries. Leave the
+                            // entire member absent while preserving every raw response header.
+                        } else {
+                            return Err(#{SerdeError}::invalid_input(format!(
+                                "failed to parse ${pm.memberName} from prefix header `${pm.prefix}`: {}",
+                                #{DisplayErrorContext}(&err),
+                            )));
                         }
                     }
-                    // Per the Smithy spec, an `@httpPrefixHeaders`-bound map
-                    // member is always populated on the output (an empty map
-                    // when no matching headers are present). Don't guard with
-                    // `!map.is_empty()`.
-                    builder.${prefixMember.memberName} = Some(map);
                 }
                 """,
+                "ShouldSkip" to
+                    nonUtf8HeaderShouldBeSkipped(
+                        runtimeConfig,
+                        "cfg",
+                        writable {
+                            rust(
+                                """
+                                headers
+                                    .iter_bytes()
+                                    .filter(|(name, _)| name.starts_with(${pm.prefix.lowercase().dq()}))
+                                    .any(|(_, value)| std::str::from_utf8(value).is_err())
+                                """,
+                            )
+                        },
+                    ),
+                "SerdeError" to smithySchema.resolve("serde::SerdeError"),
+                "DisplayErrorContext" to displayErrorContext,
             )
         }
 

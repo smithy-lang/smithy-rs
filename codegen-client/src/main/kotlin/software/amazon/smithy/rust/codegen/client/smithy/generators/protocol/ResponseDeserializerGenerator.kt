@@ -9,6 +9,8 @@ import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.HttpHeaderTrait
+import software.amazon.smithy.model.traits.HttpPrefixHeadersTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
@@ -131,7 +133,8 @@ class ResponseDeserializerGenerator(
      *
      * Strategy (mirrors the legacy path):
      * 1. Create a deserializer from the response body (while it's still available).
-     * 2. Call deserialize_with_response to read header-bound members. The streaming
+     * 2. Call the shape's response deserializer to read header-bound members. When modeled
+     *    headers are present this is the ConfigBag-aware variant. The streaming
      *    blob member gets set to an empty ByteStream placeholder.
      * 3. Swap the body out of the response (take ownership).
      * 4. Replace the placeholder with the real ByteStream wrapping the swapped body.
@@ -147,6 +150,8 @@ class ResponseDeserializerGenerator(
         val streamingMember = outputShape.findStreamingMember(model)!!
         val memberName = symbolProvider.toMemberName(streamingMember)
         val operationName = symbolProvider.toSymbol(operationShape).name
+        val responseDeserializerMethod = responseDeserializerMethod(outputShape)
+        val responseDeserializerConfigArgument = responseDeserializerConfigArgument(outputShape)
 
         rustTemplate(
             """
@@ -162,15 +167,15 @@ class ResponseDeserializerGenerator(
 
                 let result = (|| -> ::std::result::Result<#{ConcreteOutput}, #{E}> {
                     // Read header-bound members while the body is still in the response.
-                    // deserialize_with_response sets the streaming blob member to a placeholder.
+                    // The selected response deserializer sets the streaming blob member to a placeholder.
                     let _response_headers = response.headers();
                     let mut output = {
                         let protocol = _cfg.load::<#{SharedClientProtocol}>()
                             .expect("a SharedClientProtocol is required");
                         let mut deser = protocol.deserialize_response(response, $operationName::OUTPUT_SCHEMA, _cfg)
                             .map_err(#{E}::unhandled)?;
-                        #{ConcreteOutput}::deserialize_with_response(
-                            &mut *deser, _response_headers, response.status().as_u16(), &[],
+                        #{ConcreteOutput}::$responseDeserializerMethod(
+                            &mut *deser, _response_headers, response.status().as_u16(), &[]$responseDeserializerConfigArgument,
                         ).map_err(#{E}::unhandled)?
                     };
                     // Run MutateOutput so service-specific accessors (e.g. S3's
@@ -413,6 +418,9 @@ class ResponseDeserializerGenerator(
         customizations: List<OperationCustomization>,
         successCode: Int,
     ) {
+        val outputShape = operationShape.outputShape(model)
+        val responseDeserializerMethod = responseDeserializerMethod(outputShape)
+        val responseDeserializerConfigArgument = responseDeserializerConfigArgument(outputShape)
         rustTemplate(
             """
             let (success, status) = (response.status().is_success(), response.status().as_u16());
@@ -435,10 +443,11 @@ class ResponseDeserializerGenerator(
         )
         renderSchemaErrorParsing(operationShape, customizations)
 
-        // Always use deserialize_with_response — it handles both HTTP-bound members
-        // (headers, status code) and body members. When there are no HTTP bindings,
-        // it trivially delegates to deserialize(). After deserialize_with_response,
-        // run `MutateOutput` customizations so service-specific header readers
+        // Structures with modeled response headers use the ConfigBag-aware method so Reject/Skip
+        // policy reaches header parsing. All other structures retain and call the original
+        // four-argument method, avoiding a compatibility-forwarder cost for shapes that cannot use
+        // the policy. Either method handles body/status members. Afterwards, run `MutateOutput`
+        // customizations so service-specific header readers
         // (e.g. S3's request-id decorator that checks `x-amz-request-id` /
         // `x-amzn-requestid` with fallback) populate synthetic members like
         // `_request_id`. This mirrors the streaming path and the legacy
@@ -457,11 +466,11 @@ class ResponseDeserializerGenerator(
                 // customizations have a stable name to read from.
                 let _response_headers = headers;
                 ##[allow(unused_mut)]
-                let mut output = #{ConcreteOutput}::deserialize_with_response(
+                let mut output = #{ConcreteOutput}::$responseDeserializerMethod(
                     &mut *deser,
                     _response_headers,
                     response.status().into(),
-                    body,
+                    body$responseDeserializerConfigArgument,
                 ).map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
                 #{MutateOutput}
                 #{Ok}(#{Output}::erase(output))
@@ -546,6 +555,8 @@ class ResponseDeserializerGenerator(
                 val errorCode = httpBindingResolver.errorCode(errorShape).dq()
                 val errorType = symbolProvider.toSymbol(errorShape)
                 val errorMessageMember = errorShape.errorMessageMember()
+                val responseDeserializerMethod = responseDeserializerMethod(errorShape)
+                val responseDeserializerConfigArgument = responseDeserializerConfigArgument(errorShape)
 
                 rustTemplate("$errorCode => #{error_symbol}::$variantName({", "error_symbol" to errorSymbol)
                 // The protocol decides where the error body deserializer is
@@ -555,7 +566,12 @@ class ResponseDeserializerGenerator(
                 rustTemplate(
                     """
                     let mut tmp = match protocol.deserialize_error_response(response, _cfg)
-                        .and_then(|mut deser| #{ErrorType}::deserialize_with_response(&mut *deser, response.headers(), response.status().into(), body))
+                        .and_then(|mut deser| #{ErrorType}::$responseDeserializerMethod(
+                            &mut *deser,
+                            response.headers(),
+                            response.status().into(),
+                            body$responseDeserializerConfigArgument,
+                        ))
                     {
                         #{Ok}(val) => val,
                         #{Err}(e) => return #{Err}(#{OrchestratorError}::other(#{BoxError}::from(e))),
@@ -660,6 +676,21 @@ class ResponseDeserializerGenerator(
                 },
         )
     }
+
+    private fun responseDeserializerMethod(shape: StructureShape): String =
+        if (shape.hasModeledResponseHeaders()) {
+            "deserialize_with_response_with_config"
+        } else {
+            "deserialize_with_response"
+        }
+
+    private fun responseDeserializerConfigArgument(shape: StructureShape): String =
+        if (shape.hasModeledResponseHeaders()) ", _cfg" else ""
+
+    private fun StructureShape.hasModeledResponseHeaders(): Boolean =
+        allMembers.values.any {
+            it.hasTrait(HttpHeaderTrait::class.java) || it.hasTrait(HttpPrefixHeadersTrait::class.java)
+        }
 
     private fun typeEraseResult(): RuntimeType =
         ProtocolFunctions.crossOperationFn("type_erase_result") { fnName ->
