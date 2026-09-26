@@ -8,7 +8,7 @@ bug_fix: false
 ---
 `aws-sigv4` and `aws-smithy-checksums` can now perform their cryptography with [aws-lc-rs](https://github.com/aws/aws-lc-rs) instead of the RustCrypto crates, including the FIPS 140-3 validated build of AWS-LC. That covers SigV4 HMAC-SHA256 signing, SigV4a ECDSA-P256 signing, and SHA-1/SHA-256 request checksums.
 
-Nothing changes unless you ask for it: the new `rustcrypto` feature is on by default on both crates and keeps the existing behavior, byte for byte.
+Nothing changes unless you ask for it. The RustCrypto crates stay unconditional dependencies and remain the backend unless you select an AWS-LC one, so a default build behaves exactly as before, byte for byte. Selecting AWS-LC changes which implementation runs; it does not remove RustCrypto from the dependency tree.
 
 ```toml
 # non-FIPS AWS-LC
@@ -22,6 +22,7 @@ aws-smithy-checksums = { version = "...", features = ["aws-lc-rs-fips"] }
 Notes on the new features:
 
 - `aws-lc-rs-fips` takes precedence over `aws-lc-rs`, and either takes precedence over `rustcrypto`, so enabling more than one (which Cargo feature unification does routinely) resolves to the strongest backend rather than failing to build.
+- The `aws-lc-rs` floor is 1.17.0, chosen for the AWS-LC module versions it reaches rather than for its API. `aws-lc-rs` 1.17.x resolves `aws-lc-fips-sys` 0.13.x — the AWS-LC-FIPS 3.x line, which holds a CMVP certificate — whereas 1.18.x resolves `aws-lc-fips-sys` 0.14.x, which is AWS-LC-FIPS 4.1.0 and still in-process rather than certificated. 1.17.0 is the lowest floor that reaches the certificated line *and* a patched `aws-lc-sys`: 1.16.x pins `aws-lc-sys` to the 0.38.x line, which RUSTSEC-2026-0044 and RUSTSEC-2026-0048 patch only in 0.39.0, with no 0.38.x fix. Note Cargo resolves to the highest compatible version, so a fresh lockfile still takes 1.18.x and therefore the in-process module — if you need a certificated module today, pin `aws-lc-rs` to `~1.17` yourself.
 - Both aws-lc-rs backends are a per-target capability, which is why `rustcrypto` stays the default — it is the only backend that builds everywhere the SDK does. `aws-lc-rs` needs a C/C++ compiler and works on every target [aws-lc-rs supports](https://aws.github.io/aws-lc-rs/platform_support.html); the only WASM target it supports is `wasm32-unknown-emscripten`, so `wasm32-unknown-unknown` and the WASI targets have to stay on `rustcrypto`. `aws-lc-rs-fips` additionally needs CMake and Go, and covers a subset: Linux (gnu and musl), macOS, Windows MSVC, and FreeBSD — not iOS, not Android, not WASM.
 - You usually don't need to set these per crate. Generated SDK crates and `aws-config` now carry a single `aws-lc-fips` feature that turns on all of it at once — see below.
 
@@ -32,7 +33,7 @@ Notes on the new features:
 
 `aws-smithy-checksums` specifics:
 
-- MD5 is only available on the `rustcrypto` backend. aws-lc-rs does not expose MD5 and it is not FIPS-approved. This is not a behavior change: `ChecksumAlgorithm::Md5` is deprecated and already resolves to CRC-32, so no public API reaches MD5.
+- MD5 is only available on the RustCrypto backend. aws-lc-rs does not expose MD5 and it is not FIPS-approved. This is not a behavior change: `ChecksumAlgorithm::Md5` is deprecated and already resolves to CRC-32, so no public API reaches MD5.
 
 ## One switch for end-to-end FIPS
 
