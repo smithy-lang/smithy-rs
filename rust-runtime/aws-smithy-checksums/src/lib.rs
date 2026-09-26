@@ -46,6 +46,12 @@
 //! Enabling either feature on a target its AWS-LC build doesn't support fails while building
 //! `aws-lc-sys` or `aws-lc-fips-sys`, before this crate is reached.
 //!
+//! Selecting an AWS-LC backend changes which implementation runs; it does not remove the RustCrypto
+//! crates from the dependency tree. They are unconditional dependencies, so `md-5`, `sha1` and
+//! `sha2` are compiled either way and only the module that calls them is `cfg`-ed out. Cargo
+//! features are additive and cannot express "on unless AWS-LC is", and gating them would break
+//! builds that pass `default-features = false`.
+//!
 //! MD5 is only available on the `rustcrypto` backend, since aws-lc-rs does not expose it and it
 //! is not FIPS-approved. No public API reaches MD5 regardless: [`ChecksumAlgorithm::Md5`] is
 //! deprecated and resolves to CRC-32.
@@ -358,14 +364,14 @@ impl Checksum for Sha256 {
 
 // MD5 is deprecated (`ChecksumAlgorithm::Md5` resolves to CRC-32) and is only available on the
 // RustCrypto backend: aws-lc-rs doesn't expose MD5, and it isn't FIPS-approved.
-#[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+#[cfg(not(feature = "__aws-lc-rs"))]
 #[allow(dead_code)]
 #[derive(Debug, Default)]
 struct Md5 {
     hasher: crypto::Md5,
 }
 
-#[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+#[cfg(not(feature = "__aws-lc-rs"))]
 impl Md5 {
     #[warn(dead_code)]
     fn update(&mut self, bytes: &[u8]) {
@@ -384,7 +390,7 @@ impl Md5 {
     }
 }
 
-#[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+#[cfg(not(feature = "__aws-lc-rs"))]
 impl Checksum for Md5 {
     fn update(&mut self, bytes: &[u8]) {
         Self::update(self, bytes)
@@ -399,7 +405,7 @@ impl Checksum for Md5 {
 
 #[cfg(test)]
 mod tests {
-    #[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+    #[cfg(not(feature = "__aws-lc-rs"))]
     use super::{http::MD5_HEADER_NAME, Md5};
     use super::{
         http::{CRC_32_C_HEADER_NAME, CRC_32_HEADER_NAME, SHA_1_HEADER_NAME, SHA_256_HEADER_NAME},
@@ -499,7 +505,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+    #[cfg(not(feature = "__aws-lc-rs"))]
     fn test_md5_checksum() {
         let mut checksum = Md5::default();
         checksum.update(TEST_DATA.as_bytes());

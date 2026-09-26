@@ -39,13 +39,18 @@
 //! Enabling either feature on a target its AWS-LC build doesn't support fails while building
 //! `aws-lc-sys` or `aws-lc-fips-sys`, before this crate is reached.
 //!
-//! Two RustCrypto crates remain compiled in a `sigv4a` + `aws-lc-rs-fips` build, neither of which
-//! performs FIPS-relevant cryptography:
+//! Selecting an AWS-LC backend changes which implementation runs; it does not remove the RustCrypto
+//! crates from the dependency tree. These remain compiled in a `sigv4a` + `aws-lc-rs-fips` build,
+//! none of which performs FIPS-relevant cryptography:
 //!
+//! - `hmac` and `sha2`, which the signing path no longer calls. They are unconditional
+//!   dependencies: they always have been, and gating them behind `rustcrypto` would break builds
+//!   that pass `default-features = false` and name the other defaults back in. Only the module
+//!   that calls them is `cfg`-ed out.
 //! - `crypto-bigint`, for the 256-bit integer math in [`sign::v4a::generate_signing_key`]. That
 //!   is the key derivation the SigV4a specification defines, not a cryptographic primitive.
-//! - `p256`, which the signing path no longer calls. `sigv4a` has to keep declaring it, because
-//!   Cargo features are additive and cannot express "only when `rustcrypto` is also enabled".
+//! - `p256`, which the signing path no longer calls either. `sigv4a` has to keep declaring it,
+//!   because Cargo features are additive and cannot express "only when RustCrypto is in use".
 //!
 //! Signing output is unchanged by the choice of backend. SigV4 signatures are deterministic and
 //! verified against the shared signing test suite on both; SigV4a signatures are

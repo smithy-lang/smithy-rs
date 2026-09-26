@@ -20,12 +20,6 @@
 use bytes::Bytes;
 use std::fmt::Debug;
 
-#[cfg(not(any(feature = "rustcrypto", feature = "__aws-lc-rs")))]
-compile_error!(
-    "aws-smithy-checksums requires a digest backend: enable the `rustcrypto` (default), \
-     `aws-lc-rs`, or `aws-lc-rs-fips` feature."
-);
-
 /// A streaming message digest.
 ///
 /// This mirrors the shape the [`crate::Checksum`] implementations need: construct with
@@ -48,9 +42,9 @@ pub(crate) use aws_lc_rs_impl::{Sha1, Sha256};
 
 // The RustCrypto backend is only compiled when it is the selected backend, so that enabling
 // `aws-lc-rs` alongside the default features doesn't pull RustCrypto into the digest path.
-#[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+#[cfg(not(feature = "__aws-lc-rs"))]
 mod rustcrypto_impl;
-#[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+#[cfg(not(feature = "__aws-lc-rs"))]
 pub(crate) use rustcrypto_impl::{Md5, Sha1, Sha256};
 
 #[cfg(test)]

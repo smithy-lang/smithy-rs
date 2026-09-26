@@ -21,12 +21,6 @@
 /// Size in bytes of a SHA-256 digest, and so of an HMAC-SHA256 tag.
 pub(crate) const SHA256_OUTPUT_SIZE: usize = 32;
 
-#[cfg(not(any(feature = "rustcrypto", feature = "__aws-lc-rs")))]
-compile_error!(
-    "aws-sigv4 requires a crypto backend: enable the `rustcrypto` (default), `aws-lc-rs`, or \
-     `aws-lc-rs-fips` feature."
-);
-
 #[cfg(feature = "__aws-lc-rs")]
 mod aws_lc_rs_impl;
 #[cfg(feature = "__aws-lc-rs")]
@@ -34,9 +28,9 @@ pub(crate) use aws_lc_rs_impl::HmacSha256;
 
 // The RustCrypto backend is only compiled when it is the selected backend, so that enabling
 // `aws-lc-rs` alongside the default features doesn't route signing through RustCrypto.
-#[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+#[cfg(not(feature = "__aws-lc-rs"))]
 mod rustcrypto_impl;
-#[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+#[cfg(not(feature = "__aws-lc-rs"))]
 pub(crate) use rustcrypto_impl::HmacSha256;
 
 #[cfg(feature = "sigv4a")]
@@ -45,7 +39,7 @@ pub(crate) use imp::sha256;
 
 #[cfg(feature = "__aws-lc-rs")]
 use aws_lc_rs_impl as imp;
-#[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+#[cfg(not(feature = "__aws-lc-rs"))]
 use rustcrypto_impl as imp;
 
 #[cfg(test)]
