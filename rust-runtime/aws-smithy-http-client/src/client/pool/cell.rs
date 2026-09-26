@@ -276,6 +276,31 @@ impl CellState {
         H1ReservationDecision::Rejected(report)
     }
 
+    /// Extracts an idle sender without reserving a future sender return.
+    fn try_take_idle_h1(&mut self, match_id: H1MatchId) -> H1IdleProbeDecision<OwnedH1Sender> {
+        let local_h1_demand = self.acquisitions.has_h1_compatible_waiter();
+        if self.h1.blocks_peer_selection(local_h1_demand)
+            || self.acquisitions.has_prior_h1_waiter()
+            || !self.h1.peer_reservation_available()
+        {
+            let revision = self.current_h1_supply_revision();
+            self.assert_consistent();
+            return H1IdleProbeDecision::Unavailable(revision);
+        }
+
+        let Some(owner) = self.h1.take_idle_candidate() else {
+            let revision = self.current_h1_supply_revision();
+            self.assert_consistent();
+            return H1IdleProbeDecision::Unavailable(revision);
+        };
+        assert!(
+            self.h1.reserve_resolving(match_id),
+            "idle HTTP/1 connection could not reserve its peer match"
+        );
+        self.assert_consistent();
+        H1IdleProbeDecision::Candidate(owner)
+    }
+
     /// Clears a peer reservation and returns the cell's complete H1 status.
     fn cancel_h1_reservation(&mut self, match_id: H1MatchId) -> SupplyRevision<H1SupplyStatus> {
         self.h1.release_peer_reservation(match_id);
@@ -336,6 +361,24 @@ pub(in crate::client::pool) enum H1ReservationDecision<C> {
     Candidate(C),
     /// The supplier cell could not reserve sender ownership for the match.
     Rejected(SupplyRevision<H1SupplyStatus>),
+}
+
+/// Supplier-cell result of probing for an immediately idle HTTP/1 sender.
+pub(in crate::client::pool) enum H1IdleProbeDecision<C> {
+    /// An idle sender was extracted immediately.
+    Candidate(C),
+    /// The supplier remains live but has no sender available for immediate use.
+    Unavailable(SupplyRevision<H1SupplyStatus>),
+}
+
+impl<C> H1IdleProbeDecision<C> {
+    /// Maps only the detached sender while preserving the supplier decision.
+    fn map_candidate<D>(self, map: impl FnOnce(C) -> D) -> H1IdleProbeDecision<D> {
+        match self {
+            Self::Candidate(candidate) => H1IdleProbeDecision::Candidate(map(candidate)),
+            Self::Unavailable(revision) => H1IdleProbeDecision::Unavailable(revision),
+        }
+    }
 }
 
 impl<C> H1ReservationDecision<C> {
@@ -1153,6 +1196,53 @@ mod tests {
         assert_eq!((1, 0), connection_cell.h1_counts());
         drop(borrowed);
         assert_eq!((1, 1), connection_cell.h1_counts());
+    }
+
+    #[test]
+    fn peer_idle_probe_skips_a_busy_supplier_for_an_idle_one() {
+        let admission = OriginAdmission::for_test(NonZeroUsize::new(2).unwrap());
+        let origin = OriginKey::from_parts(Scheme::HTTPS, "example.com", None).unwrap();
+        let supplier = |index| {
+            OriginAdmission::register_cell(
+                &admission,
+                Arc::new(OriginCell::new(
+                    PartitionId::from_index(index),
+                    origin.clone(),
+                    EligibilityGroup::Pool,
+                    Some(admission.clone()),
+                    None,
+                )),
+            )
+        };
+        let busy_cell = supplier(1);
+        let idle_cell = supplier(2);
+        let requesting_cell = supplier(3);
+
+        let busy_lease = OriginAdmission::lease_for_test(&admission);
+        let (busy_connection, _busy_physical) = ConnectionState::bounded(
+            ConnectionInfo::for_test(ConnectionId::new(1), busy_cell.id().partition()),
+            busy_lease,
+        );
+        let busy = OriginCell::insert_selected_h1(&busy_cell, busy_connection, H1Sender::test(11));
+
+        let idle_lease = OriginAdmission::lease_for_test(&admission);
+        let (idle_connection, _idle_physical) = ConnectionState::bounded(
+            ConnectionInfo::for_test(ConnectionId::new(2), idle_cell.id().partition()),
+            idle_lease,
+        );
+        OriginCell::insert_idle_h1(&idle_cell, idle_connection, H1Sender::test(22));
+
+        let waiter =
+            OriginCell::register_waiter(&requesting_cell, ProtocolRequirement::H1Compatible);
+        let borrowed = requesting_cell
+            .take_ready_h1(waiter)
+            .expect("bounded idle probing did not find the second supplier");
+
+        assert_eq!(22, borrowed.test_sender_id());
+        assert_eq!((1, 0), busy_cell.h1_counts());
+        assert_eq!((1, 0), idle_cell.h1_counts());
+        drop(borrowed);
+        drop(busy);
     }
 
     #[test]
@@ -2703,6 +2793,271 @@ mod loom_tests {
 
             assert_eq!((1, 1), connection_cell.h1_counts());
             assert_eq!(0, requesting_cell.probe().retained);
+            assert_eq!(0, admission.ordered_demand_count_for_test());
+            admission.clear_modeled_cells_for_test();
+        });
+    }
+
+    /// Races a busy idle-probe reply with cancellation of its demand.
+    ///
+    /// The supplier returns to its index, no fallback reservation survives,
+    /// and the active sender remains owned by its connection cell.
+    #[test]
+    fn busy_idle_probe_and_cancellation_leave_no_retained_match() {
+        let mut model = loom::model::Builder::new();
+        model.preemption_bound.get_or_insert(3);
+        model.check(|| {
+            let admission = OriginAdmission::for_test(NonZeroUsize::new(2).unwrap());
+            let origin = OriginKey::from_parts(Scheme::HTTPS, "example.com", None).unwrap();
+            let first = OriginAdmission::register_cell(
+                &admission,
+                Arc::new(OriginCell::new(
+                    PartitionId::from_index(1),
+                    origin.clone(),
+                    EligibilityGroup::Pool,
+                    Some(admission.clone()),
+                    None,
+                )),
+            );
+            let second = OriginAdmission::register_cell(
+                &admission,
+                Arc::new(OriginCell::new(
+                    PartitionId::from_index(2),
+                    origin.clone(),
+                    EligibilityGroup::Pool,
+                    Some(admission.clone()),
+                    None,
+                )),
+            );
+            let requesting_cell = OriginAdmission::register_cell(
+                &admission,
+                Arc::new(OriginCell::new(
+                    PartitionId::from_index(3),
+                    origin,
+                    EligibilityGroup::Pool,
+                    Some(admission.clone()),
+                    None,
+                )),
+            );
+            let first_lease = OriginAdmission::lease_for_test(&admission);
+            let (first_connection, _first_physical) =
+                ConnectionState::bounded(connection_info(1), first_lease);
+            let first_returning =
+                OriginCell::insert_selected_h1(&first, first_connection, H1Sender::test(11));
+            let second_lease = OriginAdmission::lease_for_test(&admission);
+            let (second_connection, _second_physical) =
+                ConnectionState::bounded(connection_info(2), second_lease);
+            let second_returning =
+                OriginCell::insert_selected_h1(&second, second_connection, H1Sender::test(22));
+            let (waiter, demand) =
+                requesting_cell.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
+            let action = OriginAdmission::submit_action_without_running(
+                &admission,
+                requesting_cell.id().partition(),
+                demand,
+            )
+            .expect("peer demand did not prepare an idle probe");
+
+            let probing = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || OriginAdmission::run_action_chain(Some(action)))
+                .unwrap();
+            let cancel_cell = requesting_cell.clone();
+            let cancelling = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || OriginCell::cancel_waiter(&cancel_cell, waiter))
+                .unwrap();
+            probing.join().unwrap();
+            assert!(cancelling.join().unwrap());
+            drop(first_returning);
+            drop(second_returning);
+
+            assert_eq!(vec![11], first.h1_idle_sender_ids());
+            assert_eq!(vec![22], second.h1_idle_sender_ids());
+            assert!(first.state.lock().h1.peer_reservation_available());
+            assert!(second.state.lock().h1.peer_reservation_available());
+            assert_eq!(0, admission.ordered_demand_count_for_test());
+            admission.clear_modeled_cells_for_test();
+        });
+    }
+
+    /// Races cancellation with a later idle supplier winning bounded probing.
+    ///
+    /// Whether cancellation or candidate delivery wins, both sender identities
+    /// return to their owning cells exactly once. Cancellation returns `true`
+    /// when it removes either a waiting record or a ready, unclaimed selection;
+    /// in the latter case it also owns cleanup of that selection.
+    #[test]
+    fn later_idle_probe_and_cancellation_preserve_each_sender() {
+        let mut model = loom::model::Builder::new();
+        model.preemption_bound.get_or_insert(3);
+        model.check(|| {
+            let admission = OriginAdmission::for_test(NonZeroUsize::new(2).unwrap());
+            let origin = OriginKey::from_parts(Scheme::HTTPS, "example.com", None).unwrap();
+            let first = OriginAdmission::register_cell(
+                &admission,
+                Arc::new(OriginCell::new(
+                    PartitionId::from_index(1),
+                    origin.clone(),
+                    EligibilityGroup::Pool,
+                    Some(admission.clone()),
+                    None,
+                )),
+            );
+            let second = OriginAdmission::register_cell(
+                &admission,
+                Arc::new(OriginCell::new(
+                    PartitionId::from_index(2),
+                    origin.clone(),
+                    EligibilityGroup::Pool,
+                    Some(admission.clone()),
+                    None,
+                )),
+            );
+            let requester = OriginAdmission::register_cell(
+                &admission,
+                Arc::new(OriginCell::new(
+                    PartitionId::from_index(3),
+                    origin,
+                    EligibilityGroup::Pool,
+                    Some(admission.clone()),
+                    None,
+                )),
+            );
+            let first_lease = OriginAdmission::lease_for_test(&admission);
+            let (first_connection, _first_physical) =
+                ConnectionState::bounded(connection_info(1), first_lease);
+            let returning =
+                OriginCell::insert_selected_h1(&first, first_connection, H1Sender::test(11));
+            let second_lease = OriginAdmission::lease_for_test(&admission);
+            let (second_connection, _second_physical) =
+                ConnectionState::bounded(connection_info(2), second_lease);
+            OriginCell::insert_idle_h1(&second, second_connection, H1Sender::test(22));
+            let (waiter, demand) =
+                requester.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
+            let action = OriginAdmission::submit_action_without_running(
+                &admission,
+                requester.id().partition(),
+                demand,
+            )
+            .expect("peer demand did not prepare an idle probe");
+
+            let probing = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || OriginAdmission::run_action_chain(Some(action)))
+                .unwrap();
+            let cancel_cell = requester.clone();
+            let cancelling = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || OriginCell::cancel_waiter(&cancel_cell, waiter))
+                .unwrap();
+            probing.join().unwrap();
+            assert!(cancelling.join().unwrap());
+            drop(returning);
+
+            let mut sender_ids = first.h1_idle_sender_ids();
+            sender_ids.extend(second.h1_idle_sender_ids());
+            sender_ids.extend(requester.h1_idle_sender_ids());
+            sender_ids.sort_unstable();
+            assert_eq!(vec![11, 22], sender_ids);
+            assert!(first.state.lock().h1.peer_reservation_available());
+            assert!(second.state.lock().h1.peer_reservation_available());
+            assert_eq!(0, admission.ordered_demand_count_for_test());
+            admission.clear_modeled_cells_for_test();
+        });
+    }
+
+    /// Races a probed supplier return with installation of the fallback reservation.
+    ///
+    /// The first supplier is busy when probed. Its sender returns after the
+    /// miss while admission installs the exact reservation on the second
+    /// supplier. The fallback must satisfy the waiter without losing,
+    /// duplicating, or reserving the returning sender.
+    #[test]
+    fn supplier_return_between_probe_miss_and_fallback_preserves_both_senders() {
+        let mut model = loom::model::Builder::new();
+        model.preemption_bound.get_or_insert(3);
+        model.check(|| {
+            let admission = OriginAdmission::for_test(NonZeroUsize::new(2).unwrap());
+            let origin = OriginKey::from_parts(Scheme::HTTPS, "example.com", None).unwrap();
+            let first = OriginAdmission::register_cell(
+                &admission,
+                Arc::new(OriginCell::new(
+                    PartitionId::from_index(1),
+                    origin.clone(),
+                    EligibilityGroup::Pool,
+                    Some(admission.clone()),
+                    None,
+                )),
+            );
+            let second = OriginAdmission::register_cell(
+                &admission,
+                Arc::new(OriginCell::new(
+                    PartitionId::from_index(2),
+                    origin.clone(),
+                    EligibilityGroup::Pool,
+                    Some(admission.clone()),
+                    None,
+                )),
+            );
+            let requester = OriginAdmission::register_cell(
+                &admission,
+                Arc::new(OriginCell::new(
+                    PartitionId::from_index(3),
+                    origin,
+                    EligibilityGroup::Pool,
+                    Some(admission.clone()),
+                    None,
+                )),
+            );
+
+            let first_lease = OriginAdmission::lease_for_test(&admission);
+            let (first_connection, _first_physical) =
+                ConnectionState::bounded(connection_info(1), first_lease);
+            let returning =
+                OriginCell::insert_selected_h1(&first, first_connection, H1Sender::test(11));
+
+            let second_lease = OriginAdmission::lease_for_test(&admission);
+            let (second_connection, _second_physical) =
+                ConnectionState::bounded(connection_info(2), second_lease);
+            OriginCell::insert_idle_h1(&second, second_connection, H1Sender::test(22));
+
+            let (waiter, demand) =
+                requester.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
+            let probe = OriginAdmission::submit_action_without_running(
+                &admission,
+                requester.id().partition(),
+                demand,
+            )
+            .expect("peer demand did not prepare an idle probe");
+            let fallback = probe
+                .run_once_for_test()
+                .expect("busy probe did not prepare the fallback reservation");
+
+            let reserving = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || OriginAdmission::run_action_chain(Some(fallback)))
+                .unwrap();
+            let returning = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || drop(returning))
+                .unwrap();
+            reserving.join().unwrap();
+            returning.join().unwrap();
+
+            let selected = requester
+                .take_ready_h1(waiter)
+                .expect("fallback reservation did not satisfy the waiter");
+            assert_eq!(22, selected.test_sender_id());
+            drop(selected);
+
+            let mut sender_ids = first.h1_idle_sender_ids();
+            sender_ids.extend(second.h1_idle_sender_ids());
+            sender_ids.extend(requester.h1_idle_sender_ids());
+            sender_ids.sort_unstable();
+            assert_eq!(vec![11, 22], sender_ids);
+            assert!(first.state.lock().h1.peer_reservation_available());
+            assert!(second.state.lock().h1.peer_reservation_available());
             assert_eq!(0, admission.ordered_demand_count_for_test());
             admission.clear_modeled_cells_for_test();
         });

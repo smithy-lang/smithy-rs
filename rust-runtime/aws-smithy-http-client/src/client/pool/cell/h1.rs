@@ -52,7 +52,7 @@
 //! fallback close the connection directly.
 
 use super::super::admission::{
-    AdmissionAction, H1Candidate, H1MatchId, H1SupplyStatus, OriginAdmission,
+    AdmissionAction, H1Candidate, H1MatchId, H1SupplyStatus, OriginAdmission, PreparedH1IdleProbe,
     PreparedH1Reservation, SupplyRevision,
 };
 use super::super::connection::{CloseReason, ConnectionState};
@@ -1315,6 +1315,40 @@ impl OriginCell {
             cell.id.partition(),
             decision,
         )
+    }
+
+    /// Attempts to extract an idle sender without intercepting a future return.
+    pub(in crate::client::pool) fn try_take_idle_h1(
+        cell: &Arc<Self>,
+        admission: Arc<OriginAdmission>,
+        prepared: PreparedH1IdleProbe,
+    ) -> Option<AdmissionAction> {
+        let decision = {
+            let mut state = cell.state.lock();
+            state.try_take_idle_h1(prepared.match_id)
+        };
+        let decision = decision.map_candidate(|owner| {
+            let provisional = ProvisionalH1::new(cell, owner);
+            H1Candidate::new(
+                admission.clone(),
+                prepared.match_id,
+                cell.id.partition(),
+                provisional,
+            )
+        });
+        OriginAdmission::settle_h1_idle_probe(
+            &admission,
+            prepared.match_id,
+            cell.id.partition(),
+            decision,
+        )
+    }
+
+    /// Returns the current admission-facing HTTP/1 supply revision.
+    pub(in crate::client::pool) fn current_h1_supply_revision(
+        &self,
+    ) -> SupplyRevision<H1SupplyStatus> {
+        self.state.lock().current_h1_supply_revision()
     }
 
     /// Clears an installed or resolving reservation after request cancellation.

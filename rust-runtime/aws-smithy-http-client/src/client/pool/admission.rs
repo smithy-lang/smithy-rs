@@ -34,7 +34,7 @@
 //! held with the admission lock, and connection-owning and requesting cell
 //! locks are never held together.
 
-use super::cell::{H1ReservationDecision, OriginCell};
+use super::cell::{H1IdleProbeDecision, H1ReservationDecision, OriginCell};
 use super::origin::OriginKey;
 use super::partition::{EligibilityGroup, PartitionId};
 use super::registry::AdmissionPolicy;
@@ -58,14 +58,14 @@ pub(in crate::client::pool) use self::demand::{
     DemandId, DemandSnapshot, ProtocolRequirement, SnapshotVersion,
 };
 use self::h1::{
-    H1CancellationAction, H1CapacityReclaim, H1ReservationAction, H1SupplierSettlement, H1Supply,
-    H1SupplyOutcome,
+    H1CancellationAction, H1CapacityReclaim, H1IdleProbeAction, H1ReservationAction,
+    H1SupplierSettlement, H1Supply, H1SupplyOutcome, PreparedH1Match,
 };
 use self::h2::{H2CapacityReclaim, H2RouteGuard, H2Supply, PreparedH2Reclaim, PreparedH2Route};
 use self::order::{IntrusiveLinks, IntrusiveOrder};
 pub(in crate::client::pool) use delivery::DeliveryGuard;
 pub(in crate::client::pool) use h1::{
-    H1Candidate, H1MatchId, H1SupplyStatus, PreparedH1Reservation,
+    H1Candidate, H1MatchId, H1SupplyStatus, PreparedH1IdleProbe, PreparedH1Reservation,
 };
 pub(in crate::client::pool) use h2::H2SupplyStatus;
 
@@ -224,10 +224,15 @@ impl OriginAdmission {
                 route,
             )));
         }
-        if let Some(reservation) = state.h1_supply.prepare_match(&state.demand) {
-            return Some(AdmissionAction::ReserveH1Supplier(
-                H1ReservationAction::new(origin.clone(), reservation),
-            ));
+        if let Some(prepared) = state.h1_supply.prepare_match(&state.demand) {
+            return Some(match prepared {
+                PreparedH1Match::ProbeIdle(probe) => {
+                    AdmissionAction::ProbeH1Supplier(H1IdleProbeAction::new(origin.clone(), probe))
+                }
+                PreparedH1Match::Reserve(reservation) => AdmissionAction::ReserveH1Supplier(
+                    H1ReservationAction::new(origin.clone(), reservation),
+                ),
+            });
         }
         if !origin.can_reclaim_h2_for_h1 {
             return None;
@@ -257,6 +262,7 @@ impl OriginAdmission {
         while let Some(current) = action {
             action = match current {
                 AdmissionAction::Deliver(delivery) => delivery.deliver(),
+                AdmissionAction::ProbeH1Supplier(probe) => probe.probe_supplier(),
                 AdmissionAction::ReserveH1Supplier(reservation) => reservation.reserve_supplier(),
                 AdmissionAction::CancelH1Reservation(cancellation) => {
                     cancellation.cancel_reservation()
@@ -317,6 +323,16 @@ impl OriginAdmission {
         revision: SupplyRevision<H1SupplyStatus>,
     ) {
         h1::reject_returned_match(admission, match_id, supplier, revision);
+    }
+
+    /// Settles one supplier-cell idle probe against its retained H1 match.
+    pub(in crate::client::pool) fn settle_h1_idle_probe(
+        admission: &Arc<Self>,
+        match_id: H1MatchId,
+        supplier: PartitionId,
+        decision: H1IdleProbeDecision<H1Candidate>,
+    ) -> Option<AdmissionAction> {
+        h1::settle_idle_probe(admission, match_id, supplier, decision)
     }
 
     /// Settles installation of one supplier-cell reservation.
@@ -464,6 +480,8 @@ impl OriginAdmission {
 pub(super) enum AdmissionAction {
     /// One capacity or borrowed-H1 payload handed to a requesting cell.
     Deliver(DeliveryGuard),
+    /// Probe one selected HTTP/1 supplier for an immediately idle sender.
+    ProbeH1Supplier(H1IdleProbeAction),
     /// Reserve the selected supplier at its owning HTTP/1 cell.
     ReserveH1Supplier(H1ReservationAction),
     /// Cancel a retained HTTP/1 supplier reservation.
@@ -482,6 +500,7 @@ impl AdmissionAction {
     pub(super) fn run_once_for_test(self) -> Option<Self> {
         match self {
             Self::Deliver(delivery) => delivery.deliver(),
+            Self::ProbeH1Supplier(probe) => probe.probe_supplier(),
             Self::ReserveH1Supplier(reservation) => reservation.reserve_supplier(),
             Self::CancelH1Reservation(cancellation) => cancellation.cancel_reservation(),
             Self::SettleH1Supplier(settlement) => settlement.settle_supplier(),
