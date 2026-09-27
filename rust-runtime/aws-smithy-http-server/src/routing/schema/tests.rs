@@ -449,39 +449,6 @@ async fn all_builtins_route_without_polling_body_and_preserve_fallback_errors() 
 }
 
 #[tokio::test]
-async fn aws_json_routes_on_the_schema_compat_name() {
-    static FIRST_COMPAT: OperationSchema<'static> =
-        OperationSchema::new(FIRST_ID, &FIRST_INPUT, &UNIT, &[]).with_compat_name("FirstSymbol");
-    static COMPAT_OPERATIONS: &[&OperationSchema<'static>] = &[&FIRST_COMPAT, &SECOND];
-    static AWS_JSON_11_COMPAT: ServiceSchema<'static> = ServiceSchema::new(
-        SERVICE_ID,
-        None,
-        &[shape_id!("aws.protocols", "awsJson1_1")],
-        COMPAT_OPERATIONS,
-    );
-    let app = SchemaRoutingService::from_operation_handler_bindings(
-        &AWS_JSON_11_COMPAT,
-        [],
-        [binding(&SECOND), binding(&FIRST_COMPAT)],
-    )
-    .unwrap();
-    for (target, status) in [
-        ("Service.FirstSymbol", StatusCode::OK),
-        // The compat name replaces the modeled name; `second` has none and keeps its own.
-        ("Service.first", StatusCode::NOT_FOUND),
-        ("Service.second", StatusCode::OK),
-    ] {
-        let req = Request::builder()
-            .method("POST")
-            .uri("/")
-            .header("x-amz-target", target)
-            .body(Body::empty())
-            .unwrap();
-        assert_eq!(app.clone().oneshot(req).await.unwrap().status(), status, "{target}");
-    }
-}
-
-#[tokio::test]
 async fn rpc_capitalized_alias_is_a_protocol_setting() {
     for (settings, capitalized_status) in [
         (r#"{"capitalizeRoutes":true}"#, StatusCode::OK),

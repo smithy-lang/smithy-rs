@@ -1027,8 +1027,7 @@ where
     }))
 }
 
-/// Builds the awsJson-style target router (`Service.Operation`, honoring
-/// [`compat_name`](crate::schema::OperationSchema::compat_name)) for any protocol
+/// Builds the awsJson-style target router (`Service.Operation`) for any protocol
 /// marker `P` whose rejections convert like awsJson's. Exposed for out-of-tree protocols that
 /// route on the same key. Among several protocols, the router claims `POST /` requests whose
 /// `Content-Type` is `content_type`.
@@ -1041,10 +1040,7 @@ where
     crate::protocol::aws_json::router::Error: crate::response::IntoResponse<P>,
 {
     let entries = ctx.targets.iter().map(|target| {
-        let name = target
-            .operation
-            .compat_name()
-            .unwrap_or(target.operation.shape_id().shape_name());
+        let name = target.operation.shape_id().shape_name();
         (format!("{}.{}", ctx.service.shape_id().shape_name(), name), *target)
     });
     Ok(SharedProtocolRouter::new(AwsJsonProtocolRouter::<P> {

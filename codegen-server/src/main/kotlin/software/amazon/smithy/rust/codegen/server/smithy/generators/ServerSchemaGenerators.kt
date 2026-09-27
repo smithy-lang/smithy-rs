@@ -85,11 +85,6 @@ class ServerServiceSchemaGenerator(
     ) {
         val name = operationConstName(operation)
         val errorRefs = operation.errorsSet.sorted().joinToString(", ") { schemaRef(model.expectShape(it)) }
-        // Name-keyed routing matches the Rust symbol name, so record it on the
-        // descriptor when it diverges from the modeled shape name.
-        val symbolName = symbolProvider.toSymbol(operation).name
-        val compatNameChain =
-            if (symbolName != operation.id.name) "\n.with_compat_name(${symbolName.dq()})" else ""
         writer.rustTemplate(
             """
             static ${name}_ERRORS: &[&#{Schema}<'static>] = &[$errorRefs];
@@ -100,7 +95,7 @@ class ServerServiceSchemaGenerator(
                 ${schemaRef(operation.inputShape(model))},
                 ${schemaRef(operation.outputShape(model))},
                 ${name}_ERRORS,
-            )$compatNameChain;
+            );
             """,
             *codegenScope,
         )
