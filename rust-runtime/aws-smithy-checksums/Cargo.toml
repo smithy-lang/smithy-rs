@@ -51,9 +51,12 @@ aws-lc-rs = ["__aws-lc-rs", "aws-lc-rs?/aws-lc-sys"]
 # generated SDK crate a bare `fips` would sit next to `Config::use_fips`, which selects a
 # FIPS-compliant *endpoint* and is unrelated to which module performs the cryptography.
 #
-# Supported on a subset of the targets above: Linux (gnu and musl), macOS, Windows MSVC, and
-# FreeBSD. Not iOS, not Android, not WASM. Requires a C/C++ compiler, CMake, and Go at build
-# time, plus bindgen on targets without pre-generated FIPS bindings (Windows).
+# Supported on a subset of the targets above: x86_64 and aarch64 Linux (gnu and musl), `arm`
+# musleabi/musleabihf, powerpc/powerpc64/powerpc64le gnu, macOS, 64-bit Windows MSVC, and x86_64
+# FreeBSD. Not i686, not riscv64, not s390x, not mips, not NetBSD, not iOS, not Android, not WASM.
+# The missing i686 support is why CI excludes this crate from its i686 `--all-features` leg.
+# Requires a C/C++ compiler, CMake, and Go at build time, plus bindgen on targets without
+# pre-generated FIPS bindings, which is everything except 64-bit Linux and macOS.
 aws-lc-rs-fips = ["__aws-lc-rs", "aws-lc-rs?/fips"]
 # Internal: selects the aws-lc-rs digest backend. Do not enable directly; use
 # `aws-lc-rs` or `aws-lc-rs-fips` instead so that an AWS-LC build is also selected.
