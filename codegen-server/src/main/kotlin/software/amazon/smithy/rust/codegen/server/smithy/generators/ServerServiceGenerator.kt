@@ -40,7 +40,7 @@ class ServerServiceGenerator(
     private val codegenContext: ServerCodegenContext,
     private val protocol: ServerProtocol,
     private val isConfigBuilderFallible: Boolean,
-    private val additionalProtocolRegistrations: List<Writable> = emptyList(),
+    private val protocolRegistries: List<Writable> = emptyList(),
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val smithyHttpServer = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
@@ -81,7 +81,7 @@ class ServerServiceGenerator(
         smithyHttpServer.resolve(
             when {
                 !schemaSerde -> "operation::UpgradePlugin"
-                streams(operation) -> "operation::StreamingUpgradePlugin"
+                streams(operation) -> "operation::DynStreamingUpgradePlugin"
                 else -> "operation::DynUpgradePlugin"
             },
         )
@@ -349,7 +349,7 @@ class ServerServiceGenerator(
                         self
                     }
                     """,
-                    "Router" to (if (schemaSerde) smithyHttpServer.resolve("routing::SchemaRoutingService") else protocol.routerType()),
+                    "Router" to (if (schemaSerde) smithyHttpServer.resolve("routing::MultiProtocolRoutingService") else protocol.routerType()),
                     "Protocol" to protocol.markerStruct(),
                     "Handler" to handler,
                     "HandlerFixed" to handlerFixed,
@@ -840,7 +840,21 @@ class ServerServiceGenerator(
                         rustTemplate("#{SmithyHttpServer}::routing::OperationHandlerBinding::new(<crate::operation_shape::$name as #{SmithyHttpServer}::operation::SchemaOperationShape>::SCHEMA, $handler)", *codegenScope)
                     }
                 }.join(",")
-            val registrations = additionalProtocolRegistrations.join(",")
+            // Each decorator-contributed writable renders a `&'static ProtocolRegistry`; the
+            // built-in registry is always consulted by the routing service itself.
+            val registries =
+                if (protocolRegistries.isEmpty()) {
+                    writable { rust("::std::iter::empty()") }
+                } else {
+                    writable {
+                        rust("[")
+                        protocolRegistries.forEach { registry ->
+                            registry(this)
+                            rust(",")
+                        }
+                        rust("]")
+                    }
+                }
             val schema = "crate::schema::service::${ServerServiceSchemaGenerator.serviceSchemaConstName(service)}"
             val name = if (unchecked) "build_unchecked" else "build"
             val result = if (unchecked) serviceName else "#{Result}<$serviceName, BuildError>"
@@ -858,15 +872,15 @@ class ServerServiceGenerator(
                 {
                     #{Checks}
                     #{Patterns}
-                    let svc = #{SmithyHttpServer}::routing::SchemaRoutingService::from_operation_handler_bindings_with_options(
-                        &$schema, [#{Registrations}], [#{Bindings}], self.routing_options,
+                    let svc = #{SmithyHttpServer}::routing::MultiProtocolRoutingService::from_operation_handler_bindings_with_options(
+                        &$schema, #{Registries}, [#{Bindings}], self.routing_options,
                     )$unwrap;
                     let svc = svc.layer(&self.layer);
                     ${if (unchecked) "$serviceName { svc }" else "#{Ok}($serviceName { svc })"}
                 }
                 """,
                 *codegenScope, "Checks" to checks, "Patterns" to patternInitializations(),
-                "Bindings" to bindings, "Registrations" to registrations,
+                "Bindings" to bindings, "Registries" to registries,
             )
         }
 
@@ -909,7 +923,7 @@ class ServerServiceGenerator(
 
                 /// A service using runtime schema routing.
                 ##[derive(Clone)]
-                pub struct $serviceName<S = #{SmithyHttpServer}::routing::SchemaRoutingService> { svc: S }
+                pub struct $serviceName<S = #{SmithyHttpServer}::routing::MultiProtocolRoutingService> { svc: S }
 
                 impl $serviceName<()> {
                     pub fn builder<L, HttpPl: #{SmithyHttpServer}::plugin::HttpMarker, ModelPl: #{SmithyHttpServer}::plugin::ModelMarker>(

@@ -438,7 +438,7 @@ class ServerProtocolTestGenerator(
                 "crate::schema::service::${ServerServiceSchemaGenerator.serviceSchemaConstName(codegenContext.serviceShape)}"
             rustTemplate(
                 """
-                let protocol = #{SmithyHttpServer}::schema::ProtocolRegistry::builtin()
+                let protocol = #{SmithyHttpServer}::schema::ProtocolRegistry::BUILTIN
                     .resolve_id(&$serviceSchema, ${codegenContext.protocol.toString().replace("#", "##").dq()})
                     .expect("no protocol registered for the protocol under test");
                 let http_response = #{Serialize:W};

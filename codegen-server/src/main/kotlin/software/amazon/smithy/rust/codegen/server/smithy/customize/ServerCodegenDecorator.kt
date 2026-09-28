@@ -80,12 +80,14 @@ interface ServerCodegenDecorator : CoreCodegenDecorator<ServerCodegenContext, Se
     fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> = emptyList()
 
     /**
-     * Additional protocol registrations for the schema-serde path. Each writable renders an
-     * `aws_smithy_http_server::schema::ProtocolRegistration` expression; the generated service
-     * builder registers them ahead of the built-in protocols before resolving the service's
-     * protocol from its `ServiceSchema`.
+     * Additional protocol registries for the schema-serde path. Each writable renders a
+     * `&'static aws_smithy_http_server::schema::ProtocolRegistry` expression — typically a
+     * reference to a crate's static registry, which keeps every protocol the crate provides,
+     * and each protocol's ordering constraints, in one place. The built-in registry is always
+     * consulted; a registry registering a protocol another registry (built-ins included)
+     * already registers fails the service build.
      */
-    fun additionalProtocolRegistrations(codegenContext: ServerCodegenContext): List<Writable> = emptyList()
+    fun protocolRegistries(codegenContext: ServerCodegenContext): List<Writable> = emptyList()
 }
 
 /**
@@ -148,8 +150,8 @@ class CombinedServerCodegenDecorator(decorators: List<ServerCodegenDecorator>) :
     override fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> =
         orderedDecorators.flatMap { it.configMethods(codegenContext) }
 
-    override fun additionalProtocolRegistrations(codegenContext: ServerCodegenContext): List<Writable> =
-        orderedDecorators.flatMap { it.additionalProtocolRegistrations(codegenContext) }
+    override fun protocolRegistries(codegenContext: ServerCodegenContext): List<Writable> =
+        orderedDecorators.flatMap { it.protocolRegistries(codegenContext) }
 
     companion object {
         fun fromClasspath(

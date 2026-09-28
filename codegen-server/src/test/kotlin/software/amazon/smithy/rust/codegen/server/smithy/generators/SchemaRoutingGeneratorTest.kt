@@ -234,8 +234,10 @@ class SchemaRoutingGeneratorTest {
         val model =
             """
             namespace test
-            use aws.protocols#restJson1
-            @restJson1
+            @protocolDefinition
+            @trait(selector: "service")
+            structure bodyRouting {}
+            @bodyRouting
             service Example { operations: [Stream] }
             @http(method: "POST", uri: "/stream")
             operation Stream {
@@ -251,27 +253,49 @@ class SchemaRoutingGeneratorTest {
                     override val name = "Body routing streaming validation"
                     override val order: Byte = 0
 
-                    override fun additionalProtocolRegistrations(codegenContext: ServerCodegenContext): List<Writable> =
+                    override fun protocols(
+                        serviceId: ShapeId,
+                        currentProtocols: ServerProtocolMap,
+                    ): ServerProtocolMap =
+                        currentProtocols + (
+                            ShapeId.from("test#bodyRouting") to
+                                object : ProtocolGeneratorFactory<ServerProtocolGenerator, ServerCodegenContext> {
+                                    override fun protocol(codegenContext: ServerCodegenContext) =
+                                        ServerRestJsonProtocol(codegenContext)
+
+                                    override fun buildProtocolGenerator(codegenContext: ServerCodegenContext) =
+                                        ServerHttpBoundProtocolGenerator(codegenContext, ServerRestJsonProtocol(codegenContext))
+
+                                    override fun support() = ServerRestJsonFactory().support()
+                                }
+                        )
+
+                    override fun protocolRegistries(codegenContext: ServerCodegenContext): List<Writable> =
                         listOf(
                             {
                                 rustTemplate(
                                     """
                                     {
-                                        use #{Server}::schema::{ServerProtocol, SharedServerProtocol, ProtocolRegistration};
-                                        use #{Server}::routing::{AsyncProtocolRouter, ProtocolClaimFuture, ProtocolRouteFuture, SharedProtocolRouter, RouterBuildContext, RouterBuildError};
+                                        use #{Server}::schema::{ProtocolBuildContext, ProtocolRegistration, ProtocolRegistry, ServerProtocol, SharedServerProtocol};
+                                        use #{Server}::routing::{BodyProtocolRouter, CollectedBody, OperationIndex, RouteClaim, SharedProtocolRouter, RouterBuildContext, RouterBuildError};
                                         use #{Server}::body::BoxBody;
                                         use #{Schema}::{Schema, ShapeId};
                                         use #{Http}::{Request, Response};
                                         ##[derive(Debug)]
                                         struct BodyRouter;
-                                        impl AsyncProtocolRouter for BodyRouter {
+                                        impl BodyProtocolRouter for BodyRouter {
                                             // The test only builds the service; no request routes.
-                                            fn route(self: ::std::sync::Arc<Self>, _: Request<BoxBody>) -> ProtocolRouteFuture { unreachable!() }
-                                            fn claim(self: ::std::sync::Arc<Self>, _: Request<BoxBody>) -> ProtocolClaimFuture { unreachable!() }
+                                            fn route(&self, _: &Request<CollectedBody>) -> #{Result}<OperationIndex, Response<BoxBody>> { unreachable!() }
+                                            fn claim(&self, _: &Request<CollectedBody>) -> RouteClaim { unreachable!() }
                                         }
                                         ##[derive(Debug)]
                                         struct TestProtocol;
                                         impl ServerProtocol for TestProtocol {
+                                            fn from_build_context(
+                                                _ctx: &ProtocolBuildContext<'_>,
+                                            ) -> #{Result}<SharedServerProtocol, RouterBuildError> {
+                                                #{Ok}(SharedServerProtocol::new(TestProtocol))
+                                            }
                                             fn protocol_id(&self) -> &'static ShapeId<'static> {
                                                 static ID: ShapeId<'static> = #{Schema}::shape_id!("test", "bodyRouting");
                                                 &ID
@@ -279,7 +303,7 @@ class SchemaRoutingGeneratorTest {
                                             fn build_router(&self, ctx: RouterBuildContext<'_>)
                                                 -> #{Result}<SharedProtocolRouter, RouterBuildError> {
                                                 if $bodyRouting {
-                                                    #{Ok}(SharedProtocolRouter::new_async(BodyRouter))
+                                                    #{Ok}(SharedProtocolRouter::new_body_routed(BodyRouter))
                                                 } else {
                                                     #{Server}::protocol::rest_json_1::RestJson1Protocol::default().build_router(ctx)
                                                 }
@@ -291,7 +315,11 @@ class SchemaRoutingGeneratorTest {
                                             fn serialize_error(&self, _: &dyn #{Server}::schema::HttpModeledError) -> Response<BoxBody> { unreachable!() }
                                             fn serialize_rejection(&self, _: #{Server}::schema::DeserializeError) -> Response<BoxBody> { unreachable!() }
                                         }
-                                        ProtocolRegistration::new(|_| #{Some}(SharedServerProtocol::new(TestProtocol)))
+                                        static REGISTRY: ProtocolRegistry = ProtocolRegistry::new(&[ProtocolRegistration::new(
+                                            "test##bodyRouting",
+                                            TestProtocol::from_build_context,
+                                        )]);
+                                        &REGISTRY
                                     }
                                     """,
                                     "Server" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),

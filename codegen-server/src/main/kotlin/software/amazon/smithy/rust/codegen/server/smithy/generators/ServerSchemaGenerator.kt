@@ -22,6 +22,7 @@ import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
@@ -1352,6 +1353,26 @@ class ServerSchemaGenerator(
         }
     }
 
+    /**
+     * The shape ID emitted into the generated schema. Synthetic operation
+     * input/output wrappers created by `OperationNormalizer` live in a
+     * `<ns>.synthetic` namespace that does not exist in the user's model, so
+     * surface the original shape ID instead — or, when the operation had no
+     * modeled input/output, the synthetic name under the operation's own
+     * namespace.
+     */
+    private val schemaShapeId: ShapeId =
+        run {
+            val syntheticTrait =
+                shape.getTrait(SyntheticInputTrait::class.java).orElse(null)?.let { it.originalId to it.operation }
+                    ?: shape.getTrait(SyntheticOutputTrait::class.java).orElse(null)?.let { it.originalId to it.operation }
+            when {
+                syntheticTrait == null -> shape.id
+                syntheticTrait.first != null -> syntheticTrait.first!!
+                else -> ShapeId.fromParts(syntheticTrait.second.namespace, shape.id.name)
+            }
+        }
+
     private fun renderSchemaStatic(
         writer: RustWriter,
         schemaPrefix: String,
@@ -1370,9 +1391,9 @@ class ServerSchemaGenerator(
         // initializer would fail (a `const` context cannot call `.clone()`).
         // Constructing it inline moves a `const` temporary into the `const fn`
         // constructor, which is allowed — the same pattern member schemas use.
-        val ns = shape.id.namespace
-        val name = shape.id.name
-        val escapedFqn = shape.id.toString().replace("#", "##")
+        val ns = schemaShapeId.namespace
+        val name = schemaShapeId.name
+        val escapedFqn = schemaShapeId.toString().replace("#", "##")
         val schemaIdExpr = """#{ShapeId}::from_parts("$escapedFqn", "$ns", "$name")"""
 
         when (shape) {
@@ -1487,7 +1508,8 @@ class ServerSchemaGenerator(
                     val rustMemberName = symbolProvider.toMemberName(member)
                     val smithyMemberName = member.memberName
                     val target = model.expectShape(member.target)
-                    val escapedMemberId = member.id.toString().replace("#", "##")
+                    val memberId = ShapeId.fromParts(schemaShapeId.namespace, schemaShapeId.name, member.memberName)
+                    val escapedMemberId = memberId.toString().replace("#", "##")
                     val traitChain = memberTraitChain(member)
                     val memberConstName = "${schemaPrefix}_MEMBER_${constantName(rustMemberName)}"
 
@@ -1503,8 +1525,8 @@ class ServerSchemaGenerator(
                         static $memberConstName: #{Schema}<'static> = #{Schema}::new_member(
                             #{ShapeId}::from_parts(
                                 "$escapedMemberId",
-                                "${member.id.namespace}",
-                                "${member.id.name}",
+                                "${memberId.namespace}",
+                                "${memberId.name}",
                             ),
                             #{ShapeType}::${shapeTypeVariant(target)},
                             ${templateEscape(smithyMemberName.dq())},
