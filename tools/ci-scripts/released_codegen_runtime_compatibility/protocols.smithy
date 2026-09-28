@@ -13,25 +13,25 @@ use smithy.protocols#rpcv2Cbor
 @restJson1
 service RestJsonService {
     version: "2024-01-01"
-    operations: [RestOperation]
+    operations: [RestOperation, RestEventStreamOperation, StreamingBlobOperation]
 }
 
 @restXml
 service RestXmlService {
     version: "2024-01-01"
-    operations: [RestOperation]
+    operations: [RestOperation, StreamingBlobOperation]
 }
 
 @awsJson1_0
 service AwsJson10Service {
     version: "2024-01-01"
-    operations: [RpcOperation]
+    operations: [RpcOperation, RpcEventStreamOperation]
 }
 
 @awsJson1_1
 service AwsJson11Service {
     version: "2024-01-01"
-    operations: [RpcOperation]
+    operations: [RpcOperation, RpcEventStreamOperation]
 }
 
 @xmlNamespace(uri: "https://example.com/aws-query")
@@ -51,7 +51,7 @@ service Ec2QueryService {
 @rpcv2Cbor
 service RpcV2CborService {
     version: "2024-01-01"
-    operations: [RpcOperation]
+    operations: [RpcOperation, RpcEventStreamOperation]
 }
 
 @http(uri: "/compatibility", method: "POST")
@@ -74,6 +74,61 @@ operation RpcOperation {
     }
     errors: [CompatibilityError]
 }
+
+// Event streams pull in aws-smithy-eventstream and the event stream
+// serde/signing paths of the runtime crates.
+@http(uri: "/event-stream", method: "POST")
+operation RestEventStreamOperation {
+    input := {
+        @httpPayload
+        events: CompatibilityEventStream
+    }
+    output := {
+        @httpPayload
+        events: CompatibilityEventStream
+    }
+    errors: [CompatibilityError]
+}
+
+operation RpcEventStreamOperation {
+    input := {
+        events: CompatibilityEventStream
+    }
+    output := {
+        events: CompatibilityEventStream
+    }
+    errors: [CompatibilityError]
+}
+
+@streaming
+union CompatibilityEventStream {
+    message: CompatibilityEvent
+}
+
+structure CompatibilityEvent {
+    @eventHeader
+    name: String
+    @eventPayload
+    payload: Blob
+}
+
+// Streaming blobs pull in the ByteStream / streaming body paths of the
+// runtime crates.
+@http(uri: "/streaming-blob", method: "POST")
+operation StreamingBlobOperation {
+    input := {
+        @httpPayload
+        data: CompatibilityStreamingBlob = ""
+    }
+    output := {
+        @httpPayload
+        data: CompatibilityStreamingBlob = ""
+    }
+    errors: [CompatibilityError]
+}
+
+@streaming
+blob CompatibilityStreamingBlob
 
 @error("client")
 structure CompatibilityError {
