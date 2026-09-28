@@ -2739,8 +2739,16 @@ mod loom_tests {
             let local_waiter =
                 OriginCell::register_waiter(&connection_cell, ProtocolRequirement::H1Compatible);
 
-            let returning = loom::thread::spawn(move || drop(returning));
-            let closing = loom::thread::spawn(move || close.close(CloseReason::Poisoned));
+            // Loom's default 4 KiB coroutine stack is too small for the full
+            // sender-return and connection-close paths modeled here.
+            let returning = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || drop(returning))
+                .unwrap();
+            let closing = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || close.close(CloseReason::Poisoned))
+                .unwrap();
             returning.join().unwrap();
             let close_won = closing.join().unwrap();
 
