@@ -9,9 +9,12 @@ use aws_smithy_types::base64;
 
 use crate::Crc64Nvme;
 use crate::{
-    Checksum, Crc32, Crc32c, Md5, Sha1, Sha256, CRC_32_C_NAME, CRC_32_NAME, CRC_64_NVME_NAME,
+    Checksum, Crc32, Crc32c, Sha1, Sha256, CRC_32_C_NAME, CRC_32_NAME, CRC_64_NVME_NAME,
     SHA_1_NAME, SHA_256_NAME,
 };
+// MD5 is only available on the RustCrypto backend; see `crate::crypto`.
+#[cfg(not(feature = "__aws-lc-rs"))]
+use crate::Md5;
 
 pub const CRC_32_HEADER_NAME: &str = "x-amz-checksum-crc32";
 pub const CRC_32_C_HEADER_NAME: &str = "x-amz-checksum-crc32c";
@@ -20,6 +23,7 @@ pub const SHA_256_HEADER_NAME: &str = "x-amz-checksum-sha256";
 pub const CRC_64_NVME_HEADER_NAME: &str = "x-amz-checksum-crc64nvme";
 
 // Preserved for compatibility purposes. This should never be used by users, only within smithy-rs
+#[cfg(not(feature = "__aws-lc-rs"))]
 #[warn(dead_code)]
 pub(crate) static MD5_HEADER_NAME: &str = "content-md5";
 
@@ -106,6 +110,7 @@ impl HttpChecksum for Sha256 {
     }
 }
 
+#[cfg(not(feature = "__aws-lc-rs"))]
 impl HttpChecksum for Md5 {
     fn header_name(&self) -> &'static str {
         MD5_HEADER_NAME

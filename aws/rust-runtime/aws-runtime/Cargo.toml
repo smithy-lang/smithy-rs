@@ -1,6 +1,6 @@
 [package]
 name = "aws-runtime"
-version = "1.10.0"
+version = "1.11.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Runtime support code for the AWS SDK. This crate isn't intended to be used directly."
 edition = "2021"
@@ -16,6 +16,16 @@ http-02x = ["dep:http-02x", "dep:http-body-04x", "aws-smithy-types/http-body-0-4
 http-1x = []
 test-util = ["dep:regex-lite"]
 sigv4a = ["aws-sigv4/sigv4a"]
+# Route SigV4/SigV4a signing through the FIPS 140-3 validated build of AWS-LC.
+#
+# This is the signing arm of the top-level `aws-lc-fips` feature on generated SDK crates and on
+# `aws-config`; TLS and checksums are reached by other routes, since neither is a dependency
+# of this crate. See `aws-sigv4`'s `aws-lc-rs-fips` feature for the platform requirements.
+#
+# Named for the module it selects rather than `fips`, so that it does not read as a sibling of
+# `Config::use_fips` on a generated SDK crate, which selects a FIPS-compliant *endpoint* and says
+# nothing about which implementation performs the cryptography.
+aws-lc-fips = ["aws-sigv4/aws-lc-rs-fips"]
 
 [dependencies]
 aws-credential-types = { path = "../aws-credential-types" }

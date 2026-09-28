@@ -15,13 +15,57 @@
 )]
 
 //! Checksum calculation and verification callbacks.
+//!
+//! # Crypto backends
+//!
+//! SHA-1 and SHA-256 checksums are computed by one of two backends, chosen by feature at
+//! compile time:
+//!
+//! | Feature | Implementation | FIPS 140-3 validated |
+//! |---|---|---|
+//! | `rustcrypto` (default) | the [RustCrypto](https://github.com/RustCrypto/hashes) hashers | no |
+//! | `aws-lc-rs` | [aws-lc-rs](https://github.com/aws/aws-lc-rs) on the standard AWS-LC build | no |
+//! | `aws-lc-rs-fips` | aws-lc-rs on the FIPS build of AWS-LC | yes |
+//!
+//! `aws-lc-rs-fips` takes precedence over `aws-lc-rs`, and either takes precedence over
+//! `rustcrypto`, so enabling more than one — which Cargo feature unification does routinely —
+//! resolves to the strongest backend rather than failing to build.
+//!
+//! ## Platform support
+//!
+//! Both aws-lc-rs backends are a per-target capability, which is why `rustcrypto` is the default:
+//! it is the only backend that builds everywhere the SDK does.
+//!
+//! - `aws-lc-rs` needs a C/C++ compiler and works on every target
+//!   [aws-lc-rs supports](https://aws.github.io/aws-lc-rs/platform_support.html). The only WASM
+//!   target it supports is `wasm32-unknown-emscripten`, so `wasm32-unknown-unknown` and the WASI
+//!   targets have to stay on `rustcrypto`.
+//! - `aws-lc-rs-fips` additionally needs CMake and Go, and covers a subset of those targets:
+//!   Linux (gnu and musl), macOS, Windows MSVC, and FreeBSD. Not iOS, not Android, not WASM.
+//!
+//! Enabling either feature on a target its AWS-LC build doesn't support fails while building
+//! `aws-lc-sys` or `aws-lc-fips-sys`, before this crate is reached.
+//!
+//! Selecting an AWS-LC backend changes which implementation runs; it does not remove the RustCrypto
+//! crates from the dependency tree. They are unconditional dependencies, so `md-5`, `sha1` and
+//! `sha2` are compiled either way and only the module that calls them is `cfg`-ed out. Cargo
+//! features are additive and cannot express "on unless AWS-LC is", and gating them would break
+//! builds that pass `default-features = false`.
+//!
+//! MD5 is only available on the `rustcrypto` backend, since aws-lc-rs does not expose it and it
+//! is not FIPS-approved. No public API reaches MD5 regardless: [`ChecksumAlgorithm::Md5`] is
+//! deprecated and resolves to CRC-32.
+//!
+//! CRC-32, CRC-32C, and CRC-64/NVME are not cryptographic and are unaffected by this choice.
 
+use crate::crypto::Digest as _;
 use crate::error::UnknownChecksumAlgorithmError;
 
 use bytes::Bytes;
 use std::{fmt::Debug, str::FromStr};
 
 pub mod body;
+mod crypto;
 pub mod error;
 pub mod http;
 
@@ -255,24 +299,21 @@ impl Checksum for Crc64Nvme {
 
 #[derive(Debug, Default)]
 struct Sha1 {
-    hasher: sha1::Sha1,
+    hasher: crypto::Sha1,
 }
 
 impl Sha1 {
     fn update(&mut self, bytes: &[u8]) {
-        use sha1::Digest;
         self.hasher.update(bytes);
     }
 
     fn finalize(self) -> Bytes {
-        use sha1::Digest;
-        Bytes::copy_from_slice(self.hasher.finalize().as_ref())
+        self.hasher.finalize()
     }
 
     // Size of the checksum in bytes
     fn size() -> u64 {
-        use sha1::Digest;
-        sha1::Sha1::output_size() as u64
+        crypto::Sha1::output_size()
     }
 }
 
@@ -291,24 +332,21 @@ impl Checksum for Sha1 {
 
 #[derive(Debug, Default)]
 struct Sha256 {
-    hasher: sha2::Sha256,
+    hasher: crypto::Sha256,
 }
 
 impl Sha256 {
     fn update(&mut self, bytes: &[u8]) {
-        use sha2::Digest;
         self.hasher.update(bytes);
     }
 
     fn finalize(self) -> Bytes {
-        use sha2::Digest;
-        Bytes::copy_from_slice(self.hasher.finalize().as_ref())
+        self.hasher.finalize()
     }
 
     // Size of the checksum in bytes
     fn size() -> u64 {
-        use sha2::Digest;
-        sha2::Sha256::output_size() as u64
+        crypto::Sha256::output_size()
     }
 }
 
@@ -324,33 +362,35 @@ impl Checksum for Sha256 {
     }
 }
 
+// MD5 is deprecated (`ChecksumAlgorithm::Md5` resolves to CRC-32) and is only available on the
+// RustCrypto backend: aws-lc-rs doesn't expose MD5, and it isn't FIPS-approved.
+#[cfg(not(feature = "__aws-lc-rs"))]
 #[allow(dead_code)]
 #[derive(Debug, Default)]
 struct Md5 {
-    hasher: md5::Md5,
+    hasher: crypto::Md5,
 }
 
+#[cfg(not(feature = "__aws-lc-rs"))]
 impl Md5 {
     #[warn(dead_code)]
     fn update(&mut self, bytes: &[u8]) {
-        use md5::Digest;
         self.hasher.update(bytes);
     }
 
     #[warn(dead_code)]
     fn finalize(self) -> Bytes {
-        use md5::Digest;
-        Bytes::copy_from_slice(self.hasher.finalize().as_ref())
+        self.hasher.finalize()
     }
 
     // Size of the checksum in bytes
     #[warn(dead_code)]
     fn size() -> u64 {
-        use md5::Digest;
-        md5::Md5::output_size() as u64
+        crypto::Md5::output_size()
     }
 }
 
+#[cfg(not(feature = "__aws-lc-rs"))]
 impl Checksum for Md5 {
     fn update(&mut self, bytes: &[u8]) {
         Self::update(self, bytes)
@@ -365,12 +405,11 @@ impl Checksum for Md5 {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(not(feature = "__aws-lc-rs"))]
+    use super::{http::MD5_HEADER_NAME, Md5};
     use super::{
-        http::{
-            CRC_32_C_HEADER_NAME, CRC_32_HEADER_NAME, MD5_HEADER_NAME, SHA_1_HEADER_NAME,
-            SHA_256_HEADER_NAME,
-        },
-        Crc32, Crc32c, Md5, Sha1, Sha256,
+        http::{CRC_32_C_HEADER_NAME, CRC_32_HEADER_NAME, SHA_1_HEADER_NAME, SHA_256_HEADER_NAME},
+        Crc32, Crc32c, Sha1, Sha256,
     };
 
     use crate::http::HttpChecksum;
@@ -466,6 +505,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "__aws-lc-rs"))]
     fn test_md5_checksum() {
         let mut checksum = Md5::default();
         checksum.update(TEST_DATA.as_bytes());

@@ -84,6 +84,33 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
             rustCrate.mergeFeature(Feature("legacy-https-client", default = false, listOf("aws-smithy-runtime/tls-rustls")))
         }
         rustCrate.mergeFeature(Feature("default-https-client", default = true, listOf("aws-smithy-runtime/default-https-client")))
+
+        // A single switch for routing this crate's cryptography through the FIPS 140-3 validated build of AWS-LC,
+        // so that a customer does not have to align a feature on each runtime crate by hand. The three paths reach
+        // this crate by different routes and there is no one broker that can see all of them: TLS through
+        // `aws-smithy-runtime` (which owns the default HTTPS client), signing through `aws-runtime` (the AWS layer,
+        // which `aws-smithy-runtime` sits below), and checksums directly, since `aws-smithy-checksums` is a
+        // dependency of neither.
+        //
+        // Named for the module it selects rather than `fips`, because a bare `fips` on a generated crate would sit
+        // alongside `Config::use_fips`, which selects a FIPS-compliant *endpoint* and says nothing about which
+        // implementation performs the cryptography. The two are independent, and a customer pursuing FedRAMP is
+        // exactly the person likely to read one as the other.
+        //
+        // Not a default feature: the validated AWS-LC build is unavailable on some targets the SDK supports (no
+        // WASM, no iOS, no Android) and needs CMake and Go at build time.
+        val fipsDeps =
+            mutableListOf(
+                "aws-smithy-runtime/aws-lc-fips",
+                "aws-runtime/aws-lc-fips",
+            )
+        // Only name the checksums crate for services that actually have checksum operations. Naming it
+        // unconditionally would make Cargo add `aws-smithy-checksums` to every service crate, including the ones
+        // that never otherwise depend on it.
+        if (serviceHasHttpChecksumOperation(codegenContext)) {
+            fipsDeps += "aws-smithy-checksums/aws-lc-rs-fips"
+        }
+        rustCrate.mergeFeature(Feature("aws-lc-fips", default = false, fipsDeps))
     }
 
     override fun libRsCustomizations(
