@@ -18,4 +18,8 @@ if [[ $# -eq 1 ]]; then
     args+=(--codegen-version "$1")
 fi
 
+echo "running compatibility tooling unit tests"
+PYTHONPATH=tools/ci-scripts python3 -m unittest discover \
+    -s tools/ci-scripts/released_codegen_runtime_compatibility/tests
+
 ./tools/ci-scripts/released-codegen-runtime-compatibility.py "${args[@]}"
