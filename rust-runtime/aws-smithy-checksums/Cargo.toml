@@ -79,6 +79,11 @@ sha2 = "0.11"
 # aws-lc-rs digest backend; see the `aws-lc-rs` and `aws-lc-rs-fips` features.
 # `default-features = false` so that the AWS-LC build (non-FIPS vs FIPS) is chosen
 # explicitly by those features rather than defaulting to the non-FIPS one.
+#
+# The 1.17.0 floor is an advisory floor, not an API one: the aws-lc-rs APIs used here exist from
+# 1.16.1, but 1.16.x declares `aws-lc-sys = "0.38.0"`, a range capped below 0.39.0, so it can never
+# reach the version that patches RUSTSEC-2026-0044 and -0048. 1.17.0 declares `aws-lc-sys = "0.41.0"`.
+# It is not an attempt to reach a particular FIPS module; see aws-sigv4's Cargo.toml for why.
 aws-lc-rs = { version = "1.17.0", optional = true, default-features = false }
 
 [dev-dependencies]
