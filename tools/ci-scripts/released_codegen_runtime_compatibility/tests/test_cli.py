@@ -69,11 +69,16 @@ class VerificationTest(unittest.TestCase):
             published = PublishedCodegen("0.1.24", "1.73.0")
             generated = object()
             patched = object()
+            runtime_crates = object()
             with mock.patch.object(
                 verify_compatibility,
                 "resolve_published_codegen",
                 return_value=published,
             ) as resolve, mock.patch.object(
+                verify_compatibility,
+                "discover_runtime_crates",
+                return_value=runtime_crates,
+            ) as discover, mock.patch.object(
                 verify_compatibility,
                 "generate_protocol_sdks",
                 return_value=generated,
@@ -90,6 +95,7 @@ class VerificationTest(unittest.TestCase):
                 )
 
         resolve.assert_called_once_with(None)
+        discover.assert_called_once_with(runtime_root.resolve())
         generate.assert_called_once_with(
             published_codegen=published,
             protocols=verify_compatibility.COMPATIBILITY_PROTOCOLS,
@@ -98,10 +104,10 @@ class VerificationTest(unittest.TestCase):
         )
         patch.assert_called_once_with(
             generated_sdks=generated,
-            runtime_root=runtime_root.resolve(),
+            runtime_crates=runtime_crates,
             destination_root=mock.ANY,
         )
-        compile_sdks.assert_called_once_with(patched)
+        compile_sdks.assert_called_once_with(patched, runtime_crates)
 
         generation_destination = generate.call_args.kwargs["destination"]
         verification_destination = patch.call_args.kwargs["destination_root"]

@@ -9,11 +9,12 @@ from typing import Tuple
 @dataclass(frozen=True)
 class RuntimeCrate:
     """Identify one current runtime crate offered to Cargo as a patch.
-    Store only its package name and local source directory.
+    Store its package name, local source directory, and candidate version.
     """
 
     name: str
     path: Path
+    version: str
 
 
 @dataclass(frozen=True)

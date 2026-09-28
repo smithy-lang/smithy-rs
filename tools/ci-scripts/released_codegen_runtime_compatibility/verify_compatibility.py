@@ -8,6 +8,7 @@ from typing import Optional
 
 from .cargo import (
     compile_generated_sdks,
+    discover_runtime_crates,
     patch_generated_sdks_with_current_runtimes,
 )
 from .codegen import COMPATIBILITY_PROTOCOLS, generate_protocol_sdks
@@ -33,6 +34,7 @@ def verify_released_codegen_runtime_compatibility(
         else repository_root / "rust-runtime"
     )
     published_codegen = resolve_published_codegen(codegen_version)
+    runtime_crates = discover_runtime_crates(runtime_root)
 
     with temporary_directory(
         prefix=temporary_prefix(published_codegen.version)
@@ -45,7 +47,7 @@ def verify_released_codegen_runtime_compatibility(
         )
         patched_sdks = patch_generated_sdks_with_current_runtimes(
             generated_sdks=generated_sdks,
-            runtime_root=runtime_root,
+            runtime_crates=runtime_crates,
             destination_root=work_directory / "verification",
         )
-        compile_generated_sdks(patched_sdks)
+        compile_generated_sdks(patched_sdks, runtime_crates)
