@@ -16,9 +16,9 @@
 //! handshake or driver submission.
 
 use super::super::cell::h2::{
-    H2CloseHandle, H2DriverGuard, H2FlightId, H2FlightInstall, H2GenerationJoin, H2Sender,
+    H2CloseHandle, H2DriverGuard, H2FlightDecision, H2FlightId, H2GenerationJoinOutcome, H2Sender,
 };
-use super::super::cell::{AcquisitionResult, EstablishmentPermit, OriginCell, WaiterId};
+use super::super::cell::{AcquisitionOutcome, EstablishmentPermit, OriginCell, WaiterId};
 use super::super::connection::{
     CloseReason, ConnectionInfo, ConnectionIo, ConnectionState, NegotiatedProtocol,
 };
@@ -26,6 +26,7 @@ use super::super::dispatch::AcquisitionContext;
 use super::super::partition::DriverSpawner;
 use super::{next_connection_id, EstablishmentOutcome};
 use crate::client::connect::BoxConn;
+use crate::client::downcast_error;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_types::body::SdkBody;
@@ -103,8 +104,8 @@ pub(super) async fn establish_h2(
     connected: Connected,
 ) -> EstablishmentOutcome {
     loop {
-        match context.cell.install_or_join_h2_flight(waiter) {
-            H2FlightInstall::Accepting(generation) => {
+        match context.cell.converge_h2_flight(waiter) {
+            H2FlightDecision::UseGeneration(generation) => {
                 tracing::trace!(
                     request_partition = ?context.partition.id(),
                     connection_partition = ?context.cell.id().partition(),
@@ -115,15 +116,15 @@ pub(super) async fn establish_h2(
                     "HTTP/2 establishment found an accepting generation"
                 );
                 match OriginCell::join_h2_generation(&context.cell, waiter, generation) {
-                    H2GenerationJoin::GenerationChanged => continue,
-                    H2GenerationJoin::Joined | H2GenerationJoin::WaiterCompleted => {
+                    H2GenerationJoinOutcome::GenerationChanged => continue,
+                    H2GenerationJoinOutcome::Joined | H2GenerationJoinOutcome::WaiterResolved => {
                         drop(io);
                         drop(permit);
-                        return EstablishmentOutcome::Transferred;
+                        return EstablishmentOutcome::WaiterCompletionTransferred;
                     }
                 }
             }
-            H2FlightInstall::Joined => {
+            H2FlightDecision::JoinedFlight => {
                 tracing::trace!(
                     request_partition = ?context.partition.id(),
                     connection_partition = ?context.cell.id().partition(),
@@ -134,9 +135,9 @@ pub(super) async fn establish_h2(
                 );
                 drop(io);
                 drop(permit);
-                return EstablishmentOutcome::Transferred;
+                return EstablishmentOutcome::WaiterCompletionTransferred;
             }
-            H2FlightInstall::WaiterCompleted => {
+            H2FlightDecision::WaiterResolved => {
                 tracing::trace!(
                     request_partition = ?context.partition.id(),
                     connection_partition = ?context.cell.id().partition(),
@@ -147,9 +148,9 @@ pub(super) async fn establish_h2(
                 );
                 drop(io);
                 drop(permit);
-                return EstablishmentOutcome::Transferred;
+                return EstablishmentOutcome::WaiterCompletionTransferred;
             }
-            H2FlightInstall::Driver(flight) => {
+            H2FlightDecision::RunFlight(flight) => {
                 tracing::trace!(
                     request_partition = ?context.partition.id(),
                     connection_partition = ?context.cell.id().partition(),
@@ -160,7 +161,7 @@ pub(super) async fn establish_h2(
                     "HTTP/2 establishment started a flight"
                 );
                 drive_flight(context, flight, permit, io, connected).await;
-                return EstablishmentOutcome::Transferred;
+                return EstablishmentOutcome::WaiterCompletionTransferred;
             }
         }
     }
@@ -201,7 +202,7 @@ async fn drive_flight(
         Ok(established) => established,
         Err(error) => {
             connection.logical_close(CloseReason::ProtocolClosed);
-            completion.fail(super::super::super::downcast_error(Box::new(error)));
+            completion.fail(downcast_error(Box::new(error)));
             return;
         }
     };
@@ -336,7 +337,7 @@ fn fail_participants(cell: &OriginCell, flight: H2FlightId, error: ConnectorErro
     for participant in participants {
         cell.complete_establishment(
             participant,
-            AcquisitionResult::Failed(error.connector_error()),
+            AcquisitionOutcome::Failed(error.connector_error()),
         );
     }
 }
@@ -345,7 +346,7 @@ fn fail_participants(cell: &OriginCell, flight: H2FlightId, error: ConnectorErro
 mod tests {
     use super::*;
     use crate::client::pool::admission::ProtocolRequirement;
-    use crate::client::pool::cell::AcquisitionEvent;
+    use crate::client::pool::cell::{AcquisitionOutcome, AcquisitionStep};
     use crate::client::pool::origin::OriginKey;
     use crate::client::pool::partition::EligibilityGroup;
     use http_1x::uri::Scheme;
@@ -366,7 +367,7 @@ mod tests {
     fn launching_waiter(cell: &crate::sync::Arc<OriginCell>) -> WaiterId {
         let waiter = OriginCell::register_waiter(cell, ProtocolRequirement::H2Required);
         let event = cell.poll_waiter(waiter, &mut Context::from_waker(Waker::noop()));
-        let Poll::Ready(AcquisitionEvent::Establish(permit)) = event else {
+        let Poll::Ready(AcquisitionStep::StartEstablishment(permit)) = event else {
             panic!("new H2 waiter did not receive establishment authority");
         };
         assert!(cell.start_establishment(waiter));
@@ -376,7 +377,7 @@ mod tests {
 
     fn failed_event(cell: &OriginCell, waiter: WaiterId) -> ConnectorError {
         let event = cell.poll_waiter(waiter, &mut Context::from_waker(Waker::noop()));
-        let Poll::Ready(AcquisitionEvent::Complete(AcquisitionResult::Failed(error))) = event
+        let Poll::Ready(AcquisitionStep::Resolved(AcquisitionOutcome::Failed(error))) = event
         else {
             panic!("flight participant did not receive a failure");
         };
@@ -388,12 +389,12 @@ mod tests {
         let cell = cell();
         let first = launching_waiter(&cell);
         let second = launching_waiter(&cell);
-        let H2FlightInstall::Driver(flight) = cell.install_or_join_h2_flight(first) else {
+        let H2FlightDecision::RunFlight(flight) = cell.converge_h2_flight(first) else {
             panic!("first participant did not become the flight driver");
         };
         assert!(matches!(
-            cell.install_or_join_h2_flight(second),
-            H2FlightInstall::Joined
+            cell.converge_h2_flight(second),
+            H2FlightDecision::JoinedFlight
         ));
 
         let mut completion = FlightCompletionGuard::new(cell.clone(), flight);
@@ -422,12 +423,12 @@ mod tests {
         let cell = cell();
         let live = launching_waiter(&cell);
         let cancelled = launching_waiter(&cell);
-        let H2FlightInstall::Driver(flight) = cell.install_or_join_h2_flight(live) else {
+        let H2FlightDecision::RunFlight(flight) = cell.converge_h2_flight(live) else {
             panic!("first participant did not become the flight driver");
         };
         assert!(matches!(
-            cell.install_or_join_h2_flight(cancelled),
-            H2FlightInstall::Joined
+            cell.converge_h2_flight(cancelled),
+            H2FlightDecision::JoinedFlight
         ));
         assert!(OriginCell::cancel_waiter(&cell, cancelled));
 
