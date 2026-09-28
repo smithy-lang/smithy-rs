@@ -23,8 +23,8 @@ use crate::{
     response::IntoResponse,
     runtime_error::InternalFailureException,
     schema::{
-        collect_request_body, DeserializableShape, DeserializeError, HttpModeledError, SelectedProtocolOperation,
-        ServerRequest,
+        collect_request_body, BodyDirective, DeserializableShape, DeserializeError, HttpModeledError,
+        SelectedProtocolOperation, ServerRequest,
     },
     service::ServiceShape,
 };
@@ -170,21 +170,20 @@ where
                 Ok(request) => request.into_parts(),
                 Err(err) => return Ok(protocol.serialize_rejection(err)),
             };
-            if let Err(err) = protocol.check_accept(operation.output(), &converted.headers) {
-                return Ok(protocol.serialize_rejection(err));
-            }
-            let bytes = if protocol.reads_request_body(operation.input()) {
-                match collect_request_body(converted.body, &selected.request_body_config()).await {
-                    Ok(bytes) => bytes,
-                    Err(err) => {
-                        return Ok(crate::schema::body_collection_rejection(
-                            &**protocol,
-                            err.map_body_error(crate::Error::new),
-                        ))
+            let bytes = match protocol.inspect_request_head(operation, &converted.headers) {
+                Err(err) => return Ok(protocol.serialize_rejection(err)),
+                Ok(BodyDirective::Collect) => {
+                    match collect_request_body(converted.body, &selected.request_body_config()).await {
+                        Ok(bytes) => bytes,
+                        Err(err) => {
+                            return Ok(crate::schema::body_collection_rejection(
+                                &**protocol,
+                                err.map_body_error(crate::Error::new),
+                            ))
+                        }
                     }
                 }
-            } else {
-                bytes::Bytes::new()
+                Ok(BodyDirective::Skip) => bytes::Bytes::new(),
             };
             let request = ServerRequest {
                 uri: converted.uri,
@@ -216,11 +215,11 @@ where
 /// `Sync`, so services with streaming operations run on a `Sync` body such as
 /// [`BoxBodySync`](crate::body::BoxBodySync) or hyper's incoming body.
 #[derive(Debug, Clone)]
-pub struct StreamingUpgradePlugin<Extractors> {
+pub struct DynStreamingUpgradePlugin<Extractors> {
     _extractors: PhantomData<Extractors>,
 }
 
-impl<Extractors> StreamingUpgradePlugin<Extractors> {
+impl<Extractors> DynStreamingUpgradePlugin<Extractors> {
     pub fn new() -> Self {
         Self {
             _extractors: PhantomData,
@@ -228,20 +227,20 @@ impl<Extractors> StreamingUpgradePlugin<Extractors> {
     }
 }
 
-impl<Extractors> Default for StreamingUpgradePlugin<Extractors> {
+impl<Extractors> Default for DynStreamingUpgradePlugin<Extractors> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<Ser, Op, T, Extractors> Plugin<Ser, Op, T> for StreamingUpgradePlugin<Extractors>
+impl<Ser, Op, T, Extractors> Plugin<Ser, Op, T> for DynStreamingUpgradePlugin<Extractors>
 where
     Ser: ServiceShape,
     Op: StreamingOperationShape,
 {
-    type Output = StreamingUpgrade<Op, Extractors, T>;
+    type Output = DynStreamingUpgrade<Op, Extractors, T>;
     fn apply(&self, inner: T) -> Self::Output {
-        StreamingUpgrade {
+        DynStreamingUpgrade {
             _operation: PhantomData,
             _extractors: PhantomData,
             inner,
@@ -255,13 +254,13 @@ where
 /// reads URI and header bindings only; the live body goes to
 /// [`StreamingOperationShape::deserialize_streaming_input`]. A non-streaming input on such an
 /// operation is collected exactly as [`DynUpgrade`] collects it.
-pub struct StreamingUpgrade<Op, Extractors, S> {
+pub struct DynStreamingUpgrade<Op, Extractors, S> {
     _operation: PhantomData<Op>,
     _extractors: PhantomData<Extractors>,
     inner: S,
 }
 
-impl<Op, Extractors, S: Clone> Clone for StreamingUpgrade<Op, Extractors, S> {
+impl<Op, Extractors, S: Clone> Clone for DynStreamingUpgrade<Op, Extractors, S> {
     fn clone(&self) -> Self {
         Self {
             _operation: PhantomData,
@@ -271,7 +270,7 @@ impl<Op, Extractors, S: Clone> Clone for StreamingUpgrade<Op, Extractors, S> {
     }
 }
 
-impl<Op, Extractors, B, S> Service<http::Request<B>> for StreamingUpgrade<Op, Extractors, S>
+impl<Op, Extractors, B, S> Service<http::Request<B>> for DynStreamingUpgrade<Op, Extractors, S>
 where
     Op: StreamingOperationShape,
     Op::Input: Send + 'static,
@@ -322,13 +321,14 @@ where
                 Ok(request) => request.into_parts(),
                 Err(err) => return Ok(protocol.serialize_rejection(err)),
             };
-            if let Err(err) = protocol.check_accept(operation.output(), &converted.headers) {
-                return Ok(protocol.serialize_rejection(err));
-            }
+            let directive = match protocol.inspect_request_head(operation, &converted.headers) {
+                Ok(directive) => directive,
+                Err(err) => return Ok(protocol.serialize_rejection(err)),
+            };
             let input_streams = operation.input().members().iter().any(|member| member.streaming());
             let (bytes, body) = if input_streams {
                 (bytes::Bytes::new(), SdkBody::from_body_1_x(converted.body))
-            } else if protocol.reads_request_body(operation.input()) {
+            } else if directive == BodyDirective::Collect {
                 match collect_request_body(converted.body, &selected.request_body_config()).await {
                     Ok(bytes) => (bytes, SdkBody::empty()),
                     Err(err) => {

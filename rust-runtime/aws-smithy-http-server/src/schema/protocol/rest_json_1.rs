@@ -20,7 +20,7 @@ use super::response::{
     ResponseBindings,
 };
 use super::rest::RestPolicy;
-use super::{ServerEventStreamProtocol, ServerProtocol, ServerRequest};
+use super::{BodyDirective, ServerEventStreamProtocol, ServerProtocol, ServerRequest};
 
 static PROTOCOL_ID: ShapeId<'static> = shape_id!("aws.protocols", "restJson1");
 const CONTENT_TYPE: &str = "application/json";
@@ -50,6 +50,12 @@ impl ServerEventStreamProtocol for RestJson1Protocol {
 }
 
 impl ServerProtocol for RestJson1Protocol {
+    fn from_build_context(
+        _ctx: &crate::schema::ProtocolBuildContext<'_>,
+    ) -> Result<crate::schema::SharedServerProtocol, crate::routing::RouterBuildError> {
+        Ok(crate::schema::SharedServerProtocol::new(Self::default()))
+    }
+
     fn build_router(
         &self,
         ctx: crate::routing::RouterBuildContext<'_>,
@@ -64,12 +70,17 @@ impl ServerProtocol for RestJson1Protocol {
         Some(self)
     }
 
-    fn check_accept(&self, output: &Schema<'_>, headers: &Headers) -> Result<(), DeserializeError> {
-        self.inner.check_accept(output, headers)
-    }
-
-    fn reads_request_body(&self, input: &Schema<'_>) -> bool {
-        self.inner.reads_request_body(input)
+    fn inspect_request_head(
+        &self,
+        operation: &crate::schema::OperationSchema<'_>,
+        headers: &Headers,
+    ) -> Result<BodyDirective, DeserializeError> {
+        self.inner.check_accept(operation.output(), headers)?;
+        Ok(if self.inner.reads_request_body(operation.input()) {
+            BodyDirective::Collect
+        } else {
+            BodyDirective::Skip
+        })
     }
 
     fn deserialize_request<'a>(

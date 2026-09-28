@@ -36,22 +36,22 @@ pub type BoxBodySync = http_body_util::combinators::BoxBody<Bytes, Error>;
 ///
 /// A request entering through the transport keeps its concrete body — hyper's
 /// [`Incoming`](hyper::body::Incoming) by default — inside the `Passthrough` state, unerased and
-/// monomorphized. A body-first protocol router replaces it with the `Buffered` state after
-/// collection. Sources that are not the transport body (tests, upgrade layers, Lambda events)
-/// enter through [`SchemaBody::new`], which erases them into a boxed state.
+/// monomorphized. The routing service replaces it with the `Buffered` state after collecting for
+/// a body-first protocol. Sources that are not the transport body (tests, upgrade layers, Lambda
+/// events) enter through [`RequestBody::new`], which erases them into a boxed state.
 ///
 /// The states are private so buffering and transport-specific optimizations can evolve.
 ///
-/// `SchemaBody<B>` is `Send`, and `Sync` whenever `B` is. The `Sync` bound is required so a
+/// `RequestBody<B>` is `Send`, and `Sync` whenever `B` is. The `Sync` bound is required so a
 /// request body can be handed to [`SdkBody::from_body_1_x`] when an operation input has a
 /// streaming member; `SdkBody` only accepts `Sync` bodies.
 ///
 /// [`SdkBody::from_body_1_x`]: aws_smithy_types::body::SdkBody::from_body_1_x
 #[derive(Debug)]
-pub struct SchemaBody<B = hyper::body::Incoming>(BodyInner<B>);
+pub struct RequestBody<B = hyper::body::Incoming>(BodyInner<B>);
 
 /// The default request body: the schema pipeline over hyper's transport body.
-pub type Body = SchemaBody<hyper::body::Incoming>;
+pub type Body = RequestBody<hyper::body::Incoming>;
 
 #[derive(Debug)]
 enum BodyInner<B> {
@@ -66,10 +66,10 @@ enum BodyInner<B> {
     },
 }
 
-impl<B> SchemaBody<B> {
+impl<B> RequestBody<B> {
     /// Wraps any compatible HTTP body without polling it.
     ///
-    /// The transport body `B` and an already-wrapped `SchemaBody<B>` stay unerased; any other
+    /// The transport body `B` and an already-wrapped `RequestBody<B>` stay unerased; any other
     /// body type is erased into a boxed state.
     pub fn new<T>(body: T) -> Self
     where
@@ -80,11 +80,6 @@ impl<B> SchemaBody<B> {
         try_downcast(body)
             .or_else(|body| try_downcast(body).map(|body| Self(BodyInner::Passthrough(body))))
             .unwrap_or_else(|body| Self(BodyInner::Boxed(boxed_sync(body))))
-    }
-
-    /// Wraps the transport body without erasing or polling it.
-    pub fn passthrough(body: B) -> Self {
-        Self(BodyInner::Passthrough(body))
     }
 
     /// Builds an already-buffered body, preserving any trailers read with the content.
@@ -120,43 +115,53 @@ impl<B> SchemaBody<B> {
     }
 }
 
-impl<B> Default for SchemaBody<B> {
+impl<B> Default for RequestBody<B> {
     fn default() -> Self {
         Self::empty()
     }
 }
 
-impl<B> From<Bytes> for SchemaBody<B> {
+/// The transport body enters unerased, in the `Passthrough` state.
+///
+/// A generic `From<B>` would overlap the content conversions below, so the conversion is
+/// offered for the concrete transport type.
+impl From<hyper::body::Incoming> for Body {
+    fn from(body: hyper::body::Incoming) -> Self {
+        Self(BodyInner::Passthrough(body))
+    }
+}
+
+impl<B> From<Bytes> for RequestBody<B> {
     fn from(bytes: Bytes) -> Self {
         Self::from_bytes(bytes)
     }
 }
 
-impl<B> From<Vec<u8>> for SchemaBody<B> {
+impl<B> From<Vec<u8>> for RequestBody<B> {
     fn from(bytes: Vec<u8>) -> Self {
         Self::from_bytes(bytes.into())
     }
 }
 
-impl<B> From<&'static [u8]> for SchemaBody<B> {
+impl<B> From<&'static [u8]> for RequestBody<B> {
     fn from(bytes: &'static [u8]) -> Self {
         Self::from_bytes(Bytes::from_static(bytes))
     }
 }
 
-impl<B> From<String> for SchemaBody<B> {
+impl<B> From<String> for RequestBody<B> {
     fn from(string: String) -> Self {
         Self::from_bytes(string.into())
     }
 }
 
-impl<B> From<&'static str> for SchemaBody<B> {
+impl<B> From<&'static str> for RequestBody<B> {
     fn from(string: &'static str) -> Self {
         Self::from_bytes(Bytes::from_static(string.as_bytes()))
     }
 }
 
-impl<B> http_body::Body for SchemaBody<B>
+impl<B> http_body::Body for RequestBody<B>
 where
     B: http_body::Body<Data = Bytes> + Unpin,
     B::Error: Into<BoxError>,

@@ -15,8 +15,8 @@ use crate::{
     body::BoxBody,
     error::BoxError,
     schema::{
-        ProtocolOrder, ProtocolRegistration, ProtocolRegistry, RequestBodyCollectionConfig, SelectedProtocolOperation,
-        ServiceRequestBodyConfig, SharedServerProtocol,
+        ProtocolBuildContext, ProtocolOrder, ProtocolRegistration, ProtocolRegistry, RequestBodyCollectionConfig,
+        SelectedProtocolOperation, ServiceRequestBodyConfig, SharedServerProtocol,
     },
 };
 use crate::schema::{OperationSchema, ServiceSchema};
@@ -55,11 +55,11 @@ impl OperationIndex {
 /// A protocol-independent operation and its HTTP handler, generic over the transport body `B`.
 pub struct OperationHandlerBinding<B = hyper::body::Incoming> {
     operation: &'static OperationSchema<'static>,
-    route: SyncRoute<crate::body::SchemaBody<B>>,
+    route: SyncRoute<crate::body::RequestBody<B>>,
 }
 impl<B> OperationHandlerBinding<B> {
     /// Binds an operation to a handler, without assigning any protocol-specific routing rule.
-    pub fn new(operation: &'static OperationSchema<'static>, route: SyncRoute<crate::body::SchemaBody<B>>) -> Self {
+    pub fn new(operation: &'static OperationSchema<'static>, route: SyncRoute<crate::body::RequestBody<B>>) -> Self {
         Self { operation, route }
     }
 }
@@ -101,8 +101,9 @@ pub struct RouterBuildContext<'a> {
     pub service: &'static ServiceSchema<'static>,
     /// The operations to route, with targets assigned by the routing service.
     pub targets: &'a [OperationIndex],
-    /// Server-global body-read allowances, for protocols that collect the body
-    /// to route (see [`ServiceRequestBodyConfig::for_routing`]).
+    /// Server-global body-read allowances. Body-first routing collects under
+    /// [`ServiceRequestBodyConfig::for_routing`], enforced by the routing
+    /// service itself, not the protocol.
     pub config: &'a ServiceRequestBodyConfig,
     /// This protocol's section of [`RoutingOptions::protocol_settings`], when
     /// one was configured.
@@ -122,6 +123,10 @@ pub enum RouterBuildError {
     BodyRoutedEventStream { protocol: String },
     #[error("protocol ordering constraints form a cycle")]
     ProtocolOrderCycle,
+    #[error("protocol {protocol} is registered more than once")]
+    DuplicateProtocol { protocol: String },
+    #[error("no ordering constraint relates protocols {first} and {second}; add a `ProtocolOrder` between them")]
+    AmbiguousProtocolOrder { first: String, second: String },
     #[error("protocol could not build its router: {0}")]
     Protocol(#[source] BoxError),
 }
@@ -155,7 +160,7 @@ pub trait ProtocolRouter: Send + Sync + fmt::Debug {
     fn claim(&self, request: &Request<()>) -> RouteClaim;
 }
 
-/// The body a body-first router collected while routing.
+/// The body the routing service collected for body-first routing.
 ///
 /// The routing service rebuilds the dispatched request around this content, so the selected
 /// handler replays exactly the bytes routing read.
@@ -167,42 +172,27 @@ pub struct CollectedBody {
     pub trailers: Option<http::HeaderMap>,
 }
 
-/// The future returned by [`AsyncProtocolRouter::route`].
-pub type ProtocolRouteFuture =
-    Pin<Box<dyn Future<Output = Result<(OperationIndex, Request<CollectedBody>), Response<BoxBody>>> + Send>>;
-
-/// A body-first protocol's answer to whether a request is its own; see [`RouteClaim`].
-#[derive(Debug)]
-pub enum AsyncRouteClaim {
-    /// The protocol identifies the request and selects this operation.
-    Matched(OperationIndex, Request<CollectedBody>),
-    /// The protocol does not identify the request. The request comes back with the body the
-    /// router collected, and the protocols asked after this one see those bytes.
-    NoClaim(Request<CollectedBody>),
-    /// The protocol identifies the request but cannot serve it. No other protocol is asked.
-    Rejected(Response<BoxBody>),
-}
-
-/// The future returned by [`AsyncProtocolRouter::claim`].
-pub type ProtocolClaimFuture = Pin<Box<dyn Future<Output = AsyncRouteClaim> + Send>>;
-
 /// Selects an operation for protocols that read the request body to route.
 ///
-/// The router owns the request while routing: it collects the erased body under the allowance
-/// it was built with (see [`collect_for_routing`](crate::schema::collect_for_routing)) and
-/// returns the request with the [`CollectedBody`]. A body-first protocol always buffers before
-/// selecting, so its output is the buffered content, never the transport body — which is what
-/// keeps this trait `dyn`-safe and free of the transport body type.
+/// The routing service owns collection: when it reaches a body-first protocol it buffers the
+/// transport body once, under the service's provisional allowance (see
+/// [`ServiceRequestBodyConfig::for_routing`]), and presents the request with the
+/// [`CollectedBody`]. Selection is therefore synchronous, over already-collected bytes — which
+/// keeps this trait `dyn`-safe and free of the transport body type. A collection failure never
+/// reaches the router; the service frames it with the first body-first protocol's rejection
+/// response. On [`RouteClaim::NoClaim`] the service keeps the collected request, so the
+/// protocols asked after this one see the same bytes without reading the transport again.
 ///
 /// A body-first protocol serves no streaming operation: the routing service builds its router
 /// without them, and rejects a body-first protocol that offers event streams.
-pub trait AsyncProtocolRouter: Send + Sync + fmt::Debug {
-    /// Selects an operation when this is the service's only protocol, returning the request for
-    /// dispatch to its handler. All rejections are terminal and the protocol frames them itself.
-    fn route(self: Arc<Self>, request: Request<BoxBody>) -> ProtocolRouteFuture;
+pub trait BodyProtocolRouter: Send + Sync + fmt::Debug {
+    /// Selects an operation when this is the service's only protocol. All rejections are
+    /// terminal and the protocol frames them itself.
+    #[allow(clippy::result_large_err)] // Keep immediate protocol responses allocation-free.
+    fn route(&self, request: &Request<CollectedBody>) -> Result<OperationIndex, Response<BoxBody>>;
 
     /// Decides whether the request is this protocol's when the service serves several protocols.
-    fn claim(self: Arc<Self>, request: Request<BoxBody>) -> ProtocolClaimFuture;
+    fn claim(&self, request: &Request<CollectedBody>) -> RouteClaim;
 }
 
 /// Shared, erased operation router built by a server protocol.
@@ -212,7 +202,7 @@ pub struct SharedProtocolRouter(RouterKind);
 #[derive(Clone, Debug)]
 enum RouterKind {
     Metadata(Arc<dyn ProtocolRouter>),
-    Body(Arc<dyn AsyncProtocolRouter>),
+    Body(Arc<dyn BodyProtocolRouter>),
 }
 
 impl SharedProtocolRouter {
@@ -221,8 +211,8 @@ impl SharedProtocolRouter {
         Self(RouterKind::Metadata(Arc::new(router)))
     }
 
-    /// Wraps a router that reads the request body to select an operation.
-    pub fn new_async(router: impl AsyncProtocolRouter + 'static) -> Self {
+    /// Wraps a router that selects from the request body the routing service collects.
+    pub fn new_body_routed(router: impl BodyProtocolRouter + 'static) -> Self {
         Self(RouterKind::Body(Arc::new(router)))
     }
 
@@ -235,7 +225,7 @@ impl SharedProtocolRouter {
 struct BoundHandler<B> {
     operation: &'static OperationSchema<'static>,
     request_body: RequestBodyCollectionConfig,
-    route: SyncRoute<crate::body::SchemaBody<B>>,
+    route: SyncRoute<crate::body::RequestBody<B>>,
 }
 impl<B> Clone for BoundHandler<B> {
     fn clone(&self) -> Self {
@@ -270,12 +260,15 @@ struct Dispatch<B> {
     /// [`ProtocolRouter::route`]; several claim with [`ProtocolRouter::claim`].
     protocols: Arc<[ProtocolRoute]>,
     bindings: Arc<[BoundHandler<B>]>,
+    /// The provisional allowance the service collects under for body-first routing.
+    routing_body: RequestBodyCollectionConfig,
 }
 impl<B> Clone for Dispatch<B> {
     fn clone(&self) -> Self {
         Self {
             protocols: self.protocols.clone(),
             bindings: self.bindings.clone(),
+            routing_body: self.routing_body,
         }
     }
 }
@@ -294,19 +287,19 @@ impl<B> fmt::Debug for Dispatch<B> {
 /// Generic over the transport body `B`: requests entering with the transport's own body flow to
 /// handlers unerased. The default is hyper's body; any other request body — tests, upgrade
 /// layers, other transports — is accepted and erased into a boxed state on entry.
-pub struct SchemaRoutingService<B = hyper::body::Incoming> {
+pub struct MultiProtocolRoutingService<B = hyper::body::Incoming> {
     inner: Dispatch<B>,
 }
-impl<B> Clone for SchemaRoutingService<B> {
+impl<B> Clone for MultiProtocolRoutingService<B> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
         }
     }
 }
-impl<B> fmt::Debug for SchemaRoutingService<B> {
+impl<B> fmt::Debug for MultiProtocolRoutingService<B> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("SchemaRoutingService")
+        f.debug_struct("MultiProtocolRoutingService")
             .field("inner", &self.inner)
             .finish()
     }
@@ -322,56 +315,98 @@ fn unclaimed() -> Response<BoxBody> {
         .expect("a bare status response is valid")
 }
 
-/// The claim a body-first router started, followed by the claims of every protocol after it.
-type ClaimChainFuture =
-    Pin<Box<dyn Future<Output = Result<(usize, OperationIndex, Request<CollectedBody>), Response<BoxBody>>> + Send>>;
+pin_project_lite::pin_project! {
+    /// Collects the transport body for body-first routing, under the service's provisional
+    /// allowance. The one asynchronous step of body-first routing: everything after it — claim
+    /// walk and dispatch — is synchronous, so this future allocates nothing beyond the buffer.
+    struct CollectRouting<B> {
+        // The concrete pipeline body, unerased: `RequestBody<B>` is `Unpin` for the `B` the
+        // service accepts, so frames are polled through `Pin::new`.
+        body: crate::body::RequestBody<B>,
+        // Zero-copy fast path: a body delivering its content in one frame — a buffered body
+        // always does — hands over its `Bytes` without a copy.
+        first: Option<Bytes>,
+        rest: bytes::BytesMut,
+        trailers: Option<http::HeaderMap>,
+        config: RequestBodyCollectionConfig,
+        // Armed on first poll, so construction needs no runtime context.
+        #[pin]
+        deadline: Option<tokio::time::Sleep>,
+    }
+}
 
-/// Asks the body-first protocol at `start` and every protocol after it, in priority order.
-///
-/// Once a body-first router has collected the body, later protocols see the collected bytes: a
-/// metadata router probes the head as usual, and a later body-first router reads the bytes again.
-fn claim_chain(protocols: Arc<[ProtocolRoute]>, start: usize, request: Request<BoxBody>) -> ClaimChainFuture {
-    Box::pin(async move {
-        // The transport body, until the first body-first router collects it.
-        let mut unread = Some(request);
-        // The request with the collected body, once a body-first router has passed on it.
-        let mut collected: Option<Request<CollectedBody>> = None;
-        for (index, protocol) in protocols.iter().enumerate().skip(start) {
-            match &protocol.router.0 {
-                RouterKind::Metadata(router) => {
-                    let (parts, body) = collected.take().expect("a body-first router went first").into_parts();
-                    let probe = Request::from_parts(parts, ());
-                    match router.claim(&probe) {
-                        RouteClaim::Matched(selected) => {
-                            let (parts, ()) = probe.into_parts();
-                            return Ok((index, selected, Request::from_parts(parts, body)));
-                        }
-                        RouteClaim::Rejected(response) => return Err(response),
-                        RouteClaim::NoClaim => {
-                            let (parts, ()) = probe.into_parts();
-                            collected = Some(Request::from_parts(parts, body));
-                        }
-                    }
-                }
-                RouterKind::Body(router) => {
-                    let request = match collected.take() {
-                        Some(request) => request.map(|body| {
-                            crate::body::boxed(crate::body::SchemaBody::<BoxBody>::buffered(body.bytes, body.trailers))
-                        }),
-                        None => unread
-                            .take()
-                            .expect("the first body-first router reads the transport body"),
-                    };
-                    match router.clone().claim(request).await {
-                        AsyncRouteClaim::Matched(selected, request) => return Ok((index, selected, request)),
-                        AsyncRouteClaim::Rejected(response) => return Err(response),
-                        AsyncRouteClaim::NoClaim(request) => collected = Some(request),
-                    }
-                }
+impl<B> CollectRouting<B> {
+    fn new(body: crate::body::RequestBody<B>, config: RequestBodyCollectionConfig) -> Self {
+        Self {
+            body,
+            first: None,
+            rest: bytes::BytesMut::new(),
+            trailers: None,
+            config,
+            deadline: None,
+        }
+    }
+}
+
+impl<B> Future for CollectRouting<B>
+where
+    B: http_body::Body<Data = Bytes> + Unpin,
+    B::Error: Into<BoxError>,
+{
+    type Output = Result<CollectedBody, crate::schema::RequestBodyCollectionError<crate::Error>>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        use crate::schema::RequestBodyCollectionError;
+        use http_body::Body as _;
+        let mut this = self.project();
+        if let Some(timeout) = this.config.read_timeout {
+            if this.deadline.is_none() {
+                this.deadline.set(Some(tokio::time::sleep(timeout)));
+            }
+            let deadline = this.deadline.as_mut().as_pin_mut().expect("armed above");
+            if deadline.poll(cx).is_ready() {
+                return Poll::Ready(Err(RequestBodyCollectionError::Timeout { timeout }));
             }
         }
-        Err(unclaimed())
-    })
+        loop {
+            match Pin::new(&mut *this.body).poll_frame(cx) {
+                Poll::Pending => return Poll::Pending,
+                Poll::Ready(None) => {
+                    let bytes = this.first.take().unwrap_or_else(|| std::mem::take(this.rest).freeze());
+                    return Poll::Ready(Ok(CollectedBody {
+                        bytes,
+                        trailers: this.trailers.take(),
+                    }));
+                }
+                Poll::Ready(Some(Err(err))) => return Poll::Ready(Err(RequestBodyCollectionError::Body(err))),
+                Poll::Ready(Some(Ok(frame))) => match frame.into_data() {
+                    Ok(data) => {
+                        let read = this.first.as_ref().map_or(0, Bytes::len) + this.rest.len();
+                        if let Some(limit) = this.config.max_bytes {
+                            if data.len() > limit.get().saturating_sub(read) {
+                                return Poll::Ready(Err(RequestBodyCollectionError::TooLarge(
+                                    crate::body::BodyLimitExceeded { limit: limit.get() },
+                                )));
+                            }
+                        }
+                        if read == 0 {
+                            *this.first = Some(data);
+                        } else {
+                            if let Some(first) = this.first.take() {
+                                this.rest.extend_from_slice(&first);
+                            }
+                            this.rest.extend_from_slice(&data);
+                        }
+                    }
+                    Err(frame) => {
+                        if let Ok(new_trailers) = frame.into_trailers() {
+                            this.trailers.get_or_insert_with(http::HeaderMap::new).extend(new_trailers);
+                        }
+                    }
+                },
+            }
+        }
+    }
 }
 
 impl<B> Dispatch<B>
@@ -384,8 +419,8 @@ where
         &self,
         selected: OperationIndex,
         protocol: usize,
-        mut request: Request<crate::body::SchemaBody<B>>,
-    ) -> super::route::SyncRouteFuture<crate::body::SchemaBody<B>> {
+        mut request: Request<crate::body::RequestBody<B>>,
+    ) -> super::route::SyncRouteFuture<crate::body::RequestBody<B>> {
         let binding = &self.bindings[selected.index];
         debug_assert!(
             std::ptr::eq(binding.operation, selected.operation),
@@ -399,17 +434,17 @@ where
         binding.route.clone().call_owned(request)
     }
 
-    fn call(&mut self, request: Request<crate::body::SchemaBody<B>>) -> SchemaRoutingFuture<B> {
+    fn call(&mut self, request: Request<crate::body::RequestBody<B>>) -> MultiProtocolRoutingFuture<B> {
         let state = if self.protocols.len() == 1 {
             self.route(request)
         } else {
             self.claim(request)
         };
-        SchemaRoutingFuture { inner: state }
+        MultiProtocolRoutingFuture { inner: state }
     }
 
     /// Routes with the service's only protocol, exactly as a single-protocol service always has.
-    fn route(&self, request: Request<crate::body::SchemaBody<B>>) -> State<B> {
+    fn route(&self, request: Request<crate::body::RequestBody<B>>) -> State<B> {
         match &self.protocols[0].router.0 {
             RouterKind::Metadata(router) => {
                 // Probe with the head only: the parts move over and back, nothing is cloned,
@@ -428,19 +463,15 @@ where
                     },
                 }
             }
-            // A body-first protocol buffers everything before selecting, so erasing the body
-            // here costs one box on a path that allocates the full content anyway.
-            RouterKind::Body(router) => State::Routing {
-                future: router.clone().route(request.map(crate::body::boxed)),
-                dispatch: Some(self.clone()),
-            },
+            // A body-first protocol selects from collected bytes; the service collects first.
+            RouterKind::Body(_) => self.collect(request, 0),
         }
     }
 
     /// Asks each protocol in priority order to claim the request and dispatches to the first that
-    /// does. Metadata routers answer synchronously; the first body-first router hands the rest of
-    /// the walk to [`claim_chain`].
-    fn claim(&self, request: Request<crate::body::SchemaBody<B>>) -> State<B> {
+    /// does. Metadata routers answer from the head; the first body-first router suspends the walk
+    /// while the service collects the body, and [`Self::routed`] finishes it synchronously.
+    fn claim(&self, request: Request<crate::body::RequestBody<B>>) -> State<B> {
         let (parts, body) = request.into_parts();
         let probe = Request::from_parts(parts, ());
         for (index, protocol) in self.protocols.iter().enumerate() {
@@ -461,11 +492,7 @@ where
                 },
                 RouterKind::Body(_) => {
                     let (parts, ()) = probe.into_parts();
-                    let request = Request::from_parts(parts, body).map(crate::body::boxed);
-                    return State::Claiming {
-                        future: claim_chain(self.protocols.clone(), index, request),
-                        dispatch: Some(self.clone()),
-                    };
+                    return self.collect(Request::from_parts(parts, body), index);
                 }
             }
         }
@@ -473,24 +500,95 @@ where
             response: Some(unclaimed()),
         }
     }
+
+    /// Suspends routing while the body is collected for the body-first protocol at `start`.
+    fn collect(&self, request: Request<crate::body::RequestBody<B>>, start: usize) -> State<B> {
+        let (parts, body) = request.into_parts();
+        State::Collecting {
+            parts: Some(parts),
+            collect: CollectRouting::new(body, self.routing_body),
+            start,
+            dispatch: Some(self.clone()),
+        }
+    }
+
+    /// Finishes routing over the collected body, synchronously.
+    ///
+    /// A single-protocol service routes with the body-first protocol's terminal
+    /// [`BodyProtocolRouter::route`]. A multi-protocol service resumes the claim walk at `start`:
+    /// a metadata router probes the head as usual, and every body-first router sees the same
+    /// collected bytes — the transport is never read again.
+    fn routed(&self, parts: http::request::Parts, collected: CollectedBody, start: usize) -> State<B> {
+        let mut request = Request::from_parts(parts, collected);
+        if self.protocols.len() == 1 {
+            let RouterKind::Body(router) = &self.protocols[0].router.0 else {
+                unreachable!("only a body-first protocol suspends single-protocol routing");
+            };
+            return match router.route(&request) {
+                Ok(selected) => self.dispatch_collected(selected, 0, request),
+                Err(response) => State::Rejected {
+                    response: Some(response),
+                },
+            };
+        }
+        for (index, protocol) in self.protocols.iter().enumerate().skip(start) {
+            let claim = match &protocol.router.0 {
+                RouterKind::Metadata(router) => {
+                    let (parts, body) = request.into_parts();
+                    let probe = Request::from_parts(parts, ());
+                    let claim = router.claim(&probe);
+                    let (parts, ()) = probe.into_parts();
+                    request = Request::from_parts(parts, body);
+                    claim
+                }
+                RouterKind::Body(router) => router.claim(&request),
+            };
+            match claim {
+                RouteClaim::Matched(selected) => return self.dispatch_collected(selected, index, request),
+                RouteClaim::Rejected(response) => {
+                    return State::Rejected {
+                        response: Some(response),
+                    }
+                }
+                RouteClaim::NoClaim => {}
+            }
+        }
+        State::Rejected {
+            response: Some(unclaimed()),
+        }
+    }
+
+    /// Hands a routed request to its handler with the collected body, replayed as buffered content.
+    fn dispatch_collected(
+        &self,
+        selected: OperationIndex,
+        protocol: usize,
+        request: Request<CollectedBody>,
+    ) -> State<B> {
+        let (parts, collected) = request.into_parts();
+        let body = crate::body::RequestBody::buffered(collected.bytes, collected.trailers);
+        State::Handling {
+            future: self.handle(selected, protocol, Request::from_parts(parts, body)),
+        }
+    }
 }
 
 pin_project_lite::pin_project! {
     #[project = StateProj]
     enum State<B> {
-        // The routing future owns the request; the dispatch clone shares the handlers. Nothing is
-        // borrowed across the await.
-        Routing {
-            future: ProtocolRouteFuture,
-            dispatch: Option<Dispatch<B>>,
-        },
-        Claiming {
-            future: ClaimChainFuture,
+        // Body-first routing, suspended on collection. The state owns the request head and the
+        // collection future; the dispatch clone shares the handlers. Nothing is borrowed across
+        // the suspension, and nothing here is boxed.
+        Collecting {
+            parts: Option<http::request::Parts>,
+            #[pin]
+            collect: CollectRouting<B>,
+            start: usize,
             dispatch: Option<Dispatch<B>>,
         },
         Handling {
             #[pin]
-            future: super::route::SyncRouteFuture<crate::body::SchemaBody<B>>,
+            future: super::route::SyncRouteFuture<crate::body::RequestBody<B>>,
         },
         Rejected {
             response: Option<Response<BoxBody>>,
@@ -500,12 +598,12 @@ pin_project_lite::pin_project! {
 
 pin_project_lite::pin_project! {
     /// Response future for schema routing.
-    pub struct SchemaRoutingFuture<B = hyper::body::Incoming> {
+    pub struct MultiProtocolRoutingFuture<B = hyper::body::Incoming> {
         #[pin]
         inner: State<B>,
     }
 }
-impl<B> Future for SchemaRoutingFuture<B>
+impl<B> Future for MultiProtocolRoutingFuture<B>
 where
     B: http_body::Body<Data = Bytes> + Send + Sync + Unpin + 'static,
     B::Error: Into<BoxError>,
@@ -515,26 +613,26 @@ where
         let mut this = self.project();
         loop {
             match this.inner.as_mut().project() {
-                StateProj::Routing { future, dispatch } => match future.as_mut().poll(cx) {
-                    Poll::Ready(Ok((selected, request))) => {
-                        let dispatch = dispatch.take().expect("routing resolves once");
-                        let request = request
-                            .map(|collected| crate::body::SchemaBody::buffered(collected.bytes, collected.trailers));
-                        let future = dispatch.handle(selected, 0, request);
-                        this.inner.set(State::Handling { future });
+                StateProj::Collecting {
+                    parts,
+                    collect,
+                    start,
+                    dispatch,
+                } => match collect.poll(cx) {
+                    Poll::Ready(Ok(collected)) => {
+                        let dispatch = dispatch.take().expect("collection resolves once");
+                        let parts = parts.take().expect("collection resolves once");
+                        let start = *start;
+                        this.inner.set(dispatch.routed(parts, collected, start));
                     }
-                    Poll::Ready(Err(response)) => return Poll::Ready(Ok(response)),
-                    Poll::Pending => return Poll::Pending,
-                },
-                StateProj::Claiming { future, dispatch } => match future.as_mut().poll(cx) {
-                    Poll::Ready(Ok((protocol, selected, request))) => {
-                        let dispatch = dispatch.take().expect("claiming resolves once");
-                        let request = request
-                            .map(|collected| crate::body::SchemaBody::buffered(collected.bytes, collected.trailers));
-                        let future = dispatch.handle(selected, protocol, request);
-                        this.inner.set(State::Handling { future });
+                    // A collection failure precedes any claim, so the first body-first
+                    // protocol — the one collection was for — frames the rejection, exactly
+                    // as when it collected for itself.
+                    Poll::Ready(Err(error)) => {
+                        let dispatch = dispatch.take().expect("collection resolves once");
+                        let protocol = &dispatch.protocols[*start].protocol;
+                        return Poll::Ready(Ok(crate::schema::body_collection_rejection(&**protocol, error)));
                     }
-                    Poll::Ready(Err(response)) => return Poll::Ready(Ok(response)),
                     Poll::Pending => return Poll::Pending,
                 },
                 StateProj::Handling { future } => return future.poll(cx),
@@ -552,86 +650,133 @@ fn has_streaming_member(operation: &OperationSchema<'_>) -> bool {
         .any(|schema| schema.members().iter().any(|member| member.streaming()))
 }
 
-/// Puts the served protocols in priority order.
+/// Resolves the registered protocols the service declares, in claim order.
 ///
-/// Before constraints apply, protocols routing on metadata come before body-first ones, and the
-/// built-ins sit in [`BUILTIN_PRIORITY`](crate::schema::protocol::BUILTIN_PRIORITY) order ahead of
-/// other protocols, which keep their registration order. [`ProtocolOrder`] constraints then
-/// reorder with a stable topological sort; a constraint naming an unserved protocol is ignored.
-fn prioritize(
-    mut protocols: Vec<(ProtocolRoute, &'static [ProtocolOrder])>,
-) -> Result<Vec<ProtocolRoute>, RouterBuildError> {
-    let builtin_rank = |route: &ProtocolRoute| {
-        crate::schema::protocol::BUILTIN_PRIORITY
+/// The order comes from [`ProtocolOrder`] constraints alone, resolved over the **global** set of
+/// registered protocols: a constraint against a protocol the service does not serve still orders
+/// the ones it does, transitively. Registry and declaration order carry no meaning. Errors:
+/// a protocol registered twice, a constraint naming an unregistered protocol, a constraint
+/// cycle, or two served protocols the constraints leave unordered.
+fn resolve_protocols(
+    service: &'static ServiceSchema<'static>,
+    registries: impl IntoIterator<Item = &'static ProtocolRegistry>,
+    options: &RoutingOptions,
+) -> Result<Vec<SharedServerProtocol>, RouterBuildError> {
+    let mut registrations: Vec<ProtocolRegistration> = Vec::new();
+    registrations.extend_from_slice(ProtocolRegistry::BUILTIN.registrations());
+    for registry in registries {
+        registrations.extend_from_slice(registry.registrations());
+    }
+    for (index, registration) in registrations.iter().enumerate() {
+        if registrations[..index]
             .iter()
-            .position(|id| *id == route.protocol.protocol_id().as_str())
-            .unwrap_or(usize::MAX)
-    };
-    protocols.sort_by_key(|(route, _)| (route.router.routes_on_body(), builtin_rank(route)));
+            .any(|other| other.protocol_id() == registration.protocol_id())
+        {
+            return Err(RouterBuildError::DuplicateProtocol {
+                protocol: registration.protocol_id().to_string(),
+            });
+        }
+    }
 
-    let position = |id: &str| {
-        protocols
-            .iter()
-            .position(|(route, _)| route.protocol.protocol_id().as_str() == id)
-    };
-    let mut after: Vec<Vec<usize>> = vec![Vec::new(); protocols.len()];
-    let mut blockers = vec![0usize; protocols.len()];
-    for (index, (_, order)) in protocols.iter().enumerate() {
-        for constraint in order.iter() {
-            let edge = match *constraint {
-                ProtocolOrder::Before(id) => position(id).map(|other| (index, other)),
-                ProtocolOrder::After(id) => position(id).map(|other| (other, index)),
+    // Reachability over the global constraint graph, absent protocols included as transit nodes.
+    let count = registrations.len();
+    let position = |id: &str| registrations.iter().position(|registration| registration.protocol_id() == id);
+    let mut reaches = vec![vec![false; count]; count];
+    for (index, registration) in registrations.iter().enumerate() {
+        for constraint in registration.order() {
+            let id = match *constraint {
+                ProtocolOrder::Before(id) | ProtocolOrder::After(id) => id,
             };
-            if let Some((first, then)) = edge {
-                if first != then && !after[first].contains(&then) {
-                    after[first].push(then);
-                    blockers[then] += 1;
+            let other = position(id).ok_or_else(|| {
+                RouterBuildError::Configuration(format!(
+                    "protocol {} orders against unregistered protocol {id}",
+                    registration.protocol_id()
+                ))
+            })?;
+            match *constraint {
+                ProtocolOrder::Before(_) => reaches[index][other] = true,
+                ProtocolOrder::After(_) => reaches[other][index] = true,
+            }
+        }
+    }
+    for via in 0..count {
+        for from in 0..count {
+            if reaches[from][via] {
+                for to in 0..count {
+                    if reaches[via][to] {
+                        reaches[from][to] = true;
+                    }
                 }
             }
         }
     }
-    let mut placed = vec![false; protocols.len()];
-    let mut ordered = Vec::with_capacity(protocols.len());
-    while ordered.len() < protocols.len() {
-        let next = (0..protocols.len())
-            .find(|&index| !placed[index] && blockers[index] == 0)
-            .ok_or(RouterBuildError::ProtocolOrderCycle)?;
-        placed[next] = true;
-        ordered.push(next);
-        for &then in &after[next] {
-            blockers[then] -= 1;
+    if (0..count).any(|index| reaches[index][index]) {
+        return Err(RouterBuildError::ProtocolOrderCycle);
+    }
+
+    let mut served: Vec<usize> = registrations
+        .iter()
+        .enumerate()
+        .filter(|(_, registration)| {
+            service
+                .protocols()
+                .iter()
+                .any(|protocol| protocol.as_str() == registration.protocol_id())
+        })
+        .map(|(index, _)| index)
+        .collect();
+    if served.is_empty() {
+        return Err(RouterBuildError::UnknownProtocol);
+    }
+    for (nth, &first) in served.iter().enumerate() {
+        for &second in &served[nth + 1..] {
+            if !reaches[first][second] && !reaches[second][first] {
+                return Err(RouterBuildError::AmbiguousProtocolOrder {
+                    first: registrations[first].protocol_id().to_string(),
+                    second: registrations[second].protocol_id().to_string(),
+                });
+            }
         }
     }
-    let mut protocols: Vec<_> = protocols.into_iter().map(|(route, _)| Some(route)).collect();
-    Ok(ordered
+    // Every served pair is comparable and the graph is acyclic, so reachability totally orders them.
+    served.sort_by(|&first, &second| {
+        if reaches[first][second] {
+            std::cmp::Ordering::Less
+        } else {
+            std::cmp::Ordering::Greater
+        }
+    });
+
+    served
         .into_iter()
-        .map(|index| protocols[index].take().expect("each protocol is placed once"))
-        .collect())
+        .map(|index| {
+            let registration = &registrations[index];
+            let context = ProtocolBuildContext::new(service)
+                .with_settings(options.protocol_settings.get(registration.protocol_id()))
+                .with_global(options.protocol_settings.get("global"));
+            registration.build(&context)
+        })
+        .collect()
 }
 
-impl<B> SchemaRoutingService<B> {
+impl<B> MultiProtocolRoutingService<B> {
     pub fn from_operation_handler_bindings(
         service: &'static ServiceSchema<'static>,
-        registrations: impl IntoIterator<Item = ProtocolRegistration>,
+        registries: impl IntoIterator<Item = &'static ProtocolRegistry>,
         bindings: impl IntoIterator<Item = OperationHandlerBinding<B>>,
     ) -> Result<Self, RouterBuildError> {
-        Self::from_operation_handler_bindings_with_options(service, registrations, bindings, RoutingOptions::default())
+        Self::from_operation_handler_bindings_with_options(service, registries, bindings, RoutingOptions::default())
     }
 
+    /// Builds the routing service. [`ProtocolRegistry::BUILTIN`] is always consulted; `registries`
+    /// contribute protocols implemented outside this crate.
     pub fn from_operation_handler_bindings_with_options(
         service: &'static ServiceSchema<'static>,
-        registrations: impl IntoIterator<Item = ProtocolRegistration>,
+        registries: impl IntoIterator<Item = &'static ProtocolRegistry>,
         bindings: impl IntoIterator<Item = OperationHandlerBinding<B>>,
         options: RoutingOptions,
     ) -> Result<Self, RouterBuildError> {
-        let mut registry = ProtocolRegistry::builtin();
-        for registration in registrations {
-            registry = registry.register(registration);
-        }
-        let resolved = registry.resolve_all(service);
-        if resolved.is_empty() {
-            return Err(RouterBuildError::UnknownProtocol);
-        }
+        let resolved = resolve_protocols(service, registries, &options)?;
         let bindings: Vec<_> = bindings.into_iter().collect();
         let mut seen = HashSet::new();
         for binding in &bindings {
@@ -673,8 +818,9 @@ impl<B> SchemaRoutingService<B> {
             .filter(|target| !has_streaming_member(target.operation))
             .copied()
             .collect();
-        let mut built = Vec::with_capacity(resolved.len());
-        for (protocol, order) in resolved {
+        // `resolved` is already in claim order; build each protocol's router in place.
+        let mut protocols = Vec::with_capacity(resolved.len());
+        for protocol in resolved {
             let context = |targets| RouterBuildContext {
                 service,
                 targets,
@@ -692,9 +838,8 @@ impl<B> SchemaRoutingService<B> {
                     router = protocol.build_router(context(&non_streaming))?;
                 }
             }
-            built.push((ProtocolRoute { router, protocol }, order));
+            protocols.push(ProtocolRoute { router, protocol });
         }
-        let protocols = prioritize(built)?;
         let bindings = bindings
             .into_iter()
             .map(|binding| BoundHandler {
@@ -707,6 +852,7 @@ impl<B> SchemaRoutingService<B> {
             inner: Dispatch {
                 protocols: protocols.into(),
                 bindings,
+                routing_body: options.request_body.for_routing(),
             },
         })
     }
@@ -715,13 +861,13 @@ impl<B> SchemaRoutingService<B> {
     pub fn layer<L>(mut self, layer: &L) -> Self
     where
         B: 'static,
-        L: tower::Layer<SyncRoute<crate::body::SchemaBody<B>>>,
-        L::Service: Service<Request<crate::body::SchemaBody<B>>, Response = Response<BoxBody>, Error = Infallible>
+        L: tower::Layer<SyncRoute<crate::body::RequestBody<B>>>,
+        L::Service: Service<Request<crate::body::RequestBody<B>>, Response = Response<BoxBody>, Error = Infallible>
             + Clone
             + Send
             + Sync
             + 'static,
-        <L::Service as Service<Request<crate::body::SchemaBody<B>>>>::Future: Send + 'static,
+        <L::Service as Service<Request<crate::body::RequestBody<B>>>>::Future: Send + 'static,
     {
         self.inner.bindings = self
             .inner
@@ -738,9 +884,9 @@ impl<B> SchemaRoutingService<B> {
     }
 }
 /// Any compatible body enters. The transport body `B` and an already-normalized
-/// [`SchemaBody<B>`](crate::body::SchemaBody) stay unerased; any other body — tests, adapters,
-/// upgrade layers — is erased into a boxed state (see [`SchemaBody::new`](crate::body::SchemaBody::new)).
-impl<B, RB> Service<Request<RB>> for SchemaRoutingService<B>
+/// [`RequestBody<B>`](crate::body::RequestBody) stay unerased; any other body — tests, adapters,
+/// upgrade layers — is erased into a boxed state (see [`RequestBody::new`](crate::body::RequestBody::new)).
+impl<B, RB> Service<Request<RB>> for MultiProtocolRoutingService<B>
 where
     B: http_body::Body<Data = Bytes> + Send + Sync + Unpin + 'static,
     B::Error: Into<BoxError>,
@@ -749,12 +895,12 @@ where
 {
     type Response = Response<BoxBody>;
     type Error = Infallible;
-    type Future = SchemaRoutingFuture<B>;
+    type Future = MultiProtocolRoutingFuture<B>;
     fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Infallible>> {
         Poll::Ready(Ok(()))
     }
     fn call(&mut self, request: Request<RB>) -> Self::Future {
-        self.inner.call(request.map(crate::body::SchemaBody::new))
+        self.inner.call(request.map(crate::body::RequestBody::new))
     }
 }
 

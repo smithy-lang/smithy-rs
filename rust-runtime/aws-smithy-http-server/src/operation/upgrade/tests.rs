@@ -18,6 +18,12 @@ use std::sync::Arc;
 struct HttpOnly;
 
 impl ServerProtocol for HttpOnly {
+        fn from_build_context(
+            _ctx: &crate::schema::ProtocolBuildContext<'_>,
+        ) -> Result<crate::schema::SharedServerProtocol, crate::routing::RouterBuildError> {
+            unimplemented!("test protocol is constructed directly, not registered")
+        }
+
     fn build_router(
         &self,
         ctx: crate::routing::RouterBuildContext<'_>,
@@ -28,8 +34,12 @@ impl ServerProtocol for HttpOnly {
         static ID: aws_smithy_schema::ShapeId<'static> = shape_id!("test", "httpOnly");
         &ID
     }
-    fn reads_request_body(&self, _: &Schema<'_>) -> bool {
-        false
+    fn inspect_request_head(
+        &self,
+        _: &crate::schema::OperationSchema<'_>,
+        _: &aws_smithy_runtime_api::http::Headers,
+    ) -> Result<crate::schema::BodyDirective, DeserializeError> {
+        Ok(crate::schema::BodyDirective::Skip)
     }
     fn deserialize_request<'a>(
         &'a self,
@@ -115,7 +125,7 @@ async fn check<Op: StreamingOperationShape<Input = (), Output = ()>>(expected: h
         Default::default(),
     ));
     let handler_called = called.clone();
-    let upgrade = StreamingUpgrade::<Op, (), _> {
+    let upgrade = DynStreamingUpgrade::<Op, (), _> {
         inner: tower::service_fn(move |_: ((), ())| {
             handler_called.store(true, Ordering::SeqCst);
             async { Ok::<_, Infallible>(()) }

@@ -22,9 +22,9 @@ pub(crate) mod schema;
 #[doc(hidden)]
 pub use schema::aws_json_router;
 pub use schema::{
-    AsyncProtocolRouter, AsyncRouteClaim, CollectedBody, OperationHandlerBinding, OperationIndex, ProtocolClaimFuture,
-    ProtocolRouteFuture, ProtocolRouter, RouteClaim, RouterBuildContext, RouterBuildError, RoutingOptions,
-    SchemaRoutingFuture, SchemaRoutingService, SharedProtocolRouter,
+    BodyProtocolRouter, CollectedBody, OperationHandlerBinding, OperationIndex, ProtocolRouter, RouteClaim,
+    RouterBuildContext, RouterBuildError, RoutingOptions, MultiProtocolRoutingFuture, MultiProtocolRoutingService,
+    SharedProtocolRouter,
 };
 
 pub(crate) mod tiny_map;

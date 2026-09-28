@@ -167,13 +167,28 @@ fn request(uri: &str, headers: &[(&'static str, &str)], body: &[u8]) -> ServerRe
 }
 
 /// The request half of the upgrade: `Accept` gate, then deserialization of `input`.
+/// Wraps an output schema in a throwaway operation descriptor for head validation. The
+/// input side is irrelevant to the built-ins' `Accept` gate, so an empty input stands in.
+fn head_op<'a>(output: &'a Schema<'a>) -> crate::schema::OperationSchema<'a> {
+    crate::schema::OperationSchema::new(shape_id!("test", "HeadOp"), &EMPTY_IN_SCHEMA, output, &[])
+}
+
+/// Asks the protocol's head inspection for its body directive on `input`. The request carries
+/// no `Accept` header, so nothing trips the gate and the directive is the whole answer.
+fn body_directive(protocol: &dyn ServerProtocol, input: &'static Schema<'static>) -> super::BodyDirective {
+    let op = crate::schema::OperationSchema::new(shape_id!("test", "BodyOp"), input, &EMPTY_OUT_SCHEMA, &[]);
+    protocol
+        .inspect_request_head(&op, &request("/", &[], b"").headers)
+        .expect("no Accept header, the gate passes")
+}
+
 fn deserialize<T: DeserializableShape>(
     protocol: &dyn ServerProtocol,
     input: &Schema<'_>,
     output: &Schema<'_>,
     request: &ServerRequest,
 ) -> Result<T, DeserializeError> {
-    protocol.check_accept(output, &request.headers)?;
+    protocol.inspect_request_head(&head_op(output), &request.headers)?;
     let mut deserializer = protocol.deserialize_request(input, request)?;
     T::deserialize(&mut *deserializer)
 }
@@ -287,12 +302,12 @@ fn accept_header_gates_every_protocol() {
     // generates the gate for `NoInputAndNoOutput`. restXml labels nothing and so gates nothing.
     let req = request("/empty", &[("accept", "text/xml")], b"");
     assert!(matches!(
-        REST_JSON.check_accept(&EMPTY_OUT_SCHEMA, &req.headers),
+        REST_JSON.inspect_request_head(&head_op(&EMPTY_OUT_SCHEMA), &req.headers),
         Err(DeserializeError::NotAcceptable)
     ));
-    assert!(REST_XML.check_accept(&EMPTY_OUT_SCHEMA, &req.headers).is_ok());
+    assert!(REST_XML.inspect_request_head(&head_op(&EMPTY_OUT_SCHEMA), &req.headers).is_ok());
     let req = request("/empty", &[("accept", "application/json")], b"");
-    assert!(REST_JSON.check_accept(&EMPTY_OUT_SCHEMA, &req.headers).is_ok());
+    assert!(REST_JSON.inspect_request_head(&head_op(&EMPTY_OUT_SCHEMA), &req.headers).is_ok());
 
     // awsJson: gated against the fixed protocol content type on every operation.
     let req = request("/", &[("accept", "application/x-amz-json-1.1")], b"");
@@ -301,7 +316,7 @@ fn accept_header_gates_every_protocol() {
     let err = deserialize::<RpcTestInput>(&*AWS_JSON_11, &RPC_IN_SCHEMA, &RPC_OUT_SCHEMA, &req).unwrap_err();
     assert!(matches!(err, DeserializeError::NotAcceptable), "{err}");
     assert!(matches!(
-        AWS_JSON_11.check_accept(&EMPTY_OUT_SCHEMA, &req.headers),
+        AWS_JSON_11.inspect_request_head(&head_op(&EMPTY_OUT_SCHEMA), &req.headers),
         Err(DeserializeError::NotAcceptable)
     ));
 
@@ -328,20 +343,20 @@ fn accept_expectation_follows_the_output_payload() {
     // An untyped blob payload carries no content type on restJson1 (the legacy server sets
     // none), so nothing is gated; restXml labels it `application/octet-stream` and gates that.
     let req = request("/empty", &[("accept", "application/json")], b"");
-    assert!(REST_JSON.check_accept(&BLOB_OUT, &req.headers).is_ok());
+    assert!(REST_JSON.inspect_request_head(&head_op(&BLOB_OUT), &req.headers).is_ok());
     assert!(matches!(
-        REST_XML.check_accept(&BLOB_OUT, &req.headers),
+        REST_XML.inspect_request_head(&head_op(&BLOB_OUT), &req.headers),
         Err(DeserializeError::NotAcceptable)
     ));
     let req = request("/empty", &[("accept", "application/octet-stream")], b"");
-    assert!(REST_XML.check_accept(&BLOB_OUT, &req.headers).is_ok());
+    assert!(REST_XML.inspect_request_head(&head_op(&BLOB_OUT), &req.headers).is_ok());
 
     // A string payload is `text/plain` everywhere.
     let req = request("/empty", &[("accept", "text/plain")], b"");
-    assert!(REST_JSON.check_accept(&STRING_OUT, &req.headers).is_ok());
+    assert!(REST_JSON.inspect_request_head(&head_op(&STRING_OUT), &req.headers).is_ok());
     let req = request("/empty", &[("accept", "application/json")], b"");
     assert!(matches!(
-        REST_JSON.check_accept(&STRING_OUT, &req.headers),
+        REST_JSON.inspect_request_head(&head_op(&STRING_OUT), &req.headers),
         Err(DeserializeError::NotAcceptable)
     ));
 }
@@ -383,8 +398,8 @@ impl SerializableStruct for StreamOutput {
 
 #[test]
 fn streaming_requests_are_never_collected_and_carry_no_content_type_check() {
-    assert!(!REST_JSON.reads_request_body(&STREAM_IN));
-    assert!(REST_JSON.reads_request_body(&IN_SCHEMA));
+    assert_eq!(body_directive(&*REST_JSON, &STREAM_IN), super::BodyDirective::Skip);
+    assert_eq!(body_directive(&*REST_JSON, &IN_SCHEMA), super::BodyDirective::Collect);
 
     // The event stream request arrives with its own content type; nothing checks it, and the
     // URI bindings are still read.
@@ -402,25 +417,25 @@ fn streaming_requests_are_never_collected_and_carry_no_content_type_check() {
 fn streaming_outputs_gate_accept_the_way_the_legacy_server_does() {
     // REST: against the event stream media type.
     let req = request("/stream", &[("accept", "application/vnd.amazon.eventstream")], b"");
-    assert!(REST_JSON.check_accept(&STREAM_OUT, &req.headers).is_ok());
+    assert!(REST_JSON.inspect_request_head(&head_op(&STREAM_OUT), &req.headers).is_ok());
     let req = request("/stream", &[("accept", "application/json")], b"");
     assert!(matches!(
-        REST_JSON.check_accept(&STREAM_OUT, &req.headers),
+        REST_JSON.inspect_request_head(&head_op(&STREAM_OUT), &req.headers),
         Err(DeserializeError::NotAcceptable)
     ));
 
     // rpcv2Cbor: the event stream media type or, for compatibility with earlier servers, the
     // codec's; awsJson: the codec's only.
     let req = request("/stream", &[("accept", "application/cbor")], b"");
-    assert!(RPC_V2_CBOR.check_accept(&STREAM_OUT, &req.headers).is_ok());
+    assert!(RPC_V2_CBOR.inspect_request_head(&head_op(&STREAM_OUT), &req.headers).is_ok());
     let req = request("/stream", &[("accept", "application/vnd.amazon.eventstream")], b"");
-    assert!(RPC_V2_CBOR.check_accept(&STREAM_OUT, &req.headers).is_ok());
+    assert!(RPC_V2_CBOR.inspect_request_head(&head_op(&STREAM_OUT), &req.headers).is_ok());
     assert!(matches!(
-        AWS_JSON_11.check_accept(&STREAM_OUT, &req.headers),
+        AWS_JSON_11.inspect_request_head(&head_op(&STREAM_OUT), &req.headers),
         Err(DeserializeError::NotAcceptable)
     ));
     let req = request("/stream", &[("accept", "application/x-amz-json-1.1")], b"");
-    assert!(AWS_JSON_11.check_accept(&STREAM_OUT, &req.headers).is_ok());
+    assert!(AWS_JSON_11.inspect_request_head(&head_op(&STREAM_OUT), &req.headers).is_ok());
 }
 
 #[tokio::test]
@@ -462,10 +477,10 @@ async fn rest_protocols_skip_the_body_when_nothing_is_bound_to_it() {
     static BOUND_ONLY: Schema<'static> =
         Schema::new_struct(shape_id!("test", "BoundOnly"), ShapeType::Structure, &BOUND_MEMBERS);
 
-    assert!(!REST_JSON.reads_request_body(&BOUND_ONLY));
-    assert!(!REST_XML.reads_request_body(&BOUND_ONLY));
-    assert!(REST_JSON.reads_request_body(&IN_SCHEMA));
-    assert!(RPC_V2_CBOR.reads_request_body(&BOUND_ONLY));
+    assert_eq!(body_directive(&*REST_JSON, &BOUND_ONLY), super::BodyDirective::Skip);
+    assert_eq!(body_directive(&*REST_XML, &BOUND_ONLY), super::BodyDirective::Skip);
+    assert_eq!(body_directive(&*REST_JSON, &IN_SCHEMA), super::BodyDirective::Collect);
+    assert_eq!(body_directive(&*RPC_V2_CBOR, &BOUND_ONLY), super::BodyDirective::Collect);
 
     let body = http_body_util::Full::new(bytes::Bytes::from_static(b"read"));
     let collected = collect_request_body(body, &RequestBodyCollectionConfig::default())
@@ -477,9 +492,9 @@ async fn rest_protocols_skip_the_body_when_nothing_is_bound_to_it() {
 #[tokio::test]
 async fn rpc_body_handling_is_decided_separately_from_mechanical_collection() {
     // The generated RPC deserializers never touch the body when the input has no members; the
-    // RPC protocols answer `reads_request_body` to mirror that.
-    assert!(!RPC_V2_CBOR.reads_request_body(&EMPTY_IN_SCHEMA));
-    assert!(RPC_V2_CBOR.reads_request_body(&RPC_IN_SCHEMA));
+    // RPC protocols answer `Skip` from `inspect_request_head` to mirror that.
+    assert_eq!(body_directive(&*RPC_V2_CBOR, &EMPTY_IN_SCHEMA), super::BodyDirective::Skip);
+    assert_eq!(body_directive(&*RPC_V2_CBOR, &RPC_IN_SCHEMA), super::BodyDirective::Collect);
 
     let body = http_body_util::Full::new(bytes::Bytes::from_static(b"ignored"));
     let collected = collect_request_body(body, &RequestBodyCollectionConfig::default())
@@ -529,6 +544,12 @@ fn provided_methods_collect_the_body_and_gate_nothing() {
     }
 
     impl ServerProtocol for Minimal {
+        fn from_build_context(
+            _ctx: &crate::schema::ProtocolBuildContext<'_>,
+        ) -> Result<crate::schema::SharedServerProtocol, crate::routing::RouterBuildError> {
+            unimplemented!("test protocol is constructed directly, not registered")
+        }
+
         fn build_router(
             &self,
             ctx: crate::routing::RouterBuildContext<'_>,
@@ -569,14 +590,14 @@ fn provided_methods_collect_the_body_and_gate_nothing() {
     }
 
     let protocol = Minimal::default();
-    assert!(protocol.reads_request_body(&RPC_IN_SCHEMA));
-    assert!(protocol.reads_request_body(&EMPTY_IN_SCHEMA));
+    assert_eq!(body_directive(&protocol, &RPC_IN_SCHEMA), super::BodyDirective::Collect);
+    assert_eq!(body_directive(&protocol, &EMPTY_IN_SCHEMA), super::BodyDirective::Collect);
     assert!(protocol.event_stream().is_none());
 
     let req = request("/", &[("accept", "text/xml")], b"");
     let erased: SharedServerProtocol = SharedServerProtocol::new(protocol);
-    assert!(erased.check_accept(&OUT_SCHEMA, &req.headers).is_ok());
-    assert!(erased.reads_request_body(&EMPTY_IN_SCHEMA));
+    assert!(erased.inspect_request_head(&head_op(&OUT_SCHEMA), &req.headers).is_ok());
+    assert_eq!(body_directive(&*erased, &EMPTY_IN_SCHEMA), super::BodyDirective::Collect);
 }
 
 // --- responses ---

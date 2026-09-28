@@ -49,9 +49,11 @@ use bytes::Bytes;
 
 use crate::body::{collect_body_limited, BoxBody, CollectBodyError, HttpBody};
 use crate::response::Response;
+use crate::routing::RouterBuildError;
+use crate::schema::OperationSchema;
 
-pub(crate) use registry::BUILTIN_PRIORITY;
-pub use registry::{ProtocolOrder, ProtocolRegistration, ProtocolRegistry};
+
+pub use registry::{ProtocolBuildContext, ProtocolFactory, ProtocolOrder, ProtocolRegistration, ProtocolRegistry};
 
 use super::{DeserializeError, HttpModeledError};
 
@@ -72,8 +74,8 @@ pub struct ServerRequest {
     pub uri: Uri,
     /// The request headers. Values are valid UTF-8 by construction.
     pub headers: Headers,
-    /// The collected request body. Empty when the protocol answered `false` from
-    /// [`ServerProtocol::reads_request_body`] or when the input is streaming.
+    /// The collected request body. Empty when the protocol answered [`BodyDirective::Skip`]
+    /// from [`ServerProtocol::inspect_request_head`] or when the input is streaming.
     pub body: Bytes,
 }
 
@@ -94,6 +96,16 @@ impl std::ops::Deref for SharedServerProtocol {
     fn deref(&self) -> &Self::Target {
         self.0.as_ref()
     }
+}
+
+/// Directive from head inspection: whether the request body must be collected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum BodyDirective {
+    /// Collect the body under the operation's limits (the default).
+    Collect,
+    /// Skip collection; the input never reads the body.
+    Skip,
 }
 
 /// The event-frame capability of a server protocol.
@@ -158,6 +170,15 @@ pub trait ServerEventStreamProtocol: Send + Sync + std::fmt::Debug {
 /// }
 /// ```
 pub trait ServerProtocol: Send + Sync + std::fmt::Debug + 'static {
+    /// Builds this protocol for a service, from its registered configuration.
+    ///
+    /// Registered in a [`ProtocolRegistry`] via [`ProtocolRegistration::new`]; the registry calls
+    /// it only for services whose schema declares the registered protocol trait. Invalid
+    /// configuration fails the service build.
+    fn from_build_context(ctx: &ProtocolBuildContext<'_>) -> Result<SharedServerProtocol, RouterBuildError>
+    where
+        Self: Sized;
+
     /// Builds operation routing once for this service.
     ///
     /// The context carries the protocol's own settings section next to the
@@ -177,21 +198,25 @@ pub trait ServerProtocol: Send + Sync + std::fmt::Debug + 'static {
         None
     }
 
-    /// The `Accept` gate, keyed on the output the response will carry.
+    /// Inspects the request head for `operation` before any body work: rejects the request, or
+    /// answers whether the body must be collected.
     ///
-    /// Runs before [`Self::deserialize_request`], so a protocol that keeps `406` and `415`
-    /// distinct answers `406` first. Provided: no policy.
-    fn check_accept(&self, _output: &Schema<'_>, _headers: &Headers) -> Result<(), DeserializeError> {
-        Ok(())
-    }
-
-    /// Whether the collected body is needed to read `input`.
+    /// Runs before body collection and [`Self::deserialize_request`]: a protocol that
+    /// distinguishes head failures (`406`) from body failures (`415`) answers the head failure
+    /// first. The built-ins gate the `Accept` header against the response the operation's output
+    /// will carry; a protocol may hang any headers-only validation here. Method and URI are not
+    /// offered: routing already consumed them, so the headers are all that remains of the head.
     ///
-    /// Defaults to `true`. A protocol that never reads the body for some inputs may answer `false`
-    /// to skip collection; [`ServerRequest::body`] is then empty. Streaming inputs are never
-    /// collected, whatever this method answers.
-    fn reads_request_body(&self, _input: &Schema<'_>) -> bool {
-        true
+    /// A protocol that never reads the body for some inputs (an input bound entirely to the URI
+    /// and headers) may answer [`BodyDirective::Skip`] to spare collection; [`ServerRequest::body`]
+    /// is then empty. Streaming inputs are never collected, whatever the directive says.
+    /// Provided: no policy, collect.
+    fn inspect_request_head(
+        &self,
+        _operation: &OperationSchema<'_>,
+        _headers: &Headers,
+    ) -> Result<BodyDirective, DeserializeError> {
+        Ok(BodyDirective::Collect)
     }
 
     /// Presents `request` as a deserializer for `input`.
@@ -357,67 +382,6 @@ impl<E: std::fmt::Display> std::fmt::Display for RequestBodyCollectionError<E> {
 }
 
 impl<E: std::error::Error + 'static> std::error::Error for RequestBodyCollectionError<E> {}
-
-/// Collects a request body for body-first routing, returning the content routing selects from,
-/// trailers included.
-///
-/// This is the collection step of an [`AsyncProtocolRouter`]: the router selects an operation
-/// from the returned bytes and hands the [`CollectedBody`] back with its selection; the routing
-/// service rebuilds the dispatched request around it, so the handler reads exactly what routing
-/// read. The allowance in `config` is enforced during collection — protocols derive it from
-/// [`RouterBuildContext::config`] with [`ServiceRequestBodyConfig::for_routing`] when
-/// building their router — and a failure is framed by the protocol itself.
-///
-/// [`AsyncProtocolRouter`]: crate::routing::AsyncProtocolRouter
-/// [`CollectedBody`]: crate::routing::CollectedBody
-/// [`RouterBuildContext::config`]: crate::routing::RouterBuildContext
-pub async fn collect_for_routing(
-    body: BoxBody,
-    config: &RequestBodyCollectionConfig,
-) -> Result<crate::routing::CollectedBody, RequestBodyCollectionError<crate::Error>> {
-    let collect = collect_frames(body, config);
-    let (bytes, trailers) = match config.read_timeout {
-        Some(timeout) => tokio::time::timeout(timeout, collect)
-            .await
-            .map_err(|_| RequestBodyCollectionError::Timeout { timeout })??,
-        None => collect.await?,
-    };
-    Ok(crate::routing::CollectedBody { bytes, trailers })
-}
-
-/// Collects data frames under the size allowance, retaining trailers.
-async fn collect_frames(
-    body: BoxBody,
-    config: &RequestBodyCollectionConfig,
-) -> Result<(Bytes, Option<http::HeaderMap>), RequestBodyCollectionError<crate::Error>> {
-    let mut body = std::pin::pin!(body);
-    let mut bytes = bytes::BytesMut::new();
-    let mut trailers: Option<http::HeaderMap> = None;
-    while let Some(frame) = std::future::poll_fn(|cx| body.as_mut().poll_frame(cx))
-        .await
-        .transpose()
-        .map_err(RequestBodyCollectionError::Body)?
-    {
-        match frame.into_data() {
-            Ok(data) => {
-                if let Some(limit) = config.max_bytes {
-                    if data.len() > limit.get().saturating_sub(bytes.len()) {
-                        return Err(RequestBodyCollectionError::TooLarge(crate::body::BodyLimitExceeded {
-                            limit: limit.get(),
-                        }));
-                    }
-                }
-                bytes.extend_from_slice(&data);
-            }
-            Err(frame) => {
-                if let Ok(new_trailers) = frame.into_trailers() {
-                    trailers.get_or_insert_with(http::HeaderMap::new).extend(new_trailers);
-                }
-            }
-        }
-    }
-    Ok((bytes.freeze(), trailers))
-}
 
 pub async fn collect_request_body<B>(
     body: B,

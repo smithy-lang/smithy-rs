@@ -3,32 +3,38 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Resolution from a service schema to its [`SharedServerProtocol`].
+//! Resolution from a service schema to its [`SharedServerProtocol`]s.
 //!
-//! Generated service builders resolve their protocol through a [`ProtocolRegistry`] instead of
-//! naming a concrete protocol struct, so a protocol implemented outside this crate joins the
-//! schema-serde path by contributing a [`ProtocolRegistration`].
+//! Generated service builders resolve their protocols through [`ProtocolRegistry`]s instead of
+//! naming concrete protocol structs, so a protocol implemented outside this crate joins the
+//! schema-serde path by contributing a registry. A registry is a const collection of
+//! [`ProtocolRegistration`]s, so a crate keeps every protocol it provides — and each protocol's
+//! [`ProtocolOrder`] placement — in one place:
 //!
-//! A service declaring several protocols is served by all of them. The routing service asks them
-//! in priority order: the built-ins as [`BUILTIN_PRIORITY`] lists them, other protocols after the
-//! built-ins, and protocols that read the body to route after those that route on metadata alone.
-//! A registration moves its protocol relative to another with [`ProtocolOrder`].
+//! ```ignore
+//! pub static MY_PROTOCOLS: ProtocolRegistry = ProtocolRegistry::new(&[
+//!     ProtocolRegistration::new("example.protocols#myProtocol", MyProtocol::from_build_context)
+//!         .with_order(&[ProtocolOrder::Before("aws.protocols#restJson1")]),
+//! ]);
+//! ```
+//!
+//! A service declaring several protocols is served by all of them. The claim order is decided
+//! only by [`ProtocolOrder`] constraints, resolved over every registered protocol — including
+//! ones the service does not serve, so `a Before b` and `b Before c` order `a` before `c` on a
+//! service serving only `a` and `c`. Registry and declaration order carry no meaning: two served
+//! protocols that the constraints leave unordered fail the build, as does the same protocol
+//! registered twice.
 
+use aws_smithy_types::Document;
+
+use crate::routing::RouterBuildError;
 use crate::schema::ServiceSchema;
 
-use super::SharedServerProtocol;
-
-/// The built-in protocols in the order a multi-protocol service asks them to claim a request.
-pub(crate) const BUILTIN_PRIORITY: [&str; 5] = [
-    "smithy.protocols#rpcv2Cbor",
-    "aws.protocols#awsJson1_0",
-    "aws.protocols#awsJson1_1",
-    "aws.protocols#restJson1",
-    "aws.protocols#restXml",
-];
+use super::{ServerProtocol as _, SharedServerProtocol};
 
 /// Places a protocol relative to another protocol, by shape ID, in a multi-protocol service's
-/// priority order. A constraint naming a protocol the service does not serve is ignored.
+/// claim order. Constraints resolve transitively over every registered protocol, so a constraint
+/// against a protocol the service does not serve still orders the ones it does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProtocolOrder {
     /// Ask this protocol before the named one.
@@ -37,148 +43,176 @@ pub enum ProtocolOrder {
     After(&'static str),
 }
 
+/// Everything a protocol factory sees.
+///
+/// `#[non_exhaustive]` — grows without breaking registries.
+#[non_exhaustive]
+#[derive(Debug)]
+pub struct ProtocolBuildContext<'a> {
+    /// The service schema the protocol is being built for.
+    pub service: &'static ServiceSchema<'static>,
+    /// This protocol's own section from `customizationConfig.protocols.<its shape ID>`.
+    pub settings: Option<&'a Document>,
+    /// The shared section every protocol may read: `customizationConfig.protocols.global`.
+    pub global: Option<&'a Document>,
+}
+
+impl<'a> ProtocolBuildContext<'a> {
+    /// Creates a context with no settings, for tests and manual construction.
+    pub fn new(service: &'static ServiceSchema<'static>) -> Self {
+        Self {
+            service,
+            settings: None,
+            global: None,
+        }
+    }
+
+    /// Sets the protocol's own settings section.
+    pub fn with_settings(mut self, settings: Option<&'a Document>) -> Self {
+        self.settings = settings;
+        self
+    }
+
+    /// Sets the shared settings section.
+    pub fn with_global(mut self, global: Option<&'a Document>) -> Self {
+        self.global = global;
+        self
+    }
+}
+
+/// Builds a protocol from its registered configuration; see
+/// [`ServerProtocol::from_build_context`](super::ServerProtocol::from_build_context).
+pub type ProtocolFactory = fn(&ProtocolBuildContext<'_>) -> Result<SharedServerProtocol, RouterBuildError>;
+
 /// A single protocol's entry in a [`ProtocolRegistry`].
 ///
-/// Wraps a function that inspects a service schema and, when the schema carries the protocol's
-/// trait ID, produces the protocol. Const-constructible, so registrations can live in statics.
+/// Names the protocol it provides, wraps the factory that builds it, and carries the protocol's
+/// [`ProtocolOrder`] placement. Const-constructible, so registrations live in static registries.
 #[derive(Clone, Copy)]
 pub struct ProtocolRegistration {
-    build: fn(&'static ServiceSchema<'static>) -> Option<SharedServerProtocol>,
+    protocol_id: &'static str,
+    build: ProtocolFactory,
     order: &'static [ProtocolOrder],
 }
 
 impl ProtocolRegistration {
-    /// Creates a protocol registration.
-    pub const fn new(build: fn(&'static ServiceSchema<'static>) -> Option<SharedServerProtocol>) -> Self {
-        Self { build, order: &[] }
+    /// Registers `build` as the factory for the protocol trait `protocol_id`.
+    ///
+    /// The factory runs only for services whose schema declares `protocol_id`; the protocol it
+    /// builds must answer the same ID from [`protocol_id`](super::ServerProtocol::protocol_id).
+    pub const fn new(protocol_id: &'static str, build: ProtocolFactory) -> Self {
+        Self {
+            protocol_id,
+            build,
+            order: &[],
+        }
     }
 
-    /// Constrains where the protocol sits in a multi-protocol service's priority order.
+    /// Constrains where the protocol sits in a multi-protocol service's claim order.
     pub const fn with_order(mut self, order: &'static [ProtocolOrder]) -> Self {
         self.order = order;
         self
+    }
+
+    pub(crate) fn protocol_id(&self) -> &'static str {
+        self.protocol_id
     }
 
     pub(crate) fn order(&self) -> &'static [ProtocolOrder] {
         self.order
     }
 
-    fn resolve(&self, service_schema: &'static ServiceSchema<'static>) -> Option<SharedServerProtocol> {
-        (self.build)(service_schema)
+    pub(crate) fn build(&self, ctx: &ProtocolBuildContext<'_>) -> Result<SharedServerProtocol, RouterBuildError> {
+        let protocol = (self.build)(ctx)?;
+        if protocol.protocol_id().as_str() != self.protocol_id {
+            return Err(RouterBuildError::Configuration(format!(
+                "protocol registered as `{}` answers `{}` from `protocol_id()`",
+                self.protocol_id,
+                protocol.protocol_id()
+            )));
+        }
+        Ok(protocol)
     }
 }
 
 impl std::fmt::Debug for ProtocolRegistration {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ProtocolRegistration").finish_non_exhaustive()
+        f.debug_struct("ProtocolRegistration")
+            .field("protocol_id", &self.protocol_id)
+            .finish_non_exhaustive()
     }
 }
 
-/// An ordered collection of [`ProtocolRegistration`]s.
+/// A const collection of [`ProtocolRegistration`]s.
 ///
-/// [`ProtocolRegistry::resolve`] asks each registration in order and returns the first protocol
-/// produced. Registrations added with [`ProtocolRegistry::register`] are asked before the ones
-/// already present, so a later registration overrides a built-in for the same protocol trait.
-#[derive(Debug)]
+/// Each protocol may be registered exactly once across every registry a service consults;
+/// a duplicate fails the build. Order within a registry carries no meaning.
+#[derive(Clone, Copy, Debug)]
 pub struct ProtocolRegistry {
-    registrations: Vec<ProtocolRegistration>,
+    registrations: &'static [ProtocolRegistration],
 }
 
 impl ProtocolRegistry {
-    /// Creates a registry of the built-in protocols: restJson1, restXml, awsJson1.0, awsJson1.1
-    /// and rpcv2Cbor.
-    pub fn builtin() -> Self {
-        Self {
-            registrations: vec![
-                ProtocolRegistration::new(rpc_v2_cbor_registration),
-                ProtocolRegistration::new(aws_json_11_registration),
-                ProtocolRegistration::new(aws_json_10_registration),
-                ProtocolRegistration::new(rest_json_1_registration),
-                ProtocolRegistration::new(rest_xml_registration),
-            ],
-        }
+    /// The built-in protocols: rpcv2Cbor, awsJson1.0, awsJson1.1, restJson1 and restXml,
+    /// chained into a fixed relative claim order by explicit constraints.
+    pub const BUILTIN: ProtocolRegistry = ProtocolRegistry::new(&[
+        ProtocolRegistration::new(
+            "smithy.protocols#rpcv2Cbor",
+            crate::protocol::rpc_v2_cbor::RpcV2CborProtocol::from_build_context,
+        ),
+        ProtocolRegistration::new(
+            "aws.protocols#awsJson1_0",
+            crate::protocol::aws_json_10::AwsJson1_0Protocol::from_build_context,
+        )
+        .with_order(&[ProtocolOrder::After("smithy.protocols#rpcv2Cbor")]),
+        ProtocolRegistration::new(
+            "aws.protocols#awsJson1_1",
+            crate::protocol::aws_json_11::AwsJson1_1Protocol::from_build_context,
+        )
+        .with_order(&[ProtocolOrder::After("aws.protocols#awsJson1_0")]),
+        ProtocolRegistration::new(
+            "aws.protocols#restJson1",
+            crate::protocol::rest_json_1::RestJson1Protocol::from_build_context,
+        )
+        .with_order(&[ProtocolOrder::After("aws.protocols#awsJson1_1")]),
+        ProtocolRegistration::new(
+            "aws.protocols#restXml",
+            crate::protocol::rest_xml::RestXmlProtocol::from_build_context,
+        )
+        .with_order(&[ProtocolOrder::After("aws.protocols#restJson1")]),
+    ]);
+
+    /// Creates a registry over `registrations`.
+    pub const fn new(registrations: &'static [ProtocolRegistration]) -> Self {
+        Self { registrations }
     }
 
-    /// Adds a registration, giving it precedence over the ones already present.
-    pub fn register(mut self, registration: ProtocolRegistration) -> Self {
-        self.registrations.insert(0, registration);
-        self
-    }
-
-    /// Resolves the protocol for `service_schema`: the first registration whose protocol trait
-    /// appears on the schema wins. `None` when no registration recognizes the schema.
-    pub fn resolve(&self, service_schema: &'static ServiceSchema<'static>) -> Option<SharedServerProtocol> {
+    pub(crate) fn registrations(&self) -> &'static [ProtocolRegistration] {
         self.registrations
-            .iter()
-            .find_map(|registration| registration.resolve(service_schema))
     }
 
-    /// Resolves the protocol with shape ID `protocol_id` for `service_schema`, honoring overrides
-    /// the same way [`Self::resolve`] does.
+    /// Builds the protocol with shape ID `protocol_id` for `service_schema`, without settings.
+    ///
+    /// `None` when this registry does not register `protocol_id` or the schema does not declare
+    /// it. Used by generated protocol tests, which exercise one protocol in isolation.
     pub fn resolve_id(
         &self,
         service_schema: &'static ServiceSchema<'static>,
         protocol_id: &str,
     ) -> Option<SharedServerProtocol> {
+        let declared = service_schema
+            .protocols()
+            .iter()
+            .any(|protocol| protocol.as_str() == protocol_id);
+        if !declared {
+            return None;
+        }
         self.registrations
             .iter()
-            .filter_map(|registration| registration.resolve(service_schema))
-            .find(|protocol| protocol.protocol_id().as_str() == protocol_id)
+            .find(|registration| registration.protocol_id() == protocol_id)?
+            .build(&ProtocolBuildContext::new(service_schema))
+            .ok()
     }
-
-    /// Resolves every protocol the registrations recognize on `service_schema`, each with its
-    /// registration's ordering constraints. When several registrations produce the same protocol,
-    /// the first one wins, as in [`Self::resolve`].
-    pub(crate) fn resolve_all(
-        &self,
-        service_schema: &'static ServiceSchema<'static>,
-    ) -> Vec<(SharedServerProtocol, &'static [ProtocolOrder])> {
-        let mut resolved: Vec<(SharedServerProtocol, &'static [ProtocolOrder])> = Vec::new();
-        for registration in &self.registrations {
-            let Some(protocol) = registration.resolve(service_schema) else {
-                continue;
-            };
-            if !resolved
-                .iter()
-                .any(|(existing, _)| existing.protocol_id() == protocol.protocol_id())
-            {
-                resolved.push((protocol, registration.order()));
-            }
-        }
-        resolved
-    }
-}
-
-fn has_protocol(service_schema: &'static ServiceSchema<'static>, id: &str) -> bool {
-    service_schema
-        .protocols()
-        .iter()
-        .any(|protocol| protocol.as_str() == id)
-}
-
-fn rest_json_1_registration(service_schema: &'static ServiceSchema<'static>) -> Option<SharedServerProtocol> {
-    has_protocol(service_schema, "aws.protocols#restJson1")
-        .then(|| SharedServerProtocol::new(crate::protocol::rest_json_1::RestJson1Protocol::default()))
-}
-
-fn rest_xml_registration(service_schema: &'static ServiceSchema<'static>) -> Option<SharedServerProtocol> {
-    has_protocol(service_schema, "aws.protocols#restXml")
-        .then(|| SharedServerProtocol::new(crate::protocol::rest_xml::RestXmlProtocol::default()))
-}
-
-fn aws_json_10_registration(service_schema: &'static ServiceSchema<'static>) -> Option<SharedServerProtocol> {
-    has_protocol(service_schema, "aws.protocols#awsJson1_0")
-        .then(|| SharedServerProtocol::new(crate::protocol::aws_json_10::AwsJson1_0Protocol::default()))
-}
-
-fn aws_json_11_registration(service_schema: &'static ServiceSchema<'static>) -> Option<SharedServerProtocol> {
-    has_protocol(service_schema, "aws.protocols#awsJson1_1")
-        .then(|| SharedServerProtocol::new(crate::protocol::aws_json_11::AwsJson1_1Protocol::default()))
-}
-
-fn rpc_v2_cbor_registration(service_schema: &'static ServiceSchema<'static>) -> Option<SharedServerProtocol> {
-    has_protocol(service_schema, "smithy.protocols#rpcv2Cbor")
-        .then(|| SharedServerProtocol::new(crate::protocol::rpc_v2_cbor::RpcV2CborProtocol::default()))
 }
 
 #[cfg(test)]
@@ -191,61 +225,64 @@ mod tests {
     const SERVICE_ID: ShapeId<'static> = shape_id!("example", "Service");
 
     static REST_JSON_1: [ShapeId<'static>; 1] = [shape_id!("aws.protocols", "restJson1")];
-    static REST_XML: [ShapeId<'static>; 1] = [shape_id!("aws.protocols", "restXml")];
-    static AWS_JSON_10: [ShapeId<'static>; 1] = [shape_id!("aws.protocols", "awsJson1_0")];
-    static AWS_JSON_11: [ShapeId<'static>; 1] = [shape_id!("aws.protocols", "awsJson1_1")];
-    static RPC_V2_CBOR: [ShapeId<'static>; 1] = [shape_id!("smithy.protocols", "rpcv2Cbor")];
     static UNKNOWN: [ShapeId<'static>; 1] = [shape_id!("example.protocols", "myProtocol")];
 
     static REST_JSON_1_SERVICE: ServiceSchema<'static> = ServiceSchema::new(SERVICE_ID, None, &REST_JSON_1, &[]);
-    static REST_XML_SERVICE: ServiceSchema<'static> = ServiceSchema::new(SERVICE_ID, None, &REST_XML, &[]);
-    static AWS_JSON_10_SERVICE: ServiceSchema<'static> = ServiceSchema::new(SERVICE_ID, None, &AWS_JSON_10, &[]);
-    static AWS_JSON_11_SERVICE: ServiceSchema<'static> = ServiceSchema::new(SERVICE_ID, None, &AWS_JSON_11, &[]);
-    static RPC_V2_CBOR_SERVICE: ServiceSchema<'static> = ServiceSchema::new(SERVICE_ID, None, &RPC_V2_CBOR, &[]);
     static UNKNOWN_SERVICE: ServiceSchema<'static> = ServiceSchema::new(SERVICE_ID, None, &UNKNOWN, &[]);
 
     #[test]
     fn builtin_resolves_each_builtin_protocol() {
-        let registry = ProtocolRegistry::builtin();
-        for (service, id) in [
-            (&REST_JSON_1_SERVICE, "aws.protocols#restJson1"),
-            (&REST_XML_SERVICE, "aws.protocols#restXml"),
-            (&AWS_JSON_10_SERVICE, "aws.protocols#awsJson1_0"),
-            (&AWS_JSON_11_SERVICE, "aws.protocols#awsJson1_1"),
-            (&RPC_V2_CBOR_SERVICE, "smithy.protocols#rpcv2Cbor"),
-        ] {
-            let protocol = registry.resolve(service).expect(id);
+        static PROTOCOLS: [[ShapeId<'static>; 1]; 5] = [
+            [shape_id!("aws.protocols", "restJson1")],
+            [shape_id!("aws.protocols", "restXml")],
+            [shape_id!("aws.protocols", "awsJson1_0")],
+            [shape_id!("aws.protocols", "awsJson1_1")],
+            [shape_id!("smithy.protocols", "rpcv2Cbor")],
+        ];
+        static SERVICES: [ServiceSchema<'static>; 5] = [
+            ServiceSchema::new(SERVICE_ID, None, &PROTOCOLS[0], &[]),
+            ServiceSchema::new(SERVICE_ID, None, &PROTOCOLS[1], &[]),
+            ServiceSchema::new(SERVICE_ID, None, &PROTOCOLS[2], &[]),
+            ServiceSchema::new(SERVICE_ID, None, &PROTOCOLS[3], &[]),
+            ServiceSchema::new(SERVICE_ID, None, &PROTOCOLS[4], &[]),
+        ];
+        for (service, id) in SERVICES.iter().zip([
+            "aws.protocols#restJson1",
+            "aws.protocols#restXml",
+            "aws.protocols#awsJson1_0",
+            "aws.protocols#awsJson1_1",
+            "smithy.protocols#rpcv2Cbor",
+        ]) {
+            let protocol = ProtocolRegistry::BUILTIN.resolve_id(service, id).expect(id);
             assert_eq!(protocol.protocol_id().as_str(), id);
         }
     }
 
     #[test]
     fn unknown_protocol_resolves_to_none() {
-        assert!(ProtocolRegistry::builtin().resolve(&UNKNOWN_SERVICE).is_none());
+        assert!(ProtocolRegistry::BUILTIN
+            .resolve_id(&UNKNOWN_SERVICE, "example.protocols#myProtocol")
+            .is_none());
     }
 
     #[test]
-    fn additional_registration_resolves_an_unknown_protocol() {
-        fn my_protocol(service_schema: &'static ServiceSchema<'static>) -> Option<SharedServerProtocol> {
-            super::has_protocol(service_schema, "example.protocols#myProtocol")
-                .then(|| SharedServerProtocol::new(crate::protocol::rest_json_1::RestJson1Protocol::default()))
-        }
-
-        let registry = ProtocolRegistry::builtin().register(ProtocolRegistration::new(my_protocol));
-        assert!(registry.resolve(&UNKNOWN_SERVICE).is_some());
-        // The built-ins still resolve behind it.
-        assert!(registry.resolve(&REST_XML_SERVICE).is_some());
+    fn undeclared_protocol_resolves_to_none() {
+        assert!(ProtocolRegistry::BUILTIN
+            .resolve_id(&REST_JSON_1_SERVICE, "aws.protocols#restXml")
+            .is_none());
     }
 
     #[test]
-    fn additional_registration_overrides_a_builtin() {
-        fn override_rest_json_1(service_schema: &'static ServiceSchema<'static>) -> Option<SharedServerProtocol> {
-            super::has_protocol(service_schema, "aws.protocols#restJson1")
-                .then(|| SharedServerProtocol::new(crate::protocol::rest_xml::RestXmlProtocol::default()))
+    fn a_mismatched_protocol_id_is_an_error() {
+        fn wrong(_: &ProtocolBuildContext<'_>) -> Result<SharedServerProtocol, RouterBuildError> {
+            Ok(SharedServerProtocol::new(
+                crate::protocol::rest_xml::RestXmlProtocol::default(),
+            ))
         }
-
-        let registry = ProtocolRegistry::builtin().register(ProtocolRegistration::new(override_rest_json_1));
-        let protocol = registry.resolve(&REST_JSON_1_SERVICE).unwrap();
-        assert_eq!(protocol.protocol_id().as_str(), "aws.protocols#restXml");
+        let registration = ProtocolRegistration::new("aws.protocols#restJson1", wrong);
+        let err = registration
+            .build(&ProtocolBuildContext::new(&REST_JSON_1_SERVICE))
+            .expect_err("IDs disagree");
+        assert!(matches!(err, RouterBuildError::Configuration(_)));
     }
 }

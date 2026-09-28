@@ -14,7 +14,7 @@ pub use deserialize::{DeserializableShape, DeserializeError};
 pub use modeled_error::HttpModeledError;
 pub(crate) use protocol::body_collection_rejection;
 pub use protocol::{
-    collect_for_routing, collect_request_body, parse_settings_json, settings_bool, ProtocolOrder, ProtocolRegistration,
+    collect_request_body, parse_settings_json, settings_bool, BodyDirective, ProtocolBuildContext, ProtocolFactory, ProtocolOrder, ProtocolRegistration,
     ProtocolRegistry, RequestBodyCollectionConfig, RequestBodyCollectionError, ServerEventStreamProtocol,
     ServerProtocol, ServerRequest, ServiceRequestBodyConfig, SharedServerProtocol,
 };
