@@ -35,7 +35,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.Servi
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.TestCase
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
-import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
@@ -286,9 +285,6 @@ class ClientProtocolTestGenerator(
             RT.sdkBody(runtimeConfig = rc),
         )
         val mediaType = testCase.bodyMediaType.orNull()
-        val outputShape = operationShape.outputShape(codegenContext.model)
-        val schemaExclusive = SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)
-        val streamingBlobOutput = schemaExclusive && outputShape.hasStreamingMember(codegenContext.model)
         rustTemplate(
             """
             use #{DeserializeResponse};
@@ -325,12 +321,10 @@ class ClientProtocolTestGenerator(
             "inject_protocol" to protocolTestConfigBagSetup(),
             "call_streaming" to
                 writable {
-                    if (streamingBlobOutput) {
-                        // Schema-serde streaming blob: use _with_config so the protocol is available
-                        rust("de.deserialize_streaming_with_config(&mut http_response, &test_cfg);")
-                    } else {
-                        rust("de.deserialize_streaming(&mut http_response);")
-                    }
+                    // Generated deserializers implement `_with_config`, which is also what the
+                    // orchestrator calls; the deprecated `deserialize_streaming` would resolve to
+                    // the trait's default and always return `None`.
+                    rust("de.deserialize_streaming_with_config(&mut http_response, &test_cfg);")
                 },
         )
         if (expectedShape.hasTrait<ErrorTrait>()) {

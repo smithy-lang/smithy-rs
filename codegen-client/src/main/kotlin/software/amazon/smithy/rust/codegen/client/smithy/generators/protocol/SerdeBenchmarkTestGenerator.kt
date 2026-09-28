@@ -170,7 +170,7 @@ class SerdeBenchmarkTestGenerator(
             .unwrap()
             ).unwrap();
             let start = std::time::Instant::now();
-            let parsed = de.deserialize_streaming(&mut http_response);
+            let parsed = de.deserialize_streaming_with_config(&mut http_response, &cfg);
             let parsed = parsed.unwrap_or_else(|| {
                 let http_response = http_response.map(|body| {
                     #{SdkBody}::from(#{copy_from_slice}(&#{decode_body_data}(body.bytes().unwrap(), #{MediaType}::from(${(mediaType ?: defaultBodyMediaType).dq()}))))

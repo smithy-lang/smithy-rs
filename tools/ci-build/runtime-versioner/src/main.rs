@@ -20,7 +20,9 @@ mod command {
     pub use patch::{patch, patch_with};
 }
 
+mod manifest;
 mod repo;
+mod requirements;
 mod tag;
 mod util;
 
@@ -109,10 +111,19 @@ enum Command {
     ///
     /// Requires a full clone of smithy-rs. Will not work against shallow clones.
     ///
-    /// This audits that any runtime crate that has been changed since the last
+    /// This performs two checks.
+    ///
+    /// First, it audits that any runtime crate that has been changed since the last
     /// release has been version bumped. It's not smart enough to know if the version
     /// bump is correct in semver terms, but verifies that there was at least a
     /// bump. A human will still need to verify the semver correctness of that bump.
+    ///
+    /// Second, for each runtime crate whose current version is already published, it
+    /// audits that the dependency requirements published for that version still accept
+    /// the current versions of the runtime crates they point at. A dependency's version
+    /// bump changes files in the dependency's directory, not in its dependents', so the
+    /// first check can't see it. When a published requirement no longer matches, the
+    /// dependent needs a new version so that the updated requirement can be published.
     Audit(Audit),
 
     /// Outputs the previous release tag for the revision at HEAD.

@@ -163,7 +163,7 @@ class HttpBindingGenerator(
                 "Output" to outputT,
                 "header_util" to headerUtil,
             ) {
-                rust("let headers = header_map.get_all(${binding.locationName.dq()});")
+                rust("let headers = header_map.get_all_bytes(${binding.locationName.dq()});")
                 deserializeFromHeader(model.expectShape(binding.member.target), binding.member)
             }
         }
@@ -177,7 +177,7 @@ class HttpBindingGenerator(
         val inner =
             protocolFunctions.deserializeFn(binding.member, fnNameSuffix = "inner") { fnName ->
                 rustBlockTemplate(
-                    "pub fn $fnName<'a>(headers: impl #{Iterator}<Item = &'a str>) -> std::result::Result<Option<#{Value}>, #{header_util}::ParseError>",
+                    "pub fn $fnName<'a>(headers: impl #{Iterator}<Item = &'a [u8]>) -> std::result::Result<Option<#{Value}>, #{header_util}::ParseError>",
                     *preludeScope,
                     "Value" to symbolProvider.toSymbol(model.expectShape(target.value.target)),
                     "header_util" to headerUtil,
@@ -196,11 +196,11 @@ class HttpBindingGenerator(
                 rust(
                     """
                     let headers = #T::headers_for_prefix(
-                        header_map.iter().map(|(k, _)| k),
+                        header_map.iter_bytes().map(|(k, _)| k),
                         ${binding.locationName.dq()}
                     );
                     let out: std::result::Result<_, _> = headers.map(|(key, header_name)| {
-                        let values = header_map.get_all(header_name);
+                        let values = header_map.get_all_bytes(header_name);
                         #T(values).map(|v| (key.to_string(), v.expect(
                             "we have checked there is at least one value for this header name; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues"
                         )))
@@ -395,7 +395,7 @@ class HttpBindingGenerator(
         // is just a single string (which might include `,`s.).
         // MediaType doesn't include `,` since it's base64, send that through the normal path
         if (targetShape is StringShape && !targetShape.hasTrait<MediaTypeTrait>()) {
-            rust("#T::one_or_none(headers)", headerUtil)
+            rust("#T::one_or_none_bytes(headers)", headerUtil)
             return
         }
         val (coreType, coreShape) =
@@ -415,7 +415,7 @@ class HttpBindingGenerator(
                 )
             val timestampFormatType = RuntimeType.parseTimestampFormat(codegenTarget, runtimeConfig, timestampFormat)
             rust(
-                "let $parsedValue: Vec<${coreType.render()}> = #T::many_dates(headers, #T)?",
+                "let $parsedValue: Vec<${coreType.render()}> = #T::many_dates_bytes(headers, #T)?",
                 headerUtil,
                 timestampFormatType,
             )
@@ -425,12 +425,12 @@ class HttpBindingGenerator(
             rust(";")
         } else if (coreShape.isPrimitive()) {
             rust(
-                "let $parsedValue = #T::read_many_primitive::<${coreType.render()}>(headers)?;",
+                "let $parsedValue = #T::read_many_primitive_bytes::<${coreType.render()}>(headers)?;",
                 headerUtil,
             )
         } else {
             rust(
-                "let $parsedValue: Vec<${coreType.render()}> = #T::read_many_from_str(headers)?;",
+                "let $parsedValue: Vec<${coreType.render()}> = #T::read_many_from_str_bytes(headers)?;",
                 headerUtil,
             )
             if (coreShape.hasTrait<MediaTypeTrait>()) {
