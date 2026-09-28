@@ -72,7 +72,7 @@ data class TargetCrate(
     /** Whether the target server routes through the schema-serde path rather than a per-protocol router. */
     fun isSchemaServer(): Boolean =
         Path.of(relativePath).resolve("src/service.rs").toFile().let {
-            it.exists() && it.readText().contains("routing::SchemaRoutingService")
+            it.exists() && it.readText().contains("routing::MultiProtocolRoutingService")
         }
 }
 
