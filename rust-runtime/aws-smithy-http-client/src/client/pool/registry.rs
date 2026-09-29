@@ -824,6 +824,10 @@ mod tests {
         assert!(registry.admissions.lock().is_empty());
     }
 
+    /// Resolves the same first-use origin concurrently through one partition.
+    ///
+    /// Publication must retain one production `OriginCell` instance and return
+    /// that exact instance to both callers.
     #[test]
     fn first_cell_publication_is_stable_under_contention() {
         const THREADS: usize = 8;
@@ -897,6 +901,10 @@ mod loom_tests {
         )
     }
 
+    /// Resolves the same first-use origin through two concurrent production calls.
+    ///
+    /// Loom enumerates publication schedules while `PartitionRegistry` and
+    /// `PartitionState` perform their ordinary lookup and insertion transitions.
     #[test]
     fn first_cell_publication_is_stable_under_contention() {
         loom::model(|| {
@@ -929,6 +937,8 @@ mod loom_tests {
             let second = second.join().unwrap();
             assert!(Arc::ptr_eq(&first, &second));
             assert_eq!(1, partition.cell_count());
+            drop((first, second));
+            partition.maintenance.clear_modeled_cells_for_test();
         });
     }
 }

@@ -1067,6 +1067,7 @@ enum H1MatchKind {
 }
 
 enum H1MatchState {
+    ProbingIdle,
     Reserving,
     WaitingForSender,
     Resolving,
@@ -1116,23 +1117,39 @@ requesting-cell locks:
 OriginAdmission owns queued demand R
   |
   `-- H1SupplyIndex selects peer supplier cell C
-        `-- retain H1Match K in Reserving
-              `-- reserve K under C's lock
+        +-- one eligible supplier -> retain H1Match K in Reserving
         |
-        +-- C owes a usable local turn
-        |     `-- reject K; R stays queued
-        |
-        +-- C has an older local H1 candidate
-        |     `-- reject K; R stays queued
-        |
-        +-- idle H1 available
-        |     `-- C reservation -> Resolving(K); H1Candidate owns sender
-        |
-        +-- active or returning H1 exists
-        |     `-- C reservation -> Installed(K); reserve next reusable return
-        |
-        `-- no H1 can return
-              `-- reject K; R stays queued
+        `-- several eligible suppliers -> retain K in ProbingIdle
+              `-- check C for an immediately idle sender under C's lock
+
+ProbingIdle(K)
+  |
+  +-- idle H1 available
+  |     `-- C reservation -> Resolving(K); H1Candidate owns sender
+  |
+  +-- C is busy or unavailable and probe bound remains
+  |     `-- select a distinct eligible supplier and repeat
+  |
+  `-- final supplier check
+        `-- choose one exact supplier; K -> Reserving
+              `-- reserve K under that supplier's lock
+
+Reserving(K)
+  |
+  +-- supplier owes a usable local turn
+  |     `-- reject K; R stays queued
+  |
+  +-- supplier has an older local H1 candidate
+  |     `-- reject K; R stays queued
+  |
+  +-- idle H1 available
+  |     `-- supplier reservation -> Resolving(K); H1Candidate owns sender
+  |
+  +-- active or returning H1 exists
+  |     `-- supplier reservation -> Installed(K); reserve next reusable return
+  |
+  `-- no H1 can return
+        `-- reject K; R stays queued
 
 Installed(K) + reusable return at C
   `-- C reservation -> Resolving(K); H1Candidate owns sender
@@ -1177,12 +1194,13 @@ candidate already outside the cell lock returns through ordinary owning-cell
 policy. Cancellation after irreversible transfer does not revoke an earned
 fairness turn.
 
-Every cross-lock action owns a typed fallback. Dropping an
-`H1ReservationAction` or `H1CancellationAction` clears the cell reservation and
-settles the admission match. Dropping an `H1Candidate` returns its sender before
-the supplier cell becomes selectable again. Dropping a `DeliveryGuard`
-returns the permit to admission. Fallbacks run no connector, protocol, wake,
-or listener code while a pool lock is held.
+Every cross-lock action owns a typed fallback. Dropping an `H1IdleProbeAction`
+returns the supplier to its index and advances or settles the match. Dropping
+an `H1ReservationAction` or `H1CancellationAction` clears the cell reservation
+and settles the admission match. Dropping an `H1Candidate` returns its sender
+before the supplier cell becomes selectable again. Dropping a `DeliveryGuard`
+returns the permit to admission. Fallbacks run no connector, protocol, wake, or
+listener code while a pool lock is held.
 
 A fallback invoked from `Drop` may synchronously acquire a bounded sequence of pool locks to publish its
 terminal state, but it holds at most one pool lock at a time. Each lock transition produces the next typed
@@ -1235,7 +1253,9 @@ HTTP/1 selection begins with the oldest origin demand:
 oldest origin demand R from requesting cell Q
   |
   +-- R accepts H1 and an eligible peer cell C exists
-  |     `-- retain BorrowSender match(C, Q, R)
+  |     `-- cross at most MAX_H1_SUPPLIER_CHECKS distinct suppliers
+  |           +-- idle sender found -> resolve BorrowSender match(C, Q, R)
+  |           `-- final check -> reserve one exact eligible supplier
   |
   +-- another peer H1 cell C exists
   |     `-- retain ReclaimCapacity match(C, Q, R)
@@ -1246,8 +1266,15 @@ oldest origin demand R from requesting cell Q
 
 The supply selector skips the requesting cell. Same-cell idle selection and
 return are resolved under that cell's lock and do not create a cross-cell
-match. Borrow takes the oldest eligible peer; reclaim takes the oldest
-origin-wide peer.
+match. Borrow crosses at most `MAX_H1_SUPPLIER_CHECKS` distinct eligible
+supplier cells. With one supplier, admission reserves it directly. With
+several suppliers, preliminary crossings take only an immediately idle sender;
+the final crossing installs the ordinary exact reservation, which takes an
+idle sender when present or intercepts that supplier's next reusable return.
+If eligible supply disappears during the crossings, ordinary reclaim selection
+resumes. The fixed-size probe set prevents a supplier that re-enters the FIFO
+from being checked twice in one search. Reclaim takes the oldest origin-wide
+peer.
 
 The origin demand head is no younger than any eligibility-group demand head.
 Selecting that origin head first therefore preserves eligible H1 ordering
@@ -1531,6 +1558,10 @@ checks specified in [Appendix B](#appendix-b-validation).
 * **H1 match completion** [safety] — one H1 match reserves at most one supplier cell and one requesting cell; it
   remains authoritative until supplier-cell completion and any borrowed demand assignment settles its terminal
   state.
+* **Bounded H1 probing** [optimization] — one H1 borrow match crosses at most
+  `MAX_H1_SUPPLIER_CHECKS` distinct eligible supplier cells. Preliminary crossings take only an immediately
+  idle sender; the final crossing installs one exact supplier reservation. The work does not grow with the
+  number of partitions.
 * **Return interception** [liveness] — an installed H1 reservation intercepts the next reusable H1 before it
   becomes idle, so a connection cycling continuously between active and reusable cannot strand requesting
   demand.
@@ -2021,12 +2052,14 @@ point.
 
 Request results do not reveal whether a request reused a connection, opened a
 new one, waited for capacity, or observed a connection closing. The pool exposes
-two complementary observations:
+three complementary observations:
 
+- request-attempt telemetry reports dispatch and connection selection facts
+  through an optional request extension;
 - lifecycle events report completed transitions; and
 - statistics report current origin or partition-origin state.
 
-Neither surface participates in admission, reuse, reclaim, or dispatch.
+None participates in admission, reuse, reclaim, or dispatch.
 
 #### Lifecycle events
 
@@ -2055,7 +2088,9 @@ handshake work.
 
 `Opened` is emitted after Hyper produces the protocol request handle and the
 connection is installed as pool supply. It carries the establishment
-observation and the installed connection's immutable `ConnectionInfo`:
+observation and the installed connection's immutable `ConnectionInfo`.
+Successful establishment measurements are frozen after protocol installation
+and before the connection is published to waiting demand:
 
 ```text
 ConnectionEstablishmentInfo
@@ -2219,8 +2254,10 @@ the pool catches and logs listener panics after the authoritative transition;
 the panic does not alter pool state or prevent required cleanup. Abort-on-panic
 builds retain their normal process-abort semantics.
 
-Installing no listener avoids event timing, establishment identity allocation,
-listener cloning, and callback work. Diagnostic connection counts remain
+Installing no listener avoids establishment identity allocation, listener
+cloning, and callback work. Successful establishment timing remains available
+as immutable connection metadata. Request-attempt timing is read only when the
+request carries its capture extension. Diagnostic connection counts remain
 available independently of event configuration.
 
 #### Obligations

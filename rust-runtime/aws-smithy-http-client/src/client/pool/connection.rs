@@ -16,12 +16,14 @@
 use super::admission::CapacityLease;
 use super::events::{LogicalCloseCause, SharedConnectionEventListener};
 use super::origin::OriginKey;
-use super::partition::PartitionId;
+use super::partition::{DriverSpawner, PartitionId};
 use super::stats::CellConnectionStats;
 use crate::client::connect::{ConnectPath, ConnectPathInner};
 use crate::sync::{Arc, Mutex};
 pub use aws_smithy_runtime_api::client::connection::ConnectionId;
-use aws_smithy_runtime_api::client::connection::ConnectionMetadata;
+use aws_smithy_runtime_api::client::connection::{
+    ConnectionEstablishmentMetadata, ConnectionMetadata,
+};
 use http_1x::Extensions;
 use hyper::rt::{Read, ReadBufCursor, Write};
 use hyper_util::client::legacy::connect::{Connected, Connection, HttpInfo};
@@ -30,6 +32,7 @@ use std::fmt;
 use std::io::{self, IoSlice};
 use std::net::SocketAddr;
 use std::pin::Pin;
+use std::sync::{Arc as StdArc, OnceLock};
 use std::task::{Context, Poll};
 
 /// Final protocol and ownership classification for a closed connection.
@@ -91,6 +94,8 @@ pub struct ConnectionInfo {
     connect_path: ConnectPathInner,
     /// Connector metadata copied into every response on this connection.
     connected: Connected,
+    /// Measurements frozen before this connection becomes visible to dispatch.
+    establishment: OnceLock<ConnectionEstablishmentMetadata>,
 }
 
 impl ConnectionInfo {
@@ -115,6 +120,7 @@ impl ConnectionInfo {
             remote_addr: http_info.map(HttpInfo::remote_addr),
             connect_path,
             connected,
+            establishment: OnceLock::new(),
         })
     }
 
@@ -158,6 +164,19 @@ impl ConnectionInfo {
         self.connect_path().is_proxied()
     }
 
+    /// Returns successful establishment measurements, when installation completed.
+    pub fn establishment(&self) -> Option<&ConnectionEstablishmentMetadata> {
+        self.establishment.get()
+    }
+
+    /// Freezes successful establishment measurements before pool publication.
+    pub(super) fn set_establishment(&self, metadata: ConnectionEstablishmentMetadata) {
+        assert!(
+            self.establishment.set(metadata).is_ok(),
+            "connection establishment metadata was set more than once"
+        );
+    }
+
     /// Returns connector-owned request-path state.
     pub(super) fn connect_path_inner(&self) -> &ConnectPathInner {
         &self.connect_path
@@ -178,7 +197,8 @@ impl ConnectionInfo {
             });
         builder
             .set_local_addr(self.local_addr)
-            .set_remote_addr(self.remote_addr);
+            .set_remote_addr(self.remote_addr)
+            .set_establishment(self.establishment().cloned());
         builder.build()
     }
 
@@ -192,7 +212,8 @@ impl ConnectionInfo {
             });
         builder
             .set_local_addr(self.local_addr)
-            .set_remote_addr(self.remote_addr);
+            .set_remote_addr(self.remote_addr)
+            .set_establishment(self.establishment().cloned());
         builder.build()
     }
 
@@ -214,10 +235,23 @@ impl ConnectionInfo {
 pub(super) struct ConnectionState {
     /// Identity and transport facts shared with metadata and lifecycle events.
     info: Arc<ConnectionInfo>,
+    /// Runtime that owns protocol and follow-up work for this connection.
+    owner_spawner: StdArc<dyn DriverSpawner>,
     /// Cell-owned counts for connection lifetimes that outlive protocol records.
     stats: Arc<CellConnectionStats>,
     /// Dispatch, logical-close, and physical-connection completion state.
     lifecycle: Mutex<ConnectionLifecycle>,
+}
+
+#[cfg(test)]
+#[derive(Debug)]
+struct TestDriverSpawner;
+
+#[cfg(test)]
+impl DriverSpawner for TestDriverSpawner {
+    fn spawn(&self, driver: Pin<Box<dyn std::future::Future<Output = ()> + Send + 'static>>) {
+        drop(driver);
+    }
 }
 
 /// Connection lifetime state serialized with dispatch commitment and close.
@@ -450,11 +484,13 @@ impl ConnectionState {
     /// discoverable.
     pub(super) fn pending_open(
         info: Arc<ConnectionInfo>,
+        owner_spawner: StdArc<dyn DriverSpawner>,
         stats: Arc<CellConnectionStats>,
     ) -> (Arc<Self>, PhysicalConnectionGuard) {
         stats.physical_connection_started();
         let connection = Arc::new(Self {
             info,
+            owner_spawner,
             stats,
             lifecycle: Mutex::new(ConnectionLifecycle {
                 logical: LogicalState::PendingOpen,
@@ -475,7 +511,16 @@ impl ConnectionState {
     pub(super) fn pending_open_for_test(
         info: Arc<ConnectionInfo>,
     ) -> (Arc<Self>, PhysicalConnectionGuard) {
-        Self::pending_open(info, Arc::new(CellConnectionStats::default()))
+        Self::pending_open(
+            info,
+            StdArc::new(TestDriverSpawner),
+            Arc::new(CellConnectionStats::default()),
+        )
+    }
+
+    /// Returns the runtime that owns this installed connection.
+    pub(super) fn owner_spawner(&self) -> StdArc<dyn DriverSpawner> {
+        self.owner_spawner.clone()
     }
 
     /// Opens dispatch commitment and transfers optional bounded capacity.
@@ -1157,7 +1202,8 @@ mod tests {
             stats.clone(),
         );
         establishment.protocol_selected(ConnectionProtocol::Http1);
-        let (connection, physical) = ConnectionState::pending_open(test_info(1), stats);
+        let (connection, physical) =
+            ConnectionState::pending_open(test_info(1), StdArc::new(TestDriverSpawner), stats);
         connection.open(None).unwrap();
 
         establishment.opened(&connection);
@@ -1471,6 +1517,7 @@ mod tests {
         assert_eq!(None, connection.info().local_addr());
         assert_eq!(None, connection.info().remote_addr());
         assert_eq!(ConnectPath::ForwardProxy, connection.info().connect_path());
+        assert_eq!(None, connection.info().establishment());
         let mut extensions = Extensions::new();
         connection.info().apply_connector_extras(&mut extensions);
         assert_eq!(
@@ -1507,6 +1554,10 @@ mod loom_tests {
         ConnectionInfo::for_test(ConnectionId::new(id), PartitionId::from_index(0))
     }
 
+    /// Races request dispatch commitment with logical close.
+    ///
+    /// Dispatch either commits before close and drains afterward, or close
+    /// rejects it without incrementing the in-flight count.
     #[test]
     fn dispatch_commit_linearizes_against_close() {
         loom::model(|| {
@@ -1546,6 +1597,9 @@ mod loom_tests {
         });
     }
 
+    /// Races two independent logical-close signals for one bounded connection.
+    ///
+    /// Exactly one reason becomes authoritative and its capacity lease returns once.
     #[test]
     fn concurrent_logical_close_releases_one_capacity_lease() {
         loom::model(|| {
@@ -1572,13 +1626,60 @@ mod loom_tests {
         });
     }
 
-    /// Races `Opened` completion with logical and physical close.
+    /// Races HTTP/1 upgrade classification with physical connection completion.
+    ///
+    /// The winning transition determines the final reason while both paths
+    /// converge on one capacity return and zero retained lifetime counts.
+    #[test]
+    fn h1_upgrade_classification_linearizes_against_physical_completion() {
+        loom::model(|| {
+            let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
+            let lease = OriginAdmission::lease_for_test(&origin);
+            let (connection, physical) = ConnectionState::bounded(test_info(1), lease);
+            let dispatch = ConnectionState::try_commit_dispatch(&connection)
+                .expect("open HTTP/1 connection rejected dispatch");
+            assert!(connection.logical_close(CloseReason::ProtocolClosed));
+
+            let classify_connection = connection.clone();
+            let classify = loom::thread::spawn(move || {
+                classify_connection.complete_h1_exchange(CloseReason::Upgraded)
+            });
+            let complete_physical = loom::thread::spawn(move || physical.release());
+
+            let classified_as_upgrade = classify.join().unwrap();
+            complete_physical.join().unwrap();
+            dispatch.release();
+
+            let probe = connection.probe();
+            assert_eq!(
+                Some(if classified_as_upgrade {
+                    CloseReason::Upgraded
+                } else {
+                    CloseReason::ProtocolClosed
+                }),
+                probe.close_reason
+            );
+            assert!(!probe.awaiting_h1_exchange);
+            assert_eq!(0, probe.in_flight);
+            assert!(probe.physical_connection_complete);
+            assert_eq!(1, origin.available_capacity_for_test());
+
+            let stats = connection.stats.snapshot(0, 0, 0, 0, 0);
+            assert_eq!(0, stats.h1().draining());
+            assert_eq!(0, stats.h1().upgraded());
+            assert_eq!(0, stats.physically_live_connections());
+        });
+    }
+
+    /// Races `Opened`, accepted HTTP/1 completion, and both close transitions.
     ///
     /// Each installed event must be delivered once in
     /// `Opened -> LogicalClose -> PhysicalClose` order.
     #[test]
     fn installed_events_remain_ordered_across_concurrent_close() {
-        loom::model(|| {
+        let mut model = loom::model::Builder::new();
+        model.preemption_bound.get_or_insert(3);
+        model.check(|| {
             let event_sequence = Arc::new(AtomicUsize::new(0));
             let observed = event_sequence.clone();
             let events = ConnectionEvents::new(
@@ -1602,6 +1703,8 @@ mod loom_tests {
             let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
             let lease = OriginAdmission::lease_for_test(&origin);
             let (connection, physical) = ConnectionState::bounded(test_info(1), lease);
+            let dispatch = ConnectionState::try_commit_dispatch(&connection)
+                .expect("open HTTP/1 connection rejected dispatch");
             let establishment = events.establishment_started(
                 connection.info().origin(),
                 connection.owner_partition(),
@@ -1612,13 +1715,15 @@ mod loom_tests {
             let opened = loom::thread::spawn(move || establishment.opened(&opened_connection));
             let close_connection = connection.clone();
             let close = loom::thread::spawn(move || {
-                close_connection.logical_close(CloseReason::PoolDropped)
+                close_connection.logical_close(CloseReason::ProtocolClosed)
             });
             let complete_physical = loom::thread::spawn(move || physical.release());
+            let complete_dispatch = loom::thread::spawn(move || dispatch.release());
 
             opened.join().unwrap();
             assert!(close.join().unwrap());
             complete_physical.join().unwrap();
+            complete_dispatch.join().unwrap();
 
             assert_eq!(
                 27,
@@ -1627,7 +1732,9 @@ mod loom_tests {
             );
             assert_eq!(1, origin.available_capacity_for_test());
             let probe = connection.probe();
-            assert_eq!(Some(CloseReason::PoolDropped), probe.close_reason);
+            assert_eq!(Some(CloseReason::ProtocolClosed), probe.close_reason);
+            assert!(!probe.awaiting_h1_exchange);
+            assert_eq!(0, probe.in_flight);
             assert!(probe.physical_connection_complete);
         });
     }

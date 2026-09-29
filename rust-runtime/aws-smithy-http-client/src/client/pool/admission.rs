@@ -34,7 +34,7 @@
 //! held with the admission lock, and connection-owning and requesting cell
 //! locks are never held together.
 
-use super::cell::{H1ReservationDecision, OriginCell};
+use super::cell::{H1IdleProbeDecision, H1ReservationDecision, OriginCell};
 use super::origin::OriginKey;
 use super::partition::{EligibilityGroup, PartitionId};
 use super::registry::AdmissionPolicy;
@@ -58,14 +58,14 @@ pub(in crate::client::pool) use self::demand::{
     DemandId, DemandSnapshot, ProtocolRequirement, SnapshotVersion,
 };
 use self::h1::{
-    H1CancellationAction, H1CapacityReclaim, H1ReservationAction, H1SupplierSettlement, H1Supply,
-    H1SupplyOutcome,
+    H1CancellationAction, H1CapacityReclaim, H1IdleProbeAction, H1ReservationAction,
+    H1SupplierSettlement, H1Supply, H1SupplyOutcome, PreparedH1Match,
 };
 use self::h2::{H2CapacityReclaim, H2RouteGuard, H2Supply, PreparedH2Reclaim, PreparedH2Route};
 use self::order::{IntrusiveLinks, IntrusiveOrder};
 pub(in crate::client::pool) use delivery::DeliveryGuard;
 pub(in crate::client::pool) use h1::{
-    H1Candidate, H1MatchId, H1SupplyStatus, PreparedH1Reservation,
+    H1Candidate, H1MatchId, H1SupplyStatus, PreparedH1IdleProbe, PreparedH1Reservation,
 };
 pub(in crate::client::pool) use h2::H2SupplyStatus;
 
@@ -224,10 +224,15 @@ impl OriginAdmission {
                 route,
             )));
         }
-        if let Some(reservation) = state.h1_supply.prepare_match(&state.demand) {
-            return Some(AdmissionAction::ReserveH1Supplier(
-                H1ReservationAction::new(origin.clone(), reservation),
-            ));
+        if let Some(prepared) = state.h1_supply.prepare_match(&state.demand) {
+            return Some(match prepared {
+                PreparedH1Match::ProbeIdle(probe) => {
+                    AdmissionAction::ProbeH1Supplier(H1IdleProbeAction::new(origin.clone(), probe))
+                }
+                PreparedH1Match::Reserve(reservation) => AdmissionAction::ReserveH1Supplier(
+                    H1ReservationAction::new(origin.clone(), reservation),
+                ),
+            });
         }
         if !origin.can_reclaim_h2_for_h1 {
             return None;
@@ -257,6 +262,7 @@ impl OriginAdmission {
         while let Some(current) = action {
             action = match current {
                 AdmissionAction::Deliver(delivery) => delivery.deliver(),
+                AdmissionAction::ProbeH1Supplier(probe) => probe.probe_supplier(),
                 AdmissionAction::ReserveH1Supplier(reservation) => reservation.reserve_supplier(),
                 AdmissionAction::CancelH1Reservation(cancellation) => {
                     cancellation.cancel_reservation()
@@ -317,6 +323,16 @@ impl OriginAdmission {
         revision: SupplyRevision<H1SupplyStatus>,
     ) {
         h1::reject_returned_match(admission, match_id, supplier, revision);
+    }
+
+    /// Settles one supplier-cell idle probe against its retained H1 match.
+    pub(in crate::client::pool) fn settle_h1_idle_probe(
+        admission: &Arc<Self>,
+        match_id: H1MatchId,
+        supplier: PartitionId,
+        decision: H1IdleProbeDecision<H1Candidate>,
+    ) -> Option<AdmissionAction> {
+        h1::settle_idle_probe(admission, match_id, supplier, decision)
     }
 
     /// Settles installation of one supplier-cell reservation.
@@ -464,6 +480,8 @@ impl OriginAdmission {
 pub(super) enum AdmissionAction {
     /// One capacity or borrowed-H1 payload handed to a requesting cell.
     Deliver(DeliveryGuard),
+    /// Probe one selected HTTP/1 supplier for an immediately idle sender.
+    ProbeH1Supplier(H1IdleProbeAction),
     /// Reserve the selected supplier at its owning HTTP/1 cell.
     ReserveH1Supplier(H1ReservationAction),
     /// Cancel a retained HTTP/1 supplier reservation.
@@ -482,6 +500,7 @@ impl AdmissionAction {
     pub(super) fn run_once_for_test(self) -> Option<Self> {
         match self {
             Self::Deliver(delivery) => delivery.deliver(),
+            Self::ProbeH1Supplier(probe) => probe.probe_supplier(),
             Self::ReserveH1Supplier(reservation) => reservation.reserve_supplier(),
             Self::CancelH1Reservation(cancellation) => cancellation.cancel_reservation(),
             Self::SettleH1Supplier(settlement) => settlement.settle_supplier(),
@@ -977,6 +996,10 @@ mod loom_tests {
         )
     }
 
+    /// Races return of the only capacity permit with publication of one demand.
+    ///
+    /// The permit remains conserved and demand is either absent or represented
+    /// by one schedulable record, never by an outstanding assignment.
     #[test]
     fn release_and_demand_submission_conserve_one_permit() {
         loom::model(|| {
@@ -994,52 +1017,59 @@ mod loom_tests {
             release.join().unwrap();
             publish.join().unwrap();
 
-            assert_eq!(1, origin.probe().available);
-            assert!(origin.probe().ordered <= 1);
+            let probe = origin.probe();
+            assert_eq!(1, probe.limit);
+            assert_eq!(1, probe.available);
+            assert_eq!(0, probe.assigned);
+            assert!(
+                matches!((probe.ordered, probe.queued), (0, 0) | (1, 1)),
+                "demand publication left duplicate or unschedulable demand: {probe:?}"
+            );
         });
     }
 
+    /// Replaces cancelled demand while its previous assignment is still detached.
+    ///
+    /// Assignment settlement and replacement publication may enter in either
+    /// order, but capacity and the requester's active assignment remain singular.
     #[test]
     fn cancellation_preserves_an_outstanding_demand_assignment() {
         loom::model(|| {
-            use loom::sync::atomic::{AtomicBool, Ordering};
-
             let origin = OriginAdmission::for_test(NonZeroUsize::new(2).unwrap());
             let requesting_partition = id();
             let delivery =
                 OriginAdmission::submit_without_running(&origin, requesting_partition, demand())
                     .unwrap();
-            let release = Arc::new(AtomicBool::new(false));
-
-            let delivery_release = release.clone();
-            let dropped = loom::thread::spawn(move || {
-                while !delivery_release.load(Ordering::Acquire) {
-                    loom::thread::yield_now();
-                }
-                drop(delivery);
+            let dropping = loom::thread::spawn(move || drop(delivery));
+            let replacement_origin = origin.clone();
+            let replacing = loom::thread::spawn(move || {
+                replacement_origin.state.lock().apply_demand_snapshot(
+                    requesting_partition,
+                    DemandSnapshot::inactive(
+                        DemandId::from_u64(1),
+                        SnapshotVersion::INITIAL.next(),
+                    ),
+                );
+                OriginAdmission::submit_without_running(
+                    &replacement_origin,
+                    requesting_partition,
+                    DemandSnapshot::active(
+                        DemandId::from_u64(2),
+                        SnapshotVersion::INITIAL,
+                        ProtocolRequirement::H1Compatible,
+                        EligibilityGroup::Pool,
+                    ),
+                )
             });
 
-            origin.state.lock().apply_demand_snapshot(
-                requesting_partition,
-                DemandSnapshot::inactive(DemandId::from_u64(1), SnapshotVersion::INITIAL.next()),
-            );
-            let duplicate = OriginAdmission::submit_without_running(
-                &origin,
-                requesting_partition,
-                DemandSnapshot::active(
-                    DemandId::from_u64(2),
-                    SnapshotVersion::INITIAL,
-                    ProtocolRequirement::H1Compatible,
-                    EligibilityGroup::Pool,
-                ),
-            );
-
-            release.store(true, Ordering::Release);
-            dropped.join().unwrap();
-            assert!(
-                duplicate.is_none(),
-                "outstanding demand assignment admitted a second delivery"
-            );
+            dropping.join().unwrap();
+            if let Some(replacement) = replacing.join().unwrap() {
+                assert!(
+                    replacement.is_current(),
+                    "replacement delivery did not own the current demand assignment"
+                );
+                drop(replacement);
+            }
 
             let probe = origin.probe();
             assert_eq!(2, probe.available);

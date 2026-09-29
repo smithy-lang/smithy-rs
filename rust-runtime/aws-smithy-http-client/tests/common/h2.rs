@@ -198,6 +198,11 @@ impl H2Response {
 #[derive(Clone, Debug)]
 pub(crate) enum H2StreamScript {
     Respond(H2Response),
+    /// Waits at the response-head boundary before sending the response.
+    RespondAfter {
+        response: H2Response,
+        send: GateWaiter,
+    },
     /// Sends the response before a gate permits the request body to be drained.
     RespondBeforeReceivingRequestBody {
         response: H2Response,
@@ -209,6 +214,11 @@ pub(crate) enum H2StreamScript {
 impl H2StreamScript {
     pub(crate) fn respond(response: H2Response) -> Self {
         Self::Respond(response)
+    }
+
+    /// Delays the response head until the gate is released.
+    pub(crate) fn respond_after(response: H2Response, send: GateWaiter) -> Self {
+        Self::RespondAfter { response, send }
     }
 
     /// Delays request-body reads until after the response and gate release.
@@ -230,6 +240,17 @@ pub(crate) struct H2ConnectionScript {
     fallback: Option<H2StreamScript>,
     allow_handshake_abandonment: bool,
     goaway_on_ready: bool,
+    client_close_behavior: ClientCloseBehavior,
+}
+
+/// How a scripted connection handles active stream tasks after client close.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum ClientCloseBehavior {
+    /// Wait for stream scripts and report their failures.
+    #[default]
+    Drain,
+    /// Abort scripts that a test deliberately leaves blocked.
+    AbortStreams,
 }
 
 impl H2ConnectionScript {
@@ -258,6 +279,15 @@ impl H2ConnectionScript {
 
     pub(crate) fn goaway_on_ready(mut self) -> Self {
         self.goaway_on_ready = true;
+        self
+    }
+
+    /// Aborts active stream scripts when the client closes the connection.
+    ///
+    /// Use this only when the test intentionally strands a stream while
+    /// terminating the runtime that owns its transport.
+    pub(crate) fn abort_streams_on_client_close(mut self) -> Self {
+        self.client_close_behavior = ClientCloseBehavior::AbortStreams;
         self
     }
 
@@ -395,6 +425,7 @@ impl SharedState {
 #[derive(Debug)]
 enum ConnectionCommand {
     GracefulShutdown(oneshot::Sender<()>),
+    AbortTransport(oneshot::Sender<()>),
 }
 
 #[derive(Debug, Default)]
@@ -530,6 +561,34 @@ impl H2TestServer {
             .map_err(|_| {
                 H2HarnessError::new(format!(
                     "H2 connection {connection_id:?} closed before graceful shutdown started"
+                ))
+            })
+    }
+
+    /// Drops one active transport without sending GOAWAY.
+    pub(crate) async fn abort_transport(
+        &self,
+        connection_id: H2ConnectionId,
+    ) -> Result<(), H2HarnessError> {
+        let control = self.state.control(connection_id).ok_or_else(|| {
+            H2HarnessError::new(format!("H2 connection {connection_id:?} is not active"))
+        })?;
+        let (acknowledged, ack) = oneshot::channel();
+        control
+            .send(ConnectionCommand::AbortTransport(acknowledged))
+            .map_err(|_| {
+                H2HarnessError::new(format!("failed to abort H2 transport {connection_id:?}"))
+            })?;
+        tokio::time::timeout(WAIT, ack)
+            .await
+            .map_err(|_| {
+                H2HarnessError::new(format!(
+                    "timed out waiting to abort H2 transport {connection_id:?}"
+                ))
+            })?
+            .map_err(|_| {
+                H2HarnessError::new(format!(
+                    "H2 connection {connection_id:?} closed before its transport was aborted"
                 ))
             })
     }
@@ -738,6 +797,7 @@ async fn drive_connection(
 
     let mut stream_tasks = JoinSet::new();
     let mut shutting_down = false;
+    let mut transport_aborted = false;
     let mut graceful_shutdown = script.goaway_on_ready;
     let mut control_open = true;
     // Tracks whether the connection ended because the client closed it (accept returned None)
@@ -758,6 +818,11 @@ async fn drive_connection(
                         graceful_shutdown = true;
                         connection.graceful_shutdown();
                         let _ = acknowledged.send(());
+                    }
+                    Some(ConnectionCommand::AbortTransport(acknowledged)) => {
+                        transport_aborted = true;
+                        let _ = acknowledged.send(());
+                        break;
                     }
                     None => control_open = false,
                 }
@@ -835,10 +900,18 @@ async fn drive_connection(
         }
     }
 
-    if shutting_down {
+    let abort_streams = shutting_down
+        || transport_aborted
+        || (client_initiated_close
+            && script.client_close_behavior == ClientCloseBehavior::AbortStreams);
+    if abort_streams {
         stream_tasks.abort_all();
         while stream_tasks.join_next().await.is_some() {}
-        Ok(ConnectionCloseReason::HarnessShutdown)
+        Ok(aborted_connection_close_reason(
+            transport_aborted,
+            shutting_down,
+            client_initiated_close,
+        ))
     } else {
         let drain = async {
             while let Some(completed) = stream_tasks.join_next().await {
@@ -858,6 +931,29 @@ async fn drive_connection(
             Ok(ConnectionCloseReason::ScriptCompleted)
         }
     }
+}
+
+fn aborted_connection_close_reason(
+    transport_aborted: bool,
+    shutting_down: bool,
+    client_initiated_close: bool,
+) -> ConnectionCloseReason {
+    debug_assert!(transport_aborted || shutting_down || client_initiated_close);
+    if transport_aborted {
+        ConnectionCloseReason::ScriptedTransportAbort
+    } else if shutting_down {
+        ConnectionCloseReason::HarnessShutdown
+    } else {
+        ConnectionCloseReason::ClientClosed
+    }
+}
+
+#[test]
+fn harness_shutdown_precedes_client_close() {
+    assert_eq!(
+        ConnectionCloseReason::HarnessShutdown,
+        aborted_connection_close_reason(false, true, true,)
+    );
 }
 
 fn record_stream_task_result(
@@ -881,6 +977,11 @@ async fn run_stream(
     state: Arc<SharedState>,
     held_request: Option<(RecvStream, GateWaiter)>,
 ) -> Result<(), H2HarnessError> {
+    if let H2StreamScript::RespondAfter { send, .. } = &script {
+        send.wait()
+            .await
+            .map_err(|err| H2HarnessError::new(format!("H2 response-head gate failed: {err}")))?;
+    }
     match script {
         H2StreamScript::Reset(reason) => {
             respond.send_reset(reason);
@@ -891,6 +992,7 @@ async fn run_stream(
             });
         }
         H2StreamScript::Respond(response)
+        | H2StreamScript::RespondAfter { response, send: _ }
         | H2StreamScript::RespondBeforeReceivingRequestBody {
             response,
             receive: _,

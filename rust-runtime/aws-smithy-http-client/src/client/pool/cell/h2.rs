@@ -2922,6 +2922,7 @@ mod tests {
 #[cfg(all(test, smithy_http_client_loom))]
 mod loom_tests {
     use super::*;
+    use crate::client::pool::admission::ProtocolRequirement;
     use crate::client::pool::connection::{CloseReason, ConnectionInfo};
     use crate::client::pool::origin::OriginKey;
     use crate::client::pool::partition::EligibilityGroup;
@@ -2947,6 +2948,23 @@ mod loom_tests {
         (generation, connection)
     }
 
+    fn launching_waiter(cell: &Arc<OriginCell>) -> WaiterId {
+        let waiter = OriginCell::register_waiter(cell, ProtocolRequirement::H2Required);
+        let AcquisitionStep::StartEstablishment(permit) = cell
+            .take_ready_event(waiter)
+            .expect("new HTTP/2 waiter did not receive establishment authority")
+        else {
+            panic!("new HTTP/2 waiter completed before establishment");
+        };
+        assert!(cell.start_establishment(waiter));
+        drop(permit);
+        waiter
+    }
+
+    /// Races activation of one exact generation with close of that generation.
+    ///
+    /// Close either rejects activation or retains the draining generation until
+    /// the prospective request releases its claim.
     #[test]
     fn activation_linearizes_against_generation_close() {
         loom::model(|| {
@@ -2965,13 +2983,24 @@ mod loom_tests {
                 OriginCell::close_h2(&closing_cell, generation, CloseReason::Poisoned)
             });
 
-            drop(activation.join().unwrap());
+            let activation = activation.join().unwrap();
             assert!(close.join().unwrap());
             assert_eq!(Some(CloseReason::Poisoned), connection.probe().close_reason);
+            if let Some(activation) = activation {
+                assert_eq!(
+                    Some((1, 0)),
+                    cell.h2_request_counts(generation),
+                    "close did not retain the prospective activation"
+                );
+                drop(activation);
+            }
             assert!(!cell.state.lock().h2.generations.contains_key(&generation));
         });
     }
 
+    /// Completes the upload and response sides of one accepted request concurrently.
+    ///
+    /// The two guards share one request claim and must release its dispatch once.
     #[test]
     fn concurrent_request_side_completion_releases_one_dispatch() {
         loom::model(|| {
@@ -3004,47 +3033,71 @@ mod loom_tests {
         });
     }
 
+    /// Converges two post-ALPN attempts, then races flight completion with cancellation.
+    ///
+    /// Exactly one attempt owns the flight task. The live participant receives
+    /// the installed generation while the cancelled participant is removed from
+    /// either the flight or the generation gate.
     #[test]
-    fn generation_close_waits_for_both_request_sides() {
+    fn concurrent_h2_flight_convergence_installs_one_generation() {
         loom::model(|| {
             let cell = cell();
-            let (connection, _physical) = ConnectionState::unbounded(ConnectionInfo::for_test(
+            let first = launching_waiter(&cell);
+            let second = launching_waiter(&cell);
+
+            let first_cell = cell.clone();
+            let first_convergence =
+                loom::thread::spawn(move || first_cell.converge_h2_flight(first));
+            let second_cell = cell.clone();
+            let second_convergence =
+                loom::thread::spawn(move || second_cell.converge_h2_flight(second));
+            let first_decision = first_convergence.join().unwrap();
+            let second_decision = second_convergence.join().unwrap();
+            let flight = match (first_decision, second_decision) {
+                (H2FlightDecision::RunFlight(flight), H2FlightDecision::JoinedFlight)
+                | (H2FlightDecision::JoinedFlight, H2FlightDecision::RunFlight(flight)) => flight,
+                decisions => panic!("convergence did not select one flight owner: {decisions:?}"),
+            };
+
+            let (connection, physical) = ConnectionState::unbounded(ConnectionInfo::for_test(
                 ConnectionId::new(1),
                 PartitionId::from_index(1),
             ));
-            let generation = OriginCell::install_h2_for_test(&cell, connection.clone(), 1, None);
-            let mut activation = OriginCell::activate_h2(&cell, generation, cell.id().partition())
-                .expect("generation did not activate");
-            let H2DispatchParts {
-                sender: _sender,
-                upload,
-                response,
-            } = activation.take_dispatch_parts();
-            let dispatch = ConnectionState::try_commit_dispatch(&connection)
-                .expect("open connection rejected dispatch");
-            activation.accept(dispatch);
-
-            let first_side = loom::thread::spawn(move || drop(upload));
-            let closing_cell = cell.clone();
-            let close = loom::thread::spawn(move || {
-                OriginCell::close_h2(&closing_cell, generation, CloseReason::ProtocolClosed)
+            let completing_cell = cell.clone();
+            let completing_connection = connection.clone();
+            let completing = loom::thread::spawn(move || {
+                OriginCell::complete_h2_flight(
+                    &completing_cell,
+                    flight,
+                    completing_connection,
+                    H2Sender::test(1),
+                    None,
+                )
             });
-            first_side.join().unwrap();
-            assert!(close.join().unwrap());
+            let cancelling_cell = cell.clone();
+            let cancelling =
+                loom::thread::spawn(move || OriginCell::cancel_waiter(&cancelling_cell, second));
 
-            assert_eq!(1, connection.probe().in_flight);
-            assert_eq!(
-                Some((0, 1)),
-                cell.h2_request_counts(generation),
-                "draining generation released before its second request side"
-            );
-            drop(response);
-            assert_eq!(0, connection.probe().in_flight);
-            assert_eq!(
-                None,
-                cell.h2_request_counts(generation),
-                "finished draining generation remained installed"
-            );
+            let generation = completing
+                .join()
+                .unwrap()
+                .expect("the sole HTTP/2 flight did not install");
+            assert!(cancelling.join().unwrap());
+            let AcquisitionStep::Resolved(AcquisitionOutcome::H2(activation)) = cell
+                .take_ready_event(first)
+                .expect("live flight participant did not receive the generation")
+            else {
+                panic!("live flight participant received a non-HTTP/2 result");
+            };
+            drop(activation);
+
+            assert_eq!(0, cell.retained_waiters_for_test());
+            assert!(OriginCell::close_h2(
+                &cell,
+                generation,
+                CloseReason::PoolDropped,
+            ));
+            drop(physical);
         });
     }
 }

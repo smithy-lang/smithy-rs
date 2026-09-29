@@ -52,7 +52,7 @@
 //! fallback close the connection directly.
 
 use super::super::admission::{
-    AdmissionAction, H1Candidate, H1MatchId, H1SupplyStatus, OriginAdmission,
+    AdmissionAction, H1Candidate, H1MatchId, H1SupplyStatus, OriginAdmission, PreparedH1IdleProbe,
     PreparedH1Reservation, SupplyRevision,
 };
 use super::super::connection::{CloseReason, ConnectionState};
@@ -78,7 +78,7 @@ pub(in crate::client::pool) enum H1Sender {
     Hyper(hyper::client::conn::http1::SendRequest<SdkBody>),
     /// Synthetic sender identity used only by ownership tests.
     #[cfg(test)]
-    Test(u64),
+    Test { id: u64, ready: bool },
 }
 
 impl H1Sender {
@@ -100,7 +100,7 @@ impl H1Sender {
         match self {
             Self::Hyper(sender) => sender,
             #[cfg(test)]
-            Self::Test(_) => panic!("test HTTP/1 sender reached Hyper dispatch"),
+            Self::Test { .. } => panic!("test HTTP/1 sender reached Hyper dispatch"),
         }
     }
 
@@ -109,21 +109,38 @@ impl H1Sender {
         match self {
             Self::Hyper(sender) => sender.is_ready(),
             #[cfg(test)]
-            Self::Test(_) => panic!("test HTTP/1 sender reached Hyper readiness"),
+            Self::Test { ready, .. } => *ready,
+        }
+    }
+
+    /// Polls Hyper for proof that another request may be sent.
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), hyper::Error>> {
+        match self {
+            Self::Hyper(sender) => sender.poll_ready(cx),
+            #[cfg(test)]
+            Self::Test { ready: true, .. } => Poll::Ready(Ok(())),
+            #[cfg(test)]
+            Self::Test { ready: false, .. } => Poll::Pending,
         }
     }
 
     /// Creates a synthetic sender for state-machine tests.
     #[cfg(test)]
     pub(in crate::client::pool) fn test(id: u64) -> Self {
-        Self::Test(id)
+        Self::Test { id, ready: true }
+    }
+
+    /// Creates a synthetic sender whose readiness remains pending.
+    #[cfg(test)]
+    pub(in crate::client::pool) fn pending_test(id: u64) -> Self {
+        Self::Test { id, ready: false }
     }
 
     /// Returns the synthetic sender identity.
     #[cfg(test)]
     pub(super) fn test_id(&self) -> u64 {
         match self {
-            Self::Test(id) => *id,
+            Self::Test { id, .. } => *id,
             Self::Hyper(_) => panic!("Hyper sender used in a synthetic ownership test"),
         }
     }
@@ -134,7 +151,11 @@ impl fmt::Debug for H1Sender {
         match self {
             Self::Hyper(_) => f.write_str("H1Sender::Hyper"),
             #[cfg(test)]
-            Self::Test(id) => f.debug_tuple("H1Sender::Test").field(id).finish(),
+            Self::Test { id, ready } => f
+                .debug_struct("H1Sender::Test")
+                .field("id", id)
+                .field("ready", ready)
+                .finish(),
         }
     }
 }
@@ -637,6 +658,20 @@ impl H1CellState {
         (self.records.len(), self.idle_order.len())
     }
 
+    /// Returns the synthetic identities of every idle sender.
+    #[cfg(all(test, smithy_http_client_loom))]
+    pub(super) fn idle_sender_ids(&self) -> Vec<u64> {
+        self.records
+            .values()
+            .filter_map(|record| match &record.sender_state {
+                H1SenderResidence::Idle { sender, .. } => Some(sender.test_id()),
+                H1SenderResidence::Selected
+                | H1SenderResidence::ReservedForPeer
+                | H1SenderResidence::Closing => None,
+            })
+            .collect()
+    }
+
     /// Returns the sole installed connection for focused dispatch tests.
     #[cfg(all(test, feature = "rt-tokio"))]
     pub(super) fn only_connection_for_test(&self) -> Arc<ConnectionState> {
@@ -954,6 +989,14 @@ pub(in crate::client::pool) struct H1Exchange {
 }
 
 impl H1Exchange {
+    /// Returns the installed connection that owns this exchange.
+    pub(in crate::client::pool) fn connection(&self) -> &Arc<ConnectionState> {
+        self.owner
+            .as_ref()
+            .expect("HTTP/1 exchange consumed more than once")
+            .connection()
+    }
+
     /// Returns whether Hyper already permits another request.
     pub(in crate::client::pool) fn is_ready(&self) -> bool {
         self.owner
@@ -972,7 +1015,6 @@ impl H1Exchange {
             .as_mut()
             .expect("HTTP/1 exchange consumed more than once")
             .sender_mut()
-            .hyper_mut()
             .poll_ready(cx)
     }
 
@@ -1275,6 +1317,40 @@ impl OriginCell {
         )
     }
 
+    /// Attempts to extract an idle sender without intercepting a future return.
+    pub(in crate::client::pool) fn try_take_idle_h1(
+        cell: &Arc<Self>,
+        admission: Arc<OriginAdmission>,
+        prepared: PreparedH1IdleProbe,
+    ) -> Option<AdmissionAction> {
+        let decision = {
+            let mut state = cell.state.lock();
+            state.try_take_idle_h1(prepared.match_id)
+        };
+        let decision = decision.map_candidate(|owner| {
+            let provisional = ProvisionalH1::new(cell, owner);
+            H1Candidate::new(
+                admission.clone(),
+                prepared.match_id,
+                cell.id.partition(),
+                provisional,
+            )
+        });
+        OriginAdmission::settle_h1_idle_probe(
+            &admission,
+            prepared.match_id,
+            cell.id.partition(),
+            decision,
+        )
+    }
+
+    /// Returns the current admission-facing HTTP/1 supply revision.
+    pub(in crate::client::pool) fn current_h1_supply_revision(
+        &self,
+    ) -> SupplyRevision<H1SupplyStatus> {
+        self.state.lock().current_h1_supply_revision()
+    }
+
     /// Clears an installed or resolving reservation after request cancellation.
     pub(in crate::client::pool) fn cancel_h1_reservation(
         &self,
@@ -1565,6 +1641,12 @@ impl OriginCell {
     #[cfg(test)]
     pub(super) fn h1_counts(&self) -> (usize, usize) {
         self.state.lock().h1.counts()
+    }
+
+    /// Returns the synthetic identities of every idle HTTP/1 sender.
+    #[cfg(all(test, smithy_http_client_loom))]
+    pub(super) fn h1_idle_sender_ids(&self) -> Vec<u64> {
+        self.state.lock().h1.idle_sender_ids()
     }
 
     /// Returns the sole installed HTTP/1 connection for focused dispatch tests.

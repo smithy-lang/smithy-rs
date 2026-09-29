@@ -8,12 +8,14 @@
 use super::partition::PartitionId;
 use super::registry::PartitionState;
 use super::ConnectionPool;
-use crate::client::downcast_error;
 use crate::client::timeout::{self, TimeoutKind};
+use crate::client::{downcast_error, ConnectorCallTimer};
 use crate::sync::Arc;
 use aws_smithy_async::rt::sleep::{default_async_sleep, SharedAsyncSleep};
+use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::connector_metadata::ConnectorMetadata;
+use aws_smithy_runtime_api::client::http::telemetry::CaptureHttpAttemptTelemetry;
 use aws_smithy_runtime_api::client::http::{
     HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpConnector,
 };
@@ -106,6 +108,7 @@ impl HttpClient for Client {
         let connect_timeout = settings.connect_timeout();
         let read_timeout = settings.read_timeout();
         let sleep = components.sleep_impl().or_else(default_async_sleep);
+        let time_source = components.time_source().unwrap_or_default();
 
         SharedHttpConnector::new(PoolConnector {
             pool: self.pool.clone(),
@@ -113,6 +116,7 @@ impl HttpClient for Client {
             connect_timeout,
             read_timeout,
             sleep,
+            time_source,
         })
     }
 
@@ -187,6 +191,8 @@ struct PoolConnector {
     read_timeout: Option<Duration>,
     /// Runtime timer used by operation timeouts.
     sleep: Option<SharedAsyncSleep>,
+    /// Operation runtime clock used for request-attempt telemetry.
+    time_source: SharedTimeSource,
 }
 
 impl fmt::Debug for PoolConnector {
@@ -199,37 +205,64 @@ impl fmt::Debug for PoolConnector {
     }
 }
 
+/// Converts and dispatches one request through the partitioned pool.
+async fn send_pool_request(
+    pool: &ConnectionPool,
+    partition: Arc<PartitionState>,
+    request: HttpRequest,
+    connect_timeout: Option<Duration>,
+    read_timeout: Option<Duration>,
+    sleep: Option<SharedAsyncSleep>,
+    attempt_telemetry: Option<super::dispatch::AttemptTelemetryInput>,
+) -> Result<HttpResponse, ConnectorError> {
+    if (connect_timeout.is_some() || read_timeout.is_some()) && sleep.is_none() {
+        return Err(ConnectorError::user(MissingAsyncSleep.into()));
+    }
+
+    let request = request
+        .try_into_http1x()
+        .map_err(|error| ConnectorError::user(error.into()))?;
+    let options = super::dispatch::RequestOptions::new(
+        connect_timeout
+            .zip(sleep.clone())
+            .map(|(duration, sleep)| super::establish::TransportTimeout::new(duration, sleep)),
+        attempt_telemetry,
+    );
+    let send = pool.send_request(partition, request, options);
+    let response =
+        timeout::maybe_timeout_future(send, read_timeout, sleep.as_ref(), TimeoutKind::Read)
+            .await
+            .map_err(downcast_error)?;
+    HttpResponse::try_from(response).map_err(|error| ConnectorError::other(error.into(), None))
+}
+
 impl HttpConnector for PoolConnector {
     fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
+        let attempt_capture = request.extension::<CaptureHttpAttemptTelemetry>().cloned();
+        let connector_call_timer = ConnectorCallTimer::start(&request, &self.time_source);
+        let attempt_telemetry = attempt_capture.as_ref().map(|capture| {
+            super::dispatch::AttemptTelemetryInput::new(capture.clone(), self.time_source.clone())
+        });
         let pool = self.pool.clone();
         let partition = self.partition.clone();
         let connect_timeout = self.connect_timeout;
         let read_timeout = self.read_timeout;
         let sleep = self.sleep.clone();
         HttpConnectorFuture::new(async move {
-            if (connect_timeout.is_some() || read_timeout.is_some()) && sleep.is_none() {
-                return Err(ConnectorError::user(MissingAsyncSleep.into()));
-            }
-
-            let request = request.try_into_http1x().map_err(|error| {
-                aws_smithy_runtime_api::client::result::ConnectorError::user(error.into())
-            })?;
-            let options =
-                super::dispatch::RequestOptions::new(connect_timeout.zip(sleep.clone()).map(
-                    |(duration, sleep)| super::establish::TransportTimeout::new(duration, sleep),
-                ));
-            let send = pool.send_request(partition, request, options);
-            let response = timeout::maybe_timeout_future(
-                send,
+            let result = send_pool_request(
+                &pool,
+                partition,
+                request,
+                connect_timeout,
                 read_timeout,
-                sleep.as_ref(),
-                TimeoutKind::Read,
+                sleep,
+                attempt_telemetry,
             )
-            .await
-            .map_err(downcast_error)?;
-            HttpResponse::try_from(response).map_err(|error| {
-                aws_smithy_runtime_api::client::result::ConnectorError::other(error.into(), None)
-            })
+            .await;
+            if let Some(timer) = connector_call_timer {
+                timer.finish();
+            }
+            result
         })
     }
 }
@@ -268,6 +301,7 @@ mod tests {
                 connect_timeout,
                 read_timeout,
                 sleep: None,
+                time_source: SharedTimeSource::default(),
             };
 
             let error = connector

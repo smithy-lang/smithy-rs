@@ -175,7 +175,10 @@ pub struct ConnectionEstablishmentStats {
 }
 
 impl ConnectionEstablishmentStats {
-    /// Returns elapsed time from establishment start through its terminal event.
+    /// Returns elapsed time through successful protocol installation or terminal failure.
+    ///
+    /// Successful measurements are frozen before the connection is published
+    /// to waiting pool demand.
     pub fn total_duration(&self) -> Duration {
         self.total_duration
     }
@@ -193,6 +196,17 @@ impl ConnectionEstablishmentStats {
     /// Failures before protocol handshake return `None`.
     pub fn protocol_handshake_duration(&self) -> Option<Duration> {
         self.protocol_handshake_duration
+    }
+
+    fn connection_metadata(
+        &self,
+    ) -> aws_smithy_runtime_api::client::connection::ConnectionEstablishmentMetadata {
+        let mut builder =
+            aws_smithy_runtime_api::client::connection::ConnectionEstablishmentMetadata::builder()
+                .total_duration(self.total_duration)
+                .transport_duration(self.transport_duration);
+        builder.set_protocol_handshake_duration(self.protocol_handshake_duration);
+        builder.build()
     }
 }
 
@@ -268,7 +282,7 @@ impl<'a> ConnectionOpened<'a> {
         self.establishment
     }
 
-    /// Returns measurements from the successful establishment.
+    /// Returns measurements frozen after protocol installation and before pool publication.
     pub fn stats(&self) -> &'a ConnectionEstablishmentStats {
         self.stats
     }
@@ -362,9 +376,9 @@ impl<'a> ConnectionPhysicalClose<'a> {
 
 /// Pool-owned connection event source.
 ///
-/// This owner retains callback delivery, lifecycle timing, and establishment
-/// identity allocation. Starting an establishment performs no timing or
-/// identity work when no listener is configured.
+/// This owner retains callback delivery, establishment timing, and public
+/// establishment identity allocation. Timing is collected for successful
+/// connection metadata even when callback delivery is disabled.
 #[derive(Debug)]
 pub(super) struct ConnectionEvents {
     listener: Option<SharedConnectionEventListener>,
@@ -385,7 +399,7 @@ impl ConnectionEvents {
         }
     }
 
-    /// Records the start of an establishment when observation is enabled.
+    /// Records the start of one connection establishment.
     pub(super) fn establishment_started(
         &self,
         origin: &OriginKey,
@@ -393,6 +407,13 @@ impl ConnectionEvents {
         connection_stats: PoolArc<CellConnectionStats>,
     ) -> ConnectionEstablishment {
         connection_stats.establishment_started();
+        let timing = EstablishmentTiming {
+            time_source: self.time_source.clone(),
+            started_at: self.time_source.now(),
+            protocol_handshake_started_at: None,
+            transport_duration: None,
+            protocol_handshake_duration: None,
+        };
         let observation = self
             .listener
             .as_ref()
@@ -405,37 +426,40 @@ impl ConnectionEvents {
                     origin: origin.clone(),
                     partition,
                 },
-                time_source: self.time_source.clone(),
-                started_at: self.time_source.now(),
-                protocol_handshake_started_at: None,
-                transport_duration: None,
-                protocol_handshake_duration: None,
                 stage: ConnectionEstablishmentStage::Transport,
                 remote_addr: None,
                 protocol: None,
             });
         ConnectionEstablishment {
+            timing,
             observation,
+            successful_stats: None,
             connection_stats: Some(connection_stats),
         }
     }
 }
 
-/// Tracks observations collected during one connection establishment.
+/// Tracks measurements and optional callback state for one establishment.
 pub(super) struct ConnectionEstablishment {
+    timing: EstablishmentTiming,
     observation: Option<EstablishmentObservation>,
+    successful_stats: Option<ConnectionEstablishmentStats>,
     connection_stats: Option<PoolArc<CellConnectionStats>>,
 }
 
-/// Data collected while one observed establishment is active.
-struct EstablishmentObservation {
-    listener: SharedConnectionEventListener,
-    info: ConnectionEstablishmentInfo,
+/// Timing collected for every connection establishment.
+struct EstablishmentTiming {
     time_source: SharedTimeSource,
     started_at: SystemTime,
     protocol_handshake_started_at: Option<SystemTime>,
     transport_duration: Option<Duration>,
     protocol_handshake_duration: Option<Duration>,
+}
+
+/// Callback state retained only when a listener is configured.
+struct EstablishmentObservation {
+    listener: SharedConnectionEventListener,
+    info: ConnectionEstablishmentInfo,
     stage: ConnectionEstablishmentStage,
     remote_addr: Option<SocketAddr>,
     protocol: Option<ConnectionProtocol>,
@@ -444,9 +468,8 @@ struct EstablishmentObservation {
 impl ConnectionEstablishment {
     /// Records completion of the transport stage.
     pub(super) fn transport_completed(&mut self, remote_addr: Option<SocketAddr>) {
+        self.timing.transport_duration = Some(self.timing.elapsed_since(self.timing.started_at));
         if let Some(observation) = &mut self.observation {
-            observation.transport_duration =
-                Some(observation.elapsed_since(observation.started_at));
             observation.remote_addr = remote_addr;
             observation.stage = ConnectionEstablishmentStage::ProtocolSelection;
         }
@@ -461,41 +484,58 @@ impl ConnectionEstablishment {
 
     /// Records entry into Hyper's protocol handshake.
     pub(super) fn protocol_handshake_started(&mut self) {
+        self.timing.protocol_handshake_started_at = Some(self.timing.time_source.now());
         if let Some(observation) = &mut self.observation {
-            observation.protocol_handshake_started_at = Some(observation.time_source.now());
             observation.stage = ConnectionEstablishmentStage::ProtocolHandshake;
         }
     }
 
     /// Records a failed Hyper handshake before emitting its terminal event.
     pub(super) fn protocol_handshake_failed(&mut self) {
-        if let Some(observation) = &mut self.observation {
-            observation.finish_protocol_handshake();
-        }
+        self.timing.finish_protocol_handshake();
     }
 
     /// Records successful Hyper handshake before pool installation.
     pub(super) fn protocol_handshake_completed(&mut self) {
+        self.timing.finish_protocol_handshake();
         if let Some(observation) = &mut self.observation {
-            observation.finish_protocol_handshake();
             observation.stage = ConnectionEstablishmentStage::PoolInstallation;
         }
     }
 
+    /// Freezes successful measurements before the connection becomes visible.
+    pub(super) fn installed(&mut self, connection: &PoolArc<ConnectionState>) {
+        let stats = self.timing.stats();
+        connection
+            .info()
+            .set_establishment(stats.connection_metadata());
+        assert!(
+            self.successful_stats.replace(stats).is_none(),
+            "connection establishment was installed more than once"
+        );
+    }
+
     /// Emits the terminal failure for this establishment.
     pub(super) fn failed(mut self, error: &ConnectorError) {
+        let stats = self.timing.stats();
         self.finish_connection_stats();
         let Some(observation) = self.observation.take() else {
             return;
         };
-        observation.notify_failure(error);
+        observation.notify_failure(error, &stats);
     }
 
     /// Reports successful installation and enables ordered close observations.
     pub(super) fn opened(mut self, connection: &PoolArc<ConnectionState>) {
+        let stats = self.successful_stats.take().unwrap_or_else(|| {
+            let stats = self.timing.stats();
+            connection
+                .info()
+                .set_establishment(stats.connection_metadata());
+            stats
+        });
         self.finish_connection_stats();
         let listener = self.observation.take().map(|observation| {
-            let stats = observation.stats();
             observation
                 .listener
                 .notify(&ConnectionEvent::Opened(ConnectionOpened {
@@ -523,22 +563,22 @@ impl ConnectionEstablishment {
 
 impl Drop for ConnectionEstablishment {
     fn drop(&mut self) {
+        let stats = self.successful_stats.unwrap_or_else(|| self.timing.stats());
         self.finish_connection_stats();
         let Some(observation) = self.observation.take() else {
             return;
         };
         let error = ConnectorError::io("connection establishment task was dropped".into());
-        observation.notify_failure(&error);
+        observation.notify_failure(&error, &stats);
     }
 }
 
 impl EstablishmentObservation {
-    fn notify_failure(&self, error: &ConnectorError) {
-        let stats = self.stats();
+    fn notify_failure(&self, error: &ConnectorError, stats: &ConnectionEstablishmentStats) {
         self.listener.notify(&ConnectionEvent::EstablishmentFailed(
             ConnectionEstablishmentFailed {
                 establishment: &self.info,
-                stats: &stats,
+                stats,
                 stage: self.stage,
                 remote_addr: self.remote_addr,
                 protocol: self.protocol,
@@ -546,7 +586,9 @@ impl EstablishmentObservation {
             },
         ));
     }
+}
 
+impl EstablishmentTiming {
     fn stats(&self) -> ConnectionEstablishmentStats {
         let total_duration = self.elapsed_since(self.started_at);
         ConnectionEstablishmentStats {
@@ -567,18 +609,23 @@ impl EstablishmentObservation {
     }
 
     fn elapsed_since(&self, started_at: SystemTime) -> Duration {
-        self.time_source
-            .now()
-            .duration_since(started_at)
-            .unwrap_or_default()
+        match self.time_source.now().duration_since(started_at) {
+            Ok(duration) => duration,
+            Err(error) => {
+                tracing::warn!(?error, "connection establishment clock moved backwards");
+                Duration::ZERO
+            }
+        }
     }
 }
 
 #[cfg(all(test, not(smithy_http_client_loom)))]
 mod tests {
     use super::*;
+    use aws_smithy_async::{test_util::ManualTimeSource, time::StaticTimeSource};
     use std::sync::atomic::AtomicUsize;
     use std::sync::Mutex;
+    use std::time::UNIX_EPOCH;
 
     fn origin() -> OriginKey {
         OriginKey::from_parts(http_1x::uri::Scheme::HTTPS, "example.com", None).unwrap()
@@ -700,6 +747,66 @@ mod tests {
             )),
             *observed.lock().unwrap()
         );
+    }
+
+    #[test]
+    fn establishment_stats_measure_recorded_phases() {
+        let time = ManualTimeSource::new(UNIX_EPOCH);
+        let observed = Arc::new(Mutex::new(None));
+        let events = ConnectionEvents::new(
+            Some(SharedConnectionEventListener::new({
+                let observed = observed.clone();
+                move |event: &ConnectionEvent<'_>| {
+                    let ConnectionEvent::EstablishmentFailed(failed) = event else {
+                        panic!("unexpected event: {event:?}");
+                    };
+                    *observed.lock().unwrap() = Some(*failed.stats());
+                }
+            })),
+            SharedTimeSource::new(time.clone()),
+        );
+        let mut establishment = establishment(&events);
+
+        time.advance(Duration::from_secs(2));
+        establishment.transport_completed(None);
+        establishment.protocol_selected(ConnectionProtocol::Http2);
+        establishment.protocol_handshake_started();
+        time.advance(Duration::from_secs(3));
+        establishment.protocol_handshake_completed();
+        time.advance(Duration::from_secs(2));
+        establishment.failed(&ConnectorError::io("synthetic installation failure".into()));
+
+        let stats = observed.lock().unwrap().expect("establishment stats");
+        assert_eq!(stats.total_duration(), Duration::from_secs(7));
+        assert_eq!(stats.transport_duration(), Duration::from_secs(2));
+        assert_eq!(
+            stats.protocol_handshake_duration(),
+            Some(Duration::from_secs(3))
+        );
+        let metadata = stats.connection_metadata();
+        assert_eq!(metadata.total_duration(), Duration::from_secs(7));
+        assert_eq!(metadata.transport_duration(), Duration::from_secs(2));
+        assert_eq!(
+            metadata.protocol_handshake_duration(),
+            Some(Duration::from_secs(3))
+        );
+    }
+
+    #[test]
+    fn backwards_clock_saturates_establishment_durations() {
+        let timing = EstablishmentTiming {
+            time_source: StaticTimeSource::new(UNIX_EPOCH).into(),
+            started_at: UNIX_EPOCH + Duration::from_secs(1),
+            protocol_handshake_started_at: Some(UNIX_EPOCH + Duration::from_secs(1)),
+            transport_duration: None,
+            protocol_handshake_duration: None,
+        };
+
+        let stats = timing.stats();
+
+        assert_eq!(stats.total_duration(), Duration::ZERO);
+        assert_eq!(stats.transport_duration(), Duration::ZERO);
+        assert_eq!(stats.protocol_handshake_duration(), Some(Duration::ZERO));
     }
 
     #[test]

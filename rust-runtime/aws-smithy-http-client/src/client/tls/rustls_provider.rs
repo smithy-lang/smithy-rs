@@ -337,8 +337,7 @@ pub(crate) mod build_connector {
             .map(|protocol| protocol.to_vec())
             .collect();
         conn.enforce_http(false);
-        let https_connector =
-            hyper_rustls::HttpsConnector::from((conn, client_config.clone()));
+        let https_connector = hyper_rustls::HttpsConnector::from((conn, client_config.clone()));
 
         super::connect::RustTlsConnector::new(https_connector, client_config, proxy_config)
     }

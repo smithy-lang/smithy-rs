@@ -22,7 +22,7 @@ use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_types::body::SdkBody;
 use http_1x::{Method, Request, Response, Uri, Version};
 use hyper::body::Body;
-use std::future::poll_fn;
+use std::future::{poll_fn, Future};
 use std::pin::Pin;
 use std::sync::Arc as StdArc;
 use std::task::{Context, Poll};
@@ -49,16 +49,17 @@ pub(super) async fn dispatch(
     let reused = selection.is_reused();
     let connection = selection.connection().clone();
     let close_handle = selection.close_handle();
-    let captured_metadata = request
+    let connection_capture = request
         .extensions()
         .get::<CaptureSmithyConnection>()
-        .cloned()
-        .map(|capture| {
-            let metadata = connection.info().metadata(close_handle.clone());
-            let captured = metadata.clone();
-            capture.set_connection_retriever(move || Some(captured.clone()));
-            metadata
-        });
+        .cloned();
+    let captured_metadata = (connection_capture.is_some()
+        || context.captures_connection_selection())
+    .then(|| connection.info().metadata(close_handle.clone()));
+    if let (Some(capture), Some(metadata)) = (connection_capture, &captured_metadata) {
+        let captured = metadata.clone();
+        capture.set_connection_retriever(move || Some(captured.clone()));
+    }
 
     if request.version() == Version::HTTP_2 {
         let metadata =
@@ -92,10 +93,26 @@ pub(super) async fn dispatch(
         return Ok(H1DispatchOutcome::NotAccepted(request));
     };
     let send = selection.sender_mut().hyper_mut().try_send_request(request);
-
     let exchange = selection.into_exchange();
-    match send.await {
+    let mut send = std::pin::pin!(send);
+    // Freeze acquisition time when Hyper first retains the request. Publish it
+    // only after a later error can no longer return the request envelope.
+    let first = poll_fn(|cx| Poll::Ready(send.as_mut().poll(cx))).await;
+    let (result, connection_selection) = match first {
+        Poll::Ready(result) => (
+            result,
+            context.freeze_connection_selection(reused, captured_metadata.as_ref()),
+        ),
+        Poll::Pending => {
+            let selection = context.freeze_connection_selection(reused, captured_metadata.as_ref());
+            (send.await, selection)
+        }
+    };
+    match result {
         Ok(mut response) => {
+            if let Some(selection) = connection_selection {
+                selection.record();
+            }
             // Response-body ownership keeps both the accepted dispatch
             // and exclusive request handle out of the pool until Hyper
             // proves a complete message boundary.
@@ -107,7 +124,6 @@ pub(super) async fn dispatch(
                 request_method,
                 exchange,
                 dispatch,
-                context.owner_spawner.clone(),
             )))
         }
         Err(mut error) => {
@@ -133,6 +149,9 @@ pub(super) async fn dispatch(
             }
             exchange.retire_connection(CloseReason::IncompleteH1Exchange);
             drop(dispatch);
+            if let Some(selection) = connection_selection {
+                selection.record();
+            }
             let metadata =
                 captured_metadata.unwrap_or_else(|| connection.info().metadata(close_handle));
             Err(downcast_error(Box::new(error.into_error())).with_connection(metadata))
@@ -150,7 +169,6 @@ fn guard_h1_response(
     method: Method,
     exchange: H1Exchange,
     dispatch: DispatchGuard,
-    spawner: StdArc<dyn DriverSpawner>,
 ) -> Response<SdkBody> {
     let upgrade = response.status() == http_1x::StatusCode::SWITCHING_PROTOCOLS
         || (method == Method::CONNECT && response.status().is_success());
@@ -160,7 +178,7 @@ fn guard_h1_response(
         dispatch.release();
         return Response::from_parts(parts, SdkBody::from_body_1_x(body));
     }
-    let body = H1ResponseBody::new(body, exchange, dispatch, spawner);
+    let body = H1ResponseBody::new(body, exchange, dispatch);
     Response::from_parts(parts, SdkBody::from_body_1_x(body))
 }
 
@@ -178,19 +196,10 @@ struct H1ResponseBody {
 
 impl H1ResponseBody {
     /// Wraps a response and immediately completes a body already at end stream.
-    fn new(
-        inner: hyper::body::Incoming,
-        exchange: H1Exchange,
-        dispatch: DispatchGuard,
-        spawner: StdArc<dyn DriverSpawner>,
-    ) -> Self {
+    fn new(inner: hyper::body::Incoming, exchange: H1Exchange, dispatch: DispatchGuard) -> Self {
         let mut body = Self {
             inner,
-            lifecycle: Some(H1ResponseLifecycle {
-                exchange: Some(exchange),
-                dispatch: Some(dispatch),
-                spawner,
-            }),
+            lifecycle: Some(H1ResponseLifecycle::new(exchange, dispatch)),
         };
         if body.inner.is_end_stream() {
             body.finish_without_context();
@@ -293,6 +302,16 @@ struct H1ReadinessTask {
 }
 
 impl H1ResponseLifecycle {
+    /// Retains response ownership and derives follow-up placement from the connection.
+    fn new(exchange: H1Exchange, dispatch: DispatchGuard) -> Self {
+        let spawner = exchange.connection().owner_spawner();
+        Self {
+            exchange: Some(exchange),
+            dispatch: Some(dispatch),
+            spawner,
+        }
+    }
+
     /// Returns or retires the request handle and completes dispatch accounting.
     ///
     /// Readiness is first polled with the response body's task context when one
@@ -426,11 +445,15 @@ fn rewrite_h1_request_target(request: &mut Request<SdkBody>, is_proxied: bool) {
 mod tests {
     use super::*;
     use crate::client::connect::ConnectPathInner;
+    use crate::client::pool::admission::{OriginAdmission, ProtocolRequirement};
     use crate::client::pool::cell::h1::H1Sender;
-    use crate::client::pool::cell::OriginCell;
+    use crate::client::pool::cell::{AcquisitionOutcome, AcquisitionStep, OriginCell};
     use crate::client::pool::connection::ConnectionInfo;
     use crate::client::pool::dispatch::RequestOptions;
+    use crate::client::pool::origin::OriginKey;
+    use crate::client::pool::partition::EligibilityGroup;
     use crate::client::pool::registry::PartitionState;
+    use crate::client::pool::stats::CellConnectionStats;
     use crate::client::pool::{
         Client, ConnectionId, ConnectionPool, ConnectionReuseScope, Partition, PartitionId,
         TokioDriverSpawner,
@@ -442,11 +465,13 @@ mod tests {
     use aws_smithy_runtime_api::client::http::{HttpClient, HttpConnector, HttpConnectorSettings};
     use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
+    use http_1x::uri::Scheme;
     use http_body_util::BodyExt;
     use hyper_util::client::legacy::connect::{Connected, Connection};
     use hyper_util::rt::TokioIo;
     use std::future::Future;
     use std::io::{self, IoSlice};
+    use std::num::NonZeroUsize;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::task::{Context, Poll};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -496,6 +521,18 @@ mod tests {
         fn spawn(&self, driver: Pin<Box<dyn Future<Output = ()> + Send + 'static>>) {
             self.submitted.fetch_add(1, Ordering::SeqCst);
             drop(tokio::spawn(driver));
+        }
+    }
+
+    #[derive(Clone, Debug)]
+    struct CountingDroppingSpawner {
+        submitted: StdArc<AtomicUsize>,
+    }
+
+    impl DriverSpawner for CountingDroppingSpawner {
+        fn spawn(&self, driver: Pin<Box<dyn Future<Output = ()> + Send + 'static>>) {
+            self.submitted.fetch_add(1, Ordering::SeqCst);
+            drop(driver);
         }
     }
 
@@ -960,16 +997,99 @@ mod tests {
         let exchange = selection.into_exchange();
         assert!(exchange.is_ready());
 
-        H1ResponseLifecycle {
-            exchange: Some(exchange),
-            dispatch: Some(dispatch),
-            spawner: StdArc::new(CountingSpawner {
-                submitted: submitted.clone(),
-            }),
-        }
-        .resolve(None);
+        H1ResponseLifecycle::new(exchange, dispatch).resolve(None);
 
         assert_eq!(baseline, submitted.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn response_lifecycle_uses_the_connection_owner_spawner() {
+        let pool = ConnectionPool::builder()
+            .idle_timeout(None)
+            .build_http()
+            .unwrap();
+        let partition = anonymous_partition(&pool);
+        let uri = "http://example.com/".parse().unwrap();
+        let cell = pool.inner.registry.resolve_cell(&partition, &uri).unwrap();
+        let submitted = StdArc::new(AtomicUsize::new(0));
+        let owner_spawner: StdArc<dyn DriverSpawner> = StdArc::new(CountingSpawner { submitted });
+        let (connection, _physical) = ConnectionState::pending_open(
+            ConnectionInfo::for_test(ConnectionId::new(1), PartitionId::ANONYMOUS),
+            owner_spawner.clone(),
+            Arc::new(CellConnectionStats::default()),
+        );
+        connection.open(None).unwrap();
+        let selection =
+            OriginCell::insert_selected_h1(&cell, connection.clone(), H1Sender::test(11));
+        let dispatch =
+            ConnectionState::try_commit_dispatch(&connection).expect("connection should be open");
+
+        let lifecycle = H1ResponseLifecycle::new(selection.into_exchange(), dispatch);
+
+        assert!(StdArc::ptr_eq(&owner_spawner, &lifecycle.spawner));
+    }
+
+    #[test]
+    fn borrowed_pending_sender_readiness_uses_the_supplier_runtime() {
+        let owner_partition = PartitionId::from_index(1);
+        let requester_partition = PartitionId::from_index(2);
+        let admission = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
+        let origin = OriginKey::from_parts(Scheme::HTTPS, "example.com", None).unwrap();
+        let owner_cell = OriginAdmission::register_cell(
+            &admission,
+            Arc::new(OriginCell::new(
+                owner_partition,
+                origin.clone(),
+                EligibilityGroup::Pool,
+                Some(admission.clone()),
+                None,
+            )),
+        );
+        let requester_cell = OriginAdmission::register_cell(
+            &admission,
+            Arc::new(OriginCell::new(
+                requester_partition,
+                origin,
+                EligibilityGroup::Pool,
+                Some(admission.clone()),
+                None,
+            )),
+        );
+        let submitted = StdArc::new(AtomicUsize::new(0));
+        let owner_spawner: StdArc<dyn DriverSpawner> = StdArc::new(CountingDroppingSpawner {
+            submitted: submitted.clone(),
+        });
+        let (connection, _physical) = ConnectionState::pending_open(
+            ConnectionInfo::for_test(ConnectionId::new(1), owner_partition),
+            owner_spawner.clone(),
+            owner_cell.connection_stats(),
+        );
+        connection
+            .open(Some(OriginAdmission::lease_for_test(&admission)))
+            .unwrap();
+        OriginCell::insert_idle_h1(&owner_cell, connection.clone(), H1Sender::pending_test(11));
+
+        let waiter =
+            OriginCell::register_waiter(&requester_cell, ProtocolRequirement::H1Compatible);
+        let selection = match requester_cell
+            .poll_waiter(waiter, &mut Context::from_waker(std::task::Waker::noop()))
+        {
+            Poll::Ready(AcquisitionStep::Resolved(AcquisitionOutcome::H1(selection))) => selection,
+            other => panic!("peer demand did not borrow the pending HTTP/1 sender: {other:?}"),
+        };
+        assert_eq!(owner_partition, selection.connection().owner_partition());
+        let dispatch =
+            ConnectionState::try_commit_dispatch(&connection).expect("connection should be open");
+
+        let lifecycle = H1ResponseLifecycle::new(selection.into_exchange(), dispatch);
+        assert!(StdArc::ptr_eq(&owner_spawner, &lifecycle.spawner));
+        lifecycle.resolve(None);
+
+        assert_eq!(1, submitted.load(Ordering::SeqCst));
+        assert_eq!(
+            Some(CloseReason::OwnerRuntimeShutdown),
+            connection.probe().close_reason
+        );
     }
 
     #[tokio::test]
@@ -1533,6 +1653,9 @@ mod tests {
         assert!(error.is_timeout(), "unexpected connector error: {error:?}");
     }
 
+    /// Proves that a successful HTTP/1 upgrade transfers root I/O to the
+    /// response while retaining bounded capacity. The pool may establish a
+    /// replacement only after the caller drops the upgraded I/O.
     async fn assert_h1_upgrade_retains_capacity(
         method: Method,
         response_head: &'static [u8],

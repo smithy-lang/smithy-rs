@@ -16,6 +16,10 @@
 //! Admission advances each match through these phases:
 //!
 //! ```text
+//! ProbingIdle -- idle sender extracted ----------------------> Resolving
+//! ProbingIdle -- supplier busy and probes remain ------------> ProbingIdle
+//! ProbingIdle -- probes exhausted ---------------------------> Reserving
+//! ProbingIdle(cancelled) -- supplier reply ------------------> removed
 //! Reserving -- reservation installed -----------------------> WaitingForSender
 //! Reserving -- sender extracted ----------------------------> Resolving
 //! Reserving(cancelled) -- reservation installed ------------> Cancelling
@@ -39,12 +43,59 @@ use super::{
     IntrusiveLinks, IntrusiveOrder, OriginAdmission, SupplyRevision,
 };
 use crate::client::pool::cell::h1::{H1Selection, ProvisionalH1};
-use crate::client::pool::cell::{H1ReservationDecision, OriginCell};
+use crate::client::pool::cell::{H1IdleProbeDecision, H1ReservationDecision, OriginCell};
 use crate::client::pool::partition::{EligibilityGroup, PartitionId};
 use crate::sync::Arc;
 use aws_smithy_runtime_api::client::connection::ConnectionId;
 use std::collections::{HashMap, VecDeque};
 use std::fmt;
+
+/// Maximum supplier cells crossed before waiting for one exact H1 return.
+///
+/// Preliminary checks take only an immediately idle sender. The final check
+/// uses the ordinary reservation, which takes an idle sender when present or
+/// intercepts that supplier's next reusable return.
+const MAX_H1_SUPPLIER_CHECKS: usize = 3;
+
+/// Exact supplier cells already checked by one bounded idle search.
+///
+/// The fixed-size representation keeps the miss path allocation-free and
+/// prevents a supplier that re-enters the FIFO from being checked twice.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct H1IdleProbeSet {
+    suppliers: [Option<PartitionId>; MAX_H1_SUPPLIER_CHECKS],
+    len: usize,
+}
+
+impl H1IdleProbeSet {
+    /// Starts one probe sequence with its first selected supplier.
+    fn first(supplier: PartitionId) -> Self {
+        let mut suppliers = [None; MAX_H1_SUPPLIER_CHECKS];
+        suppliers[0] = Some(supplier);
+        Self { suppliers, len: 1 }
+    }
+
+    /// Returns whether this sequence already checked `supplier`.
+    fn contains(&self, supplier: PartitionId) -> bool {
+        self.suppliers[..self.len].contains(&Some(supplier))
+    }
+
+    /// Records one distinct supplier within the fixed probe bound.
+    fn record(&mut self, supplier: PartitionId) {
+        assert!(
+            self.len < MAX_H1_SUPPLIER_CHECKS,
+            "HTTP/1 idle probe bound exceeded"
+        );
+        debug_assert!(!self.contains(supplier));
+        self.suppliers[self.len] = Some(supplier);
+        self.len += 1;
+    }
+
+    /// Returns whether another idle-only probe fits before final reservation.
+    fn may_probe_before_reservation(&self) -> bool {
+        self.len + 1 < MAX_H1_SUPPLIER_CHECKS
+    }
+}
 
 /// Identity of one retained HTTP/1 demand-to-supplier match.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -187,6 +238,11 @@ struct H1Match {
 /// Origin-side progress of one retained H1 match.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum H1MatchState {
+    /// Admission is checking bounded supplier cells for an idle sender.
+    ProbingIdle {
+        /// Exact suppliers already checked by this search.
+        probed: H1IdleProbeSet,
+    },
     /// Admission selected a connection, but the cell has not reserved it.
     Reserving,
     /// The cell will intercept the connection's next reusable return.
@@ -204,6 +260,39 @@ pub(in crate::client::pool) struct PreparedH1Reservation {
     pub(in crate::client::pool) match_id: H1MatchId,
     /// Cell whose connection was selected while admission was locked.
     pub(in crate::client::pool) supplier: PartitionId,
+}
+
+/// Work required to probe one supplier cell for an idle sender.
+pub(in crate::client::pool) struct PreparedH1IdleProbe {
+    /// Match whose supplier is being checked.
+    pub(in crate::client::pool) match_id: H1MatchId,
+    /// Supplier cell selected while admission was locked.
+    pub(in crate::client::pool) supplier: PartitionId,
+}
+
+/// Next detached crossing prepared for one H1 demand/supplier match.
+pub(super) enum PreparedH1Match {
+    /// Probe one supplier for an immediately idle sender.
+    ProbeIdle(PreparedH1IdleProbe),
+    /// Reserve one supplier's idle sender or next reusable return.
+    Reserve(PreparedH1Reservation),
+}
+
+#[cfg(test)]
+impl PreparedH1Match {
+    fn match_id(&self) -> H1MatchId {
+        match self {
+            Self::ProbeIdle(prepared) => prepared.match_id,
+            Self::Reserve(prepared) => prepared.match_id,
+        }
+    }
+
+    fn supplier(&self) -> PartitionId {
+        match self {
+            Self::ProbeIdle(prepared) => prepared.supplier,
+            Self::Reserve(prepared) => prepared.supplier,
+        }
+    }
 }
 
 /// Work required to cancel a reservation outside the admission lock.
@@ -250,12 +339,64 @@ impl H1SupplyIndex {
         eligibility_group: &EligibilityGroup,
         requester: PartitionId,
     ) -> Option<PartitionId> {
-        let supplier = {
-            let order = self.suppliers_by_group.get(eligibility_group)?;
-            self.first_peer_supplier(order, requester, false)?
-        };
+        self.select_borrow_supplier_excluding(eligibility_group, requester, None)
+    }
+
+    /// Returns the oldest eligible peer not already checked by this probe.
+    ///
+    /// Traversal is bounded by the probe limit plus the requesting cell, which
+    /// may occupy the same group order but cannot supply itself.
+    fn first_borrow_supplier_excluding(
+        &self,
+        eligibility_group: &EligibilityGroup,
+        requester: PartitionId,
+        probed: Option<&H1IdleProbeSet>,
+    ) -> Option<PartitionId> {
+        let mut supplier = self.suppliers_by_group.get(eligibility_group)?.head();
+        for _ in 0..=MAX_H1_SUPPLIER_CHECKS {
+            let current = supplier?;
+            if current != requester && !probed.is_some_and(|probed| probed.contains(current)) {
+                return Some(current);
+            }
+            supplier = self.next_group_supplier(current);
+        }
+        None
+    }
+
+    /// Removes the oldest eligible peer not already checked by this probe.
+    fn select_borrow_supplier_excluding(
+        &mut self,
+        eligibility_group: &EligibilityGroup,
+        requester: PartitionId,
+        probed: Option<&H1IdleProbeSet>,
+    ) -> Option<PartitionId> {
+        let supplier =
+            self.first_borrow_supplier_excluding(eligibility_group, requester, probed)?;
         self.unlink_supplier(&supplier);
         Some(supplier)
+    }
+
+    /// Returns whether another distinct peer can participate in this search.
+    fn has_borrow_supplier_excluding(
+        &self,
+        eligibility_group: &EligibilityGroup,
+        requester: PartitionId,
+        probed: Option<&H1IdleProbeSet>,
+    ) -> bool {
+        self.first_borrow_supplier_excluding(eligibility_group, requester, probed)
+            .is_some()
+    }
+
+    /// Returns the next supplier in one eligibility-group order.
+    fn next_group_supplier(&self, supplier: PartitionId) -> Option<PartitionId> {
+        let record = self
+            .records
+            .get(&supplier)
+            .expect("ordered H1 supplier disappeared");
+        let H1SupplyIndexState::Linked { group, .. } = &record.index_state else {
+            unreachable!("ordered H1 supplier was unlinked");
+        };
+        group.next
     }
 
     fn select_peer_reclaim_supplier(&mut self, requester: PartitionId) -> Option<PartitionId> {
@@ -505,32 +646,100 @@ impl H1Supply {
         self.assert_consistent();
     }
 
-    pub(super) fn prepare_match(
-        &mut self,
-        demand: &DemandSchedule,
-    ) -> Option<PreparedH1Reservation> {
+    pub(super) fn prepare_match(&mut self, demand: &DemandSchedule) -> Option<PreparedH1Match> {
         let queued = demand.queued_head()?;
         if self.by_requester.contains_key(&queued.requester) {
             return None;
         }
-        let (supplier, kind) = if queued.requirement.accepts_h1() {
-            match self
+
+        if queued.requirement.accepts_h1() {
+            if let Some(supplier) = self
                 .index
                 .select_borrow_supplier(&queued.eligibility_group, queued.requester)
             {
-                Some(supplier) => (supplier, H1MatchKind::BorrowSender),
-                None => (
-                    self.index.select_peer_reclaim_supplier(queued.requester)?,
-                    H1MatchKind::ReclaimCapacity,
-                ),
+                let probe_idle = self.index.has_borrow_supplier_excluding(
+                    &queued.eligibility_group,
+                    queued.requester,
+                    None,
+                );
+                let state = if probe_idle {
+                    H1MatchState::ProbingIdle {
+                        probed: H1IdleProbeSet::first(supplier),
+                    }
+                } else {
+                    H1MatchState::Reserving
+                };
+                let match_id = self.insert_match(
+                    supplier,
+                    queued.requester,
+                    queued.demand,
+                    H1MatchKind::BorrowSender,
+                    state,
+                );
+                return Some(if probe_idle {
+                    PreparedH1Match::ProbeIdle(PreparedH1IdleProbe { match_id, supplier })
+                } else {
+                    PreparedH1Match::Reserve(PreparedH1Reservation { match_id, supplier })
+                });
             }
-        } else {
-            (
-                self.index.select_oldest_reclaim_supplier()?,
+            let supplier = self.index.select_peer_reclaim_supplier(queued.requester)?;
+            let match_id = self.insert_match(
+                supplier,
+                queued.requester,
+                queued.demand,
                 H1MatchKind::ReclaimCapacity,
-            )
-        };
+                H1MatchState::Reserving,
+            );
+            return Some(PreparedH1Match::Reserve(PreparedH1Reservation {
+                match_id,
+                supplier,
+            }));
+        }
+
+        let supplier = self.index.select_oldest_reclaim_supplier()?;
+        let match_id = self.insert_match(
+            supplier,
+            queued.requester,
+            queued.demand,
+            H1MatchKind::ReclaimCapacity,
+            H1MatchState::Reserving,
+        );
+        Some(PreparedH1Match::Reserve(PreparedH1Reservation {
+            match_id,
+            supplier,
+        }))
+    }
+
+    /// Retains one demand-to-supplier match and removes its supplier from
+    /// selection until the match advances or terminates.
+    fn insert_match(
+        &mut self,
+        supplier: PartitionId,
+        requester: PartitionId,
+        demand: DemandId,
+        kind: H1MatchKind,
+        state: H1MatchState,
+    ) -> H1MatchId {
         let match_id = self.take_match_id();
+        self.reserve_supplier(supplier, match_id);
+        self.by_requester.insert(requester, match_id);
+        self.matches.insert(
+            match_id,
+            H1Match {
+                supplier,
+                requester,
+                demand,
+                kind,
+                state,
+                cancelled: false,
+            },
+        );
+        self.assert_consistent();
+        match_id
+    }
+
+    /// Attaches one retained match to its currently selected supplier.
+    fn reserve_supplier(&mut self, supplier: PartitionId, match_id: H1MatchId) {
         let record = self
             .index
             .records
@@ -538,20 +747,89 @@ impl H1Supply {
             .expect("selected H1 supplier disappeared");
         debug_assert!(record.reserved_by.is_none());
         record.reserved_by = Some(match_id);
-        self.by_requester.insert(queued.requester, match_id);
-        self.matches.insert(
-            match_id,
-            H1Match {
+    }
+
+    /// Applies one probe miss and prepares the next probe or exact reservation.
+    ///
+    /// Only the supplier-cell probe reply path calls this method. The supplier
+    /// named by `outcome` is still reserved by `match_id` on entry.
+    fn prepare_next_idle_probe(
+        &mut self,
+        match_id: H1MatchId,
+        demand: &DemandSchedule,
+        outcome: H1SupplyOutcome,
+    ) -> Option<PreparedH1Match> {
+        let outcome_supplier = *outcome.supplier();
+        self.apply_h1_supply_outcome(outcome);
+        let retained = self.matches.get(&match_id).cloned()?;
+        debug_assert_eq!(retained.supplier, outcome_supplier);
+        if let Some(record) = self.index.records.get_mut(&outcome_supplier) {
+            if record.reserved_by == Some(match_id) {
+                record.reserved_by = None;
+            }
+        }
+        self.index.link_supplier_if_selectable(&outcome_supplier);
+
+        let H1MatchState::ProbingIdle { mut probed } = retained.state else {
+            unreachable!("HTTP/1 idle probe settled outside its probing phase");
+        };
+        if retained.cancelled || !demand.is_current_queued(&retained.requester, retained.demand) {
+            self.remove_match(match_id);
+            self.assert_consistent();
+            return None;
+        }
+        let eligibility_group = demand
+            .group_for(&retained.requester)
+            .expect("queued H1 demand lost its eligibility group");
+        if let Some(supplier) = self.index.select_borrow_supplier_excluding(
+            &eligibility_group,
+            retained.requester,
+            Some(&probed),
+        ) {
+            let probe_idle = probed.may_probe_before_reservation()
+                && self.index.has_borrow_supplier_excluding(
+                    &eligibility_group,
+                    retained.requester,
+                    Some(&probed),
+                );
+            self.reserve_supplier(supplier, match_id);
+            let retained = self
+                .matches
+                .get_mut(&match_id)
+                .expect("probing H1 match disappeared");
+            retained.supplier = supplier;
+            if probe_idle {
+                probed.record(supplier);
+                retained.state = H1MatchState::ProbingIdle { probed };
+                self.assert_consistent();
+                return Some(PreparedH1Match::ProbeIdle(PreparedH1IdleProbe {
+                    match_id,
+                    supplier,
+                }));
+            }
+            retained.state = H1MatchState::Reserving;
+            self.assert_consistent();
+            return Some(PreparedH1Match::Reserve(PreparedH1Reservation {
+                match_id,
                 supplier,
-                requester: queued.requester,
-                demand: queued.demand,
-                kind,
-                state: H1MatchState::Reserving,
-                cancelled: false,
-            },
-        );
+            }));
+        }
+
+        self.remove_match(match_id);
         self.assert_consistent();
-        Some(PreparedH1Reservation { match_id, supplier })
+        None
+    }
+
+    /// Advances one successful idle probe to candidate resolution.
+    fn settle_idle_probe_candidate(&mut self, match_id: H1MatchId) -> Option<H1Match> {
+        let retained = self.matches.get_mut(&match_id)?;
+        if !matches!(retained.state, H1MatchState::ProbingIdle { .. }) {
+            return None;
+        }
+        retained.state = H1MatchState::Resolving;
+        let retained = retained.clone();
+        self.assert_consistent();
+        Some(retained)
     }
 
     pub(super) fn prepare_cancellation(&mut self) -> Option<PreparedH1Cancellation> {
@@ -607,21 +885,26 @@ impl H1Supply {
     fn settle_match(&mut self, match_id: H1MatchId, outcome: H1SupplyOutcome) -> Option<H1Match> {
         let outcome_supplier = *outcome.supplier();
         self.apply_h1_supply_outcome(outcome);
-        let retained = self.matches.remove(&match_id);
+        let retained = self.remove_match(match_id);
         if let Some(retained) = retained.as_ref() {
             debug_assert_eq!(retained.supplier, outcome_supplier);
-            if self.by_requester.get(&retained.requester) == Some(&match_id) {
-                self.by_requester.remove(&retained.requester);
-            }
-            if let Some(record) = self.index.records.get_mut(&retained.supplier) {
-                if record.reserved_by == Some(match_id) {
-                    record.reserved_by = None;
-                }
-            }
         }
         self.index.link_supplier_if_selectable(&outcome_supplier);
         self.assert_consistent();
         retained
+    }
+
+    fn remove_match(&mut self, match_id: H1MatchId) -> Option<H1Match> {
+        let retained = self.matches.remove(&match_id)?;
+        if self.by_requester.get(&retained.requester) == Some(&match_id) {
+            self.by_requester.remove(&retained.requester);
+        }
+        if let Some(record) = self.index.records.get_mut(&retained.supplier) {
+            if record.reserved_by == Some(match_id) {
+                record.reserved_by = None;
+            }
+        }
+        Some(retained)
     }
 
     fn apply_h1_supply_outcome(&mut self, outcome: H1SupplyOutcome) {
@@ -712,6 +995,53 @@ impl H1Supply {
                 );
             }
         }
+    }
+}
+
+/// Detached probe of one supplier cell for an immediately idle H1 sender.
+pub(in crate::client::pool) struct H1IdleProbeAction {
+    /// Admission authority that owns the retained H1 match.
+    admission: Arc<OriginAdmission>,
+    /// Probe identity retained until the supplier reply is settled.
+    prepared: Option<PreparedH1IdleProbe>,
+}
+
+impl H1IdleProbeAction {
+    /// Creates one unlocked supplier-cell probe.
+    pub(super) fn new(admission: Arc<OriginAdmission>, prepared: PreparedH1IdleProbe) -> Self {
+        Self {
+            admission,
+            prepared: Some(prepared),
+        }
+    }
+
+    /// Probes the selected supplier and returns the next admission action.
+    pub(super) fn probe_supplier(mut self) -> Option<AdmissionAction> {
+        let prepared = self
+            .prepared
+            .take()
+            .expect("HTTP/1 idle probe consumed more than once");
+        let Some(supplier) = self.admission.cell(&prepared.supplier) else {
+            return settle_idle_probe_miss(
+                &self.admission,
+                prepared.match_id,
+                H1SupplyOutcome::supplier_expired(prepared.supplier),
+            );
+        };
+        OriginCell::try_take_idle_h1(&supplier, self.admission.clone(), prepared)
+    }
+}
+
+impl Drop for H1IdleProbeAction {
+    fn drop(&mut self) {
+        let Some(prepared) = self.prepared.take() else {
+            return;
+        };
+        let outcome = h1_supply_outcome(&self.admission, &prepared.supplier, |supplier| {
+            supplier.current_h1_supply_revision()
+        });
+        let next = settle_idle_probe_miss(&self.admission, prepared.match_id, outcome);
+        OriginAdmission::run_action_chain(next);
     }
 }
 
@@ -1051,6 +1381,58 @@ pub(super) fn reject_returned_match(
     OriginAdmission::run_action_chain(action);
 }
 
+/// Settles one supplier-cell idle probe against its retained match.
+pub(super) fn settle_idle_probe(
+    admission: &Arc<OriginAdmission>,
+    match_id: H1MatchId,
+    supplier: PartitionId,
+    decision: H1IdleProbeDecision<H1Candidate>,
+) -> Option<AdmissionAction> {
+    match decision {
+        H1IdleProbeDecision::Unavailable(revision) => settle_idle_probe_miss(
+            admission,
+            match_id,
+            H1SupplyOutcome::supplier_live(supplier, revision),
+        ),
+        H1IdleProbeDecision::Candidate(candidate) => {
+            {
+                let mut state = admission.state.lock();
+                if state
+                    .h1_supply
+                    .settle_idle_probe_candidate(match_id)
+                    .is_none()
+                {
+                    drop(state);
+                    return reject_candidate(admission, match_id, candidate);
+                }
+            }
+            resolve_match(admission, match_id, candidate)
+        }
+    }
+}
+
+/// Applies one missing idle sender and continues bounded supplier selection.
+fn settle_idle_probe_miss(
+    admission: &Arc<OriginAdmission>,
+    match_id: H1MatchId,
+    outcome: H1SupplyOutcome,
+) -> Option<AdmissionAction> {
+    let mut state = admission.state.lock();
+    let super::AdmissionState {
+        h1_supply, demand, ..
+    } = &mut *state;
+    let next = h1_supply.prepare_next_idle_probe(match_id, demand, outcome);
+    match next {
+        Some(PreparedH1Match::ProbeIdle(prepared)) => Some(AdmissionAction::ProbeH1Supplier(
+            H1IdleProbeAction::new(admission.clone(), prepared),
+        )),
+        Some(PreparedH1Match::Reserve(prepared)) => Some(AdmissionAction::ReserveH1Supplier(
+            H1ReservationAction::new(admission.clone(), prepared),
+        )),
+        None => OriginAdmission::prepare_action(admission, &mut state),
+    }
+}
+
 pub(super) fn settle_reservation(
     admission: &Arc<OriginAdmission>,
     match_id: H1MatchId,
@@ -1272,15 +1654,15 @@ mod tests {
             .prepare_match(&schedule)
             .expect("local HTTP/1 capacity was not selected for reclaim");
 
-        assert_eq!(requesting_partition, prepared.supplier);
+        assert_eq!(requesting_partition, prepared.supplier());
         assert_eq!(
             H1MatchKind::ReclaimCapacity,
-            supply.matches[&prepared.match_id].kind
+            supply.matches[&prepared.match_id()].kind
         );
     }
 
     #[test]
-    fn borrow_supplier_selection_skips_the_requesting_cell() {
+    fn single_peer_supplier_is_reserved_without_an_idle_probe() {
         let requesting_partition = cell(1);
         let peer = cell(2);
         let group = EligibilityGroup::Pool;
@@ -1295,38 +1677,154 @@ mod tests {
         let prepared = supply
             .prepare_match(&schedule(requesting_partition, group))
             .expect("peer connection cell was not selected");
-        assert_eq!(peer, prepared.supplier);
-        assert_ne!(requesting_partition, prepared.supplier);
+        assert_eq!(peer, prepared.supplier());
+        assert_ne!(requesting_partition, prepared.supplier());
+        assert!(matches!(prepared, PreparedH1Match::Reserve(_)));
     }
 
     #[test]
-    fn resolving_match_discards_its_lazy_cancellation_entry() {
-        let supplier = cell(1);
-        let requester = cell(2);
+    fn last_available_supplier_becomes_the_fallback_reservation() {
+        let requester = cell(9);
+        let group = EligibilityGroup::Pool;
+        let schedule = schedule(requester, group.clone());
+        let suppliers = [cell(1), cell(2)];
+        let mut supply = H1Supply::default();
+        for supplier in suppliers {
+            supply.apply_revision(supplier, group.clone(), supply_revision(1, true, false));
+        }
+
+        let first = supply
+            .prepare_match(&schedule)
+            .expect("first idle probe was not prepared");
+        let match_id = first.match_id();
+        assert_eq!(suppliers[0], first.supplier());
+        assert!(matches!(first, PreparedH1Match::ProbeIdle(_)));
+
+        let fallback = supply
+            .prepare_next_idle_probe(
+                match_id,
+                &schedule,
+                H1SupplyOutcome::supplier_live(suppliers[0], supply_revision(2, true, false)),
+            )
+            .expect("last supplier was not retained as the fallback");
+        assert_eq!(suppliers[1], fallback.supplier());
+        assert!(matches!(fallback, PreparedH1Match::Reserve(_)));
+    }
+
+    #[test]
+    fn idle_probing_checks_distinct_suppliers_through_the_bound() {
+        let requester = cell(9);
+        let group = EligibilityGroup::Pool;
+        let schedule = schedule(requester, group.clone());
+        let suppliers = [cell(1), cell(2), cell(3), cell(4)];
+        let mut supply = H1Supply::default();
+        supply.apply_revision(requester, group.clone(), supply_revision(1, true, false));
+        for supplier in suppliers {
+            supply.apply_revision(supplier, group.clone(), supply_revision(1, true, false));
+        }
+
+        let first = supply
+            .prepare_match(&schedule)
+            .expect("first idle probe was not prepared");
+        let match_id = first.match_id();
+        assert_eq!(suppliers[0], first.supplier());
+        assert!(matches!(first, PreparedH1Match::ProbeIdle(_)));
+
+        let second = supply
+            .prepare_next_idle_probe(
+                match_id,
+                &schedule,
+                H1SupplyOutcome::supplier_live(suppliers[0], supply_revision(2, true, false)),
+            )
+            .expect("second idle probe was not prepared");
+        assert_eq!(suppliers[1], second.supplier());
+        assert!(matches!(second, PreparedH1Match::ProbeIdle(_)));
+
+        let fallback = supply
+            .prepare_next_idle_probe(
+                match_id,
+                &schedule,
+                H1SupplyOutcome::supplier_live(suppliers[1], supply_revision(3, true, false)),
+            )
+            .expect("bounded probes did not retain an exact fallback");
+        assert_eq!(suppliers[2], fallback.supplier());
+        assert!(matches!(fallback, PreparedH1Match::Reserve(_)));
+        assert_eq!(H1MatchKind::BorrowSender, supply.matches[&match_id].kind);
+        assert!(supply.index.records[&requester].index_state.is_linked());
+        assert!(supply.index.records[&suppliers[3]].index_state.is_linked());
+    }
+
+    #[test]
+    fn idle_probe_miss_removes_cancelled_match_without_reserving_a_return() {
+        let suppliers = [cell(1), cell(2)];
+        let requester = cell(3);
         let group = EligibilityGroup::Pool;
         let mut schedule = schedule(requester, group.clone());
         let mut supply = H1Supply::default();
-        supply.apply_revision(supplier, group.clone(), supply_revision(1, true, false));
+        for supplier in suppliers {
+            supply.apply_revision(supplier, group.clone(), supply_revision(1, true, false));
+        }
         let prepared = supply
             .prepare_match(&schedule)
-            .expect("supplier cell did not produce a retained match");
-        supply.settle_reservation(prepared.match_id, false);
+            .expect("idle probe was not prepared");
+        let match_id = prepared.match_id();
+        assert!(matches!(prepared, PreparedH1Match::ProbeIdle(_)));
 
         schedule.apply_snapshot(
             requester,
             DemandSnapshot::inactive(DemandId::from_u64(1), SnapshotVersion::INITIAL.next()),
         );
         supply.reconcile_requester(&requester, &schedule);
-        assert_eq!(
-            H1MatchState::Cancelling,
-            supply.matches[&prepared.match_id].state
-        );
+        assert!(supply
+            .prepare_next_idle_probe(
+                match_id,
+                &schedule,
+                H1SupplyOutcome::supplier_live(suppliers[0], supply_revision(2, true, false)),
+            )
+            .is_none());
 
-        supply.begin_resolution(prepared.match_id);
-        assert_eq!(
-            H1MatchState::Resolving,
-            supply.matches[&prepared.match_id].state
+        assert!(!supply.matches.contains_key(&match_id));
+        assert!(!supply.by_requester.contains_key(&requester));
+        for supplier in suppliers {
+            assert_eq!(None, supply.index.records[&supplier].reserved_by);
+            assert!(supply.index.records[&supplier].index_state.is_linked());
+        }
+    }
+
+    #[test]
+    fn resolving_match_discards_its_lazy_cancellation_entry() {
+        let suppliers = [cell(1), cell(2)];
+        let requester = cell(3);
+        let group = EligibilityGroup::Pool;
+        let mut schedule = schedule(requester, group.clone());
+        let mut supply = H1Supply::default();
+        for supplier in suppliers {
+            supply.apply_revision(supplier, group.clone(), supply_revision(1, true, false));
+        }
+        let prepared = supply
+            .prepare_match(&schedule)
+            .expect("supplier cell did not produce a retained match");
+        let match_id = prepared.match_id();
+        assert!(matches!(prepared, PreparedH1Match::ProbeIdle(_)));
+        let prepared = supply
+            .prepare_next_idle_probe(
+                match_id,
+                &schedule,
+                H1SupplyOutcome::supplier_live(suppliers[0], supply_revision(2, true, false)),
+            )
+            .expect("idle probe did not retain an exact reservation");
+        assert!(matches!(prepared, PreparedH1Match::Reserve(_)));
+        supply.settle_reservation(match_id, false);
+
+        schedule.apply_snapshot(
+            requester,
+            DemandSnapshot::inactive(DemandId::from_u64(1), SnapshotVersion::INITIAL.next()),
         );
+        supply.reconcile_requester(&requester, &schedule);
+        assert_eq!(H1MatchState::Cancelling, supply.matches[&match_id].state);
+
+        supply.begin_resolution(match_id);
+        assert_eq!(H1MatchState::Resolving, supply.matches[&match_id].state);
         assert!(
             supply.prepare_cancellation().is_none(),
             "resolving match produced stale cancellation work"
@@ -1347,7 +1845,7 @@ mod tests {
             .expect("supplier cell did not produce a retained match");
 
         supply.settle_match(
-            prepared.match_id,
+            prepared.match_id(),
             H1SupplyOutcome::supplier_expired(connection_partition),
         );
 
@@ -1369,11 +1867,11 @@ mod tests {
             .expect("supplier cell did not produce a retained match");
 
         supply.settle_match(
-            prepared.match_id,
+            prepared.match_id(),
             H1SupplyOutcome::supplier_live(connection_partition, supply_revision(3, true, false)),
         );
         supply.settle_match(
-            prepared.match_id,
+            prepared.match_id(),
             H1SupplyOutcome::supplier_live(connection_partition, supply_revision(2, false, false)),
         );
 
@@ -1400,11 +1898,11 @@ mod tests {
             .expect("supplier cell did not produce a retained match");
 
         supply.settle_match(
-            prepared.match_id,
+            prepared.match_id(),
             H1SupplyOutcome::supplier_live(connection_partition, supply_revision(2, true, false)),
         );
         supply.settle_match(
-            prepared.match_id,
+            prepared.match_id(),
             H1SupplyOutcome::supplier_live(connection_partition, supply_revision(3, false, false)),
         );
 

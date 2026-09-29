@@ -83,9 +83,8 @@ async fn run_h1_handshake(
         pool,
         partition,
         cell,
-        absolute_uri: _,
         owner_spawner,
-        connect_timeout: _,
+        ..
     } = context;
 
     let id = match next_connection_id(&pool) {
@@ -103,7 +102,8 @@ async fn run_h1_handshake(
         ConnectionProtocol::Http1,
         transport.metadata,
     );
-    let (connection, physical) = ConnectionState::pending_open(info, cell.connection_stats());
+    let (connection, physical) =
+        ConnectionState::pending_open(info, owner_spawner, cell.connection_stats());
     let io = ConnectionIo::new(transport.io, physical);
 
     establishment.protocol_handshake_started();
@@ -129,12 +129,13 @@ async fn run_h1_handshake(
         establishment.failed(&error);
         return Err(error);
     }
+    establishment.installed(&connection);
 
     let selection =
         OriginCell::insert_selected_h1(&cell, connection.clone(), H1Sender::from_hyper(sender));
     let driver_guard = H1DriverGuard::new(H1CloseHandle::new(&cell, &connection));
     let driver_info = connection.info().clone();
-    owner_spawner.spawn(Box::pin(async move {
+    connection.owner_spawner().spawn(Box::pin(async move {
         let result = driver.with_upgrades().await;
         if let Err(error) = result {
             tracing::debug!(
