@@ -20,6 +20,7 @@ use super::partition::TokioDriverSpawner;
 use super::partition::{
     ConnectionReuseScope, DriverSpawner, EligibilityGroup, Partition, PartitionId,
 };
+use super::stats::{ConnectionCapacityStats, OriginConnectionStats, PartitionConnectionStats};
 use crate::sync::{Arc, Mutex, RwLock};
 use http_1x::Uri;
 use std::collections::HashMap;
@@ -122,6 +123,37 @@ impl PartitionRegistry {
         id: PartitionId,
     ) -> Option<Arc<PartitionState>> {
         self.partitions.get(&id).cloned()
+    }
+
+    /// Returns bounded connection capacity without creating admission state.
+    pub(in crate::client::pool) fn origin_stats(
+        &self,
+        origin: &OriginKey,
+    ) -> OriginConnectionStats {
+        let Some(policy) = self.admission_policy else {
+            return OriginConnectionStats::new(None);
+        };
+        let admission = self.admissions.lock().get(origin).cloned();
+        let capacity = admission
+            .map(|admission| admission.connection_capacity_stats())
+            .unwrap_or_else(|| ConnectionCapacityStats::new(policy.connection_limit().get(), 0));
+        OriginConnectionStats::new(Some(capacity))
+    }
+
+    /// Returns state for one configured partition and existing origin cell.
+    pub(in crate::client::pool) fn partition_stats(
+        &self,
+        partition: PartitionId,
+        origin: &OriginKey,
+    ) -> Option<PartitionConnectionStats> {
+        let partition = self.partitions.get(&partition)?;
+        let lookup = OriginLookup::from_origin(origin);
+        Some(
+            partition
+                .find_cell(&lookup)
+                .map(|cell| cell.connection_stats_snapshot())
+                .unwrap_or_default(),
+        )
     }
 
     /// Resolves the stable cell for an already-resolved partition and URI.
@@ -480,6 +512,79 @@ mod tests {
         registry
             .partition(PartitionId::from_index(index))
             .expect("test partition was not registered")
+    }
+
+    fn test_origin() -> OriginKey {
+        OriginKey::from_parts(http_1x::uri::Scheme::HTTPS, "example.com", None)
+            .expect("test origin is valid")
+    }
+
+    #[test]
+    fn origin_stats_do_not_create_admission_state() {
+        let origin = test_origin();
+        let unbounded =
+            explicit_registry([partition(1)], ConnectionReuseScope::default(), None).unwrap();
+        assert_eq!(None, unbounded.origin_stats(&origin).capacity());
+        assert!(unbounded.admissions.lock().is_empty());
+
+        let bounded = explicit_registry(
+            [partition(1)],
+            ConnectionReuseScope::default(),
+            NonZeroUsize::new(2),
+        )
+        .unwrap();
+        let stats = bounded.origin_stats(&origin);
+        let capacity = stats.capacity().expect("bounded origin had no capacity");
+        assert_eq!(2, capacity.limit());
+        assert_eq!(0, capacity.in_use());
+        assert!(bounded.admissions.lock().is_empty());
+    }
+
+    #[test]
+    fn origin_stats_read_authoritative_admission_capacity() {
+        let origin = test_origin();
+        let registry = explicit_registry(
+            [partition(1)],
+            ConnectionReuseScope::default(),
+            NonZeroUsize::new(2),
+        )
+        .unwrap();
+        let partition = explicit_partition(&registry, 1);
+        registry
+            .resolve_cell(&partition, &"https://example.com/".parse().unwrap())
+            .unwrap();
+        let admission = registry
+            .admissions
+            .lock()
+            .get(&origin)
+            .cloned()
+            .expect("cell resolution did not create admission");
+        let lease = OriginAdmission::lease_for_test(&admission);
+
+        let stats = registry.origin_stats(&origin);
+
+        assert_eq!(1, stats.capacity().unwrap().in_use());
+        drop(lease);
+        assert_eq!(
+            0,
+            registry.origin_stats(&origin).capacity().unwrap().in_use()
+        );
+    }
+
+    #[test]
+    fn partition_stats_do_not_create_cells() {
+        let origin = test_origin();
+        let registry =
+            explicit_registry([partition(1)], ConnectionReuseScope::default(), None).unwrap();
+
+        assert!(registry
+            .partition_stats(PartitionId::from_index(2), &origin)
+            .is_none());
+        assert_eq!(
+            Some(PartitionConnectionStats::default()),
+            registry.partition_stats(PartitionId::from_index(1), &origin)
+        );
+        assert_eq!(0, explicit_partition(&registry, 1).cell_count());
     }
 
     #[test]
