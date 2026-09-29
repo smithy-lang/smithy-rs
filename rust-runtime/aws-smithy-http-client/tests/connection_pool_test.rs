@@ -35,12 +35,20 @@ use aws_smithy_runtime_api::client::http::telemetry::{
 };
 use aws_smithy_runtime_api::client::http::{SharedHttpClient, SharedHttpConnector};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+use aws_smithy_types::body::SdkBody;
+use bytes::Bytes;
 use common::client as test_client;
+use http_body_1x::{Body, Frame, SizeHint};
+use std::convert::Infallible;
+use std::future::Future;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll};
 use std::time::{Duration, UNIX_EPOCH};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
+use tokio::sync::oneshot;
 
 const IP1: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
 const IP2: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 2));
@@ -612,18 +620,88 @@ async fn eligible_partition_borrows_the_peer_h1() {
     harness.shutdown().await.expect("clean harness shutdown");
 }
 
+/// Request body that remains open until the test releases it.
+struct HeldUpload {
+    finish: oneshot::Receiver<()>,
+    complete: bool,
+}
+
+impl Body for HeldUpload {
+    type Data = Bytes;
+    type Error = Infallible;
+
+    fn poll_frame(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+        if self.complete {
+            return Poll::Ready(None);
+        }
+        match Pin::new(&mut self.finish).poll(cx) {
+            Poll::Ready(_) => {
+                self.complete = true;
+                Poll::Ready(None)
+            }
+            Poll::Pending => Poll::Pending,
+        }
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.complete
+    }
+
+    fn size_hint(&self) -> SizeHint {
+        SizeHint::default()
+    }
+}
+
+fn held_upload() -> (oneshot::Sender<()>, SdkBody) {
+    let (finish, finished) = oneshot::channel();
+    (
+        finish,
+        SdkBody::from_body_1_x(HeldUpload {
+            finish: finished,
+            complete: false,
+        }),
+    )
+}
+
 #[tokio::test]
 async fn peer_h1_reuse_survives_borrower_runtime_shutdown() {
     use runtime::DrivenRuntime;
 
+    let peer_response_gate = ManualGate::new();
     let harness = ConnectionTestHarness::builder()
         .endpoint(
             IP1,
-            Http1Script::responses([
-                Http1Response::ok().body("owner"),
-                Http1Response::ok().body("peer"),
-                Http1Response::ok().body("reused"),
-            ]),
+            SocketScript::new()
+                .read_http1_request()
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\n\
+                      Content-Length: 5\r\n\
+                      Connection: keep-alive\r\n\
+                      \r\n\
+                      owner",
+                )
+                .read_until(b"\r\n\r\n", 16 * 1024)
+                .wait(peer_response_gate.waiter())
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\n\
+                      Content-Length: 4\r\n\
+                      Connection: keep-alive\r\n\
+                      \r\n\
+                      peer",
+                )
+                .read_until(b"0\r\n\r\n", 1024)
+                .read_http1_request()
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\n\
+                      Content-Length: 6\r\n\
+                      Connection: keep-alive\r\n\
+                      \r\n\
+                      reused",
+                )
+                .await_client_close(),
         )
         .build()
         .await
@@ -656,15 +734,37 @@ async fn peer_h1_reuse_survives_borrower_runtime_shutdown() {
         .expect("owner request task should not panic");
     assert_eq!((status, body.as_slice()), (200, b"owner".as_slice()));
 
-    let peer_request = second_connector.clone();
-    let peer_url = url.clone();
-    let (status, body) = second_runtime
-        .spawn(async move { test_client::get_and_collect(&peer_request, &peer_url).await })
+    let (finish_upload, upload) = held_upload();
+    let mut peer_request = HttpRequest::new(upload);
+    peer_request
+        .set_uri(url.clone())
+        .expect("valid HTTP request URI");
+    peer_request.set_method("POST").expect("valid HTTP method");
+    let peer_connector = second_connector.clone();
+    let peer = second_runtime
+        .spawn(async move { test_client::send_and_collect(&peer_connector, peer_request).await });
+    peer_response_gate
+        .wait_until_reached(test_client::WAIT)
         .await
-        .expect("peer request task should not panic");
+        .expect("peer request should reach the response gate");
+    let owner_tasks_before_peer_completion = first_runtime.submitted_tasks();
+    let borrower_tasks_before_peer_completion = second_runtime.submitted_tasks();
+    peer_response_gate.release();
+    let (status, body) = peer.await.expect("peer request task should not panic");
     assert_eq!((status, body.as_slice()), (200, b"peer".as_slice()));
-    assert!(first_runtime.submitted_tasks() > 0);
-    assert!(second_runtime.submitted_tasks() > 0);
+    assert_eq!(
+        owner_tasks_before_peer_completion + 1,
+        first_runtime.submitted_tasks(),
+        "deferred H1 readiness must use the connection owner's spawner"
+    );
+    assert_eq!(
+        borrower_tasks_before_peer_completion,
+        second_runtime.submitted_tasks(),
+        "the borrowing partition must not own readiness for a peer connection"
+    );
+    finish_upload
+        .send(())
+        .expect("peer upload should remain open until readiness placement is observed");
 
     second_runtime.shutdown();
 
@@ -684,7 +784,7 @@ async fn peer_h1_reuse_survives_borrower_runtime_shutdown() {
             _ => None,
         })
         .collect::<Vec<_>>();
-    assert_eq!(3, request_connections.len());
+    assert_eq!(2, request_connections.len());
     assert!(
         request_connections
             .iter()

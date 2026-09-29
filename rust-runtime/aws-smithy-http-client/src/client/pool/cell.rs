@@ -2488,6 +2488,7 @@ mod tests {
 #[cfg(all(test, smithy_http_client_loom))]
 mod loom_tests {
     use super::*;
+    use crate::sync::{AtomicBool, AtomicUsize, Ordering};
     use http_1x::uri::Scheme;
     use std::num::NonZeroUsize;
 
@@ -2963,6 +2964,137 @@ mod loom_tests {
             assert!(first.state.lock().h1.peer_reservation_available());
             assert!(second.state.lock().h1.peer_reservation_available());
             assert_eq!(0, admission.ordered_demand_count_for_test());
+            admission.clear_modeled_cells_for_test();
+        });
+    }
+
+    /// Races cancellation with the second idle probe and exact fallback reservation.
+    ///
+    /// Three busy suppliers force two distinct idle-only probes followed by
+    /// reservation of the third supplier. Cancellation begins after the second
+    /// probe is selected, so every explored schedule crosses the full bounded
+    /// probe path while racing its final supplier transition.
+    #[test]
+    fn second_idle_probe_and_cancellation_preserve_all_senders() {
+        let mut model = loom::model::Builder::new();
+        model.preemption_bound.get_or_insert(3);
+        model.check(|| {
+            let admission = OriginAdmission::for_test(NonZeroUsize::new(3).unwrap());
+            let origin = OriginKey::from_parts(Scheme::HTTPS, "example.com", None).unwrap();
+            let first = OriginAdmission::register_cell(
+                &admission,
+                Arc::new(OriginCell::new(
+                    PartitionId::from_index(1),
+                    origin.clone(),
+                    EligibilityGroup::Pool,
+                    Some(admission.clone()),
+                    None,
+                )),
+            );
+            let second = OriginAdmission::register_cell(
+                &admission,
+                Arc::new(OriginCell::new(
+                    PartitionId::from_index(2),
+                    origin.clone(),
+                    EligibilityGroup::Pool,
+                    Some(admission.clone()),
+                    None,
+                )),
+            );
+            let third = OriginAdmission::register_cell(
+                &admission,
+                Arc::new(OriginCell::new(
+                    PartitionId::from_index(3),
+                    origin.clone(),
+                    EligibilityGroup::Pool,
+                    Some(admission.clone()),
+                    None,
+                )),
+            );
+            let requester = OriginAdmission::register_cell(
+                &admission,
+                Arc::new(OriginCell::new(
+                    PartitionId::from_index(4),
+                    origin,
+                    EligibilityGroup::Pool,
+                    Some(admission.clone()),
+                    None,
+                )),
+            );
+
+            let first_lease = OriginAdmission::lease_for_test(&admission);
+            let (first_connection, _first_physical) =
+                ConnectionState::bounded(connection_info(1), first_lease);
+            let first_returning =
+                OriginCell::insert_selected_h1(&first, first_connection, H1Sender::test(11));
+            let second_lease = OriginAdmission::lease_for_test(&admission);
+            let (second_connection, _second_physical) =
+                ConnectionState::bounded(connection_info(2), second_lease);
+            let second_returning =
+                OriginCell::insert_selected_h1(&second, second_connection, H1Sender::test(22));
+            let third_lease = OriginAdmission::lease_for_test(&admission);
+            let (third_connection, _third_physical) =
+                ConnectionState::bounded(connection_info(3), third_lease);
+            let third_returning =
+                OriginCell::insert_selected_h1(&third, third_connection, H1Sender::test(33));
+
+            let (waiter, demand) =
+                requester.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
+            let first_probe = OriginAdmission::submit_action_without_running(
+                &admission,
+                requester.id().partition(),
+                demand,
+            )
+            .expect("peer demand did not prepare its first idle probe");
+            assert!(matches!(&first_probe, AdmissionAction::ProbeH1Supplier(_)));
+
+            let probes = Arc::new(AtomicUsize::new(0));
+            let second_probe_started = Arc::new(AtomicBool::new(false));
+            let probing_count = probes.clone();
+            let probing_started = second_probe_started.clone();
+            let probing = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || {
+                    probing_count.fetch_add(1, Ordering::SeqCst);
+                    let second_probe = first_probe
+                        .run_once_for_test()
+                        .expect("first miss did not prepare a second idle probe");
+                    assert!(matches!(&second_probe, AdmissionAction::ProbeH1Supplier(_)));
+                    probing_count.fetch_add(1, Ordering::SeqCst);
+                    probing_started.store(true, Ordering::SeqCst);
+                    let fallback = second_probe.run_once_for_test();
+                    OriginAdmission::run_action_chain(fallback);
+                })
+                .unwrap();
+            let cancel_cell = requester.clone();
+            let cancelling = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || {
+                    while !second_probe_started.load(Ordering::SeqCst) {
+                        loom::thread::yield_now();
+                    }
+                    OriginCell::cancel_waiter(&cancel_cell, waiter)
+                })
+                .unwrap();
+            probing.join().unwrap();
+            assert!(cancelling.join().unwrap());
+            assert_eq!(2, probes.load(Ordering::SeqCst));
+
+            drop(first_returning);
+            drop(second_returning);
+            drop(third_returning);
+
+            let mut sender_ids = first.h1_idle_sender_ids();
+            sender_ids.extend(second.h1_idle_sender_ids());
+            sender_ids.extend(third.h1_idle_sender_ids());
+            sender_ids.extend(requester.h1_idle_sender_ids());
+            sender_ids.sort_unstable();
+            assert_eq!(vec![11, 22, 33], sender_ids);
+            assert!(first.state.lock().h1.peer_reservation_available());
+            assert!(second.state.lock().h1.peer_reservation_available());
+            assert!(third.state.lock().h1.peer_reservation_available());
+            assert_eq!(0, admission.ordered_demand_count_for_test());
+            assert_eq!(0, admission.available_capacity_for_test());
             admission.clear_modeled_cells_for_test();
         });
     }

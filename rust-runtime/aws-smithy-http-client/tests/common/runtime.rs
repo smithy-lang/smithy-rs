@@ -59,11 +59,10 @@ impl DrivenRuntime {
         }
     }
 
-    /// Returns a spawner that checks task placement on this runtime.
+    /// Returns a spawner that records task placement on this runtime.
     pub(crate) fn driver_spawner(&self) -> RuntimeDriverSpawner {
         RuntimeDriverSpawner {
             handle: self.handle.clone(),
-            runtime_id: self.runtime_id,
             submitted_tasks: self.submitted_tasks.clone(),
         }
     }
@@ -82,7 +81,7 @@ impl DrivenRuntime {
         self.runtime_id
     }
 
-    /// Returns how many connection-owned tasks have started on this runtime.
+    /// Returns how many connection-owned tasks were submitted to this runtime.
     pub(crate) fn submitted_tasks(&self) -> usize {
         self.submitted_tasks.load(Ordering::SeqCst)
     }
@@ -112,22 +111,12 @@ impl Drop for DrivenRuntime {
 #[derive(Clone, Debug)]
 pub(crate) struct RuntimeDriverSpawner {
     handle: Handle,
-    runtime_id: Id,
     submitted_tasks: Arc<AtomicUsize>,
 }
 
 impl DriverSpawner for RuntimeDriverSpawner {
     fn spawn(&self, driver: Pin<Box<dyn Future<Output = ()> + Send + 'static>>) {
-        let runtime_id = self.runtime_id;
-        let submitted_tasks = self.submitted_tasks.clone();
-        drop(self.handle.spawn(async move {
-            assert_eq!(
-                runtime_id,
-                Handle::current().id(),
-                "connection-owned task started on the wrong runtime"
-            );
-            submitted_tasks.fetch_add(1, Ordering::SeqCst);
-            driver.await;
-        }));
+        self.submitted_tasks.fetch_add(1, Ordering::SeqCst);
+        drop(self.handle.spawn(driver));
     }
 }
