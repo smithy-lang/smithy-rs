@@ -3,11 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::client::ConnectorCallTimer;
 use crate::hyper_legacy::timeout_middleware::HttpTimeoutError;
 use aws_smithy_async::future::timeout::TimedOutError;
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
-use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::connection::CaptureSmithyConnection;
 use aws_smithy_runtime_api::client::connection::ConnectionMetadata;
@@ -192,7 +190,6 @@ impl HttpConnector for HyperConnector {
 pub struct HyperConnectorBuilder {
     connector_settings: Option<HttpConnectorSettings>,
     sleep_impl: Option<SharedAsyncSleep>,
-    time_source: SharedTimeSource,
     client_builder: Option<hyper_0_14::client::Builder>,
 }
 
@@ -235,7 +232,6 @@ impl HyperConnectorBuilder {
         HyperConnector {
             adapter: Box::new(Adapter {
                 client: read_timeout,
-                time_source: self.time_source,
             }),
         }
     }
@@ -261,12 +257,6 @@ impl HyperConnectorBuilder {
     /// [`default_async_sleep`].
     pub fn set_sleep_impl(&mut self, sleep_impl: Option<SharedAsyncSleep>) -> &mut Self {
         self.sleep_impl = sleep_impl;
-        self
-    }
-
-    /// Copies the runtime-component clock used for request telemetry.
-    fn set_time_source(&mut self, time_source: SharedTimeSource) -> &mut Self {
-        self.time_source = time_source;
         self
     }
 
@@ -312,7 +302,6 @@ struct Adapter<C> {
     client: timeout_middleware::HttpReadTimeout<
         hyper_0_14::Client<timeout_middleware::ConnectTimeout<C>, SdkBody>,
     >,
-    time_source: SharedTimeSource,
 }
 
 impl<C> fmt::Debug for Adapter<C> {
@@ -360,7 +349,6 @@ where
     fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
         use hyper_0_14::service::Service;
 
-        let connector_call_timer = ConnectorCallTimer::start(&request, &self.time_source);
         let mut request = match request.try_into_http02x() {
             Ok(request) => request,
             Err(err) => {
@@ -377,15 +365,11 @@ where
         let mut client = self.client.clone();
         let fut = client.call(request);
         HttpConnectorFuture::new(async move {
-            let result = match fut.await {
+            match fut.await {
                 Ok(response) => HttpResponse::try_from(response.map(SdkBody::from_body_0_4))
                     .map_err(|err| ConnectorError::other(err.into(), None)),
                 Err(err) => Err(downcast_error(err)),
-            };
-            if let Some(timer) = connector_call_timer {
-                timer.finish();
             }
-            result
         })
     }
 }
@@ -504,10 +488,6 @@ where
                     .hyper_builder(self.client_builder.clone())
                     .connector_settings(settings.clone());
                 builder.set_sleep_impl(components.sleep_impl());
-                if let Some(time_source) = components.time_source() {
-                    builder.set_time_source(time_source);
-                }
-
                 let start = components.time_source().map(|ts| ts.now());
                 let tcp_connector = (self.tcp_connector_fn)();
                 let end = components.time_source().map(|ts| ts.now());
