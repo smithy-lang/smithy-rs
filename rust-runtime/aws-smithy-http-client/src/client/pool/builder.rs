@@ -190,13 +190,13 @@ impl<Tls> Builder<Tls> {
         self
     }
 
-    /// Sets the clock used by pool maintenance.
+    /// Sets the clock used by pool maintenance and connection timing.
     pub fn time_source(mut self, source: impl TimeSource + 'static) -> Self {
         self.time_source = Some(SharedTimeSource::new(source));
         self
     }
 
-    /// Mutably sets the clock used by pool maintenance.
+    /// Mutably sets the clock used by pool maintenance and connection timing.
     pub fn set_time_source(&mut self, source: Option<SharedTimeSource>) -> &mut Self {
         self.time_source = source;
         self

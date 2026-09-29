@@ -609,17 +609,20 @@ impl EstablishmentTiming {
     }
 
     fn elapsed_since(&self, started_at: SystemTime) -> Duration {
-        self.time_source
-            .now()
-            .duration_since(started_at)
-            .unwrap_or_default()
+        match self.time_source.now().duration_since(started_at) {
+            Ok(duration) => duration,
+            Err(error) => {
+                tracing::warn!(?error, "connection establishment clock moved backwards");
+                Duration::ZERO
+            }
+        }
     }
 }
 
 #[cfg(all(test, not(smithy_http_client_loom)))]
 mod tests {
     use super::*;
-    use aws_smithy_async::test_util::ManualTimeSource;
+    use aws_smithy_async::{test_util::ManualTimeSource, time::StaticTimeSource};
     use std::sync::atomic::AtomicUsize;
     use std::sync::Mutex;
     use std::time::UNIX_EPOCH;
@@ -787,6 +790,23 @@ mod tests {
             metadata.protocol_handshake_duration(),
             Some(Duration::from_secs(3))
         );
+    }
+
+    #[test]
+    fn backwards_clock_saturates_establishment_durations() {
+        let timing = EstablishmentTiming {
+            time_source: StaticTimeSource::new(UNIX_EPOCH).into(),
+            started_at: UNIX_EPOCH + Duration::from_secs(1),
+            protocol_handshake_started_at: Some(UNIX_EPOCH + Duration::from_secs(1)),
+            transport_duration: None,
+            protocol_handshake_duration: None,
+        };
+
+        let stats = timing.stats();
+
+        assert_eq!(stats.total_duration(), Duration::ZERO);
+        assert_eq!(stats.transport_duration(), Duration::ZERO);
+        assert_eq!(stats.protocol_handshake_duration(), Some(Duration::ZERO));
     }
 
     #[test]
