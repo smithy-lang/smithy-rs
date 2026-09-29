@@ -290,13 +290,8 @@ pub(crate) mod connect {
     {
         type Response = C::Response;
         type Error = S2nConnectorError;
-        type Future = Pin<
-            Box<
-                dyn Future<Output = Result<Self::Response, Self::Error>>
-                    + Send
-                    + 'static,
-            >,
-        >;
+        type Future =
+            Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
 
         fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
             self.0.poll_ready(cx).map_err(S2nConnectorError)

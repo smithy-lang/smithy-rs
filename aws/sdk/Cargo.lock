@@ -1352,7 +1352,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-client"
-version = "1.4.2"
+version = "1.5.0"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-protocol-test",
@@ -1497,7 +1497,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.15.0"
+version = "1.16.0"
 dependencies = [
  "approx",
  "aws-smithy-async",
@@ -1527,7 +1527,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.18.0"
+version = "1.19.0"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api-macros",
