@@ -92,6 +92,7 @@ pub(crate) enum H2Event {
         stream_id: u32,
         method: Method,
         path: String,
+        proxy_authorization: Option<String>,
     },
     ResponseCompleted {
         connection_id: H2ConnectionId,
@@ -411,7 +412,8 @@ impl H2ServerBuilder {
         let connections = self
             .connections
             .ok_or_else(|| H2HarnessError::new("an H2 connection plan is required"))?;
-        let tls_acceptor = tls::server_tls_acceptor(&[b"h2"])
+        let tls_acceptor = tls::SERVER_IDENTITY
+            .acceptor(&[b"h2"])
             .map_err(|err| H2HarnessError::new(format!("failed to configure TLS: {err}")))?;
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
@@ -766,11 +768,16 @@ async fn drive_connection(
                         let stream_id = respond.stream_id().as_u32();
                         let method = request.method().clone();
                         let path = request.uri().path().to_string();
+                        let proxy_authorization = request
+                            .headers()
+                            .get(http_1x::header::PROXY_AUTHORIZATION)
+                            .map(|value| value.to_str().unwrap_or_default().to_string());
                         state.record_event(H2Event::StreamAccepted {
                             connection_id,
                             stream_id,
                             method,
                             path: path.clone(),
+                            proxy_authorization,
                         });
                         let Some(stream_script) = script.script_for(&path) else {
                             respond.send_reset(Reason::PROTOCOL_ERROR);
