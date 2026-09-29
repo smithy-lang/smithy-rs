@@ -38,6 +38,7 @@ use super::cell::{H1ReservationDecision, OriginCell};
 use super::origin::OriginKey;
 use super::partition::{EligibilityGroup, PartitionId};
 use super::registry::AdmissionPolicy;
+use super::stats::ConnectionCapacityStats;
 use crate::sync::{Arc, Mutex, Weak};
 use std::collections::HashMap;
 use std::fmt;
@@ -134,6 +135,15 @@ impl OriginAdmission {
             OriginKey::from_parts(http_1x::uri::Scheme::HTTPS, "example.com", None)
                 .expect("test origin is valid"),
             AdmissionPolicy::new(limit, can_reclaim_h2_for_h1),
+        )
+    }
+
+    /// Returns authoritative bounded capacity for this origin.
+    pub(in crate::client::pool) fn connection_capacity_stats(&self) -> ConnectionCapacityStats {
+        let state = self.state.lock();
+        ConnectionCapacityStats::new(
+            state.capacity.limit,
+            state.capacity.limit - state.capacity.available,
         )
     }
 

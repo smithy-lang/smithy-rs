@@ -485,7 +485,7 @@ mod loom_tests {
 mod tests {
     use super::*;
     use crate::client::pool::cell::h1::H1Sender;
-    use crate::client::pool::connection::{ConnectionInfo, ConnectionState, NegotiatedProtocol};
+    use crate::client::pool::connection::{ConnectionInfo, ConnectionProtocol, ConnectionState};
     use crate::client::pool::origin::OriginKey;
     use crate::client::pool::partition::{EligibilityGroup, PartitionId, TokioDriverSpawner};
     use aws_smithy_async::test_util::controlled_time_and_sleep;
@@ -601,7 +601,7 @@ mod tests {
             ConnectionId::new(id),
             OriginKey::from_parts(Scheme::HTTP, "example.com", None).unwrap(),
             PartitionId::from_index(1),
-            NegotiatedProtocol::Http1,
+            ConnectionProtocol::Http1,
             hyper_util::client::legacy::connect::Connected::new(),
         );
         let (connection, _physical) = ConnectionState::unbounded(info);
@@ -613,7 +613,7 @@ mod tests {
             ConnectionId::new(id),
             OriginKey::from_parts(Scheme::HTTP, "example.com", None).unwrap(),
             PartitionId::from_index(1),
-            NegotiatedProtocol::Http2,
+            ConnectionProtocol::Http2,
             hyper_util::client::legacy::connect::Connected::new(),
         );
         let (connection, _physical) = ConnectionState::unbounded(info);

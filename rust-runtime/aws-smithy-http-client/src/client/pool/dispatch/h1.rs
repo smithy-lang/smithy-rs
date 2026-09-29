@@ -71,7 +71,7 @@ pub(super) async fn dispatch(
 
     add_host_header(&mut request, &context.absolute_uri)
         .map_err(|error| ConnectorError::user(error.into()))?;
-    let connect_path = connection.info().connect_path();
+    let connect_path = connection.info().connect_path_inner();
     connect_path.apply_proxy_authorization(request.headers_mut());
     rewrite_h1_request_target(&mut request, connect_path.uses_absolute_form());
 
@@ -425,7 +425,7 @@ fn rewrite_h1_request_target(request: &mut Request<SdkBody>, is_proxied: bool) {
 #[cfg(all(test, not(smithy_http_client_loom), feature = "rt-tokio"))]
 mod tests {
     use super::*;
-    use crate::client::connect::ConnectPath;
+    use crate::client::connect::ConnectPathInner;
     use crate::client::pool::cell::h1::H1Sender;
     use crate::client::pool::cell::OriginCell;
     use crate::client::pool::connection::ConnectionInfo;
@@ -831,8 +831,9 @@ mod tests {
 
     #[test]
     fn forward_proxy_authorization_preserves_a_caller_value() {
-        let connect_path =
-            ConnectPath::forward_proxy(Some(http_1x::HeaderValue::from_static("Basic connector")));
+        let connect_path = ConnectPathInner::forward_proxy(Some(
+            http_1x::HeaderValue::from_static("Basic connector"),
+        ));
         let caller_value = http_1x::HeaderValue::from_static("Basic caller");
 
         let mut request = Request::get("http://example.com/")
@@ -1532,7 +1533,7 @@ mod tests {
         assert!(error.is_timeout(), "unexpected connector error: {error:?}");
     }
 
-    async fn assert_h1_upgrade_releases_capacity(
+    async fn assert_h1_upgrade_retains_capacity(
         method: Method,
         response_head: &'static [u8],
         expected_status: http_1x::StatusCode,
@@ -1626,26 +1627,36 @@ mod tests {
             connection.probe().close_reason,
             "the upgraded HTTP/1 sender returned to pool policy"
         );
-        assert_eq!(1, cell.admission().unwrap().available_capacity_for_test());
+        assert_eq!(0, cell.admission().unwrap().available_capacity_for_test());
 
         let second_uri: Uri = format!("{endpoint}/after").parse().unwrap();
-        let second = tokio::time::timeout(
-            std::time::Duration::from_secs(1),
-            request(&pool, partition, second_uri),
-        )
-        .await
-        .expect("bounded capacity was not released at upgrade logical close");
-        consume(second).await;
-        assert_eq!(2, accepted.load(Ordering::SeqCst));
+        let second_pool = pool.clone();
+        let mut second =
+            tokio::spawn(async move { request(&second_pool, partition, second_uri).await });
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(100), &mut second)
+                .await
+                .is_err(),
+            "bounded capacity was returned while upgraded I/O remained live"
+        );
+        assert_eq!(1, accepted.load(Ordering::SeqCst));
 
         drop(upgraded);
         drop(response);
+
+        let second = tokio::time::timeout(std::time::Duration::from_secs(1), &mut second)
+            .await
+            .expect("bounded capacity was not returned after upgraded I/O dropped")
+            .unwrap();
+        consume(second).await;
+        assert_eq!(0, cell.admission().unwrap().available_capacity_for_test());
+        assert_eq!(2, accepted.load(Ordering::SeqCst));
         server.abort();
     }
 
     #[tokio::test]
-    async fn switching_protocols_upgrade_releases_capacity_and_transfers_io() {
-        assert_h1_upgrade_releases_capacity(
+    async fn switching_protocols_upgrade_retains_capacity_until_io_drops() {
+        assert_h1_upgrade_retains_capacity(
             Method::GET,
             b"HTTP/1.1 101 Switching Protocols\r\n\
               connection: upgrade\r\n\
@@ -1656,8 +1667,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn successful_connect_releases_capacity_and_transfers_io() {
-        assert_h1_upgrade_releases_capacity(
+    async fn successful_connect_retains_capacity_until_io_drops() {
+        assert_h1_upgrade_retains_capacity(
             Method::CONNECT,
             b"HTTP/1.1 200 Connection Established\r\n\r\nhello",
             http_1x::StatusCode::OK,
