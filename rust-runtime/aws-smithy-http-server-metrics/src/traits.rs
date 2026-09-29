@@ -6,6 +6,7 @@
 use metrique::AppendAndCloseOnDrop;
 use metrique::RootEntry;
 use metrique_core::CloseEntry;
+use metrique_util::MetricsPoolHandle;
 use metrique_writer::EntrySink;
 
 use crate::types::HttpRequest;
@@ -14,6 +15,22 @@ use crate::types::HttpResponse;
 /// A thread safe [`CloseEntry`]
 pub trait ThreadSafeCloseEntry: CloseEntry + Send + Sync + 'static {}
 impl<T> ThreadSafeCloseEntry for T where T: CloseEntry + Send + Sync + 'static {}
+
+/// A metrics entry that owns a flattened [`MetricsPool`](metrique_util::MetricsPool),
+/// letting the metrics layer hand out producer handles for a request.
+///
+/// The layer uses the handle to install a request-scoped pool via
+/// [`MetricsPool::current`](metrique_util::MetricsPool::current) and to store a
+/// clone in the request's extensions. Independently-owned middleware, handlers,
+/// and libraries can then contribute child metrics that flatten into this entry
+/// when the request finishes.
+///
+/// Implemented for [`DefaultMetrics`](crate::default::DefaultMetrics) and
+/// generated for structs annotated with `#[smithy_metrics]`.
+pub trait HasMetricsPool {
+    /// Return a cloneable producer handle for this entry's metrics pool.
+    fn metrics_pool_handle(&self) -> MetricsPoolHandle;
+}
 
 /// A thread safe [`EntrySink`]
 pub trait ThreadSafeEntrySink<Entry>:

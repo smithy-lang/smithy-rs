@@ -16,8 +16,11 @@ use std::time::Duration;
 use metrique::unit_of_work::metrics;
 use metrique::Slot;
 use metrique::SlotGuard;
+use metrique_util::MetricsPool;
+use metrique_util::MetricsPoolHandle;
 
 use crate::default::service_counter::ServiceCounter;
+use crate::traits::HasMetricsPool;
 
 pub(crate) mod service_counter;
 
@@ -44,14 +47,25 @@ pub struct DefaultMetrics {
     pub(crate) default_request_metrics: Option<Slot<DefaultRequestMetrics>>,
     #[metrics(flatten)]
     pub(crate) default_response_metrics: Option<Slot<DefaultResponseMetrics>>,
+    /// Pool that collects heterogeneous child metrics contributed by middleware,
+    /// handlers, and libraries during the request. Flattened into this entry when
+    /// the request finishes.
+    #[metrics(flatten)]
+    pub(crate) metrics_pool: MetricsPool,
 }
-// Slot currently doesn't impl debug: https://github.com/awslabs/metrique/issues/190
 impl Debug for DefaultMetrics {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DefaultMetrics")
-            .field("default_request_metrics", &())
-            .field("default_response_metrics", &())
+            .field("default_request_metrics", &self.default_request_metrics)
+            .field("default_response_metrics", &self.default_response_metrics)
+            .field("metrics_pool", &self.metrics_pool)
             .finish()
+    }
+}
+
+impl HasMetricsPool for DefaultMetrics {
+    fn metrics_pool_handle(&self) -> MetricsPoolHandle {
+        self.metrics_pool.handle()
     }
 }
 
