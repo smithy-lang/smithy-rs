@@ -320,105 +320,120 @@ impl CountedClose {
     }
 }
 
-/// Progress through installed-connection event delivery.
+/// Progress through connection lifecycle event emission.
 ///
-/// Connection state may close while the `Opened` callback is running. Tracking
-/// callback progress under the lifecycle lock delays close callbacks until
-/// `Opened` returns and preserves `Opened -> LogicalClose -> PhysicalClose`
-/// without invoking a listener while the lock is held.
+/// `OpenedPending` keeps close events behind the `Opened` callback. The
+/// waiting states name the next event and retain the listener after `Opened`
+/// returns. `emitting` grants one thread responsibility for emitting every
+/// event that becomes ready before it releases that responsibility.
 #[derive(Debug)]
 enum LifecycleEventProgress {
     /// Pool installation completed, but the `Opened` callback has not returned.
     OpenedPending,
-    /// `Opened` returned and logical close is the next event.
-    WaitingForLogicalClose(SharedConnectionEventListener),
-    /// Logical close was reported and physical close is the next event.
-    WaitingForPhysicalClose(SharedConnectionEventListener),
-    /// No further installed-connection event remains.
+    /// Logical close is the next event.
+    WaitingForLogicalClose {
+        listener: SharedConnectionEventListener,
+        emitting: bool,
+    },
+    /// Physical close is the next event.
+    WaitingForPhysicalClose {
+        listener: SharedConnectionEventListener,
+        emitting: bool,
+    },
+    /// No further connection lifecycle event remains.
     Complete,
 }
 
+/// Event data copied out of the lifecycle lock for listener invocation.
+enum ReadyLifecycleEvent {
+    LogicalClose(LogicalCloseCause),
+    PhysicalClose(CloseReason),
+}
+
 impl LifecycleEventProgress {
-    /// Advances callback progress after the `Opened` callback returns.
-    fn opened_completed(
-        &mut self,
-        listener: Option<&SharedConnectionEventListener>,
-        close: Option<(LogicalCloseCause, Option<CloseReason>)>,
-        physically_closed: bool,
-    ) -> Option<(LogicalCloseCause, Option<CloseReason>)> {
+    /// Transfers callback ownership from `Opened` to close-event emission.
+    fn opened_completed(&mut self, listener: Option<&SharedConnectionEventListener>) -> bool {
         assert!(
             matches!(self, Self::OpenedPending),
             "connection opened event completed more than once"
         );
         let Some(listener) = listener else {
             *self = Self::Complete;
-            return None;
+            return false;
         };
-        match (close, physically_closed) {
-            (None, _) => {
-                *self = Self::WaitingForLogicalClose(listener.clone());
-                None
-            }
-            (Some((cause, _)), false) => {
-                *self = Self::WaitingForPhysicalClose(listener.clone());
-                Some((cause, None))
-            }
-            (Some((cause, final_reason)), true) => {
-                *self = Self::Complete;
-                Some((
-                    cause,
-                    Some(final_reason.expect("physical close completed before H1 classification")),
-                ))
-            }
-        }
+        *self = Self::WaitingForLogicalClose {
+            listener: listener.clone(),
+            emitting: true,
+        };
+        true
     }
 
-    /// Returns the listener when logical close may now be reported.
-    fn logical_closed(
-        &mut self,
-        final_reason: Option<CloseReason>,
-        physically_closed: bool,
-    ) -> Option<(SharedConnectionEventListener, Option<CloseReason>)> {
-        match std::mem::replace(self, Self::Complete) {
-            Self::OpenedPending => {
-                *self = Self::OpenedPending;
-                None
+    /// Claims responsibility for emitting newly ready lifecycle events.
+    fn claim_emission(&mut self) -> bool {
+        let emitting = match self {
+            Self::WaitingForLogicalClose { emitting, .. }
+            | Self::WaitingForPhysicalClose { emitting, .. } => emitting,
+            Self::OpenedPending | Self::Complete => return false,
+        };
+        if *emitting {
+            return false;
+        }
+        *emitting = true;
+        true
+    }
+}
+
+impl ConnectionLifecycle {
+    /// Takes the next ready event or releases emission responsibility.
+    fn take_ready_event(&mut self) -> Option<(SharedConnectionEventListener, ReadyLifecycleEvent)> {
+        match std::mem::replace(&mut self.events, LifecycleEventProgress::Complete) {
+            LifecycleEventProgress::OpenedPending => {
+                unreachable!("connection lifecycle event emission began before Opened completed")
             }
-            Self::WaitingForLogicalClose(listener) => {
-                if physically_closed {
-                    Some((
+            LifecycleEventProgress::WaitingForLogicalClose { listener, emitting } => {
+                assert!(
+                    emitting,
+                    "connection lifecycle event emission was not claimed"
+                );
+                let cause = match &self.logical {
+                    LogicalState::Closed { cause, .. } => *cause,
+                    LogicalState::PendingOpen | LogicalState::Open { .. } => {
+                        self.events = LifecycleEventProgress::WaitingForLogicalClose {
+                            listener,
+                            emitting: false,
+                        };
+                        return None;
+                    }
+                };
+                self.events = LifecycleEventProgress::WaitingForPhysicalClose {
+                    listener: listener.clone(),
+                    emitting: true,
+                };
+                Some((listener, ReadyLifecycleEvent::LogicalClose(cause)))
+            }
+            LifecycleEventProgress::WaitingForPhysicalClose { listener, emitting } => {
+                assert!(
+                    emitting,
+                    "connection lifecycle event emission was not claimed"
+                );
+                if !self.physical_connection_complete {
+                    self.events = LifecycleEventProgress::WaitingForPhysicalClose {
                         listener,
-                        Some(
-                            final_reason
-                                .expect("physical close completed before H1 classification"),
-                        ),
-                    ))
-                } else {
-                    *self = Self::WaitingForPhysicalClose(listener.clone());
-                    Some((listener, None))
+                        emitting: false,
+                    };
+                    return None;
                 }
+                let reason = match &self.logical {
+                    LogicalState::Closed { disposition, .. } => disposition
+                        .final_reason()
+                        .expect("physical close completed before H1 classification"),
+                    LogicalState::PendingOpen | LogicalState::Open { .. } => {
+                        panic!("physical close followed an open connection")
+                    }
+                };
+                Some((listener, ReadyLifecycleEvent::PhysicalClose(reason)))
             }
-            Self::WaitingForPhysicalClose(listener) => {
-                *self = Self::WaitingForPhysicalClose(listener);
-                None
-            }
-            Self::Complete => None,
-        }
-    }
-
-    /// Returns the listener when physical close may now be reported.
-    fn physical_closed(&mut self) -> Option<SharedConnectionEventListener> {
-        match std::mem::replace(self, Self::Complete) {
-            Self::OpenedPending => {
-                *self = Self::OpenedPending;
-                None
-            }
-            Self::WaitingForLogicalClose(listener) => {
-                *self = Self::WaitingForLogicalClose(listener);
-                None
-            }
-            Self::WaitingForPhysicalClose(listener) => Some(listener),
-            Self::Complete => None,
+            LifecycleEventProgress::Complete => None,
         }
     }
 }
@@ -551,30 +566,37 @@ impl ConnectionState {
     /// its callbacks are delayed until this method can preserve
     /// `Opened`, logical close, and physical close in that order.
     pub(super) fn complete_opened_event(&self, listener: Option<&SharedConnectionEventListener>) {
-        let pending_close = {
+        let emit = {
             let mut lifecycle = self.lifecycle.lock();
             assert!(
                 !matches!(lifecycle.logical, LogicalState::PendingOpen),
                 "connection opened event completed before the connection opened"
             );
-            let close = match &lifecycle.logical {
-                LogicalState::PendingOpen | LogicalState::Open { .. } => None,
-                LogicalState::Closed {
-                    cause, disposition, ..
-                } => Some((*cause, disposition.final_reason())),
+            lifecycle.events.opened_completed(listener)
+        };
+
+        if emit {
+            self.emit_ready_events();
+        }
+    }
+
+    /// Emits every ready lifecycle event claimed by the current thread.
+    ///
+    /// Each event is taken in its own statement so the lifecycle lock is
+    /// released before the listener runs.
+    fn emit_ready_events(&self) {
+        loop {
+            let ready = self.lifecycle.lock().take_ready_event();
+            let Some((listener, event)) = ready else {
+                return;
             };
-            let physically_closed = lifecycle.physical_connection_complete;
-            lifecycle
-                .events
-                .opened_completed(listener, close, physically_closed)
-        };
-        let Some(listener) = listener else {
-            return;
-        };
-        if let Some((cause, physical_reason)) = pending_close {
-            listener.logical_close(&self.info, cause);
-            if let Some(reason) = physical_reason {
-                listener.physical_close(&self.info, reason);
+            match event {
+                ReadyLifecycleEvent::LogicalClose(cause) => {
+                    listener.logical_close(&self.info, cause);
+                }
+                ReadyLifecycleEvent::PhysicalClose(reason) => {
+                    listener.physical_close(&self.info, reason);
+                }
             }
         }
     }
@@ -590,7 +612,7 @@ impl ConnectionState {
     /// upgraded I/O.
     pub(super) fn logical_close(&self, reason: CloseReason) -> bool {
         let cause = LogicalCloseCause::from_reason(reason);
-        let (released_capacity, pending_events) = {
+        let (released_capacity, emit) = {
             let mut lifecycle = self.lifecycle.lock();
             let previous = std::mem::replace(&mut lifecycle.logical, LogicalState::PendingOpen);
             let (disposition, retained_capacity, released_capacity, was_open) = match previous {
@@ -642,7 +664,6 @@ impl ConnectionState {
                     return false;
                 }
             };
-            let final_reason = disposition.final_reason();
             if was_open && !lifecycle.physical_connection_complete {
                 let counted_close = match self.info.protocol() {
                     ConnectionProtocol::Http1 if reason == CloseReason::Upgraded => {
@@ -663,18 +684,12 @@ impl ConnectionState {
                 disposition,
                 retained_capacity,
             };
-            let physically_closed = lifecycle.physical_connection_complete;
-            let pending_events = lifecycle
-                .events
-                .logical_closed(final_reason, physically_closed);
-            (released_capacity, pending_events)
+            let emit = lifecycle.events.claim_emission();
+            (released_capacity, emit)
         };
         drop(released_capacity);
-        if let Some((listener, physical_reason)) = pending_events {
-            listener.logical_close(&self.info, cause);
-            if let Some(reason) = physical_reason {
-                listener.physical_close(&self.info, reason);
-            }
+        if emit {
+            self.emit_ready_events();
         }
         tracing::debug!(
             connection_id = %self.id(),
@@ -695,7 +710,7 @@ impl ConnectionState {
     /// client. Every other classification preserves the driver reason and
     /// returns capacity immediately.
     pub(super) fn complete_h1_exchange(&self, exchange_reason: CloseReason) -> bool {
-        let (released_capacity, listener, final_reason) = {
+        let (released_capacity, final_reason) = {
             let mut lifecycle = self.lifecycle.lock();
             let physical_connection_complete = lifecycle.physical_connection_complete;
             let (released_capacity, final_reason) = match &mut lifecycle.logical {
@@ -707,14 +722,17 @@ impl ConnectionState {
                     let H1CloseDisposition::AwaitingExchange { fallback } = *state else {
                         return false;
                     };
+                    debug_assert!(
+                        !physical_connection_complete,
+                        "physical close left HTTP/1 exchange classification pending"
+                    );
                     let final_reason = if exchange_reason == CloseReason::Upgraded {
                         CloseReason::Upgraded
                     } else {
                         fallback
                     };
                     *state = H1CloseDisposition::Final(final_reason);
-                    let release_capacity =
-                        final_reason != CloseReason::Upgraded || physical_connection_complete;
+                    let release_capacity = final_reason != CloseReason::Upgraded;
                     (
                         release_capacity.then(|| retained_capacity.take()).flatten(),
                         final_reason,
@@ -722,7 +740,7 @@ impl ConnectionState {
                 }
                 _ => return false,
             };
-            if final_reason == CloseReason::Upgraded && !physical_connection_complete {
+            if final_reason == CloseReason::Upgraded {
                 lifecycle.counted_close = Some(
                     lifecycle
                         .counted_close
@@ -730,17 +748,9 @@ impl ConnectionState {
                         .h1_upgrade(&self.stats),
                 );
             }
-            let listener = if physical_connection_complete {
-                lifecycle.events.physical_closed()
-            } else {
-                None
-            };
-            (released_capacity, listener, final_reason)
+            (released_capacity, final_reason)
         };
         drop(released_capacity);
-        if let Some(listener) = listener {
-            listener.physical_close(&self.info, final_reason);
-        }
         tracing::debug!(
             connection_id = %self.id(),
             connection_partition = ?self.owner_partition(),
@@ -786,7 +796,7 @@ impl ConnectionState {
     ///
     /// Panics if physical connection ownership completes more than once.
     fn complete_physical_connection(&self) {
-        let (released_capacity, listener, final_reason) = {
+        let (released_capacity, emit) = {
             let mut lifecycle = self.lifecycle.lock();
             assert!(
                 !lifecycle.physical_connection_complete,
@@ -794,7 +804,7 @@ impl ConnectionState {
             );
             lifecycle.physical_connection_complete = true;
 
-            let (released_capacity, final_reason) = match &mut lifecycle.logical {
+            let released_capacity = match &mut lifecycle.logical {
                 LogicalState::Closed {
                     disposition,
                     retained_capacity,
@@ -806,23 +816,20 @@ impl ConnectionState {
                     {
                         *disposition = CloseDisposition::Http1(H1CloseDisposition::Final(fallback));
                     }
-                    (retained_capacity.take(), disposition.final_reason())
+                    retained_capacity.take()
                 }
-                LogicalState::PendingOpen | LogicalState::Open { .. } => (None, None),
+                LogicalState::PendingOpen | LogicalState::Open { .. } => None,
             };
             if let Some(counted_close) = lifecycle.counted_close.take() {
                 counted_close.finish(&self.stats);
             }
             self.stats.physical_connection_finished();
-            let listener = final_reason.and_then(|_| lifecycle.events.physical_closed());
-            (released_capacity, listener, final_reason)
+            let emit = lifecycle.events.claim_emission();
+            (released_capacity, emit)
         };
         drop(released_capacity);
-        if let Some(listener) = listener {
-            listener.physical_close(
-                &self.info,
-                final_reason.expect("physical close event had no final reason"),
-            );
+        if emit {
+            self.emit_ready_events();
         }
         tracing::debug!(
             connection_id = %self.id(),
@@ -1236,7 +1243,7 @@ mod tests {
     }
 
     #[test]
-    fn close_callback_may_reenter_connection_state() {
+    fn close_callbacks_may_reenter_connection_state() {
         let observed = StdArc::new(StdMutex::new(Vec::new()));
         let connection_slot = StdArc::new(StdMutex::new(None::<Arc<ConnectionState>>));
         let events = ConnectionEvents::new(
@@ -1244,21 +1251,32 @@ mod tests {
                 let observed = observed.clone();
                 let connection_slot = connection_slot.clone();
                 move |event: &ConnectionEvent<'_>| {
-                    let ConnectionEvent::LogicalClose(closed) = event else {
-                        return;
+                    let event = match event {
+                        ConnectionEvent::Opened(_) => return,
+                        ConnectionEvent::LogicalClose(closed) => {
+                            ObservedLifecycleEvent::LogicalClose(closed.cause())
+                        }
+                        ConnectionEvent::PhysicalClose(closed) => {
+                            ObservedLifecycleEvent::PhysicalClose(closed.reason())
+                        }
+                        ConnectionEvent::EstablishmentFailed(failed) => {
+                            panic!("installed connection failed: {failed:?}")
+                        }
                     };
-                    observed.lock().unwrap().push(closed.cause());
                     let connection = connection_slot
                         .lock()
                         .unwrap()
                         .clone()
                         .expect("connection installed before callback");
-                    assert!(!connection.logical_close(CloseReason::PoolDropped));
+                    // Recorded after reentry so a panic swallowed by the
+                    // listener boundary leaves the observation missing.
+                    let closed_again = connection.logical_close(CloseReason::PoolDropped);
+                    observed.lock().unwrap().push((event, closed_again));
                 }
             })),
             SharedTimeSource::default(),
         );
-        let (connection, _physical) = ConnectionState::unbounded(test_info(1));
+        let (connection, physical) = ConnectionState::unbounded(test_info(1));
         *connection_slot.lock().unwrap() = Some(connection.clone());
         let establishment = events.establishment_started(
             connection.info().origin(),
@@ -1268,8 +1286,18 @@ mod tests {
         establishment.opened(&connection);
 
         assert!(connection.logical_close(CloseReason::Poisoned));
+        physical.release();
         assert_eq!(
-            &[LogicalCloseCause::Poisoned],
+            &[
+                (
+                    ObservedLifecycleEvent::LogicalClose(LogicalCloseCause::Poisoned),
+                    false
+                ),
+                (
+                    ObservedLifecycleEvent::PhysicalClose(CloseReason::Poisoned),
+                    false
+                ),
+            ],
             observed.lock().unwrap().as_slice()
         );
     }
@@ -1468,6 +1496,11 @@ mod tests {
 mod loom_tests {
     use super::*;
     use crate::client::pool::admission::OriginAdmission;
+    use crate::client::pool::events::{
+        ConnectionEvent, ConnectionEvents, SharedConnectionEventListener,
+    };
+    use aws_smithy_async::time::SharedTimeSource;
+    use loom::sync::atomic::{AtomicUsize, Ordering};
     use std::num::NonZeroUsize;
 
     fn test_info(id: u64) -> Arc<ConnectionInfo> {
@@ -1536,6 +1569,66 @@ mod loom_tests {
                 reason,
                 CloseReason::Poisoned | CloseReason::PoolDropped
             ));
+        });
+    }
+
+    /// Races `Opened` completion with logical and physical close.
+    ///
+    /// Each installed event must be delivered once in
+    /// `Opened -> LogicalClose -> PhysicalClose` order.
+    #[test]
+    fn installed_events_remain_ordered_across_concurrent_close() {
+        loom::model(|| {
+            let event_sequence = Arc::new(AtomicUsize::new(0));
+            let observed = event_sequence.clone();
+            let events = ConnectionEvents::new(
+                Some(SharedConnectionEventListener::new(
+                    move |event: &ConnectionEvent<'_>| {
+                        let code = match event {
+                            ConnectionEvent::Opened(_) => 1,
+                            ConnectionEvent::LogicalClose(_) => 2,
+                            ConnectionEvent::PhysicalClose(_) => 3,
+                            ConnectionEvent::EstablishmentFailed(_) => 4,
+                        };
+                        observed
+                            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |sequence| {
+                                Some(sequence * 4 + code)
+                            })
+                            .expect("event sequence update is infallible");
+                    },
+                )),
+                SharedTimeSource::default(),
+            );
+            let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
+            let lease = OriginAdmission::lease_for_test(&origin);
+            let (connection, physical) = ConnectionState::bounded(test_info(1), lease);
+            let establishment = events.establishment_started(
+                connection.info().origin(),
+                connection.owner_partition(),
+                connection.stats.clone(),
+            );
+
+            let opened_connection = connection.clone();
+            let opened = loom::thread::spawn(move || establishment.opened(&opened_connection));
+            let close_connection = connection.clone();
+            let close = loom::thread::spawn(move || {
+                close_connection.logical_close(CloseReason::PoolDropped)
+            });
+            let complete_physical = loom::thread::spawn(move || physical.release());
+
+            opened.join().unwrap();
+            assert!(close.join().unwrap());
+            complete_physical.join().unwrap();
+
+            assert_eq!(
+                27,
+                event_sequence.load(Ordering::SeqCst),
+                "installed connection events were missing, duplicated, or reordered"
+            );
+            assert_eq!(1, origin.available_capacity_for_test());
+            let probe = connection.probe();
+            assert_eq!(Some(CloseReason::PoolDropped), probe.close_reason);
+            assert!(probe.physical_connection_complete);
         });
     }
 }
