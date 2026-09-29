@@ -345,7 +345,7 @@ pub(crate) mod build_connector {
 }
 
 pub(crate) mod connect {
-    use crate::client::connect::{Conn, Connecting};
+    use crate::client::connect::{Conn, ConnectPath, Connecting};
     use crate::client::proxy::ProxyConfig;
     use aws_smithy_runtime_api::box_error::BoxError;
     use http_1x::uri::Scheme;
@@ -449,7 +449,7 @@ pub(crate) mod connect {
                 let conn = fut.await?;
                 Ok(Conn {
                     inner: Box::new(conn),
-                    is_proxy: false,
+                    connect_path: ConnectPath::Direct,
                 })
             })
         }
@@ -461,12 +461,13 @@ pub(crate) mod connect {
         ) -> Connecting {
             // For HTTP through proxy, connect to the proxy and let it handle the request
             let proxy_uri = intercept.uri().clone();
+            let connect_path = ConnectPath::forward_proxy(intercept.basic_auth().cloned());
             let fut = self.https.call(proxy_uri);
             Box::pin(async move {
                 let conn = fut.await?;
                 Ok(Conn {
                     inner: Box::new(conn),
-                    is_proxy: true,
+                    connect_path,
                 })
             })
         }
@@ -499,10 +500,7 @@ pub(crate) mod connect {
             Box::pin(async move {
                 // Establish CONNECT tunnel
                 tracing::trace!("tunneling HTTPS over proxy");
-                let tunneled = tunnel
-                    .call(dst_clone.clone())
-                    .await
-                    .map_err(|e| BoxError::from(format!("CONNECT tunnel failed: {e}")))?;
+                let tunneled = tunnel.call(dst_clone.clone()).await?;
 
                 // Stage 2: Manual TLS handshake over tunneled stream
                 let host = dst_clone
@@ -521,7 +519,7 @@ pub(crate) mod connect {
                     inner: Box::new(RustTlsConn {
                         inner: TokioIo::new(tls_connector),
                     }),
-                    is_proxy: true,
+                    connect_path: ConnectPath::ProxyTunnel,
                 })
             })
         }
