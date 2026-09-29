@@ -500,10 +500,7 @@ pub(crate) mod connect {
             Box::pin(async move {
                 // Establish CONNECT tunnel
                 tracing::trace!("tunneling HTTPS over proxy");
-                let tunneled = tunnel
-                    .call(dst_clone.clone())
-                    .await
-                    .map_err(|e| BoxError::from(format!("CONNECT tunnel failed: {e}")))?;
+                let tunneled = tunnel.call(dst_clone.clone()).await?;
 
                 // Stage 2: Manual TLS handshake over tunneled stream
                 let host = dst_clone

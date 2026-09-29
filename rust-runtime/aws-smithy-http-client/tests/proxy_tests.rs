@@ -13,6 +13,12 @@
 mod common {
     #[allow(dead_code)]
     pub(crate) mod client;
+    #[cfg(all(
+        feature = "wire-mock",
+        any(feature = "rustls-ring", feature = "s2n-tls")
+    ))]
+    #[allow(dead_code)]
+    pub(crate) mod h2;
     pub(crate) mod proxy;
     #[cfg(any(feature = "rustls-ring", feature = "s2n-tls"))]
     pub(crate) mod tls;
@@ -28,7 +34,9 @@ use aws_smithy_runtime_api::box_error::BoxError;
     feature = "rustls-ring",
     feature = "s2n-tls"
 ))]
-use aws_smithy_runtime_api::client::dns::SharedDnsResolver;
+use aws_smithy_runtime_api::client::dns::{
+    DnsFuture, ResolveDns, ResolveDnsError, SharedDnsResolver,
+};
 use aws_smithy_runtime_api::client::http::{HttpConnector, SharedHttpClient, SharedHttpConnector};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 #[cfg(any(feature = "rustls-ring", feature = "s2n-tls"))]
@@ -36,6 +44,13 @@ use common::client::HttpsClientBackend;
 use common::client::{
     self as test_client, BackendConfig, HttpClientBackend, HyperUtilLegacyPool,
     PartitionedConnectionPool,
+};
+#[cfg(all(
+    feature = "wire-mock",
+    any(feature = "rustls-ring", feature = "s2n-tls")
+))]
+use common::h2::{
+    H2ConnectionPlan, H2ConnectionScript, H2Event, H2Response, H2StreamScript, H2TestServer,
 };
 use common::proxy::{basic_authorization, MockHttpServer};
 #[cfg(any(feature = "rustls-ring", feature = "s2n-tls"))]
@@ -71,18 +86,11 @@ fn proxy_backend_config(proxy_config: ProxyConfig) -> BackendConfig {
 #[cfg(any(feature = "rustls-ring", feature = "s2n-tls"))]
 fn https_client(
     backend: &dyn HttpsClientBackend,
-    proxy_config: ProxyConfig,
+    config: BackendConfig,
     provider: tls::Provider,
     tls_context: tls::TlsContext,
 ) -> TestClient {
-    let client = backend.build_https(
-        BackendConfig {
-            proxy_config: Some(proxy_config),
-            ..Default::default()
-        },
-        provider,
-        tls_context,
-    );
+    let client = backend.build_https(config, provider, tls_context);
     let connector = test_client::connector(&client);
     TestClient {
         _client: client,
@@ -102,6 +110,169 @@ async fn send_request(
 
 async fn get(client: &TestClient, uri: &str) -> Result<(StatusCode, String), BoxError> {
     send_request(client, HttpRequest::get(uri)?).await
+}
+
+#[cfg(any(feature = "rustls-ring", feature = "s2n-tls"))]
+#[derive(Clone, Debug)]
+struct FailingDns;
+
+#[cfg(any(feature = "rustls-ring", feature = "s2n-tls"))]
+impl ResolveDns for FailingDns {
+    fn resolve_dns<'a>(&'a self, name: &'a str) -> DnsFuture<'a> {
+        DnsFuture::ready(Err(ResolveDnsError::new(std::io::Error::other(format!(
+            "intentional DNS failure for {name}"
+        )))))
+    }
+}
+
+#[cfg(all(
+    feature = "wire-mock",
+    any(feature = "rustls-ring", feature = "s2n-tls")
+))]
+async fn h2_forward_proxy_applies_configured_authentication(
+    backend: &dyn HttpsClientBackend,
+    provider: tls::Provider,
+) {
+    let server = H2TestServer::builder()
+        .connections(H2ConnectionPlan::queue([H2ConnectionScript::new().route(
+            "/protected",
+            H2StreamScript::respond(H2Response::ok("authenticated over H2")),
+        )]))
+        .start()
+        .await
+        .expect("H2 forward proxy should start");
+    let config = ProxyConfig::http(server.url("/"))
+        .expect("valid proxy URI")
+        .with_basic_auth("h2user", "h2pass");
+    let client = https_client(
+        backend,
+        proxy_backend_config(config),
+        provider,
+        test_tls::SERVER_IDENTITY.client_context(),
+    );
+
+    assert_eq!(
+        (StatusCode::OK, "authenticated over H2".to_string()),
+        get(&client, "http://origin.test/protected")
+            .await
+            .expect("H2 forward-proxy request should succeed")
+    );
+    let expected = basic_authorization("h2user", "h2pass");
+    let authorization = server.events().into_iter().find_map(|event| match event {
+        H2Event::StreamAccepted {
+            path,
+            proxy_authorization,
+            ..
+        } if path == "/protected" => proxy_authorization,
+        _ => None,
+    });
+    assert_eq!(Some(expected), authorization);
+
+    drop(client);
+    server
+        .shutdown()
+        .await
+        .expect("clean H2 forward-proxy shutdown");
+}
+
+#[cfg(all(feature = "wire-mock", feature = "rustls-ring"))]
+#[tokio::test]
+async fn test_h2_forward_proxy_auth_with_rustls_and_hyper_util_legacy_pool() {
+    h2_forward_proxy_applies_configured_authentication(
+        &HyperUtilLegacyPool,
+        tls::Provider::rustls(tls::rustls_provider::CryptoMode::Ring),
+    )
+    .await;
+}
+
+#[cfg(all(feature = "wire-mock", feature = "rustls-ring"))]
+#[tokio::test]
+async fn test_h2_forward_proxy_auth_with_rustls_and_partitioned_connection_pool() {
+    h2_forward_proxy_applies_configured_authentication(
+        &PartitionedConnectionPool,
+        tls::Provider::rustls(tls::rustls_provider::CryptoMode::Ring),
+    )
+    .await;
+}
+
+#[cfg(all(feature = "wire-mock", feature = "s2n-tls"))]
+#[tokio::test]
+async fn test_h2_forward_proxy_auth_with_s2n_tls_and_hyper_util_legacy_pool() {
+    h2_forward_proxy_applies_configured_authentication(&HyperUtilLegacyPool, tls::Provider::S2nTls)
+        .await;
+}
+
+#[cfg(all(feature = "wire-mock", feature = "s2n-tls"))]
+#[tokio::test]
+async fn test_h2_forward_proxy_auth_with_s2n_tls_and_partitioned_connection_pool() {
+    h2_forward_proxy_applies_configured_authentication(
+        &PartitionedConnectionPool,
+        tls::Provider::S2nTls,
+    )
+    .await;
+}
+
+#[cfg(any(feature = "rustls-ring", feature = "s2n-tls"))]
+async fn https_proxy_dns_failure_remains_retryable_io(
+    backend: &dyn HttpsClientBackend,
+    provider: tls::Provider,
+) {
+    let client = https_client(
+        backend,
+        BackendConfig {
+            proxy_config: Some(
+                ProxyConfig::all("http://proxy.invalid:8080").expect("valid proxy URI"),
+            ),
+            dns_resolver: Some(SharedDnsResolver::new(FailingDns)),
+            ..Default::default()
+        },
+        provider,
+        tls::TlsContext::default(),
+    );
+
+    let error = test_client::send_request(
+        &client.connector,
+        HttpRequest::get("https://origin.test/protected").expect("valid request"),
+    )
+    .await
+    .expect_err("proxy DNS failure must fail the request");
+    assert!(
+        error.is_io(),
+        "HTTPS proxy DNS failure should remain retryable I/O, got {error:?}"
+    );
+}
+
+#[cfg(feature = "rustls-ring")]
+#[tokio::test]
+async fn test_https_proxy_dns_failure_with_rustls_and_hyper_util_legacy_pool() {
+    https_proxy_dns_failure_remains_retryable_io(
+        &HyperUtilLegacyPool,
+        tls::Provider::rustls(tls::rustls_provider::CryptoMode::Ring),
+    )
+    .await;
+}
+
+#[cfg(feature = "rustls-ring")]
+#[tokio::test]
+async fn test_https_proxy_dns_failure_with_rustls_and_partitioned_connection_pool() {
+    https_proxy_dns_failure_remains_retryable_io(
+        &PartitionedConnectionPool,
+        tls::Provider::rustls(tls::rustls_provider::CryptoMode::Ring),
+    )
+    .await;
+}
+
+#[cfg(feature = "s2n-tls")]
+#[tokio::test]
+async fn test_https_proxy_dns_failure_with_s2n_tls_and_hyper_util_legacy_pool() {
+    https_proxy_dns_failure_remains_retryable_io(&HyperUtilLegacyPool, tls::Provider::S2nTls).await;
+}
+
+#[cfg(feature = "s2n-tls")]
+#[tokio::test]
+async fn test_https_proxy_dns_failure_with_s2n_tls_and_partitioned_connection_pool() {
+    https_proxy_dns_failure_remains_retryable_io(&PartitionedConnectionPool, tls::Provider::S2nTls)
+        .await;
 }
 
 #[allow(clippy::await_holding_lock)]
@@ -624,7 +795,12 @@ async fn https_connect_uses_authority_form_and_authentication(
     let config = ProxyConfig::all(format!("http://{}", proxy.addr()))
         .expect("valid proxy")
         .with_basic_auth("connectuser", "connectpass");
-    let client = https_client(backend, config, provider, tls::TlsContext::default());
+    let client = https_client(
+        backend,
+        proxy_backend_config(config),
+        provider,
+        tls::TlsContext::default(),
+    );
 
     assert!(
         get(&client, "https://secure.example.com/private")
@@ -691,7 +867,12 @@ async fn https_connect_without_authentication_is_rejected(
     })
     .await;
     let config = ProxyConfig::all(format!("http://{}", proxy.addr())).expect("valid proxy");
-    let client = https_client(backend, config, provider, tls::TlsContext::default());
+    let client = https_client(
+        backend,
+        proxy_backend_config(config),
+        provider,
+        tls::TlsContext::default(),
+    );
 
     assert!(
         get(&client, "https://secure.example.com/private")
@@ -752,7 +933,7 @@ async fn tunneled_https_request_uses_origin_form(
         .with_basic_auth("connectuser", "connectpass");
     let client = https_client(
         backend,
-        config,
+        proxy_backend_config(config),
         provider,
         test_tls::SERVER_IDENTITY.client_context(),
     );

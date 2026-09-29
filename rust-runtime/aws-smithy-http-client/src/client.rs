@@ -1432,11 +1432,8 @@ mod test {
             .await
             .unwrap_err();
         let error = error.into_source();
-        let s2n_error = error
-            .source()
-            .unwrap()
-            .downcast_ref::<s2n_tls_hyper::error::Error>()
-            .unwrap();
+        let s2n_error = find_source::<s2n_tls_hyper::error::Error>(error.as_ref())
+            .expect("s2n-tls-hyper error is present in the source chain");
         assert!(matches!(
             s2n_error,
             s2n_tls_hyper::error::Error::InvalidScheme

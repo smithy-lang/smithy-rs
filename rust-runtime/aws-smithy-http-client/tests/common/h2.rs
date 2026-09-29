@@ -92,6 +92,7 @@ pub(crate) enum H2Event {
         stream_id: u32,
         method: Method,
         path: String,
+        proxy_authorization: Option<String>,
     },
     ResponseCompleted {
         connection_id: H2ConnectionId,
@@ -767,11 +768,16 @@ async fn drive_connection(
                         let stream_id = respond.stream_id().as_u32();
                         let method = request.method().clone();
                         let path = request.uri().path().to_string();
+                        let proxy_authorization = request
+                            .headers()
+                            .get(http_1x::header::PROXY_AUTHORIZATION)
+                            .map(|value| value.to_str().unwrap_or_default().to_string());
                         state.record_event(H2Event::StreamAccepted {
                             connection_id,
                             stream_id,
                             method,
                             path: path.clone(),
+                            proxy_authorization,
                         });
                         let Some(stream_script) = script.script_for(&path) else {
                             respond.send_reset(Reason::PROTOCOL_ERROR);

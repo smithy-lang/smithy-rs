@@ -21,6 +21,7 @@ use super::super::cell::h2::{
 };
 use super::super::connection::{CloseReason, ConnectionState};
 use super::{AcquisitionContext, H1HostHeaderInserted};
+use crate::client::connect::ConnectPath;
 use crate::client::downcast_error;
 use crate::sync::{Arc, Mutex};
 use aws_smithy_runtime_api::client::connection::CaptureSmithyConnection;
@@ -86,8 +87,12 @@ pub(super) async fn dispatch(
     mut request: Request<SdkBody>,
     mut activation: H2Activation,
 ) -> Result<H2DispatchOutcome, ConnectorError> {
-    prepare_h2_request(&mut request, &context.absolute_uri);
     let connection = activation.connection().clone();
+    prepare_h2_request(
+        &mut request,
+        &context.absolute_uri,
+        connection.info().connect_path(),
+    );
     let reused = activation.is_reused();
     let close = activation.close_handle();
     let captured_metadata = request
@@ -247,8 +252,12 @@ fn resolve_h2_send(
     }
 }
 
-/// Restores the absolute URI and removes only a pool-synthesized H1 `Host`.
-fn prepare_h2_request(request: &mut Request<SdkBody>, absolute_uri: &http_1x::Uri) {
+/// Restores the absolute URI and applies connection-path request metadata.
+fn prepare_h2_request(
+    request: &mut Request<SdkBody>,
+    absolute_uri: &http_1x::Uri,
+    connect_path: &ConnectPath,
+) {
     *request.uri_mut() = absolute_uri.clone();
     if request
         .extensions_mut()
@@ -257,6 +266,7 @@ fn prepare_h2_request(request: &mut Request<SdkBody>, absolute_uri: &http_1x::Ur
     {
         request.headers_mut().remove(http_1x::header::HOST);
     }
+    connect_path.apply_proxy_authorization(request.headers_mut());
 }
 
 /// Point at which the pool learned that Hyper had not accepted the request.
@@ -590,7 +600,7 @@ mod tests {
             .insert(http_1x::header::HOST, "example.com".parse().unwrap());
         request.extensions_mut().insert(H1HostHeaderInserted);
 
-        prepare_h2_request(&mut request, &absolute);
+        prepare_h2_request(&mut request, &absolute, &ConnectPath::Direct);
 
         assert_eq!(&absolute, request.uri());
         assert!(!request.headers().contains_key(http_1x::header::HOST));
@@ -600,8 +610,36 @@ mod tests {
         user_host
             .headers_mut()
             .insert(http_1x::header::HOST, "signed.example".parse().unwrap());
-        prepare_h2_request(&mut user_host, &absolute);
+        prepare_h2_request(&mut user_host, &absolute, &ConnectPath::Direct);
         assert_eq!("signed.example", user_host.headers()[http_1x::header::HOST]);
+    }
+
+    #[test]
+    fn h2_preparation_applies_forward_proxy_auth_without_overwriting_caller() {
+        let absolute: http_1x::Uri = "http://example.com/resource".parse().unwrap();
+        let connect_path =
+            ConnectPath::forward_proxy(Some(http_1x::HeaderValue::from_static("Basic connector")));
+        let mut request = Request::get("/resource").body(SdkBody::empty()).unwrap();
+
+        prepare_h2_request(&mut request, &absolute, &connect_path);
+
+        assert_eq!(
+            "Basic connector",
+            request.headers()[http_1x::header::PROXY_AUTHORIZATION]
+        );
+
+        let caller_value = http_1x::HeaderValue::from_static("Basic caller");
+        let mut request = Request::get("/resource")
+            .header(http_1x::header::PROXY_AUTHORIZATION, caller_value.clone())
+            .body(SdkBody::empty())
+            .unwrap();
+
+        prepare_h2_request(&mut request, &absolute, &connect_path);
+
+        assert_eq!(
+            Some(&caller_value),
+            request.headers().get(http_1x::header::PROXY_AUTHORIZATION)
+        );
     }
 
     #[test]

@@ -58,7 +58,7 @@ impl ProxyAuthorization {
 pub(crate) enum ConnectPath {
     /// The transport reaches the origin without a proxy.
     Direct,
-    /// HTTP/1 requests are sent to a forward proxy in absolute form.
+    /// Requests are sent to a forward proxy; HTTP/1 uses absolute-form targets.
     ForwardProxy {
         authorization: Option<ProxyAuthorization>,
     },
@@ -95,7 +95,7 @@ impl ConnectPath {
         matches!(self, Self::ForwardProxy { .. })
     }
 
-    /// Applies forwarding credentials to an HTTP/1 request.
+    /// Applies configured forwarding credentials unless the request supplied them.
     pub(crate) fn apply_proxy_authorization(&self, headers: &mut HeaderMap) {
         if let Self::ForwardProxy {
             authorization: Some(authorization),

@@ -174,9 +174,14 @@ impl HttpsClientBackend for HyperUtilLegacyPool {
         provider: tls::Provider,
         tls_context: tls::TlsContext,
     ) -> SharedHttpClient {
-        let Some(proxy_config) = config.proxy_config else {
+        let BackendConfig {
+            pool_idle_timeout,
+            proxy_config,
+            dns_resolver,
+        } = config;
+        if proxy_config.is_none() && dns_resolver.is_none() {
             let mut builder = Builder::new();
-            if let Some(pool_idle_timeout) = config.pool_idle_timeout {
+            if let Some(pool_idle_timeout) = pool_idle_timeout {
                 builder = builder.pool_idle_timeout(pool_idle_timeout);
             }
             return builder
@@ -185,20 +190,23 @@ impl HttpsClientBackend for HyperUtilLegacyPool {
                 .build_https();
         };
 
-        let pool_idle_timeout = config.pool_idle_timeout;
         http_client_fn(move |settings, _| {
             let mut builder = Connector::builder()
                 .connector_settings(settings.clone())
-                .proxy_config(proxy_config.clone());
+                .tls_provider(provider.clone())
+                .tls_context(tls_context.clone());
+            if let Some(proxy_config) = &proxy_config {
+                builder = builder.proxy_config(proxy_config.clone());
+            }
             if let Some(pool_idle_timeout) = pool_idle_timeout {
                 builder = builder.pool_idle_timeout(Some(pool_idle_timeout));
             }
-            SharedHttpConnector::new(
-                builder
-                    .tls_provider(provider.clone())
-                    .tls_context(tls_context.clone())
-                    .build(),
-            )
+            match &dns_resolver {
+                Some(resolver) => {
+                    SharedHttpConnector::new(builder.build_with_resolver(resolver.clone()))
+                }
+                None => SharedHttpConnector::new(builder.build()),
+            }
         })
     }
 }
@@ -212,6 +220,9 @@ impl HttpsClientBackend for PartitionedConnectionPool {
         tls_context: tls::TlsContext,
     ) -> SharedHttpClient {
         let mut builder = ConnectionPool::builder();
+        if let Some(dns_resolver) = config.dns_resolver {
+            builder = builder.dns_resolver(dns_resolver);
+        }
         if let Some(pool_idle_timeout) = config.pool_idle_timeout {
             builder = builder.idle_timeout(pool_idle_timeout);
         }
