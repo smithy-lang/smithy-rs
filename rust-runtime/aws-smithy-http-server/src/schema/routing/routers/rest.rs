@@ -85,7 +85,7 @@ impl MetadataProtocolRouter for RestProtocolRouter {
     fn claim(&self, request: &Request<()>) -> RouteClaim {
         use crate::routing::Router;
         match self.router.match_route(request) {
-            Ok(target) if self.content_types[target.index()].admits(request) => RouteClaim::Matched(target),
+            Ok(target) if self.content_types[target.index()].admits(request) => RouteClaim::ClaimedWithRoute(target),
             Ok(_) | Err(_) => RouteClaim::NoClaim,
         }
     }

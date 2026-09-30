@@ -41,7 +41,7 @@ impl MetadataProtocolRouter for AwsJsonProtocolRouter {
             return RouteClaim::NoClaim;
         }
         match self.router.match_target(request) {
-            Some(target) => RouteClaim::Matched(target),
+            Some(target) => RouteClaim::ClaimedWithRoute(target),
             None => RouteClaim::NoClaim,
         }
     }

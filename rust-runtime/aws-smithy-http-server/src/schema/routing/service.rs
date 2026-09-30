@@ -164,7 +164,7 @@ impl Pursuit {
             protocol,
             routing,
             decoder: requirement.decoder,
-            want: requirement.want,
+            want: if routing { BodyWant::Complete } else { requirement.want },
             decoded: Vec::new(),
             fed: 0,
         }
@@ -311,11 +311,17 @@ where
             };
             match &self.protocols[index].router {
                 SharedProtocolRouter::Metadata(router) => match router.claim(&probe) {
-                    RouteClaim::Matched(selected) => {
+                    RouteClaim::ClaimedWithRoute(selected) => {
                         let (parts, ()) = probe.into_parts();
                         return self.dispatch_replayed(selected, index, parts, source);
                     }
-                    RouteClaim::Rejected(err) => return self.reject(index, err),
+                    RouteClaim::Claimed => match router.route(&probe) {
+                        Ok(selected) => {
+                            let (parts, ()) = probe.into_parts();
+                            return self.dispatch_replayed(selected, index, parts, source);
+                        }
+                        Err(err) => return self.reject(index, err),
+                    },
                     RouteClaim::NoClaim => {}
                 },
                 SharedProtocolRouter::Body(router) => {
@@ -333,17 +339,16 @@ where
                         }
                     }
                     match router.claim(&probe) {
-                        BodyRouteClaim::Matched(selected) => {
+                        BodyRouteClaim::ClaimedWithRoute(selected) => {
                             let (parts, ()) = probe.into_parts();
                             return self.dispatch_replayed(selected, index, parts, source);
                         }
-                        BodyRouteClaim::Rejected(err) => return self.reject(index, err),
                         BodyRouteClaim::NoClaim => {}
-                        BodyRouteClaim::ClaimNeedsBody(requirement) => {
+                        BodyRouteClaim::NeedsBodyToClaim(requirement) => {
                             let (parts, ()) = probe.into_parts();
                             return self.pursue(parts, source, Pursuit::new(index, false, requirement), cursor);
                         }
-                        BodyRouteClaim::MatchedNeedsBody(requirement) => {
+                        BodyRouteClaim::Claimed(requirement) => {
                             let (parts, ()) = probe.into_parts();
                             return self.pursue(parts, source, Pursuit::new(index, true, requirement), cursor);
                         }
@@ -403,16 +408,15 @@ where
             };
         }
         match router.claim_with_body(&request) {
-            BodyRouteClaim::Matched(selected) => {
+            BodyRouteClaim::ClaimedWithRoute(selected) => {
                 let (parts, _) = request.into_parts();
                 self.dispatch_replayed(selected, pursuit.protocol, parts, BodySource::Collector(collector))
             }
-            BodyRouteClaim::Rejected(err) => self.reject(pursuit.protocol, err),
             BodyRouteClaim::NoClaim => {
                 let (parts, _) = request.into_parts();
                 self.walk(parts, BodySource::Collector(collector), cursor)
             }
-            BodyRouteClaim::ClaimNeedsBody(requirement) => {
+            BodyRouteClaim::NeedsBodyToClaim(requirement) => {
                 let (parts, _) = request.into_parts();
                 self.pursue(
                     parts,
@@ -421,7 +425,7 @@ where
                     cursor,
                 )
             }
-            BodyRouteClaim::MatchedNeedsBody(requirement) => {
+            BodyRouteClaim::Claimed(requirement) => {
                 let (parts, _) = request.into_parts();
                 self.pursue(
                     parts,

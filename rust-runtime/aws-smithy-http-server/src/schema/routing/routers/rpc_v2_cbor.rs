@@ -12,10 +12,9 @@ use crate::schema::routing::{OperationTarget, MetadataProtocolRouter, RouteClaim
 
 /// Routes rpcv2Cbor on the `/service/{service}/operation/{operation}` path.
 ///
-/// Claims a `POST` carrying `Smithy-Protocol: rpc-v2-cbor` whose path names an operation the
-/// service binds. The protocol does not stream blobs: a claimed operation with a streaming blob
-/// member is rejected as an unknown operation, as is a request carrying a header the protocol
-/// forbids.
+/// Claims a `POST` carrying `Smithy-Protocol: rpc-v2-cbor`. Routing then validates the path
+/// and headers. Unknown operations and operations with streaming blobs return an unknown
+/// operation error; forbidden headers return a malformed request error.
 #[derive(Debug)]
 struct RpcV2CborProtocolRouter {
     router: crate::protocol::rpc_v2_cbor::router::RpcV2CborRouter<OperationTarget>,
@@ -44,23 +43,15 @@ impl MetadataProtocolRouter for RpcV2CborProtocolRouter {
     }
 
     fn claim(&self, request: &Request<()>) -> RouteClaim {
-        use crate::routing::Router;
-        use crate::protocol::rpc_v2_cbor::router::Error;
         let identified = request.method() == http::Method::POST
             && request
                 .headers()
                 .get("smithy-protocol")
                 .is_some_and(|value| value.as_bytes() == b"rpc-v2-cbor");
-        if !identified {
-            return RouteClaim::NoClaim;
-        }
-        match self.router.match_route(request) {
-            Ok(target) if target.has_streaming_blob() => {
-                RouteClaim::Rejected(RoutingError::unknown_operation())
-            }
-            Ok(target) => RouteClaim::Matched(target),
-            Err(err @ Error::ForbiddenHeaders) => RouteClaim::Rejected(RoutingError::malformed(err)),
-            Err(_) => RouteClaim::NoClaim,
+        if identified {
+            RouteClaim::Claimed
+        } else {
+            RouteClaim::NoClaim
         }
     }
 }

@@ -191,16 +191,16 @@ pub enum RouterBuildError {
 /// A protocol's answer to whether a request is its own.
 ///
 /// A multi-protocol service asks its protocols in priority order and dispatches to the first that
-/// claims the request. A protocol claims a request only when the request carries every
-/// characteristic that identifies the protocol, including naming an operation the service binds.
+/// claims the request. Once claimed, routing errors are terminal and framed by that protocol.
 #[derive(Debug)]
 pub enum RouteClaim {
-    /// The protocol identifies the request and selects this operation.
-    Matched(OperationTarget),
+    /// The protocol claims the request and knows the operation. Dispatch directly.
+    ClaimedWithRoute(OperationTarget),
+    /// The protocol claims the request. Call [`MetadataProtocolRouter::route`] to select
+    /// the operation or return a terminal routing error. No other protocol is asked.
+    Claimed,
     /// The protocol does not identify the request; the next protocol is asked.
     NoClaim,
-    /// The protocol identifies the request but cannot serve it. No other protocol is asked.
-    Rejected(RoutingError),
 }
 
 /// Selects an operation from request metadata alone.
@@ -213,8 +213,8 @@ pub enum RouteClaim {
 /// [`serialize_routing_error`](crate::schema::ServerProtocol::serialize_routing_error), which
 /// owns the kind-to-wire mapping.
 pub trait MetadataProtocolRouter: Send + Sync + fmt::Debug {
-    /// Selects from the request URI, method and headers when this is the service's only protocol.
-    /// All rejections are terminal.
+    /// Selects from the request URI, method and headers when this is the service's only
+    /// protocol or after [`RouteClaim::Claimed`]. All routing errors are terminal.
     fn route(&self, request: &Request<()>) -> Result<OperationTarget, RoutingError>;
 
     /// Decides whether the request is this protocol's when the service serves several protocols.
@@ -267,7 +267,7 @@ impl CollectedBody {
 ///
 /// A decode error during claiming means the bytes are not this protocol's format: the service
 /// treats the claim as [`BodyRouteClaim::NoClaim`] and keeps walking. After
-/// [`BodyRouteClaim::MatchedNeedsBody`] the claim is settled, so a decode error is a terminal
+/// [`BodyRouteClaim::Claimed`] the claim is settled, so a decode error is a terminal
 /// [`RoutingErrorKind::MalformedRequest`] framed by the matched protocol.
 pub trait ClaimDecoder: Send {
     /// Feeds the next raw wire chunk, appending decoded output to `out`.
@@ -338,25 +338,22 @@ impl fmt::Debug for BodyRequirement {
 /// A body-routed protocol's answer to whether a request is its own.
 ///
 /// Distinct from [`RouteClaim`] so that needing the body stays unrepresentable for metadata
-/// protocols. The two `NeedsBody` variants separate the questions the body answers: whether
-/// the request is this protocol's at all, or which operation an already-claimed request names.
+/// protocols. Routing errors are returned by [`BodyProtocolRouter::route_with_body`] after
+/// the protocol claims the request.
 #[derive(Debug)]
 pub enum BodyRouteClaim {
-    /// The protocol identifies the request and selects this operation from the head alone.
-    Matched(OperationTarget),
-    /// The request is this protocol's — the claim walk ends now — but the operation is named
-    /// in the body (a Coral RPC envelope, for example). The service satisfies the requirement
-    /// and finishes with [`BodyProtocolRouter::route_with_body`].
-    MatchedNeedsBody(BodyRequirement),
-    /// The head alone cannot tell whose the request is (a magic-number sniff, for example).
-    /// The service satisfies the requirement and asks again with
-    /// [`BodyProtocolRouter::claim_with_body`]; the claim stays open, so other protocols may
-    /// still be asked.
-    ClaimNeedsBody(BodyRequirement),
-    /// The protocol does not identify the request; the next protocol is asked.
+    /// The protocol claims the request and knows the operation. Dispatch directly without
+    /// calling [`BodyProtocolRouter::route_with_body`].
+    ClaimedWithRoute(OperationTarget),
+    /// The protocol claims the request. The service collects the complete body using the
+    /// requirement's decoder, if any, then calls [`BodyProtocolRouter::route_with_body`].
+    /// No other protocol is asked, including when routing returns an error.
+    Claimed(BodyRequirement),
+    /// The protocol needs body bytes to decide whether the request is its own. The service
+    /// satisfies the requirement and calls [`BodyProtocolRouter::claim_with_body`].
+    NeedsBodyToClaim(BodyRequirement),
+    /// The request is not this protocol's; the next protocol is asked.
     NoClaim,
-    /// The protocol identifies the request but cannot serve it. No other protocol is asked.
-    Rejected(RoutingError),
 }
 
 /// Selects an operation for protocols that may read the request body to route.
@@ -379,7 +376,7 @@ pub enum BodyRouteClaim {
 /// routers for these requests until every metadata router declines. Recognition is advisory:
 /// deferred routers may still collect the body during fallback.
 ///
-/// Rejections are the standard [`RoutingError`], exactly as on [`MetadataProtocolRouter`]. When this
+/// Routing errors are the standard [`RoutingError`], exactly as on [`MetadataProtocolRouter`]. When this
 /// is the service's only protocol the same claim path runs, with a final
 /// [`BodyRouteClaim::NoClaim`] answered as this protocol's
 /// [`RoutingError::unknown_operation`] — all rejections stay terminal and protocol-framed.
@@ -388,15 +385,15 @@ pub trait BodyProtocolRouter: Send + Sync + fmt::Debug {
     fn claim(&self, request: &Request<()>) -> BodyRouteClaim;
 
     /// Continues an open claim over the requested body bytes. Called only after this router
-    /// returned [`BodyRouteClaim::ClaimNeedsBody`]; any variant may return, including another
-    /// `ClaimNeedsBody` with a larger requirement.
+    /// returned [`BodyRouteClaim::NeedsBodyToClaim`]; any variant may return, including another
+    /// `NeedsBodyToClaim` with a larger requirement.
     fn claim_with_body(&self, request: &Request<CollectedBody>) -> BodyRouteClaim {
         let _ = request;
         BodyRouteClaim::NoClaim
     }
 
     /// Selects the operation a claimed request names in its body. Called only after this
-    /// router returned [`BodyRouteClaim::MatchedNeedsBody`]; the claim is settled, so an
+    /// router returned [`BodyRouteClaim::Claimed`]; the claim is settled, so an
     /// unrecognized operation is an error serialized by this protocol, never a fall-through.
     fn route_with_body(&self, request: &Request<CollectedBody>) -> Result<OperationTarget, RoutingError> {
         let _ = request;
