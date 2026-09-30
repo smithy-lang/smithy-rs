@@ -4,7 +4,7 @@ name = "aws-smithy-schema"
 # also bump its stable dependents: multiple schema versions give ConfigBag Storables
 # different TypeIds, so values stored through one copy are silently missed by another.
 # Version 0.4 skips the yanked 0.3.0.
-version = "0.4.0"
+version = "1.0.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Schema types for the smithy-rs ecosystem"
 edition = "2021"
