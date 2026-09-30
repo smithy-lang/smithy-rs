@@ -4155,4 +4155,181 @@ mod loom_tests {
             admission.clear_modeled_cells_for_test();
         });
     }
+
+    /// Races registration of a second waiter with cancellation of the head.
+    ///
+    /// Each actor commits its waiter change under the cell lock and publishes
+    /// the resulting snapshot after unlocking, so the cancelled head's
+    /// retirement and the surviving head's active demand can reach admission in
+    /// either order. Admission's view must still agree with the cell, and the
+    /// agreement is checked against the resource: the origin's only permit has
+    /// to reach the waiter that is still queued.
+    #[test]
+    fn concurrent_demand_publications_agree_with_the_surviving_waiter() {
+        loom::model(|| {
+            let (admission, cell) = bounded_cell();
+            // Hold the origin's only permit so no delivery can run while the
+            // two publications race. Publication ordering is then the only
+            // thing that can change admission's demand schedule.
+            let lease = OriginAdmission::lease_for_test(&admission);
+            let head = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+
+            let registering_cell = cell.clone();
+            let registering = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || {
+                    OriginCell::register_waiter(
+                        &registering_cell,
+                        ProtocolRequirement::H1Compatible,
+                    )
+                })
+                .unwrap();
+            let cancelling_cell = cell.clone();
+            let cancelling = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || OriginCell::cancel_waiter(&cancelling_cell, head))
+                .unwrap();
+            let survivor = registering.join().unwrap();
+            assert!(
+                cancelling.join().unwrap(),
+                "the queued head waiter was not cancelled"
+            );
+
+            let probe = cell.probe();
+            assert_eq!(
+                1, probe.waiting,
+                "the surviving waiter left the cell's acquisition queue: {probe:?}"
+            );
+            assert!(
+                probe.demand.is_some(),
+                "the surviving head owns no cell-local demand: {probe:?}"
+            );
+            assert_eq!(
+                1,
+                admission.ordered_demand_count_for_test(),
+                "admission's ordered demand did not match the cell's surviving waiter"
+            );
+
+            // A lost demand is only observable as a hang, so prove the
+            // surviving waiter is still reachable by returned capacity. This
+            // also checks demand identity: the delivery is refused unless
+            // admission holds exactly the cell's current head demand.
+            drop(lease);
+            let served = OriginCell::take_ready_lease(&cell, survivor)
+                .expect("returned capacity never reached the surviving waiter");
+            drop(served);
+            assert_eq!(1, admission.available_capacity_for_test());
+            assert_eq!(0, admission.ordered_demand_count_for_test());
+            admission.clear_modeled_cells_for_test();
+        });
+    }
+
+    /// Races one capacity delivery with cancellation of its target head waiter.
+    ///
+    /// Cancelling the head retires demand from the cell while the delivery's
+    /// settlement retires the same generation from inside admission. Whichever
+    /// order they arrive in, the newer demand published for the waiter behind
+    /// the head must survive: otherwise that waiter parks while the permit it
+    /// needs sits available in admission.
+    #[test]
+    fn stale_delivery_retirement_does_not_strand_the_next_waiter() {
+        let mut model = loom::model::Builder::new();
+        model.preemption_bound.get_or_insert(3);
+        model.check(|| {
+            let (admission, cell) = bounded_cell();
+            let (head, snapshot) =
+                cell.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
+            let next = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+            let delivery = OriginAdmission::submit_without_running(
+                &admission,
+                cell.id().partition(),
+                snapshot,
+            )
+            .expect("published demand did not reserve the origin's only permit");
+
+            let delivering = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || {
+                    OriginAdmission::run_action_chain(Some(AdmissionAction::Deliver(delivery)));
+                })
+                .unwrap();
+            let cancelling_cell = cell.clone();
+            let cancelling = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || OriginCell::cancel_waiter(&cancelling_cell, head))
+                .unwrap();
+            delivering.join().unwrap();
+            assert!(
+                cancelling.join().unwrap(),
+                "the delivery's target waiter was not cancelled"
+            );
+
+            let probe = cell.probe();
+            assert_eq!(
+                usize::from(probe.demand.is_some()),
+                admission.ordered_demand_count_for_test(),
+                "admission's ordered demand did not agree with the cell queue: {probe:?}"
+            );
+            let served = OriginCell::take_ready_lease(&cell, next)
+                .expect("the surviving waiter never received the origin's only permit");
+            drop(served);
+            assert_eq!(1, admission.available_capacity_for_test());
+            assert_eq!(0, admission.ordered_demand_count_for_test());
+            admission.clear_modeled_cells_for_test();
+        });
+    }
+
+    /// Races one capacity delivery with cancellation of the waiter behind it.
+    ///
+    /// Reserving the head hands the delivery a successor snapshot for the next
+    /// waiter, while that waiter's cancellation retires the same demand
+    /// identity at a newer version. The successor must lose, otherwise
+    /// admission orders demand for a cell with no waiter left to serve.
+    #[test]
+    fn delivery_successor_does_not_revive_a_cancelled_demand() {
+        let mut model = loom::model::Builder::new();
+        model.preemption_bound.get_or_insert(3);
+        model.check(|| {
+            let (admission, cell) = bounded_cell();
+            let (head, snapshot) =
+                cell.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
+            let next = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+            let delivery = OriginAdmission::submit_without_running(
+                &admission,
+                cell.id().partition(),
+                snapshot,
+            )
+            .expect("published demand did not reserve the origin's only permit");
+
+            let delivering = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || {
+                    OriginAdmission::run_action_chain(Some(AdmissionAction::Deliver(delivery)));
+                })
+                .unwrap();
+            let cancelling_cell = cell.clone();
+            let cancelling = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || OriginCell::cancel_waiter(&cancelling_cell, next))
+                .unwrap();
+            delivering.join().unwrap();
+            assert!(
+                cancelling.join().unwrap(),
+                "the successor waiter was not cancelled"
+            );
+
+            let probe = cell.probe();
+            assert_eq!(
+                usize::from(probe.demand.is_some()),
+                admission.ordered_demand_count_for_test(),
+                "admission ordered demand the cell no longer has a waiter for: {probe:?}"
+            );
+            let served = OriginCell::take_ready_lease(&cell, head)
+                .expect("the delivered head waiter never owned the origin's permit");
+            drop(served);
+            assert_eq!(1, admission.available_capacity_for_test());
+            assert_eq!(0, admission.ordered_demand_count_for_test());
+            admission.clear_modeled_cells_for_test();
+        });
+    }
 }
