@@ -58,7 +58,7 @@ internal class ServerSchemaCborErrorsTest {
                             """
                         use #{Server}::schema::ServerProtocol;
                         use #{BodyUtil}::BodyExt;
-                        let protocol = #{Server}::protocol::rpc_v2_cbor::RpcV2CborProtocol::default();
+                        let protocol = #{Server}::schema::protocol::RpcV2CborProtocol::default();
                         let failure = || crate::error::Failure { message: #{Some}("failed".into()) };
                         let output = crate::output::GetOutput {
                             direct: #{Some}(failure()),

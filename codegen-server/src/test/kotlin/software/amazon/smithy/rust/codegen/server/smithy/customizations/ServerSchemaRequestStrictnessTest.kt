@@ -188,7 +188,7 @@ internal class ServerSchemaRequestStrictnessTest {
                                 assert!(response.status().is_success(), "{path}");
                             }
                             use #{Server}::schema::{ServerProtocol, DeserializableShape};
-                            let protocol = #{Server}::protocol::rest_json_1::RestJson1Protocol::default();
+                            let protocol = #{Server}::schema::protocol::RestJson1Protocol::default();
                             for body in [
                                 br##"{"text":"evil","count":99,"value":10}"##.as_slice(),
                                 br##"{"text":false,"count":{},"value":10}"##,

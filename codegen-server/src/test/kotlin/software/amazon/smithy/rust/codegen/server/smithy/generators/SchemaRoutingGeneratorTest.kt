@@ -327,7 +327,7 @@ class SchemaRoutingGeneratorTest {
                                                 -> #{Result}<impl #{Server}::schema::routing::MetadataProtocolRouter + 'static + use<>, RouterBuildError> {
                                                 // `use<>` on the subtraits admits delegating through a temporary protocol.
                                                 #{Server}::schema::MetadataRoutedProtocol::build_router(
-                                                    &#{Server}::protocol::rest_json_1::RestJson1Protocol::default(), ctx)
+                                                    &#{Server}::schema::protocol::RestJson1Protocol::default(), ctx)
                                             }
                                         }
                                         static REGISTRY: ProtocolRegistry = ProtocolRegistry::new(&[
