@@ -663,24 +663,28 @@ async fn ready_body_frames_yield_and_wake_before_collection_finishes() {
             self.0.fetch_add(1, Ordering::SeqCst);
         }
     }
-    let reads = Arc::new(AtomicUsize::new(0));
-    let observed = reads.clone();
-    let frames = futures_util::stream::poll_fn(move |_| {
-        let index = observed.fetch_add(1, Ordering::SeqCst);
-        Poll::Ready(match index {
-            0 => Some(Ok::<_, Error>(Frame::data(Bytes::from_static(b"first\n")))),
-            1..=1000 => Some(Ok(Frame::data(Bytes::new()))),
-            _ => None,
-        })
-    });
-    let mut app = service(RoutingOptions::default());
-    let mut future = Box::pin(app.call(Request::new(Body::new(http_body_util::StreamBody::new(frames)))));
-    let wakes = Arc::new(WakeCount(AtomicUsize::new(0)));
-    let waker = std::task::Waker::from(wakes.clone());
-    assert!(future.as_mut().poll(&mut Context::from_waker(&waker)).is_pending());
-    assert!((1..1000).contains(&reads.load(Ordering::SeqCst)));
-    assert!(wakes.0.load(Ordering::SeqCst) > 0, "yield must schedule another poll");
-    assert_eq!(future.await.unwrap().status(), StatusCode::OK);
+    for limit in [0, 1024] {
+        let reads = Arc::new(AtomicUsize::new(0));
+        let observed = reads.clone();
+        let frames = futures_util::stream::poll_fn(move |_| {
+            let index = observed.fetch_add(1, Ordering::SeqCst);
+            Poll::Ready(match index {
+                0 => Some(Ok::<_, Error>(Frame::data(Bytes::from_static(b"first\n")))),
+                1..=1000 => Some(Ok(Frame::data(Bytes::new()))),
+                _ => None,
+            })
+        });
+        let mut options = RoutingOptions::default();
+        options.request_body.global = config(limit, 1000);
+        let mut app = service(options);
+        let mut future = Box::pin(app.call(Request::new(Body::new(http_body_util::StreamBody::new(frames)))));
+        let wakes = Arc::new(WakeCount(AtomicUsize::new(0)));
+        let waker = std::task::Waker::from(wakes.clone());
+        assert!(future.as_mut().poll(&mut Context::from_waker(&waker)).is_pending());
+        assert!((1..1000).contains(&reads.load(Ordering::SeqCst)));
+        assert!(wakes.0.load(Ordering::SeqCst) > 0, "yield must schedule another poll");
+        assert_eq!(future.await.unwrap().status(), StatusCode::OK);
+    }
 }
 
 #[tokio::test]

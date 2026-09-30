@@ -47,7 +47,7 @@ use aws_smithy_schema::serde::{SerializableStruct, ShapeDeserializer};
 use aws_smithy_schema::{Schema, ShapeId};
 use bytes::Bytes;
 
-use crate::body::{collect_body_limited, BoxBody, CollectBodyError, HttpBody};
+use crate::body::{collect_body_limited_with_trailers, BoxBody, CollectBodyError, HttpBody};
 use crate::response::Response;
 use crate::schema::routing::RouterBuildError;
 use crate::schema::OperationSchema;
@@ -576,12 +576,27 @@ where
         }
         return Ok(bytes.clone());
     }
+    collect_request_body_with_trailers(body, config)
+        .await
+        .map(|(bytes, _)| bytes)
+}
+
+/// Shared complete-body collection for routing and operation deserialization.
+pub(crate) async fn collect_request_body_with_trailers<B>(
+    body: B,
+    config: &RequestBodyCollectionConfig,
+) -> Result<(Bytes, Option<http::HeaderMap>), RequestBodyCollectionError<B::Error>>
+where
+    B: HttpBody,
+{
     let limit = config.max_bytes.map(NonZeroUsize::get).unwrap_or(0);
     let collect = async move {
-        collect_body_limited(body, limit).await.map_err(|err| match err {
-            CollectBodyError::Body(err) => RequestBodyCollectionError::Body(err),
-            CollectBodyError::TooLarge(err) => RequestBodyCollectionError::TooLarge(err),
-        })
+        collect_body_limited_with_trailers(body, limit)
+            .await
+            .map_err(|err| match err {
+                CollectBodyError::Body(err) => RequestBodyCollectionError::Body(err),
+                CollectBodyError::TooLarge(err) => RequestBodyCollectionError::TooLarge(err),
+            })
     };
     match config.read_timeout {
         Some(timeout) => tokio::time::timeout(timeout, collect)

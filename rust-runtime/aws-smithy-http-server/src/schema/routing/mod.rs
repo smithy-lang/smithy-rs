@@ -16,7 +16,6 @@
 //! A request no protocol claims is answered the way Coral answers one: `404` with
 //! the XML body `<UnknownOperationException/>`.
 
-mod collect;
 mod contract;
 pub mod route_errors;
 mod routers;

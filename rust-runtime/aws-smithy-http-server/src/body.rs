@@ -64,15 +64,6 @@ enum BodyInner<B> {
         bytes: Option<Bytes>,
         trailers: Option<http::HeaderMap>,
     },
-    /// A prefix routing consumed off the wire, replayed ahead of the untouched remainder.
-    ///
-    /// Trailer frames the prefix reads happened to include are replayed after the tail
-    /// finishes, preserving their position at the end of the stream.
-    Prefixed {
-        prefix: Option<Bytes>,
-        trailers: Option<http::HeaderMap>,
-        tail: Box<RequestBody<B>>,
-    },
 }
 
 impl<B> RequestBody<B> {
@@ -99,26 +90,11 @@ impl<B> RequestBody<B> {
         })
     }
 
-    /// Replays `prefix` — bytes already consumed off the wire — ahead of the untouched `tail`.
-    ///
-    /// Trailer frames read with the prefix (`trailers`) are replayed after the tail finishes.
-    /// An empty prefix with no trailers is the tail unchanged.
-    pub(crate) fn prefixed(prefix: Bytes, trailers: Option<http::HeaderMap>, tail: RequestBody<B>) -> Self {
-        if prefix.is_empty() && trailers.is_none() {
-            return tail;
-        }
-        Self(BodyInner::Prefixed {
-            prefix: Some(prefix).filter(|prefix| !prefix.is_empty()),
-            trailers,
-            tail: Box::new(tail),
-        })
-    }
-
     // Only unpolled buffered bodies qualify. Polling or wrapping consumes this representation.
     pub(crate) fn buffered_content(&self) -> Option<&Bytes> {
         match &self.0 {
             BodyInner::Buffered { bytes, .. } => bytes.as_ref(),
-            BodyInner::Passthrough(_) | BodyInner::Boxed(_) | BodyInner::Prefixed { .. } => None,
+            BodyInner::Passthrough(_) | BodyInner::Boxed(_) => None,
         }
     }
 
@@ -210,17 +186,6 @@ where
                     .or_else(|| trailers.take().map(http_body::Frame::trailers))
                     .map(Ok),
             ),
-            BodyInner::Prefixed { prefix, trailers, tail } => {
-                if let Some(prefix) = prefix.take() {
-                    return std::task::Poll::Ready(Some(Ok(http_body::Frame::data(prefix))));
-                }
-                match std::pin::Pin::new(tail.as_mut()).poll_frame(cx) {
-                    std::task::Poll::Ready(None) => {
-                        std::task::Poll::Ready(trailers.take().map(http_body::Frame::trailers).map(Ok))
-                    }
-                    other => other,
-                }
-            }
         }
     }
 
@@ -231,9 +196,6 @@ where
             BodyInner::Buffered { bytes, trailers } => {
                 bytes.as_ref().is_none_or(|bytes| bytes.is_empty()) && trailers.is_none()
             }
-            BodyInner::Prefixed { prefix, trailers, tail } => {
-                prefix.is_none() && trailers.is_none() && tail.is_end_stream()
-            }
         }
     }
     fn size_hint(&self) -> http_body::SizeHint {
@@ -242,15 +204,6 @@ where
             BodyInner::Boxed(body) => body.size_hint(),
             BodyInner::Buffered { bytes, .. } => {
                 http_body::SizeHint::with_exact(bytes.as_ref().map_or(0, |bytes| bytes.len() as u64))
-            }
-            BodyInner::Prefixed { prefix, tail, .. } => {
-                let mut hint = tail.size_hint();
-                let prefix = prefix.as_ref().map_or(0, |prefix| prefix.len() as u64);
-                hint.set_lower(hint.lower() + prefix);
-                if let Some(upper) = hint.upper() {
-                    hint.set_upper(upper + prefix);
-                }
-                hint
             }
         }
     }
@@ -407,43 +360,67 @@ pub async fn collect_body_limited<B>(body: B, limit: usize) -> Result<Bytes, Col
 where
     B: HttpBody,
 {
-    use http_body_util::BodyExt;
+    collect_body_limited_with_trailers(body, limit)
+        .await
+        .map(|(bytes, _)| bytes)
+}
 
-    if limit == 0 {
-        return body
-            .collect()
-            .await
-            .map(|c| c.to_bytes())
-            .map_err(CollectBodyError::Body);
-    }
-
+/// Collect a complete body, retaining trailers for callers that replay it.
+pub(crate) async fn collect_body_limited_with_trailers<B>(
+    body: B,
+    limit: usize,
+) -> Result<(Bytes, Option<http::HeaderMap>), CollectBodyError<B::Error>>
+where
+    B: HttpBody,
+{
     // Walk frames ourselves (rather than using `http_body_util::Limited`) so we
     // don't require `B::Error: Send + Sync + 'static`. The generated server
     // deserializer only carries a `Send` bound on body errors.
     let lower = body.size_hint().lower() as usize;
-    if lower > limit {
+    if limit != 0 && lower > limit {
         return Err(CollectBodyError::TooLarge(BodyLimitExceeded { limit }));
     }
 
     let mut body = std::pin::pin!(body);
     let mut collected = bytes::BytesMut::with_capacity(lower);
-    while let Some(frame) = std::future::poll_fn(|cx| body.as_mut().poll_frame(cx))
-        .await
-        .transpose()
-        .map_err(CollectBodyError::Body)?
-    {
-        if let Ok(data) = frame.into_data() {
-            use bytes::{Buf, BufMut};
-            let data_len = data.remaining();
-            if collected.len().saturating_add(data_len) > limit {
-                return Err(CollectBodyError::TooLarge(BodyLimitExceeded { limit }));
-            }
-            collected.put(data);
+    let mut trailers = None;
+    let mut frame_budget = 64;
+    while let Some(frame) = std::future::poll_fn(|cx| {
+        // Always-ready streams must yield so other tasks and read timeouts can run.
+        if frame_budget == 0 {
+            frame_budget = 64;
+            cx.waker().wake_by_ref();
+            return std::task::Poll::Pending;
         }
-        // Trailer / non-data frames are discarded; we don't surface trailers.
+        frame_budget -= 1;
+        let frame = body.as_mut().poll_frame(cx);
+        if frame.is_pending() {
+            frame_budget = 64;
+        }
+        frame
+    })
+    .await
+    .transpose()
+    .map_err(CollectBodyError::Body)?
+    {
+        match frame.into_data() {
+            Ok(data) => {
+                use bytes::{Buf, BufMut};
+                let data_len = data.remaining();
+                if limit != 0 && collected.len().saturating_add(data_len) > limit {
+                    return Err(CollectBodyError::TooLarge(BodyLimitExceeded { limit }));
+                }
+                collected.put(data);
+            }
+            Err(frame) => {
+                if let Ok(headers) = frame.into_trailers() {
+                    trailers.get_or_insert_with(http::HeaderMap::new).extend(headers);
+                }
+            }
+        }
     }
 
-    Ok(collected.freeze())
+    Ok((collected.freeze(), trailers))
 }
 
 // ============================================================================
@@ -908,6 +885,22 @@ mod tests {
         let body = boxed_sync(Full::new(Bytes::from("test")));
         fn check_sync<T: Sync>(_: &T) {}
         check_sync(&body);
+    }
+
+    #[tokio::test]
+    async fn collection_preserves_trailers_with_and_without_a_limit() {
+        for limit in [0, 1024] {
+            let mut trailers = http::HeaderMap::new();
+            trailers.insert("checksum", http::HeaderValue::from_static("abc"));
+            let frames = vec![
+                Ok::<_, std::convert::Infallible>(http_body::Frame::data(Bytes::from_static(b"payload"))),
+                Ok(http_body::Frame::trailers(trailers.clone())),
+            ];
+            let body = http_body_util::StreamBody::new(futures_util::stream::iter(frames));
+            let (bytes, actual_trailers) = collect_body_limited_with_trailers(body, limit).await.unwrap();
+            assert_eq!(bytes, "payload");
+            assert_eq!(actual_trailers, Some(trailers));
+        }
     }
 
     #[tokio::test]
