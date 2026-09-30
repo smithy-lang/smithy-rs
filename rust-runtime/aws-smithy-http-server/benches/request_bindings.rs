@@ -24,7 +24,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use aws_smithy_http_server::schema::protocol::RestJson1Protocol;
 use aws_smithy_http_server::schema::protocol::RestXmlProtocol;
-use aws_smithy_http_server::schema::{ServerProtocol, ServerRequest};
+use aws_smithy_http_server::schema::ServerProtocol;
 use aws_smithy_schema::serde::{SerdeError, ShapeDeserializer};
 use aws_smithy_schema::traits::HttpTrait;
 use aws_smithy_schema::{shape_id, Schema, ShapeType};
@@ -203,25 +203,24 @@ static MIXED_INPUT: Schema<'static> =
 // Scenarios
 // ============================================================================
 
-fn server_request(uri: &str, headers: &[(&str, &str)], body: &'static [u8]) -> ServerRequest {
+fn server_request(
+    uri: &str,
+    headers: &[(&str, &str)],
+    body: &'static [u8],
+) -> aws_smithy_runtime_api::http::Request<bytes::Bytes> {
     let mut builder = http::Request::builder().method("POST").uri(uri);
     for (name, value) in headers {
         builder = builder.header(*name, *value);
     }
     let request =
         aws_smithy_runtime_api::http::Request::try_from(builder.body(()).unwrap()).expect("valid bench request");
-    let parts = request.into_parts();
-    ServerRequest {
-        uri: parts.uri,
-        headers: parts.headers,
-        body: Bytes::from_static(body),
-    }
+    request.map(|_| Bytes::from_static(body))
 }
 
 struct Scenario {
     name: &'static str,
     schema: &'static Schema<'static>,
-    request: ServerRequest,
+    request: aws_smithy_runtime_api::http::Request<bytes::Bytes>,
     /// How many members the walker must hand to the consumer; the validate
     /// pass fails loudly if the bench stops exercising what it claims to.
     expected_reads: usize,

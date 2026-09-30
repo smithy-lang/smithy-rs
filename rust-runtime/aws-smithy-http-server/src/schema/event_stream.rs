@@ -2114,7 +2114,7 @@ mod tests {
             fn deserialize_request<'a>(
                 &'a self,
                 _: &Schema<'_>,
-                _: &'a crate::schema::ServerRequest,
+                _: &'a aws_smithy_runtime_api::http::Request<bytes::Bytes>,
             ) -> Result<Box<dyn ShapeDeserializer + 'a>, DeserializeError> {
                 unreachable!()
             }

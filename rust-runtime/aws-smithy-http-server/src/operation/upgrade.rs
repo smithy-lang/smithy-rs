@@ -24,7 +24,7 @@ use crate::{
     runtime_error::InternalFailureException,
     schema::{
         collect_request_body, BodyDirective, DeserializableShape, DeserializeError, HttpModeledError,
-        SelectedProtocolOperation, ServerRequest,
+        SelectedProtocolOperation,
     },
     service::ServiceShape,
 };
@@ -166,30 +166,27 @@ where
                 Ok(value) => value,
                 Err(err) => return Ok(err.into_response()),
             };
-            let converted = match convert_request(parts, body) {
-                Ok(request) => request.into_parts(),
+            let mut request = match convert_request(parts, body) {
+                Ok(request) => request.map(Some),
                 Err(err) => return Ok(protocol.serialize_rejection(err)),
             };
-            let bytes = match protocol.inspect_request_head(operation, &converted.headers) {
-                Err(err) => return Ok(protocol.serialize_rejection(err)),
-                Ok(BodyDirective::Collect) => {
-                    match collect_request_body(converted.body, &selected.request_body_config()).await {
-                        Ok(bytes) => bytes,
-                        Err(err) => {
-                            return Ok(crate::schema::body_collection_rejection(
-                                &**protocol,
-                                err.map_body_error(crate::Error::new),
-                            ))
-                        }
+            let body = request.body_mut().take().expect("request body is present");
+            if let Err(err) = protocol.validate_request_headers(operation, request.headers()) {
+                return Ok(protocol.serialize_rejection(err));
+            }
+            let bytes = match protocol.request_body_requirement(operation) {
+                BodyDirective::Collect => match collect_request_body(body, &selected.request_body_config()).await {
+                    Ok(bytes) => bytes,
+                    Err(err) => {
+                        return Ok(crate::schema::body_collection_rejection(
+                            &**protocol,
+                            err.map_body_error(crate::Error::new),
+                        ))
                     }
-                }
-                Ok(BodyDirective::Skip) => bytes::Bytes::new(),
+                },
+                BodyDirective::Skip => bytes::Bytes::new(),
             };
-            let request = ServerRequest {
-                uri: converted.uri,
-                headers: converted.headers,
-                body: bytes,
-            };
+            let request = request.map(|_| bytes);
             let input = {
                 let mut deserializer = match protocol.deserialize_request(operation.input(), &request) {
                     Ok(value) => value,
@@ -250,7 +247,7 @@ where
 
 /// Upgrade service for a schema operation with a streaming input or output.
 ///
-/// A streaming input reaches the protocol with an empty [`ServerRequest`] body, so the protocol
+/// A streaming input reaches the protocol with an empty [`Request`](aws_smithy_runtime_api::http::Request) body, so the protocol
 /// reads URI and header bindings only; the live body goes to
 /// [`StreamingOperationShape::deserialize_streaming_input`]. A non-streaming input on such an
 /// operation is collected exactly as [`DynUpgrade`] collects it.
@@ -317,19 +314,20 @@ where
                 Ok(value) => value,
                 Err(err) => return Ok(err.into_response()),
             };
-            let converted = match convert_request(parts, body) {
-                Ok(request) => request.into_parts(),
+            let mut request = match convert_request(parts, body) {
+                Ok(request) => request.map(Some),
                 Err(err) => return Ok(protocol.serialize_rejection(err)),
             };
-            let directive = match protocol.inspect_request_head(operation, &converted.headers) {
-                Ok(directive) => directive,
-                Err(err) => return Ok(protocol.serialize_rejection(err)),
-            };
+            if let Err(err) = protocol.validate_request_headers(operation, request.headers()) {
+                return Ok(protocol.serialize_rejection(err));
+            }
+            let directive = protocol.request_body_requirement(operation);
+            let body = request.body_mut().take().expect("request body is present");
             let input_streams = operation.input().members().iter().any(|member| member.streaming());
             let (bytes, body) = if input_streams {
-                (bytes::Bytes::new(), SdkBody::from_body_1_x(converted.body))
+                (bytes::Bytes::new(), SdkBody::from_body_1_x(body))
             } else if directive == BodyDirective::Collect {
-                match collect_request_body(converted.body, &selected.request_body_config()).await {
+                match collect_request_body(body, &selected.request_body_config()).await {
                     Ok(bytes) => (bytes, SdkBody::empty()),
                     Err(err) => {
                         return Ok(crate::schema::body_collection_rejection(
@@ -341,11 +339,7 @@ where
             } else {
                 (bytes::Bytes::new(), SdkBody::empty())
             };
-            let request = ServerRequest {
-                uri: converted.uri,
-                headers: converted.headers,
-                body: bytes,
-            };
+            let request = request.map(|_| bytes);
             // The deserializer borrows the request and is not `Send`; the walk over it happens
             // inside `deserialize_streaming_input` before the future is returned, so it is dropped
             // before the first await.

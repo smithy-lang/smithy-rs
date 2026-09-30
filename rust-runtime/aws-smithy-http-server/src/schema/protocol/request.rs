@@ -17,8 +17,6 @@ use crate::schema::DeserializeError;
 
 pub(super) use crate::schema::request_bindings::is_body_member;
 
-use super::ServerRequest;
-
 /// The `Content-Type` of event stream requests and responses.
 pub(super) const EVENT_STREAM_CONTENT_TYPE: &str = "application/vnd.amazon.eventstream";
 
@@ -184,14 +182,14 @@ pub(super) fn rpc_request_deserializer<'a, C>(
     codec: &'a C,
     codec_content_type: &'static str,
     input: &Schema<'_>,
-    request: &'a ServerRequest,
+    request: &'a aws_smithy_runtime_api::http::Request<bytes::Bytes>,
 ) -> Result<Box<dyn ShapeDeserializer + 'a>, DeserializeError>
 where
     C: Codec,
 {
-    if request.body.is_empty() || input.members().is_empty() {
+    if request.body().is_empty() || input.members().is_empty() {
         return Ok(Box::new(EmptyStructDeserializer));
     }
-    check_content_type(&request.headers, Some(codec_content_type))?;
-    Ok(Box::new(codec.create_deserializer(&request.body)))
+    check_content_type(request.headers(), Some(codec_content_type))?;
+    Ok(Box::new(codec.create_deserializer(request.body())))
 }

@@ -363,7 +363,7 @@ internal class ServerSchemaStreamingTest {
                 static ID: #{Schema}::ShapeId<'static> = #{Schema}::shape_id!("test", "HttpOnly");
                 &ID
             }
-            fn deserialize_request<'a>(&'a self, _: &#{Schema}::Schema<'_>, _: &'a #{SmithyHttpServer}::schema::ServerRequest)
+            fn deserialize_request<'a>(&'a self, _: &#{Schema}::Schema<'_>, _: &'a #{RuntimeApi}::http::Request<#{Bytes}>)
                 -> #{Result}<#{Box}<dyn #{Schema}::serde::ShapeDeserializer + 'a>, #{SmithyHttpServer}::schema::DeserializeError> { unreachable!() }
             fn serialize_response(&self, _: &#{Schema}::Schema<'_>, _: &dyn #{Schema}::serde::SerializableStruct)
                 -> #{SmithyHttpServer}::response::Response { unreachable!() }
@@ -526,9 +526,7 @@ internal class ServerSchemaStreamingTest {
         assert!(receiver.try_recv_initial(#{SmithyHttp}::event_stream::InitialMessageType::Request).await.unwrap().is_none());
         assert!(matches!(receiver.recv().await.unwrap(), #{Some}(crate::model::ChatEvents::Message(_))));
         for bytes in [body, #{Vec}::new(), b"malformed frame".to_vec()] {
-            let request = #{SmithyHttpServer}::schema::ServerRequest {
-                uri: #{RuntimeApi}::http::Uri::try_from("/").unwrap(), headers: Default::default(), body: #{Bytes}::new(),
-            };
+            let request = #{RuntimeApi}::http::Request::new(#{Bytes}::new());
             let future = {
                 let mut deserializer = protocol.deserialize_request(crate::input::ChatInput::SCHEMA, &request).unwrap();
                 crate::operation_shape::Chat::deserialize_streaming_input(&mut *deserializer, #{SdkBody}::from(bytes), protocol.clone())

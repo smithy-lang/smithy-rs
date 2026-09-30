@@ -197,8 +197,8 @@ internal class ServerSchemaRequestStrictnessTest {
                                     #{Http}::Request::builder().method("POST").uri("/read")
                                         .header("content-type", "application/json")
                                         .header("x-text", "trusted").header("x-count", "7")
-                                        .body(()).unwrap()).unwrap().into_parts();
-                                let request = #{Server}::schema::ServerRequest { uri: converted.uri, headers: converted.headers, body: body.to_vec().into() };
+                                        .body(()).unwrap()).unwrap();
+                                let request = converted.map(|_| body.to_vec().into());
                                 let mut d = protocol.deserialize_request(crate::input::ReadInput::SCHEMA, &request).unwrap();
                                 let input = crate::input::ReadInput::deserialize(&mut *d).unwrap();
                                 assert_eq!(input.text.as_deref(), #{Some}("trusted"));

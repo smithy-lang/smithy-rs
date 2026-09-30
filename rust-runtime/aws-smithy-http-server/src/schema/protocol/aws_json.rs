@@ -24,7 +24,7 @@ use super::response::{
     log_serialize_failure, serialize_modeled_error_response, stamp_error_extension, stamp_validation_extension,
     ResponseBindings,
 };
-use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerProtocol, ServerRequest};
+use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerProtocol};
 
 /// Stateful schema-driven AWS JSON 1.0 protocol implementation.
 #[derive(Debug)]
@@ -121,7 +121,10 @@ macro_rules! aws_json_protocol {
             fn build_router(
                 &self,
                 ctx: crate::schema::routing::RouterBuildContext<'_>,
-            ) -> Result<impl crate::schema::routing::MetadataProtocolRouter + 'static + use<>, crate::schema::routing::RouterBuildError> {
+            ) -> Result<
+                impl crate::schema::routing::MetadataProtocolRouter + 'static + use<>,
+                crate::schema::routing::RouterBuildError,
+            > {
                 crate::schema::routing::aws_json_router(&ctx, $content_type)
             }
 
@@ -136,23 +139,26 @@ macro_rules! aws_json_protocol {
                 &PROTOCOL_ID
             }
 
-            fn inspect_request_head(
+            fn validate_request_headers(
                 &self,
                 operation: &crate::schema::OperationSchema<'_>,
                 headers: &Headers,
-            ) -> Result<BodyDirective, DeserializeError> {
-                self.inner.check_accept(operation.output(), headers)?;
-                Ok(if self.inner.reads_request_body(operation.input()) {
+            ) -> Result<(), DeserializeError> {
+                self.inner.check_accept(operation.output(), headers)
+            }
+
+            fn request_body_requirement(&self, operation: &crate::schema::OperationSchema<'_>) -> BodyDirective {
+                if self.inner.reads_request_body(operation.input()) {
                     BodyDirective::Collect
                 } else {
                     BodyDirective::Skip
-                })
+                }
             }
 
             fn deserialize_request<'a>(
                 &'a self,
                 input: &Schema<'_>,
-                request: &'a ServerRequest,
+                request: &'a aws_smithy_runtime_api::http::Request<bytes::Bytes>,
             ) -> Result<Box<dyn ShapeDeserializer + 'a>, DeserializeError> {
                 self.inner.deserialize_request(input, request)
             }

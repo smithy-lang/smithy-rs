@@ -4,9 +4,9 @@
  */
 
 use super::*;
+use crate::schema::OperationSchema;
 use crate::schema::{HttpModeledError, ServerProtocol, SharedServerProtocol};
 use aws_smithy_schema::serde::ShapeDeserializer;
-use crate::schema::OperationSchema;
 use aws_smithy_schema::{shape_id, Schema, ShapeType};
 use bytes::Bytes;
 use http_body_util::BodyExt;
@@ -14,26 +14,39 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 /// A perfectly usable HTTP protocol that deliberately has no event-stream capability.
-#[derive(Debug)]
-struct HttpOnly;
+#[derive(Debug, Default)]
+struct HttpOnly {
+    expected_extension: Option<std::sync::Weak<String>>,
+    collect: bool,
+}
 
 impl ServerProtocol for HttpOnly {
     fn protocol_id(&self) -> &'static aws_smithy_schema::ShapeId<'static> {
         static ID: aws_smithy_schema::ShapeId<'static> = shape_id!("test", "httpOnly");
         &ID
     }
-    fn inspect_request_head(
-        &self,
-        _: &crate::schema::OperationSchema<'_>,
-        _: &aws_smithy_runtime_api::http::Headers,
-    ) -> Result<crate::schema::BodyDirective, DeserializeError> {
-        Ok(crate::schema::BodyDirective::Skip)
+    fn request_body_requirement(&self, _: &crate::schema::OperationSchema<'_>) -> BodyDirective {
+        if self.collect {
+            BodyDirective::Collect
+        } else {
+            BodyDirective::Skip
+        }
     }
     fn deserialize_request<'a>(
         &'a self,
         _: &Schema<'_>,
-        _: &'a ServerRequest,
+        request: &'a aws_smithy_runtime_api::http::Request<bytes::Bytes>,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, DeserializeError> {
+        if let Some(extension) = &self.expected_extension {
+            assert_eq!(extension.upgrade().as_deref().map(String::as_str), Some("preserved"));
+            assert_eq!(request.method(), "PATCH");
+            assert_eq!(request.uri(), "/metadata?key=value");
+            assert_eq!(request.headers().get("x-test"), Some("header"));
+            assert_eq!(
+                request.body().as_ref(),
+                if self.collect { b"payload".as_slice() } else { b"" }
+            );
+        }
         Ok(Box::new(crate::schema::request_bindings::EmptyStructDeserializer))
     }
     fn serialize_response(&self, _: &Schema<'_>, _: &dyn SerializableStruct) -> http::Response<BoxBody> {
@@ -74,7 +87,8 @@ macro_rules! operation {
         }
         impl SchemaOperationShape for $name {
             const SCHEMA: &'static OperationSchema<'static> = {
-                static SCHEMA: OperationSchema<'static> = OperationSchema::new(shape_id!("test", "Operation"), &$input, &$output, &[]);
+                static SCHEMA: OperationSchema<'static> =
+                    OperationSchema::new(shape_id!("test", "Operation"), &$input, &$output, &[]);
                 &SCHEMA
             };
         }
@@ -108,7 +122,7 @@ async fn check<Op: StreamingOperationShape<Input = (), Output = ()>>(expected: h
     }));
     let mut request = http::Request::new(body);
     request.extensions_mut().insert(SelectedProtocolOperation::new(
-        SharedServerProtocol::serde_only(HttpOnly),
+        SharedServerProtocol::serde_only(HttpOnly::default()),
         Op::SCHEMA,
         Default::default(),
     ));
@@ -139,4 +153,103 @@ async fn unsupported_event_directions_reject_before_polling_or_calling_handler()
 async fn http_and_streaming_blobs_need_no_event_capability() {
     check::<Ordinary>(http::StatusCode::OK).await;
     check::<StreamingBlob>(http::StatusCode::OK).await;
+}
+
+struct EmptyShape;
+impl DeserializableShape for EmptyShape {
+    fn deserialize(deserializer: &mut dyn ShapeDeserializer) -> Result<Self, DeserializeError> {
+        deserializer.read_struct(&EMPTY, &mut |_, _| Ok(()))?;
+        Ok(Self)
+    }
+}
+impl SerializableStruct for EmptyShape {
+    fn schema(&self) -> &Schema<'_> {
+        &EMPTY
+    }
+    fn serialize_members(
+        &self,
+        _: &mut dyn aws_smithy_schema::serde::ShapeSerializer,
+    ) -> Result<(), aws_smithy_schema::serde::SerdeError> {
+        Ok(())
+    }
+}
+struct NonStreaming;
+impl OperationShape for NonStreaming {
+    const ID: crate::shape_id::ShapeId = Ordinary::ID;
+    type Input = EmptyShape;
+    type Output = EmptyShape;
+    type Error = Infallible;
+}
+impl SchemaOperationShape for NonStreaming {
+    const SCHEMA: &'static OperationSchema<'static> = Ordinary::SCHEMA;
+}
+
+#[tokio::test]
+async fn schema_upgrades_preserve_request_metadata() {
+    for (streaming_upgrade, streaming_input, collect) in [
+        (false, false, false),
+        (false, false, true),
+        (true, false, false),
+        (true, false, true),
+        (true, true, false),
+    ] {
+        let extension = Arc::new(String::from("preserved"));
+        let weak = Arc::downgrade(&extension);
+        let protocol = HttpOnly {
+            expected_extension: Some(weak.clone()),
+            collect,
+        };
+        let mut request = http::Request::builder()
+            .method("PATCH")
+            .uri("/metadata?key=value")
+            .header("x-test", "header")
+            .body(http_body_util::Full::new(Bytes::from_static(b"payload")))
+            .unwrap();
+        request.extensions_mut().insert(extension);
+        request.extensions_mut().insert(SelectedProtocolOperation::new(
+            SharedServerProtocol::serde_only(protocol),
+            if streaming_input {
+                StreamingBlob::SCHEMA
+            } else {
+                Ordinary::SCHEMA
+            },
+            Default::default(),
+        ));
+        let response = if streaming_upgrade {
+            let service = tower::service_fn(|_: ((), ())| async { Ok::<_, Infallible>(()) });
+            if streaming_input {
+                DynStreamingUpgrade::<StreamingBlob, (), _> {
+                    inner: service,
+                    _operation: PhantomData,
+                    _extractors: PhantomData,
+                }
+                .oneshot(request)
+                .await
+                .unwrap()
+            } else {
+                DynStreamingUpgrade::<Ordinary, (), _> {
+                    inner: service,
+                    _operation: PhantomData,
+                    _extractors: PhantomData,
+                }
+                .oneshot(request)
+                .await
+                .unwrap()
+            }
+        } else {
+            DynUpgrade::<NonStreaming, (), _> {
+                inner: tower::service_fn(|_: (EmptyShape, ())| async { Ok::<_, Infallible>(EmptyShape) }),
+                _operation: PhantomData,
+                _extractors: PhantomData,
+            }
+            .oneshot(request)
+            .await
+            .unwrap()
+        };
+        assert_eq!(response.status(), http::StatusCode::OK);
+        assert!(
+            weak.upgrade().is_none(),
+            "extension is released when the request finishes"
+        );
+    }
 }

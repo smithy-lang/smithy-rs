@@ -22,7 +22,6 @@ use super::request::{
     EVENT_STREAM_CONTENT_TYPE, OCTET_STREAM_CONTENT_TYPE,
 };
 use super::response::{assemble_response, assemble_streaming_response, resolve_status};
-use super::ServerRequest;
 
 /// How a REST protocol labels its responses. These are the rules the legacy generated servers
 /// follow, so the schema path stays byte-identical to them.
@@ -94,18 +93,18 @@ impl<C: Codec> RestProtocol<C> {
     pub(crate) fn deserialize_request<'a>(
         &'a self,
         input: &Schema<'_>,
-        request: &'a ServerRequest,
+        request: &'a aws_smithy_runtime_api::http::Request<bytes::Bytes>,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, DeserializeError> {
         enforce_content_type(
-            &request.headers,
+            request.headers(),
             &expected_request_content_type(input, self.policy.codec_content_type),
-            &request.body,
+            request.body(),
         )?;
         Ok(Box::new(RestRequestDeserializer::new(
             &self.codec,
-            &request.uri,
-            &request.headers,
-            &request.body,
+            request.uri_ref(),
+            request.headers(),
+            request.body(),
         )))
     }
 

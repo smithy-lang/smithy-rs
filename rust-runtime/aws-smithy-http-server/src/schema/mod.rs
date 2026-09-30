@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-pub mod routing;
 mod deserialize;
 pub mod event_stream;
 mod modeled_error;
 pub mod protocol;
 pub(crate) mod request_bindings;
 pub(crate) mod response_bindings;
+pub mod routing;
 mod service;
 
 pub use deserialize::{DeserializableShape, DeserializeError};
@@ -18,7 +18,7 @@ pub(crate) use protocol::body_collection_rejection;
 pub use protocol::{
     collect_request_body, parse_settings_json, settings_bool, BodyDirective, BodyRoutedProtocol, EventStreamFraming,
     MetadataRoutedProtocol, ProtocolBuildContext, ProtocolFactory, ProtocolOrder, ProtocolRegistration,
-    ProtocolRegistry, RequestBodyCollectionConfig, RequestBodyCollectionError, ServerProtocol, ServerRequest,
+    ProtocolRegistry, RequestBodyCollectionConfig, RequestBodyCollectionError, ServerProtocol,
     ServiceRequestBodyConfig, SharedServerProtocol,
 };
 

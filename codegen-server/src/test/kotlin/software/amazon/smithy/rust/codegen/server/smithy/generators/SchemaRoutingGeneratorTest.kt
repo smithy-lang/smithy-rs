@@ -294,7 +294,7 @@ class SchemaRoutingGeneratorTest {
                                                 static ID: ShapeId<'static> = #{Schema}::shape_id!("test", "bodyRouting");
                                                 &ID
                                             }
-                                            fn deserialize_request<'a>(&'a self, _: &Schema<'_>, _: &'a #{Server}::schema::ServerRequest)
+                                            fn deserialize_request<'a>(&'a self, _: &Schema<'_>, _: &'a #{RuntimeApi}::http::Request<#{Bytes}>)
                                                 -> #{Result}<#{Box}<dyn #{Schema}::serde::ShapeDeserializer + 'a>, #{Server}::schema::DeserializeError> { unreachable!() }
                                             fn serialize_response(&self, _: &Schema<'_>, _: &dyn #{Schema}::serde::SerializableStruct) -> Response<BoxBody> { unreachable!() }
                                             fn serialize_streaming_response(&self, _: &Schema<'_>, _: &dyn #{Schema}::serde::SerializableStruct, _: BoxBody) -> Response<BoxBody> { unreachable!() }
@@ -343,6 +343,7 @@ class SchemaRoutingGeneratorTest {
                                     "Schema" to RuntimeType.smithySchema(codegenContext.runtimeConfig),
                                     "Http" to RuntimeType.http(codegenContext.runtimeConfig),
                                     "Bytes" to RuntimeType.Bytes,
+                                    "RuntimeApi" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig),
                                     *RuntimeType.preludeScope,
                                 )
                             },

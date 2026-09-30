@@ -255,7 +255,7 @@ impl<B> Request<B> {
     }
 
     /// Update the body of this request to be a new body.
-    pub fn map<U>(self, f: impl Fn(B) -> U) -> Request<U> {
+    pub fn map<U>(self, f: impl FnOnce(B) -> U) -> Request<U> {
         Request {
             body: f(self.body),
             uri: self.uri,
@@ -325,6 +325,11 @@ impl<B> Request<B> {
     /// Returns the URI associated with this request
     pub fn uri(&self) -> &str {
         &self.uri.as_string
+    }
+
+    /// Returns a reference to the parsed URI associated with this request.
+    pub fn uri_ref(&self) -> &Uri {
+        &self.uri
     }
 
     /// Returns a mutable reference the the URI of this http::Request
@@ -422,6 +427,32 @@ impl<B> TryFrom<http_1x::Request<B>> for Request<B> {
 mod test {
     use aws_smithy_types::body::SdkBody;
     use http_1x::header::{AUTHORIZATION, CONTENT_LENGTH};
+
+    #[test]
+    fn mapping_body_preserves_request_metadata() {
+        let mut request = http_1x::Request::builder()
+            .method("PATCH")
+            .uri("/resource?key=value")
+            .header("x-test", "header")
+            .body(())
+            .unwrap();
+        request.extensions_mut().insert(String::from("extension"));
+        let replacement = String::from("body");
+        let request = super::Request::try_from(request)
+            .unwrap()
+            .map(|_| replacement);
+        assert_eq!(request.uri_ref().path(), "/resource");
+        assert_eq!(request.uri_ref().query(), Some("key=value"));
+        let request = request.try_into_http1x().unwrap();
+        assert_eq!(request.method(), "PATCH");
+        assert_eq!(request.uri(), "/resource?key=value");
+        assert_eq!(request.headers()["x-test"], "header");
+        assert_eq!(
+            request.extensions().get::<String>().map(String::as_str),
+            Some("extension")
+        );
+        assert_eq!(request.body(), "body");
+    }
 
     #[test]
     fn non_ascii_requests() {

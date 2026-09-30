@@ -20,7 +20,6 @@ use super::request::{
     accept_permits, check_accept, has_streaming_payload, rpc_request_deserializer, EVENT_STREAM_CONTENT_TYPE,
 };
 use super::response::{assemble_response, assemble_streaming_response};
-use super::ServerRequest;
 
 /// Determines which RPC operations advertise a response entity to the `Accept` gate.
 #[derive(Debug, Clone, Copy)]
@@ -118,7 +117,7 @@ impl<C: Codec> RpcProtocol<C> {
     pub fn deserialize_request<'a>(
         &'a self,
         input: &Schema<'_>,
-        request: &'a ServerRequest,
+        request: &'a aws_smithy_runtime_api::http::Request<bytes::Bytes>,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, DeserializeError> {
         rpc_request_deserializer(&self.codec, self.content_type, input, request)
     }

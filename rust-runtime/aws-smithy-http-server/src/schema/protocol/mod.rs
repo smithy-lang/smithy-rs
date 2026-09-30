@@ -41,7 +41,7 @@ use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::time::Duration;
 
-use aws_smithy_runtime_api::http::{Headers, Uri};
+use aws_smithy_runtime_api::http::Headers;
 use aws_smithy_schema::codec::DynCodec;
 use aws_smithy_schema::serde::{SerializableStruct, ShapeDeserializer};
 use aws_smithy_schema::{Schema, ShapeId};
@@ -52,7 +52,6 @@ use crate::response::Response;
 use crate::schema::routing::RouterBuildError;
 use crate::schema::OperationSchema;
 
-
 pub use aws_json::{AwsJson1_0Protocol, AwsJson1_1Protocol};
 pub use rest_json_1::RestJson1Protocol;
 pub use rest_xml::RestXmlProtocol;
@@ -61,28 +60,6 @@ pub use rpc_v2_cbor::RpcV2CborProtocol;
 pub use registry::{ProtocolBuildContext, ProtocolFactory, ProtocolOrder, ProtocolRegistration, ProtocolRegistry};
 
 use super::{DeserializeError, HttpModeledError};
-
-/// The canonical, transport-independent view of a collected request on the schema path.
-///
-/// Transports convert into this at the edge, the way `LambdaHandler` (behind the `aws-lambda`
-/// feature) converts a Lambda event into an HTTP request today: an HTTP server runs
-/// [`Request::try_from`](aws_smithy_runtime_api::http::Request), collects the body, and builds one
-/// of these; a future transport synthesizes the same fields from its own messages. The fields are
-/// public precisely so such upgrade layers can construct it.
-///
-/// A streaming request (event stream or streaming blob input) reaches
-/// [`ServerProtocol::deserialize_request`] with an empty `body`: the protocol reads the URI and
-/// header bindings, and the generated streaming glue attaches the live body afterwards.
-#[derive(Debug)]
-pub struct ServerRequest {
-    /// The request URI.
-    pub uri: Uri,
-    /// The request headers. Values are valid UTF-8 by construction.
-    pub headers: Headers,
-    /// The collected request body. Empty when the protocol answered [`BodyDirective::Skip`]
-    /// from [`ServerProtocol::inspect_request_head`] or when the input is streaming.
-    pub body: Bytes,
-}
 
 /// Shared, erased server protocol selected by routing.
 ///
@@ -220,7 +197,7 @@ impl<P: BodyRoutedProtocol> ErasedBodyRoutedProtocol for P {
     }
 }
 
-/// Directive from head inspection: whether the request body must be collected.
+/// Whether request deserialization needs the body to be collected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum BodyDirective {
@@ -321,36 +298,38 @@ pub trait ServerProtocol: Send + Sync + std::fmt::Debug + 'static {
     /// The protocol trait's shape ID, such as `aws.protocols#restJson1`.
     fn protocol_id(&self) -> &'static ShapeId<'static>;
 
-    /// Inspects the request head for `operation` before any body work: rejects the request, or
-    /// answers whether the body must be collected.
-    ///
-    /// Runs before body collection and [`Self::deserialize_request`]: a protocol that
-    /// distinguishes head failures (`406`) from body failures (`415`) answers the head failure
-    /// first. The built-ins gate the `Accept` header against the response the operation's output
-    /// will carry; a protocol may hang any headers-only validation here. Method and URI are not
-    /// offered: routing already consumed them, so the headers are all that remains of the head.
-    ///
-    /// A protocol that never reads the body for some inputs (an input bound entirely to the URI
-    /// and headers) may answer [`BodyDirective::Skip`] to spare collection; [`ServerRequest::body`]
-    /// is then empty. Streaming inputs are never collected, whatever the directive says.
-    /// Provided: no policy, collect.
-    fn inspect_request_head(
+    /// Validates request headers for the selected operation before upgrade body collection
+    /// and [`Self::deserialize_request`]. Header failures therefore take precedence over
+    /// deserialization failures. The built-in protocols check `Accept` against the response
+    /// content type. The default accepts all headers.
+    fn validate_request_headers(
         &self,
         _operation: &OperationSchema<'_>,
         _headers: &Headers,
-    ) -> Result<BodyDirective, DeserializeError> {
-        Ok(BodyDirective::Collect)
+    ) -> Result<(), DeserializeError> {
+        Ok(())
+    }
+
+    /// Specifies whether deserialization needs the request body. The default collects it.
+    ///
+    /// Returning [`BodyDirective::Skip`] leaves the deserialization request's body empty.
+    /// Streaming inputs bypass collection regardless of this requirement; their live body
+    /// is passed separately to the generated streaming glue.
+    fn request_body_requirement(&self, _operation: &OperationSchema<'_>) -> BodyDirective {
+        BodyDirective::Collect
     }
 
     /// Presents `request` as a deserializer for `input`.
     ///
     /// The `Content-Type` check happens here; the returned deserializer resolves `@http` bindings
     /// from the request and hands body members to its internal codec. Synchronous over an
-    /// already collected body.
+    /// already collected body. The request retains HTTP metadata, including extensions.
+    /// Its body is empty when collection is skipped or the input streams; streaming glue
+    /// receives the live body separately.
     fn deserialize_request<'a>(
         &'a self,
         input: &Schema<'_>,
-        request: &'a ServerRequest,
+        request: &'a aws_smithy_runtime_api::http::Request<bytes::Bytes>,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, DeserializeError>;
 
     /// Serializes `value` as a complete in-memory response for `output`.

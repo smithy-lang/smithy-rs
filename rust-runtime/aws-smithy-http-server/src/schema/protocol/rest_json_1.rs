@@ -19,7 +19,7 @@ use super::response::{
     ResponseBindings,
 };
 use super::rest::RestPolicy;
-use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerProtocol, ServerRequest};
+use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerProtocol};
 
 /// Stateful schema-driven restJson1 protocol implementation.
 #[derive(Debug)]
@@ -69,7 +69,10 @@ impl MetadataRoutedProtocol for RestJson1Protocol {
     fn build_router(
         &self,
         ctx: crate::schema::routing::RouterBuildContext<'_>,
-    ) -> Result<impl crate::schema::routing::MetadataProtocolRouter + 'static + use<>, crate::schema::routing::RouterBuildError> {
+    ) -> Result<
+        impl crate::schema::routing::MetadataProtocolRouter + 'static + use<>,
+        crate::schema::routing::RouterBuildError,
+    > {
         crate::schema::routing::rest_router(ctx.targets, CONTENT_TYPE)
     }
 
@@ -83,23 +86,26 @@ impl ServerProtocol for RestJson1Protocol {
         &PROTOCOL_ID
     }
 
-    fn inspect_request_head(
+    fn validate_request_headers(
         &self,
         operation: &crate::schema::OperationSchema<'_>,
         headers: &Headers,
-    ) -> Result<BodyDirective, DeserializeError> {
-        self.inner.check_accept(operation.output(), headers)?;
-        Ok(if self.inner.reads_request_body(operation.input()) {
+    ) -> Result<(), DeserializeError> {
+        self.inner.check_accept(operation.output(), headers)
+    }
+
+    fn request_body_requirement(&self, operation: &crate::schema::OperationSchema<'_>) -> BodyDirective {
+        if self.inner.reads_request_body(operation.input()) {
             BodyDirective::Collect
         } else {
             BodyDirective::Skip
-        })
+        }
     }
 
     fn deserialize_request<'a>(
         &'a self,
         input: &Schema<'_>,
-        request: &'a ServerRequest,
+        request: &'a aws_smithy_runtime_api::http::Request<bytes::Bytes>,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, DeserializeError> {
         self.inner.deserialize_request(input, request)
     }

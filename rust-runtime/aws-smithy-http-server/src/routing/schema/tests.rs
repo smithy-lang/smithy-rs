@@ -5,7 +5,7 @@
 use super::*;
 use crate::body::Body;
 use crate::error::Error;
-use crate::schema::{DeserializeError, HttpModeledError, RequestBodyCollectionConfig, ServerProtocol, ServerRequest};
+use crate::schema::{DeserializeError, HttpModeledError, RequestBodyCollectionConfig, ServerProtocol};
 use aws_smithy_schema::serde::{SerializableStruct, ShapeDeserializer};
 use aws_smithy_schema::{shape_id, traits::HttpTrait, Schema, ShapeId, ShapeType};
 use http::{HeaderMap, HeaderValue, StatusCode};
@@ -166,7 +166,7 @@ impl ServerProtocol for BodyProtocol {
     fn deserialize_request<'a>(
         &'a self,
         input: &Schema<'_>,
-        request: &'a ServerRequest,
+        request: &'a aws_smithy_runtime_api::http::Request<bytes::Bytes>,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, DeserializeError> {
         self.inner.deserialize_request(input, request)
     }
