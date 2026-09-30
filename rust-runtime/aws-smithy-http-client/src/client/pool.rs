@@ -202,8 +202,6 @@ pub use events::{
     LogicalCloseCause, SharedConnectionEventListener,
 };
 pub use origin::{InvalidOrigin, OriginKey};
-#[cfg(feature = "rt-tokio")]
-pub use partition::TokioDriverSpawner;
 pub use partition::{ConnectionReuseScope, DriverSpawner, Partition, PartitionId};
 pub use stats::{
     ConnectionCapacityStats, Http1ConnectionStats, Http2ConnectionStats, OriginConnectionStats,

@@ -380,7 +380,7 @@ mod tests {
     use super::*;
     use crate::client::pool::maintenance::MaintenanceConfig;
     use crate::client::pool::partition::{
-        ConnectionReuseScope, DriverSpawner, Partition, PartitionId,
+        ConnectionReuseScope, DriverSpawner, Partition, PartitionId, Spawn,
     };
     use crate::client::pool::registry::PartitionRegistry;
     use aws_smithy_runtime_api::client::http::HttpClient;
@@ -392,7 +392,7 @@ mod tests {
     #[derive(Debug)]
     struct TestSpawner;
 
-    impl DriverSpawner for TestSpawner {
+    impl Spawn for TestSpawner {
         fn spawn(&self, _: Pin<Box<dyn Future<Output = ()> + Send + 'static>>) {}
     }
 
@@ -458,7 +458,7 @@ mod tests {
         let selected = PartitionId::from_index(7);
         let initialized = Arc::new(Mutex::new(Vec::new()));
         let pool = crate::client::pool::builder::Builder::default()
-            .partitions([Partition::new(selected, TestSpawner)])
+            .partitions([Partition::new(selected, DriverSpawner::new(TestSpawner))])
             .build_with_transport_for_test(Arc::new(InitializationRecorder {
                 partitions: initialized.clone(),
             }))
@@ -508,8 +508,8 @@ mod tests {
         let first = PartitionId::from_index(1);
         let second = PartitionId::from_index(2);
         let registry = registry(Some(vec![
-            Partition::new(first, TestSpawner).interface("interface-a"),
-            Partition::new(second, TestSpawner).interface("interface-a"),
+            Partition::new(first, DriverSpawner::new(TestSpawner)).interface("interface-a"),
+            Partition::new(second, DriverSpawner::new(TestSpawner)).interface("interface-a"),
         ]));
         let fixture = recording_factory();
 
@@ -539,8 +539,8 @@ mod tests {
         let first = PartitionId::from_index(1);
         let second = PartitionId::from_index(2);
         let registry = registry(Some(vec![
-            Partition::new(first, TestSpawner).interface("interface-a"),
-            Partition::new(second, TestSpawner).interface("interface-b"),
+            Partition::new(first, DriverSpawner::new(TestSpawner)).interface("interface-a"),
+            Partition::new(second, DriverSpawner::new(TestSpawner)).interface("interface-b"),
         ]));
         let fixture = recording_factory();
 

@@ -22,8 +22,8 @@ mod runtime;
 use aws_smithy_async::test_util::ManualTimeSource;
 use aws_smithy_http_client::pool::{
     Client, ConnectPath, ConnectionEstablishmentId, ConnectionEstablishmentStage, ConnectionEvent,
-    ConnectionPool, ConnectionProtocol, ConnectionReuseScope, OriginKey, Partition, PartitionId,
-    TokioDriverSpawner,
+    ConnectionPool, ConnectionProtocol, ConnectionReuseScope, DriverSpawner, OriginKey, Partition,
+    PartitionId,
 };
 use aws_smithy_http_client::test_util::wire::connection::{
     BodyPlan, ConnectionCloseReason, ConnectionEvent as WireConnectionEvent, ConnectionTestHarness,
@@ -316,7 +316,10 @@ async fn custom_dns_resolver_is_used_for_explicit_partition_connections() {
         .expect("harness should start");
     let partition = PartitionId::from_index(1);
     let pool = ConnectionPool::builder()
-        .partitions([Partition::new(partition, TokioDriverSpawner::current())])
+        .partitions([Partition::new(
+            partition,
+            DriverSpawner::tokio(tokio::runtime::Handle::current()),
+        )])
         .dns_resolver(harness.dns_resolver())
         .build_http()
         .expect("valid pool");
@@ -582,8 +585,14 @@ async fn eligible_partition_borrows_the_peer_h1() {
     let second_id = PartitionId::from_index(2);
     let pool = ConnectionPool::builder()
         .partitions([
-            Partition::new(first_id, TokioDriverSpawner::current()),
-            Partition::new(second_id, TokioDriverSpawner::current()),
+            Partition::new(
+                first_id,
+                DriverSpawner::tokio(tokio::runtime::Handle::current()),
+            ),
+            Partition::new(
+                second_id,
+                DriverSpawner::tokio(tokio::runtime::Handle::current()),
+            ),
         ])
         .connection_reuse_scope(ConnectionReuseScope::Pool)
         .max_connections_per_host(1)
@@ -819,8 +828,14 @@ async fn ineligible_partition_reclaims_peer_capacity() {
     let second_id = PartitionId::from_index(2);
     let pool = ConnectionPool::builder()
         .partitions([
-            Partition::new(first_id, TokioDriverSpawner::current()),
-            Partition::new(second_id, TokioDriverSpawner::current()),
+            Partition::new(
+                first_id,
+                DriverSpawner::tokio(tokio::runtime::Handle::current()),
+            ),
+            Partition::new(
+                second_id,
+                DriverSpawner::tokio(tokio::runtime::Handle::current()),
+            ),
         ])
         .connection_reuse_scope(ConnectionReuseScope::Partition)
         .max_connections_per_host(1)

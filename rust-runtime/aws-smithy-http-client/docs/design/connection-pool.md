@@ -306,23 +306,17 @@ pub struct Partition {
 }
 
 impl Partition {
-    pub fn new<S: DriverSpawner>(id: PartitionId, spawner: S) -> Self;
+    pub fn new(id: PartitionId, spawner: DriverSpawner) -> Self;
     pub fn interface(self, nic: impl Into<String>) -> Self;
 }
 
-/// Spawns protocol drivers on a partition's owning runtime.
-pub trait DriverSpawner: Debug + Send + Sync + 'static {
-    fn spawn(&self, driver: Pin<Box<dyn Future<Output = ()> + Send + 'static>>);
+/// Runtime placement for one partition's connection-owned work.
+pub struct DriverSpawner {
+    /* private: type-erased placement implementation */
 }
 
-/// A driver spawner backed by a captured Tokio runtime handle.
-pub struct TokioDriverSpawner {
-    /* private: captured tokio::runtime::Handle */
-}
-
-impl TokioDriverSpawner {
-    pub fn current() -> Self;
-    pub fn from_handle(handle: tokio::runtime::Handle) -> Self;
+impl DriverSpawner {
+    pub fn tokio(handle: tokio::runtime::Handle) -> Self;
 }
 ```
 
@@ -330,7 +324,7 @@ For example, a thread-per-core caller can declare one partition from the identit
 maintains:
 
 ```rust
-Partition::new(PartitionId::from_index(core), TokioDriverSpawner::current())
+Partition::new(PartitionId::from_index(core), DriverSpawner::tokio(Handle::current()))
     .interface("eth0")
 ```
 
@@ -361,10 +355,18 @@ caller can therefore reconstruct `PartitionId::from_index(thread_id)` when it de
 topology, creates each thread's client, and reads per-partition statistics, without plumbing pool-issued
 handles between those sites.
 
-`TokioDriverSpawner::current` captures the current Tokio handle eagerly and panics when called outside a
-runtime. `from_handle` takes a specific handle. Both spawn on the captured runtime regardless of which thread
-invokes `spawn`; neither is supplied by the caller for the anonymous partition, which captures its runtime on
-first use as [Connection establishment](#connection-establishment) describes.
+`DriverSpawner::tokio` takes the handle of the runtime that owns the partition's connections and spawns
+on it regardless of which thread invokes `spawn`. A caller that wants the constructing runtime passes
+`Handle::current()`, whose panic outside a runtime is Tokio's own. No spawner is supplied by the caller
+for the anonymous partition, which captures its runtime on first use as
+[Connection establishment](#connection-establishment) describes. Under the `test-util` feature, a hidden
+`DriverSpawner::from_fn` adapts a spawn function so placement tests can observe task submission; it is
+not a supported extension point.
+
+A spawner is placement, not runtime ownership. It does not keep its runtime alive and takes no part in
+shutdown. A runtime that drops spawned work is observed by the pool through the connection's own close
+path. The placement contract is type-erased behind `DriverSpawner` so the pool can extend it without
+changing the public type.
 
 ##### Alternatives
 
@@ -2633,8 +2635,8 @@ Building retains configuration and assembles the reusable transport factory but 
 loading is deferred to the idempotent connector preflight invoked when the `Client` is selected by smithy, or
 to first establishment when used without smithy validation. Whether a configured interface exists and can be
 used is therefore reported later as a connector error on establishment, not `BuildError`. Likewise,
-`TokioDriverSpawner::current` retains its own documented panic outside a Tokio runtime because that constructor
-is invoked before the spawner is passed to the pool.
+obtaining a Tokio handle for `DriverSpawner::tokio` is the caller's step and keeps Tokio's own panic
+outside a runtime; it happens before the spawner is passed to the pool.
 
 ### Module structure
 

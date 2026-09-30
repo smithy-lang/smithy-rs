@@ -7,7 +7,6 @@
 
 use aws_smithy_http_client::pool::DriverSpawner;
 use std::future::Future;
-use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{mpsc, Arc};
 use std::thread::{self, JoinHandle};
@@ -60,11 +59,13 @@ impl DrivenRuntime {
     }
 
     /// Returns a spawner that records task placement on this runtime.
-    pub(crate) fn driver_spawner(&self) -> RuntimeDriverSpawner {
-        RuntimeDriverSpawner {
-            handle: self.handle.clone(),
-            submitted_tasks: self.submitted_tasks.clone(),
-        }
+    pub(crate) fn driver_spawner(&self) -> DriverSpawner {
+        let handle = self.handle.clone();
+        let submitted_tasks = self.submitted_tasks.clone();
+        DriverSpawner::from_fn(move |driver| {
+            submitted_tasks.fetch_add(1, Ordering::SeqCst);
+            drop(handle.spawn(driver));
+        })
     }
 
     /// Spawns test orchestration work on this runtime.
@@ -104,19 +105,5 @@ impl DrivenRuntime {
 impl Drop for DrivenRuntime {
     fn drop(&mut self) {
         self.stop();
-    }
-}
-
-/// Places connection-owned tasks on one [`DrivenRuntime`].
-#[derive(Clone, Debug)]
-pub(crate) struct RuntimeDriverSpawner {
-    handle: Handle,
-    submitted_tasks: Arc<AtomicUsize>,
-}
-
-impl DriverSpawner for RuntimeDriverSpawner {
-    fn spawn(&self, driver: Pin<Box<dyn Future<Output = ()> + Send + 'static>>) {
-        self.submitted_tasks.fetch_add(1, Ordering::SeqCst);
-        drop(self.handle.spawn(driver));
     }
 }

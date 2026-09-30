@@ -95,7 +95,7 @@ impl PartitionMaintenance {
     }
 
     /// Starts this partition's maintenance task at most once.
-    pub(super) fn start(this: &Arc<Self>, spawner: &dyn DriverSpawner) {
+    pub(super) fn start(this: &Arc<Self>, spawner: &DriverSpawner) {
         if this.idle_timeout.is_none()
             || this
                 .started
@@ -575,7 +575,7 @@ mod tests {
     use crate::client::pool::cell::h1::H1Sender;
     use crate::client::pool::connection::{ConnectionInfo, ConnectionProtocol, ConnectionState};
     use crate::client::pool::origin::OriginKey;
-    use crate::client::pool::partition::{EligibilityGroup, PartitionId, TokioDriverSpawner};
+    use crate::client::pool::partition::{DriverSpawner, EligibilityGroup, PartitionId, Spawn};
     use aws_smithy_async::test_util::controlled_time_and_sleep;
     use aws_smithy_async::time::TimeSource;
     use aws_smithy_runtime_api::client::connection::ConnectionId;
@@ -583,12 +583,12 @@ mod tests {
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{Duration, UNIX_EPOCH};
 
-    #[derive(Debug)]
+    #[derive(Clone, Debug)]
     struct DroppingSpawner {
         submitted: Arc<AtomicU64>,
     }
 
-    impl DriverSpawner for DroppingSpawner {
+    impl Spawn for DroppingSpawner {
         fn spawn(&self, driver: std::pin::Pin<Box<dyn Future<Output = ()> + Send + 'static>>) {
             self.submitted.fetch_add(1, Ordering::SeqCst);
             drop(driver);
@@ -603,9 +603,9 @@ mod tests {
             submitted: submitted.clone(),
         };
 
-        PartitionMaintenance::start(&maintenance, &spawner);
+        PartitionMaintenance::start(&maintenance, &DriverSpawner::new(spawner.clone()));
         assert!(!maintenance.probe().started);
-        PartitionMaintenance::start(&maintenance, &spawner);
+        PartitionMaintenance::start(&maintenance, &DriverSpawner::new(spawner.clone()));
         assert_eq!(2, submitted.load(Ordering::SeqCst));
         assert!(!maintenance.probe().started);
     }
@@ -621,7 +621,7 @@ mod tests {
             submitted: submitted.clone(),
         };
 
-        PartitionMaintenance::start(&maintenance, &spawner);
+        PartitionMaintenance::start(&maintenance, &DriverSpawner::new(spawner.clone()));
 
         assert_eq!(0, submitted.load(Ordering::SeqCst));
         assert!(!maintenance.probe().started);
@@ -723,7 +723,7 @@ mod tests {
         }
     }
 
-    impl DriverSpawner for TrackingSpawner {
+    impl Spawn for TrackingSpawner {
         fn spawn(&self, driver: std::pin::Pin<Box<dyn Future<Output = ()> + Send + 'static>>) {
             self.submitted.fetch_add(1, Ordering::SeqCst);
             let active = self.active.clone();
@@ -747,7 +747,7 @@ mod tests {
         let spawner = TrackingSpawner::new();
 
         for _ in 0..10 {
-            PartitionMaintenance::start(&maintenance, &spawner);
+            PartitionMaintenance::start(&maintenance, &DriverSpawner::new(spawner.clone()));
         }
         for _ in 0..10 {
             if spawner.active.load(Ordering::SeqCst) == 1 {
@@ -774,7 +774,10 @@ mod tests {
     async fn idle_insertion_wakes_a_task_with_no_scheduled_deadline() {
         let timeout = Duration::from_secs(10);
         let (maintenance, cell, mut gate) = managed_cell(timeout);
-        PartitionMaintenance::start(&maintenance, &TokioDriverSpawner::current());
+        PartitionMaintenance::start(
+            &maintenance,
+            &DriverSpawner::tokio(tokio::runtime::Handle::current()),
+        );
         tokio::task::yield_now().await;
         assert_eq!(None, maintenance.probe().scheduled_deadline);
 
@@ -812,7 +815,10 @@ mod tests {
         let (maintenance, cell, mut gate) = managed_cell(timeout);
         let connection = connection(1);
         OriginCell::insert_idle_h1(&cell, connection.clone(), H1Sender::test(1));
-        PartitionMaintenance::start(&maintenance, &TokioDriverSpawner::current());
+        PartitionMaintenance::start(
+            &maintenance,
+            &DriverSpawner::tokio(tokio::runtime::Handle::current()),
+        );
 
         let sleep = gate.expect_sleep().await;
         assert_eq!(timeout, sleep.duration());
@@ -836,7 +842,10 @@ mod tests {
         let (maintenance, cell, mut gate) = managed_cell(timeout);
         let connection = h2_connection(1);
         OriginCell::install_h2_for_test(&cell, connection.clone(), 1, maintenance.idle_deadline());
-        PartitionMaintenance::start(&maintenance, &TokioDriverSpawner::current());
+        PartitionMaintenance::start(
+            &maintenance,
+            &DriverSpawner::tokio(tokio::runtime::Handle::current()),
+        );
 
         let sleep = gate.expect_sleep().await;
         assert_eq!(timeout, sleep.duration());
@@ -890,7 +899,10 @@ mod tests {
         let (maintenance, cell, mut gate) = managed_cell(timeout);
         let connection = connection(1);
         OriginCell::insert_idle_h1(&cell, connection.clone(), H1Sender::test(1));
-        PartitionMaintenance::start(&maintenance, &TokioDriverSpawner::current());
+        PartitionMaintenance::start(
+            &maintenance,
+            &DriverSpawner::tokio(tokio::runtime::Handle::current()),
+        );
 
         let sleep = gate.expect_sleep().await;
         let selection = OriginCell::select_h1(&cell).expect("idle H1 was not selected");
@@ -915,7 +927,10 @@ mod tests {
         );
         let connection = connection(1);
         OriginCell::insert_idle_h1(&cell, connection.clone(), H1Sender::test(1));
-        PartitionMaintenance::start(&maintenance, &TokioDriverSpawner::current());
+        PartitionMaintenance::start(
+            &maintenance,
+            &DriverSpawner::tokio(tokio::runtime::Handle::current()),
+        );
 
         let sleep = gate.expect_sleep().await;
         assert_eq!(timeout, sleep.duration());

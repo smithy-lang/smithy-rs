@@ -39,7 +39,7 @@ use std::sync::Arc as StdArc;
 #[derive(Clone, Debug)]
 struct PartitionExecutor {
     /// Runtime placement inherited from the connection-owning partition.
-    spawner: StdArc<dyn DriverSpawner>,
+    spawner: DriverSpawner,
 }
 
 impl<F> Executor<F> for PartitionExecutor
@@ -382,6 +382,7 @@ mod tests {
     use crate::client::pool::cell::{AcquisitionOutcome, AcquisitionStep};
     use crate::client::pool::origin::OriginKey;
     use crate::client::pool::partition::EligibilityGroup;
+    use crate::client::pool::partition::Spawn;
     use http_1x::uri::Scheme;
     use std::error::Error as _;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -486,7 +487,7 @@ mod tests {
         submissions: StdArc<AtomicUsize>,
     }
 
-    impl DriverSpawner for CountingSpawner {
+    impl Spawn for CountingSpawner {
         fn spawn(&self, future: std::pin::Pin<Box<dyn Future<Output = ()> + Send + 'static>>) {
             self.submissions.fetch_add(1, Ordering::Relaxed);
             drop(future);
@@ -497,7 +498,7 @@ mod tests {
     fn hyper_executor_submits_work_to_the_partition_spawner() {
         let submissions = StdArc::new(AtomicUsize::new(0));
         let executor = PartitionExecutor {
-            spawner: StdArc::new(CountingSpawner {
+            spawner: DriverSpawner::new(CountingSpawner {
                 submissions: submissions.clone(),
             }),
         };

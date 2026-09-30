@@ -46,7 +46,6 @@ use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_types::body::SdkBody;
 use http_1x::{header, Method, Request, Response, Uri, Version};
 use std::future::poll_fn;
-use std::sync::Arc as StdArc;
 use std::time::SystemTime;
 
 /// Replacement selections allowed after the initial HTTP/2 dispatch attempt.
@@ -110,7 +109,7 @@ pub(super) struct AcquisitionContext {
     /// Absolute request URI retained across protocol wire-form changes.
     pub(super) absolute_uri: Uri,
     /// Runtime that owns establishment, drivers, and pending return work.
-    pub(super) owner_spawner: StdArc<dyn DriverSpawner>,
+    pub(super) owner_spawner: DriverSpawner,
     /// Transport connection timeout configured for this operation.
     pub(super) connect_timeout: Option<TransportTimeout>,
     /// Request-attempt observation retained until Hyper accepts a connection.
@@ -242,7 +241,7 @@ pub(super) async fn send(
     let owner_spawner = partition
         .owner_spawner()
         .map_err(|error| ConnectorError::user(error.into()))?;
-    partition.ensure_maintenance_started(owner_spawner.as_ref());
+    partition.ensure_maintenance_started(&owner_spawner);
 
     let context = AcquisitionContext {
         pool: pool.inner.clone(),

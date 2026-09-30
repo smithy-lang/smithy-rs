@@ -15,8 +15,8 @@ mod common;
 mod runtime;
 
 use aws_smithy_http_client::pool::{
-    Client as PoolClient, ConnectionPool, ConnectionReuseScope, Partition, PartitionId,
-    TokioDriverSpawner,
+    Client as PoolClient, ConnectionPool, ConnectionReuseScope, DriverSpawner, Partition,
+    PartitionId,
 };
 use aws_smithy_http_client::test_util::wire::connection::{ConnectionCloseReason, ManualGate};
 use aws_smithy_http_client::tls;
@@ -1358,8 +1358,14 @@ mod partition_reuse {
             .tls_provider(rustls_aws_lc())
             .tls_context(test_tls::SERVER_IDENTITY.client_context())
             .partitions([
-                Partition::new(first, TokioDriverSpawner::current()),
-                Partition::new(second, TokioDriverSpawner::current()),
+                Partition::new(
+                    first,
+                    DriverSpawner::tokio(tokio::runtime::Handle::current()),
+                ),
+                Partition::new(
+                    second,
+                    DriverSpawner::tokio(tokio::runtime::Handle::current()),
+                ),
             ])
             .connection_reuse_scope(scope)
             .max_connections_per_host(1)

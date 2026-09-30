@@ -15,8 +15,6 @@ use super::cell::OriginCell;
 use super::connection::CloseReason;
 use super::maintenance::{MaintenanceConfig, PartitionMaintenance};
 use super::origin::{InvalidOrigin, OriginKey, OriginLookup, SchemeKey};
-#[cfg(feature = "rt-tokio")]
-use super::partition::TokioDriverSpawner;
 use super::partition::{
     ConnectionReuseScope, DriverSpawner, EligibilityGroup, Partition, PartitionId,
 };
@@ -236,7 +234,7 @@ pub(in crate::client::pool) struct PartitionState {
     id: PartitionId,
     /// Configured spawner, or the first spawner published for the anonymous
     /// partition.
-    spawner: OnceLock<StdArc<dyn DriverSpawner>>,
+    spawner: OnceLock<DriverSpawner>,
     /// Network interface used for placement and reuse eligibility.
     interface: Option<StdArc<str>>,
     /// Cells retained for the lifetime of this partition.
@@ -286,7 +284,7 @@ impl PartitionState {
     /// all later requests use that same runtime.
     pub(in crate::client::pool) fn owner_spawner(
         &self,
-    ) -> Result<StdArc<dyn DriverSpawner>, MissingAnonymousRuntime> {
+    ) -> Result<DriverSpawner, MissingAnonymousRuntime> {
         if let Some(spawner) = self.spawner.get() {
             return Ok(spawner.clone());
         }
@@ -301,7 +299,7 @@ impl PartitionState {
                 tokio::runtime::Handle::try_current().map_err(|_| MissingAnonymousRuntime)?;
             Ok(self
                 .spawner
-                .get_or_init(|| StdArc::new(TokioDriverSpawner::from_handle(handle)))
+                .get_or_init(|| DriverSpawner::tokio(handle))
                 .clone())
         }
 
@@ -328,7 +326,7 @@ impl PartitionState {
     }
 
     /// Ensures idle maintenance is running on this partition's owner runtime.
-    pub(in crate::client::pool) fn ensure_maintenance_started(&self, spawner: &dyn DriverSpawner) {
+    pub(in crate::client::pool) fn ensure_maintenance_started(&self, spawner: &DriverSpawner) {
         PartitionMaintenance::start(&self.maintenance, spawner);
     }
 
@@ -460,6 +458,7 @@ impl Error for MissingAnonymousRuntime {}
 mod tests {
     use super::*;
     use crate::client::pool::admission::ProtocolRequirement;
+    use crate::client::pool::partition::Spawn;
     use std::future::Future;
     use std::pin::Pin;
     use std::sync::Barrier;
@@ -467,14 +466,17 @@ mod tests {
     #[derive(Debug)]
     struct TestSpawner;
 
-    impl DriverSpawner for TestSpawner {
+    impl Spawn for TestSpawner {
         fn spawn(&self, driver: Pin<Box<dyn Future<Output = ()> + Send + 'static>>) {
             drop(driver);
         }
     }
 
     fn partition(index: usize) -> Partition {
-        Partition::new(PartitionId::from_index(index), TestSpawner)
+        Partition::new(
+            PartitionId::from_index(index),
+            DriverSpawner::new(TestSpawner),
+        )
     }
 
     fn admission_policy(limit: Option<NonZeroUsize>) -> Option<AdmissionPolicy> {
@@ -622,7 +624,7 @@ mod tests {
         assert!(spawners
             .iter()
             .skip(1)
-            .all(|spawner| StdArc::ptr_eq(&spawners[0], spawner)));
+            .all(|spawner| spawners[0].ptr_eq(spawner)));
     }
 
     #[test]
@@ -634,7 +636,10 @@ mod tests {
         assert_eq!(
             PartitionRegistryError::ReservedAnonymousPartition,
             explicit_registry(
-                [Partition::new(PartitionId::ANONYMOUS, TestSpawner)],
+                [Partition::new(
+                    PartitionId::ANONYMOUS,
+                    DriverSpawner::new(TestSpawner)
+                )],
                 ConnectionReuseScope::default(),
                 None,
             )
@@ -874,13 +879,14 @@ mod tests {
 #[cfg(all(test, smithy_http_client_loom))]
 mod loom_tests {
     use super::*;
+    use crate::client::pool::partition::Spawn;
     use std::future::Future;
     use std::pin::Pin;
 
     #[derive(Debug)]
     struct TestSpawner;
 
-    impl DriverSpawner for TestSpawner {
+    impl Spawn for TestSpawner {
         fn spawn(&self, driver: Pin<Box<dyn Future<Output = ()> + Send + 'static>>) {
             drop(driver);
         }
@@ -910,7 +916,10 @@ mod loom_tests {
         loom::model(|| {
             let registry = Arc::new(
                 explicit_registry(
-                    [Partition::new(PartitionId::from_index(1), TestSpawner)],
+                    [Partition::new(
+                        PartitionId::from_index(1),
+                        DriverSpawner::new(TestSpawner),
+                    )],
                     ConnectionReuseScope::default(),
                     None,
                 )

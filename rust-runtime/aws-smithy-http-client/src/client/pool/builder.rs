@@ -724,6 +724,7 @@ fn set_default_connector_interface<R>(_connector: &mut HttpConnector<R>, _interf
 #[cfg(all(test, not(smithy_http_client_loom)))]
 mod tests {
     use super::*;
+    use crate::client::pool::partition::Spawn;
     use crate::client::pool::{DriverSpawner, PartitionId};
     use std::future::Future;
     use std::net::IpAddr;
@@ -741,7 +742,7 @@ mod tests {
     #[derive(Debug)]
     struct TestSpawner;
 
-    impl DriverSpawner for TestSpawner {
+    impl Spawn for TestSpawner {
         fn spawn(&self, driver: Pin<Box<dyn Future<Output = ()> + Send + 'static>>) {
             drop(driver);
         }
@@ -760,7 +761,10 @@ mod tests {
     }
 
     fn partition(index: usize) -> Partition {
-        Partition::new(PartitionId::from_index(index), TestSpawner)
+        Partition::new(
+            PartitionId::from_index(index),
+            DriverSpawner::new(TestSpawner),
+        )
     }
 
     #[test]
@@ -959,7 +963,10 @@ mod tests {
     #[test]
     fn terminal_build_rejects_reserved_anonymous_partition_id() {
         let error = Builder::default()
-            .partitions([Partition::new(PartitionId::ANONYMOUS, TestSpawner)])
+            .partitions([Partition::new(
+                PartitionId::ANONYMOUS,
+                DriverSpawner::new(TestSpawner),
+            )])
             .build_http()
             .unwrap_err();
         assert_eq!(

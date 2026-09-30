@@ -24,7 +24,6 @@ use http_1x::{Method, Request, Response, Uri, Version};
 use hyper::body::Body;
 use std::future::{poll_fn, Future};
 use std::pin::Pin;
-use std::sync::Arc as StdArc;
 use std::task::{Context, Poll};
 
 /// Result of one HTTP/1 dispatch attempt while the pool owns the request.
@@ -285,7 +284,7 @@ struct H1ResponseLifecycle {
     /// Accepted-dispatch accounting completed with response cleanup.
     dispatch: Option<DispatchGuard>,
     /// Owner-runtime placement for readiness work that outlives the body.
-    spawner: StdArc<dyn DriverSpawner>,
+    spawner: DriverSpawner,
 }
 
 /// Owner-runtime task waiting for Hyper to prove the sender reusable.
@@ -452,11 +451,12 @@ mod tests {
     use crate::client::pool::dispatch::RequestOptions;
     use crate::client::pool::origin::OriginKey;
     use crate::client::pool::partition::EligibilityGroup;
+    use crate::client::pool::partition::Spawn;
     use crate::client::pool::registry::PartitionState;
     use crate::client::pool::stats::CellConnectionStats;
     use crate::client::pool::{
-        Client, ConnectionId, ConnectionPool, ConnectionReuseScope, Partition, PartitionId,
-        TokioDriverSpawner,
+        Client, ConnectionId, ConnectionPool, ConnectionReuseScope, DriverSpawner, Partition,
+        PartitionId,
     };
     use crate::client::timeout::test::{NeverConnects, NeverReplies};
     use crate::sync::Arc;
@@ -473,6 +473,7 @@ mod tests {
     use std::io::{self, IoSlice};
     use std::num::NonZeroUsize;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc as StdArc;
     use std::task::{Context, Poll};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::{TcpListener, TcpStream};
@@ -482,7 +483,7 @@ mod tests {
     #[derive(Debug)]
     struct DroppingSpawner;
 
-    impl DriverSpawner for DroppingSpawner {
+    impl Spawn for DroppingSpawner {
         fn spawn(&self, driver: Pin<Box<dyn std::future::Future<Output = ()> + Send + 'static>>) {
             drop(driver);
         }
@@ -493,7 +494,7 @@ mod tests {
         active: StdArc<AtomicUsize>,
     }
 
-    impl DriverSpawner for TrackingSpawner {
+    impl Spawn for TrackingSpawner {
         fn spawn(&self, driver: Pin<Box<dyn std::future::Future<Output = ()> + Send + 'static>>) {
             self.active.fetch_add(1, Ordering::SeqCst);
             let active = self.active.clone();
@@ -517,7 +518,7 @@ mod tests {
         submitted: StdArc<AtomicUsize>,
     }
 
-    impl DriverSpawner for CountingSpawner {
+    impl Spawn for CountingSpawner {
         fn spawn(&self, driver: Pin<Box<dyn Future<Output = ()> + Send + 'static>>) {
             self.submitted.fetch_add(1, Ordering::SeqCst);
             drop(tokio::spawn(driver));
@@ -529,7 +530,7 @@ mod tests {
         submitted: StdArc<AtomicUsize>,
     }
 
-    impl DriverSpawner for CountingDroppingSpawner {
+    impl Spawn for CountingDroppingSpawner {
         fn spawn(&self, driver: Pin<Box<dyn Future<Output = ()> + Send + 'static>>) {
             self.submitted.fetch_add(1, Ordering::SeqCst);
             drop(driver);
@@ -678,7 +679,10 @@ mod tests {
     async fn dropped_owner_task_completes_the_establishment_waiter() {
         let pool = ConnectionPool::builder()
             .idle_timeout(None)
-            .partitions([Partition::new(PartitionId::from_index(7), DroppingSpawner)])
+            .partitions([Partition::new(
+                PartitionId::from_index(7),
+                DriverSpawner::new(DroppingSpawner),
+            )])
             .build_http()
             .unwrap();
         let partition = pool
@@ -975,9 +979,9 @@ mod tests {
             .idle_timeout(None)
             .partitions([Partition::new(
                 PartitionId::from_index(7),
-                CountingSpawner {
+                DriverSpawner::new(CountingSpawner {
                     submitted: submitted.clone(),
-                },
+                }),
             )])
             .build_http()
             .unwrap();
@@ -1012,7 +1016,7 @@ mod tests {
         let uri = "http://example.com/".parse().unwrap();
         let cell = pool.inner.registry.resolve_cell(&partition, &uri).unwrap();
         let submitted = StdArc::new(AtomicUsize::new(0));
-        let owner_spawner: StdArc<dyn DriverSpawner> = StdArc::new(CountingSpawner { submitted });
+        let owner_spawner = DriverSpawner::new(CountingSpawner { submitted });
         let (connection, _physical) = ConnectionState::pending_open(
             ConnectionInfo::for_test(ConnectionId::new(1), PartitionId::ANONYMOUS),
             owner_spawner.clone(),
@@ -1026,7 +1030,7 @@ mod tests {
 
         let lifecycle = H1ResponseLifecycle::new(selection.into_exchange(), dispatch);
 
-        assert!(StdArc::ptr_eq(&owner_spawner, &lifecycle.spawner));
+        assert!(owner_spawner.ptr_eq(&lifecycle.spawner));
     }
 
     #[test]
@@ -1056,7 +1060,7 @@ mod tests {
             )),
         );
         let submitted = StdArc::new(AtomicUsize::new(0));
-        let owner_spawner: StdArc<dyn DriverSpawner> = StdArc::new(CountingDroppingSpawner {
+        let owner_spawner = DriverSpawner::new(CountingDroppingSpawner {
             submitted: submitted.clone(),
         });
         let (connection, _physical) = ConnectionState::pending_open(
@@ -1082,7 +1086,7 @@ mod tests {
             ConnectionState::try_commit_dispatch(&connection).expect("connection should be open");
 
         let lifecycle = H1ResponseLifecycle::new(selection.into_exchange(), dispatch);
-        assert!(StdArc::ptr_eq(&owner_spawner, &lifecycle.spawner));
+        assert!(owner_spawner.ptr_eq(&lifecycle.spawner));
         lifecycle.resolve(None);
 
         assert_eq!(1, submitted.load(Ordering::SeqCst));
@@ -1399,7 +1403,7 @@ mod tests {
         let pool = ConnectionPool::builder()
             .partitions([Partition::new(
                 PartitionId::from_index(7),
-                TokioDriverSpawner::current(),
+                DriverSpawner::tokio(tokio::runtime::Handle::current()),
             )])
             .build_http()
             .unwrap();
@@ -1440,9 +1444,9 @@ mod tests {
         let pool = ConnectionPool::builder()
             .partitions([Partition::new(
                 PartitionId::from_index(7),
-                TrackingSpawner {
+                DriverSpawner::new(TrackingSpawner {
                     active: active.clone(),
-                },
+                }),
             )])
             .build_http()
             .unwrap();
@@ -1452,7 +1456,7 @@ mod tests {
             .partition(PartitionId::from_index(7))
             .unwrap();
         let spawner = partition.owner_spawner().unwrap();
-        partition.ensure_maintenance_started(spawner.as_ref());
+        partition.ensure_maintenance_started(&spawner);
         for _ in 0..10 {
             if active.load(Ordering::SeqCst) == 1 {
                 break;
@@ -1480,7 +1484,7 @@ mod tests {
             observed: StdArc<AtomicUsize>,
         }
 
-        impl DriverSpawner for RecordingSpawner {
+        impl Spawn for RecordingSpawner {
             fn spawn(
                 &self,
                 driver: Pin<Box<dyn std::future::Future<Output = ()> + Send + 'static>>,
@@ -1505,11 +1509,11 @@ mod tests {
         let pool = ConnectionPool::builder()
             .partitions([Partition::new(
                 PartitionId::from_index(7),
-                RecordingSpawner {
+                DriverSpawner::new(RecordingSpawner {
                     handle: owner.handle().clone(),
                     expected: owner.handle().id(),
                     observed: observed.clone(),
-                },
+                }),
             )])
             .build_http()
             .unwrap();
@@ -1549,12 +1553,21 @@ mod tests {
         let pool = super::super::super::builder::Builder::default()
             .idle_timeout(None)
             .partitions([
-                Partition::new(first_id, TokioDriverSpawner::current())
-                    .interface("synthetic-interface-a"),
-                Partition::new(matching_id, TokioDriverSpawner::current())
-                    .interface("synthetic-interface-a"),
-                Partition::new(mismatched_id, TokioDriverSpawner::current())
-                    .interface("synthetic-interface-b"),
+                Partition::new(
+                    first_id,
+                    DriverSpawner::tokio(tokio::runtime::Handle::current()),
+                )
+                .interface("synthetic-interface-a"),
+                Partition::new(
+                    matching_id,
+                    DriverSpawner::tokio(tokio::runtime::Handle::current()),
+                )
+                .interface("synthetic-interface-a"),
+                Partition::new(
+                    mismatched_id,
+                    DriverSpawner::tokio(tokio::runtime::Handle::current()),
+                )
+                .interface("synthetic-interface-b"),
             ])
             .connection_reuse_scope(ConnectionReuseScope::NetworkInterface)
             .max_connections_per_host(1)

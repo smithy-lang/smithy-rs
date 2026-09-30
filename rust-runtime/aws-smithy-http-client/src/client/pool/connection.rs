@@ -16,6 +16,8 @@
 use super::admission::CapacityLease;
 use super::events::{LogicalCloseCause, SharedConnectionEventListener};
 use super::origin::OriginKey;
+#[cfg(test)]
+use super::partition::Spawn;
 use super::partition::{DriverSpawner, PartitionId};
 use super::stats::CellConnectionStats;
 use crate::client::connect::{ConnectPath, ConnectPathInner};
@@ -32,7 +34,7 @@ use std::fmt;
 use std::io::{self, IoSlice};
 use std::net::SocketAddr;
 use std::pin::Pin;
-use std::sync::{Arc as StdArc, OnceLock};
+use std::sync::OnceLock;
 use std::task::{Context, Poll};
 
 /// Final protocol and ownership classification for a closed connection.
@@ -236,7 +238,7 @@ pub(super) struct ConnectionState {
     /// Identity and transport facts shared with metadata and lifecycle events.
     info: Arc<ConnectionInfo>,
     /// Runtime that owns protocol and follow-up work for this connection.
-    owner_spawner: StdArc<dyn DriverSpawner>,
+    owner_spawner: DriverSpawner,
     /// Cell-owned counts for connection lifetimes that outlive protocol records.
     stats: Arc<CellConnectionStats>,
     /// Dispatch, logical-close, and physical-connection completion state.
@@ -248,7 +250,7 @@ pub(super) struct ConnectionState {
 struct TestDriverSpawner;
 
 #[cfg(test)]
-impl DriverSpawner for TestDriverSpawner {
+impl Spawn for TestDriverSpawner {
     fn spawn(&self, driver: Pin<Box<dyn std::future::Future<Output = ()> + Send + 'static>>) {
         drop(driver);
     }
@@ -484,7 +486,7 @@ impl ConnectionState {
     /// discoverable.
     pub(super) fn pending_open(
         info: Arc<ConnectionInfo>,
-        owner_spawner: StdArc<dyn DriverSpawner>,
+        owner_spawner: DriverSpawner,
         stats: Arc<CellConnectionStats>,
     ) -> (Arc<Self>, PhysicalConnectionGuard) {
         stats.physical_connection_started();
@@ -513,13 +515,13 @@ impl ConnectionState {
     ) -> (Arc<Self>, PhysicalConnectionGuard) {
         Self::pending_open(
             info,
-            StdArc::new(TestDriverSpawner),
+            DriverSpawner::new(TestDriverSpawner),
             Arc::new(CellConnectionStats::default()),
         )
     }
 
     /// Returns the runtime that owns this installed connection.
-    pub(super) fn owner_spawner(&self) -> StdArc<dyn DriverSpawner> {
+    pub(super) fn owner_spawner(&self) -> DriverSpawner {
         self.owner_spawner.clone()
     }
 
@@ -1202,8 +1204,11 @@ mod tests {
             stats.clone(),
         );
         establishment.protocol_selected(ConnectionProtocol::Http1);
-        let (connection, physical) =
-            ConnectionState::pending_open(test_info(1), StdArc::new(TestDriverSpawner), stats);
+        let (connection, physical) = ConnectionState::pending_open(
+            test_info(1),
+            DriverSpawner::new(TestDriverSpawner),
+            stats,
+        );
         connection.open(None).unwrap();
 
         establishment.opened(&connection);
