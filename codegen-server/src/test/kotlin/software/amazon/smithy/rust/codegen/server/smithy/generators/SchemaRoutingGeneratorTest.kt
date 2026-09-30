@@ -324,7 +324,7 @@ class SchemaRoutingGeneratorTest {
                                                 #{Ok}(TestProtocol)
                                             }
                                             fn build_router(&self, ctx: RouterBuildContext<'_>)
-                                                -> #{Result}<impl #{Server}::schema::routing::ProtocolRouter + 'static + use<>, RouterBuildError> {
+                                                -> #{Result}<impl #{Server}::schema::routing::MetadataProtocolRouter + 'static + use<>, RouterBuildError> {
                                                 // `use<>` on the subtraits admits delegating through a temporary protocol.
                                                 #{Server}::schema::MetadataRoutedProtocol::build_router(
                                                     &#{Server}::protocol::rest_json_1::RestJson1Protocol::default(), ctx)
