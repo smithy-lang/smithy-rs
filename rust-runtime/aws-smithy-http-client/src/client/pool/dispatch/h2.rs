@@ -141,25 +141,29 @@ pub(super) async fn dispatch(
     let mut send = Box::pin(sender.hyper_mut().try_send_request(request));
     let first = poll_fn(|cx| Poll::Ready(send.as_mut().poll(cx))).await;
 
-    match first {
-        Poll::Ready(Err(mut error)) if error.message().is_some() => {
-            let returned = error
-                .take_message()
-                .expect("checked returned request disappeared");
-            body.clear();
-            drop(response);
-            drop(dispatch);
-            drop(activation);
-            close.close(CloseReason::ProtocolClosed);
-            let metadata =
-                captured_metadata.unwrap_or_else(|| connection.info().h2_metadata(close));
-            resolve_unaccepted_request(
-                returned,
-                reused,
-                UnacceptedStage::ReturnedByHyper,
-                downcast_error(Box::new(error.into_error())).with_connection(metadata),
-            )
+    let first = match first {
+        Poll::Ready(Err(mut error)) => {
+            if let Some(returned) = error.take_message() {
+                body.clear();
+                drop(response);
+                drop(dispatch);
+                drop(activation);
+                close.close(CloseReason::ProtocolClosed);
+                let metadata =
+                    captured_metadata.unwrap_or_else(|| connection.info().h2_metadata(close));
+                return resolve_unaccepted_request(
+                    returned,
+                    reused,
+                    UnacceptedStage::ReturnedByHyper,
+                    downcast_error(Box::new(error.into_error())).with_connection(metadata),
+                );
+            }
+            Poll::Ready(Err(error))
         }
+        first => first,
+    };
+
+    match first {
         Poll::Ready(result) => {
             activation.accept(dispatch);
             let connection_selection =

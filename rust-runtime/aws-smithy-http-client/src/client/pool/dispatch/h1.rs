@@ -455,8 +455,7 @@ mod tests {
     use crate::client::pool::registry::PartitionState;
     use crate::client::pool::stats::CellConnectionStats;
     use crate::client::pool::{
-        Client, ConnectionId, ConnectionPool, ConnectionReuseScope, DriverSpawner, Partition,
-        PartitionId,
+        Client, ConnectionId, ConnectionPool, DriverSpawner, Partition, PartitionId,
     };
     use crate::client::timeout::test::{NeverConnects, NeverReplies};
     use crate::sync::Arc;
@@ -1546,6 +1545,8 @@ mod tests {
     ))]
     #[tokio::test]
     async fn network_interface_scope_reuses_matching_and_reclaims_mismatched_h1() {
+        use crate::client::pool::ConnectionReuseScope;
+
         let server = TestServer::start().await;
         let first_id = PartitionId::from_index(1);
         let matching_id = PartitionId::from_index(2);

@@ -360,22 +360,7 @@ fn alpn_protocols(requirement: ProtocolRequirement) -> AlpnProtocols {
     }
 }
 
-#[cfg(all(
-    test,
-    any(feature = "__rustls", feature = "s2n-tls"),
-    any(
-        target_os = "android",
-        target_os = "fuchsia",
-        target_os = "illumos",
-        target_os = "ios",
-        target_os = "linux",
-        target_os = "macos",
-        target_os = "solaris",
-        target_os = "tvos",
-        target_os = "visionos",
-        target_os = "watchos",
-    )
-))]
+#[cfg(all(test, any(feature = "__rustls", feature = "s2n-tls")))]
 mod tests {
     use super::*;
     use crate::client::pool::maintenance::MaintenanceConfig;
@@ -503,6 +488,18 @@ mod tests {
         assert_eq!(2, fixture.factory.connectors.lock().len());
     }
 
+    #[cfg(any(
+        target_os = "android",
+        target_os = "fuchsia",
+        target_os = "illumos",
+        target_os = "ios",
+        target_os = "linux",
+        target_os = "macos",
+        target_os = "solaris",
+        target_os = "tvos",
+        target_os = "visionos",
+        target_os = "watchos",
+    ))]
     #[test]
     fn equal_interface_bindings_share_connector_entries() {
         let first = PartitionId::from_index(1);
@@ -534,6 +531,18 @@ mod tests {
         assert_eq!(2, fixture.factory.connectors.lock().len());
     }
 
+    #[cfg(any(
+        target_os = "android",
+        target_os = "fuchsia",
+        target_os = "illumos",
+        target_os = "ios",
+        target_os = "linux",
+        target_os = "macos",
+        target_os = "solaris",
+        target_os = "tvos",
+        target_os = "visionos",
+        target_os = "watchos",
+    ))]
     #[test]
     fn distinct_interface_bindings_use_distinct_connector_entries() {
         let first = PartitionId::from_index(1);
