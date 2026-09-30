@@ -4369,4 +4369,302 @@ mod loom_tests {
             admission.clear_modeled_cells_for_test();
         });
     }
+
+    /// Races the drop of a prepared capacity delivery with cell-local churn.
+    ///
+    /// Every other model consumes its prepared action explicitly, so
+    /// `DeliveryGuard::drop` is the only path that refunnels a capacity payload
+    /// abandoned mid-crossing. Cancelling a crowding waiter takes the same cell
+    /// lock the refunnelled delivery must commit against and republishes the
+    /// cell's HTTP/1 supply through admission, so both actors contend on both
+    /// pool locks. The permit must return to the demand that reserved it, at its
+    /// original origin position, and the cell that published later must not
+    /// overtake it.
+    #[test]
+    fn dropped_capacity_delivery_refunnels_to_its_original_head() {
+        loom::model(|| {
+            let (admission, head_cell, younger_cell) =
+                bounded_peer_cells(EligibilityGroup::Pool, EligibilityGroup::Pool);
+            let (head, demand) =
+                head_cell.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
+            // A younger same-cell waiter shares the published demand generation,
+            // so cancelling it cannot retire or reorder the head's demand.
+            let crowding =
+                OriginCell::register_waiter(&head_cell, ProtocolRequirement::H1Compatible);
+            let delivery = OriginAdmission::submit_without_running(
+                &admission,
+                head_cell.id().partition(),
+                demand,
+            )
+            .expect("head demand did not reserve the only permit");
+            assert_eq!(0, admission.available_capacity_for_test());
+            let (younger, younger_demand) =
+                younger_cell.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
+            OriginAdmission::submit_demand_snapshot(
+                &admission,
+                younger_cell.id().partition(),
+                younger_demand,
+            );
+
+            let dropping = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || drop(delivery))
+                .unwrap();
+            let crowding_cell = head_cell.clone();
+            let crowding_out = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || OriginCell::cancel_waiter(&crowding_cell, crowding))
+                .unwrap();
+            dropping.join().unwrap();
+            assert!(crowding_out.join().unwrap());
+
+            let head_lease = OriginCell::take_ready_lease(&head_cell, head)
+                .expect("dropped delivery did not refunnel the permit to its own head");
+            assert!(
+                OriginCell::take_ready_lease(&younger_cell, younger).is_none(),
+                "refunnelled permit overtook the demand that reserved it"
+            );
+            drop(head_lease);
+            let younger_lease = OriginCell::take_ready_lease(&younger_cell, younger)
+                .expect("younger demand never received the released permit");
+            drop(younger_lease);
+            assert_eq!(1, admission.available_capacity_for_test());
+            assert_eq!(0, admission.ordered_demand_count_for_test());
+            assert_eq!(0, head_cell.probe().retained);
+            admission.clear_modeled_cells_for_test();
+        });
+    }
+
+    /// Races the drop of a prepared HTTP/1 reservation with request cancellation.
+    ///
+    /// `H1ReservationAction::drop` is the only path that releases a supplier
+    /// admission already removed from selection. Whichever actor wins, the
+    /// supplier keeps its sender exactly once and stays matchable by fresh peer
+    /// demand. Three preemptions cover either actor entering first plus a full
+    /// reservation round trip across the supplier cell and admission locks.
+    #[test]
+    fn dropped_h1_reservation_action_keeps_the_supplier_borrowable() {
+        let mut model = loom::model::Builder::new();
+        model.preemption_bound.get_or_insert(3);
+        model.check(|| {
+            let (admission, supplier, requester) =
+                bounded_peer_cells(EligibilityGroup::Pool, EligibilityGroup::Pool);
+            let lease = OriginAdmission::lease_for_test(&admission);
+            let (connection, _physical) = ConnectionState::bounded(connection_info(1), lease);
+            OriginCell::insert_idle_h1(&supplier, connection, H1Sender::test(11));
+            let (waiter, demand) =
+                requester.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
+            let reservation = OriginAdmission::submit_action_without_running(
+                &admission,
+                requester.id().partition(),
+                demand,
+            )
+            .expect("peer demand did not prepare a supplier reservation");
+            assert!(matches!(
+                &reservation,
+                AdmissionAction::ReserveH1Supplier(_)
+            ));
+
+            let dropping = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || drop(reservation))
+                .unwrap();
+            let cancel_cell = requester.clone();
+            let cancelling = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || OriginCell::cancel_waiter(&cancel_cell, waiter))
+                .unwrap();
+            dropping.join().unwrap();
+            assert!(cancelling.join().unwrap());
+
+            assert_eq!(
+                vec![11],
+                supplier.h1_idle_sender_ids(),
+                "dropped reservation lost or duplicated the supplier's sender"
+            );
+            assert_eq!((1, 1), supplier.h1_counts());
+            assert_eq!(0, requester.probe().retained);
+            assert_eq!(0, admission.ordered_demand_count_for_test());
+            assert_eq!(0, admission.available_capacity_for_test());
+            assert!(supplier.state.lock().h1.peer_reservation_available());
+
+            // A dropped reservation must leave admission able to match the same
+            // supplier again; a leaked match would strand this sender forever.
+            let retry = OriginCell::register_waiter(&requester, ProtocolRequirement::H1Compatible);
+            let borrowed = requester
+                .take_ready_h1(retry)
+                .expect("dropped reservation left the supplier unmatchable");
+            assert_eq!(11, borrowed.test_sender_id());
+            drop(borrowed);
+            admission.clear_modeled_cells_for_test();
+        });
+    }
+
+    /// Races the drop of a resolved HTTP/1 reclaim candidate with cancellation.
+    ///
+    /// `H1Candidate::drop` is the only path that returns a provisional sender
+    /// already detached from its owning cell when the reclaim action it belongs
+    /// to is abandoned. Either the reclaim retries and recovers the origin's
+    /// only connection slot, or cancellation wins and the sender returns to its
+    /// owning cell. Exactly one of those holds, and the slot is conserved.
+    #[test]
+    fn dropped_h1_candidate_returns_its_detached_sender() {
+        let mut model = loom::model::Builder::new();
+        model.preemption_bound.get_or_insert(3);
+        model.check(|| {
+            let (admission, supplier, requester) =
+                bounded_peer_cells(EligibilityGroup::Pool, EligibilityGroup::Pool);
+            let lease = OriginAdmission::lease_for_test(&admission);
+            let (connection, _physical) = ConnectionState::bounded(connection_info(1), lease);
+            OriginCell::insert_idle_h1(&supplier, connection, H1Sender::test(11));
+            let (waiter, demand) =
+                requester.register_waiter_without_publish(ProtocolRequirement::H2Required);
+            let reservation = OriginAdmission::submit_action_without_running(
+                &admission,
+                requester.id().partition(),
+                demand,
+            )
+            .expect("HTTP/2-only demand did not prepare a reclaim reservation");
+            let reclaim = reservation
+                .run_once_for_test()
+                .expect("supplier reservation did not resolve a reclaim candidate");
+            assert!(matches!(&reclaim, AdmissionAction::ReclaimCapacity(_)));
+
+            let dropping = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || drop(reclaim))
+                .unwrap();
+            let cancel_cell = requester.clone();
+            let cancelling = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || OriginCell::cancel_waiter(&cancel_cell, waiter))
+                .unwrap();
+            dropping.join().unwrap();
+            assert!(cancelling.join().unwrap());
+
+            let available = admission.available_capacity_for_test();
+            let (installed, idle) = supplier.h1_counts();
+            assert_eq!(
+                1,
+                available + installed,
+                "candidate drop lost or duplicated the origin's only connection slot"
+            );
+            if installed == 1 {
+                assert_eq!(1, idle, "returned sender did not become reusable again");
+                assert_eq!(
+                    vec![11],
+                    supplier.h1_idle_sender_ids(),
+                    "candidate drop lost the detached sender"
+                );
+            } else {
+                assert!(
+                    supplier.h1_idle_sender_ids().is_empty(),
+                    "reclaimed connection left a reusable sender behind"
+                );
+            }
+            assert_eq!(0, requester.probe().retained);
+            assert_eq!(0, admission.ordered_demand_count_for_test());
+            assert!(supplier.state.lock().h1.peer_reservation_available());
+            admission.clear_modeled_cells_for_test();
+        });
+    }
+
+    /// Races the drop of a prepared idle probe with request cancellation.
+    ///
+    /// `H1IdleProbeAction::drop` is the only path that returns a probed
+    /// supplier to selection when the probe never reaches its cell. Both
+    /// suppliers must keep their senders exactly once, and admission must stay
+    /// able to match either of them afterwards.
+    #[test]
+    fn dropped_h1_idle_probe_returns_the_probed_supplier() {
+        let mut model = loom::model::Builder::new();
+        model.preemption_bound.get_or_insert(3);
+        model.check(|| {
+            let admission = OriginAdmission::for_test(NonZeroUsize::new(2).unwrap());
+            let origin = OriginKey::from_parts(Scheme::HTTPS, "example.com", None).unwrap();
+            let first = OriginAdmission::register_cell(
+                &admission,
+                Arc::new(OriginCell::new(
+                    PartitionId::from_index(1),
+                    origin.clone(),
+                    EligibilityGroup::Pool,
+                    Some(admission.clone()),
+                    None,
+                )),
+            );
+            let second = OriginAdmission::register_cell(
+                &admission,
+                Arc::new(OriginCell::new(
+                    PartitionId::from_index(2),
+                    origin.clone(),
+                    EligibilityGroup::Pool,
+                    Some(admission.clone()),
+                    None,
+                )),
+            );
+            let requester = OriginAdmission::register_cell(
+                &admission,
+                Arc::new(OriginCell::new(
+                    PartitionId::from_index(3),
+                    origin,
+                    EligibilityGroup::Pool,
+                    Some(admission.clone()),
+                    None,
+                )),
+            );
+            let first_lease = OriginAdmission::lease_for_test(&admission);
+            let (first_connection, _first_physical) =
+                ConnectionState::bounded(connection_info(1), first_lease);
+            OriginCell::insert_idle_h1(&first, first_connection, H1Sender::test(11));
+            let second_lease = OriginAdmission::lease_for_test(&admission);
+            let (second_connection, _second_physical) =
+                ConnectionState::bounded(connection_info(2), second_lease);
+            OriginCell::insert_idle_h1(&second, second_connection, H1Sender::test(22));
+            let (waiter, demand) =
+                requester.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
+            let probe = OriginAdmission::submit_action_without_running(
+                &admission,
+                requester.id().partition(),
+                demand,
+            )
+            .expect("peer demand did not prepare an idle probe");
+            assert!(matches!(&probe, AdmissionAction::ProbeH1Supplier(_)));
+
+            let dropping = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || drop(probe))
+                .unwrap();
+            let cancel_cell = requester.clone();
+            let cancelling = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || OriginCell::cancel_waiter(&cancel_cell, waiter))
+                .unwrap();
+            dropping.join().unwrap();
+            assert!(cancelling.join().unwrap());
+
+            let mut sender_ids = first.h1_idle_sender_ids();
+            sender_ids.extend(second.h1_idle_sender_ids());
+            sender_ids.extend(requester.h1_idle_sender_ids());
+            sender_ids.sort_unstable();
+            assert_eq!(
+                vec![11, 22],
+                sender_ids,
+                "dropped idle probe lost or duplicated an HTTP/1 sender"
+            );
+            assert_eq!(0, requester.probe().retained);
+            assert_eq!(0, admission.ordered_demand_count_for_test());
+            assert_eq!(0, admission.available_capacity_for_test());
+            assert!(first.state.lock().h1.peer_reservation_available());
+            assert!(second.state.lock().h1.peer_reservation_available());
+
+            // A dropped probe must leave both probed suppliers selectable.
+            let retry = OriginCell::register_waiter(&requester, ProtocolRequirement::H1Compatible);
+            let borrowed = requester
+                .take_ready_h1(retry)
+                .expect("dropped idle probe left every supplier unmatchable");
+            assert!(matches!(borrowed.test_sender_id(), 11 | 22));
+            drop(borrowed);
+            admission.clear_modeled_cells_for_test();
+        });
+    }
 }
