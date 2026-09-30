@@ -741,9 +741,11 @@ impl OriginCell {
             }
         }
 
-        // Ready results and any locally rejected event cross the lock boundary
-        // before their fallback can re-enter the pool.
+        // Ready results, any locally rejected event, and the cancelled waiter's
+        // waker cross the lock boundary before their destructors can re-enter
+        // the pool.
         drop(cancelled.returned_steps);
+        drop(cancelled.released_waker);
         if let Some((_, install)) = local_install {
             drop(install.returned_step);
             if let Some(waker) = install.waker {
@@ -779,8 +781,17 @@ impl OriginCell {
         waiter: WaiterId,
         cx: &mut Context<'_>,
     ) -> Poll<AcquisitionStep> {
-        let mut state = self.state.lock();
-        state.acquisitions.poll_waiter(waiter, cx)
+        // Clone the waker before taking the cell lock and drop whatever this
+        // poll displaces after releasing it. A custom raw-waker `clone` or
+        // `drop` callback runs arbitrary caller code, which must never re-enter
+        // a held pool lock.
+        let mut waker = Some(cx.waker().clone());
+        let step = {
+            let mut state = self.state.lock();
+            state.acquisitions.poll_waiter(waiter, &mut waker)
+        };
+        drop(waker);
+        step
     }
 
     /// Marks an establishment attempt as started before its first connector poll.
@@ -879,11 +890,9 @@ impl OriginCell {
 
     #[cfg(test)]
     fn take_ready_event(&self, waiter: WaiterId) -> Option<AcquisitionStep> {
+        let mut waker = Some(std::task::Waker::noop().clone());
         let mut state = self.state.lock();
-        match state
-            .acquisitions
-            .poll_waiter(waiter, &mut Context::from_waker(std::task::Waker::noop()))
-        {
+        match state.acquisitions.poll_waiter(waiter, &mut waker) {
             Poll::Ready(event) => Some(event),
             Poll::Pending => None,
         }
@@ -2154,6 +2163,116 @@ mod tests {
         assert_eq!(1, counter.0.load(Ordering::Relaxed));
         drop(OriginCell::take_ready_lease(&cell, waiter).expect("woken waiter had no capacity"));
         assert_eq!(1, counter.0.load(Ordering::Relaxed));
+    }
+
+    struct ReentrantWaker {
+        cell: Arc<OriginCell>,
+        victim: WaiterId,
+    }
+
+    impl Wake for ReentrantWaker {
+        fn wake(self: StdArc<Self>) {}
+        fn wake_by_ref(self: &StdArc<Self>) {}
+    }
+
+    impl Drop for ReentrantWaker {
+        fn drop(&mut self) {
+            OriginCell::cancel_waiter(&self.cell, self.victim);
+        }
+    }
+
+    /// A waker displaced by a later poll must drop outside the cell lock.
+    ///
+    /// Custom raw-waker `clone` and `drop` callbacks run arbitrary caller code.
+    /// If one re-enters the pool while the cell lock is held, a debug build
+    /// trips the lock-nesting assertion and a release build deadlocks, so
+    /// `poll_waiter` clones before locking and drops the displaced waker after
+    /// unlocking. This waker cancels another waiter from its destructor, which
+    /// is the cheapest faithful stand-in for that class of executor.
+    #[test]
+    fn replacing_a_stored_waker_drops_it_outside_the_cell_lock() {
+        let (_admission, cell, _held) = saturated_bounded_cell();
+        let parked = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+        let victim = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+
+        let reentrant = Waker::from(StdArc::new(ReentrantWaker {
+            cell: cell.clone(),
+            victim,
+        }));
+        let mut first = Context::from_waker(&reentrant);
+        assert!(cell.poll_waiter(parked, &mut first).is_pending());
+
+        let counter = StdArc::new(WakeCounter(AtomicUsize::new(0)));
+        let replacement = Waker::from(counter);
+        let mut second = Context::from_waker(&replacement);
+        drop(reentrant);
+        assert!(cell.poll_waiter(parked, &mut second).is_pending());
+    }
+
+    /// Parks `parked` behind a waker whose destructor cancels `victim`.
+    ///
+    /// The returned record then holds the only reference to the waker, so
+    /// whichever code path discards that record runs the destructor.
+    fn park_with_reentrant_waker(cell: &Arc<OriginCell>, parked: WaiterId, victim: WaiterId) {
+        let reentrant = Waker::from(StdArc::new(ReentrantWaker {
+            cell: cell.clone(),
+            victim,
+        }));
+        assert!(cell
+            .poll_waiter(parked, &mut Context::from_waker(&reentrant))
+            .is_pending());
+    }
+
+    /// Cancelling a parked waiter must drop its waker outside the cell lock.
+    ///
+    /// Cancellation is the path every dropped acquisition future takes, so a
+    /// waker whose destructor re-enters the pool must not run while the
+    /// cancelled record is being removed. Covers a waiting head and a waiting
+    /// record behind it.
+    #[test]
+    fn cancelling_a_parked_waiter_drops_its_waker_outside_the_cell_lock() {
+        let (_admission, cell, _held) = saturated_bounded_cell();
+        let head = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+        let behind = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+        let head_victim = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+        let behind_victim = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+        park_with_reentrant_waker(&cell, head, head_victim);
+        park_with_reentrant_waker(&cell, behind, behind_victim);
+
+        assert!(OriginCell::cancel_waiter(&cell, behind));
+        assert!(
+            !OriginCell::cancel_waiter(&cell, behind_victim),
+            "the cancelled record's waker was not dropped"
+        );
+        assert!(OriginCell::cancel_waiter(&cell, head));
+        assert!(
+            !OriginCell::cancel_waiter(&cell, head_victim),
+            "the cancelled head's waker was not dropped"
+        );
+        assert_eq!(0, cell.probe().retained);
+    }
+
+    /// Cancelling a launching waiter must drop its waker outside the cell lock.
+    #[test]
+    fn cancelling_a_launching_waiter_drops_its_waker_outside_the_cell_lock() {
+        let cell = unbounded_cell();
+        let launching = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+        let AcquisitionStep::StartEstablishment(permit) = cell
+            .take_ready_event(launching)
+            .expect("unbounded miss did not start establishment")
+        else {
+            panic!("unbounded miss completed before establishment started");
+        };
+        let victim = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+        park_with_reentrant_waker(&cell, launching, victim);
+
+        assert!(OriginCell::cancel_waiter(&cell, launching));
+        assert!(
+            !OriginCell::cancel_waiter(&cell, victim),
+            "the cancelled launching record's waker was not dropped"
+        );
+        drop(permit);
+        assert_eq!(0, cell.probe().retained);
     }
 
     fn install_bounded_h2(
