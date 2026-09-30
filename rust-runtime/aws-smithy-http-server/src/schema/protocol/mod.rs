@@ -83,16 +83,26 @@ pub struct ServerRequest {
 ///
 /// Wraps one of the routing kinds — [`metadata_routed`](Self::metadata_routed) or
 /// [`body_routed`](Self::body_routed) — or a routing-less serde handle
-/// ([`serde_only`](Self::serde_only)). The kind decides how the routing service builds the
-/// protocol's router and whether the protocol can answer the event-stream question; everything
-/// after routing works through the [`ServerProtocol`] this dereferences to.
+/// ([`serde_only`](Self::serde_only)). The kind decides which
+/// [`SharedProtocolRouter`](crate::schema::routing::SharedProtocolRouter) variant
+/// [`build_router`](Self::build_router) produces and whether the protocol can answer the
+/// event-stream question; everything after routing works through the [`ServerProtocol`] this
+/// dereferences to. The kind stays private: the constructors' trait bounds are what guarantee
+/// each variant builds the matching router, so nothing else may assemble one.
 #[derive(Clone, Debug)]
-pub struct SharedServerProtocol(std::sync::Arc<dyn ErasedServerProtocol>);
+pub struct SharedServerProtocol(ProtocolKind);
+
+#[derive(Clone, Debug)]
+enum ProtocolKind {
+    Metadata(std::sync::Arc<dyn ErasedMetadataRoutedProtocol>),
+    BodyCollected(std::sync::Arc<dyn ErasedBodyRoutedProtocol>),
+    SerdeOnly(std::sync::Arc<dyn ServerProtocol>),
+}
 
 impl SharedServerProtocol {
     /// Wraps a protocol that selects operations from request metadata alone.
     pub fn metadata_routed(protocol: impl MetadataRoutedProtocol) -> Self {
-        Self(std::sync::Arc::new(MetadataRouted(protocol)))
+        Self(ProtocolKind::Metadata(std::sync::Arc::new(protocol)))
     }
 
     /// Wraps a protocol that reads the request body to select operations.
@@ -100,7 +110,7 @@ impl SharedServerProtocol {
     /// A body-routed protocol cannot express event-stream framing — the subtrait has no such
     /// method — so this handle always answers `None` from [`Self::event_stream_framing`].
     pub fn body_routed(protocol: impl BodyRoutedProtocol) -> Self {
-        Self(std::sync::Arc::new(BodyRouted(protocol)))
+        Self(ProtocolKind::BodyCollected(std::sync::Arc::new(protocol)))
     }
 
     /// Wraps a protocol for serialization only, without routing or event-stream support.
@@ -109,29 +119,45 @@ impl SharedServerProtocol {
     /// tests. Registration requires one of the routed constructors, so this handle is never
     /// asked to build a router.
     pub fn serde_only(protocol: impl ServerProtocol) -> Self {
-        Self(std::sync::Arc::new(SerdeOnly(protocol)))
+        Self(ProtocolKind::SerdeOnly(std::sync::Arc::new(protocol)))
     }
 
     /// Builds this protocol's operation router; see
     /// [`MetadataRoutedProtocol::build_router`] and [`BodyRoutedProtocol::build_router`].
-    pub fn build_router(
-        &self,
-        ctx: crate::schema::routing::RouterBuildContext<'_>,
-    ) -> Result<crate::schema::routing::SharedProtocolRouter, RouterBuildError> {
-        self.0.build_router(ctx)
-    }
-
-    /// Whether operation selection reads the request body.
     ///
-    /// Known from the registration kind, so the routing service hands a body-routed protocol
-    /// only its non-streaming operations on the single [`Self::build_router`] call.
-    pub fn routes_on_body(&self) -> bool {
-        self.0.routes_on_body()
+    /// `ctx.targets` carries every bound operation; `non_streaming` the subset without
+    /// streaming members. The kind picks here: a body-routed protocol may buffer the body to
+    /// select, so a streaming operation is never its to claim and its router is built without
+    /// them.
+    pub(crate) fn build_router<'a>(
+        &self,
+        mut ctx: crate::schema::routing::RouterBuildContext<'a>,
+        non_streaming: &'a [crate::schema::routing::OperationIndex],
+    ) -> Result<crate::schema::routing::SharedProtocolRouter, RouterBuildError> {
+        use crate::schema::routing::SharedProtocolRouter;
+        match &self.0 {
+            ProtocolKind::Metadata(protocol) => Ok(SharedProtocolRouter::Metadata(protocol.build_router(ctx)?)),
+            ProtocolKind::BodyCollected(protocol) => {
+                ctx.targets = non_streaming;
+                Ok(SharedProtocolRouter::Body(protocol.build_router(ctx)?))
+            }
+            ProtocolKind::SerdeOnly(protocol) => Err(RouterBuildError::Configuration(format!(
+                "protocol {} was wrapped without routing support",
+                protocol.protocol_id()
+            ))),
+        }
     }
 
     /// Event-frame support, when this protocol supports event streams.
+    ///
+    /// Only a metadata-routed protocol can answer: the [`BodyRoutedProtocol`] subtrait has no
+    /// framing method (an event-stream body must not be collected), and a serde-only handle
+    /// never routes.
     pub fn event_stream_framing(&self) -> Option<EventStreamFraming<'_>> {
-        self.0.event_stream_framing()
+        match &self.0 {
+            ProtocolKind::Metadata(protocol) => protocol.event_stream_framing(),
+            ProtocolKind::BodyCollected(_) | ProtocolKind::SerdeOnly(_) => None,
+        }
     }
 }
 
@@ -139,88 +165,53 @@ impl std::ops::Deref for SharedServerProtocol {
     type Target = dyn ServerProtocol;
 
     fn deref(&self) -> &Self::Target {
-        self.0.protocol()
+        match &self.0 {
+            ProtocolKind::Metadata(protocol) => protocol.as_ref(),
+            ProtocolKind::BodyCollected(protocol) => protocol.as_ref(),
+            ProtocolKind::SerdeOnly(protocol) => protocol.as_ref(),
+        }
     }
 }
 
-/// The registration-kind erasure behind [`SharedServerProtocol`]: forwards serialization,
-/// builds the matching [`SharedProtocolRouter`](crate::schema::routing::SharedProtocolRouter) kind,
-/// and answers the event-stream question.
-trait ErasedServerProtocol: Send + Sync + std::fmt::Debug {
-    fn protocol(&self) -> &dyn ServerProtocol;
+/// Object-safe facade over [`MetadataRoutedProtocol`], which cannot be a trait object itself:
+/// its `from_build_context` returns `Self` and its `build_router` returns
+/// `impl MetadataProtocolRouter`. Blanket-implemented for every metadata-routed protocol, so
+/// the one boxing step lives here and [`ProtocolKind::Metadata`] holds the protocol directly.
+trait ErasedMetadataRoutedProtocol: ServerProtocol {
     fn build_router(
         &self,
         ctx: crate::schema::routing::RouterBuildContext<'_>,
-    ) -> Result<crate::schema::routing::SharedProtocolRouter, RouterBuildError>;
-    fn routes_on_body(&self) -> bool;
+    ) -> Result<std::sync::Arc<dyn crate::schema::routing::MetadataProtocolRouter>, RouterBuildError>;
     fn event_stream_framing(&self) -> Option<EventStreamFraming<'_>>;
 }
 
-#[derive(Debug)]
-struct MetadataRouted<P>(P);
-
-impl<P: MetadataRoutedProtocol> ErasedServerProtocol for MetadataRouted<P> {
-    fn protocol(&self) -> &dyn ServerProtocol {
-        &self.0
-    }
+impl<P: MetadataRoutedProtocol> ErasedMetadataRoutedProtocol for P {
     fn build_router(
         &self,
         ctx: crate::schema::routing::RouterBuildContext<'_>,
-    ) -> Result<crate::schema::routing::SharedProtocolRouter, RouterBuildError> {
-        Ok(crate::schema::routing::SharedProtocolRouter::new(self.0.build_router(ctx)?))
-    }
-    fn routes_on_body(&self) -> bool {
-        false
+    ) -> Result<std::sync::Arc<dyn crate::schema::routing::MetadataProtocolRouter>, RouterBuildError> {
+        Ok(std::sync::Arc::new(MetadataRoutedProtocol::build_router(self, ctx)?))
     }
     fn event_stream_framing(&self) -> Option<EventStreamFraming<'_>> {
-        self.0.event_stream_framing()
+        MetadataRoutedProtocol::event_stream_framing(self)
     }
 }
 
-#[derive(Debug)]
-struct BodyRouted<P>(P);
-
-impl<P: BodyRoutedProtocol> ErasedServerProtocol for BodyRouted<P> {
-    fn protocol(&self) -> &dyn ServerProtocol {
-        &self.0
-    }
+/// Object-safe facade over [`BodyRoutedProtocol`], exactly as [`ErasedMetadataRoutedProtocol`] is
+/// over [`MetadataRoutedProtocol`].
+trait ErasedBodyRoutedProtocol: ServerProtocol {
     fn build_router(
         &self,
         ctx: crate::schema::routing::RouterBuildContext<'_>,
-    ) -> Result<crate::schema::routing::SharedProtocolRouter, RouterBuildError> {
-        Ok(crate::schema::routing::SharedProtocolRouter::new_body_routed(
-            self.0.build_router(ctx)?,
-        ))
-    }
-    fn routes_on_body(&self) -> bool {
-        true
-    }
-    fn event_stream_framing(&self) -> Option<EventStreamFraming<'_>> {
-        None
-    }
+    ) -> Result<std::sync::Arc<dyn crate::schema::routing::BodyProtocolRouter>, RouterBuildError>;
 }
 
-#[derive(Debug)]
-struct SerdeOnly<P>(P);
-
-impl<P: ServerProtocol> ErasedServerProtocol for SerdeOnly<P> {
-    fn protocol(&self) -> &dyn ServerProtocol {
-        &self.0
-    }
+impl<P: BodyRoutedProtocol> ErasedBodyRoutedProtocol for P {
     fn build_router(
         &self,
-        _ctx: crate::schema::routing::RouterBuildContext<'_>,
-    ) -> Result<crate::schema::routing::SharedProtocolRouter, RouterBuildError> {
-        Err(RouterBuildError::Configuration(format!(
-            "protocol {} was wrapped without routing support",
-            self.0.protocol_id()
-        )))
-    }
-    fn routes_on_body(&self) -> bool {
-        false
-    }
-    fn event_stream_framing(&self) -> Option<EventStreamFraming<'_>> {
-        None
+        ctx: crate::schema::routing::RouterBuildContext<'_>,
+    ) -> Result<std::sync::Arc<dyn crate::schema::routing::BodyProtocolRouter>, RouterBuildError> {
+        Ok(std::sync::Arc::new(BodyRoutedProtocol::build_router(self, ctx)?))
     }
 }
 
@@ -241,6 +232,7 @@ pub enum BodyDirective {
 /// body-first routing collects the body before selecting an operation, and an event-stream
 /// body must not be collected.
 #[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
 pub struct EventStreamFraming<'a> {
     /// Codec for structured event and initial-message payloads.
     pub payload_codec: &'a dyn DynCodec,
@@ -248,6 +240,25 @@ pub struct EventStreamFraming<'a> {
     pub media_type: &'a str,
     /// Whether non-stream members travel in initial-message frames.
     pub initial_messages_in_frames: bool,
+}
+
+impl<'a> EventStreamFraming<'a> {
+    /// Framing with the given payload codec and media type; non-stream members do not travel
+    /// in initial-message frames unless [`initial_messages_in_frames`](Self::initial_messages_in_frames)
+    /// is set.
+    pub fn new(payload_codec: &'a dyn DynCodec, media_type: &'a str) -> Self {
+        Self {
+            payload_codec,
+            media_type,
+            initial_messages_in_frames: false,
+        }
+    }
+
+    /// Sets whether non-stream members travel in initial-message frames.
+    pub fn initial_messages_in_frames(mut self, initial_messages_in_frames: bool) -> Self {
+        self.initial_messages_in_frames = initial_messages_in_frames;
+        self
+    }
 }
 
 /// Schema-driven serialization for one protocol, keyed on struct schemas.
@@ -408,7 +419,7 @@ pub trait MetadataRoutedProtocol: ServerProtocol + Sized {
     fn build_router(
         &self,
         ctx: crate::schema::routing::RouterBuildContext<'_>,
-    ) -> Result<impl crate::schema::routing::ProtocolRouter + 'static + use<Self>, RouterBuildError>;
+    ) -> Result<impl crate::schema::routing::MetadataProtocolRouter + 'static + use<Self>, RouterBuildError>;
 
     /// Event-frame support, when this protocol supports event streams.
     fn event_stream_framing(&self) -> Option<EventStreamFraming<'_>> {

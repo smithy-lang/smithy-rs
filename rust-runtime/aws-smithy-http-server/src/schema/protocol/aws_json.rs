@@ -69,16 +69,12 @@ macro_rules! aws_json_protocol {
             fn build_router(
                 &self,
                 ctx: crate::schema::routing::RouterBuildContext<'_>,
-            ) -> Result<impl crate::schema::routing::ProtocolRouter + 'static + use<>, crate::schema::routing::RouterBuildError> {
+            ) -> Result<impl crate::schema::routing::MetadataProtocolRouter + 'static + use<>, crate::schema::routing::RouterBuildError> {
                 crate::schema::routing::aws_json_router(&ctx, $content_type)
             }
 
             fn event_stream_framing(&self) -> Option<EventStreamFraming<'_>> {
-                Some(EventStreamFraming {
-                    payload_codec: self.inner.codec(),
-                    media_type: "application/json",
-                    initial_messages_in_frames: true,
-                })
+                Some(EventStreamFraming::new(self.inner.codec(), "application/json").initial_messages_in_frames(true))
             }
         }
 

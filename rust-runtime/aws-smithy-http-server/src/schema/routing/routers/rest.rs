@@ -9,7 +9,7 @@ use crate::schema::routing::RoutingError;
 use http::Request;
 
 use super::{announces_no_body, content_type_is, per_target};
-use crate::schema::routing::{OperationIndex, ProtocolRouter, RouteClaim, RouterBuildError};
+use crate::schema::routing::{OperationIndex, MetadataProtocolRouter, RouteClaim, RouterBuildError};
 
 #[derive(Debug)]
 enum ClaimContentType {
@@ -69,7 +69,7 @@ struct RestProtocolRouter {
     /// Indexed by [`OperationIndex::index`].
     content_types: Vec<ClaimContentType>,
 }
-impl ProtocolRouter for RestProtocolRouter {
+impl MetadataProtocolRouter for RestProtocolRouter {
     fn route(&self, request: &Request<()>) -> Result<OperationIndex, RoutingError> {
         use crate::routing::Router;
         self.router.match_route(request).map_err(RoutingError::from)
@@ -92,7 +92,7 @@ impl ProtocolRouter for RestProtocolRouter {
 pub(crate) fn rest_router(
     targets: &[OperationIndex],
     codec_content_type: &'static str,
-) -> Result<impl ProtocolRouter + 'static, RouterBuildError> {
+) -> Result<impl MetadataProtocolRouter + 'static, RouterBuildError> {
     use crate::routing::request_spec::{PathSegment, QuerySegment, RequestSpec};
     let entries = targets
         .iter()

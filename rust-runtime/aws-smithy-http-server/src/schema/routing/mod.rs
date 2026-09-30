@@ -6,7 +6,7 @@
 //! Runtime construction and dispatch for the schema protocols a service declares.
 //!
 //! A service declaring one metadata protocol routes every request with that protocol's
-//! [`ProtocolRouter::route`]. Otherwise the protocols are asked in priority order to claim each
+//! [`MetadataProtocolRouter::route`]. Otherwise the protocols are asked in priority order to claim each
 //! request — from the head alone; a body-routed protocol escalates by returning a
 //! [`BodyRequirement`] the service satisfies — and the request dispatches to the first that
 //! claims it. A request no protocol claims is answered the way Coral answers one: `404` with
@@ -22,7 +22,7 @@ mod tests;
 
 pub use contract::{
     BodyProtocolRouter, BodyRequirement, BodyRouteClaim, ClaimDecoder, CollectedBody,
-    OperationHandlerBinding, OperationIndex, ProtocolRouter, RouteClaim, RouterBuildContext,
+    MetadataProtocolRouter, OperationHandlerBinding, OperationIndex, RouteClaim, RouterBuildContext,
     RouterBuildError, RoutingOptions, SharedProtocolRouter,
 };
 pub use route_errors::{RoutingError, RoutingErrorKind};

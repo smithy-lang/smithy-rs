@@ -30,8 +30,8 @@ use std::{
 };
 use tower::Service;
 use super::collect::BodyCollector;
-use super::contract::{BodyWant, RouterKind};
-use crate::schema::routing::{BodyRequirement, BodyRouteClaim, ClaimDecoder, CollectedBody, OperationHandlerBinding, OperationIndex, RouteClaim, RouterBuildContext, RouterBuildError, RoutingOptions, SharedProtocolRouter};
+use super::contract::BodyWant;
+use crate::schema::routing::{BodyRequirement, BodyRouteClaim, ClaimDecoder, CollectedBody, MetadataProtocolRouter, OperationHandlerBinding, OperationIndex, RouteClaim, RouterBuildContext, RouterBuildError, RoutingOptions, SharedProtocolRouter};
 
 pub(super) struct BoundHandler<B> {
     operation: &'static OperationSchema<'static>,
@@ -68,7 +68,7 @@ pub(super) struct ProtocolRoute {
 /// behind an `Arc`: a clone is a few reference counts, and dispatch clones only the selected route.
 pub(super) struct Dispatch<B> {
     /// The served protocols in priority order. A single protocol routes with
-    /// [`ProtocolRouter::route`]; several claim with [`ProtocolRouter::claim`].
+    /// [`MetadataProtocolRouter::route`]; several claim with [`MetadataProtocolRouter::claim`].
     pub(super) protocols: Arc<[ProtocolRoute]>,
     pub(super) bindings: Arc<[BoundHandler<B>]>,
     /// The provisional allowance the service collects under for body-first routing.
@@ -251,11 +251,15 @@ where
     }
 
     fn call(&mut self, request: Request<crate::body::RequestBody<B>>) -> MultiProtocolRoutingFuture<B> {
-        let state = if self.protocols.len() == 1 && !self.protocols[0].router.routes_on_body() {
-            self.route(request)
-        } else {
-            let (parts, body) = request.into_parts();
-            self.walk(parts, BodySource::Untouched(body), 0)
+        let state = match &self.protocols[..] {
+            [ProtocolRoute {
+                router: SharedProtocolRouter::Metadata(router),
+                ..
+            }] => self.route(router, request),
+            _ => {
+                let (parts, body) = request.into_parts();
+                self.walk(parts, BodySource::Untouched(body), 0)
+            }
         };
         MultiProtocolRoutingFuture { inner: state }
     }
@@ -263,10 +267,7 @@ where
     /// Routes with the service's only (metadata) protocol, exactly as a single-protocol service
     /// always has. A single body-routed protocol runs the claim walk instead, with the final
     /// fall-through answered as its own terminal rejection.
-    fn route(&self, request: Request<crate::body::RequestBody<B>>) -> State<B> {
-        let RouterKind::Metadata(router) = &self.protocols[0].router.0 else {
-            unreachable!("single body-routed protocols take the claim walk");
-        };
+    fn route(&self, router: &Arc<dyn MetadataProtocolRouter>, request: Request<crate::body::RequestBody<B>>) -> State<B> {
         // Probe with the head only: the parts move over and back, nothing is cloned,
         // and the router stays free of the transport body type.
         let (parts, body) = request.into_parts();
@@ -293,8 +294,8 @@ where
         let probe = Request::from_parts(parts, ());
         let event_stream = crate::schema::protocol::request::is_event_stream_content_type(probe.headers());
         for (index, protocol) in self.protocols.iter().enumerate().skip(start) {
-            match &protocol.router.0 {
-                RouterKind::Metadata(router) => match router.claim(&probe) {
+            match &protocol.router {
+                SharedProtocolRouter::Metadata(router) => match router.claim(&probe) {
                     RouteClaim::Matched(selected) => {
                         let (parts, ()) = probe.into_parts();
                         return self.dispatch_replayed(selected, index, parts, source);
@@ -302,8 +303,8 @@ where
                     RouteClaim::Rejected(err) => return self.reject(index, err),
                     RouteClaim::NoClaim => {}
                 },
-                RouterKind::Body(_) if event_stream => {}
-                RouterKind::Body(router) => match router.claim(&probe) {
+                SharedProtocolRouter::Body(_) if event_stream => {}
+                SharedProtocolRouter::Body(router) => match router.claim(&probe) {
                     BodyRouteClaim::Matched(selected) => {
                         let (parts, ()) = probe.into_parts();
                         return self.dispatch_replayed(selected, index, parts, source);
@@ -351,7 +352,7 @@ where
         pursuit: &Pursuit,
         collected: CollectedBody,
     ) -> State<B> {
-        let RouterKind::Body(router) = &self.protocols[pursuit.protocol].router.0 else {
+        let SharedProtocolRouter::Body(router) = &self.protocols[pursuit.protocol].router else {
             unreachable!("only body-routed protocols suspend the walk");
         };
         let request = Request::from_parts(parts, collected);
@@ -739,21 +740,19 @@ impl<B> MultiProtocolRoutingService<B> {
             .copied()
             .collect();
         // `resolved` is already in claim order; build each protocol's router in place. The
-        // registration kind is known up front, so a body-routed protocol gets only the
-        // non-streaming operations on its single `build_router` call.
+        // protocol's kind picks its target set inside `build_router`: a body-routed protocol
+        // gets only the non-streaming operations.
         let mut protocols = Vec::with_capacity(resolved.len());
         for protocol in resolved {
-            let router_targets: &[OperationIndex] = if protocol.routes_on_body() {
-                &non_streaming
-            } else {
-                &targets
-            };
-            let router = protocol.build_router(RouterBuildContext {
-                service,
-                targets: router_targets,
-                config: &options.request_body,
-                protocol_settings: options.protocol_settings.get(protocol.protocol_id().as_str()),
-            })?;
+            let router = protocol.build_router(
+                RouterBuildContext {
+                    service,
+                    targets: &targets,
+                    config: &options.request_body,
+                    protocol_settings: options.protocol_settings.get(protocol.protocol_id().as_str()),
+                },
+                &non_streaming,
+            )?;
             protocols.push(ProtocolRoute { router, protocol });
         }
         let bindings = bindings

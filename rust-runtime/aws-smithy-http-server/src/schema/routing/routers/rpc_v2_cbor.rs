@@ -9,7 +9,7 @@ use crate::schema::routing::RoutingError;
 use http::Request;
 
 use super::per_target;
-use crate::schema::routing::{OperationIndex, ProtocolRouter, RouteClaim, RouterBuildContext, RouterBuildError};
+use crate::schema::routing::{OperationIndex, MetadataProtocolRouter, RouteClaim, RouterBuildContext, RouterBuildError};
 
 /// Routes rpcv2Cbor on the `/service/{service}/operation/{operation}` path.
 ///
@@ -28,7 +28,7 @@ impl RpcV2CborProtocolRouter {
         self.streams_blobs[target.index]
     }
 }
-impl ProtocolRouter for RpcV2CborProtocolRouter {
+impl MetadataProtocolRouter for RpcV2CborProtocolRouter {
     fn route(&self, request: &Request<()>) -> Result<OperationIndex, RoutingError> {
         use crate::routing::Router;
         match self.router.match_route(request) {
@@ -64,7 +64,7 @@ impl ProtocolRouter for RpcV2CborProtocolRouter {
 
 pub(crate) fn rpc_v2_cbor_router(
     ctx: &RouterBuildContext<'_>,
-) -> Result<impl ProtocolRouter + 'static, RouterBuildError> {
+) -> Result<impl MetadataProtocolRouter + 'static, RouterBuildError> {
     let capitalize_routes = crate::schema::protocol::settings_bool(ctx.protocol_settings, "capitalizeRoutes")?;
     let entries = ctx.targets.iter().flat_map(|target| {
         let name = target.operation.shape_id().shape_name();

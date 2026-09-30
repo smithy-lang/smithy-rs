@@ -139,7 +139,7 @@ pub enum RouteClaim {
 /// service hands it to the rejecting protocol's
 /// [`serialize_routing_error`](crate::schema::ServerProtocol::serialize_routing_error), which
 /// owns the kind-to-wire mapping.
-pub trait ProtocolRouter: Send + Sync + fmt::Debug {
+pub trait MetadataProtocolRouter: Send + Sync + fmt::Debug {
     /// Selects from the request URI, method and headers when this is the service's only protocol.
     /// All rejections are terminal.
     fn route(&self, request: &Request<()>) -> Result<OperationIndex, RoutingError>;
@@ -297,7 +297,7 @@ pub enum BodyRouteClaim {
 /// body — such a request is never this protocol's, and its body may not arrive before the
 /// handler responds.
 ///
-/// Rejections are the standard [`RoutingError`], exactly as on [`ProtocolRouter`]. When this
+/// Rejections are the standard [`RoutingError`], exactly as on [`MetadataProtocolRouter`]. When this
 /// is the service's only protocol the same claim path runs, with a final
 /// [`BodyRouteClaim::NoClaim`] answered as this protocol's
 /// [`RoutingError::unknown_operation`] — all rejections stay terminal and protocol-framed.
@@ -323,28 +323,28 @@ pub trait BodyProtocolRouter: Send + Sync + fmt::Debug {
 }
 
 /// Shared operation router built by a server protocol.
+///
+/// The variant is decided by the protocol's registration kind: a
+/// [`MetadataRoutedProtocol`](crate::schema::MetadataRoutedProtocol) can only build a
+/// [`Metadata`](Self::Metadata) router and a
+/// [`BodyRoutedProtocol`](crate::schema::BodyRoutedProtocol) a [`Body`](Self::Body) one,
+/// so dispatch matching on this enum speaks the claim protocol the registration promised.
 #[derive(Clone, Debug)]
-pub struct SharedProtocolRouter(pub(super) RouterKind);
-
-#[derive(Clone, Debug)]
-pub(super) enum RouterKind {
-    Metadata(Arc<dyn ProtocolRouter>),
+pub enum SharedProtocolRouter {
+    /// Selects operations from request metadata alone.
+    Metadata(Arc<dyn MetadataProtocolRouter>),
+    /// May read collected body bytes to select operations.
     Body(Arc<dyn BodyProtocolRouter>),
 }
 
 impl SharedProtocolRouter {
     /// Wraps a router that selects from request metadata alone.
-    pub fn new(router: impl ProtocolRouter + 'static) -> Self {
-        Self(RouterKind::Metadata(Arc::new(router)))
+    pub fn new(router: impl MetadataProtocolRouter + 'static) -> Self {
+        Self::Metadata(Arc::new(router))
     }
 
     /// Wraps a router that selects from the request body the routing service collects.
     pub fn new_body_routed(router: impl BodyProtocolRouter + 'static) -> Self {
-        Self(RouterKind::Body(Arc::new(router)))
-    }
-
-    /// Whether operation selection reads the request body.
-    pub fn routes_on_body(&self) -> bool {
-        matches!(self.0, RouterKind::Body(_))
+        Self::Body(Arc::new(router))
     }
 }

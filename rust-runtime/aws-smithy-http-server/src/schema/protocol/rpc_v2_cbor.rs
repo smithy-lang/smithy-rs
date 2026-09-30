@@ -44,16 +44,12 @@ impl MetadataRoutedProtocol for RpcV2CborProtocol {
     fn build_router(
         &self,
         ctx: crate::schema::routing::RouterBuildContext<'_>,
-    ) -> Result<impl crate::schema::routing::ProtocolRouter + 'static + use<>, crate::schema::routing::RouterBuildError> {
+    ) -> Result<impl crate::schema::routing::MetadataProtocolRouter + 'static + use<>, crate::schema::routing::RouterBuildError> {
         crate::schema::routing::rpc_v2_cbor_router(&ctx)
     }
 
     fn event_stream_framing(&self) -> Option<EventStreamFraming<'_>> {
-        Some(EventStreamFraming {
-            payload_codec: self.inner.codec(),
-            media_type: CONTENT_TYPE,
-            initial_messages_in_frames: true,
-        })
+        Some(EventStreamFraming::new(self.inner.codec(), CONTENT_TYPE).initial_messages_in_frames(true))
     }
 }
 

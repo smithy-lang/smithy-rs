@@ -9,14 +9,14 @@ use crate::schema::routing::RoutingError;
 use http::Request;
 
 use super::content_type_is;
-use crate::schema::routing::{OperationIndex, ProtocolRouter, RouteClaim, RouterBuildContext, RouterBuildError};
+use crate::schema::routing::{OperationIndex, MetadataProtocolRouter, RouteClaim, RouterBuildContext, RouterBuildError};
 
 #[derive(Debug)]
 struct AwsJsonProtocolRouter {
     router: crate::protocol::aws_json::router::AwsJsonRouter<OperationIndex>,
     content_type: &'static str,
 }
-impl ProtocolRouter for AwsJsonProtocolRouter {
+impl MetadataProtocolRouter for AwsJsonProtocolRouter {
     fn route(&self, request: &Request<()>) -> Result<OperationIndex, RoutingError> {
         use crate::routing::Router;
         self.router.match_route(request).map_err(RoutingError::from)
@@ -45,7 +45,7 @@ impl ProtocolRouter for AwsJsonProtocolRouter {
 pub fn aws_json_router(
     ctx: &RouterBuildContext<'_>,
     content_type: &'static str,
-) -> Result<impl ProtocolRouter + 'static, RouterBuildError> {
+) -> Result<impl MetadataProtocolRouter + 'static, RouterBuildError> {
     let entries = ctx.targets.iter().map(|target| {
         let name = target.operation.shape_id().shape_name();
         (format!("{}.{}", ctx.service.shape_id().shape_name(), name), *target)

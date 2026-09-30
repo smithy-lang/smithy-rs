@@ -44,16 +44,12 @@ impl MetadataRoutedProtocol for RestJson1Protocol {
     fn build_router(
         &self,
         ctx: crate::schema::routing::RouterBuildContext<'_>,
-    ) -> Result<impl crate::schema::routing::ProtocolRouter + 'static + use<>, crate::schema::routing::RouterBuildError> {
+    ) -> Result<impl crate::schema::routing::MetadataProtocolRouter + 'static + use<>, crate::schema::routing::RouterBuildError> {
         crate::schema::routing::rest_router(ctx.targets, CONTENT_TYPE)
     }
 
     fn event_stream_framing(&self) -> Option<EventStreamFraming<'_>> {
-        Some(EventStreamFraming {
-            payload_codec: self.inner.codec(),
-            media_type: CONTENT_TYPE,
-            initial_messages_in_frames: false,
-        })
+        Some(EventStreamFraming::new(self.inner.codec(), CONTENT_TYPE))
     }
 }
 
