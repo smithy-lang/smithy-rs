@@ -123,36 +123,6 @@ impl BodyRouter {
             .copied())
     }
 }
-fn nz(n: usize) -> NonZeroUsize {
-    NonZeroUsize::new(n).unwrap()
-}
-/// Flips ASCII case; errors on bytes outside printable ASCII. A stand-in for a claim codec
-/// (gzip, in real protocols) that lets tests distinguish decoded views from wire bytes.
-#[derive(Debug, Default)]
-struct CaseFlip;
-impl ClaimDecoder for CaseFlip {
-    fn decode(&mut self, chunk: &[u8], out: &mut Vec<u8>) -> Result<(), crate::error::BoxError> {
-        for byte in chunk {
-            if !byte.is_ascii_graphic() && !byte.is_ascii_whitespace() {
-                return Err("byte outside the test codec's alphabet".into());
-            }
-            out.push(byte.ascii_change_case());
-        }
-        Ok(())
-    }
-}
-trait AsciiChangeCase {
-    fn ascii_change_case(&self) -> u8;
-}
-impl AsciiChangeCase for u8 {
-    fn ascii_change_case(&self) -> u8 {
-        if self.is_ascii_uppercase() {
-            self.to_ascii_lowercase()
-        } else {
-            self.to_ascii_uppercase()
-        }
-    }
-}
 /// The `x-body-claim` header drives the router's claiming style per request, so one protocol
 /// covers every escalation shape. Absent, the router claims on the complete body's first line.
 fn claim_mode(headers: &HeaderMap) -> Option<&str> {
@@ -162,57 +132,29 @@ impl BodyProtocolRouter for BodyRouter {
     fn claim(&self, request: &Request<()>) -> BodyRouteClaim {
         match claim_mode(request.headers()) {
             Some("known-route") => BodyRouteClaim::ClaimedWithRoute(self.targets[0]),
-            Some("envelope-prefix") => BodyRouteClaim::Claimed(BodyRequirement::prefix(nz(2))),
-            Some("magic") => BodyRouteClaim::NeedsBodyToClaim(BodyRequirement::prefix(nz(4))),
-            Some("escalate") => BodyRouteClaim::NeedsBodyToClaim(BodyRequirement::prefix(nz(2))),
-            Some("decoded") => BodyRouteClaim::NeedsBodyToClaim(BodyRequirement::decoded_prefix(CaseFlip, nz(6))),
-            Some("envelope") => BodyRouteClaim::Claimed(BodyRequirement::complete()),
-            Some("envelope-decoded") => BodyRouteClaim::Claimed(BodyRequirement::decoded_complete(CaseFlip)),
-            _ => BodyRouteClaim::NeedsBodyToClaim(BodyRequirement::complete()),
+            Some("envelope") => BodyRouteClaim::Claimed,
+            _ => BodyRouteClaim::NeedsBodyToClaim(BodyRequirement::Complete),
         }
     }
-    fn claim_with_body(&self, request: &Request<CollectedBody>) -> BodyRouteClaim {
-        let body = request.body();
-        match claim_mode(request.headers()) {
-            Some("magic") => {
-                if body.bytes().len() < 4 {
-                    assert!(body.complete(), "a short prefix must be the whole body");
-                }
-                match body.bytes().starts_with(b"BSF!") {
-                    true => BodyRouteClaim::ClaimedWithRoute(self.targets[0]),
-                    false => BodyRouteClaim::NoClaim,
-                }
-            }
-            Some("escalate") => {
-                if body.bytes().len() < 8 && !body.complete() {
-                    return BodyRouteClaim::NeedsBodyToClaim(BodyRequirement::prefix(nz(8)));
-                }
-                match body.bytes().starts_with(b"escalate") {
-                    true => BodyRouteClaim::ClaimedWithRoute(self.targets[0]),
-                    false => BodyRouteClaim::NoClaim,
-                }
-            }
-            Some("decoded") => {
-                let name = std::str::from_utf8(body.bytes()).unwrap_or_default();
-                match self
-                    .targets
-                    .iter()
-                    .find(|target| target.operation().shape_id().shape_name() == name)
-                {
-                    Some(selected) => BodyRouteClaim::ClaimedWithRoute(*selected),
-                    None => BodyRouteClaim::NoClaim,
-                }
-            }
-            _ => match self.select(request) {
-                Ok(Some(selected)) => BodyRouteClaim::ClaimedWithRoute(selected),
-                Ok(None) => BodyRouteClaim::NoClaim,
-                Err(_) => BodyRouteClaim::Claimed(BodyRequirement::complete()),
-            },
+    fn claim_with_body(&self, request: &Request<CollectedBody>) -> RouteClaim {
+        if claim_mode(request.headers()) == Some("deferred-route") {
+            return RouteClaim::Claimed;
+        }
+        if claim_mode(request.headers()) == Some("magic") {
+            return if request.body().bytes().starts_with(b"BSF!") {
+                RouteClaim::ClaimedWithRoute(self.targets[0])
+            } else {
+                RouteClaim::NoClaim
+            };
+        }
+        match self.select(request) {
+            Ok(Some(selected)) => RouteClaim::ClaimedWithRoute(selected),
+            Ok(None) => RouteClaim::NoClaim,
+            Err(_) => RouteClaim::Claimed,
         }
     }
     fn route_with_body(&self, request: &Request<CollectedBody>) -> Result<OperationTarget, RoutingError> {
         assert_ne!(claim_mode(request.headers()), Some("known-route"));
-        assert!(request.body().complete(), "claimed routing requires the complete body");
         self.select(request)?.ok_or_else(RoutingError::unknown_operation)
     }
 }
@@ -713,6 +655,55 @@ async fn layers_see_selection_and_do_not_observe_routing_rejections() {
         StatusCode::NOT_FOUND
     );
     assert_eq!(calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn ready_body_frames_yield_and_wake_before_collection_finishes() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    struct WakeCount(AtomicUsize);
+    impl std::task::Wake for WakeCount {
+        fn wake(self: Arc<Self>) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    let reads = Arc::new(AtomicUsize::new(0));
+    let observed = reads.clone();
+    let frames = futures_util::stream::poll_fn(move |_| {
+        let index = observed.fetch_add(1, Ordering::SeqCst);
+        Poll::Ready(match index {
+            0 => Some(Ok::<_, Error>(Frame::data(Bytes::from_static(b"first\n")))),
+            1..=1000 => Some(Ok(Frame::data(Bytes::new()))),
+            _ => None,
+        })
+    });
+    let mut app = service(RoutingOptions::default());
+    let mut future = Box::pin(app.call(Request::new(Body::new(http_body_util::StreamBody::new(frames)))));
+    let wakes = Arc::new(WakeCount(AtomicUsize::new(0)));
+    let waker = std::task::Waker::from(wakes.clone());
+    assert!(future.as_mut().poll(&mut Context::from_waker(&waker)).is_pending());
+    assert!((1..1000).contains(&reads.load(Ordering::SeqCst)));
+    assert!(wakes.0.load(Ordering::SeqCst) > 0, "yield must schedule another poll");
+    assert_eq!(future.await.unwrap().status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn claim_with_complete_body_can_defer_to_routing() {
+    for (body, status) in [
+        ("first\npayload", StatusCode::OK),
+        ("unknown\npayload", StatusCode::NOT_FOUND),
+        ("", StatusCode::NOT_FOUND),
+    ] {
+        let response = service(RoutingOptions::default())
+            .oneshot(
+                Request::builder()
+                    .header("x-body-claim", "deferred-route")
+                    .body(Body::from_bytes(Bytes::from_static(body.as_bytes())))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), status);
+    }
 }
 
 #[tokio::test]
@@ -1629,7 +1620,7 @@ mod multi_protocol {
             self.calls.lock().unwrap().push(self.index);
             self.router.claim(request)
         }
-        fn claim_with_body(&self, request: &Request<CollectedBody>) -> BodyRouteClaim {
+        fn claim_with_body(&self, request: &Request<CollectedBody>) -> RouteClaim {
             self.router.claim_with_body(request)
         }
         fn route_with_body(&self, request: &Request<CollectedBody>) -> Result<OperationTarget, RoutingError> {
@@ -1738,7 +1729,7 @@ mod multi_protocol {
         let response = app
             .oneshot(
                 post("/anywhere")
-                    .header("x-body-claim", "envelope-prefix")
+                    .header("x-body-claim", "envelope")
                     .body(Body::new(http_body_util::StreamBody::new(futures_util::stream::iter(frames))))
                     .unwrap(),
             )
@@ -1751,20 +1742,19 @@ mod multi_protocol {
         );
     }
 
-    /// A magic-number sniff reads a bounded prefix. On a match the handler replays the whole
-    /// body byte-identically; on a mismatch the walk continues and the *next* protocol's
-    /// handler sees the prefix stitched back onto the untouched remainder.
+    /// Body inspection receives the complete body. Whether the protocol claims or declines,
+    /// the selected handler receives the original bytes.
     #[tokio::test]
-    async fn prefix_sniff_claims_on_magic_and_replays_on_mismatch() {
+    async fn complete_body_claims_on_magic_and_replays_on_mismatch() {
         static FIRST: &[ProtocolOrder] = &[ProtocolOrder::Before("aws.protocols#restJson1")];
         let app = app(&WITH_BODY_ROUTING, [body_routing(FIRST)]);
         let sniff = |uri: &str| post(uri).header("x-body-claim", "magic");
-        // Match: 4 bytes decide; the handler still receives everything.
+        // Match: the body begins with the protocol marker.
         assert_eq!(
             send(&app, sniff("/anywhere"), "BSF!datagram-bytes").await,
             (StatusCode::OK, "test#bodyRouting first BSF!datagram-bytes".to_owned())
         );
-        // Mismatch, streamed across frames so the replay really is prefix + live tail.
+        // Mismatch across multiple frames: the next protocol receives the complete body.
         let frames = vec![
             Ok::<_, Error>(Frame::data(Bytes::from_static(b"{\"na"))),
             Ok(Frame::data(Bytes::from_static(b"me\":\"n\"}"))),
@@ -1786,100 +1776,11 @@ mod multi_protocol {
             response.into_body().collect().await.unwrap().to_bytes(),
             "aws.protocols#restJson1 first {\"name\":\"n\"}"
         );
-        // A body shorter than the requested prefix is delivered short and complete (the
-        // router asserts `complete()`), and still replays to the next claimant.
+        // A body shorter than the marker still replays to the next claimant.
         assert_eq!(
             send(&app, sniff("/first").header("content-type", "application/json"), "B").await,
             (StatusCode::OK, "aws.protocols#restJson1 first B".to_owned())
         );
-    }
-
-    /// An open claim may escalate: ask for a small prefix, then a larger one, then decide.
-    /// The already-buffered bytes are reused; only the difference is read from the wire.
-    #[tokio::test]
-    async fn claims_escalate_to_larger_requirements() {
-        static FIRST: &[ProtocolOrder] = &[ProtocolOrder::Before("aws.protocols#restJson1")];
-        let app = app(&WITH_BODY_ROUTING, [body_routing(FIRST)]);
-        assert_eq!(
-            send(
-                &app,
-                post("/anywhere").header("x-body-claim", "escalate"),
-                "escalate: full payload"
-            )
-            .await,
-            (StatusCode::OK, "test#bodyRouting first escalate: full payload".to_owned())
-        );
-        assert_eq!(
-            send(
-                &app,
-                post("/first")
-                    .header("x-body-claim", "escalate")
-                    .header("content-type", "application/json"),
-                "{\"name\":\"long enough to escalate\"}"
-            )
-            .await,
-            (
-                StatusCode::OK,
-                "aws.protocols#restJson1 first {\"name\":\"long enough to escalate\"}".to_owned()
-            )
-        );
-    }
-
-    /// A router sees its requirement's decoded view; everything downstream of routing always
-    /// sees the raw wire bytes. `CaseFlip` decodes wire `SECOND` to the operation name
-    /// `second`; the handler receives the wire form untouched.
-    #[tokio::test]
-    async fn routers_see_decoded_views_and_handlers_see_wire_bytes() {
-        static FIRST: &[ProtocolOrder] = &[ProtocolOrder::Before("aws.protocols#restJson1")];
-        let app = app(&WITH_BODY_ROUTING, [body_routing(FIRST)]);
-        // Decoded prefix on an open claim.
-        assert_eq!(
-            send(&app, post("/anywhere").header("x-body-claim", "decoded"), "SECOND\nXYZ").await,
-            (StatusCode::OK, "test#bodyRouting second SECOND\nXYZ".to_owned())
-        );
-        // Decoded complete body on a settled claim (operation named in the body).
-        assert_eq!(
-            send(
-                &app,
-                post("/anywhere").header("x-body-claim", "envelope-decoded"),
-                "SECOND\nPAYLOAD"
-            )
-            .await,
-            (StatusCode::OK, "test#bodyRouting second SECOND\nPAYLOAD".to_owned())
-        );
-    }
-
-    /// A decode failure classifies by phase: during an open claim the bytes are simply not
-    /// this protocol's — the walk continues over the replayed buffer — while after
-    /// `Claimed` the claim is settled and the failure is the protocol's own
-    /// malformed request.
-    #[tokio::test]
-    async fn decode_failures_classify_by_claim_phase() {
-        static FIRST: &[ProtocolOrder] = &[ProtocolOrder::Before("aws.protocols#restJson1")];
-        let app = app(&WITH_BODY_ROUTING, [body_routing(FIRST)]);
-        let body = "\u{80}not the codec's alphabet";
-        let response = app
-            .clone()
-            .oneshot(
-                post("/first")
-                    .header("x-body-claim", "decoded")
-                    .header("content-type", "application/json")
-                    .body(Body::from_bytes(Bytes::from(body)))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-        assert_eq!(
-            response.into_body().collect().await.unwrap().to_bytes(),
-            format!("aws.protocols#restJson1 first {body}")
-        );
-        let (status, text) = send(&app, post("/anywhere").header("x-body-claim", "envelope-decoded"), {
-            "\u{80}settled claim"
-        })
-        .await;
-        assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert!(text.contains("malformed request"), "{text}");
     }
 
     /// After `Claimed` the claim is settled: an operation the body does not name is

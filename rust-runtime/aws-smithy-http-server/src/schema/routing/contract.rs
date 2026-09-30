@@ -196,8 +196,9 @@ pub enum RouterBuildError {
 pub enum RouteClaim {
     /// The protocol claims the request and knows the operation. Dispatch directly.
     ClaimedWithRoute(OperationTarget),
-    /// The protocol claims the request. Call [`MetadataProtocolRouter::route`] to select
-    /// the operation or return a terminal routing error. No other protocol is asked.
+    /// The protocol claims the request. Call [`MetadataProtocolRouter::route`] or
+    /// [`BodyProtocolRouter::route_with_body`] to select the operation or return a terminal
+    /// routing error. No other protocol is asked.
     Claimed,
     /// The protocol does not identify the request; the next protocol is asked.
     NoClaim,
@@ -230,109 +231,27 @@ pub trait MetadataProtocolRouter: Send + Sync + fmt::Debug {
     }
 }
 
-/// The router's view of the body bytes the routing service collected for one
-/// [`BodyRequirement`].
+/// The complete request body collected by the routing service.
 ///
-/// This is a view for selection, not the replay artifact: whatever a router reads here, the
-/// dispatched handler (or the next claimant) always receives the raw wire bytes, replayed
-/// exactly as the transport delivered them.
+/// These are the raw wire bytes. The same bytes are replayed to the dispatched handler
+/// or the next protocol if the claim is declined.
 #[derive(Debug)]
 pub struct CollectedBody {
-    /// Wire bytes for a plain requirement; the decoder's output for a decoded one.
     pub(super) bytes: Bytes,
-    /// Whether `bytes` covers the entire request body.
-    pub(super) complete: bool,
 }
 
 impl CollectedBody {
-    /// The bytes satisfying the requirement: wire bytes for a plain requirement, the
-    /// decoder's output for a decoded one.
+    /// The complete request body's raw wire bytes.
     pub fn bytes(&self) -> &Bytes {
         &self.bytes
     }
-
-    /// `true` when [`bytes`](Self::bytes) is the entire (decoded) request body; `false` when
-    /// it is only the requested prefix.
-    pub fn complete(&self) -> bool {
-        self.complete
-    }
 }
 
-/// A protocol-owned codec the routing service runs while satisfying a [`BodyRequirement`].
-///
-/// The decoder is push-fed by the service's read loop — it can never pull, so it cannot cause
-/// over-reading — and each requirement's decoder starts from the first body byte. The codec
-/// choice is per-request protocol knowledge (for example, a gzip inflater when the request
-/// carries `Content-Encoding: gzip`); the service stays codec-blind.
-///
-/// A decode error during claiming means the bytes are not this protocol's format: the service
-/// treats the claim as [`BodyRouteClaim::NoClaim`] and keeps walking. After
-/// [`BodyRouteClaim::Claimed`] the claim is settled, so a decode error is a terminal
-/// [`RoutingErrorKind::MalformedRequest`] framed by the matched protocol.
-pub trait ClaimDecoder: Send {
-    /// Feeds the next raw wire chunk, appending decoded output to `out`.
-    fn decode(&mut self, chunk: &[u8], out: &mut Vec<u8>) -> Result<(), BoxError>;
-}
-
-/// How much of the request body a [`BodyProtocolRouter`] needs, in decoded bytes.
+/// The body a protocol needs for claiming or routing.
 #[derive(Clone, Copy, Debug)]
-pub(super) enum BodyWant {
-    Prefix(std::num::NonZeroUsize),
+pub enum BodyRequirement {
+    /// Collect the complete request body as raw wire bytes.
     Complete,
-}
-
-/// A body-routed protocol's ask: how much of the body it needs, and through which codec.
-///
-/// The routing service satisfies the requirement — reading the transport under the service's
-/// provisional allowance ([`ServiceRequestBodyConfig::for_routing`], applied to raw wire
-/// bytes) — and presents the result as a [`CollectedBody`]. Requirements are self-contained:
-/// each decoder is fed the body from its first byte, so no decoder state crosses phases.
-pub struct BodyRequirement {
-    pub(super) decoder: Option<Box<dyn ClaimDecoder>>,
-    pub(super) want: BodyWant,
-}
-
-impl BodyRequirement {
-    /// The first `n` wire bytes (fewer if the body ends first).
-    pub fn prefix(n: std::num::NonZeroUsize) -> Self {
-        Self {
-            decoder: None,
-            want: BodyWant::Prefix(n),
-        }
-    }
-
-    /// The whole body, as raw wire bytes.
-    pub fn complete() -> Self {
-        Self {
-            decoder: None,
-            want: BodyWant::Complete,
-        }
-    }
-
-    /// The first `n` bytes of `decoder`'s output (fewer if the body ends first).
-    pub fn decoded_prefix(decoder: impl ClaimDecoder + 'static, n: std::num::NonZeroUsize) -> Self {
-        Self {
-            decoder: Some(Box::new(decoder)),
-            want: BodyWant::Prefix(n),
-        }
-    }
-
-    /// The whole body, as `decoder`'s output.
-    pub fn decoded_complete(decoder: impl ClaimDecoder + 'static) -> Self {
-        Self {
-            decoder: Some(Box::new(decoder)),
-            want: BodyWant::Complete,
-        }
-    }
-}
-
-impl fmt::Debug for BodyRequirement {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("BodyRequirement")
-            .field("want", &self.want)
-            .field("decoded", &self.decoder.is_some())
-            .finish()
-    }
 }
 
 /// A body-routed protocol's answer to whether a request is its own.
@@ -345,10 +264,10 @@ pub enum BodyRouteClaim {
     /// The protocol claims the request and knows the operation. Dispatch directly without
     /// calling [`BodyProtocolRouter::route_with_body`].
     ClaimedWithRoute(OperationTarget),
-    /// The protocol claims the request. The service collects the complete body using the
-    /// requirement's decoder, if any, then calls [`BodyProtocolRouter::route_with_body`].
+    /// The protocol claims the request. The service collects the complete body,
+    /// then calls [`BodyProtocolRouter::route_with_body`].
     /// No other protocol is asked, including when routing returns an error.
-    Claimed(BodyRequirement),
+    Claimed,
     /// The protocol needs body bytes to decide whether the request is its own. The service
     /// satisfies the requirement and calls [`BodyProtocolRouter::claim_with_body`].
     NeedsBodyToClaim(BodyRequirement),
@@ -358,14 +277,15 @@ pub enum BodyRouteClaim {
 
 /// Selects an operation for protocols that may read the request body to route.
 ///
-/// Claiming is head-first: [`claim`](Self::claim) sees the request head and escalates to body
-/// bytes only by returning a [`BodyRequirement`]. The routing service owns all body I/O — it
+/// Claiming is head-first: [`claim`](Self::claim) sees the request head. The service collects
+/// the complete body after `Claimed`, or before continuing a `NeedsBodyToClaim` decision.
+/// The routing service owns all body I/O — it
 /// reads the transport under the service's provisional allowance
 /// ([`ServiceRequestBodyConfig::for_routing`]; the selected operation is not known yet, so
 /// per-operation allowances cannot apply), buffers every wire byte it reads, and replays them
 /// to later claimants and the dispatched handler, so a declined claim never damages the
-/// request. The protocol owns interpretation: it may lend the service a [`ClaimDecoder`] to
-/// present decoded bytes. Declining from the head whenever possible is not an optimization —
+/// request. The protocol interprets the complete raw body. Declining from the head whenever
+/// possible is not an optimization —
 /// it is what keeps a body protocol from stalling requests destined for others on body bytes
 /// a client may never send.
 ///
@@ -385,15 +305,16 @@ pub trait BodyProtocolRouter: Send + Sync + fmt::Debug {
     fn claim(&self, request: &Request<()>) -> BodyRouteClaim;
 
     /// Continues an open claim over the requested body bytes. Called only after this router
-    /// returned [`BodyRouteClaim::NeedsBodyToClaim`]; any variant may return, including another
-    /// `NeedsBodyToClaim` with a larger requirement.
-    fn claim_with_body(&self, request: &Request<CollectedBody>) -> BodyRouteClaim {
+    /// returned [`BodyRouteClaim::NeedsBodyToClaim`]. The complete body is available, so
+    /// the return type cannot request more bytes. `Claimed` proceeds directly to
+    /// [`Self::route_with_body`] with the same collected body.
+    fn claim_with_body(&self, request: &Request<CollectedBody>) -> RouteClaim {
         let _ = request;
-        BodyRouteClaim::NoClaim
+        RouteClaim::NoClaim
     }
 
     /// Selects the operation a claimed request names in its body. Called only after this
-    /// router returned [`BodyRouteClaim::Claimed`]; the claim is settled, so an
+    /// router returned [`BodyRouteClaim::Claimed`] or [`RouteClaim::Claimed`]; the claim is settled, so an
     /// unrecognized operation is an error serialized by this protocol, never a fall-through.
     fn route_with_body(&self, request: &Request<CollectedBody>) -> Result<OperationTarget, RoutingError> {
         let _ = request;

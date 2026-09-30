@@ -30,8 +30,7 @@ use std::{
 };
 use tower::Service;
 use super::collect::BodyCollector;
-use super::contract::BodyWant;
-use crate::schema::routing::{BodyRequirement, BodyRouteClaim, ClaimDecoder, CollectedBody, MetadataProtocolRouter, OperationHandlerBinding, OperationTarget, RouteClaim, RouterBuildContext, RouterBuildError, RoutingOptions, SharedProtocolRouter};
+use crate::schema::routing::{BodyRequirement, BodyRouteClaim, CollectedBody, MetadataProtocolRouter, OperationHandlerBinding, OperationTarget, RouteClaim, RouterBuildContext, RouterBuildError, RoutingOptions, SharedProtocolRouter};
 
 pub(super) struct BoundHandler<B> {
     operation: &'static OperationSchema<'static>,
@@ -134,97 +133,17 @@ fn unclaimed() -> Response<BoxBody> {
         .expect("a status and static body response is valid")
 }
 
-/// Reads the transport body for routing, incrementally and resumably, under the service's
-/// provisional allowance.
-///
-/// The raw buffer is append-only and service-owned: every wire byte read while satisfying any
-/// [`BodyRequirement`] accumulates here, so the transport is never read twice and
-/// [`Self::into_replay_body`] can always reconstruct exactly what left the wire — for the next
-/// claimant after a declined claim, or for the dispatched handler. Decoded views are derived
-
-/// One [`BodyRequirement`] being satisfied for one protocol: the decoder's progress over the
+/// The protocol waiting for the complete body and the phase to resume afterwards.
 struct Pursuit {
-    /// The protocol the requirement belongs to.
     protocol: usize,
-    /// `false`: an open claim, finished by [`BodyProtocolRouter::claim_with_body`].
-    /// `true`: a settled claim, finished by [`BodyProtocolRouter::route_with_body`].
+    /// `false` resumes `claim_with_body`; `true` resumes `route_with_body`.
     routing: bool,
-    decoder: Option<Box<dyn ClaimDecoder>>,
-    want: BodyWant,
-    /// The decoder's output so far. Unused for plain requirements.
-    decoded: Vec<u8>,
-    /// Raw bytes fed to the decoder so far, as an absolute offset into the raw buffer —
-    /// stable across chunk consolidation.
-    fed: usize,
 }
 
 impl Pursuit {
     fn new(protocol: usize, routing: bool, requirement: BodyRequirement) -> Self {
-        Self {
-            protocol,
-            routing,
-            decoder: requirement.decoder,
-            want: if routing { BodyWant::Complete } else { requirement.want },
-            decoded: Vec::new(),
-            fed: 0,
-        }
-    }
-
-    /// Feeds raw bytes the decoder has not seen yet. A no-op for plain requirements.
-    fn catch_up<B>(&mut self, collector: &BodyCollector<B>) -> Result<(), BoxError> {
-        let Some(decoder) = self.decoder.as_mut() else {
-            return Ok(());
-        };
-        let mut offset = 0;
-        for chunk in &collector.chunks {
-            let end = offset + chunk.len();
-            if end > self.fed {
-                decoder.decode(&chunk[self.fed - offset..], &mut self.decoded)?;
-                self.fed = end;
-            }
-            offset = end;
-        }
-        Ok(())
-    }
-
-    /// The requirement's view once it is satisfiable, `None` while more of the body is needed.
-    /// At end-of-body every requirement is satisfiable (possibly short).
-    fn satisfied<B>(&mut self, collector: &mut BodyCollector<B>) -> Option<CollectedBody> {
-        match self.decoder {
-            None => {
-                let whole = collector.eof;
-                match self.want {
-                    BodyWant::Prefix(n) if collector.len >= n.get() => Some(CollectedBody {
-                        complete: whole && collector.len <= n.get(),
-                        bytes: collector.contiguous(n.get()),
-                    }),
-                    BodyWant::Prefix(_) | BodyWant::Complete if whole => Some(CollectedBody {
-                        bytes: collector.contiguous(collector.len),
-                        complete: true,
-                    }),
-                    BodyWant::Prefix(_) | BodyWant::Complete => None,
-                }
-            }
-            Some(_) => {
-                let whole = collector.eof && self.fed == collector.len;
-                let bytes = match self.want {
-                    BodyWant::Prefix(n) if self.decoded.len() >= n.get() || whole => {
-                        let complete = whole && self.decoded.len() <= n.get();
-                        let mut decoded = std::mem::take(&mut self.decoded);
-                        decoded.truncate(n.get());
-                        return Some(CollectedBody {
-                            bytes: Bytes::from(decoded),
-                            complete,
-                        });
-                    }
-                    BodyWant::Complete if whole => std::mem::take(&mut self.decoded),
-                    BodyWant::Prefix(_) | BodyWant::Complete => return None,
-                };
-                Some(CollectedBody {
-                    bytes: Bytes::from(bytes),
-                    complete: true,
-                })
-            }
+        match requirement {
+            BodyRequirement::Complete => Self { protocol, routing },
         }
     }
 }
@@ -348,9 +267,9 @@ where
                             let (parts, ()) = probe.into_parts();
                             return self.pursue(parts, source, Pursuit::new(index, false, requirement), cursor);
                         }
-                        BodyRouteClaim::Claimed(requirement) => {
+                        BodyRouteClaim::Claimed => {
                             let (parts, ()) = probe.into_parts();
-                            return self.pursue(parts, source, Pursuit::new(index, true, requirement), cursor);
+                            return self.pursue(parts, source, Pursuit::new(index, true, BodyRequirement::Complete), cursor);
                         }
                     }
                 }
@@ -408,32 +327,21 @@ where
             };
         }
         match router.claim_with_body(&request) {
-            BodyRouteClaim::ClaimedWithRoute(selected) => {
+            RouteClaim::ClaimedWithRoute(selected) => {
                 let (parts, _) = request.into_parts();
                 self.dispatch_replayed(selected, pursuit.protocol, parts, BodySource::Collector(collector))
             }
-            BodyRouteClaim::NoClaim => {
+            RouteClaim::NoClaim => {
                 let (parts, _) = request.into_parts();
                 self.walk(parts, BodySource::Collector(collector), cursor)
             }
-            BodyRouteClaim::NeedsBodyToClaim(requirement) => {
-                let (parts, _) = request.into_parts();
-                self.pursue(
-                    parts,
-                    BodySource::Collector(collector),
-                    Pursuit::new(pursuit.protocol, false, requirement),
-                    cursor,
-                )
-            }
-            BodyRouteClaim::Claimed(requirement) => {
-                let (parts, _) = request.into_parts();
-                self.pursue(
-                    parts,
-                    BodySource::Collector(collector),
-                    Pursuit::new(pursuit.protocol, true, requirement),
-                    cursor,
-                )
-            }
+            RouteClaim::Claimed => match router.route_with_body(&request) {
+                Ok(selected) => {
+                    let (parts, _) = request.into_parts();
+                    self.dispatch_replayed(selected, pursuit.protocol, parts, BodySource::Collector(collector))
+                }
+                Err(err) => self.reject(pursuit.protocol, err),
+            },
         }
     }
 
@@ -504,8 +412,6 @@ struct WalkPursuit<B> {
 enum PursuitPoll {
     /// The requirement is met; resume the walk over this view.
     Satisfied(CollectedBody),
-    /// The pursuit's decoder rejected the bytes.
-    DecodeFailed(BoxError),
     /// The transport failed, timed out, or overran the provisional allowance.
     CollectionFailed(crate::schema::RequestBodyCollectionError<crate::Error>),
 }
@@ -515,14 +421,18 @@ where
     B: http_body::Body<Data = Bytes> + Unpin,
     B::Error: Into<BoxError>,
 {
-    fn poll_pursuit(&mut self, cx: &mut Context<'_>) -> Poll<PursuitPoll> {
+    fn poll_pursuit(&mut self, cx: &mut Context<'_>, budget: &mut usize) -> Poll<PursuitPoll> {
         loop {
-            if let Err(err) = self.pursuit.catch_up(&self.collector) {
-                return Poll::Ready(PursuitPoll::DecodeFailed(err));
+            if self.collector.eof {
+                return Poll::Ready(PursuitPoll::Satisfied(CollectedBody {
+                    bytes: self.collector.contiguous(self.collector.len),
+                }));
             }
-            if let Some(collected) = self.pursuit.satisfied(&mut self.collector) {
-                return Poll::Ready(PursuitPoll::Satisfied(collected));
+            if *budget == 0 {
+                cx.waker().wake_by_ref();
+                return Poll::Pending;
             }
+            *budget -= 1;
             match self.collector.poll_read(cx) {
                 Poll::Pending => return Poll::Pending,
                 Poll::Ready(Err(err)) => return Poll::Ready(PursuitPoll::CollectionFailed(err)),
@@ -565,10 +475,18 @@ where
     type Output = Result<Response<BoxBody>, Infallible>;
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let mut this = self.project();
+        // Share a budget across frame reads and body-claim continuations so an always-ready
+        // transport or a sequence of declined claims yields back to the executor.
+        let mut budget = 64;
         loop {
+            if budget == 0 {
+                cx.waker().wake_by_ref();
+                return Poll::Pending;
+            }
+            budget -= 1;
             match this.inner.as_mut().project() {
                 StateProj::Collecting { walk } => {
-                    let outcome = match walk.as_mut().expect("pursuit resolves once").poll_pursuit(cx) {
+                    let outcome = match walk.as_mut().expect("pursuit resolves once").poll_pursuit(cx, &mut budget) {
                         Poll::Pending => return Poll::Pending,
                         Poll::Ready(outcome) => outcome,
                     };
@@ -584,24 +502,6 @@ where
                             this.inner
                                 .set(dispatch.resumed(parts, collector, &pursuit, collected, cursor));
                         }
-                        // The decoder rejecting the bytes means different things by phase: an
-                        // open claim was simply not this protocol's — the walk continues over
-                        // the replayable buffer — while a settled claim owns the request, so
-                        // a body its own codec cannot decode is its malformed request.
-                        PursuitPoll::DecodeFailed(err) => {
-                            if pursuit.routing {
-                                this.inner.set(dispatch.reject(
-                                    pursuit.protocol,
-                                    RoutingError::malformed(crate::Error::new(err)),
-                                ));
-                            } else {
-                                this.inner
-                                    .set(dispatch.walk(parts, BodySource::Collector(collector), cursor));
-                            }
-                        }
-                        // A transport-level failure is terminal whatever the phase; the
-                        // protocol the requirement belonged to frames it, exactly as when it
-                        // collected for itself.
                         PursuitPoll::CollectionFailed(error) => {
                             let protocol = &dispatch.protocols[pursuit.protocol].protocol;
                             return Poll::Ready(Ok(crate::schema::body_collection_rejection(&**protocol, error)));

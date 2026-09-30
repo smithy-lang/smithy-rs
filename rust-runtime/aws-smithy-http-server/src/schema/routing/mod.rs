@@ -25,7 +25,7 @@ mod service;
 mod tests;
 
 pub use contract::{
-    BodyProtocolRouter, BodyRequirement, BodyRouteClaim, ClaimDecoder, CollectedBody,
+    BodyProtocolRouter, BodyRequirement, BodyRouteClaim, CollectedBody,
     MetadataProtocolRouter, OperationHandlerBinding, OperationTarget, RouteClaim, RouterBuildContext,
     RouterBuildError, RoutingOptions, SharedProtocolRouter, StreamingKind,
 };
