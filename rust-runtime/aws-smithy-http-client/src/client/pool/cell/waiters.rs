@@ -50,7 +50,7 @@ use super::super::partition::EligibilityGroup;
 use super::{AcquisitionOutcome, AcquisitionStep, EstablishmentPermit};
 use std::collections::{BTreeSet, HashMap};
 use std::num::NonZeroUsize;
-use std::task::{Context, Poll, Waker};
+use std::task::{Poll, Waker};
 
 /// Local waiter identity within one cell.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -605,6 +605,12 @@ impl AcquisitionQueue {
 
     /// Returns the next event or records the latest waker for a pending waiter.
     ///
+    /// `waker` carries a clone of the polling task's waker, taken before the
+    /// cell lock. On return it holds whichever waker this poll no longer needs —
+    /// the one it displaced, or the incoming clone when the registered waker
+    /// already wakes the same task. The caller drops it after unlocking so that
+    /// a custom raw-waker `drop` callback cannot re-enter a held cell lock.
+    ///
     /// # Panics
     ///
     /// Panics if `waiter` is unknown, was cancelled, or was already consumed
@@ -612,7 +618,7 @@ impl AcquisitionQueue {
     pub(super) fn poll_waiter(
         &mut self,
         waiter: WaiterId,
-        cx: &mut Context<'_>,
+        waker: &mut Option<Waker>,
     ) -> Poll<AcquisitionStep> {
         if matches!(
             self.records.get(&waiter).map(|record| &record.state),
@@ -651,7 +657,7 @@ impl AcquisitionQueue {
             .records
             .get_mut(&waiter)
             .expect("polled a cancelled, consumed, or unknown acquisition waiter");
-        let waker = match &mut record.state {
+        let registered = match &mut record.state {
             WaiterState::Waiting { waker, .. }
             | WaiterState::DeliveryPending { waker, .. }
             | WaiterState::Launching { waker, .. } => waker,
@@ -662,11 +668,16 @@ impl AcquisitionQueue {
                 unreachable!("ready waiter changed state under the cell lock")
             }
         };
-        if waker
+        let incoming = waker
             .as_ref()
-            .is_none_or(|waker| !waker.will_wake(cx.waker()))
+            .expect("poll_waiter requires the caller's waker clone");
+        if registered
+            .as_ref()
+            .is_none_or(|registered| !registered.will_wake(incoming))
         {
-            *waker = Some(cx.waker().clone());
+            // Leaves the displaced waker in `waker` for the caller to drop
+            // after unlocking; never drops it here.
+            *waker = std::mem::replace(registered, waker.take());
         }
         Poll::Pending
     }
