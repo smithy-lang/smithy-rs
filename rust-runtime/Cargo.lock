@@ -537,6 +537,7 @@ dependencies = [
  "indexmap 2.14.2",
  "loom",
  "pin-project-lite",
+ "proptest",
  "rustls 0.21.12",
  "rustls 0.23.45",
  "rustls-native-certs 0.8.4",
