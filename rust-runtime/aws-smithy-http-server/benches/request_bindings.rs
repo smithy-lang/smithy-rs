@@ -22,8 +22,8 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use aws_smithy_http_server::protocol::rest_json_1::RestJson1Protocol;
-use aws_smithy_http_server::protocol::rest_xml::RestXmlProtocol;
+use aws_smithy_http_server::schema::protocol::RestJson1Protocol;
+use aws_smithy_http_server::schema::protocol::RestXmlProtocol;
 use aws_smithy_http_server::schema::{ServerProtocol, ServerRequest};
 use aws_smithy_schema::serde::{SerdeError, ShapeDeserializer};
 use aws_smithy_schema::traits::HttpTrait;

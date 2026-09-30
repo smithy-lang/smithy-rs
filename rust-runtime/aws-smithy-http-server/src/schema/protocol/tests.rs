@@ -12,11 +12,11 @@ use std::num::NonZeroUsize;
 use std::sync::LazyLock;
 use std::time::Duration;
 
-use crate::protocol::aws_json_10::AwsJson1_0Protocol;
-use crate::protocol::aws_json_11::AwsJson1_1Protocol;
-use crate::protocol::rest_json_1::RestJson1Protocol;
-use crate::protocol::rest_xml::RestXmlProtocol;
-use crate::protocol::rpc_v2_cbor::RpcV2CborProtocol;
+use crate::schema::protocol::AwsJson1_0Protocol;
+use crate::schema::protocol::AwsJson1_1Protocol;
+use crate::schema::protocol::RestJson1Protocol;
+use crate::schema::protocol::RestXmlProtocol;
+use crate::schema::protocol::RpcV2CborProtocol;
 use crate::protocol::test_helpers::get_body_as_string;
 use crate::response::Response;
 use crate::schema::{

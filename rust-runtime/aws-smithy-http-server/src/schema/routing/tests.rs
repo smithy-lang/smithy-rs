@@ -78,11 +78,11 @@ static RPC: ServiceSchema<'static> = ServiceSchema::new(
 /// The first line of this test protocol's request body names the operation.
 #[derive(Debug, Default)]
 struct BodyProtocol {
-    inner: crate::protocol::rest_json_1::RestJson1Protocol,
+    inner: crate::schema::protocol::RestJson1Protocol,
 }
 #[derive(Debug)]
 struct BodyRouter {
-    targets: Vec<OperationIndex>,
+    targets: Vec<OperationTarget>,
 }
 fn rejection(status: StatusCode, message: impl Into<Bytes>) -> Response<BoxBody> {
     Response::builder()
@@ -108,7 +108,7 @@ impl std::fmt::Display for InvalidName {
 impl std::error::Error for InvalidName {}
 impl BodyRouter {
     /// Names the operation the collected body's first line selects, if any.
-    fn select(&self, request: &Request<CollectedBody>) -> Result<Option<OperationIndex>, RoutingError> {
+    fn select(&self, request: &Request<CollectedBody>) -> Result<Option<OperationTarget>, RoutingError> {
         let first_line = request
             .body()
             .bytes()
@@ -208,7 +208,7 @@ impl BodyProtocolRouter for BodyRouter {
             },
         }
     }
-    fn route_with_body(&self, request: &Request<CollectedBody>) -> Result<OperationIndex, RoutingError> {
+    fn route_with_body(&self, request: &Request<CollectedBody>) -> Result<OperationTarget, RoutingError> {
         self.select(request)?.ok_or_else(RoutingError::unknown_operation)
     }
 }
@@ -530,7 +530,7 @@ fn binding_and_protocol_validation() {
     ));
     assert!(matches!(
         MultiProtocolRoutingService::from_operation_handler_bindings(&SERVICE, [], [binding(&FIRST), binding(&SECOND)]),
-        Err(RouterBuildError::UnknownProtocol)
+        Err(RouterBuildError::MissingProtocols { protocols }) if protocols == ["test#bodyRouting"]
     ));
     static NONE: ServiceSchema<'static> = ServiceSchema::new(SERVICE_ID, None, &[], OPERATIONS);
     static MANY: ServiceSchema<'static> = ServiceSchema::new(
@@ -557,6 +557,32 @@ fn binding_and_protocol_validation() {
             [binding(&COPY), binding(&SECOND)]
         ),
         Err(RouterBuildError::Binding(_))
+    ));
+}
+
+#[test]
+fn partially_registered_service_reports_every_missing_protocol_before_building() {
+    static PARTIAL: ServiceSchema<'static> = ServiceSchema::new(
+        SERVICE_ID,
+        None,
+        &[
+            shape_id!("aws.protocols", "restJson1"),
+            shape_id!("test", "unregisteredFirst"),
+            shape_id!("test", "unregisteredSecond"),
+        ],
+        OPERATIONS,
+    );
+    // Missing registrations fail even before the missing operation bindings are checked.
+    let error =
+        MultiProtocolRoutingService::<Body>::from_operation_handler_bindings(&PARTIAL, [], []).unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "missing protocol registrations: test#unregisteredFirst, test#unregisteredSecond"
+    );
+    assert!(matches!(
+        error,
+        RouterBuildError::MissingProtocols { protocols }
+            if protocols == ["test#unregisteredFirst", "test#unregisteredSecond"]
     ));
 }
 
@@ -714,14 +740,8 @@ async fn cancelling_body_routing_drops_the_pending_stream() {
 #[tokio::test]
 async fn immediate_routing_uses_ready_future_and_rejects_unknown_routes() {
     let targets = [
-        OperationIndex {
-            index: 0,
-            operation: &FIRST,
-        },
-        OperationIndex {
-            index: 1,
-            operation: &SECOND,
-        },
+        OperationTarget::new(0, &FIRST),
+        OperationTarget::new(1, &SECOND),
     ];
     let router = rest_router(&targets, "application/json").unwrap();
     let shared = SharedProtocolRouter::new(rest_router(&targets, "application/json").unwrap());
@@ -732,6 +752,67 @@ async fn immediate_routing_uses_ready_future_and_rejects_unknown_routes() {
     assert_eq!(router.route(&req).unwrap_err().status_code(), 405);
 }
 
+#[test]
+fn operation_metadata_classifies_streaming_and_cbor_routes_without_an_indexed_table() {
+    static BLOB_MEMBER: Schema<'static> =
+        Schema::new_member(shape_id!("test", "BlobInput", "data"), ShapeType::Blob, "data", 0)
+            .with_streaming();
+    static EVENT_MEMBER: Schema<'static> =
+        Schema::new_member(shape_id!("test", "EventInput", "events"), ShapeType::Union, "events", 0)
+            .with_streaming();
+    static BLOB: Schema<'static> =
+        Schema::new_struct(shape_id!("test", "BlobInput"), ShapeType::Structure, &[&BLOB_MEMBER]);
+    static EVENT: Schema<'static> =
+        Schema::new_struct(shape_id!("test", "EventInput"), ShapeType::Structure, &[&EVENT_MEMBER]);
+    static INPUT_BLOB: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &BLOB, &UNIT, &[]);
+    static OUTPUT_BLOB: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &UNIT, &BLOB, &[]);
+    static INPUT_EVENT: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &EVENT, &UNIT, &[]);
+    static OUTPUT_EVENT: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &UNIT, &EVENT, &[]);
+    static BOTH: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &EVENT, &BLOB, &[]);
+
+    let config = RoutingOptions::default();
+    for (operation, input, output) in [
+        (&FIRST, None, None),
+        (&INPUT_BLOB, Some(StreamingKind::Blob), None),
+        (&OUTPUT_BLOB, None, Some(StreamingKind::Blob)),
+        (&INPUT_EVENT, Some(StreamingKind::EventStream), None),
+        (&OUTPUT_EVENT, None, Some(StreamingKind::EventStream)),
+        (&BOTH, Some(StreamingKind::EventStream), Some(StreamingKind::Blob)),
+    ] {
+        // Metadata and CBOR eligibility must not depend on a dense handler-index table.
+        let target = OperationTarget::new(usize::MAX, operation);
+        assert_eq!(target.index(), usize::MAX);
+        assert!(std::ptr::eq(target.operation(), operation));
+        assert_eq!(target.input_streaming(), input);
+        assert_eq!(target.output_streaming(), output);
+        assert_eq!(target.has_streaming_input(), input.is_some());
+        assert_eq!(target.has_streaming_output(), output.is_some());
+        let blob = input == Some(StreamingKind::Blob) || output == Some(StreamingKind::Blob);
+        assert_eq!(target.has_streaming_blob(), blob);
+
+        let router = rpc_v2_cbor_router(&RouterBuildContext {
+            service: &REST_JSON,
+            targets: &[target],
+            config: &config.request_body,
+            protocol_settings: None,
+        })
+        .unwrap();
+        let request = Request::builder()
+            .method("POST")
+            .uri("/service/Service/operation/first")
+            .header("smithy-protocol", "rpc-v2-cbor")
+            .body(())
+            .unwrap();
+        assert_eq!(router.recognizes_streaming_input(&request), input.is_some() && !blob);
+        if blob {
+            assert_eq!(router.route(&request).unwrap_err().status_code(), 404);
+            assert!(matches!(router.claim(&request), RouteClaim::Rejected(_)));
+        } else {
+            assert_eq!(router.route(&request).unwrap().index(), usize::MAX);
+        }
+    }
+}
+
 #[cfg(debug_assertions)]
 #[tokio::test]
 #[should_panic(expected = "router index belongs to a different operation")]
@@ -739,12 +820,9 @@ async fn inconsistent_operation_identity_is_detected_before_handler_dispatch() {
     #[derive(Debug)]
     struct IncorrectRouter;
     impl MetadataProtocolRouter for IncorrectRouter {
-        fn route(&self, _: &Request<()>) -> Result<OperationIndex, RoutingError> {
+        fn route(&self, _: &Request<()>) -> Result<OperationTarget, RoutingError> {
             // This test is in the defining module; external routers cannot construct arbitrary indices.
-            Ok(OperationIndex {
-                index: 0,
-                operation: &FIRST,
-            })
+            Ok(OperationTarget::new(0, &FIRST))
         }
         fn claim(&self, request: &Request<()>) -> RouteClaim {
             RouteClaim::Matched(self.route(request).unwrap())
@@ -1500,7 +1578,7 @@ mod multi_protocol {
         streaming: bool,
     }
     impl MetadataProtocolRouter for AdvisoryRouter {
-        fn route(&self, _: &Request<()>) -> Result<OperationIndex, RoutingError> {
+        fn route(&self, _: &Request<()>) -> Result<OperationTarget, RoutingError> {
             unreachable!()
         }
         fn recognizes_streaming_input(&self, _: &Request<()>) -> bool {
@@ -1530,7 +1608,7 @@ mod multi_protocol {
         fn claim_with_body(&self, request: &Request<CollectedBody>) -> BodyRouteClaim {
             self.router.claim_with_body(request)
         }
-        fn route_with_body(&self, request: &Request<CollectedBody>) -> Result<OperationIndex, RoutingError> {
+        fn route_with_body(&self, request: &Request<CollectedBody>) -> Result<OperationTarget, RoutingError> {
             self.router.route_with_body(request)
         }
     }
@@ -1561,10 +1639,7 @@ mod multi_protocol {
                     targets: if index == 0 {
                         vec![]
                     } else {
-                        vec![OperationIndex {
-                            index: 1,
-                            operation: &SECOND_OP,
-                        }]
+                        vec![OperationTarget::new(1, &SECOND_OP)]
                     },
                 },
                 calls: calls.clone(),

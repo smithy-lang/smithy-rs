@@ -26,8 +26,8 @@ mod tests;
 
 pub use contract::{
     BodyProtocolRouter, BodyRequirement, BodyRouteClaim, ClaimDecoder, CollectedBody,
-    MetadataProtocolRouter, OperationHandlerBinding, OperationIndex, RouteClaim, RouterBuildContext,
-    RouterBuildError, RoutingOptions, SharedProtocolRouter,
+    MetadataProtocolRouter, OperationHandlerBinding, OperationTarget, RouteClaim, RouterBuildContext,
+    RouterBuildError, RoutingOptions, SharedProtocolRouter, StreamingKind,
 };
 pub use route_errors::{RoutingError, RoutingErrorKind};
 pub use routers::aws_json_router;

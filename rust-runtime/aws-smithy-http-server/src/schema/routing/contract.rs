@@ -22,13 +22,62 @@ use std::{
     sync::Arc,
 };
 
-/// A canonical operation schema and its position in the handler array.
-#[derive(Clone, Copy, Debug)]
-pub struct OperationIndex {
-    pub(super) index: usize,
-    pub(super) operation: &'static OperationSchema<'static>,
+/// The kind of streaming member in an operation's input or output.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StreamingKind {
+    /// A streaming blob payload.
+    Blob,
+    /// A streaming union of events.
+    EventStream,
 }
-impl OperationIndex {
+
+/// Protocol-independent facts derived once from an operation's canonical schema.
+#[derive(Clone, Copy, Debug)]
+struct OperationMetadata {
+    input_streaming: Option<StreamingKind>,
+    output_streaming: Option<StreamingKind>,
+}
+impl OperationMetadata {
+    fn new(operation: &OperationSchema<'_>) -> Self {
+        fn streaming_kind(schema: &aws_smithy_schema::Schema<'_>) -> Option<StreamingKind> {
+            schema
+                .members()
+                .iter()
+                .find(|member| member.streaming())
+                .map(|member| {
+                    // Smithy streaming members are blobs or event-stream unions.
+                    if member.shape_type() == aws_smithy_schema::ShapeType::Blob {
+                        StreamingKind::Blob
+                    } else {
+                        StreamingKind::EventStream
+                    }
+                })
+        }
+        Self {
+            input_streaming: streaming_kind(operation.input()),
+            output_streaming: streaming_kind(operation.output()),
+        }
+    }
+}
+
+/// A router's operation target: its canonical schema, cached metadata and handler position.
+///
+/// Targets are assigned by the routing service and passed to protocol routers at construction.
+#[derive(Clone, Copy, Debug)]
+pub struct OperationTarget {
+    index: usize,
+    operation: &'static OperationSchema<'static>,
+    metadata: OperationMetadata,
+}
+impl OperationTarget {
+    pub(super) fn new(index: usize, operation: &'static OperationSchema<'static>) -> Self {
+        Self {
+            index,
+            operation,
+            metadata: OperationMetadata::new(operation),
+        }
+    }
+
     /// Returns the assigned handler position.
     pub fn index(self) -> usize {
         self.index
@@ -36,6 +85,27 @@ impl OperationIndex {
     /// Returns the operation's canonical schema.
     pub fn operation(self) -> &'static OperationSchema<'static> {
         self.operation
+    }
+    /// Returns the input's streaming kind, if any.
+    pub fn input_streaming(self) -> Option<StreamingKind> {
+        self.metadata.input_streaming
+    }
+    /// Returns the output's streaming kind, if any.
+    pub fn output_streaming(self) -> Option<StreamingKind> {
+        self.metadata.output_streaming
+    }
+    /// Whether the operation consumes a streaming input.
+    pub fn has_streaming_input(self) -> bool {
+        self.input_streaming().is_some()
+    }
+    /// Whether the operation produces a streaming output.
+    pub fn has_streaming_output(self) -> bool {
+        self.output_streaming().is_some()
+    }
+    /// Whether either the input or output contains a streaming blob.
+    pub fn has_streaming_blob(self) -> bool {
+        self.input_streaming() == Some(StreamingKind::Blob)
+            || self.output_streaming() == Some(StreamingKind::Blob)
     }
 }
 
@@ -86,7 +156,7 @@ pub struct RouterBuildContext<'a> {
     /// The service schema.
     pub service: &'static ServiceSchema<'static>,
     /// The operations to route, with targets assigned by the routing service.
-    pub targets: &'a [OperationIndex],
+    pub targets: &'a [OperationTarget],
     /// Server-global body-read allowances. Body-first routing collects under
     /// [`ServiceRequestBodyConfig::for_routing`], enforced by the routing
     /// service itself, not the protocol.
@@ -101,6 +171,9 @@ pub struct RouterBuildContext<'a> {
 pub enum RouterBuildError {
     #[error("no protocol registration recognizes the service schema")]
     UnknownProtocol,
+    /// Declared service protocols without a runtime registration, in declaration order.
+    #[error("missing protocol registrations: {}", .protocols.join(", "))]
+    MissingProtocols { protocols: Vec<String> },
     #[error("invalid operation binding: {0}")]
     Binding(String),
     #[error("invalid routing configuration: {0}")]
@@ -123,7 +196,7 @@ pub enum RouterBuildError {
 #[derive(Debug)]
 pub enum RouteClaim {
     /// The protocol identifies the request and selects this operation.
-    Matched(OperationIndex),
+    Matched(OperationTarget),
     /// The protocol does not identify the request; the next protocol is asked.
     NoClaim,
     /// The protocol identifies the request but cannot serve it. No other protocol is asked.
@@ -142,7 +215,7 @@ pub enum RouteClaim {
 pub trait MetadataProtocolRouter: Send + Sync + fmt::Debug {
     /// Selects from the request URI, method and headers when this is the service's only protocol.
     /// All rejections are terminal.
-    fn route(&self, request: &Request<()>) -> Result<OperationIndex, RoutingError>;
+    fn route(&self, request: &Request<()>) -> Result<OperationTarget, RoutingError>;
 
     /// Decides whether the request is this protocol's when the service serves several protocols.
     fn claim(&self, request: &Request<()>) -> RouteClaim;
@@ -270,7 +343,7 @@ impl fmt::Debug for BodyRequirement {
 #[derive(Debug)]
 pub enum BodyRouteClaim {
     /// The protocol identifies the request and selects this operation from the head alone.
-    Matched(OperationIndex),
+    Matched(OperationTarget),
     /// The request is this protocol's — the claim walk ends now — but the operation is named
     /// in the body (a Coral RPC envelope, for example). The service satisfies the requirement
     /// and finishes with [`BodyProtocolRouter::route_with_body`].
@@ -325,7 +398,7 @@ pub trait BodyProtocolRouter: Send + Sync + fmt::Debug {
     /// Selects the operation a claimed request names in its body. Called only after this
     /// router returned [`BodyRouteClaim::MatchedNeedsBody`]; the claim is settled, so an
     /// unrecognized operation is an error serialized by this protocol, never a fall-through.
-    fn route_with_body(&self, request: &Request<CollectedBody>) -> Result<OperationIndex, RoutingError> {
+    fn route_with_body(&self, request: &Request<CollectedBody>) -> Result<OperationTarget, RoutingError> {
         let _ = request;
         Err(RoutingError::unknown_operation())
     }

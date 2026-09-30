@@ -7,7 +7,7 @@
 
 use http::Request;
 
-use super::OperationIndex;
+use super::OperationTarget;
 
 fn content_type_is(request: &Request<()>, expected: &str) -> bool {
     request
@@ -30,14 +30,14 @@ fn announces_no_body(request: &Request<()>) -> bool {
 /// The `Content-Type` a REST protocol requires to claim a request for one operation.
 
 fn per_target<T>(
-    targets: &[OperationIndex],
+    targets: &[OperationTarget],
     default: impl Fn() -> T,
-    mut value: impl FnMut(OperationIndex) -> T,
+    mut value: impl FnMut(OperationTarget) -> T,
 ) -> Vec<T> {
-    let len = targets.iter().map(|target| target.index + 1).max().unwrap_or(0);
+    let len = targets.iter().map(|target| target.index() + 1).max().unwrap_or(0);
     let mut table: Vec<T> = (0..len).map(|_| default()).collect();
     for target in targets {
-        table[target.index] = value(*target);
+        table[target.index()] = value(*target);
     }
     table
 }
@@ -50,13 +50,3 @@ mod rpc_v2_cbor;
 pub use aws_json::aws_json_router;
 pub(crate) use rest::rest_router;
 pub(crate) use rpc_v2_cbor::rpc_v2_cbor_router;
-
-/// Input-only streaming classification, computed when routing tables are built.
-fn streams_input(target: OperationIndex) -> bool {
-    target
-        .operation
-        .input()
-        .members()
-        .iter()
-        .any(|member| member.streaming())
-}

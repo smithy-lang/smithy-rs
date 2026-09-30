@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! [`ServerProtocol`] and its implementations on the protocol markers.
+//! Schema-driven [`ServerProtocol`] implementations and protocol registration.
 //!
 //! Each protocol frames modeled errors with its discriminator:
 //!
@@ -28,8 +28,8 @@ pub(crate) mod request;
 #[doc(hidden)]
 pub mod response;
 pub(crate) mod rest;
-pub(crate) mod rest_json_1;
-pub(crate) mod rest_xml;
+mod rest_json_1;
+mod rest_xml;
 #[doc(hidden)]
 pub mod rpc;
 mod rpc_v2_cbor;
@@ -52,6 +52,11 @@ use crate::response::Response;
 use crate::schema::routing::RouterBuildError;
 use crate::schema::OperationSchema;
 
+
+pub use aws_json::{AwsJson1_0Protocol, AwsJson1_1Protocol};
+pub use rest_json_1::RestJson1Protocol;
+pub use rest_xml::RestXmlProtocol;
+pub use rpc_v2_cbor::RpcV2CborProtocol;
 
 pub use registry::{ProtocolBuildContext, ProtocolFactory, ProtocolOrder, ProtocolRegistration, ProtocolRegistry};
 
@@ -132,7 +137,7 @@ impl SharedServerProtocol {
     pub(crate) fn build_router<'a>(
         &self,
         mut ctx: crate::schema::routing::RouterBuildContext<'a>,
-        non_streaming: &'a [crate::schema::routing::OperationIndex],
+        non_streaming: &'a [crate::schema::routing::OperationTarget],
     ) -> Result<crate::schema::routing::SharedProtocolRouter, RouterBuildError> {
         use crate::schema::routing::SharedProtocolRouter;
         match &self.0 {

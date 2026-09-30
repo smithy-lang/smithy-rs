@@ -10,7 +10,7 @@ use aws_smithy_schema::{shape_id, Schema, ShapeId};
 use crate::body::BoxBody;
 use crate::protocol::rest_xml::rejection::RequestRejection;
 use crate::protocol::rest_xml::runtime_error::RuntimeError;
-use crate::protocol::rest_xml::{RestXml, RestXmlProtocol};
+use crate::protocol::rest_xml::RestXml;
 use crate::response::{IntoResponse, Response};
 use crate::schema::{DeserializeError, HttpModeledError};
 
@@ -19,6 +19,27 @@ use super::response::{
 };
 use super::rest::RestPolicy;
 use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerProtocol, ServerRequest};
+
+/// Stateful schema-driven restXml protocol implementation.
+#[derive(Debug)]
+pub struct RestXmlProtocol {
+    pub(crate) inner: crate::schema::protocol::rest::RestProtocol<aws_smithy_xml::codec::XmlCodec>,
+}
+
+impl Default for RestXmlProtocol {
+    fn default() -> Self {
+        Self {
+            inner: crate::schema::protocol::rest::RestProtocol::new(
+                aws_smithy_xml::codec::XmlCodec::new(
+                    aws_smithy_xml::codec::XmlCodecSettings::builder()
+                        .enforce_strictness(true)
+                        .build(),
+                ),
+                crate::schema::protocol::rest_xml::POLICY,
+            ),
+        }
+    }
+}
 
 static PROTOCOL_ID: ShapeId<'static> = shape_id!("aws.protocols", "restXml");
 const CONTENT_TYPE: &str = "application/xml";

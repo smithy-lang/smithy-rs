@@ -63,7 +63,7 @@ static RPC: ServiceSchema<'static> = ServiceSchema::new(
 /// The first line of this test protocol's request body names the operation.
 #[derive(Debug, Default)]
 struct BodyProtocol {
-    inner: crate::protocol::rest_json_1::RestJson1Protocol,
+    inner: crate::schema::protocol::RestJson1Protocol,
 }
 #[derive(Debug)]
 struct BodyRouter {

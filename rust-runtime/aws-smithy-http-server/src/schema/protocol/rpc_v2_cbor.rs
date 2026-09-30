@@ -10,7 +10,7 @@ use aws_smithy_schema::{shape_id, Schema, ShapeId};
 use crate::body::BoxBody;
 use crate::protocol::rpc_v2_cbor::rejection::RequestRejection;
 use crate::protocol::rpc_v2_cbor::runtime_error::RuntimeError;
-use crate::protocol::rpc_v2_cbor::{RpcV2Cbor, RpcV2CborProtocol};
+use crate::protocol::rpc_v2_cbor::RpcV2Cbor;
 use crate::response::{IntoResponse, Response};
 use crate::schema::{DeserializeError, HttpModeledError};
 
@@ -19,6 +19,27 @@ use super::response::{
     ResponseBindings,
 };
 use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerProtocol, ServerRequest};
+
+/// Stateful schema-driven Smithy RPC v2 CBOR protocol implementation.
+#[derive(Debug)]
+pub struct RpcV2CborProtocol {
+    pub(crate) inner:
+        crate::schema::protocol::rpc::RpcProtocol<crate::schema::protocol::rpc_v2_cbor_serde::RpcV2CborSerde>,
+}
+
+impl Default for RpcV2CborProtocol {
+    fn default() -> Self {
+        Self {
+            inner: crate::schema::protocol::rpc::RpcProtocol::new(
+                crate::schema::protocol::rpc_v2_cbor_serde::RpcV2CborSerde::default(),
+                "application/cbor",
+                None,
+                crate::schema::protocol::rpc::RpcAccept::ModeledOutput,
+                crate::schema::protocol::rpc::RpcStreaming::EventStreamContentType,
+            ),
+        }
+    }
+}
 
 static PROTOCOL_ID: ShapeId<'static> = shape_id!("smithy.protocols", "rpcv2Cbor");
 const CONTENT_TYPE: &str = "application/cbor";

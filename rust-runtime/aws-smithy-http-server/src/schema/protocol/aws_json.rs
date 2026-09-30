@@ -14,8 +14,8 @@ use aws_smithy_schema::{shape_id, Schema, ShapeId};
 use crate::body::BoxBody;
 use crate::protocol::aws_json::rejection::RequestRejection;
 use crate::protocol::aws_json::runtime_error::RuntimeError;
-use crate::protocol::aws_json_10::{AwsJson1_0, AwsJson1_0Protocol};
-use crate::protocol::aws_json_11::{AwsJson1_1, AwsJson1_1Protocol};
+use crate::protocol::aws_json_10::AwsJson1_0;
+use crate::protocol::aws_json_11::AwsJson1_1;
 use crate::response::{IntoResponse, Response};
 use crate::schema::{DeserializeError, HttpModeledError};
 
@@ -25,6 +25,58 @@ use super::response::{
     ResponseBindings,
 };
 use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerProtocol, ServerRequest};
+
+/// Stateful schema-driven AWS JSON 1.0 protocol implementation.
+#[derive(Debug)]
+pub struct AwsJson1_0Protocol {
+    pub(crate) inner: crate::schema::protocol::rpc::RpcProtocol<aws_smithy_json::codec::JsonCodec>,
+}
+
+impl Default for AwsJson1_0Protocol {
+    fn default() -> Self {
+        Self {
+            inner: crate::schema::protocol::rpc::RpcProtocol::new(
+                schema_codec(),
+                "application/x-amz-json-1.0",
+                Some("application/x-amz-json-1.0"),
+                crate::schema::protocol::rpc::RpcAccept::Always,
+                crate::schema::protocol::rpc::RpcStreaming::CodecContentType,
+            ),
+        }
+    }
+}
+
+/// Stateful schema-driven AWS JSON 1.1 protocol implementation.
+#[derive(Debug)]
+pub struct AwsJson1_1Protocol {
+    pub(crate) inner: crate::schema::protocol::rpc::RpcProtocol<aws_smithy_json::codec::JsonCodec>,
+}
+
+impl Default for AwsJson1_1Protocol {
+    fn default() -> Self {
+        Self {
+            inner: crate::schema::protocol::rpc::RpcProtocol::new(
+                schema_codec(),
+                "application/x-amz-json-1.1",
+                Some("application/x-amz-json-1.1"),
+                crate::schema::protocol::rpc::RpcAccept::Always,
+                crate::schema::protocol::rpc::RpcStreaming::CodecContentType,
+            ),
+        }
+    }
+}
+
+fn schema_codec() -> aws_smithy_json::codec::JsonCodec {
+    aws_smithy_json::codec::JsonCodec::new(
+        aws_smithy_json::codec::JsonCodecSettings::builder()
+            .use_json_name(false)
+            .default_timestamp_format(aws_smithy_types::date_time::Format::EpochSeconds)
+            .enforce_strictness(true)
+            .allow_integral_float_numbers(true)
+            .strict_timestamp_formats(true)
+            .build(),
+    )
+}
 
 fn serialize_error<P>(
     codec: &JsonCodec,

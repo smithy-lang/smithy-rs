@@ -8,8 +8,7 @@
 use crate::schema::routing::RoutingError;
 use http::Request;
 
-use super::per_target;
-use crate::schema::routing::{OperationIndex, MetadataProtocolRouter, RouteClaim, RouterBuildContext, RouterBuildError};
+use crate::schema::routing::{OperationTarget, MetadataProtocolRouter, RouteClaim, RouterBuildContext, RouterBuildError};
 
 /// Routes rpcv2Cbor on the `/service/{service}/operation/{operation}` path.
 ///
@@ -19,15 +18,7 @@ use crate::schema::routing::{OperationIndex, MetadataProtocolRouter, RouteClaim,
 /// forbids.
 #[derive(Debug)]
 struct RpcV2CborProtocolRouter {
-    router: crate::protocol::rpc_v2_cbor::router::RpcV2CborRouter<OperationIndex>,
-    /// Indexed by [`OperationIndex::index`].
-    streams_blobs: Vec<bool>,
-    streaming_inputs: Vec<bool>,
-}
-impl RpcV2CborProtocolRouter {
-    fn unsupported(&self, target: OperationIndex) -> bool {
-        self.streams_blobs[target.index]
-    }
+    router: crate::protocol::rpc_v2_cbor::router::RpcV2CborRouter<OperationTarget>,
 }
 impl MetadataProtocolRouter for RpcV2CborProtocolRouter {
     fn recognizes_streaming_input(&self, request: &Request<()>) -> bool {
@@ -40,13 +31,13 @@ impl MetadataProtocolRouter for RpcV2CborProtocolRouter {
             && self
                 .router
                 .match_route(request)
-                .is_ok_and(|target| self.streaming_inputs[target.index] && !self.unsupported(target))
+                .is_ok_and(|target| target.has_streaming_input() && !target.has_streaming_blob())
     }
 
-    fn route(&self, request: &Request<()>) -> Result<OperationIndex, RoutingError> {
+    fn route(&self, request: &Request<()>) -> Result<OperationTarget, RoutingError> {
         use crate::routing::Router;
         match self.router.match_route(request) {
-            Ok(target) if self.unsupported(target) => Err(RoutingError::unknown_operation()),
+            Ok(target) if target.has_streaming_blob() => Err(RoutingError::unknown_operation()),
             Ok(target) => Ok(target),
             Err(error) => Err(error.into()),
         }
@@ -64,7 +55,7 @@ impl MetadataProtocolRouter for RpcV2CborProtocolRouter {
             return RouteClaim::NoClaim;
         }
         match self.router.match_route(request) {
-            Ok(target) if self.unsupported(target) => {
+            Ok(target) if target.has_streaming_blob() => {
                 RouteClaim::Rejected(RoutingError::unknown_operation())
             }
             Ok(target) => RouteClaim::Matched(target),
@@ -74,14 +65,12 @@ impl MetadataProtocolRouter for RpcV2CborProtocolRouter {
     }
 }
 
-/// Sizes a per-operation table to cover every target index.
-
 pub(crate) fn rpc_v2_cbor_router(
     ctx: &RouterBuildContext<'_>,
 ) -> Result<impl MetadataProtocolRouter + 'static, RouterBuildError> {
     let capitalize_routes = crate::schema::protocol::settings_bool(ctx.protocol_settings, "capitalizeRoutes")?;
     let entries = ctx.targets.iter().flat_map(|target| {
-        let name = target.operation.shape_id().shape_name();
+        let name = target.operation().shape_id().shape_name();
         let mut names = vec![name.to_owned()];
         if capitalize_routes {
             let mut chars = name.chars();
@@ -96,27 +85,7 @@ pub(crate) fn rpc_v2_cbor_router(
             .into_iter()
             .map(move |name| (format!("{}.{}", ctx.service.shape_id().shape_name(), name), *target))
     });
-    let streams_blobs = per_target(
-        ctx.targets,
-        || false,
-        |target| {
-            [target.operation.input(), target.operation.output()]
-                .iter()
-                .any(|schema| {
-                    schema
-                        .members()
-                        .iter()
-                        .any(|member| member.streaming() && member.shape_type() == aws_smithy_schema::ShapeType::Blob)
-                })
-        },
-    );
     Ok(RpcV2CborProtocolRouter {
         router: crate::protocol::rpc_v2_cbor::router::RpcV2CborRouter::from_owned(entries),
-        streaming_inputs: super::per_target(
-            ctx.targets,
-            || false,
-            |target| super::streams_input(target) && !streams_blobs[target.index],
-        ),
-        streams_blobs,
     })
 }

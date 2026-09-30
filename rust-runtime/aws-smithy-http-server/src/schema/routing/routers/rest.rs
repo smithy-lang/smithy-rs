@@ -9,7 +9,7 @@ use crate::schema::routing::RoutingError;
 use http::Request;
 
 use super::{announces_no_body, content_type_is, per_target};
-use crate::schema::routing::{OperationIndex, MetadataProtocolRouter, RouteClaim, RouterBuildError};
+use crate::schema::routing::{OperationTarget, MetadataProtocolRouter, RouteClaim, RouterBuildError};
 
 #[derive(Debug)]
 enum ClaimContentType {
@@ -65,20 +65,19 @@ impl ClaimContentType {
 /// `application/json` or `application/xml` and reach the right protocol.
 #[derive(Debug)]
 struct RestProtocolRouter {
-    router: crate::protocol::rest::router::RestRouter<OperationIndex>,
-    /// Indexed by [`OperationIndex::index`].
+    router: crate::protocol::rest::router::RestRouter<OperationTarget>,
+    /// Indexed by [`OperationTarget::index`].
     content_types: Vec<ClaimContentType>,
-    streaming_inputs: Vec<bool>,
 }
 impl MetadataProtocolRouter for RestProtocolRouter {
     fn recognizes_streaming_input(&self, request: &Request<()>) -> bool {
         use crate::routing::Router;
         self.router
             .match_route(request)
-            .is_ok_and(|target| self.streaming_inputs[target.index] && self.content_types[target.index].admits(request))
+            .is_ok_and(|target| target.has_streaming_input() && self.content_types[target.index()].admits(request))
     }
 
-    fn route(&self, request: &Request<()>) -> Result<OperationIndex, RoutingError> {
+    fn route(&self, request: &Request<()>) -> Result<OperationTarget, RoutingError> {
         use crate::routing::Router;
         self.router.match_route(request).map_err(RoutingError::from)
     }
@@ -86,7 +85,7 @@ impl MetadataProtocolRouter for RestProtocolRouter {
     fn claim(&self, request: &Request<()>) -> RouteClaim {
         use crate::routing::Router;
         match self.router.match_route(request) {
-            Ok(target) if self.content_types[target.index].admits(request) => RouteClaim::Matched(target),
+            Ok(target) if self.content_types[target.index()].admits(request) => RouteClaim::Matched(target),
             Ok(_) | Err(_) => RouteClaim::NoClaim,
         }
     }
@@ -98,15 +97,15 @@ impl MetadataProtocolRouter for RestProtocolRouter {
 /// `X-Amz-Target` names an operation the service binds.
 
 pub(crate) fn rest_router(
-    targets: &[OperationIndex],
+    targets: &[OperationTarget],
     codec_content_type: &'static str,
 ) -> Result<impl MetadataProtocolRouter + 'static, RouterBuildError> {
     use crate::routing::request_spec::{PathSegment, QuerySegment, RequestSpec};
     let entries = targets
         .iter()
         .map(|target| {
-            let http = target.operation.http().ok_or_else(|| {
-                RouterBuildError::Configuration(format!("missing HTTP trait on {}", target.operation.shape_id()))
+            let http = target.operation().http().ok_or_else(|| {
+                RouterBuildError::Configuration(format!("missing HTTP trait on {}", target.operation().shape_id()))
             })?;
             let method = http
                 .method()
@@ -151,11 +150,10 @@ pub(crate) fn rest_router(
     let content_types = per_target(
         targets,
         || ClaimContentType::Any,
-        |target| ClaimContentType::for_input(target.operation.input(), codec_content_type),
+        |target| ClaimContentType::for_input(target.operation().input(), codec_content_type),
     );
     Ok(RestProtocolRouter {
         router: crate::protocol::rest::router::RestRouter::from_iter(entries),
         content_types,
-        streaming_inputs: super::per_target(targets, || false, super::streams_input),
     })
 }

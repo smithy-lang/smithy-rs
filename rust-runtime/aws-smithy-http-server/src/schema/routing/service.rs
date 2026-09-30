@@ -31,7 +31,7 @@ use std::{
 use tower::Service;
 use super::collect::BodyCollector;
 use super::contract::BodyWant;
-use crate::schema::routing::{BodyRequirement, BodyRouteClaim, ClaimDecoder, CollectedBody, MetadataProtocolRouter, OperationHandlerBinding, OperationIndex, RouteClaim, RouterBuildContext, RouterBuildError, RoutingOptions, SharedProtocolRouter};
+use crate::schema::routing::{BodyRequirement, BodyRouteClaim, ClaimDecoder, CollectedBody, MetadataProtocolRouter, OperationHandlerBinding, OperationTarget, RouteClaim, RouterBuildContext, RouterBuildError, RoutingOptions, SharedProtocolRouter};
 
 pub(super) struct BoundHandler<B> {
     operation: &'static OperationSchema<'static>,
@@ -237,13 +237,13 @@ where
     /// Hands the routed request to its handler, recording the selection for downstream consumers.
     fn handle(
         &self,
-        selected: OperationIndex,
+        selected: OperationTarget,
         protocol: usize,
         mut request: Request<crate::body::RequestBody<B>>,
     ) -> crate::routing::route::SyncRouteFuture<crate::body::RequestBody<B>> {
-        let binding = &self.bindings[selected.index];
+        let binding = &self.bindings[selected.index()];
         debug_assert!(
-            std::ptr::eq(binding.operation, selected.operation),
+            std::ptr::eq(binding.operation, selected.operation()),
             "router index belongs to a different operation"
         );
         request.extensions_mut().insert(SelectedProtocolOperation::new(
@@ -443,7 +443,7 @@ where
     /// Hands a routed request to its handler, replaying anything routing read off the wire.
     fn dispatch_replayed(
         &self,
-        selected: OperationIndex,
+        selected: OperationTarget,
         protocol: usize,
         parts: http::request::Parts,
         source: BodySource<B>,
@@ -613,19 +613,13 @@ where
     }
 }
 
-fn has_streaming_member(operation: &OperationSchema<'_>) -> bool {
-    [operation.input(), operation.output()]
-        .iter()
-        .any(|schema| schema.members().iter().any(|member| member.streaming()))
-}
-
 /// Resolves the registered protocols the service declares, in claim order.
 ///
 /// The order comes from [`ProtocolOrder`] constraints alone, resolved over the **global** set of
 /// registered protocols: a constraint against a protocol the service does not serve still orders
 /// the ones it does, transitively. Registry and declaration order carry no meaning. Errors:
-/// a protocol registered twice, a constraint naming an unregistered protocol, a constraint
-/// cycle, or two served protocols the constraints leave unordered.
+/// a declared protocol without a registration, a protocol registered twice, a constraint naming
+/// an unregistered protocol, a constraint cycle, or two served protocols left unordered.
 fn resolve_protocols(
     service: &'static ServiceSchema<'static>,
     registries: impl IntoIterator<Item = &'static ProtocolRegistry>,
@@ -645,6 +639,21 @@ fn resolve_protocols(
                 protocol: registration.protocol_id().to_string(),
             });
         }
+    }
+
+    // Validate every declaration before invoking any protocol factory or building its router.
+    let missing: Vec<String> = service
+        .protocols()
+        .iter()
+        .filter(|protocol| {
+            !registrations
+                .iter()
+                .any(|registration| registration.protocol_id() == protocol.as_str())
+        })
+        .map(|protocol| protocol.to_string())
+        .collect();
+    if !missing.is_empty() {
+        return Err(RouterBuildError::MissingProtocols { protocols: missing });
     }
 
     // Reachability over the global constraint graph, absent protocols included as transit nodes.
@@ -775,16 +784,13 @@ impl<B> MultiProtocolRoutingService<B> {
         let targets: Vec<_> = bindings
             .iter()
             .enumerate()
-            .map(|(index, binding)| OperationIndex {
-                index,
-                operation: binding.operation,
-            })
+            .map(|(index, binding)| OperationTarget::new(index, binding.operation))
             .collect();
         // A body-routed protocol may buffer the body to select, so it never sees a streaming
         // operation. Streaming-input recognition defers it until metadata routers have passed.
         let non_streaming: Vec<_> = targets
             .iter()
-            .filter(|target| !has_streaming_member(target.operation))
+            .filter(|target| !target.has_streaming_input() && !target.has_streaming_output())
             .copied()
             .collect();
         // `resolved` is already in claim order; build each protocol's router in place. The
@@ -805,10 +811,7 @@ impl<B> MultiProtocolRoutingService<B> {
         }
         // Whether recognition is needed comes from the service schema. Each metadata
         // router owns recognition of the streaming operations its protocol supports.
-        let has_streaming_inputs = service
-            .operations()
-            .iter()
-            .any(|operation| operation.input().members().iter().any(|member| member.streaming()));
+        let has_streaming_inputs = targets.iter().any(|target| target.has_streaming_input());
         let streaming_recognizers = protocols
             .iter()
             .enumerate()

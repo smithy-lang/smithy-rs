@@ -10,7 +10,7 @@ use aws_smithy_schema::{shape_id, Schema, ShapeId};
 use crate::body::BoxBody;
 use crate::protocol::rest_json_1::rejection::RequestRejection;
 use crate::protocol::rest_json_1::runtime_error::RuntimeError;
-use crate::protocol::rest_json_1::{RestJson1, RestJson1Protocol};
+use crate::protocol::rest_json_1::RestJson1;
 use crate::response::{IntoResponse, Response};
 use crate::schema::{DeserializeError, HttpModeledError};
 
@@ -20,6 +20,31 @@ use super::response::{
 };
 use super::rest::RestPolicy;
 use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerProtocol, ServerRequest};
+
+/// Stateful schema-driven restJson1 protocol implementation.
+#[derive(Debug)]
+pub struct RestJson1Protocol {
+    pub(crate) inner: crate::schema::protocol::rest::RestProtocol<aws_smithy_json::codec::JsonCodec>,
+}
+
+impl Default for RestJson1Protocol {
+    fn default() -> Self {
+        Self {
+            inner: crate::schema::protocol::rest::RestProtocol::new(
+                aws_smithy_json::codec::JsonCodec::new(
+                    aws_smithy_json::codec::JsonCodecSettings::builder()
+                        .use_json_name(true)
+                        .default_timestamp_format(aws_smithy_types::date_time::Format::EpochSeconds)
+                        .enforce_strictness(true)
+                        .allow_integral_float_numbers(true)
+                        .strict_timestamp_formats(true)
+                        .build(),
+                ),
+                crate::schema::protocol::rest_json_1::POLICY,
+            ),
+        }
+    }
+}
 
 static PROTOCOL_ID: ShapeId<'static> = shape_id!("aws.protocols", "restJson1");
 const CONTENT_TYPE: &str = "application/json";

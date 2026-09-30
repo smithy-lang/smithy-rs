@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_http_server::protocol::rest_json_1::RestJson1Protocol;
-use aws_smithy_http_server::protocol::rest_xml::RestXmlProtocol;
+use aws_smithy_http_server::schema::protocol::RestJson1Protocol;
+use aws_smithy_http_server::schema::protocol::RestXmlProtocol;
 use aws_smithy_http_server::response::Response;
 use aws_smithy_http_server::schema::ServerProtocol;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};

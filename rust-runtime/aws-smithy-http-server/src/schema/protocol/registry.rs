@@ -189,22 +189,22 @@ impl ProtocolRegistry {
     /// The built-in protocols: rpcv2Cbor, awsJson1.0, awsJson1.1, restJson1 and restXml,
     /// chained into a fixed relative claim order by explicit constraints.
     pub const BUILTIN: ProtocolRegistry = ProtocolRegistry::new(&[
-        ProtocolRegistration::metadata_routed::<crate::protocol::rpc_v2_cbor::RpcV2CborProtocol>(
+        ProtocolRegistration::metadata_routed::<crate::schema::protocol::RpcV2CborProtocol>(
             "smithy.protocols#rpcv2Cbor",
         ),
-        ProtocolRegistration::metadata_routed::<crate::protocol::aws_json_10::AwsJson1_0Protocol>(
+        ProtocolRegistration::metadata_routed::<crate::schema::protocol::AwsJson1_0Protocol>(
             "aws.protocols#awsJson1_0",
         )
         .with_order(&[ProtocolOrder::After("smithy.protocols#rpcv2Cbor")]),
-        ProtocolRegistration::metadata_routed::<crate::protocol::aws_json_11::AwsJson1_1Protocol>(
+        ProtocolRegistration::metadata_routed::<crate::schema::protocol::AwsJson1_1Protocol>(
             "aws.protocols#awsJson1_1",
         )
         .with_order(&[ProtocolOrder::After("aws.protocols#awsJson1_0")]),
-        ProtocolRegistration::metadata_routed::<crate::protocol::rest_json_1::RestJson1Protocol>(
+        ProtocolRegistration::metadata_routed::<crate::schema::protocol::RestJson1Protocol>(
             "aws.protocols#restJson1",
         )
         .with_order(&[ProtocolOrder::After("aws.protocols#awsJson1_1")]),
-        ProtocolRegistration::metadata_routed::<crate::protocol::rest_xml::RestXmlProtocol>(
+        ProtocolRegistration::metadata_routed::<crate::schema::protocol::RestXmlProtocol>(
             "aws.protocols#restXml",
         )
         .with_order(&[ProtocolOrder::After("aws.protocols#restJson1")]),
@@ -302,7 +302,7 @@ mod tests {
 
     #[test]
     fn a_mismatched_protocol_id_is_an_error() {
-        let registration = ProtocolRegistration::metadata_routed::<crate::protocol::rest_xml::RestXmlProtocol>(
+        let registration = ProtocolRegistration::metadata_routed::<crate::schema::protocol::RestXmlProtocol>(
             "aws.protocols#restJson1",
         );
         let err = registration

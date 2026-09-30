@@ -1132,8 +1132,8 @@ where
 mod tests {
     use super::*;
     use aws_smithy_http::event_stream::Receiver;
-    use crate::protocol::rest_json_1::RestJson1Protocol;
-    use crate::protocol::rpc_v2_cbor::RpcV2CborProtocol;
+    use crate::schema::protocol::RestJson1Protocol;
+    use crate::schema::protocol::RpcV2CborProtocol;
     use aws_smithy_schema::ShapeId;
 
     fn json_protocol() -> SharedServerProtocol {
@@ -1755,7 +1755,7 @@ mod tests {
                 b"\xbf\x64data\x62hi\xff".as_slice(),
             ),
             (
-                SharedServerProtocol::metadata_routed(crate::protocol::rest_xml::RestXmlProtocol::default()),
+                SharedServerProtocol::metadata_routed(crate::schema::protocol::RestXmlProtocol::default()),
                 "application/xml",
                 br#"<WireEvent xmlns="urn:test"><WireData>hi</WireData></WireEvent>"#.as_slice(),
             ),

@@ -9,13 +9,12 @@ use crate::schema::routing::RoutingError;
 use http::Request;
 
 use super::content_type_is;
-use crate::schema::routing::{OperationIndex, MetadataProtocolRouter, RouteClaim, RouterBuildContext, RouterBuildError};
+use crate::schema::routing::{OperationTarget, MetadataProtocolRouter, RouteClaim, RouterBuildContext, RouterBuildError};
 
 #[derive(Debug)]
 struct AwsJsonProtocolRouter {
-    router: crate::protocol::aws_json::router::AwsJsonRouter<OperationIndex>,
+    router: crate::protocol::aws_json::router::AwsJsonRouter<OperationTarget>,
     content_type: &'static str,
-    streaming_inputs: Vec<bool>,
 }
 impl MetadataProtocolRouter for AwsJsonProtocolRouter {
     fn recognizes_streaming_input(&self, request: &Request<()>) -> bool {
@@ -25,10 +24,10 @@ impl MetadataProtocolRouter for AwsJsonProtocolRouter {
             && self
                 .router
                 .match_target(request)
-                .is_some_and(|target| self.streaming_inputs[target.index])
+                .is_some_and(|target| target.has_streaming_input())
     }
 
-    fn route(&self, request: &Request<()>) -> Result<OperationIndex, RoutingError> {
+    fn route(&self, request: &Request<()>) -> Result<OperationTarget, RoutingError> {
         use crate::routing::Router;
         self.router.match_route(request).map_err(RoutingError::from)
     }
@@ -58,12 +57,11 @@ pub fn aws_json_router(
     content_type: &'static str,
 ) -> Result<impl MetadataProtocolRouter + 'static, RouterBuildError> {
     let entries = ctx.targets.iter().map(|target| {
-        let name = target.operation.shape_id().shape_name();
+        let name = target.operation().shape_id().shape_name();
         (format!("{}.{}", ctx.service.shape_id().shape_name(), name), *target)
     });
     Ok(AwsJsonProtocolRouter {
         router: crate::protocol::aws_json::router::AwsJsonRouter::from_owned(entries),
         content_type,
-        streaming_inputs: super::per_target(ctx.targets, || false, super::streams_input),
     })
 }
