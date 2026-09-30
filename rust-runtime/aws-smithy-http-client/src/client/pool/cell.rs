@@ -2755,6 +2755,130 @@ mod loom_tests {
         });
     }
 
+    /// Races a reusable HTTP/1 return that serves a waiter with close of the
+    /// same connection.
+    ///
+    /// `h1_return_linearizes_against_close` races a return with no waiter, so
+    /// only `return_idle` contends. This model registers a compatible waiter, so
+    /// the return takes the serve-a-waiter branch and `begin_close` contends with
+    /// `commit_return_to_waiter` and `offer_returned_h1` instead.
+    ///
+    /// Both orders are legal. Delivering a closing connection's sender to a
+    /// waiter is intended, not prevented: `commit_return_to_waiter` leaves the
+    /// record `Selected` and `begin_close` then marks the externally owned record
+    /// `Closing`, and dispatch re-checks logical close through
+    /// `ConnectionState::try_commit_dispatch` before handing the request to
+    /// Hyper. What must hold in both orders is that the waiter always has an
+    /// outcome, that the sender is accounted for exactly once, that a closed
+    /// connection's sender never becomes reusable, and that the recorded close
+    /// reason is the requested one.
+    #[test]
+    fn h1_return_to_waiter_linearizes_against_close() {
+        // Schedule counters live outside the modeled program, so they are plain
+        // std atomics rather than the loom-instrumented ones. Both winners must
+        // actually occur; a model that only ever explores one of them would pass
+        // for the wrong reason.
+        static DELIVERED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        static REJECTED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+        loom::model(|| {
+            let cell = unbounded_cell();
+            let (connection, _physical) = ConnectionState::unbounded(connection_info(1));
+            let selection =
+                OriginCell::insert_selected_h1(&cell, connection.clone(), H1Sender::test(11));
+            let waiter = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+            let close = H1CloseHandle::new(&cell, &connection);
+
+            let returning = loom::thread::spawn(move || drop(selection));
+            let closing = loom::thread::spawn(move || close.close(CloseReason::Poisoned));
+            returning.join().unwrap();
+            assert!(
+                closing.join().unwrap(),
+                "a rejected HTTP/1 return closed the connection instead of the close signal"
+            );
+            assert_eq!(
+                Some(CloseReason::Poisoned),
+                connection.probe().close_reason,
+                "the HTTP/1 return overwrote the requested close reason"
+            );
+            assert!(
+                cell.h1_idle_sender_ids().is_empty(),
+                "a closed connection's HTTP/1 sender became reusable"
+            );
+
+            match cell
+                .take_ready_event(waiter)
+                .expect("return/close race stranded the HTTP/1 waiter")
+            {
+                // The return committed before `begin_close` marked the record,
+                // so the waiter owns the sender of a connection that closed
+                // immediately afterwards. The record must stay installed until
+                // that external owner comes back.
+                AcquisitionStep::Resolved(AcquisitionOutcome::H1(delivered)) => {
+                    DELIVERED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    assert_eq!(11, delivered.test_sender_id());
+                    assert!(delivered.is_reused());
+                    assert_eq!(ConnectionId::new(1), delivered.connection_id());
+                    assert!(
+                        ConnectionState::try_commit_dispatch(delivered.connection()).is_none(),
+                        "a closed connection accepted a dispatch from the waiter it served"
+                    );
+                    assert_eq!(
+                        (1, 0),
+                        cell.h1_counts(),
+                        "the closing record was removed while a waiter still owned its sender"
+                    );
+                    drop(delivered);
+                }
+                // Close marked the record first, so the return was rejected and
+                // the sender was destroyed with its record. The waiter keeps its
+                // establishment turn and retries on a new connection.
+                AcquisitionStep::StartEstablishment(permit) => {
+                    REJECTED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    assert_eq!(
+                        (0, 0),
+                        cell.h1_counts(),
+                        "a closed HTTP/1 record outlived its rejected return"
+                    );
+                    assert!(
+                        OriginCell::cancel_waiter(&cell, waiter),
+                        "the retrying waiter disappeared after close won"
+                    );
+                    drop(permit);
+                }
+                AcquisitionStep::Resolved(AcquisitionOutcome::Failed(error)) => {
+                    panic!("unexpected establishment failure: {error}")
+                }
+                AcquisitionStep::Resolved(AcquisitionOutcome::RetryAcquisition) => {
+                    panic!("HTTP/1 return/close race requested reacquisition")
+                }
+                AcquisitionStep::Resolved(AcquisitionOutcome::H2(_)) => {
+                    panic!("HTTP/1 return/close race produced an HTTP/2 activation")
+                }
+            }
+
+            assert_eq!(
+                (0, 0),
+                cell.h1_counts(),
+                "a closed HTTP/1 record survived its sender"
+            );
+            assert!(
+                OriginCell::select_h1(&cell).is_none(),
+                "a closed connection's HTTP/1 sender remained selectable"
+            );
+            assert_eq!(0, cell.probe().retained);
+        });
+
+        assert!(
+            DELIVERED.load(std::sync::atomic::Ordering::Relaxed) > 0,
+            "no explored schedule let the return serve the waiter before close"
+        );
+        assert!(
+            REJECTED.load(std::sync::atomic::Ordering::Relaxed) > 0,
+            "no explored schedule let close reject the return"
+        );
+    }
+
     /// Races an idle return with completion of an already-started establishment.
     ///
     /// Exactly one result satisfies the waiter and the losing sender remains reusable.
