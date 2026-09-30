@@ -51,3 +51,12 @@ pub use aws_json::aws_json_router;
 pub(crate) use rest::rest_router;
 pub(crate) use rpc_v2_cbor::rpc_v2_cbor_router;
 
+/// Input-only streaming classification, computed when routing tables are built.
+fn streams_input(target: OperationIndex) -> bool {
+    target
+        .operation
+        .input()
+        .members()
+        .iter()
+        .any(|member| member.streaming())
+}

@@ -146,6 +146,15 @@ pub trait MetadataProtocolRouter: Send + Sync + fmt::Debug {
 
     /// Decides whether the request is this protocol's when the service serves several protocols.
     fn claim(&self, request: &Request<()>) -> RouteClaim;
+
+    /// Recognizes a potentially streaming input using only the request head. Output-only
+    /// streaming does not qualify. This must perform no body I/O or request-head mutation.
+    /// This advisory check delays body claimants; it neither claims nor rejects the request.
+    /// The service consults it only when its schema declares a streaming input. Routers
+    /// recognize only streaming operations they support; the default recognizes none.
+    fn recognizes_streaming_input(&self, _request: &Request<()>) -> bool {
+        false
+    }
 }
 
 /// The router's view of the body bytes the routing service collected for one
@@ -293,9 +302,9 @@ pub enum BodyRouteClaim {
 /// A body-routed protocol serves no streaming operation: the routing service builds its router
 /// without them, a body-routed protocol cannot express event-stream framing at all (the
 /// [`BodyRoutedProtocol`](crate::schema::BodyRoutedProtocol) subtrait has no such method), and
-/// the service never asks this router to claim a request whose head declares an event-stream
-/// body — such a request is never this protocol's, and its body may not arrive before the
-/// handler responds.
+/// metadata routers can recognize streaming inputs from the head. The service defers body
+/// routers for these requests until every metadata router declines. Recognition is advisory:
+/// deferred routers may still collect the body during fallback.
 ///
 /// Rejections are the standard [`RoutingError`], exactly as on [`MetadataProtocolRouter`]. When this
 /// is the service's only protocol the same claim path runs, with a final

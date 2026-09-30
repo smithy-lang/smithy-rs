@@ -22,19 +22,6 @@ use super::ServerRequest;
 /// The `Content-Type` of event stream requests and responses.
 pub(super) const EVENT_STREAM_CONTENT_TYPE: &str = "application/vnd.amazon.eventstream";
 
-/// `true` when the request head declares an event-stream body.
-///
-/// Smithy's HTTP bindings require event-stream request bodies to be sent as
-/// `application/vnd.amazon.eventstream`, so the head alone identifies them. Parameters and
-/// ASCII case on the media type are ignored.
-pub(crate) fn is_event_stream_content_type(headers: &http::HeaderMap) -> bool {
-    headers
-        .get(http::header::CONTENT_TYPE)
-        .and_then(|value| value.to_str().ok())
-        .map(|value| value.split(';').next().unwrap_or_default().trim())
-        .is_some_and(|media_type| media_type.eq_ignore_ascii_case(EVENT_STREAM_CONTENT_TYPE))
-}
-
 /// The response `Content-Type` of a streaming blob without `@mediaType`.
 pub(super) const OCTET_STREAM_CONTENT_TYPE: &str = "application/octet-stream";
 

@@ -1325,54 +1325,297 @@ mod multi_protocol {
         )))
     }
 
-    /// An event-stream request is never a body-routed protocol's to claim: such protocols
-    /// serve no streaming operation, and waiting on its body could stall the walk on frames
-    /// the client withholds until the handler responds. The walk skips them without touching
-    /// the body — even though this body's first line would otherwise match.
+    static STREAM_MEMBER: Schema<'static> =
+        Schema::new_member(shape_id!("test", "Streaming", "events"), ShapeType::Union, "events", 0)
+            .with_streaming()
+            .with_http_payload();
+    static STREAM_INPUT: Schema<'static> =
+        Schema::new_struct(shape_id!("test", "Streaming"), ShapeType::Structure, &[&STREAM_MEMBER])
+            .with_http(HttpTrait::new("POST", "/stream", Some(200)));
+    static STREAM_OP: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &STREAM_INPUT, &UNIT, &[]);
+    static OUTPUT_OP: OperationSchema<'static> =
+        OperationSchema::new(shape_id!("test", "output"), &SECOND_IN, &STREAM_INPUT, &[]);
+    static STREAM_SERVICE: ServiceSchema<'static> = ServiceSchema::new(
+        SERVICE_ID,
+        None,
+        &[
+            shape_id!("test", "bodyRouting"),
+            shape_id!("aws.protocols", "awsJson1_1"),
+        ],
+        &[&STREAM_OP, &SECOND_OP, &OUTPUT_OP],
+    );
+
+    fn streaming_app() -> MultiProtocolRoutingService {
+        static BEFORE: &[ProtocolOrder] = &[ProtocolOrder::Before("aws.protocols#awsJson1_1")];
+        MultiProtocolRoutingService::from_operation_handler_bindings(
+            &STREAM_SERVICE,
+            [body_routing(BEFORE)],
+            STREAM_SERVICE.operations().iter().map(|operation| {
+                OperationHandlerBinding::new(
+                    operation,
+                    SyncRoute::new(tower::service_fn(move |request: Request<Body>| async move {
+                        let selected = request.extensions().get::<SelectedProtocolOperation>().unwrap().clone();
+                        let bytes = if operation.input().members().iter().any(|member| member.streaming()) {
+                            Bytes::new()
+                        } else {
+                            request.into_body().collect().await.unwrap().to_bytes()
+                        };
+                        Ok::<_, Infallible>(Response::new(crate::body::from_bytes(
+                            format!(
+                                "{} {} {}",
+                                selected.protocol().protocol_id().as_str(),
+                                operation.shape_id().shape_name(),
+                                String::from_utf8_lossy(&bytes)
+                            )
+                            .into(),
+                        )))
+                    })),
+                )
+            }),
+        )
+        .unwrap()
+    }
+
     #[tokio::test]
-    async fn event_stream_requests_skip_body_routed_protocols() {
-        static FIRST: &[ProtocolOrder] = &[ProtocolOrder::Before("aws.protocols#restJson1")];
-        let app = app(&WITH_BODY_ROUTING, [body_routing(FIRST)]);
+    async fn aws_json_streaming_input_defers_body_claimants_without_polling() {
+        let app = streaming_app();
+        assert_eq!(app.inner.streaming_recognizers.as_ref(), &[1]);
         let response = app
             .oneshot(
-                post("/first")
-                    .header("content-type", "application/vnd.amazon.eventstream")
+                post("/")
+                    .header("content-type", "application/x-amz-json-1.1; charset=UTF-8")
+                    .header("x-amz-target", "Service.first")
                     .body(untouchable_body())
                     .unwrap(),
             )
             .await
             .unwrap();
-        // restJson1 does not derive this content type for `/first` either, so the request
-        // falls through to the service-level unclaimed response — never to the body router.
-        assert_eq!(response.status(), StatusCode::NOT_FOUND);
         assert_eq!(
             response.into_body().collect().await.unwrap().to_bytes(),
-            "<UnknownOperationException/>\n"
+            "aws.protocols#awsJson1_1 first "
         );
-        // The skip also protects a single-protocol body-routed service, which frames the
-        // fall-through as its own rejection.
-        let single = MultiProtocolRoutingService::from_operation_handler_bindings(
-            &super::SERVICE,
-            [registry()],
-            [binding(&super::SECOND), binding(&super::FIRST)],
-        )
-        .unwrap();
-        let response = single
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri("/")
-                    .header("content-type", "application/vnd.amazon.eventstream; charset=UTF-8")
-                    .body(untouchable_body())
-                    .unwrap(),
+    }
+
+    #[tokio::test]
+    async fn media_type_alone_does_not_defer_body_claimants() {
+        static BEFORE: &[ProtocolOrder] = &[ProtocolOrder::Before("aws.protocols#restJson1")];
+        let app = app(&WITH_BODY_ROUTING, [body_routing(BEFORE)]);
+        assert!(app.inner.streaming_recognizers.is_empty());
+        assert_eq!(
+            send(
+                &app,
+                post("/first").header("content-type", "application/vnd.amazon.eventstream"),
+                "second\npayload"
             )
             .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::NOT_FOUND);
-        assert!(
-            response.headers().contains_key("x-amzn-errortype"),
-            "protocol-framed, not the unclaimed fallback"
+            .1,
+            "test#bodyRouting second second\npayload"
         );
+    }
+
+    #[tokio::test]
+    async fn ordinary_and_output_only_streaming_requests_keep_body_precedence() {
+        let app = streaming_app();
+        for target in ["Service.second", "Service.output", "Service.unknown"] {
+            assert_eq!(
+                send(
+                    &app,
+                    post("/")
+                        .header("content-type", "application/x-amz-json-1.1")
+                        .header("x-amz-target", target),
+                    "second\npayload"
+                )
+                .await,
+                (StatusCode::OK, "test#bodyRouting second second\npayload".into())
+            );
+        }
+        // The target alone does not identify awsJson; method, path and content type matter.
+        for builder in [
+            Request::builder().method("GET").uri("/"),
+            post("/other"),
+            post("/").header("content-type", "application/json"),
+        ] {
+            assert_eq!(
+                send(&app, builder.header("x-amz-target", "Service.first"), "second\npayload")
+                    .await
+                    .1,
+                "test#bodyRouting second second\npayload"
+            );
+        }
+    }
+
+    #[test]
+    fn built_in_recognizers_use_input_routes_and_protocol_identification() {
+        static ALL: ServiceSchema<'static> = ServiceSchema::new(
+            SERVICE_ID,
+            None,
+            &[
+                shape_id!("aws.protocols", "restJson1"),
+                shape_id!("aws.protocols", "restXml"),
+                shape_id!("aws.protocols", "awsJson1_0"),
+                shape_id!("aws.protocols", "awsJson1_1"),
+                shape_id!("smithy.protocols", "rpcv2Cbor"),
+            ],
+            &[&STREAM_OP, &SECOND_OP],
+        );
+        let all_app = app(&ALL, []);
+        assert_eq!(all_app.inner.streaming_recognizers.len(), 5);
+        for route in all_app.inner.protocols.iter() {
+            let SharedProtocolRouter::Metadata(router) = &route.router else {
+                unreachable!()
+            };
+            let builder = match route.protocol.protocol_id().as_str() {
+                "aws.protocols#restJson1" | "aws.protocols#restXml" => {
+                    post("/stream").header("content-type", "application/vnd.amazon.eventstream")
+                }
+                "aws.protocols#awsJson1_0" => post("/")
+                    .header("content-type", "application/x-amz-json-1.0")
+                    .header("x-amz-target", "Service.first"),
+                "aws.protocols#awsJson1_1" => post("/")
+                    .header("content-type", "application/x-amz-json-1.1")
+                    .header("x-amz-target", "Service.first"),
+                "smithy.protocols#rpcv2Cbor" => {
+                    post("/service/Service/operation/first").header("smithy-protocol", "rpc-v2-cbor")
+                }
+                _ => unreachable!(),
+            };
+            assert!(router.recognizes_streaming_input(&builder.body(()).unwrap()));
+            assert!(!router.recognizes_streaming_input(&post("/second").body(()).unwrap()));
+        }
+        static OUTPUT_ONLY: ServiceSchema<'static> = ServiceSchema::new(
+            SERVICE_ID,
+            None,
+            &[shape_id!("aws.protocols", "awsJson1_1")],
+            &[&OUTPUT_OP],
+        );
+        let output = app(&OUTPUT_ONLY, []);
+        assert!(output.inner.streaming_recognizers.is_empty());
+    }
+
+    #[derive(Debug)]
+    struct AdvisoryRouter {
+        checks: Arc<std::sync::atomic::AtomicUsize>,
+        claims: Arc<std::sync::atomic::AtomicUsize>,
+        reject: bool,
+        streaming: bool,
+    }
+    impl MetadataProtocolRouter for AdvisoryRouter {
+        fn route(&self, _: &Request<()>) -> Result<OperationIndex, RoutingError> {
+            unreachable!()
+        }
+        fn recognizes_streaming_input(&self, _: &Request<()>) -> bool {
+            self.checks.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.streaming
+        }
+        fn claim(&self, _: &Request<()>) -> RouteClaim {
+            self.claims.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if self.reject {
+                RouteClaim::Rejected(RoutingError::unknown_operation())
+            } else {
+                RouteClaim::NoClaim
+            }
+        }
+    }
+    #[derive(Debug)]
+    struct TrackedBodyRouter {
+        router: BodyRouter,
+        calls: Arc<std::sync::Mutex<Vec<usize>>>,
+        index: usize,
+    }
+    impl BodyProtocolRouter for TrackedBodyRouter {
+        fn claim(&self, request: &Request<()>) -> BodyRouteClaim {
+            self.calls.lock().unwrap().push(self.index);
+            self.router.claim(request)
+        }
+        fn claim_with_body(&self, request: &Request<CollectedBody>) -> BodyRouteClaim {
+            self.router.claim_with_body(request)
+        }
+        fn route_with_body(&self, request: &Request<CollectedBody>) -> Result<OperationIndex, RoutingError> {
+            self.router.route_with_body(request)
+        }
+    }
+    fn advisory_app(
+        reject: bool,
+        streaming: bool,
+    ) -> (
+        MultiProtocolRoutingService,
+        Arc<std::sync::atomic::AtomicUsize>,
+        Arc<std::sync::atomic::AtomicUsize>,
+        Arc<std::sync::Mutex<Vec<usize>>>,
+    ) {
+        let mut app = streaming_app();
+        let checks = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let claims = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let calls = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut routes = app.inner.protocols.to_vec();
+        routes[1].router = SharedProtocolRouter::new(AdvisoryRouter {
+            checks: checks.clone(),
+            claims: claims.clone(),
+            reject,
+            streaming,
+        });
+        let mut second_body = routes[0].clone();
+        for (index, route) in [(0, &mut routes[0]), (2, &mut second_body)] {
+            route.router = SharedProtocolRouter::new_body_routed(TrackedBodyRouter {
+                router: BodyRouter {
+                    targets: if index == 0 {
+                        vec![]
+                    } else {
+                        vec![OperationIndex {
+                            index: 1,
+                            operation: &SECOND_OP,
+                        }]
+                    },
+                },
+                calls: calls.clone(),
+                index,
+            });
+        }
+        routes.push(second_body);
+        app.inner.protocols = routes.into();
+        app.inner.body_routers = vec![0, 2].into();
+        (app, checks, claims, calls)
+    }
+
+    #[tokio::test]
+    async fn normal_and_deferred_walks_preserve_order_replay_and_cached_recognition_across_suspension() {
+        for streaming in [true, false] {
+            let (app, checks, claims, calls) = advisory_app(false, streaming);
+            let mut pending_once = true;
+            let mut frames = vec![b"ond\npayload".as_slice(), b"sec".as_slice()];
+            let body = Body::new(http_body_util::StreamBody::new(futures_util::stream::poll_fn(
+                move |cx| {
+                    if pending_once {
+                        pending_once = false;
+                        cx.waker().wake_by_ref();
+                        return Poll::Pending;
+                    }
+                    Poll::Ready(
+                        frames
+                            .pop()
+                            .map(|bytes| Ok::<_, Error>(Frame::data(Bytes::copy_from_slice(bytes)))),
+                    )
+                },
+            )));
+            let response = app.oneshot(post("/").body(body).unwrap()).await.unwrap();
+            assert_eq!(
+                response.into_body().collect().await.unwrap().to_bytes(),
+                "test#bodyRouting second second\npayload"
+            );
+            assert_eq!(*calls.lock().unwrap(), vec![0, 2]);
+            assert_eq!(checks.load(std::sync::atomic::Ordering::SeqCst), 1);
+            assert_eq!(claims.load(std::sync::atomic::Ordering::SeqCst), 1);
+        }
+    }
+
+    #[tokio::test]
+    async fn metadata_rejection_bypasses_deferred_body_fallback() {
+        let (app, checks, claims, calls) = advisory_app(true, true);
+        let response = app.oneshot(post("/").body(untouchable_body()).unwrap()).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert!(calls.lock().unwrap().is_empty());
+        assert_eq!(checks.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(claims.load(std::sync::atomic::Ordering::SeqCst), 1);
     }
 
     /// A magic-number sniff reads a bounded prefix. On a match the handler replays the whole

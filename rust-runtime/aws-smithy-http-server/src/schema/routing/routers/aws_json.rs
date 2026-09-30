@@ -15,8 +15,19 @@ use crate::schema::routing::{OperationIndex, MetadataProtocolRouter, RouteClaim,
 struct AwsJsonProtocolRouter {
     router: crate::protocol::aws_json::router::AwsJsonRouter<OperationIndex>,
     content_type: &'static str,
+    streaming_inputs: Vec<bool>,
 }
 impl MetadataProtocolRouter for AwsJsonProtocolRouter {
+    fn recognizes_streaming_input(&self, request: &Request<()>) -> bool {
+        request.method() == http::Method::POST
+            && request.uri().path() == "/"
+            && content_type_is(request, self.content_type)
+            && self
+                .router
+                .match_target(request)
+                .is_some_and(|target| self.streaming_inputs[target.index])
+    }
+
     fn route(&self, request: &Request<()>) -> Result<OperationIndex, RoutingError> {
         use crate::routing::Router;
         self.router.match_route(request).map_err(RoutingError::from)
@@ -53,6 +64,6 @@ pub fn aws_json_router(
     Ok(AwsJsonProtocolRouter {
         router: crate::protocol::aws_json::router::AwsJsonRouter::from_owned(entries),
         content_type,
+        streaming_inputs: super::per_target(ctx.targets, || false, super::streams_input),
     })
 }
-

@@ -68,8 +68,16 @@ struct RestProtocolRouter {
     router: crate::protocol::rest::router::RestRouter<OperationIndex>,
     /// Indexed by [`OperationIndex::index`].
     content_types: Vec<ClaimContentType>,
+    streaming_inputs: Vec<bool>,
 }
 impl MetadataProtocolRouter for RestProtocolRouter {
+    fn recognizes_streaming_input(&self, request: &Request<()>) -> bool {
+        use crate::routing::Router;
+        self.router
+            .match_route(request)
+            .is_ok_and(|target| self.streaming_inputs[target.index] && self.content_types[target.index].admits(request))
+    }
+
     fn route(&self, request: &Request<()>) -> Result<OperationIndex, RoutingError> {
         use crate::routing::Router;
         self.router.match_route(request).map_err(RoutingError::from)
@@ -148,5 +156,6 @@ pub(crate) fn rest_router(
     Ok(RestProtocolRouter {
         router: crate::protocol::rest::router::RestRouter::from_iter(entries),
         content_types,
+        streaming_inputs: super::per_target(targets, || false, super::streams_input),
     })
 }

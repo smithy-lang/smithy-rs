@@ -9,7 +9,11 @@
 //! [`MetadataProtocolRouter::route`]. Otherwise the protocols are asked in priority order to claim each
 //! request — from the head alone; a body-routed protocol escalates by returning a
 //! [`BodyRequirement`] the service satisfies — and the request dispatches to the first that
-//! claims it. A request no protocol claims is answered the way Coral answers one: `404` with
+//! claims it. At the first body-router boundary, a head-only check against preselected metadata
+//! routers recognizes potential streaming inputs. For these requests body routers are deferred
+//! until every metadata router declines, then visited once in their original order. Recognition
+//! is advisory: fallback may still collect the body. Other requests retain canonical claim order.
+//! A request no protocol claims is answered the way Coral answers one: `404` with
 //! the XML body `<UnknownOperationException/>`.
 
 mod collect;

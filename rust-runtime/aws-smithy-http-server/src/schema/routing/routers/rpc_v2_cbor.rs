@@ -22,6 +22,7 @@ struct RpcV2CborProtocolRouter {
     router: crate::protocol::rpc_v2_cbor::router::RpcV2CborRouter<OperationIndex>,
     /// Indexed by [`OperationIndex::index`].
     streams_blobs: Vec<bool>,
+    streaming_inputs: Vec<bool>,
 }
 impl RpcV2CborProtocolRouter {
     fn unsupported(&self, target: OperationIndex) -> bool {
@@ -29,6 +30,19 @@ impl RpcV2CborProtocolRouter {
     }
 }
 impl MetadataProtocolRouter for RpcV2CborProtocolRouter {
+    fn recognizes_streaming_input(&self, request: &Request<()>) -> bool {
+        use crate::routing::Router;
+        request.method() == http::Method::POST
+            && request
+                .headers()
+                .get("smithy-protocol")
+                .is_some_and(|value| value.as_bytes() == b"rpc-v2-cbor")
+            && self
+                .router
+                .match_route(request)
+                .is_ok_and(|target| self.streaming_inputs[target.index] && !self.unsupported(target))
+    }
+
     fn route(&self, request: &Request<()>) -> Result<OperationIndex, RoutingError> {
         use crate::routing::Router;
         match self.router.match_route(request) {
@@ -98,7 +112,11 @@ pub(crate) fn rpc_v2_cbor_router(
     );
     Ok(RpcV2CborProtocolRouter {
         router: crate::protocol::rpc_v2_cbor::router::RpcV2CborRouter::from_owned(entries),
+        streaming_inputs: super::per_target(
+            ctx.targets,
+            || false,
+            |target| super::streams_input(target) && !streams_blobs[target.index],
+        ),
         streams_blobs,
     })
 }
-

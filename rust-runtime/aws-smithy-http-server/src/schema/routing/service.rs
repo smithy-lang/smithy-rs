@@ -71,6 +71,8 @@ pub(super) struct Dispatch<B> {
     /// [`MetadataProtocolRouter::route`]; several claim with [`MetadataProtocolRouter::claim`].
     pub(super) protocols: Arc<[ProtocolRoute]>,
     pub(super) bindings: Arc<[BoundHandler<B>]>,
+    pub(super) streaming_recognizers: Arc<[usize]>,
+    pub(super) body_routers: Arc<[usize]>,
     /// The provisional allowance the service collects under for body-first routing.
     pub(super) routing_body: RequestBodyCollectionConfig,
 }
@@ -79,6 +81,8 @@ impl<B> Clone for Dispatch<B> {
         Self {
             protocols: self.protocols.clone(),
             bindings: self.bindings.clone(),
+            streaming_recognizers: self.streaming_recognizers.clone(),
+            body_routers: self.body_routers.clone(),
             routing_body: self.routing_body,
         }
     }
@@ -258,7 +262,7 @@ where
             }] => self.route(router, request),
             _ => {
                 let (parts, body) = request.into_parts();
-                self.walk(parts, BodySource::Untouched(body), 0)
+                self.walk(parts, BodySource::Untouched(body), ClaimWalk::default())
             }
         };
         MultiProtocolRoutingFuture { inner: state }
@@ -283,18 +287,29 @@ where
         }
     }
 
-    /// Asks each protocol from `start` in priority order to claim the request and dispatches to
-    /// the first that does. Every claim starts from the head; a body-routed router escalates by
-    /// returning a [`BodyRequirement`], which suspends the walk while the service satisfies it.
-    /// Requests whose head declares an event-stream body skip body-routed protocols entirely:
-    /// such protocols serve no streaming operation (their routers are built without them), and
-    /// waiting on event-stream bytes could stall the walk on frames the client withholds until
-    /// the handler responds.
-    fn walk(&self, parts: http::request::Parts, source: BodySource<B>, start: usize) -> State<B> {
+    /// Walks canonical order, deferring body routers for recognized streaming inputs.
+    /// After metadata fall-through, deferred routers run once in their original order.
+    fn walk(&self, parts: http::request::Parts, source: BodySource<B>, mut cursor: ClaimWalk) -> State<B> {
         let probe = Request::from_parts(parts, ());
-        let event_stream = crate::schema::protocol::request::is_event_stream_content_type(probe.headers());
-        for (index, protocol) in self.protocols.iter().enumerate().skip(start) {
-            match &protocol.router {
+        loop {
+            let index = if cursor.fallback {
+                let Some(index) = self.body_routers.get(cursor.next).copied() else {
+                    break;
+                };
+                cursor.next += 1;
+                index
+            } else if cursor.next < self.protocols.len() {
+                let index = cursor.next;
+                cursor.next += 1;
+                index
+            } else if cursor.streaming == Some(true) {
+                cursor.fallback = true;
+                cursor.next = 0;
+                continue;
+            } else {
+                break;
+            };
+            match &self.protocols[index].router {
                 SharedProtocolRouter::Metadata(router) => match router.claim(&probe) {
                     RouteClaim::Matched(selected) => {
                         let (parts, ()) = probe.into_parts();
@@ -303,23 +318,37 @@ where
                     RouteClaim::Rejected(err) => return self.reject(index, err),
                     RouteClaim::NoClaim => {}
                 },
-                SharedProtocolRouter::Body(_) if event_stream => {}
-                SharedProtocolRouter::Body(router) => match router.claim(&probe) {
-                    BodyRouteClaim::Matched(selected) => {
-                        let (parts, ()) = probe.into_parts();
-                        return self.dispatch_replayed(selected, index, parts, source);
+                SharedProtocolRouter::Body(router) => {
+                    if !cursor.fallback {
+                        let streaming = *cursor.streaming.get_or_insert_with(|| {
+                            self.streaming_recognizers.iter().any(|index| {
+                                let SharedProtocolRouter::Metadata(router) = &self.protocols[*index].router else {
+                                    unreachable!("recognizers are metadata routers");
+                                };
+                                router.recognizes_streaming_input(&probe)
+                            })
+                        });
+                        if streaming {
+                            continue;
+                        }
                     }
-                    BodyRouteClaim::Rejected(err) => return self.reject(index, err),
-                    BodyRouteClaim::NoClaim => {}
-                    BodyRouteClaim::ClaimNeedsBody(requirement) => {
-                        let (parts, ()) = probe.into_parts();
-                        return self.pursue(parts, source, Pursuit::new(index, false, requirement));
+                    match router.claim(&probe) {
+                        BodyRouteClaim::Matched(selected) => {
+                            let (parts, ()) = probe.into_parts();
+                            return self.dispatch_replayed(selected, index, parts, source);
+                        }
+                        BodyRouteClaim::Rejected(err) => return self.reject(index, err),
+                        BodyRouteClaim::NoClaim => {}
+                        BodyRouteClaim::ClaimNeedsBody(requirement) => {
+                            let (parts, ()) = probe.into_parts();
+                            return self.pursue(parts, source, Pursuit::new(index, false, requirement), cursor);
+                        }
+                        BodyRouteClaim::MatchedNeedsBody(requirement) => {
+                            let (parts, ()) = probe.into_parts();
+                            return self.pursue(parts, source, Pursuit::new(index, true, requirement), cursor);
+                        }
                     }
-                    BodyRouteClaim::MatchedNeedsBody(requirement) => {
-                        let (parts, ()) = probe.into_parts();
-                        return self.pursue(parts, source, Pursuit::new(index, true, requirement));
-                    }
-                },
+                }
             }
         }
         // A single body-routed protocol owns every request, so its fall-through is its own
@@ -333,12 +362,19 @@ where
     }
 
     /// Suspends the walk while the service satisfies `pursuit`'s body requirement.
-    fn pursue(&self, parts: http::request::Parts, source: BodySource<B>, pursuit: Pursuit) -> State<B> {
+    fn pursue(
+        &self,
+        parts: http::request::Parts,
+        source: BodySource<B>,
+        pursuit: Pursuit,
+        cursor: ClaimWalk,
+    ) -> State<B> {
         State::Collecting {
             walk: Some(WalkPursuit {
                 parts,
                 collector: source.into_collector(self.routing_body),
                 pursuit,
+                cursor,
                 dispatch: self.clone(),
             }),
         }
@@ -351,6 +387,7 @@ where
         collector: BodyCollector<B>,
         pursuit: &Pursuit,
         collected: CollectedBody,
+        cursor: ClaimWalk,
     ) -> State<B> {
         let SharedProtocolRouter::Body(router) = &self.protocols[pursuit.protocol].router else {
             unreachable!("only body-routed protocols suspend the walk");
@@ -373,7 +410,7 @@ where
             BodyRouteClaim::Rejected(err) => self.reject(pursuit.protocol, err),
             BodyRouteClaim::NoClaim => {
                 let (parts, _) = request.into_parts();
-                self.walk(parts, BodySource::Collector(collector), pursuit.protocol + 1)
+                self.walk(parts, BodySource::Collector(collector), cursor)
             }
             BodyRouteClaim::ClaimNeedsBody(requirement) => {
                 let (parts, _) = request.into_parts();
@@ -381,6 +418,7 @@ where
                     parts,
                     BodySource::Collector(collector),
                     Pursuit::new(pursuit.protocol, false, requirement),
+                    cursor,
                 )
             }
             BodyRouteClaim::MatchedNeedsBody(requirement) => {
@@ -389,6 +427,7 @@ where
                     parts,
                     BodySource::Collector(collector),
                     Pursuit::new(pursuit.protocol, true, requirement),
+                    cursor,
                 )
             }
         }
@@ -439,6 +478,14 @@ impl<B> BodySource<B> {
     }
 }
 
+/// Request-local cursor retained across collection. Recognition is computed at most once.
+#[derive(Default)]
+struct ClaimWalk {
+    next: usize,
+    streaming: Option<bool>,
+    fallback: bool,
+}
+
 /// A suspended walk: the request head, the service's collector, and the pursuit being
 /// satisfied. Owns everything — nothing is borrowed across the suspension — and is `Unpin`,
 /// so pursuits move freely between walk states.
@@ -446,6 +493,7 @@ struct WalkPursuit<B> {
     parts: http::request::Parts,
     collector: BodyCollector<B>,
     pursuit: Pursuit,
+    cursor: ClaimWalk,
     dispatch: Dispatch<B>,
 }
 
@@ -524,11 +572,13 @@ where
                         parts,
                         collector,
                         pursuit,
+                        cursor,
                         dispatch,
                     } = walk.take().expect("pursuit resolves once");
                     match outcome {
                         PursuitPoll::Satisfied(collected) => {
-                            this.inner.set(dispatch.resumed(parts, collector, &pursuit, collected));
+                            this.inner
+                                .set(dispatch.resumed(parts, collector, &pursuit, collected, cursor));
                         }
                         // The decoder rejecting the bytes means different things by phase: an
                         // open claim was simply not this protocol's — the walk continues over
@@ -541,9 +591,8 @@ where
                                     RoutingError::malformed(crate::Error::new(err)),
                                 ));
                             } else {
-                                let next = pursuit.protocol + 1;
                                 this.inner
-                                    .set(dispatch.walk(parts, BodySource::Collector(collector), next));
+                                    .set(dispatch.walk(parts, BodySource::Collector(collector), cursor));
                             }
                         }
                         // A transport-level failure is terminal whatever the phase; the
@@ -732,8 +781,7 @@ impl<B> MultiProtocolRoutingService<B> {
             })
             .collect();
         // A body-routed protocol may buffer the body to select, so it never sees a streaming
-        // operation: those requests are not its to claim, and the walk skips such protocols
-        // for requests whose head declares an event-stream body.
+        // operation. Streaming-input recognition defers it until metadata routers have passed.
         let non_streaming: Vec<_> = targets
             .iter()
             .filter(|target| !has_streaming_member(target.operation))
@@ -755,6 +803,25 @@ impl<B> MultiProtocolRoutingService<B> {
             )?;
             protocols.push(ProtocolRoute { router, protocol });
         }
+        // Whether recognition is needed comes from the service schema. Each metadata
+        // router owns recognition of the streaming operations its protocol supports.
+        let has_streaming_inputs = service
+            .operations()
+            .iter()
+            .any(|operation| operation.input().members().iter().any(|member| member.streaming()));
+        let streaming_recognizers = protocols
+            .iter()
+            .enumerate()
+            .filter_map(|(index, route)| match &route.router {
+                SharedProtocolRouter::Metadata(_) if has_streaming_inputs => Some(index),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let body_routers = protocols
+            .iter()
+            .enumerate()
+            .filter_map(|(index, route)| matches!(route.router, SharedProtocolRouter::Body(_)).then_some(index))
+            .collect::<Vec<_>>();
         let bindings = bindings
             .into_iter()
             .map(|binding| BoundHandler {
@@ -766,6 +833,8 @@ impl<B> MultiProtocolRoutingService<B> {
         Ok(Self {
             inner: Dispatch {
                 protocols: protocols.into(),
+                streaming_recognizers: streaming_recognizers.into(),
+                body_routers: body_routers.into(),
                 bindings,
                 routing_body: options.request_body.for_routing(),
             },
@@ -818,4 +887,3 @@ where
         self.inner.call(request.map(crate::body::RequestBody::new))
     }
 }
-
