@@ -782,7 +782,6 @@ open class ServerCodegenVisitor(
             if (schemaStreaming) {
                 ServerStreamingOperationGenerator(
                     codegenContext,
-                    protocolGenerator.protocol,
                     shape,
                     validationExceptionConversionGenerator,
                 ).render(this)

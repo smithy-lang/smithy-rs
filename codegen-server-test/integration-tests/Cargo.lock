@@ -108,6 +108,7 @@ name = "aws-smithy-http-server"
 version = "0.67.2"
 dependencies = [
  "aws-smithy-cbor",
+ "aws-smithy-eventstream",
  "aws-smithy-http",
  "aws-smithy-json",
  "aws-smithy-runtime-api",

@@ -184,7 +184,8 @@ class ServerSchemaGenerator(
             target is ByteShape || target is ShortShape || target is IntegerShape ||
                 target is LongShape || target is FloatShape || target is DoubleShape
         ) &&
-            target !is IntEnumShape &&
+            // A constrained intEnum (e.g. `@range`) is a newtype like any other constrained
+            // number; an unconstrained one resolves to a plain `i32` and fails the Opaque check.
             symbolProvider.toSymbol(target).rustType() is RustType.Opaque
 
     /** True when a blob shape resolves to a constrained-newtype wrapper (read `val.0.as_ref()`). */

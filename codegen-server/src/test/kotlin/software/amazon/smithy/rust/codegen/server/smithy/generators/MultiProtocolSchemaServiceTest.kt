@@ -205,7 +205,7 @@ class MultiProtocolSchemaServiceTest {
                         *scope,
                     )
                 }
-                tokioTest("a_request_no_protocol_identifies_is_a_bare_bad_request") {
+                tokioTest("a_request_no_protocol_claims_is_answered_like_coral") {
                     rustTemplate(
                         """
                         for request in [
@@ -214,9 +214,9 @@ class MultiProtocolSchemaServiceTest {
                             #{Http}::Request::builder().method("GET").uri("/nowhere"),
                         ] {
                             let (status, headers, body) = send(request, "{}").await;
-                            assert_eq!(status, 400);
+                            assert_eq!(status, 404);
                             assert!(headers.is_empty());
-                            assert!(body.is_empty());
+                            assert_eq!(body, "<UnknownOperationException/>\n");
                         }
                         """,
                         *scope,

@@ -276,37 +276,23 @@ class SchemaRoutingGeneratorTest {
                                 rustTemplate(
                                     """
                                     {
-                                        use #{Server}::schema::{ProtocolBuildContext, ProtocolRegistration, ProtocolRegistry, ServerProtocol, SharedServerProtocol};
-                                        use #{Server}::routing::{BodyProtocolRouter, CollectedBody, OperationIndex, RouteClaim, SharedProtocolRouter, RouterBuildContext, RouterBuildError};
+                                        use #{Server}::schema::{ProtocolBuildContext, ProtocolRegistration, ProtocolRegistry, ServerProtocol};
+                                        use #{Server}::schema::routing::{BodyProtocolRouter, BodyRouteClaim, RouterBuildContext, RouterBuildError};
                                         use #{Server}::body::BoxBody;
                                         use #{Schema}::{Schema, ShapeId};
                                         use #{Http}::{Request, Response};
-                                        ##[derive(Debug)]
+                                        ##[derive(Debug)] ##[allow(dead_code)] // unused on the metadata-routed pass
                                         struct BodyRouter;
                                         impl BodyProtocolRouter for BodyRouter {
                                             // The test only builds the service; no request routes.
-                                            fn route(&self, _: &Request<CollectedBody>) -> #{Result}<OperationIndex, Response<BoxBody>> { unreachable!() }
-                                            fn claim(&self, _: &Request<CollectedBody>) -> RouteClaim { unreachable!() }
+                                            fn claim(&self, _: &Request<()>) -> BodyRouteClaim { unreachable!() }
                                         }
                                         ##[derive(Debug)]
                                         struct TestProtocol;
                                         impl ServerProtocol for TestProtocol {
-                                            fn from_build_context(
-                                                _ctx: &ProtocolBuildContext<'_>,
-                                            ) -> #{Result}<SharedServerProtocol, RouterBuildError> {
-                                                #{Ok}(SharedServerProtocol::new(TestProtocol))
-                                            }
                                             fn protocol_id(&self) -> &'static ShapeId<'static> {
                                                 static ID: ShapeId<'static> = #{Schema}::shape_id!("test", "bodyRouting");
                                                 &ID
-                                            }
-                                            fn build_router(&self, ctx: RouterBuildContext<'_>)
-                                                -> #{Result}<SharedProtocolRouter, RouterBuildError> {
-                                                if $bodyRouting {
-                                                    #{Ok}(SharedProtocolRouter::new_body_routed(BodyRouter))
-                                                } else {
-                                                    #{Server}::protocol::rest_json_1::RestJson1Protocol::default().build_router(ctx)
-                                                }
                                             }
                                             fn deserialize_request<'a>(&'a self, _: &Schema<'_>, _: &'a #{Server}::schema::ServerRequest)
                                                 -> #{Result}<#{Box}<dyn #{Schema}::serde::ShapeDeserializer + 'a>, #{Server}::schema::DeserializeError> { unreachable!() }
@@ -315,10 +301,41 @@ class SchemaRoutingGeneratorTest {
                                             fn serialize_error(&self, _: &dyn #{Server}::schema::HttpModeledError) -> Response<BoxBody> { unreachable!() }
                                             fn serialize_rejection(&self, _: #{Server}::schema::DeserializeError) -> Response<BoxBody> { unreachable!() }
                                         }
-                                        static REGISTRY: ProtocolRegistry = ProtocolRegistry::new(&[ProtocolRegistration::new(
-                                            "test##bodyRouting",
-                                            TestProtocol::from_build_context,
-                                        )]);
+                                        ${
+                        if (bodyRouting) {
+                            """
+                                        impl #{Server}::schema::BodyRoutedProtocol for TestProtocol {
+                                            fn from_build_context(_ctx: &ProtocolBuildContext<'_>) -> #{Result}<Self, RouterBuildError> {
+                                                #{Ok}(TestProtocol)
+                                            }
+                                            fn build_router(&self, _ctx: RouterBuildContext<'_>)
+                                                -> #{Result}<impl BodyProtocolRouter + 'static + use<>, RouterBuildError> {
+                                                #{Ok}(BodyRouter)
+                                            }
+                                        }
+                                        static REGISTRY: ProtocolRegistry = ProtocolRegistry::new(&[
+                                            ProtocolRegistration::body_routed::<TestProtocol>("test##bodyRouting"),
+                                        ]);
+                            """
+                        } else {
+                            """
+                                        impl #{Server}::schema::MetadataRoutedProtocol for TestProtocol {
+                                            fn from_build_context(_ctx: &ProtocolBuildContext<'_>) -> #{Result}<Self, RouterBuildError> {
+                                                #{Ok}(TestProtocol)
+                                            }
+                                            fn build_router(&self, ctx: RouterBuildContext<'_>)
+                                                -> #{Result}<impl #{Server}::schema::routing::ProtocolRouter + 'static + use<>, RouterBuildError> {
+                                                // `use<>` on the subtraits admits delegating through a temporary protocol.
+                                                #{Server}::schema::MetadataRoutedProtocol::build_router(
+                                                    &#{Server}::protocol::rest_json_1::RestJson1Protocol::default(), ctx)
+                                            }
+                                        }
+                                        static REGISTRY: ProtocolRegistry = ProtocolRegistry::new(&[
+                                            ProtocolRegistration::metadata_routed::<TestProtocol>("test##bodyRouting"),
+                                        ]);
+                            """
+                        }
+                    }
                                         &REGISTRY
                                     }
                                     """,

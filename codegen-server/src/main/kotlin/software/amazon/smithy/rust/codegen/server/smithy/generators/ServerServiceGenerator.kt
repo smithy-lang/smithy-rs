@@ -349,7 +349,7 @@ class ServerServiceGenerator(
                         self
                     }
                     """,
-                    "Router" to (if (schemaSerde) smithyHttpServer.resolve("routing::MultiProtocolRoutingService") else protocol.routerType()),
+                    "Router" to (if (schemaSerde) smithyHttpServer.resolve("schema::routing::MultiProtocolRoutingService") else protocol.routerType()),
                     "Protocol" to protocol.markerStruct(),
                     "Handler" to handler,
                     "HandlerFixed" to handlerFixed,
@@ -573,7 +573,7 @@ class ServerServiceGenerator(
                     layer: L,
                     http_plugin: HttpPl,
                     model_plugin: ModelPl,
-                    ${if (schemaSerde) "routing_options: #{SmithyHttpServer}::routing::RoutingOptions," else ""}
+                    ${if (schemaSerde) "routing_options: #{SmithyHttpServer}::schema::routing::RoutingOptions," else ""}
                 }
 
                 impl<$builderGenerics> $builderName<$builderGenerics> {
@@ -837,7 +837,7 @@ class ServerServiceGenerator(
                         val field = builderFieldNames.getValue(operation)
                         val name = operationStructNames.getValue(operation)
                         val handler = if (unchecked) "self.$field.unwrap_or_else(|| #{SmithyHttpServer}::routing::SyncRoute::new(#{SmithyHttpServer}::operation::SchemaMissingFailure))" else "self.$field.expect(\"handler checked above\")"
-                        rustTemplate("#{SmithyHttpServer}::routing::OperationHandlerBinding::new(<crate::operation_shape::$name as #{SmithyHttpServer}::operation::SchemaOperationShape>::SCHEMA, $handler)", *codegenScope)
+                        rustTemplate("#{SmithyHttpServer}::schema::routing::OperationHandlerBinding::new(<crate::operation_shape::$name as #{SmithyHttpServer}::operation::SchemaOperationShape>::SCHEMA, $handler)", *codegenScope)
                     }
                 }.join(",")
             // Each decorator-contributed writable renders a `&'static ProtocolRegistry`; the
@@ -872,7 +872,7 @@ class ServerServiceGenerator(
                 {
                     #{Checks}
                     #{Patterns}
-                    let svc = #{SmithyHttpServer}::routing::MultiProtocolRoutingService::from_operation_handler_bindings_with_options(
+                    let svc = #{SmithyHttpServer}::schema::routing::MultiProtocolRoutingService::from_operation_handler_bindings_with_options(
                         &$schema, #{Registries}, [#{Bindings}], self.routing_options,
                     )$unwrap;
                     let svc = svc.layer(&self.layer);
@@ -908,7 +908,7 @@ class ServerServiceGenerator(
                 ##[derive(Debug)]
                 pub enum BuildError {
                     MissingOperations(MissingOperationsError),
-                    Routing(#{SmithyHttpServer}::routing::RouterBuildError),
+                    Routing(#{SmithyHttpServer}::schema::routing::RouterBuildError),
                 }
                 impl ::std::fmt::Display for BuildError {
                     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
@@ -923,7 +923,7 @@ class ServerServiceGenerator(
 
                 /// A service using runtime schema routing.
                 ##[derive(Clone)]
-                pub struct $serviceName<S = #{SmithyHttpServer}::routing::MultiProtocolRoutingService> { svc: S }
+                pub struct $serviceName<S = #{SmithyHttpServer}::schema::routing::MultiProtocolRoutingService> { svc: S }
 
                 impl $serviceName<()> {
                     pub fn builder<L, HttpPl: #{SmithyHttpServer}::plugin::HttpMarker, ModelPl: #{SmithyHttpServer}::plugin::ModelMarker>(
@@ -935,8 +935,8 @@ class ServerServiceGenerator(
                             routing_options: Self::routing_options(),
                         }
                     }
-                    fn routing_options() -> #{SmithyHttpServer}::routing::RoutingOptions {
-                        #{SmithyHttpServer}::routing::RoutingOptions {
+                    fn routing_options() -> #{SmithyHttpServer}::schema::routing::RoutingOptions {
+                        #{SmithyHttpServer}::schema::routing::RoutingOptions {
                             request_body: #{SmithyHttpServer}::schema::ServiceRequestBodyConfig {
                                 global: #{SmithyHttpServer}::schema::RequestBodyCollectionConfig { max_bytes: $maxExpr, read_timeout: #{None} },
                                 per_operation: ::std::collections::HashMap::new(),

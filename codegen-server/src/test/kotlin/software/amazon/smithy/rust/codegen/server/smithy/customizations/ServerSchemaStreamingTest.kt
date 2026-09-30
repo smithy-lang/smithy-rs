@@ -29,8 +29,11 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
  * `initial-request` and `initial-response` frames; on restJson1 in the URI and headers.
  */
 internal class ServerSchemaStreamingTest {
-    private fun model(rpc: Boolean): String {
-        val service = if (rpc) "@rpcv2Cbor" else "@restJson1"
+    private fun model(
+        rpc: Boolean,
+        sigv4: Boolean = false,
+    ): String {
+        val service = (if (rpc) "@rpcv2Cbor" else "@restJson1") + (if (sigv4) "\n            @sigv4(name: \"chat\")" else "")
         val http = if (rpc) "" else "@http(uri: \"/chat/{room}\", method: \"POST\")"
         val label = if (rpc) "" else "@httpLabel"
         val nickHeader = if (rpc) "" else "@httpHeader(\"x-nick\")"
@@ -40,6 +43,7 @@ internal class ServerSchemaStreamingTest {
             ${'$'}version: "2"
             namespace com.aws.example.streaming
 
+            use aws.auth#sigv4
             use aws.protocols#restJson1
             use smithy.protocols#rpcv2Cbor
 
@@ -234,7 +238,7 @@ internal class ServerSchemaStreamingTest {
         for (frame, text) in frames[usize::from(initial)..].iter().zip(["hi", "there"]) {
             let content_type = frame.headers().iter().find(|h| h.name().as_str() == ":content-type").unwrap()
                 .value().as_string().unwrap().as_str();
-            assert_eq!(content_type, protocol.event_stream().unwrap().event_stream_media_type());
+            assert_eq!(content_type, protocol.event_stream_framing().unwrap().media_type);
             if content_type == "application/cbor" {
                 let mut decoder = #{Cbor}::Decoder::new(frame.payload());
                 decoder.map().unwrap();
@@ -274,8 +278,8 @@ internal class ServerSchemaStreamingTest {
         use #{SmithyHttpServer}::schema::SharedServerProtocol;
         // The very same generated types must follow either selected runtime codec.
         for (protocol, content_type, empty) in [
-            (SharedServerProtocol::new(#{SmithyHttpServer}::protocol::rest_json_1::RestJson1Protocol::default()), "application/json", br##"{"value":"bad"}"##.as_slice()),
-            (SharedServerProtocol::new(#{SmithyHttpServer}::protocol::rpc_v2_cbor::RpcV2CborProtocol::default()), "application/cbor", b"\xa1\x65value\x63bad".as_slice()),
+            (SharedServerProtocol::metadata_routed(#{SmithyHttpServer}::protocol::rest_json_1::RestJson1Protocol::default()), "application/json", br##"{"value":"bad"}"##.as_slice()),
+            (SharedServerProtocol::metadata_routed(#{SmithyHttpServer}::protocol::rpc_v2_cbor::RpcV2CborProtocol::default()), "application/cbor", b"\xa1\x65value\x63bad".as_slice()),
         ] {
             let marshaller = ChatEventsMarshaller::new(protocol.clone());
             let unmarshaller = ChatEventsUnmarshaller::new(protocol.clone());
@@ -355,8 +359,6 @@ internal class ServerSchemaStreamingTest {
         ##[derive(Debug)]
         struct HttpOnly;
         impl #{SmithyHttpServer}::schema::ServerProtocol for HttpOnly {
-            fn build_router(&self, _: #{SmithyHttpServer}::routing::RouterBuildContext<'_>)
-                -> #{Result}<#{SmithyHttpServer}::routing::SharedProtocolRouter, #{SmithyHttpServer}::routing::RouterBuildError> { unreachable!() }
             fn protocol_id(&self) -> &'static #{Schema}::ShapeId<'static> {
                 static ID: #{Schema}::ShapeId<'static> = #{Schema}::shape_id!("test", "HttpOnly");
                 &ID
@@ -372,7 +374,7 @@ internal class ServerSchemaStreamingTest {
             fn serialize_rejection(&self, _: #{SmithyHttpServer}::schema::DeserializeError)
                 -> #{SmithyHttpServer}::response::Response { unreachable!() }
         }
-        let missing = SharedServerProtocol::new(HttpOnly);
+        let missing = SharedServerProtocol::serde_only(HttpOnly);
         let marshaller = ChatEventsMarshaller::new(missing.clone());
         assert!(marshaller.marshall(ChatEvents::Bye(crate::model::Bye {})).is_err());
         assert!(marshaller.marshall(ChatEvents::Text(TextEvent { value: #{Some}("raw".into()) })).is_err());
@@ -411,9 +413,9 @@ internal class ServerSchemaStreamingTest {
         return """
         use #{SmithyHttpServer}::schema::SharedServerProtocol;
         let protocol = if $rpc {
-            SharedServerProtocol::new(#{SmithyHttpServer}::protocol::rpc_v2_cbor::RpcV2CborProtocol::default())
+            SharedServerProtocol::metadata_routed(#{SmithyHttpServer}::protocol::rpc_v2_cbor::RpcV2CborProtocol::default())
         } else {
-            SharedServerProtocol::new(#{SmithyHttpServer}::protocol::rest_json_1::RestJson1Protocol::default())
+            SharedServerProtocol::metadata_routed(#{SmithyHttpServer}::protocol::rest_json_1::RestJson1Protocol::default())
         };
         let config = crate::service::ChatServiceConfig::builder().build();
         let service = crate::service::ChatService::builder(config)
@@ -467,7 +469,7 @@ internal class ServerSchemaStreamingTest {
 
     private val swapProtocolTest =
         """
-        let protocol = #{SmithyHttpServer}::schema::SharedServerProtocol::new(
+        let protocol = #{SmithyHttpServer}::schema::SharedServerProtocol::metadata_routed(
             #{SmithyHttpServer}::protocol::aws_json_11::AwsJson1_1Protocol::default());
         let selected = protocol.clone();
         let layer = #{Tower}::util::MapRequestLayer::new(move |mut request: #{Http}::Request<#{SmithyHttpServer}::body::Body>| {
@@ -514,7 +516,7 @@ internal class ServerSchemaStreamingTest {
     private val initialRequestTests =
         """
         use #{SmithyHttpServer}::operation::StreamingOperationShape;
-        let protocol = #{SmithyHttpServer}::schema::SharedServerProtocol::new(
+        let protocol = #{SmithyHttpServer}::schema::SharedServerProtocol::metadata_routed(
             #{SmithyHttpServer}::protocol::rpc_v2_cbor::RpcV2CborProtocol::default());
         $requestFrames
         // Missing initial metadata fails required-field validation, without dropping the first event.
@@ -574,7 +576,7 @@ internal class ServerSchemaStreamingTest {
                     tokioTest("chat_over_rest_json_1") {
                         rustTemplate(
                             """
-                        let protocol = #{SmithyHttpServer}::schema::SharedServerProtocol::new(#{Protocol}::default());
+                        let protocol = #{SmithyHttpServer}::schema::SharedServerProtocol::metadata_routed(#{Protocol}::default());
                         $echoService
                         $requestFrames
                         let request = #{Http}::Request::builder()
@@ -597,6 +599,18 @@ internal class ServerSchemaStreamingTest {
                 }
             }
         servers.forEach { check(!it.path.resolve("src/protocol_serde").toFile().exists()) }
+    }
+
+    /// A `@sigv4` service wraps its event stream receivers in the generated `SigV4Receiver`;
+    /// the streaming glue must accept that wrapper wherever it accepts the plain `Receiver`
+    /// (`apply_initial_request` takes the initial-frame receive as a closure for this reason).
+    @Test
+    fun `sigv4 event stream receivers compile against the schema streaming glue`() {
+        serverIntegrationTest(
+            model(rpc = false, sigv4 = true).asSmithyModel(),
+            params(rpc = false),
+            testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
+        ) { _, _ -> }
     }
 
     @Test
@@ -630,7 +644,7 @@ internal class ServerSchemaStreamingTest {
                     tokioTest("chat_over_rpcv2_cbor") {
                         rustTemplate(
                             """
-                        let protocol = #{SmithyHttpServer}::schema::SharedServerProtocol::new(#{Protocol}::default());
+                        let protocol = #{SmithyHttpServer}::schema::SharedServerProtocol::metadata_routed(#{Protocol}::default());
                         $echoService
                         // The non-stream input members travel in the `initial-request` frame, encoded by the
                         // protocol's payload codec.
