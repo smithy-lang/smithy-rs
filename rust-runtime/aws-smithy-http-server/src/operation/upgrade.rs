@@ -307,7 +307,7 @@ where
                     .iter()
                     .any(|member| member.streaming() && member.shape_type() == aws_smithy_schema::ShapeType::Union)
             });
-            if has_event_stream && protocol.event_stream().is_none() {
+            if has_event_stream && protocol.event_stream_framing().is_none() {
                 error!(operation = %operation.shape_id(), protocol = %protocol.protocol_id(),
                     "selected protocol does not support event streams");
                 return Ok(empty_internal_server_error());

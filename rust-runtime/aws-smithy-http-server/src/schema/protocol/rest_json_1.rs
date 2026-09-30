@@ -4,7 +4,6 @@
  */
 
 use aws_smithy_runtime_api::http::Headers;
-use aws_smithy_schema::codec::DynCodec;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
 use aws_smithy_schema::{shape_id, Schema, ShapeId};
 
@@ -20,7 +19,7 @@ use super::response::{
     ResponseBindings,
 };
 use super::rest::RestPolicy;
-use super::{BodyDirective, ServerEventStreamProtocol, ServerProtocol, ServerRequest};
+use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerProtocol, ServerRequest};
 
 static PROTOCOL_ID: ShapeId<'static> = shape_id!("aws.protocols", "restJson1");
 const CONTENT_TYPE: &str = "application/json";
@@ -35,39 +34,32 @@ pub(crate) const POLICY: RestPolicy = RestPolicy {
     empty_document: true,
 };
 
-impl ServerEventStreamProtocol for RestJson1Protocol {
-    fn payload_codec(&self) -> &dyn DynCodec {
-        self.inner.codec()
-    }
-
-    fn event_stream_media_type(&self) -> &str {
-        CONTENT_TYPE
-    }
-
-    fn initial_messages_in_frames(&self) -> bool {
-        false
-    }
-}
-
-impl ServerProtocol for RestJson1Protocol {
+impl MetadataRoutedProtocol for RestJson1Protocol {
     fn from_build_context(
         _ctx: &crate::schema::ProtocolBuildContext<'_>,
-    ) -> Result<crate::schema::SharedServerProtocol, crate::routing::RouterBuildError> {
-        Ok(crate::schema::SharedServerProtocol::new(Self::default()))
+    ) -> Result<Self, crate::schema::routing::RouterBuildError> {
+        Ok(Self::default())
     }
 
     fn build_router(
         &self,
-        ctx: crate::routing::RouterBuildContext<'_>,
-    ) -> Result<crate::routing::SharedProtocolRouter, crate::routing::RouterBuildError> {
-        crate::routing::schema::rest_router::<RestJson1>(ctx.targets, CONTENT_TYPE)
-    }
-    fn protocol_id(&self) -> &'static ShapeId<'static> {
-        &PROTOCOL_ID
+        ctx: crate::schema::routing::RouterBuildContext<'_>,
+    ) -> Result<impl crate::schema::routing::ProtocolRouter + 'static + use<>, crate::schema::routing::RouterBuildError> {
+        crate::schema::routing::rest_router(ctx.targets, CONTENT_TYPE)
     }
 
-    fn event_stream(&self) -> Option<&dyn ServerEventStreamProtocol> {
-        Some(self)
+    fn event_stream_framing(&self) -> Option<EventStreamFraming<'_>> {
+        Some(EventStreamFraming {
+            payload_codec: self.inner.codec(),
+            media_type: CONTENT_TYPE,
+            initial_messages_in_frames: false,
+        })
+    }
+}
+
+impl ServerProtocol for RestJson1Protocol {
+    fn protocol_id(&self) -> &'static ShapeId<'static> {
+        &PROTOCOL_ID
     }
 
     fn inspect_request_head(

@@ -3,7 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 use super::*;
-use crate::body::Body;
+use crate::body::{Body, BoxBody};
+use crate::response::Response;
+use crate::routing::SyncRoute;
+use super::service::ProtocolRoute;
+use crate::schema::{
+    OperationSchema, ProtocolOrder, ProtocolRegistration, ProtocolRegistry,
+    SelectedProtocolOperation, ServiceSchema,
+};
+use bytes::Bytes;
+use http::Request;
+use std::collections::HashMap;
+use std::convert::Infallible;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::future::Future;
+use std::task::{Context, Poll};
 use crate::error::Error;
 use crate::schema::{DeserializeError, HttpModeledError, RequestBodyCollectionConfig, ServerProtocol, ServerRequest};
 use aws_smithy_schema::serde::{SerializableStruct, ShapeDeserializer};
@@ -13,7 +28,7 @@ use http_body::Frame;
 use http_body_util::BodyExt;
 use std::num::NonZeroUsize;
 use std::time::Duration;
-use tower::ServiceExt;
+use tower::{Service, ServiceExt};
 
 static UNIT: Schema<'static> = Schema::new(shape_id!("test", "Unit"), ShapeType::Structure);
 // Codegen records an operation's `@http` binding on its input schema.
@@ -64,8 +79,6 @@ static RPC: ServiceSchema<'static> = ServiceSchema::new(
 #[derive(Debug, Default)]
 struct BodyProtocol {
     inner: crate::protocol::rest_json_1::RestJson1Protocol,
-    /// Claims to support event streams, which a body-first protocol cannot.
-    event_streams: bool,
 }
 #[derive(Debug)]
 struct BodyRouter {
@@ -83,18 +96,26 @@ async fn rejection_message(response: Response<BoxBody>) -> String {
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
     String::from_utf8(bytes.to_vec()).unwrap()
 }
+/// The stub's malformed-request diagnostic; the wire form comes from the protocol's
+/// `serialize_routing_error`, which maps `MalformedRequest` to a `400`.
+#[derive(Debug)]
+struct InvalidName;
+impl std::fmt::Display for InvalidName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "invalid operation name")
+    }
+}
+impl std::error::Error for InvalidName {}
 impl BodyRouter {
     /// Names the operation the collected body's first line selects, if any.
-    #[allow(clippy::result_large_err)] // Mirrors the trait's allowance for immediate responses.
-    fn select(&self, request: &Request<CollectedBody>) -> Result<Option<OperationIndex>, Response<BoxBody>> {
+    fn select(&self, request: &Request<CollectedBody>) -> Result<Option<OperationIndex>, RoutingError> {
         let first_line = request
             .body()
-            .bytes
+            .bytes()
             .split(|byte| *byte == b'\n')
             .next()
             .unwrap_or_default();
-        let name = std::str::from_utf8(first_line)
-            .map_err(|_| rejection(StatusCode::BAD_REQUEST, "invalid operation name"))?;
+        let name = std::str::from_utf8(first_line).map_err(|_| RoutingError::malformed(InvalidName))?;
         Ok(self
             .targets
             .iter()
@@ -102,35 +123,111 @@ impl BodyRouter {
             .copied())
     }
 }
-impl BodyProtocolRouter for BodyRouter {
-    fn route(&self, request: &Request<CollectedBody>) -> Result<OperationIndex, Response<BoxBody>> {
-        self.select(request)?
-            .ok_or_else(|| rejection(StatusCode::NOT_FOUND, "unknown operation"))
+fn nz(n: usize) -> NonZeroUsize {
+    NonZeroUsize::new(n).unwrap()
+}
+/// Flips ASCII case; errors on bytes outside printable ASCII. A stand-in for a claim codec
+/// (gzip, in real protocols) that lets tests distinguish decoded views from wire bytes.
+#[derive(Debug, Default)]
+struct CaseFlip;
+impl ClaimDecoder for CaseFlip {
+    fn decode(&mut self, chunk: &[u8], out: &mut Vec<u8>) -> Result<(), crate::error::BoxError> {
+        for byte in chunk {
+            if !byte.is_ascii_graphic() && !byte.is_ascii_whitespace() {
+                return Err("byte outside the test codec's alphabet".into());
+            }
+            out.push(byte.ascii_change_case());
+        }
+        Ok(())
     }
-    fn claim(&self, request: &Request<CollectedBody>) -> RouteClaim {
-        match self.select(request) {
-            Ok(Some(selected)) => RouteClaim::Matched(selected),
-            Ok(None) => RouteClaim::NoClaim,
-            Err(response) => RouteClaim::Rejected(response),
+}
+trait AsciiChangeCase {
+    fn ascii_change_case(&self) -> u8;
+}
+impl AsciiChangeCase for u8 {
+    fn ascii_change_case(&self) -> u8 {
+        if self.is_ascii_uppercase() {
+            self.to_ascii_lowercase()
+        } else {
+            self.to_ascii_uppercase()
         }
     }
 }
-impl ServerProtocol for BodyProtocol {
-    fn from_build_context(
-        _ctx: &crate::schema::ProtocolBuildContext<'_>,
-    ) -> Result<SharedServerProtocol, RouterBuildError> {
-        Ok(SharedServerProtocol::new(BodyProtocol::default()))
+/// The `x-body-claim` header drives the router's claiming style per request, so one protocol
+/// covers every escalation shape. Absent, the router claims on the complete body's first line.
+fn claim_mode(headers: &HeaderMap) -> Option<&str> {
+    headers.get("x-body-claim").and_then(|value| value.to_str().ok())
+}
+impl BodyProtocolRouter for BodyRouter {
+    fn claim(&self, request: &Request<()>) -> BodyRouteClaim {
+        match claim_mode(request.headers()) {
+            Some("magic") => BodyRouteClaim::ClaimNeedsBody(BodyRequirement::prefix(nz(4))),
+            Some("escalate") => BodyRouteClaim::ClaimNeedsBody(BodyRequirement::prefix(nz(2))),
+            Some("decoded") => BodyRouteClaim::ClaimNeedsBody(BodyRequirement::decoded_prefix(CaseFlip, nz(6))),
+            Some("envelope") => BodyRouteClaim::MatchedNeedsBody(BodyRequirement::complete()),
+            Some("envelope-decoded") => BodyRouteClaim::MatchedNeedsBody(BodyRequirement::decoded_complete(CaseFlip)),
+            _ => BodyRouteClaim::ClaimNeedsBody(BodyRequirement::complete()),
+        }
     }
+    fn claim_with_body(&self, request: &Request<CollectedBody>) -> BodyRouteClaim {
+        let body = request.body();
+        match claim_mode(request.headers()) {
+            Some("magic") => {
+                if body.bytes().len() < 4 {
+                    assert!(body.complete(), "a short prefix must be the whole body");
+                }
+                match body.bytes().starts_with(b"BSF!") {
+                    true => BodyRouteClaim::Matched(self.targets[0]),
+                    false => BodyRouteClaim::NoClaim,
+                }
+            }
+            Some("escalate") => {
+                if body.bytes().len() < 8 && !body.complete() {
+                    return BodyRouteClaim::ClaimNeedsBody(BodyRequirement::prefix(nz(8)));
+                }
+                match body.bytes().starts_with(b"escalate") {
+                    true => BodyRouteClaim::Matched(self.targets[0]),
+                    false => BodyRouteClaim::NoClaim,
+                }
+            }
+            Some("decoded") => {
+                let name = std::str::from_utf8(body.bytes()).unwrap_or_default();
+                match self
+                    .targets
+                    .iter()
+                    .find(|target| target.operation().shape_id().shape_name() == name)
+                {
+                    Some(selected) => BodyRouteClaim::Matched(*selected),
+                    None => BodyRouteClaim::NoClaim,
+                }
+            }
+            _ => match self.select(request) {
+                Ok(Some(selected)) => BodyRouteClaim::Matched(selected),
+                Ok(None) => BodyRouteClaim::NoClaim,
+                Err(err) => BodyRouteClaim::Rejected(err),
+            },
+        }
+    }
+    fn route_with_body(&self, request: &Request<CollectedBody>) -> Result<OperationIndex, RoutingError> {
+        self.select(request)?.ok_or_else(RoutingError::unknown_operation)
+    }
+}
+impl crate::schema::BodyRoutedProtocol for BodyProtocol {
+    fn from_build_context(_ctx: &crate::schema::ProtocolBuildContext<'_>) -> Result<Self, RouterBuildError> {
+        Ok(BodyProtocol::default())
+    }
+    fn build_router(
+        &self,
+        ctx: RouterBuildContext<'_>,
+    ) -> Result<impl BodyProtocolRouter + 'static + use<>, RouterBuildError> {
+        Ok(BodyRouter {
+            targets: ctx.targets.to_vec(),
+        })
+    }
+}
+impl ServerProtocol for BodyProtocol {
     fn protocol_id(&self) -> &'static ShapeId<'static> {
         &PROTOCOLS[0]
-    }
-    fn event_stream(&self) -> Option<&dyn crate::schema::ServerEventStreamProtocol> {
-        self.event_streams.then_some(&self.inner as _)
-    }
-    fn build_router(&self, ctx: RouterBuildContext<'_>) -> Result<SharedProtocolRouter, RouterBuildError> {
-        Ok(SharedProtocolRouter::new_body_routed(BodyRouter {
-            targets: ctx.targets.to_vec(),
-        }))
     }
     fn deserialize_request<'a>(
         &'a self,
@@ -156,16 +253,20 @@ impl ServerProtocol for BodyProtocol {
     fn serialize_rejection(&self, error: DeserializeError) -> Response<BoxBody> {
         rejection(StatusCode::BAD_REQUEST, error.to_string())
     }
+    fn serialize_routing_error(&self, err: &RoutingError) -> Response<BoxBody> {
+        match err.kind() {
+            RoutingErrorKind::MalformedRequest => rejection(StatusCode::BAD_REQUEST, err.to_string()),
+            _ => self.inner.serialize_error(err),
+        }
+    }
 }
 /// Leaks a one-registration registry; tests parameterize constraints at runtime.
 fn registry_of(registration: ProtocolRegistration) -> &'static ProtocolRegistry {
     Box::leak(Box::new(ProtocolRegistry::new(Box::leak(Box::new([registration])))))
 }
 fn registry() -> &'static ProtocolRegistry {
-    static REGISTRY: ProtocolRegistry = ProtocolRegistry::new(&[ProtocolRegistration::new(
-        "test#bodyRouting",
-        BodyProtocol::from_build_context,
-    )]);
+    static REGISTRY: ProtocolRegistry =
+        ProtocolRegistry::new(&[ProtocolRegistration::body_routed::<BodyProtocol>("test#bodyRouting")]);
     &REGISTRY
 }
 fn binding(operation: &'static OperationSchema<'static>) -> OperationHandlerBinding {
@@ -225,6 +326,55 @@ async fn body_selects_index_and_preserves_payload_and_trailers() {
     assert_eq!(
         response.into_body().collect().await.unwrap().to_bytes(),
         "second\npayload"
+    );
+}
+
+/// The legacy router enums classify onto the three standard kinds; in particular the rpcv2
+/// wire-format errors split — a missing or unsupported `smithy-protocol` header means the
+/// request never identified the protocol (Coral falls through to its generic 404), while an
+/// invalid value on an rpcv2-shaped header is a framing violation.
+#[test]
+fn legacy_router_errors_classify_onto_the_standard_kinds() {
+    use crate::protocol::rpc_v2_cbor::router::{Error as CborError, WireFormatError};
+    use crate::protocol::{aws_json::router::Error as JsonError, rest::router::Error as RestError};
+
+    assert_eq!(RoutingError::from(RestError::NotFound).kind(), RoutingErrorKind::UnknownOperation);
+    assert_eq!(
+        RoutingError::from(RestError::MethodNotAllowed).kind(),
+        RoutingErrorKind::MethodNotAllowed
+    );
+
+    for err in [JsonError::NotFound, JsonError::NotRootUrl, JsonError::MissingHeader] {
+        assert_eq!(RoutingError::from(err).kind(), RoutingErrorKind::UnknownOperation);
+    }
+    let invalid = http::HeaderValue::from_bytes(b"\xff").unwrap().to_str().unwrap_err();
+    assert_eq!(
+        RoutingError::from(JsonError::InvalidHeader(invalid)).kind(),
+        RoutingErrorKind::MalformedRequest
+    );
+
+    assert_eq!(RoutingError::from(CborError::NotFound).kind(), RoutingErrorKind::UnknownOperation);
+    assert_eq!(
+        RoutingError::from(CborError::ForbiddenHeaders).kind(),
+        RoutingErrorKind::MalformedRequest
+    );
+    let unidentified = RoutingError::from(CborError::InvalidWireFormatHeader(WireFormatError::HeaderNotFound));
+    assert_eq!(unidentified.kind(), RoutingErrorKind::UnknownOperation);
+    // The diagnostic survives in the source chain even when the kind coarsens it.
+    assert!(std::error::Error::source(&unidentified).is_some());
+    assert_eq!(
+        RoutingError::from(CborError::InvalidWireFormatHeader(WireFormatError::WireFormatNotSupported(
+            "rpc-v2-json".to_owned()
+        )))
+        .kind(),
+        RoutingErrorKind::UnknownOperation
+    );
+    assert_eq!(
+        RoutingError::from(CborError::InvalidWireFormatHeader(WireFormatError::HeaderValueNotValid(
+            "not-rpc-v2".to_owned()
+        )))
+        .kind(),
+        RoutingErrorKind::MalformedRequest
     );
 }
 
@@ -573,15 +723,13 @@ async fn immediate_routing_uses_ready_future_and_rejects_unknown_routes() {
             operation: &SECOND,
         },
     ];
-    let router = rest_router::<crate::protocol::rest_json_1::RestJson1>(&targets, "application/json").unwrap();
-    assert!(!router.routes_on_body());
-    let RouterKind::Metadata(router) = &router.0 else {
-        panic!("REST routing selects from metadata");
-    };
+    let router = rest_router(&targets, "application/json").unwrap();
+    let shared = SharedProtocolRouter::new(rest_router(&targets, "application/json").unwrap());
+    assert!(!shared.routes_on_body());
     let req = Request::builder().method("POST").uri("/first").body(()).unwrap();
     assert_eq!(router.route(&req).unwrap().index(), 0);
     let req = Request::builder().method("GET").uri("/first").body(()).unwrap();
-    assert_eq!(router.route(&req).unwrap_err().status(), StatusCode::METHOD_NOT_ALLOWED);
+    assert_eq!(router.route(&req).unwrap_err().status_code(), 405);
 }
 
 #[cfg(debug_assertions)]
@@ -591,7 +739,7 @@ async fn inconsistent_operation_identity_is_detected_before_handler_dispatch() {
     #[derive(Debug)]
     struct IncorrectRouter;
     impl ProtocolRouter for IncorrectRouter {
-        fn route(&self, _: &Request<()>) -> Result<OperationIndex, Response<BoxBody>> {
+        fn route(&self, _: &Request<()>) -> Result<OperationIndex, RoutingError> {
             // This test is in the defining module; external routers cannot construct arbitrary indices.
             Ok(OperationIndex {
                 index: 0,
@@ -778,25 +926,6 @@ async fn buffered_content_is_reused_and_replacements_and_wrappers_are_read() {
     );
 }
 
-#[test]
-fn body_routing_protocol_cannot_offer_event_streams() {
-    fn with_event_streams(
-        _ctx: &crate::schema::ProtocolBuildContext<'_>,
-    ) -> Result<SharedServerProtocol, RouterBuildError> {
-        Ok(SharedServerProtocol::new(BodyProtocol {
-            event_streams: true,
-            ..BodyProtocol::default()
-        }))
-    }
-    let error = MultiProtocolRoutingService::from_operation_handler_bindings(
-        &SERVICE,
-        [registry_of(ProtocolRegistration::new("test#bodyRouting", with_event_streams))],
-        [binding(&FIRST), binding(&SECOND)],
-    )
-    .unwrap_err();
-    assert!(matches!(error, RouterBuildError::BodyRoutedEventStream { protocol } if protocol == "test#bodyRouting"));
-}
-
 mod multi_protocol {
     use super::*;
 
@@ -859,7 +988,7 @@ mod multi_protocol {
     }
 
     fn body_routing(order: &'static [ProtocolOrder]) -> &'static ProtocolRegistry {
-        registry_of(ProtocolRegistration::new("test#bodyRouting", BodyProtocol::from_build_context).with_order(order))
+        registry_of(ProtocolRegistration::body_routed::<BodyProtocol>("test#bodyRouting").with_order(order))
     }
 
     fn app(
@@ -898,7 +1027,8 @@ mod multi_protocol {
             .unwrap();
         let status = response.status();
         let bytes = response.into_body().collect().await.unwrap().to_bytes();
-        (status, String::from_utf8(bytes.to_vec()).unwrap())
+        // Rejection bodies may be CBOR; the assertions only match ASCII fragments.
+        (status, String::from_utf8_lossy(&bytes).into_owned())
     }
 
     fn post(uri: &str) -> http::request::Builder {
@@ -963,7 +1093,7 @@ mod multi_protocol {
     }
 
     #[tokio::test]
-    async fn requests_no_protocol_identifies_are_a_bare_bad_request() {
+    async fn requests_no_protocol_identifies_get_corals_unknown_operation_response() {
         let app = app(&BUILTINS, []);
         let unclaimed = [
             // An operation the service does not bind is not identified, even with the protocol's signals.
@@ -979,26 +1109,88 @@ mod multi_protocol {
         ];
         for request in unclaimed {
             let response = app.clone().oneshot(request.body(Body::empty()).unwrap()).await.unwrap();
-            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+            assert_eq!(response.status(), StatusCode::NOT_FOUND);
+            // Coral sends this response without a `Content-Type`.
             assert!(response.headers().is_empty());
-            assert!(response.into_body().collect().await.unwrap().to_bytes().is_empty());
+            assert_eq!(
+                response.into_body().collect().await.unwrap().to_bytes(),
+                "<UnknownOperationException/>\n"
+            );
         }
+    }
+
+    /// A routing rejection goes out as the rejecting protocol's modeled error: the same
+    /// discriminator framing as any handler-returned error, status and shape from the
+    /// rejection's schema.
+    #[tokio::test]
+    async fn routing_rejections_are_protocol_framed_modeled_errors() {
+        // restJson1 alone matched `/first` by URI but not by method: MethodNotAllowedException,
+        // 405. (Among several protocols a method mismatch is `NoClaim`, not a rejection.)
+        static REST_ONLY: ServiceSchema<'static> =
+            ServiceSchema::new(SERVICE_ID, None, &[shape_id!("aws.protocols", "restJson1")], OPS);
+        let response = app(&REST_ONLY, [])
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri("/first")
+                    .header("content-type", "application/json")
+                    .body(Body::from_bytes(Bytes::new()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
+        assert_eq!(
+            response.headers().get("x-amzn-errortype").unwrap(),
+            "MethodNotAllowedException"
+        );
+        assert_eq!(response.into_body().collect().await.unwrap().to_bytes(), "{}");
+        // awsJson1_0 alone routes an unknown target to UnknownOperationException, 404, with the
+        // discriminator in its JSON body. (Among several protocols an unknown target is
+        // `NoClaim`, answered by the service-level unclaimed response instead.)
+        static AWS_JSON_ONLY: ServiceSchema<'static> =
+            ServiceSchema::new(SERVICE_ID, None, &[shape_id!("aws.protocols", "awsJson1_0")], OPS);
+        let (status, body) = send(
+            &app(&AWS_JSON_ONLY, []),
+            post("/")
+                .header("content-type", "application/x-amz-json-1.0")
+                .header("x-amz-target", "Service.bogus"),
+            "",
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert!(
+            body.starts_with('{') && body.contains("UnknownOperationException"),
+            "{body}"
+        );
     }
 
     #[tokio::test]
     async fn rpc_v2_cbor_rejects_a_claimed_request_it_cannot_serve() {
         let app = app(&BUILTINS, []);
-        // `x-amz-target` is forbidden on rpcv2Cbor, which claimed the request first.
-        let (status, _) = send(
-            &app,
-            post("/service/Service/operation/first")
-                .header("smithy-protocol", "rpc-v2-cbor")
-                .header("x-amz-target", "Service.first")
-                .header("content-type", "application/x-amz-json-1.0"),
-            "",
-        )
-        .await;
-        assert_eq!(status, StatusCode::NOT_FOUND);
+        // `x-amz-target` is forbidden on rpcv2Cbor, which claimed the request first. The
+        // response byte-matches Coral's: `400`, no `Content-Type`, `Connection: close`, and
+        // the bare 33-byte body.
+        let response = app
+            .clone()
+            .oneshot(
+                post("/service/Service/operation/first")
+                    .header("smithy-protocol", "rpc-v2-cbor")
+                    .header("x-amz-target", "Service.first")
+                    .header("content-type", "application/x-amz-json-1.0")
+                    .body(Body::from_bytes(Bytes::new()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert!(!response.headers().contains_key(http::header::CONTENT_TYPE));
+        assert_eq!(
+            response.headers().get(http::header::CONNECTION).map(|v| v.as_bytes()),
+            Some(b"close".as_slice())
+        );
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(body, "<MalformedHttpRequestException/>\n");
     }
 
     #[tokio::test]
@@ -1095,7 +1287,7 @@ mod multi_protocol {
             (StatusCode::OK, "test#bodyRouting second second\npayload".to_owned())
         );
         let (status, _) = send(&app, post("/elsewhere"), "unknown\n").await;
-        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(status, StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
@@ -1123,6 +1315,224 @@ mod multi_protocol {
             )
             .await,
             (StatusCode::OK, "test#bodyRouting second second\n".to_owned())
+        );
+    }
+
+    /// A body that panics if routing polls it, proving claims resolved from the head alone.
+    fn untouchable_body() -> Body {
+        Body::new(http_body_util::StreamBody::new(futures_util::stream::poll_fn(
+            |_| -> Poll<Option<Result<Frame<Bytes>, Error>>> { panic!("routing polled an event-stream body") },
+        )))
+    }
+
+    /// An event-stream request is never a body-routed protocol's to claim: such protocols
+    /// serve no streaming operation, and waiting on its body could stall the walk on frames
+    /// the client withholds until the handler responds. The walk skips them without touching
+    /// the body — even though this body's first line would otherwise match.
+    #[tokio::test]
+    async fn event_stream_requests_skip_body_routed_protocols() {
+        static FIRST: &[ProtocolOrder] = &[ProtocolOrder::Before("aws.protocols#restJson1")];
+        let app = app(&WITH_BODY_ROUTING, [body_routing(FIRST)]);
+        let response = app
+            .oneshot(
+                post("/first")
+                    .header("content-type", "application/vnd.amazon.eventstream")
+                    .body(untouchable_body())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        // restJson1 does not derive this content type for `/first` either, so the request
+        // falls through to the service-level unclaimed response — never to the body router.
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(
+            response.into_body().collect().await.unwrap().to_bytes(),
+            "<UnknownOperationException/>\n"
+        );
+        // The skip also protects a single-protocol body-routed service, which frames the
+        // fall-through as its own rejection.
+        let single = MultiProtocolRoutingService::from_operation_handler_bindings(
+            &super::SERVICE,
+            [registry()],
+            [binding(&super::SECOND), binding(&super::FIRST)],
+        )
+        .unwrap();
+        let response = single
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/")
+                    .header("content-type", "application/vnd.amazon.eventstream; charset=UTF-8")
+                    .body(untouchable_body())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert!(
+            response.headers().contains_key("x-amzn-errortype"),
+            "protocol-framed, not the unclaimed fallback"
+        );
+    }
+
+    /// A magic-number sniff reads a bounded prefix. On a match the handler replays the whole
+    /// body byte-identically; on a mismatch the walk continues and the *next* protocol's
+    /// handler sees the prefix stitched back onto the untouched remainder.
+    #[tokio::test]
+    async fn prefix_sniff_claims_on_magic_and_replays_on_mismatch() {
+        static FIRST: &[ProtocolOrder] = &[ProtocolOrder::Before("aws.protocols#restJson1")];
+        let app = app(&WITH_BODY_ROUTING, [body_routing(FIRST)]);
+        let sniff = |uri: &str| post(uri).header("x-body-claim", "magic");
+        // Match: 4 bytes decide; the handler still receives everything.
+        assert_eq!(
+            send(&app, sniff("/anywhere"), "BSF!datagram-bytes").await,
+            (StatusCode::OK, "test#bodyRouting first BSF!datagram-bytes".to_owned())
+        );
+        // Mismatch, streamed across frames so the replay really is prefix + live tail.
+        let frames = vec![
+            Ok::<_, Error>(Frame::data(Bytes::from_static(b"{\"na"))),
+            Ok(Frame::data(Bytes::from_static(b"me\":\"n\"}"))),
+        ];
+        let response = app
+            .clone()
+            .oneshot(
+                sniff("/first")
+                    .header("content-type", "application/json")
+                    .body(Body::new(http_body_util::StreamBody::new(futures_util::stream::iter(
+                        frames,
+                    ))))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.into_body().collect().await.unwrap().to_bytes(),
+            "aws.protocols#restJson1 first {\"name\":\"n\"}"
+        );
+        // A body shorter than the requested prefix is delivered short and complete (the
+        // router asserts `complete()`), and still replays to the next claimant.
+        assert_eq!(
+            send(&app, sniff("/first").header("content-type", "application/json"), "B").await,
+            (StatusCode::OK, "aws.protocols#restJson1 first B".to_owned())
+        );
+    }
+
+    /// An open claim may escalate: ask for a small prefix, then a larger one, then decide.
+    /// The already-buffered bytes are reused; only the difference is read from the wire.
+    #[tokio::test]
+    async fn claims_escalate_to_larger_requirements() {
+        static FIRST: &[ProtocolOrder] = &[ProtocolOrder::Before("aws.protocols#restJson1")];
+        let app = app(&WITH_BODY_ROUTING, [body_routing(FIRST)]);
+        assert_eq!(
+            send(
+                &app,
+                post("/anywhere").header("x-body-claim", "escalate"),
+                "escalate: full payload"
+            )
+            .await,
+            (StatusCode::OK, "test#bodyRouting first escalate: full payload".to_owned())
+        );
+        assert_eq!(
+            send(
+                &app,
+                post("/first")
+                    .header("x-body-claim", "escalate")
+                    .header("content-type", "application/json"),
+                "{\"name\":\"long enough to escalate\"}"
+            )
+            .await,
+            (
+                StatusCode::OK,
+                "aws.protocols#restJson1 first {\"name\":\"long enough to escalate\"}".to_owned()
+            )
+        );
+    }
+
+    /// A router sees its requirement's decoded view; everything downstream of routing always
+    /// sees the raw wire bytes. `CaseFlip` decodes wire `SECOND` to the operation name
+    /// `second`; the handler receives the wire form untouched.
+    #[tokio::test]
+    async fn routers_see_decoded_views_and_handlers_see_wire_bytes() {
+        static FIRST: &[ProtocolOrder] = &[ProtocolOrder::Before("aws.protocols#restJson1")];
+        let app = app(&WITH_BODY_ROUTING, [body_routing(FIRST)]);
+        // Decoded prefix on an open claim.
+        assert_eq!(
+            send(&app, post("/anywhere").header("x-body-claim", "decoded"), "SECOND\nXYZ").await,
+            (StatusCode::OK, "test#bodyRouting second SECOND\nXYZ".to_owned())
+        );
+        // Decoded complete body on a settled claim (operation named in the body).
+        assert_eq!(
+            send(
+                &app,
+                post("/anywhere").header("x-body-claim", "envelope-decoded"),
+                "SECOND\nPAYLOAD"
+            )
+            .await,
+            (StatusCode::OK, "test#bodyRouting second SECOND\nPAYLOAD".to_owned())
+        );
+    }
+
+    /// A decode failure classifies by phase: during an open claim the bytes are simply not
+    /// this protocol's — the walk continues over the replayed buffer — while after
+    /// `MatchedNeedsBody` the claim is settled and the failure is the protocol's own
+    /// malformed request.
+    #[tokio::test]
+    async fn decode_failures_classify_by_claim_phase() {
+        static FIRST: &[ProtocolOrder] = &[ProtocolOrder::Before("aws.protocols#restJson1")];
+        let app = app(&WITH_BODY_ROUTING, [body_routing(FIRST)]);
+        let body = "\u{80}not the codec's alphabet";
+        let response = app
+            .clone()
+            .oneshot(
+                post("/first")
+                    .header("x-body-claim", "decoded")
+                    .header("content-type", "application/json")
+                    .body(Body::from_bytes(Bytes::from(body)))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.into_body().collect().await.unwrap().to_bytes(),
+            format!("aws.protocols#restJson1 first {body}")
+        );
+        let (status, text) = send(&app, post("/anywhere").header("x-body-claim", "envelope-decoded"), {
+            "\u{80}settled claim"
+        })
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(text.contains("malformed request"), "{text}");
+    }
+
+    /// After `MatchedNeedsBody` the claim is settled: an operation the body does not name is
+    /// this protocol's rejection, never a fall-through to later protocols or the unclaimed
+    /// response — exactly Coral's behavior once its RPC handler claims a JSON request.
+    #[tokio::test]
+    async fn matched_needs_body_rejections_never_fall_through() {
+        static FIRST: &[ProtocolOrder] = &[ProtocolOrder::Before("aws.protocols#restJson1")];
+        let app = app(&WITH_BODY_ROUTING, [body_routing(FIRST)]);
+        assert_eq!(
+            send(&app, post("/anywhere").header("x-body-claim", "envelope"), "second\npayload").await,
+            (StatusCode::OK, "test#bodyRouting second second\npayload".to_owned())
+        );
+        // `/first` names a restJson1 route and the body a bindable name for it — but the
+        // envelope claim settled first, so the unknown envelope operation is terminal.
+        let response = app
+            .oneshot(
+                post("/first")
+                    .header("x-body-claim", "envelope")
+                    .header("content-type", "application/json")
+                    .body(Body::from_bytes(Bytes::from_static(b"unknown\nfirst")))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert!(
+            response.headers().contains_key("x-amzn-errortype"),
+            "protocol-framed, not the unclaimed fallback"
         );
     }
 

@@ -64,6 +64,15 @@ enum BodyInner<B> {
         bytes: Option<Bytes>,
         trailers: Option<http::HeaderMap>,
     },
+    /// A prefix routing consumed off the wire, replayed ahead of the untouched remainder.
+    ///
+    /// Trailer frames the prefix reads happened to include are replayed after the tail
+    /// finishes, preserving their position at the end of the stream.
+    Prefixed {
+        prefix: Option<Bytes>,
+        trailers: Option<http::HeaderMap>,
+        tail: Box<RequestBody<B>>,
+    },
 }
 
 impl<B> RequestBody<B> {
@@ -90,11 +99,26 @@ impl<B> RequestBody<B> {
         })
     }
 
+    /// Replays `prefix` — bytes already consumed off the wire — ahead of the untouched `tail`.
+    ///
+    /// Trailer frames read with the prefix (`trailers`) are replayed after the tail finishes.
+    /// An empty prefix with no trailers is the tail unchanged.
+    pub(crate) fn prefixed(prefix: Bytes, trailers: Option<http::HeaderMap>, tail: RequestBody<B>) -> Self {
+        if prefix.is_empty() && trailers.is_none() {
+            return tail;
+        }
+        Self(BodyInner::Prefixed {
+            prefix: Some(prefix).filter(|prefix| !prefix.is_empty()),
+            trailers,
+            tail: Box::new(tail),
+        })
+    }
+
     // Only unpolled buffered bodies qualify. Polling or wrapping consumes this representation.
     pub(crate) fn buffered_content(&self) -> Option<&Bytes> {
         match &self.0 {
             BodyInner::Buffered { bytes, .. } => bytes.as_ref(),
-            BodyInner::Passthrough(_) | BodyInner::Boxed(_) => None,
+            BodyInner::Passthrough(_) | BodyInner::Boxed(_) | BodyInner::Prefixed { .. } => None,
         }
     }
 
@@ -186,6 +210,17 @@ where
                     .or_else(|| trailers.take().map(http_body::Frame::trailers))
                     .map(Ok),
             ),
+            BodyInner::Prefixed { prefix, trailers, tail } => {
+                if let Some(prefix) = prefix.take() {
+                    return std::task::Poll::Ready(Some(Ok(http_body::Frame::data(prefix))));
+                }
+                match std::pin::Pin::new(tail.as_mut()).poll_frame(cx) {
+                    std::task::Poll::Ready(None) => {
+                        std::task::Poll::Ready(trailers.take().map(http_body::Frame::trailers).map(Ok))
+                    }
+                    other => other,
+                }
+            }
         }
     }
 
@@ -196,6 +231,9 @@ where
             BodyInner::Buffered { bytes, trailers } => {
                 bytes.as_ref().is_none_or(|bytes| bytes.is_empty()) && trailers.is_none()
             }
+            BodyInner::Prefixed { prefix, trailers, tail } => {
+                prefix.is_none() && trailers.is_none() && tail.is_end_stream()
+            }
         }
     }
     fn size_hint(&self) -> http_body::SizeHint {
@@ -204,6 +242,15 @@ where
             BodyInner::Boxed(body) => body.size_hint(),
             BodyInner::Buffered { bytes, .. } => {
                 http_body::SizeHint::with_exact(bytes.as_ref().map_or(0, |bytes| bytes.len() as u64))
+            }
+            BodyInner::Prefixed { prefix, tail, .. } => {
+                let mut hint = tail.size_hint();
+                let prefix = prefix.as_ref().map_or(0, |prefix| prefix.len() as u64);
+                hint.set_lower(hint.lower() + prefix);
+                if let Some(upper) = hint.upper() {
+                    hint.set_upper(upper + prefix);
+                }
+                hint
             }
         }
     }

@@ -16,16 +16,7 @@ mod lambda_handler;
 #[doc(hidden)]
 pub mod request_spec;
 
-mod route;
-pub(crate) mod schema;
-
-#[doc(hidden)]
-pub use schema::aws_json_router;
-pub use schema::{
-    BodyProtocolRouter, CollectedBody, OperationHandlerBinding, OperationIndex, ProtocolRouter, RouteClaim,
-    RouterBuildContext, RouterBuildError, RoutingOptions, MultiProtocolRoutingFuture, MultiProtocolRoutingService,
-    SharedProtocolRouter,
-};
+pub(crate) mod route;
 
 pub(crate) mod tiny_map;
 

@@ -35,7 +35,7 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
 name = "aws-smithy-async"
-version = "1.2.14"
+version = "1.3.0"
 dependencies = [
  "futures-util",
  "pin-project-lite",
@@ -44,15 +44,19 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-cbor"
-version = "0.61.7"
+version = "0.64.0"
 dependencies = [
+ "aws-smithy-runtime-api",
+ "aws-smithy-schema",
  "aws-smithy-types",
+ "bigdecimal",
  "minicbor",
+ "num-bigint",
 ]
 
 [[package]]
 name = "aws-smithy-eventstream"
-version = "0.60.20"
+version = "0.61.5"
 dependencies = [
  "aws-smithy-types",
  "bytes",
@@ -61,7 +65,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http"
-version = "0.63.6"
+version = "0.64.1"
 dependencies = [
  "aws-smithy-eventstream",
  "aws-smithy-runtime-api",
@@ -81,20 +85,16 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-client"
-version = "1.1.12"
+version = "1.4.2"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-protocol-test",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
  "bytes",
- "h2 0.3.27",
  "h2 0.4.12",
- "http 0.2.12",
  "http 1.4.0",
- "http-body 0.4.6",
  "http-body 1.0.1",
- "hyper 0.14.32",
  "indexmap",
  "pin-project-lite",
  "serde",
@@ -105,15 +105,17 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-server"
-version = "0.66.4"
+version = "0.67.2"
 dependencies = [
  "aws-smithy-cbor",
  "aws-smithy-http",
  "aws-smithy-json",
  "aws-smithy-runtime-api",
+ "aws-smithy-schema",
  "aws-smithy-types",
  "aws-smithy-xml",
  "bytes",
+ "form_urlencoded",
  "futures-util",
  "http 1.4.0",
  "http-body 1.0.1",
@@ -122,12 +124,13 @@ dependencies = [
  "hyper-util",
  "mime",
  "nom",
+ "percent-encoding",
  "pin-project-lite",
  "regex",
  "serde_urlencoded",
  "thiserror",
  "tokio",
- "tower",
+ "tower 0.5.3",
  "tower-http 0.6.8",
  "tracing",
  "uuid",
@@ -135,14 +138,16 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-json"
-version = "0.62.5"
+version = "0.65.0"
 dependencies = [
+ "aws-smithy-runtime-api",
+ "aws-smithy-schema",
  "aws-smithy-types",
 ]
 
 [[package]]
 name = "aws-smithy-legacy-http"
-version = "0.62.14"
+version = "0.63.1"
 dependencies = [
  "aws-smithy-eventstream",
  "aws-smithy-http",
@@ -163,7 +168,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-legacy-http-server"
-version = "0.65.14"
+version = "0.66.2"
 dependencies = [
  "aws-smithy-cbor",
  "aws-smithy-json",
@@ -183,7 +188,7 @@ dependencies = [
  "serde_urlencoded",
  "thiserror",
  "tokio",
- "tower",
+ "tower 0.4.13",
  "tower-http 0.3.5",
  "tracing",
  "uuid",
@@ -191,14 +196,14 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-observability"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "aws-smithy-runtime-api",
 ]
 
 [[package]]
 name = "aws-smithy-protocol-test"
-version = "0.63.14"
+version = "0.64.0"
 dependencies = [
  "assert-json-diff",
  "aws-smithy-runtime-api",
@@ -215,19 +220,18 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.11.2"
+version = "1.15.1"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http",
  "aws-smithy-http-client",
  "aws-smithy-observability",
  "aws-smithy-runtime-api",
+ "aws-smithy-schema",
  "aws-smithy-types",
  "bytes",
  "fastrand",
- "http 0.2.12",
  "http 1.4.0",
- "http-body 0.4.6",
  "http-body 1.0.1",
  "http-body-util",
  "pin-project-lite",
@@ -239,7 +243,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.12.1"
+version = "1.18.0"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api-macros",
@@ -254,7 +258,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api-macros"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -262,8 +266,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-smithy-schema"
+version = "0.4.0"
+dependencies = [
+ "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "http 1.4.0",
+]
+
+[[package]]
 name = "aws-smithy-types"
-version = "1.4.8"
+version = "1.9.0"
 dependencies = [
  "base64-simd",
  "bytes",
@@ -288,8 +301,11 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-xml"
-version = "0.60.15"
+version = "0.64.0"
 dependencies = [
+ "aws-smithy-runtime-api",
+ "aws-smithy-schema",
+ "aws-smithy-types",
  "xmlparser",
 ]
 
@@ -301,6 +317,19 @@ checksum = "339abbe78e73178762e23bea9dfd08e697eb3f3301cd4be981c0f78ba5859195"
 dependencies = [
  "outref",
  "vsimd",
+]
+
+[[package]]
+name = "bigdecimal"
+version = "0.4.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8fa3f3d8cbf4dffcfe4991de61d012bef509a409ecbe9dd41049bfe32b4d4653"
+dependencies = [
+ "autocfg",
+ "libm",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
 ]
 
 [[package]]
@@ -834,7 +863,7 @@ dependencies = [
  "hyper 1.8.1",
  "libc",
  "pin-project-lite",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "tokio",
  "tower-service",
  "tracing",
@@ -983,6 +1012,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68ab91017fe16c622486840e4c83c9a37afeff978bd239b5293d61ece587de66"
 
 [[package]]
+name = "libm"
+version = "0.2.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
+
+[[package]]
 name = "litemap"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1026,23 +1061,11 @@ checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
 
 [[package]]
 name = "minicbor"
-version = "0.24.4"
+version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29be4f60e41fde478b36998b88821946aafac540e53591e76db53921a0cc225b"
+checksum = "c12b4033ffaa92fbf9df03df38d19324f52bad130dd223f811734a8006dd2d69"
 dependencies = [
  "half",
- "minicbor-derive",
-]
-
-[[package]]
-name = "minicbor-derive"
-version = "0.15.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd2209fff77f705b00c737016a48e73733d7fbccb8b007194db148f03561fb70"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -1371,7 +1394,7 @@ dependencies = [
  "http-body-util",
  "mime",
  "pin-project-lite",
- "tower",
+ "tower 0.5.3",
  "tracing",
 ]
 
@@ -1391,7 +1414,7 @@ dependencies = [
  "hyper 0.14.32",
  "mime",
  "pin-project-lite",
- "tower",
+ "tower 0.5.3",
  "tracing",
 ]
 
@@ -1412,7 +1435,7 @@ dependencies = [
  "http-body-util",
  "mime",
  "pin-project-lite",
- "tower",
+ "tower 0.5.3",
  "tracing",
 ]
 
@@ -1426,12 +1449,13 @@ dependencies = [
  "aws-smithy-legacy-http-server",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
+ "bytes",
  "futures-util",
  "http 0.2.12",
  "hyper 0.14.32",
  "mime",
  "pin-project-lite",
- "tower",
+ "tower 0.5.3",
  "tracing",
 ]
 
@@ -1628,6 +1652,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "sync_wrapper"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0bf256ce5efdfa370213c1dabab5935a12e49f2c58d15e9eac2870d3b4f27263"
+
+[[package]]
 name = "synstructure"
 version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1817,7 +1847,21 @@ dependencies = [
  "tokio",
  "tower-layer",
  "tower-service",
- "tracing",
+]
+
+[[package]]
+name = "tower"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ebe5ef63511595f1344e2d5cfa636d973292adc0eec1f0ad45fae9f0851ab1d4"
+dependencies = [
+ "futures-core",
+ "futures-util",
+ "pin-project-lite",
+ "sync_wrapper",
+ "tokio",
+ "tower-layer",
+ "tower-service",
 ]
 
 [[package]]
@@ -1870,7 +1914,6 @@ version = "0.1.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "63e71662fa4b2a2c3a26f570f037eb95bb1f85397f3cd8076caed2f026a6d100"
 dependencies = [
- "log",
  "pin-project-lite",
  "tracing-attributes",
  "tracing-core",

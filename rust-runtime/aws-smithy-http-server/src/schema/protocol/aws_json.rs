@@ -8,7 +8,6 @@
 
 use aws_smithy_json::codec::JsonCodec;
 use aws_smithy_runtime_api::http::Headers;
-use aws_smithy_schema::codec::DynCodec;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
 use aws_smithy_schema::{shape_id, Schema, ShapeId};
 
@@ -25,7 +24,7 @@ use super::response::{
     log_serialize_failure, serialize_modeled_error_response, stamp_error_extension, stamp_validation_extension,
     ResponseBindings,
 };
-use super::{BodyDirective, ServerEventStreamProtocol, ServerProtocol, ServerRequest};
+use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerProtocol, ServerRequest};
 
 fn serialize_error<P>(
     codec: &JsonCodec,
@@ -60,40 +59,33 @@ where
 
 macro_rules! aws_json_protocol {
     ($protocol:ty, $marker:ty, $protocol_id:expr, $content_type:literal, $type_value:expr) => {
-        impl ServerEventStreamProtocol for $protocol {
-            fn payload_codec(&self) -> &dyn DynCodec {
-                self.inner.codec()
-            }
-
-            fn event_stream_media_type(&self) -> &str {
-                "application/json"
-            }
-
-            fn initial_messages_in_frames(&self) -> bool {
-                true
-            }
-        }
-
-        impl ServerProtocol for $protocol {
+        impl MetadataRoutedProtocol for $protocol {
             fn from_build_context(
                 _ctx: &crate::schema::ProtocolBuildContext<'_>,
-            ) -> Result<crate::schema::SharedServerProtocol, crate::routing::RouterBuildError> {
-                Ok(crate::schema::SharedServerProtocol::new(Self::default()))
+            ) -> Result<Self, crate::schema::routing::RouterBuildError> {
+                Ok(Self::default())
             }
 
             fn build_router(
                 &self,
-                ctx: crate::routing::RouterBuildContext<'_>,
-            ) -> Result<crate::routing::SharedProtocolRouter, crate::routing::RouterBuildError> {
-                crate::routing::schema::aws_json_router::<$marker>(&ctx, $content_type)
+                ctx: crate::schema::routing::RouterBuildContext<'_>,
+            ) -> Result<impl crate::schema::routing::ProtocolRouter + 'static + use<>, crate::schema::routing::RouterBuildError> {
+                crate::schema::routing::aws_json_router(&ctx, $content_type)
             }
+
+            fn event_stream_framing(&self) -> Option<EventStreamFraming<'_>> {
+                Some(EventStreamFraming {
+                    payload_codec: self.inner.codec(),
+                    media_type: "application/json",
+                    initial_messages_in_frames: true,
+                })
+            }
+        }
+
+        impl ServerProtocol for $protocol {
             fn protocol_id(&self) -> &'static ShapeId<'static> {
                 static PROTOCOL_ID: ShapeId<'static> = $protocol_id;
                 &PROTOCOL_ID
-            }
-
-            fn event_stream(&self) -> Option<&dyn ServerEventStreamProtocol> {
-                Some(self)
             }
 
             fn inspect_request_head(

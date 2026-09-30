@@ -18,18 +18,6 @@ use std::sync::Arc;
 struct HttpOnly;
 
 impl ServerProtocol for HttpOnly {
-        fn from_build_context(
-            _ctx: &crate::schema::ProtocolBuildContext<'_>,
-        ) -> Result<crate::schema::SharedServerProtocol, crate::routing::RouterBuildError> {
-            unimplemented!("test protocol is constructed directly, not registered")
-        }
-
-    fn build_router(
-        &self,
-        ctx: crate::routing::RouterBuildContext<'_>,
-    ) -> Result<crate::routing::SharedProtocolRouter, crate::routing::RouterBuildError> {
-        crate::routing::schema::rest_router::<crate::protocol::rest_json_1::RestJson1>(ctx.targets, "application/json")
-    }
     fn protocol_id(&self) -> &'static aws_smithy_schema::ShapeId<'static> {
         static ID: aws_smithy_schema::ShapeId<'static> = shape_id!("test", "httpOnly");
         &ID
@@ -120,7 +108,7 @@ async fn check<Op: StreamingOperationShape<Input = (), Output = ()>>(expected: h
     }));
     let mut request = http::Request::new(body);
     request.extensions_mut().insert(SelectedProtocolOperation::new(
-        SharedServerProtocol::new(HttpOnly),
+        SharedServerProtocol::serde_only(HttpOnly),
         Op::SCHEMA,
         Default::default(),
     ));

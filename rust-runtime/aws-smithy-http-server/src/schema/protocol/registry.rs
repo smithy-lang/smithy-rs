@@ -13,10 +13,16 @@
 //!
 //! ```ignore
 //! pub static MY_PROTOCOLS: ProtocolRegistry = ProtocolRegistry::new(&[
-//!     ProtocolRegistration::new("example.protocols#myProtocol", MyProtocol::from_build_context)
+//!     ProtocolRegistration::metadata_routed::<MyProtocol>("example.protocols#myProtocol")
 //!         .with_order(&[ProtocolOrder::Before("aws.protocols#restJson1")]),
 //! ]);
 //! ```
+//!
+//! A protocol registers as the routing kind it implements:
+//! [`ProtocolRegistration::metadata_routed`] for a
+//! [`MetadataRoutedProtocol`](super::MetadataRoutedProtocol),
+//! [`ProtocolRegistration::body_routed`] for a
+//! [`BodyRoutedProtocol`](super::BodyRoutedProtocol).
 //!
 //! A service declaring several protocols is served by all of them. The claim order is decided
 //! only by [`ProtocolOrder`] constraints, resolved over every registered protocol — including
@@ -27,10 +33,10 @@
 
 use aws_smithy_types::Document;
 
-use crate::routing::RouterBuildError;
+use crate::schema::routing::RouterBuildError;
 use crate::schema::ServiceSchema;
 
-use super::{ServerProtocol as _, SharedServerProtocol};
+use super::{BodyRoutedProtocol, MetadataRoutedProtocol, SharedServerProtocol};
 
 /// Places a protocol relative to another protocol, by shape ID, in a multi-protocol service's
 /// claim order. Constraints resolve transitively over every registered protocol, so a constraint
@@ -80,9 +86,22 @@ impl<'a> ProtocolBuildContext<'a> {
     }
 }
 
-/// Builds a protocol from its registered configuration; see
-/// [`ServerProtocol::from_build_context`](super::ServerProtocol::from_build_context).
+/// Builds a protocol from its registered configuration into the erased handle carrying its
+/// routing kind. Produced by [`ProtocolRegistration::metadata_routed`] and
+/// [`ProtocolRegistration::body_routed`], never written by hand.
 pub type ProtocolFactory = fn(&ProtocolBuildContext<'_>) -> Result<SharedServerProtocol, RouterBuildError>;
+
+fn build_metadata_routed<P: MetadataRoutedProtocol>(
+    ctx: &ProtocolBuildContext<'_>,
+) -> Result<SharedServerProtocol, RouterBuildError> {
+    Ok(SharedServerProtocol::metadata_routed(P::from_build_context(ctx)?))
+}
+
+fn build_body_routed<P: BodyRoutedProtocol>(
+    ctx: &ProtocolBuildContext<'_>,
+) -> Result<SharedServerProtocol, RouterBuildError> {
+    Ok(SharedServerProtocol::body_routed(P::from_build_context(ctx)?))
+}
 
 /// A single protocol's entry in a [`ProtocolRegistry`].
 ///
@@ -96,14 +115,28 @@ pub struct ProtocolRegistration {
 }
 
 impl ProtocolRegistration {
-    /// Registers `build` as the factory for the protocol trait `protocol_id`.
+    /// Registers the metadata-routed protocol `P` for the protocol trait `protocol_id`.
     ///
-    /// The factory runs only for services whose schema declares `protocol_id`; the protocol it
-    /// builds must answer the same ID from [`protocol_id`](super::ServerProtocol::protocol_id).
-    pub const fn new(protocol_id: &'static str, build: ProtocolFactory) -> Self {
+    /// `P` is built only for services whose schema declares `protocol_id`, and must answer the
+    /// same ID from [`protocol_id`](super::ServerProtocol::protocol_id).
+    pub const fn metadata_routed<P: MetadataRoutedProtocol>(protocol_id: &'static str) -> Self {
         Self {
             protocol_id,
-            build,
+            build: build_metadata_routed::<P>,
+            order: &[],
+        }
+    }
+
+    /// Registers the body-routed protocol `P` for the protocol trait `protocol_id`.
+    ///
+    /// `P` is built only for services whose schema declares `protocol_id`, and must answer the
+    /// same ID from [`protocol_id`](super::ServerProtocol::protocol_id). The routing service
+    /// hands `P` only the service's non-streaming operations; see
+    /// [`BodyRoutedProtocol`](super::BodyRoutedProtocol).
+    pub const fn body_routed<P: BodyRoutedProtocol>(protocol_id: &'static str) -> Self {
+        Self {
+            protocol_id,
+            build: build_body_routed::<P>,
             order: &[],
         }
     }
@@ -156,28 +189,23 @@ impl ProtocolRegistry {
     /// The built-in protocols: rpcv2Cbor, awsJson1.0, awsJson1.1, restJson1 and restXml,
     /// chained into a fixed relative claim order by explicit constraints.
     pub const BUILTIN: ProtocolRegistry = ProtocolRegistry::new(&[
-        ProtocolRegistration::new(
+        ProtocolRegistration::metadata_routed::<crate::protocol::rpc_v2_cbor::RpcV2CborProtocol>(
             "smithy.protocols#rpcv2Cbor",
-            crate::protocol::rpc_v2_cbor::RpcV2CborProtocol::from_build_context,
         ),
-        ProtocolRegistration::new(
+        ProtocolRegistration::metadata_routed::<crate::protocol::aws_json_10::AwsJson1_0Protocol>(
             "aws.protocols#awsJson1_0",
-            crate::protocol::aws_json_10::AwsJson1_0Protocol::from_build_context,
         )
         .with_order(&[ProtocolOrder::After("smithy.protocols#rpcv2Cbor")]),
-        ProtocolRegistration::new(
+        ProtocolRegistration::metadata_routed::<crate::protocol::aws_json_11::AwsJson1_1Protocol>(
             "aws.protocols#awsJson1_1",
-            crate::protocol::aws_json_11::AwsJson1_1Protocol::from_build_context,
         )
         .with_order(&[ProtocolOrder::After("aws.protocols#awsJson1_0")]),
-        ProtocolRegistration::new(
+        ProtocolRegistration::metadata_routed::<crate::protocol::rest_json_1::RestJson1Protocol>(
             "aws.protocols#restJson1",
-            crate::protocol::rest_json_1::RestJson1Protocol::from_build_context,
         )
         .with_order(&[ProtocolOrder::After("aws.protocols#awsJson1_1")]),
-        ProtocolRegistration::new(
+        ProtocolRegistration::metadata_routed::<crate::protocol::rest_xml::RestXmlProtocol>(
             "aws.protocols#restXml",
-            crate::protocol::rest_xml::RestXmlProtocol::from_build_context,
         )
         .with_order(&[ProtocolOrder::After("aws.protocols#restJson1")]),
     ]);
@@ -274,12 +302,9 @@ mod tests {
 
     #[test]
     fn a_mismatched_protocol_id_is_an_error() {
-        fn wrong(_: &ProtocolBuildContext<'_>) -> Result<SharedServerProtocol, RouterBuildError> {
-            Ok(SharedServerProtocol::new(
-                crate::protocol::rest_xml::RestXmlProtocol::default(),
-            ))
-        }
-        let registration = ProtocolRegistration::new("aws.protocols#restJson1", wrong);
+        let registration = ProtocolRegistration::metadata_routed::<crate::protocol::rest_xml::RestXmlProtocol>(
+            "aws.protocols#restJson1",
+        );
         let err = registration
             .build(&ProtocolBuildContext::new(&REST_JSON_1_SERVICE))
             .expect_err("IDs disagree");

@@ -4,7 +4,6 @@
  */
 
 use aws_smithy_runtime_api::http::Headers;
-use aws_smithy_schema::codec::DynCodec;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
 use aws_smithy_schema::{shape_id, Schema, ShapeId};
 
@@ -19,7 +18,7 @@ use super::response::{
     log_serialize_failure, serialize_modeled_error_response, stamp_error_extension, stamp_validation_extension,
     ResponseBindings,
 };
-use super::{BodyDirective, ServerEventStreamProtocol, ServerProtocol, ServerRequest};
+use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerProtocol, ServerRequest};
 
 static PROTOCOL_ID: ShapeId<'static> = shape_id!("smithy.protocols", "rpcv2Cbor");
 const CONTENT_TYPE: &str = "application/cbor";
@@ -35,39 +34,32 @@ fn with_protocol_header(mut response: Response) -> Response {
     response
 }
 
-impl ServerEventStreamProtocol for RpcV2CborProtocol {
-    fn payload_codec(&self) -> &dyn DynCodec {
-        self.inner.codec()
-    }
-
-    fn event_stream_media_type(&self) -> &str {
-        CONTENT_TYPE
-    }
-
-    fn initial_messages_in_frames(&self) -> bool {
-        true
-    }
-}
-
-impl ServerProtocol for RpcV2CborProtocol {
+impl MetadataRoutedProtocol for RpcV2CborProtocol {
     fn from_build_context(
         _ctx: &crate::schema::ProtocolBuildContext<'_>,
-    ) -> Result<crate::schema::SharedServerProtocol, crate::routing::RouterBuildError> {
-        Ok(crate::schema::SharedServerProtocol::new(Self::default()))
+    ) -> Result<Self, crate::schema::routing::RouterBuildError> {
+        Ok(Self::default())
     }
 
     fn build_router(
         &self,
-        ctx: crate::routing::RouterBuildContext<'_>,
-    ) -> Result<crate::routing::SharedProtocolRouter, crate::routing::RouterBuildError> {
-        crate::routing::schema::rpc_v2_cbor_router(&ctx)
-    }
-    fn protocol_id(&self) -> &'static ShapeId<'static> {
-        &PROTOCOL_ID
+        ctx: crate::schema::routing::RouterBuildContext<'_>,
+    ) -> Result<impl crate::schema::routing::ProtocolRouter + 'static + use<>, crate::schema::routing::RouterBuildError> {
+        crate::schema::routing::rpc_v2_cbor_router(&ctx)
     }
 
-    fn event_stream(&self) -> Option<&dyn ServerEventStreamProtocol> {
-        Some(self)
+    fn event_stream_framing(&self) -> Option<EventStreamFraming<'_>> {
+        Some(EventStreamFraming {
+            payload_codec: self.inner.codec(),
+            media_type: CONTENT_TYPE,
+            initial_messages_in_frames: true,
+        })
+    }
+}
+
+impl ServerProtocol for RpcV2CborProtocol {
+    fn protocol_id(&self) -> &'static ShapeId<'static> {
+        &PROTOCOL_ID
     }
 
     fn inspect_request_head(
@@ -123,6 +115,24 @@ impl ServerProtocol for RpcV2CborProtocol {
         .map(with_protocol_header)
         .map(|response| stamp_error_extension(response, schema.shape_id().shape_name()))
         .unwrap_or_else(serialization_failure)
+    }
+
+    /// Routing rejections answer the way Coral's rpcv2 handler does. A framing violation —
+    /// forbidden `x-amz-target`/`x-amzn-target` headers, a malformed rpcv2 path — is `400`
+    /// with no `Content-Type`, the bare body `<MalformedHttpRequestException/>` and
+    /// `Connection: close` (Coral tears the connection down on these). Every other kind is
+    /// Coral's unknown-operation response, `404` with the CBOR `__type` body — including
+    /// `MethodNotAllowed`, because Coral has no `405`: a wrong method never matches the
+    /// handler and falls to the unknown-operation answer.
+    fn serialize_routing_error(&self, err: &crate::schema::routing::RoutingError) -> Response {
+        match err.kind() {
+            crate::schema::routing::RoutingErrorKind::MalformedRequest => http::Response::builder()
+                .status(http::StatusCode::BAD_REQUEST)
+                .header(http::header::CONNECTION, "close")
+                .body(crate::body::to_boxed("<MalformedHttpRequestException/>\n"))
+                .expect("a status and static body response is valid"),
+            _ => self.serialize_error(&crate::schema::routing::RoutingError::unknown_operation()),
+        }
     }
 
     /// rpcv2Cbor's `From<RequestRejection>` collapses every transport failure into a 400

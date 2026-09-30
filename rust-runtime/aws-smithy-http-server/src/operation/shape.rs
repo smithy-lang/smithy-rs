@@ -44,7 +44,7 @@ pub type StreamingInputFuture<I> = Pin<Box<dyn Future<Output = Result<I, Deseria
 ///
 /// Both halves work through the erased protocol handle selected by routing: the generated
 /// marshallers and unmarshallers ask it for the payload codec and the event media type, and
-/// [`ServerEventStreamProtocol::initial_messages_in_frames`](crate::schema::ServerEventStreamProtocol::initial_messages_in_frames) decides at runtime whether the non-stream
+/// [`EventStreamFraming::initial_messages_in_frames`](crate::schema::EventStreamFraming::initial_messages_in_frames) decides at runtime whether the non-stream
 /// members travel in `initial-request` and `initial-response` frames.
 ///
 /// An operation that streams on one side only implements the other half in terms of the
