@@ -2695,6 +2695,22 @@ mod loom_tests {
         }
     }
 
+    /// Extracts the HTTP/2 activation one waiter received.
+    fn take_ready_h2(cell: &OriginCell, waiter: WaiterId) -> h2::H2Activation {
+        match cell
+            .take_ready_event(waiter)
+            .expect("HTTP/2 waiter did not receive an activation")
+        {
+            AcquisitionStep::Resolved(AcquisitionOutcome::H2(activation)) => activation,
+            AcquisitionStep::Resolved(_) => {
+                panic!("HTTP/2 waiter received a non-activation outcome")
+            }
+            AcquisitionStep::StartEstablishment(_) => {
+                panic!("HTTP/2 waiter received establishment capacity")
+            }
+        }
+    }
+
     /// Races local HTTP/1 selection with close.
     ///
     /// The sender must have one winner and no installed record may survive.
@@ -4261,6 +4277,95 @@ mod loom_tests {
             drop(served);
             assert_eq!(1, admission.available_capacity_for_test());
             assert_eq!(0, admission.ordered_demand_count_for_test());
+            admission.clear_modeled_cells_for_test();
+        });
+    }
+
+    /// Races the peer-route cutoff computation with a younger waiter arriving.
+    ///
+    /// `route_cutoff` names `WaiterId(next_waiter_id - 1)` under the cell lock
+    /// that installs the route, so a waiter registered concurrently can land on
+    /// either side of the cutoff. Both placements are legal and differ only in
+    /// the gate's recorded cutoff; in neither may the younger waiter take the
+    /// route's single activation opportunity while the older waiter is queued.
+    #[test]
+    fn peer_route_cutoff_linearizes_against_a_younger_waiter_registration() {
+        loom::model(|| {
+            let (admission, connection_cell, requesting_cell) =
+                bounded_peer_cells(EligibilityGroup::Pool, EligibilityGroup::Pool);
+            let lease = OriginAdmission::lease_for_test(&admission);
+            let (connection, _physical) = ConnectionState::bounded(connection_info(1), lease);
+            let generation = OriginCell::install_h2_for_test(&connection_cell, connection, 1, None);
+            let (older, demand) =
+                requesting_cell.register_waiter_without_publish(ProtocolRequirement::H2Required);
+            let route = h2::H2Route::new(&connection_cell, generation);
+
+            let routing_cell = requesting_cell.clone();
+            let routing = loom::thread::spawn(move || {
+                let attached = OriginCell::attach_h2_route(
+                    &routing_cell,
+                    route,
+                    &EligibilityGroup::Pool,
+                    demand.id_for_test(),
+                );
+                OriginCell::offer_peer_h2(&routing_cell);
+                attached
+            });
+            let arriving_cell = requesting_cell.clone();
+            let arriving = loom::thread::spawn(move || {
+                OriginCell::register_waiter(&arriving_cell, ProtocolRequirement::H2Required)
+            });
+
+            assert!(
+                routing.join().unwrap(),
+                "peer route attachment lost the published demand"
+            );
+            let younger = arriving.join().unwrap();
+            assert!(
+                younger > older,
+                "concurrent registration did not allocate a younger waiter identity"
+            );
+
+            // Anti-starvation. The activation opportunity belongs to the oldest
+            // eligible waiter, whichever side of the cutoff the younger waiter
+            // landed on.
+            assert!(
+                requesting_cell.take_ready_event(younger).is_none(),
+                "younger HTTP/2 waiter overtook the older queued waiter"
+            );
+            // One opportunity per turn. A second prospective claim must not be
+            // minted while the first is outstanding.
+            assert_eq!(
+                Some((1, 0)),
+                connection_cell.h2_request_counts(generation),
+                "peer route gate minted a second activation opportunity"
+            );
+            assert_eq!(
+                2,
+                requesting_cell.probe().retained,
+                "the younger waiter was dropped instead of left queued"
+            );
+
+            let older_activation = take_ready_h2(&requesting_cell, older);
+            assert_eq!(generation, older_activation.generation());
+
+            // Releasing the older waiter's turn must hand the younger waiter the
+            // next opportunity, proving it stayed serviceable.
+            drop(older_activation);
+            let younger_activation = take_ready_h2(&requesting_cell, younger);
+            assert_eq!(generation, younger_activation.generation());
+            drop(younger_activation);
+
+            assert_eq!(0, requesting_cell.probe().retained);
+            assert_eq!(Some((0, 0)), connection_cell.h2_request_counts(generation));
+            assert_eq!(0, admission.ordered_demand_count_for_test());
+            assert_eq!(0, admission.available_capacity_for_test());
+            assert!(OriginCell::close_h2(
+                &connection_cell,
+                generation,
+                CloseReason::PoolDropped,
+            ));
+            assert_eq!(1, admission.available_capacity_for_test());
             admission.clear_modeled_cells_for_test();
         });
     }
