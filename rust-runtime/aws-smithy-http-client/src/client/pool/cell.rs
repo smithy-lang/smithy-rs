@@ -3712,4 +3712,115 @@ mod loom_tests {
             admission.clear_modeled_cells_for_test();
         });
     }
+
+    /// Races idle HTTP/2 capacity reclaim against direct reuse of that generation.
+    ///
+    /// The origin's only permit is held by an idle HTTP/2 generation in the
+    /// connection cell while a peer cell queues an `H1Required` demand that no
+    /// HTTP/2 supply can serve, so admission prepares
+    /// `CapacityReclaim::FromH2`. Running that reclaim crosses three lock
+    /// domains — admission, the connection cell's HTTP/2 record, and
+    /// connection close — and moves the permit while doing so. A direct
+    /// arrival calling `select_h2` contends for the middle domain.
+    ///
+    /// Either the reclaim wins, closing the generation and handing the permit
+    /// to the HTTP/1 demand while the arrival is refused cleanly, or the
+    /// activation wins, aborting the reclaim and leaving the permit with the
+    /// live connection and the demand still ordered. In both cases the origin
+    /// has exactly one permit throughout and the HTTP/1 waiter is eventually
+    /// served rather than stranded.
+    #[test]
+    fn idle_h2_reclaim_races_direct_h2_activation() {
+        loom::model(|| {
+            let (admission, connection_cell, requesting_cell) =
+                bounded_peer_cells(EligibilityGroup::Pool, EligibilityGroup::Pool);
+            let lease = OriginAdmission::lease_for_test(&admission);
+            let (connection, _physical) = ConnectionState::bounded(connection_info(1), lease);
+            let generation =
+                OriginCell::install_h2_for_test(&connection_cell, connection.clone(), 1, None);
+            let (waiter, demand) =
+                requesting_cell.register_waiter_without_publish(ProtocolRequirement::H1Required);
+            let action = OriginAdmission::submit_action_without_running(
+                &admission,
+                requesting_cell.id().partition(),
+                demand,
+            )
+            .expect("H1-required demand did not prepare idle HTTP/2 reclaim");
+            assert!(
+                matches!(action, AdmissionAction::ReclaimCapacity(_)),
+                "H1-required demand prepared something other than capacity reclaim"
+            );
+            assert_eq!(0, admission.available_capacity_for_test());
+
+            let reclaiming = loom::thread::spawn(move || {
+                OriginAdmission::run_action_chain(Some(action));
+            });
+            let activating_cell = connection_cell.clone();
+            let activating = loom::thread::spawn(move || OriginCell::select_h2(&activating_cell));
+            reclaiming.join().unwrap();
+            let activation = activating.join().unwrap();
+
+            // Snapshot the raced outcome before any activation fallback runs.
+            let closed = connection.probe().close_reason;
+            let accepting = connection_cell.accepting_h2_generation();
+            if activation.is_some() {
+                assert_eq!(
+                    None, closed,
+                    "reclaim closed a generation that had already been activated"
+                );
+                assert_eq!(
+                    Some(generation),
+                    accepting,
+                    "aborted reclaim detached the activated generation"
+                );
+                assert_eq!(
+                    1,
+                    admission.ordered_demand_count_for_test(),
+                    "aborted reclaim dropped the H1-required demand"
+                );
+                assert!(
+                    requesting_cell.take_ready_event(waiter).is_none(),
+                    "aborted reclaim delivered capacity it never recovered"
+                );
+            } else {
+                assert_eq!(
+                    Some(CloseReason::Reclaimed),
+                    closed,
+                    "activation was refused without the generation being reclaimed"
+                );
+                assert_eq!(
+                    None, accepting,
+                    "reclaimed generation still accepted activations"
+                );
+            }
+            assert_eq!(
+                0,
+                admission.available_capacity_for_test(),
+                "the origin's single permit was duplicated across the reclaim crossing"
+            );
+
+            // Releasing the losing side must leave the H1-required waiter
+            // served exactly once by that same permit.
+            drop(activation);
+            let AcquisitionStep::StartEstablishment(permit) = requesting_cell
+                .take_ready_event(waiter)
+                .expect("H1-required waiter was stranded by idle HTTP/2 reclaim")
+            else {
+                panic!("idle HTTP/2 reclaim produced a non-capacity result");
+            };
+            assert_eq!(
+                Some(CloseReason::Reclaimed),
+                connection.probe().close_reason
+            );
+            assert_eq!(None, connection_cell.accepting_h2_generation());
+            assert_eq!(0, admission.available_capacity_for_test());
+            assert!(
+                requesting_cell.take_ready_event(waiter).is_none(),
+                "H1-required waiter received more than one capacity permit"
+            );
+            drop(permit);
+            assert_eq!(1, admission.available_capacity_for_test());
+            admission.clear_modeled_cells_for_test();
+        });
+    }
 }
