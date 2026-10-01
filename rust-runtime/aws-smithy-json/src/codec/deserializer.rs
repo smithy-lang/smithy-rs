@@ -598,6 +598,11 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             Some(TimestampFormat::EpochSeconds) => Format::EpochSeconds,
             Some(TimestampFormat::DateTime) => Format::DateTime,
             Some(TimestampFormat::HttpDate) => Format::HttpDate,
+            Some(other) => {
+                return Err(SerdeError::unsupported(format!(
+                    "unsupported timestamp format {other:?}"
+                )))
+            }
             None => self.settings.default_timestamp_format(),
         };
         match self.remaining().first() {
@@ -625,6 +630,11 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                         Some(TimestampFormat::HttpDate) => Format::HttpDate,
                         Some(TimestampFormat::EpochSeconds) => Format::EpochSeconds,
                         Some(TimestampFormat::DateTime) => Format::DateTimeWithOffset,
+                        Some(other) => {
+                            return Err(SerdeError::unsupported(format!(
+                                "unsupported timestamp format {other:?}"
+                            )))
+                        }
                         None => crate::codec::string_timestamp_format(
                             self.settings.default_timestamp_format(),
                         ),

@@ -265,26 +265,31 @@ impl<'a> XmlDeserializer<'a> {
         &input[el_start..]
     }
 
-    fn resolve_timestamp_format(&self, schema: &Schema<'_>) -> TimestampFormat {
-        schema
-            .timestamp_format()
-            .map(|t| match t.format() {
-                aws_smithy_schema::traits::TimestampFormat::EpochSeconds => {
-                    TimestampFormat::EpochSeconds
-                }
-                // Use the lenient `DateTimeWithOffset` so timezone-suffixed
-                // RFC-3339 strings (e.g. `2019-12-17T00:48:18+01:00`) parse —
-                // matches the Smithy `date-time` protocol-test expectations
-                // and the JSON codec's behavior.
-                aws_smithy_schema::traits::TimestampFormat::DateTime => {
-                    TimestampFormat::DateTimeWithOffset
-                }
-                aws_smithy_schema::traits::TimestampFormat::HttpDate => TimestampFormat::HttpDate,
-            })
-            .unwrap_or_else(|| match self.settings.default_timestamp_format() {
+    fn resolve_timestamp_format(&self, schema: &Schema<'_>) -> Result<TimestampFormat, SerdeError> {
+        let Some(t) = schema.timestamp_format() else {
+            return Ok(match self.settings.default_timestamp_format() {
                 TimestampFormat::DateTime => TimestampFormat::DateTimeWithOffset,
                 other => other,
-            })
+            });
+        };
+        Ok(match t.format() {
+            aws_smithy_schema::traits::TimestampFormat::EpochSeconds => {
+                TimestampFormat::EpochSeconds
+            }
+            // Use the lenient `DateTimeWithOffset` so timezone-suffixed
+            // RFC-3339 strings (e.g. `2019-12-17T00:48:18+01:00`) parse —
+            // matches the Smithy `date-time` protocol-test expectations
+            // and the JSON codec's behavior.
+            aws_smithy_schema::traits::TimestampFormat::DateTime => {
+                TimestampFormat::DateTimeWithOffset
+            }
+            aws_smithy_schema::traits::TimestampFormat::HttpDate => TimestampFormat::HttpDate,
+            other => {
+                return Err(SerdeError::unsupported(format!(
+                    "unsupported timestamp format {other:?}"
+                )))
+            }
+        })
     }
 }
 
@@ -663,7 +668,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
 
     fn read_timestamp(&mut self, schema: &Schema<'_>) -> Result<DateTime, SerdeError> {
         let text = self.take_text()?;
-        let format = self.resolve_timestamp_format(schema);
+        let format = self.resolve_timestamp_format(schema)?;
         DateTime::from_str(text.as_ref(), format).map_err(|e| SerdeError::custom(format!("{e}")))
     }
 

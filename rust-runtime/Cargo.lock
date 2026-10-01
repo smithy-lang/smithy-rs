@@ -3062,9 +3062,9 @@ dependencies = [
 
 [[package]]
 name = "metrique-core"
-version = "0.1.22"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bd60ab3f5d8e13e36aa1d1dd9cc4920012dd21a25bd7311ae3c39810648e068"
+checksum = "763cd15a486b66bb0c4e7b10d6ffd3722d25a36c06ecaffbe3aa2fc4b7a5b688"
 dependencies = [
  "itertools 0.14.0",
  "metrique-writer-core",
