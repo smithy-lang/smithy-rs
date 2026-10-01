@@ -54,7 +54,7 @@
 //!         &self,
 //!         response: &'a Self::Response,
 //!         output_schema: &Schema<'_>,
-//!         cfg: &ConfigBag,
+//!         cfg: &'a ConfigBag,
 //!     ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
 //!         todo!()
 //!     }
@@ -161,17 +161,27 @@ pub trait ClientProtocolInner: Send + Sync + std::fmt::Debug {
         cfg: &ConfigBag,
     ) -> Result<Self::Request, SerdeError>;
 
-    /// Deserializes a response message, returning a boxed [`ShapeDeserializer`] over
-    /// the response body.
+    /// Deserializes a response message, returning a boxed [`ShapeDeserializer`] that supplies
+    /// every member of `output_schema` this protocol carries in the response.
     ///
-    /// The deserializer reads only body members. Callers that also need to read
-    /// transport-bound members (HTTP headers, status code) do that directly in
-    /// generated code before consuming the deserializer.
+    /// The protocol, not the caller, decides where each member comes from. A protocol that uses
+    /// HTTP bindings reads `@httpHeader`, `@httpPrefixHeaders`, `@httpResponseCode` and
+    /// `@httpPayload` members from the HTTP message and the rest from the body (see
+    /// [`http_output_deserializer`](crate::http_protocol::http_output_deserializer)); a body-only
+    /// protocol ignores those traits and reads every member from the body. Generated code hands
+    /// the result to the output builder's member consumer and does no transport parsing itself.
+    ///
+    /// A `@streaming` payload member is never supplied: the caller owns the live body.
+    ///
+    /// `cfg` shares the returned deserializer's lifetime so a protocol can defer reading
+    /// response-scoped settings until they are needed; the HTTP-binding composite reads
+    /// `NonUtf8HeaderHandling` only after a header fails to parse. An implementation that does
+    /// not keep `cfg` may declare it as a plain `&ConfigBag`.
     fn deserialize_response<'a>(
         &self,
         response: &'a Self::Response,
         output_schema: &Schema<'_>,
-        cfg: &ConfigBag,
+        cfg: &'a ConfigBag,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError>;
 
     /// Extracts canonical error metadata (code, message, request id) from a
@@ -208,23 +218,36 @@ pub trait ClientProtocolInner: Send + Sync + std::fmt::Debug {
     /// Returns a [`ShapeDeserializer`] positioned at the body of an error
     /// response — *inside* the protocol's error envelope, where applicable.
     ///
-    /// Generated error dispatch code calls this to obtain a deserializer
-    /// usable with `<SpecificError>::deserialize_with_response(...)` (or the
-    /// equivalent generated `deserialize`), regardless of which protocol is
-    /// active at runtime.
+    /// Generated error dispatch code calls this to obtain a deserializer for the modeled error's
+    /// member consumer, regardless of which protocol is active at runtime. As with
+    /// [`deserialize_response`](Self::deserialize_response), the protocol decides which members
+    /// come from the transport and which from the body.
     ///
-    /// For envelope-less protocols (awsJson1.0/1.1, restJson1, rpcv2Cbor) the
-    /// default implementation suffices: the body root *is* the error body, so
-    /// it forwards to [`deserialize_response`](Self::deserialize_response)
-    /// against [`prelude::DOCUMENT`](crate::prelude::DOCUMENT).
+    /// For **body-only** protocols (awsJson1.0/1.1, awsQuery, ec2Query, rpcv2Cbor) the default
+    /// implementation suffices: the body root *is* the error body, so it forwards to
+    /// [`deserialize_response`](Self::deserialize_response) against
+    /// [`prelude::DOCUMENT`](crate::prelude::DOCUMENT), and HTTP response bindings are correctly
+    /// ignored.
     ///
-    /// Envelope-bearing protocols (restXml wrapped / unwrapped, awsQuery,
-    /// ec2Query) MUST override to strip the outer `<ErrorResponse>` /
-    /// `<Error>` wrapper before returning the deserializer.
+    /// Envelope-bearing protocols (restXml wrapped / unwrapped, awsQuery, ec2Query) MUST
+    /// override to strip the outer `<ErrorResponse>` / `<Error>` wrapper before returning the
+    /// deserializer.
+    ///
+    /// # Protocols that use HTTP bindings must override this
+    ///
+    /// A protocol whose errors carry `@httpHeader`, `@httpPrefixHeaders` or
+    /// `@httpResponseCode` members MUST override this and build its deserializer with
+    /// [`http_error_deserializer`](crate::http_protocol::http_error_deserializer), even when its
+    /// body needs no envelope positioning. The default's two properties are both accidents
+    /// rather than contracts: it evaluates the *success* body-only fast path, and it does so
+    /// against a schema that is not the error's. Neither is safe to depend on, because the
+    /// concrete error schema is unknown until the generated error variant calls `read_struct`.
+    /// Every built-in REST protocol therefore overrides this, and
+    /// `the_error_path_never_takes_the_body_only_fast_path` pins the consequence.
     fn deserialize_error_response<'a>(
         &self,
         response: &'a Self::Response,
-        cfg: &ConfigBag,
+        cfg: &'a ConfigBag,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
         self.deserialize_response(response, &crate::prelude::DOCUMENT, cfg)
     }
@@ -377,7 +400,7 @@ pub trait ClientProtocol<
         &self,
         response: &'a Res,
         output_schema: &Schema<'_>,
-        cfg: &ConfigBag,
+        cfg: &'a ConfigBag,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError>;
 
     /// Extracts canonical error metadata from a response.
@@ -396,7 +419,7 @@ pub trait ClientProtocol<
     fn deserialize_error_response<'a>(
         &self,
         response: &'a Res,
-        cfg: &ConfigBag,
+        cfg: &'a ConfigBag,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError>;
 
     /// Updates a previously serialized request with a resolved endpoint.
@@ -452,7 +475,7 @@ where
         &self,
         response: &'a P::Response,
         output_schema: &Schema<'_>,
-        cfg: &ConfigBag,
+        cfg: &'a ConfigBag,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
         <Self as ClientProtocolInner>::deserialize_response(self, response, output_schema, cfg)
     }
@@ -468,7 +491,7 @@ where
     fn deserialize_error_response<'a>(
         &self,
         response: &'a P::Response,
-        cfg: &ConfigBag,
+        cfg: &'a ConfigBag,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
         <Self as ClientProtocolInner>::deserialize_error_response(self, response, cfg)
     }
@@ -825,6 +848,8 @@ mod tests {
             &self,
             _response: &'a Response,
             _output_schema: &Schema<'_>,
+            // Deliberately without `'a`: an implementation that does not keep the bag may
+            // keep the pre-`'a` signature, and this pins that it still compiles.
             _cfg: &ConfigBag,
         ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
             unimplemented!()
@@ -956,7 +981,7 @@ mod tests {
             &self,
             _response: &'a Response,
             output_schema: &Schema<'_>,
-            _cfg: &ConfigBag,
+            _cfg: &'a ConfigBag,
         ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
             *self
                 .last_schema_id

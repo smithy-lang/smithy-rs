@@ -675,6 +675,13 @@ impl<'a> ShapeDeserializer for DocumentShapeDeserializer<'a> {
         matches!(self.cursor, Document::Null)
     }
 
+    /// Nothing to advance. The cursor points at an already-parsed node of an owned
+    /// document tree, and `read_struct` hands each member its own sub-deserializer, so
+    /// declining a value has no effect on the parent's iteration.
+    fn skip_value(&mut self) -> Result<(), SerdeError> {
+        Ok(())
+    }
+
     fn container_size(&self) -> Option<usize> {
         let raw = match self.cursor {
             Document::Array(items) => items.len(),
@@ -1441,5 +1448,105 @@ mod tests {
         );
         // An i64-underflowing negative exponent cannot reach this helper:
         // BigDecimal rejects it because its resulting scale is out of range.
+    }
+}
+
+/// Tests for the [`ShapeDeserializer::skip_value`] contract.
+///
+/// This deserializer walks an already-parsed document tree and hands each member its own
+/// sub-deserializer, so skipping must be a no-op: there is no shared cursor to advance.
+#[cfg(test)]
+mod skip_value_contract {
+    use super::*;
+    use crate::serde::ShapeDeserializer;
+    use crate::{shape_id, Schema, ShapeType};
+    use std::collections::HashMap;
+
+    static NAME: Schema<'static> = Schema::new_member(
+        shape_id!("smithy.example", "Person", "name"),
+        ShapeType::String,
+        "name",
+        0,
+    );
+    static AGE: Schema<'static> = Schema::new_member(
+        shape_id!("smithy.example", "Person", "age"),
+        ShapeType::Integer,
+        "age",
+        1,
+    );
+    static PERSON: Schema<'static> = Schema::new_struct(
+        shape_id!("smithy.example", "Person"),
+        ShapeType::Structure,
+        &[&NAME, &AGE],
+    );
+
+    #[test]
+    fn skipping_one_member_leaves_the_others_readable() {
+        let doc = Document::Object(HashMap::from([
+            ("name".to_string(), Document::String("Alex".into())),
+            (
+                "age".to_string(),
+                Document::Number(aws_smithy_types::Number::PosInt(30)),
+            ),
+        ]));
+        let mut deser = DocumentShapeDeserializer::new(&doc);
+        let mut age = None;
+        deser
+            .read_struct(&PERSON, &mut |member, d| {
+                match member.member_index() {
+                    Some(0) => d.skip_value()?,
+                    Some(1) => age = Some(d.read_integer(member)?),
+                    _ => {}
+                }
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(age, Some(30));
+    }
+
+    #[test]
+    fn skipping_an_aggregate_member_is_a_no_op() {
+        // Nested content must not disturb anything, since the sub-deserializer is a
+        // separate view over its own node.
+        let doc = Document::Object(HashMap::from([
+            (
+                "name".to_string(),
+                Document::Array(vec![
+                    Document::String("nested".into()),
+                    Document::Object(HashMap::from([(
+                        "age".to_string(),
+                        Document::Number(aws_smithy_types::Number::PosInt(999)),
+                    )])),
+                ]),
+            ),
+            (
+                "age".to_string(),
+                Document::Number(aws_smithy_types::Number::PosInt(30)),
+            ),
+        ]));
+        let mut deser = DocumentShapeDeserializer::new(&doc);
+        let mut age = None;
+        deser
+            .read_struct(&PERSON, &mut |member, d| {
+                match member.member_index() {
+                    Some(0) => d.skip_value()?,
+                    Some(1) => age = Some(d.read_integer(member)?),
+                    _ => {}
+                }
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(age, Some(30), "the decoy nested `age` must not be read");
+    }
+
+    #[test]
+    fn skip_value_does_not_consume_the_cursor() {
+        // Skipping then reading the same value must still work: the override must not
+        // have side effects.
+        let doc = Document::String("still here".into());
+        let mut deser = DocumentShapeDeserializer::new(&doc);
+        let dynamic: &mut dyn ShapeDeserializer = &mut deser;
+        dynamic.skip_value().unwrap();
+        assert_eq!(deser.read_string(&NAME).unwrap(), "still here");
     }
 }

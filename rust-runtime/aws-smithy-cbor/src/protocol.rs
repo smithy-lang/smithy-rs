@@ -97,7 +97,7 @@ impl ClientProtocolInner for RpcV2CborProtocol {
         &self,
         response: &'a Response,
         output_schema: &Schema<'_>,
-        cfg: &ConfigBag,
+        cfg: &'a ConfigBag,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
         self.inner
             .deserialize_response(response, output_schema, cfg)

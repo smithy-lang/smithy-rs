@@ -125,7 +125,7 @@ impl ClientProtocolInner for AwsQueryProtocol {
         &self,
         response: &'a Response,
         _output_schema: &Schema<'_>,
-        _cfg: &ConfigBag,
+        _cfg: &'a ConfigBag,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
         use aws_smithy_schema::codec::Codec;
         use aws_smithy_xml::codec::{XmlCodec, XmlCodecSettings};
@@ -356,9 +356,10 @@ mod tests {
         static OUT_SCHEMA: Schema<'static> =
             Schema::new_struct(shape_id!("t", "S"), ShapeType::Structure, &[&NAME, &AGE]);
 
+        let base_cfg = ConfigBag::base();
         let mut deser = AwsQueryProtocol::new()
             .with_service_version("1.0")
-            .deserialize_response(&response, &OUT_SCHEMA, &ConfigBag::base())
+            .deserialize_response(&response, &OUT_SCHEMA, &base_cfg)
             .unwrap();
         let mut name = String::new();
         let mut age = 0i32;
@@ -374,6 +375,60 @@ mod tests {
             .unwrap();
         assert_eq!(name, "Alice");
         assert_eq!(age, 30);
+    }
+
+    /// awsQuery must ignore HTTP response bindings, reading every member from the XML envelope.
+    ///
+    /// This protocol builds its own deserializer over the stripped `<...Result>` element rather
+    /// than delegating to [`HttpRpcProtocol`](aws_smithy_schema::http_protocol::HttpRpcProtocol),
+    /// so it does not inherit that type's body-only guarantee and needs its own guard. Envelope
+    /// positioning and binding applicability are independent concerns: restXml positions its
+    /// error deserializer the same way *and* reads bindings, whereas this protocol positions and
+    /// reads nothing from the transport.
+    #[test]
+    fn deserialize_response_ignores_http_response_bindings() {
+        let xml = "<GetUserResponse><GetUserResult><Name>from-body</Name></GetUserResult></GetUserResponse>";
+        let mut response = Response::new(418u16.try_into().unwrap(), SdkBody::from(xml));
+        response
+            .headers_mut()
+            .insert("x-name", "from-header".to_string());
+
+        static BOUND_NAME: Schema<'static> =
+            Schema::new_member(shape_id!("t", "S"), ShapeType::String, "Name", 0)
+                .with_http_header("x-name");
+        static BOUND_STATUS: Schema<'static> =
+            Schema::new_member(shape_id!("t", "S"), ShapeType::Integer, "Status", 1)
+                .with_http_response_code();
+        static BOUND_SCHEMA: Schema<'static> = Schema::new_struct(
+            shape_id!("t", "S"),
+            ShapeType::Structure,
+            &[&BOUND_NAME, &BOUND_STATUS],
+        );
+
+        let mut name = None;
+        let mut status = None;
+        AwsQueryProtocol::new()
+            .with_service_version("1.0")
+            .deserialize_response(&response, &BOUND_SCHEMA, &ConfigBag::base())
+            .unwrap()
+            .read_struct(&BOUND_SCHEMA, &mut |member, d| {
+                match member.member_name() {
+                    Some("Name") => name = Some(d.read_string(member)?),
+                    Some("Status") => status = Some(d.read_integer(member)?),
+                    _ => {}
+                }
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(
+            name.as_deref(),
+            Some("from-body"),
+            "a bound member must come from the XML body, never from the header"
+        );
+        assert_eq!(
+            status, None,
+            "an `@httpResponseCode` member has no body representation here, so it stays absent"
+        );
     }
 
     #[test]

@@ -432,6 +432,13 @@ impl<'a> ShapeDeserializer for HttpStringDeserializer<'a> {
         self.current_value().is_empty()
     }
 
+    /// Nothing to advance. This deserializer holds a single already-extracted value and
+    /// cannot read structures at all, so it is never the parent of a member consumer;
+    /// declining the value simply means not reading it.
+    fn skip_value(&mut self) -> Result<(), SerdeError> {
+        Ok(())
+    }
+
     fn container_size(&self) -> Option<usize> {
         // Count commas + 1 for list size estimation
         Some(self.input.matches(',').count() + 1)
@@ -649,5 +656,40 @@ mod tests {
         let mut deser = codec.create_deserializer(input);
         let result = deser.read_string(&STRING).unwrap();
         assert_eq!(result, "hello");
+    }
+}
+
+/// Tests for the [`ShapeDeserializer::skip_value`] contract.
+#[cfg(test)]
+mod skip_value_contract {
+    use super::*;
+    use crate::prelude::*;
+    use crate::serde::ShapeDeserializer;
+
+    #[test]
+    fn skip_value_is_a_no_op_and_leaves_the_value_readable() {
+        // This deserializer holds a single already-extracted value and cannot read
+        // structures, so it is never the parent of a member consumer. Skipping means
+        // "don't read it", with nothing to advance — and notably must not fall through to
+        // the allocating trait default, whose `read_document` this type rejects.
+        let mut deser = HttpStringDeserializer::new("hello");
+        let dynamic: &mut dyn ShapeDeserializer = &mut deser;
+        dynamic.skip_value().expect("skip must succeed");
+        assert_eq!(deser.read_string(&STRING).unwrap(), "hello");
+    }
+
+    #[test]
+    fn skip_value_succeeds_where_the_default_would_fail() {
+        // Guards the override: `read_document` is unsupported here, so if the override
+        // were removed this would start returning an error.
+        let mut deser = HttpStringDeserializer::new("value");
+        assert!(
+            deser.read_document(&DOCUMENT).is_err(),
+            "precondition: this deserializer cannot produce documents"
+        );
+        let mut deser = HttpStringDeserializer::new("value");
+        deser
+            .skip_value()
+            .expect("override must not use read_document");
     }
 }

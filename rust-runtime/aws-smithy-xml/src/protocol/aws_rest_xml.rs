@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use crate::codec::{XmlCodec, XmlCodecSettings, XmlDeserializer};
 use crate::decode::{try_data, Document};
-use aws_smithy_schema::http_protocol::HttpBindingProtocol;
+use aws_smithy_schema::http_protocol::{http_error_deserializer, HttpBindingProtocol};
 use aws_smithy_schema::serde::SerdeError;
 use aws_smithy_schema::Schema;
 use aws_smithy_schema::{shape_id, ShapeId};
@@ -204,7 +204,7 @@ impl aws_smithy_schema::protocol::ClientProtocolInner for AwsRestXmlProtocol {
         &self,
         response: &'a aws_smithy_runtime_api::http::Response,
         output_schema: &Schema<'_>,
-        cfg: &ConfigBag,
+        cfg: &'a ConfigBag,
     ) -> Result<
         Box<dyn aws_smithy_schema::serde::ShapeDeserializer + 'a>,
         aws_smithy_schema::serde::SerdeError,
@@ -250,10 +250,16 @@ impl aws_smithy_schema::protocol::ClientProtocolInner for AwsRestXmlProtocol {
     /// For the wrapped variant, uses [`find_error_element_slice`] to locate
     /// the `<Error>` sub-element. For `noErrorWrapping`, the body root IS
     /// `<Error>`, so the body is used unchanged.
+    ///
+    /// The positioned deserializer is then wrapped so the error's modeled `@httpHeader`,
+    /// `@httpPrefixHeaders`, and `@httpResponseCode` members are read from the HTTP message.
+    /// Envelope positioning and binding routing are independent: the codec sees the `<Error>`
+    /// sub-slice, while the wrapper reads the response's headers and status. This is why the
+    /// wrapping helper takes an already-prepared body rather than building one.
     fn deserialize_error_response<'a>(
         &self,
         response: &'a aws_smithy_runtime_api::http::Response,
-        _cfg: &ConfigBag,
+        cfg: &'a ConfigBag,
     ) -> Result<
         Box<dyn aws_smithy_schema::serde::ShapeDeserializer + 'a>,
         aws_smithy_schema::serde::SerdeError,
@@ -264,7 +270,11 @@ impl aws_smithy_schema::protocol::ClientProtocolInner for AwsRestXmlProtocol {
         } else {
             find_error_element_slice(body)
         };
-        Ok(Box::new(XmlDeserializer::new(inner, self.settings.clone())))
+        Ok(http_error_deserializer(
+            XmlDeserializer::new(inner, self.settings.clone()),
+            response,
+            cfg,
+        ))
     }
 
     fn payload_codec(&self) -> Option<&dyn aws_smithy_schema::codec::DynCodec> {
@@ -707,5 +717,89 @@ mod tests {
         let body = &[0xFFu8, 0xFE, 0xFD][..];
         let slice = find_error_element_slice(body);
         assert_eq!(slice, body);
+    }
+
+    // ---------------------------------------------------------------------------------
+    // envelope positioning and binding routing compose
+    // ---------------------------------------------------------------------------------
+
+    static ERR_REASON: Schema<'static> = Schema::new_member(
+        shape_id!("test", "Err$reason"),
+        ShapeType::String,
+        "reason",
+        0,
+    )
+    .with_http_header("x-reason");
+    static ERR_STATUS: Schema<'static> = Schema::new_member(
+        shape_id!("test", "Err$status"),
+        ShapeType::Integer,
+        "status",
+        1,
+    )
+    .with_http_response_code();
+    static ERR_NAME: Schema<'static> =
+        Schema::new_member(shape_id!("test", "Err$name"), ShapeType::String, "name", 2);
+    static ERR_SCHEMA: Schema<'static> = Schema::new_struct(
+        shape_id!("test", "Err"),
+        ShapeType::Structure,
+        &[&ERR_REASON, &ERR_STATUS, &ERR_NAME],
+    );
+
+    fn http_response_with_header(
+        name: &str,
+        value: &str,
+        body: &[u8],
+    ) -> aws_smithy_runtime_api::http::Response {
+        let mut response = http_response(body);
+        response
+            .headers_mut()
+            .insert(name.to_string(), value.to_string());
+        response
+    }
+
+    #[test]
+    fn a_modeled_error_reads_its_header_and_its_body_member_from_the_envelope() {
+        // The two concerns are independent and must both hold: the codec sees the `<Error>`
+        // sub-slice, while the wrapper reads the response's own headers and status. Before the
+        // error path was wrapped, a modeled error's header-bound members were silently absent.
+        let protocol = AwsRestXmlProtocol::new();
+        let response = http_response_with_header(
+            "x-reason",
+            "throttled",
+            b"<ErrorResponse>\
+                <Error><name>Carol</name></Error>\
+                <RequestId>req-1</RequestId>\
+                </ErrorResponse>",
+        );
+        let cfg = ConfigBag::base();
+
+        let mut reason = None;
+        let mut status = None;
+        let mut name = None;
+        protocol
+            .deserialize_error_response(&response, &cfg)
+            .unwrap()
+            .read_struct(&ERR_SCHEMA, &mut |member, d| {
+                match member.member_name() {
+                    Some("reason") => reason = Some(d.read_string(member)?),
+                    Some("status") => status = Some(d.read_integer(member)?),
+                    Some("name") => name = Some(d.read_string(member)?),
+                    _ => {}
+                }
+                Ok(())
+            })
+            .unwrap();
+
+        assert_eq!(
+            reason.as_deref(),
+            Some("throttled"),
+            "the header-bound member must come from the response"
+        );
+        assert_eq!(status, Some(400), "the status must come from the response");
+        assert_eq!(
+            name.as_deref(),
+            Some("Carol"),
+            "the body member must still be read from inside <Error>"
+        );
     }
 }

@@ -1148,7 +1148,7 @@ class SchemaGeneratorTest {
     }
 
     @Test
-    fun `schema response header parsing matches legacy semantics`() {
+    fun `response header bindings are parsed by the selected protocol`() {
         val headerModel =
             """
             namespace test
@@ -1190,11 +1190,16 @@ class SchemaGeneratorTest {
         project.useShapeWriter(shape) {
             renderStructWithSchema(this, headerModel, headerProvider, headerContext, shape, project)
             val generated = toString()
-            generated shouldContain "get_all_bytes"
-            generated shouldContain "read_many_primitive_bytes"
-            generated shouldContain "headers_for_prefix"
-            generated shouldNotContain "filter_map(|s| s.trim().parse"
-            generated shouldNotContain ".parse::<i32>().ok()"
+            // The shape parses nothing itself and has no HTTP-shaped methods: the selected
+            // protocol's response deserializer reads the bindings from the schema. These
+            // assertions are the source-level half of the behavior the Rust test below exercises.
+            generated shouldNotContain "deserialize_with_response"
+            generated shouldNotContain "get_all_bytes"
+            generated shouldNotContain "read_many_primitive_bytes"
+            generated shouldNotContain "headers_for_prefix"
+            generated shouldNotContain "NonUtf8HeaderHandling"
+            // The header names themselves do remain, on the member schemas. That is the point of
+            // the design: the names are data the runtime reads, not literals in parsing code.
 
             rustTemplate(
                 """
@@ -1216,9 +1221,10 @@ class SchemaGeneratorTest {
             unitTest(
                 "schema_http_header_bindings",
                 """
-                use aws_smithy_schema::codec::Codec;
+                use aws_smithy_schema::protocol::ClientProtocolInner;
                 use aws_smithy_schema::serde::SerdeError;
-                use aws_smithy_runtime_api::http::{Headers, NonUtf8HeaderHandling};
+                use aws_smithy_runtime_api::http::{Headers, NonUtf8HeaderHandling, Response, StatusCode};
+                use aws_smithy_types::body::SdkBody;
                 use aws_smithy_types::config_bag::ConfigBag;
 
                 fn headers(entries: &[(&'static str, &'static [u8])]) -> Headers {
@@ -1232,16 +1238,17 @@ class SchemaGeneratorTest {
                     Headers::try_from(raw).unwrap()
                 }
 
+                // Reads the response the way a generated client does: through the selected
+                // protocol, here restJson1, which owns the HTTP bindings.
                 fn read(headers: &Headers, cfg: &ConfigBag) -> Result<HeaderBound, SerdeError> {
-                    let codec = aws_smithy_json::codec::JsonCodec::new(Default::default());
-                    let mut deser = codec.create_deserializer(b"{}");
-                    HeaderBound::deserialize_with_response_with_config(
-                        &mut deser,
-                        headers,
-                        200,
-                        b"",
-                        cfg,
-                    )
+                    let mut response = Response::new(
+                        StatusCode::try_from(200u16).unwrap(),
+                        SdkBody::from("{}"),
+                    );
+                    *response.headers_mut() = headers.clone();
+                    let protocol = aws_smithy_json::protocol::aws_rest_json_1::AwsRestJsonProtocol::new();
+                    let mut deser = protocol.deserialize_response(&response, HeaderBound::SCHEMA, cfg)?;
+                    HeaderBound::deserialize(&mut *deser)
                 }
 
                 let default_cfg = ConfigBag::base();
@@ -1282,21 +1289,7 @@ class SchemaGeneratorTest {
                 assert_eq!(metadata.get("one").map(String::as_str), Some("first"));
                 assert_eq!(metadata.get("two").map(String::as_str), Some("second"));
 
-                // The compatibility method remains callable and defaults to Reject.
                 let unreadable_scalar = headers(&[("x-str", b"value-\xe9")]);
-                let codec = aws_smithy_json::codec::JsonCodec::new(Default::default());
-                let mut deser = codec.create_deserializer(b"{}");
-                let err = HeaderBound::deserialize_with_response(
-                    &mut deser,
-                    &unreadable_scalar,
-                    200,
-                    b"",
-                )
-                .expect_err("the compatibility method must reject by default");
-                let message = err.to_string();
-                assert!(message.contains("scalar"), "{message}");
-                assert!(message.contains("x-str"), "{message}");
-
                 let err = read(&unreadable_scalar, &default_cfg)
                     .expect_err("an empty ConfigBag also defaults to Reject");
                 let message = err.to_string();
@@ -1418,5 +1411,197 @@ class SchemaGeneratorTest {
             )
         }
         project.compileAndTest()
+    }
+
+    @Test
+    fun `target-level streaming is propagated into combined member schemas`() {
+        // `@streaming`'s selector is `:is(blob, union)`, so it is applied to the target
+        // shape and a member can never carry it directly. Without propagation a combined
+        // member schema cannot tell a streaming payload — whose live body or event
+        // receiver is owned by the streaming call site — from a buffered one the protocol
+        // should read itself.
+        val streamingModel =
+            """
+            namespace test
+
+            @streaming
+            blob StreamingBlob
+
+            blob BufferedBlob
+
+            structure StreamingOutput {
+                @httpPayload
+                streamingBody: StreamingBlob,
+
+                bufferedBody: BufferedBlob,
+
+                name: String
+            }
+            """.asSmithyModel()
+        val ctx = testCodegenContext(streamingModel)
+        val writer = RustWriter.forModule("model")
+        SchemaGenerator(ctx, writer, streamingModel.lookup<StructureShape>("test#StreamingOutput")).render()
+        val rendered = writer.toString()
+
+        // Exactly one member gains the trait: the one whose target is streaming.
+        rendered shouldContain "with_streaming()"
+        val streamingSetters = Regex("with_streaming\\(\\)").findAll(rendered).count()
+        assert(streamingSetters == 1) {
+            "expected exactly 1 `.with_streaming()` (the streaming member), found $streamingSetters in:\n$rendered"
+        }
+
+        // The streaming member keeps its own `@httpPayload` too, so the payload branch can
+        // both recognize the member and know it is streaming.
+        rendered shouldContain "with_http_payload()"
+    }
+
+    @Test
+    fun `a streaming member is consumed without overwriting the installed stream`() {
+        // A streaming member's value belongs to the operation's response path, which installs the
+        // live stream or event receiver on the builder. The member consumer must therefore assign
+        // nothing — but it must still advance a cursor-based codec past the value, or every member
+        // after it desynchronizes.
+        //
+        // Both halves used to be wrong. A streaming union emitted `todo!("deserialize streaming
+        // union")`, which panics, and a streaming blob emitted `ByteStream::new(SdkBody::empty())`,
+        // which silently replaced a real stream with an empty one. Neither is reachable through a
+        // protocol that owns HTTP bindings, because it routes a streaming `@httpPayload` member away
+        // from the codec, but `deserialize` is also called directly — by a body-only protocol and by
+        // the type registry — with whatever the body happens to contain.
+        val streamingModel =
+            """
+            namespace test
+
+            structure Event { data: String }
+
+            @streaming
+            union EventStream { event: Event }
+
+            @streaming
+            blob StreamingBlob
+
+            structure EventStreamMixed {
+                @httpPayload
+                events: EventStream,
+
+                name: String
+            }
+
+            structure StreamingBlobMixed {
+                @httpPayload
+                body: StreamingBlob,
+
+                name: String
+            }
+            """.asSmithyModel()
+        val streamingProvider = testSymbolProvider(streamingModel)
+        val streamingContext = testCodegenContext(streamingModel)
+
+        // The union half is asserted at the source level only. Compiling it would mean generating the
+        // union and its event structure too, and the arm is produced by the same branch either way —
+        // the decision is made from the member's target, not from which streaming kind it is. The
+        // end-to-end evidence for the union is that a regenerated event-stream client no longer
+        // contains `todo!("deserialize streaming union")` anywhere.
+        val unionWriter = RustWriter.forModule("model")
+        SchemaGenerator(streamingContext, unionWriter, streamingModel.lookup<StructureShape>("test#EventStreamMixed"))
+            .render()
+        val unionRendered = unionWriter.toString()
+        unionRendered shouldContain "deser.skip_value()?;"
+        unionRendered shouldNotContain "deserialize streaming union"
+
+        val project = TestWorkspace.testProject(streamingProvider)
+        val blobShape = streamingModel.lookup<StructureShape>("test#StreamingBlobMixed")
+        project.useShapeWriter(blobShape) {
+            renderStructWithSchema(this, streamingModel, streamingProvider, streamingContext, blobShape, project)
+            val generated = toString()
+            // The arm skips rather than assigning. Pinning the absence of the old expression is what
+            // keeps a future edit from reintroducing the silent replacement.
+            generated shouldContain "deser.skip_value()?;"
+            generated shouldNotContain "SdkBody::empty()"
+        }
+
+        project.lib {
+            rustTemplate(
+                "##[allow(unused_imports)] use #{JsonCodec} as _;",
+                "JsonCodec" to RuntimeType.smithyJson(streamingContext.runtimeConfig).resolve("codec::JsonCodec"),
+            )
+            unitTest(
+                "a_streaming_member_is_skipped_not_replaced",
+                """
+                use aws_smithy_schema::codec::Codec;
+                let codec = aws_smithy_json::codec::JsonCodec::new(Default::default());
+                // `body` precedes `name`, so if the streaming member were declined without advancing
+                // the cursor the `name` read would fail or read the wrong value.
+                let body = br##"{"body":"aGVsbG8=","name":"kept"}"##;
+                let mut deser = codec.create_deserializer(body);
+                let out = crate::test_model::StreamingBlobMixed::deserialize(&mut deser)
+                    .expect("a streaming member in the body must not fail the parse");
+                // The body carried "hello" for the streaming member. Nothing was read into it, so it
+                // holds only whatever finalization defaults to. Asserting emptiness rather than
+                // `None` is what this symbol provider allows: it maps a streaming blob to `Blob`
+                // rather than to `ByteStream`, so the field is not optional here.
+                assert!(
+                    out.body.as_ref().is_empty(),
+                    "the body value must not be read into a streaming member, got {:?}",
+                    out.body,
+                );
+                assert_eq!(Some("kept"), out.name.as_deref(), "members after the streaming one must still parse");
+                """,
+            )
+        }
+        project.compileAndTest()
+    }
+
+    @Test
+    fun `target-level streaming is propagated for an event stream union member`() {
+        // The union half of `@streaming`'s selector: an event-stream member must be
+        // distinguishable the same way a streaming blob is.
+        val eventStreamModel =
+            """
+            namespace test
+
+            structure Event { data: String }
+
+            @streaming
+            union EventStream { event: Event }
+
+            structure EventStreamOutput {
+                @httpPayload
+                events: EventStream,
+
+                name: String
+            }
+            """.asSmithyModel()
+        val ctx = testCodegenContext(eventStreamModel)
+        val writer = RustWriter.forModule("model")
+        SchemaGenerator(
+            ctx,
+            writer,
+            eventStreamModel.lookup<StructureShape>("test#EventStreamOutput"),
+        ).render()
+        val rendered = writer.toString()
+
+        val streamingSetters = Regex("with_streaming\\(\\)").findAll(rendered).count()
+        assert(streamingSetters == 1) {
+            "expected exactly 1 `.with_streaming()` (the event stream member), found " +
+                "$streamingSetters in:\n$rendered"
+        }
+    }
+
+    @Test
+    fun `a structure with no streaming targets emits no streaming setter`() {
+        // Guards against propagating the trait to every member.
+        val plainModel =
+            """
+            namespace test
+            structure PlainOutput {
+                body: Blob,
+                name: String
+            }
+            """.asSmithyModel()
+        val ctx = testCodegenContext(plainModel)
+        val writer = RustWriter.forModule("model")
+        SchemaGenerator(ctx, writer, plainModel.lookup<StructureShape>("test#PlainOutput")).render()
+        writer.toString() shouldNotContain "with_streaming()"
     }
 }

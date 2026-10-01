@@ -159,7 +159,16 @@ class NonUtf8SchemaResponseHeaderTest {
                         );
                         let err = error_client.error_operation().send().await.unwrap_err();
                         let message = #{DisplayErrorContext}(&err).to_string();
-                        assert!(message.contains("error_header"), "{message}");
+                        // The runtime composite names the modeled member by its Smithy
+                        // member name (`errorHeader`), where the deleted generated parser
+                        // used the Rust field name (`error_header`). The composite has
+                        // only the schema, and codegen's Smithy-to-Rust member naming is
+                        // not reproducible from it — reserved words are renamed (`meta`
+                        // becomes `meta_value`), so no pure function of the Smithy name
+                        // recovers the Rust one. The modeled member and the concrete
+                        // header are both still identified, which is what the policy
+                        // requires.
+                        assert!(message.contains("errorHeader"), "{message}");
                         assert!(message.contains("x-error-header"), "{message}");
                         """,
                         *scope(codegenContext),
