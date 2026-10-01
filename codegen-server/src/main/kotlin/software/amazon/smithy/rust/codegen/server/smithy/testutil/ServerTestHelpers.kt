@@ -105,7 +105,9 @@ fun serverTestRustSettings(
         RequestBodyReadTimeouts(
             RequestBodyReadTimeouts.DEFAULT_NON_PAYLOAD_REQUEST_BODY_READ_TIMEOUT_MILLIS,
             RequestBodyReadTimeouts.DEFAULT_REQUEST_BODY_READ_TIMEOUT_MILLIS,
+            RequestBodyReadTimeouts.DEFAULT_EVENT_STREAM_MESSAGE_TIMEOUT_MILLIS,
             emptyMap(),
+            emptySet(),
             emptySet(),
             emptySet(),
         ),
