@@ -84,9 +84,8 @@ pub(super) struct RoutingState<B> {
     pub(super) handlers: Box<[BoundHandler<B>]>,
     /// Indices into `protocols` of metadata routers checked for streaming inputs before body
     /// collection. `None` when the service has no streaming-input operations; otherwise includes
-    /// all metadata routers. Recognition defers body routers until metadata routers decline.
+    /// all metadata routers. Recognized streaming inputs skip claims that require body I/O.
     pub(super) metadata_routers: Option<Box<[usize]>>,
-    pub(super) body_routers: Box<[usize]>,
     /// The provisional allowance the service collects under for body-first routing.
     pub(super) body_collection_config: RequestBodyCollectionConfig,
 }
@@ -195,41 +194,40 @@ where
         let mut collected: Option<Bytes> = None;
         let mut streaming = None;
 
-        // Recognized streaming inputs get a metadata pass before deferred body routers.
-        let routers = (0..self.state.protocols.len())
-            .map(|index| (index, false))
-            .chain(self.state.body_routers.iter().map(|&index| (index, true)));
-        for (index, fallback) in routers {
-            if fallback && streaming != Some(true) {
-                break;
-            }
-            let selected = match &self.state.protocols[index].router {
+        for (index, protocol) in self.state.protocols.iter().enumerate() {
+            let selected = match &protocol.router {
                 SharedProtocolRouter::Metadata(router) => match router.claim(&probe) {
                     RouteClaim::ClaimedWithRoute(selected) => Ok(selected),
                     RouteClaim::Claimed => router.route(&probe),
                     RouteClaim::NoClaim => continue,
                 },
                 SharedProtocolRouter::Body(router) => {
-                    if !fallback
-                        && *streaming.get_or_insert_with(|| {
-                            self.state.metadata_routers.as_ref().is_some_and(|indices| {
-                                indices.iter().any(|index| {
-                                    let SharedProtocolRouter::Metadata(router) = &self.state.protocols[*index].router
-                                    else {
-                                        unreachable!("recognizers are metadata routers");
-                                    };
-                                    router.recognizes_streaming_input(&probe)
-                                })
-                            })
-                        })
-                    {
-                        continue;
-                    }
                     let claim = router.claim(&probe);
                     match claim {
                         BodyRouteClaim::ClaimedWithRoute(selected) => Ok(selected),
                         BodyRouteClaim::NoClaim => continue,
                         BodyRouteClaim::NeedsBodyToClaim | BodyRouteClaim::Claimed => {
+                            // A streaming operation cannot be given to a body claiming protocol.
+                            if matches!(claim, BodyRouteClaim::NeedsBodyToClaim)
+                                && *streaming.get_or_insert_with(|| {
+                                    self.state.metadata_routers.as_ref().is_some_and(|indices| {
+                                        indices.iter().any(|index| {
+                                            let SharedProtocolRouter::Metadata(router) =
+                                                &self.state.protocols[*index].router
+                                            else {
+                                                unreachable!("recognizers are metadata routers");
+                                            };
+                                            router.recognizes_streaming_input(&probe)
+                                        })
+                                    })
+                                })
+                            {
+                                tracing::trace!(
+                                    protocol = %protocol.protocol.protocol_id(),
+                                    "skipping protocol that needs body bytes to claim a request recognized as streaming"
+                                );
+                                continue;
+                            }
                             if collected.is_none() {
                                 let (bytes, trailers) =
                                     match crate::schema::protocol::collect_request_body_with_trailers(
@@ -536,11 +534,6 @@ impl<B> MultiProtocolRoutingService<B> {
                 .filter_map(|(index, route)| matches!(route.router, SharedProtocolRouter::Metadata(_)).then_some(index))
                 .collect::<Box<[_]>>()
         });
-        let body_routers = protocols
-            .iter()
-            .enumerate()
-            .filter_map(|(index, route)| matches!(route.router, SharedProtocolRouter::Body(_)).then_some(index))
-            .collect::<Vec<_>>();
         let bindings = bindings
             .into_iter()
             .map(|binding| BoundHandler {
@@ -553,7 +546,6 @@ impl<B> MultiProtocolRoutingService<B> {
             state: Arc::new(RoutingState {
                 protocols: protocols.into(),
                 metadata_routers,
-                body_routers: body_routers.into(),
                 handlers: bindings,
                 body_collection_config: options.request_body.for_routing(),
             }),
@@ -587,7 +579,6 @@ impl<B> MultiProtocolRoutingService<B> {
             protocols: self.state.protocols.clone(),
             handlers,
             metadata_routers: self.state.metadata_routers.clone(),
-            body_routers: self.state.body_routers.clone(),
             body_collection_config: self.state.body_collection_config,
         });
         self

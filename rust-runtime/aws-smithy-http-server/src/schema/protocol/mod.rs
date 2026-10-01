@@ -420,7 +420,7 @@ pub trait MetadataRoutedProtocol: ServerProtocol + Sized {
 /// [`BodyProtocolRouter`](crate::schema::routing::BodyProtocolRouter). Event-stream framing is not
 /// expressible here: the subtrait has no such method, so the conflict between body-based
 /// routing and serving event-stream bodies cannot arise. Metadata routers can recognize
-/// streaming inputs to defer this protocol until metadata claiming has fallen through.
+/// streaming inputs so claims requiring body bytes can be skipped.
 pub trait BodyRoutedProtocol: ServerProtocol + Sized {
     /// Builds this protocol for a service, from its registered configuration. Invalid
     /// configuration fails the service build.

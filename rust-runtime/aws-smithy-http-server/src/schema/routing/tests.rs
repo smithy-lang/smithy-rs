@@ -1492,7 +1492,7 @@ mod multi_protocol {
     }
 
     #[tokio::test]
-    async fn aws_json_streaming_input_defers_body_claimants_without_polling() {
+    async fn aws_json_streaming_input_skips_body_claimants_without_polling() {
         let app = streaming_app();
         assert_eq!(app.state.metadata_routers.as_deref(), Some(&[1][..]));
         let response = app
@@ -1512,7 +1512,7 @@ mod multi_protocol {
     }
 
     #[tokio::test]
-    async fn media_type_alone_does_not_defer_body_claimants() {
+    async fn media_type_alone_does_not_skip_body_claimants() {
         static BEFORE: &[ProtocolOrder] = &[ProtocolOrder::Before("aws.protocols#restJson1")];
         let app = app(&WITH_BODY_ROUTING, [body_routing(BEFORE)]);
         assert!(app.state.metadata_routers.is_none());
@@ -1685,14 +1685,25 @@ mod multi_protocol {
         }
         routes.push(second_body);
         Arc::get_mut(&mut app.state).unwrap().protocols = routes.into();
-        Arc::get_mut(&mut app.state).unwrap().body_routers = vec![0, 2].into();
         (app, checks, claims, calls)
     }
 
     #[tokio::test]
-    async fn normal_and_deferred_routing_preserve_order_replay_and_cached_recognition() {
+    async fn streaming_skips_body_claimants_and_ordinary_requests_preserve_order_and_replay() {
         for streaming in [true, false] {
             let (app, checks, claims, calls) = advisory_app(false, streaming);
+            if streaming {
+                let response = app.oneshot(post("/").body(untouchable_body()).unwrap()).await.unwrap();
+                assert_eq!(response.status(), StatusCode::NOT_FOUND);
+                assert_eq!(
+                    response.into_body().collect().await.unwrap().to_bytes(),
+                    "<UnknownOperationException/>\n"
+                );
+                assert_eq!(*calls.lock().unwrap(), vec![0, 2]);
+                assert_eq!(checks.load(std::sync::atomic::Ordering::SeqCst), 1);
+                assert_eq!(claims.load(std::sync::atomic::Ordering::SeqCst), 1);
+                continue;
+            }
             let mut pending_once = true;
             let mut frames = vec![b"ond\npayload".as_slice(), b"sec".as_slice()];
             let body = Body::new(http_body_util::StreamBody::new(futures_util::stream::poll_fn(
@@ -1725,53 +1736,89 @@ mod multi_protocol {
         #[derive(Clone, Debug, PartialEq)]
         struct Marker(&'static str);
 
-        for streaming in [false, true] {
-            let (app, _, _, _) = advisory_app(false, streaming);
-            let mut app = app.layer(&tower::layer::layer_fn(|_: SyncRoute<Body>| {
-                tower::service_fn(|request: Request<Body>| async move {
-                    assert_eq!(request.extensions().get::<Marker>(), Some(&Marker("retained")));
-                    assert_eq!(request.headers()["x-original"], "retained");
-                    Ok::<_, Infallible>(Response::new(crate::body::boxed(request.into_body())))
-                })
-            }));
-            let mut trailers = HeaderMap::new();
-            trailers.insert("checksum", HeaderValue::from_static("abc"));
-            let polls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-            let transport_polls = polls.clone();
-            let mut frames = vec![
-                Ok::<_, Error>(Frame::data(Bytes::from_static(b"second\npayload"))),
-                Ok(Frame::trailers(trailers.clone())),
-            ]
-            .into_iter();
-            let body = Body::new(http_body_util::StreamBody::new(futures_util::stream::poll_fn(
-                move |_| {
-                    let count = transport_polls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                    assert!(count < 3, "transport polled after collection finished");
-                    Poll::Ready(frames.next())
-                },
-            )));
-            let request = post("/")
-                .header("x-original", "retained")
-                .extension(Marker("retained"))
-                .body(body)
-                .unwrap();
-            let future: MultiProtocolRoutingFuture = app.call(request);
-            let response = future.await.unwrap();
-            let collected = response.into_body().collect().await.unwrap();
-            assert_eq!(collected.trailers(), Some(&trailers));
-            assert_eq!(collected.to_bytes(), "second\npayload");
-            assert_eq!(polls.load(std::sync::atomic::Ordering::SeqCst), 3);
-        }
+        let (app, _, _, _) = advisory_app(false, false);
+        let mut app = app.layer(&tower::layer::layer_fn(|_: SyncRoute<Body>| {
+            tower::service_fn(|request: Request<Body>| async move {
+                assert_eq!(request.extensions().get::<Marker>(), Some(&Marker("retained")));
+                assert_eq!(request.headers()["x-original"], "retained");
+                Ok::<_, Infallible>(Response::new(crate::body::boxed(request.into_body())))
+            })
+        }));
+        let mut trailers = HeaderMap::new();
+        trailers.insert("checksum", HeaderValue::from_static("abc"));
+        let polls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let transport_polls = polls.clone();
+        let mut frames = vec![
+            Ok::<_, Error>(Frame::data(Bytes::from_static(b"second\npayload"))),
+            Ok(Frame::trailers(trailers.clone())),
+        ]
+        .into_iter();
+        let body = Body::new(http_body_util::StreamBody::new(futures_util::stream::poll_fn(
+            move |_| {
+                let count = transport_polls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                assert!(count < 3, "transport polled after collection finished");
+                Poll::Ready(frames.next())
+            },
+        )));
+        let request = post("/")
+            .header("x-original", "retained")
+            .extension(Marker("retained"))
+            .body(body)
+            .unwrap();
+        let future: MultiProtocolRoutingFuture = app.call(request);
+        let response = future.await.unwrap();
+        let collected = response.into_body().collect().await.unwrap();
+        assert_eq!(collected.trailers(), Some(&trailers));
+        assert_eq!(collected.to_bytes(), "second\npayload");
+        assert_eq!(polls.load(std::sync::atomic::Ordering::SeqCst), 3);
     }
 
     #[tokio::test]
-    async fn metadata_rejection_bypasses_deferred_body_fallback() {
+    async fn metadata_rejection_follows_skipped_body_claim() {
         let (app, checks, claims, calls) = advisory_app(true, true);
         let response = app.oneshot(post("/").body(untouchable_body()).unwrap()).await.unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
-        assert!(calls.lock().unwrap().is_empty());
+        assert_eq!(*calls.lock().unwrap(), vec![0]);
         assert_eq!(checks.load(std::sync::atomic::Ordering::SeqCst), 1);
         assert_eq!(claims.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn head_claims_keep_priority_over_streaming_recognition() {
+        for mode in ["known-route", "envelope"] {
+            let app = streaming_app();
+            let response = app
+                .oneshot(
+                    post("/")
+                        .header("content-type", "application/x-amz-json-1.1")
+                        .header("x-amz-target", "Service.first")
+                        .header("x-body-claim", mode)
+                        .body(Body::from("second\npayload"))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(
+                response.into_body().collect().await.unwrap().to_bytes(),
+                "test#bodyRouting second second\npayload"
+            );
+        }
+
+        // A terminal head claim requires no streaming recognition, even when routing rejects.
+        let (app, checks, claims, calls) = advisory_app(false, true);
+        let response = app
+            .oneshot(
+                post("/")
+                    .header("x-body-claim", "envelope")
+                    .body(Body::from("second\npayload"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(checks.load(std::sync::atomic::Ordering::SeqCst), 0);
+        assert_eq!(claims.load(std::sync::atomic::Ordering::SeqCst), 0);
+        assert_eq!(*calls.lock().unwrap(), vec![0]);
     }
 
     #[tokio::test]
