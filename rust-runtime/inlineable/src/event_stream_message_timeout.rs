@@ -89,6 +89,10 @@ impl FrameTracker<'_> {
             if *self.frame_remaining > 0 {
                 let take = (*self.frame_remaining).min(chunk.len() as u64) as usize;
                 *self.frame_remaining -= take as u64;
+
+                // Move the chunk slice forward by the number of bytes that are for this
+                // frame so that we can check if a new frame has started in this chunk of
+                // data.
                 chunk = &chunk[take..];
                 if *self.frame_remaining == 0 {
                     completed_a_frame = true;
@@ -295,7 +299,10 @@ mod tests {
             Duration::from_millis(100),
         );
         let err = collect_body(body).await.expect_err("expected a timeout");
-        assert!(err.contains("didn't complete within the configured timeout"), "{err}");
+        assert!(
+            err.contains("didn't complete within the configured timeout"),
+            "{err}"
+        );
     }
 
     #[tokio::test(start_paused = true)]
@@ -390,6 +397,25 @@ mod tests {
         );
         let chunks = collect_body(body).await.expect("no timeout expected");
         assert_eq!(3, chunks.len());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn timeout_fires_when_frame_started_in_boundary_chunk_stalls() {
+        // One chunk ends frame 1 and starts frame 2, then the client goes silent: the
+        // fresh deadline armed for frame 2 must still fire.
+        let frame1 = encode_frame(20);
+        let frame2 = encode_frame(20);
+        let mut boundary_chunk = frame1.to_vec();
+        boundary_chunk.extend_from_slice(&frame2.slice(0..frame2.len() / 2));
+        let body = wrapped_body(
+            vec![Step::Data(boundary_chunk.into()), Step::Hang],
+            Duration::from_millis(100),
+        );
+        let err = collect_body(body).await.expect_err("expected a timeout");
+        assert!(
+            err.contains("didn't complete within the configured timeout"),
+            "{err}"
+        );
     }
 
     #[tokio::test(start_paused = true)]
