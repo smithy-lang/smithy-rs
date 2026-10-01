@@ -7,8 +7,7 @@
 //!
 //! A service declaring one metadata protocol routes every request with that protocol's
 //! [`MetadataProtocolRouter::route`]. Otherwise the protocols are asked in priority order to claim each
-//! request — from the head alone; a body-routed protocol escalates by returning a
-//! [`BodyRequirement`] the service satisfies — and the request dispatches to the first that
+//! request — from the head alone; a body-routed protocol can request complete-body collection — and the request dispatches to the first that
 //! claims it. At the first body-router boundary, a head-only check against preselected metadata
 //! routers recognizes potential streaming inputs. For these requests body routers are deferred
 //! until every metadata router declines, then visited once in their original order. Recognition
@@ -24,9 +23,9 @@ mod service;
 mod tests;
 
 pub use contract::{
-    BodyProtocolRouter, BodyRequirement, BodyRouteClaim, CollectedBody,
-    MetadataProtocolRouter, OperationHandlerBinding, OperationTarget, RouteClaim, RouterBuildContext,
-    RouterBuildError, RoutingOptions, SharedProtocolRouter, StreamingKind,
+    BodyProtocolRouter, BodyRouteClaim, CollectedBody, MetadataProtocolRouter, OperationHandlerBinding,
+    OperationTarget, RouteClaim, RouterBuildContext, RouterBuildError, RoutingOptions, SharedProtocolRouter,
+    StreamingKind,
 };
 pub use route_errors::{RoutingError, RoutingErrorKind};
 pub use routers::aws_json_router;

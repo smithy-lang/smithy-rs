@@ -6,21 +6,14 @@
 //! The protocol-facing routing contract: router traits, claims, and build-time types.
 
 use crate::routing::SyncRoute;
-use crate::{
-    error::BoxError,
-    schema::ServiceRequestBodyConfig,
-};
-use crate::schema::{OperationSchema, ServiceSchema};
 use crate::schema::routing::RoutingError;
+use crate::schema::{OperationSchema, ServiceSchema};
+use crate::{error::BoxError, schema::ServiceRequestBodyConfig};
 use aws_smithy_types::Document;
 use bytes::Bytes;
 use http::Request;
 
-use std::{
-    collections::HashMap,
-    fmt,
-    sync::Arc,
-};
+use std::{collections::HashMap, fmt, sync::Arc};
 
 /// The kind of streaming member in an operation's input or output.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -40,18 +33,14 @@ struct OperationMetadata {
 impl OperationMetadata {
     fn new(operation: &OperationSchema<'_>) -> Self {
         fn streaming_kind(schema: &aws_smithy_schema::Schema<'_>) -> Option<StreamingKind> {
-            schema
-                .members()
-                .iter()
-                .find(|member| member.streaming())
-                .map(|member| {
-                    // Smithy streaming members are blobs or event-stream unions.
-                    if member.shape_type() == aws_smithy_schema::ShapeType::Blob {
-                        StreamingKind::Blob
-                    } else {
-                        StreamingKind::EventStream
-                    }
-                })
+            schema.members().iter().find(|member| member.streaming()).map(|member| {
+                // Smithy streaming members are blobs or event-stream unions.
+                if member.shape_type() == aws_smithy_schema::ShapeType::Blob {
+                    StreamingKind::Blob
+                } else {
+                    StreamingKind::EventStream
+                }
+            })
         }
         Self {
             input_streaming: streaming_kind(operation.input()),
@@ -104,8 +93,7 @@ impl OperationTarget {
     }
     /// Whether either the input or output contains a streaming blob.
     pub fn has_streaming_blob(self) -> bool {
-        self.input_streaming() == Some(StreamingKind::Blob)
-            || self.output_streaming() == Some(StreamingKind::Blob)
+        self.input_streaming() == Some(StreamingKind::Blob) || self.output_streaming() == Some(StreamingKind::Blob)
     }
 }
 
@@ -247,13 +235,6 @@ impl CollectedBody {
     }
 }
 
-/// The body a protocol needs for claiming or routing.
-#[derive(Clone, Copy, Debug)]
-pub enum BodyRequirement {
-    /// Collect the complete request body as raw wire bytes.
-    Complete,
-}
-
 /// A body-routed protocol's answer to whether a request is its own.
 ///
 /// Distinct from [`RouteClaim`] so that needing the body stays unrepresentable for metadata
@@ -269,8 +250,8 @@ pub enum BodyRouteClaim {
     /// No other protocol is asked, including when routing returns an error.
     Claimed,
     /// The protocol needs body bytes to decide whether the request is its own. The service
-    /// satisfies the requirement and calls [`BodyProtocolRouter::claim_with_body`].
-    NeedsBodyToClaim(BodyRequirement),
+    /// collects the complete body and calls [`BodyProtocolRouter::claim_with_body`].
+    NeedsBodyToClaim,
     /// The request is not this protocol's; the next protocol is asked.
     NoClaim,
 }
@@ -301,7 +282,7 @@ pub enum BodyRouteClaim {
 /// [`BodyRouteClaim::NoClaim`] answered as this protocol's
 /// [`RoutingError::unknown_operation`] — all rejections stay terminal and protocol-framed.
 pub trait BodyProtocolRouter: Send + Sync + fmt::Debug {
-    /// Decides from the request head alone, escalating to body bytes via a requirement.
+    /// Decides from the request head alone, requesting the complete body when needed.
     fn claim(&self, request: &Request<()>) -> BodyRouteClaim;
 
     /// Continues an open claim over the requested body bytes. Called only after this router

@@ -124,7 +124,7 @@ impl BodyProtocolRouter for BodyRouter {
         match claim_mode(request.headers()) {
             Some("known-route") => BodyRouteClaim::ClaimedWithRoute(self.targets[0]),
             Some("envelope") => BodyRouteClaim::Claimed,
-            _ => BodyRouteClaim::NeedsBodyToClaim(BodyRequirement::Complete),
+            _ => BodyRouteClaim::NeedsBodyToClaim,
         }
     }
     fn claim_with_body(&self, request: &Request<CollectedBody>) -> RouteClaim {
@@ -1656,7 +1656,7 @@ mod multi_protocol {
     }
 
     #[tokio::test]
-    async fn normal_and_deferred_walks_preserve_order_replay_and_cached_recognition_across_suspension() {
+    async fn normal_and_deferred_routing_preserve_order_replay_and_cached_recognition() {
         for streaming in [true, false] {
             let (app, checks, claims, calls) = advisory_app(false, streaming);
             let mut pending_once = true;
@@ -1683,6 +1683,50 @@ mod multi_protocol {
             assert_eq!(*calls.lock().unwrap(), vec![0, 2]);
             assert_eq!(checks.load(std::sync::atomic::Ordering::SeqCst), 1);
             assert_eq!(claims.load(std::sync::atomic::Ordering::SeqCst), 1);
+        }
+    }
+
+    #[tokio::test]
+    async fn declined_body_claim_preserves_extensions_and_trailers_for_the_next_router() {
+        #[derive(Clone, Debug, PartialEq)]
+        struct Marker(&'static str);
+
+        for streaming in [false, true] {
+            let (app, _, _, _) = advisory_app(false, streaming);
+            let mut app = app.layer(&tower::layer::layer_fn(|_: SyncRoute<Body>| {
+                tower::service_fn(|request: Request<Body>| async move {
+                    assert_eq!(request.extensions().get::<Marker>(), Some(&Marker("retained")));
+                    assert_eq!(request.headers()["x-original"], "retained");
+                    Ok::<_, Infallible>(Response::new(crate::body::boxed(request.into_body())))
+                })
+            }));
+            let mut trailers = HeaderMap::new();
+            trailers.insert("checksum", HeaderValue::from_static("abc"));
+            let polls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let transport_polls = polls.clone();
+            let mut frames = vec![
+                Ok::<_, Error>(Frame::data(Bytes::from_static(b"second\npayload"))),
+                Ok(Frame::trailers(trailers.clone())),
+            ]
+            .into_iter();
+            let body = Body::new(http_body_util::StreamBody::new(futures_util::stream::poll_fn(
+                move |_| {
+                    let count = transport_polls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    assert!(count < 3, "transport polled after collection finished");
+                    Poll::Ready(frames.next())
+                },
+            )));
+            let request = post("/")
+                .header("x-original", "retained")
+                .extension(Marker("retained"))
+                .body(body)
+                .unwrap();
+            let future: MultiProtocolRoutingFuture = app.call(request);
+            let response = future.await.unwrap();
+            let collected = response.into_body().collect().await.unwrap();
+            assert_eq!(collected.trailers(), Some(&trailers));
+            assert_eq!(collected.to_bytes(), "second\npayload");
+            assert_eq!(polls.load(std::sync::atomic::Ordering::SeqCst), 3);
         }
     }
 

@@ -20,8 +20,8 @@ use bytes::Bytes;
 use http::{Request, Response};
 
 use crate::schema::routing::{
-    BodyRequirement, BodyRouteClaim, CollectedBody, MetadataProtocolRouter, OperationHandlerBinding, OperationTarget,
-    RouteClaim, RouterBuildContext, RouterBuildError, RoutingOptions, SharedProtocolRouter,
+    BodyRouteClaim, CollectedBody, MetadataProtocolRouter, OperationHandlerBinding, OperationTarget, RouteClaim,
+    RouterBuildContext, RouterBuildError, RoutingOptions, SharedProtocolRouter,
 };
 use std::{
     collections::HashSet,
@@ -135,21 +135,6 @@ fn unclaimed() -> Response<BoxBody> {
         .expect("a status and static body response is valid")
 }
 
-/// The protocol waiting for the complete body and the phase to resume afterwards.
-struct Pursuit {
-    protocol: usize,
-    /// `false` resumes `claim_with_body`; `true` resumes `route_with_body`.
-    routing: bool,
-}
-
-impl Pursuit {
-    fn new(protocol: usize, routing: bool, requirement: BodyRequirement) -> Self {
-        match requirement {
-            BodyRequirement::Complete => Self { protocol, routing },
-        }
-    }
-}
-
 impl<B> Dispatch<B>
 where
     B: http_body::Body<Data = Bytes> + Send + Sync + Unpin + 'static,
@@ -181,16 +166,15 @@ where
                 router: SharedProtocolRouter::Metadata(router),
                 ..
             }] => self.route(router, request),
-            _ => {
-                let (parts, body) = request.into_parts();
-                self.walk(parts, BodySource::Untouched(body), ClaimWalk::default())
-            }
+            _ => State::Routing {
+                future: Box::pin(self.clone().route_protocols(request)),
+            },
         };
         MultiProtocolRoutingFuture { inner: state }
     }
 
     /// Routes with the service's only (metadata) protocol, exactly as a single-protocol service
-    /// always has. A single body-routed protocol runs the claim walk instead, with the final
+    /// always has. A single body-routed protocol runs the routing loop instead, with the final
     /// fall-through answered as its own terminal rejection.
     fn route(
         &self,
@@ -208,246 +192,117 @@ where
                     future: self.handle(selected, 0, Request::from_parts(parts, body)),
                 }
             }
-            Err(err) => self.reject(0, err),
+            Err(err) => State::Rejected {
+                response: Some(self.reject(0, err)),
+            },
         }
     }
 
-    /// Walks canonical order, deferring body routers for recognized streaming inputs.
-    /// After metadata fall-through, deferred routers run once in their original order.
-    fn walk(&self, parts: http::request::Parts, source: BodySource<B>, mut cursor: ClaimWalk) -> State<B> {
-        let probe = Request::from_parts(parts, ());
-        loop {
-            let index = if cursor.fallback {
-                let Some(index) = self.body_routers.get(cursor.next).copied() else {
-                    break;
-                };
-                cursor.next += 1;
-                index
-            } else if cursor.next < self.protocols.len() {
-                let index = cursor.next;
-                cursor.next += 1;
-                index
-            } else if cursor.streaming == Some(true) {
-                cursor.fallback = true;
-                cursor.next = 0;
-                continue;
-            } else {
+    /// Tries protocols in canonical order, retaining the collected body if a router declines.
+    async fn route_protocols(
+        self,
+        request: Request<crate::body::RequestBody<B>>,
+    ) -> Result<Response<BoxBody>, Infallible> {
+        let (parts, mut body) = request.into_parts();
+        let mut probe = Request::from_parts(parts, ());
+        let mut collected: Option<Bytes> = None;
+        let mut streaming = None;
+
+        // Recognized streaming inputs get a metadata pass before deferred body routers.
+        let routers = (0..self.protocols.len())
+            .map(|index| (index, false))
+            .chain(self.body_routers.iter().map(|&index| (index, true)));
+        for (index, fallback) in routers {
+            if fallback && streaming != Some(true) {
                 break;
-            };
-            match &self.protocols[index].router {
+            }
+            let selected = match &self.protocols[index].router {
                 SharedProtocolRouter::Metadata(router) => match router.claim(&probe) {
-                    RouteClaim::ClaimedWithRoute(selected) => {
-                        let (parts, ()) = probe.into_parts();
-                        return self.dispatch_replayed(selected, index, parts, source);
-                    }
-                    RouteClaim::Claimed => match router.route(&probe) {
-                        Ok(selected) => {
-                            let (parts, ()) = probe.into_parts();
-                            return self.dispatch_replayed(selected, index, parts, source);
-                        }
-                        Err(err) => return self.reject(index, err),
-                    },
-                    RouteClaim::NoClaim => {}
+                    RouteClaim::ClaimedWithRoute(selected) => Ok(selected),
+                    RouteClaim::Claimed => router.route(&probe),
+                    RouteClaim::NoClaim => continue,
                 },
                 SharedProtocolRouter::Body(router) => {
-                    if !cursor.fallback {
-                        let streaming = *cursor.streaming.get_or_insert_with(|| {
+                    if !fallback
+                        && *streaming.get_or_insert_with(|| {
                             self.streaming_recognizers.iter().any(|index| {
                                 let SharedProtocolRouter::Metadata(router) = &self.protocols[*index].router else {
                                     unreachable!("recognizers are metadata routers");
                                 };
                                 router.recognizes_streaming_input(&probe)
                             })
-                        });
-                        if streaming {
-                            continue;
-                        }
+                        })
+                    {
+                        continue;
                     }
-                    match router.claim(&probe) {
-                        BodyRouteClaim::ClaimedWithRoute(selected) => {
-                            let (parts, ()) = probe.into_parts();
-                            return self.dispatch_replayed(selected, index, parts, source);
-                        }
-                        BodyRouteClaim::NoClaim => {}
-                        BodyRouteClaim::NeedsBodyToClaim(requirement) => {
-                            let (parts, ()) = probe.into_parts();
-                            return self.pursue(parts, source, Pursuit::new(index, false, requirement), cursor);
-                        }
-                        BodyRouteClaim::Claimed => {
-                            let (parts, ()) = probe.into_parts();
-                            return self.pursue(
-                                parts,
-                                source,
-                                Pursuit::new(index, true, BodyRequirement::Complete),
-                                cursor,
-                            );
+                    let claim = router.claim(&probe);
+                    match claim {
+                        BodyRouteClaim::ClaimedWithRoute(selected) => Ok(selected),
+                        BodyRouteClaim::NoClaim => continue,
+                        BodyRouteClaim::NeedsBodyToClaim | BodyRouteClaim::Claimed => {
+                            if collected.is_none() {
+                                let (bytes, trailers) =
+                                    match crate::schema::protocol::collect_request_body_with_trailers(
+                                        body,
+                                        &self.routing_body,
+                                    )
+                                    .await
+                                    {
+                                        Ok(collected) => collected,
+                                        Err(error) => {
+                                            return Ok(crate::schema::body_collection_rejection(
+                                                &*self.protocols[index].protocol,
+                                                error,
+                                            ))
+                                        }
+                                    };
+                                body = crate::body::RequestBody::buffered(bytes.clone(), trailers);
+                                collected = Some(bytes);
+                            }
+                            let request = probe.map(|()| CollectedBody {
+                                bytes: collected.as_ref().expect("body was collected").clone(),
+                            });
+                            let claim = match claim {
+                                BodyRouteClaim::NeedsBodyToClaim => router.claim_with_body(&request),
+                                BodyRouteClaim::Claimed => RouteClaim::Claimed,
+                                _ => unreachable!("handled head-only claims above"),
+                            };
+                            let selected = match claim {
+                                RouteClaim::ClaimedWithRoute(selected) => Some(Ok(selected)),
+                                RouteClaim::Claimed => Some(router.route_with_body(&request)),
+                                RouteClaim::NoClaim => None,
+                            };
+                            probe = request.map(|_| ());
+                            let Some(selected) = selected else { continue };
+                            selected
                         }
                     }
                 }
-            }
-        }
-        // A single body-routed protocol owns every request, so its fall-through is its own
-        // terminal rejection, exactly as a single metadata protocol's `route` is.
-        if self.protocols.len() == 1 {
-            return self.reject(0, RoutingError::unknown_operation());
-        }
-        State::Rejected {
-            response: Some(unclaimed()),
-        }
-    }
-
-    /// Suspends the walk while the service satisfies `pursuit`'s body requirement.
-    fn pursue(
-        &self,
-        parts: http::request::Parts,
-        source: BodySource<B>,
-        pursuit: Pursuit,
-        cursor: ClaimWalk,
-    ) -> State<B> {
-        State::Collecting {
-            walk: Some(WalkPursuit {
-                parts,
-                collection: source.collect(self.routing_body),
-                pursuit,
-                cursor,
-                dispatch: self.clone(),
-            }),
-        }
-    }
-
-    /// Finishes a suspended pursuit over its satisfied requirement, synchronously.
-    fn resumed(
-        &self,
-        parts: http::request::Parts,
-        buffered: BufferedBody,
-        pursuit: &Pursuit,
-        cursor: ClaimWalk,
-    ) -> State<B> {
-        let SharedProtocolRouter::Body(router) = &self.protocols[pursuit.protocol].router else {
-            unreachable!("only body-routed protocols suspend the walk");
-        };
-        let request = Request::from_parts(
-            parts,
-            CollectedBody {
-                bytes: buffered.bytes.clone(),
-            },
-        );
-        if pursuit.routing {
-            return match router.route_with_body(&request) {
-                Ok(selected) => {
-                    let (parts, _) = request.into_parts();
-                    self.dispatch_replayed(selected, pursuit.protocol, parts, BodySource::Buffered(buffered))
-                }
-                Err(err) => self.reject(pursuit.protocol, err),
+            };
+            return match selected {
+                Ok(selected) => self.handle(selected, index, probe.map(|()| body)).await,
+                Err(error) => Ok(self.reject(index, error)),
             };
         }
-        match router.claim_with_body(&request) {
-            RouteClaim::ClaimedWithRoute(selected) => {
-                let (parts, _) = request.into_parts();
-                self.dispatch_replayed(selected, pursuit.protocol, parts, BodySource::Buffered(buffered))
-            }
-            RouteClaim::NoClaim => {
-                let (parts, _) = request.into_parts();
-                self.walk(parts, BodySource::Buffered(buffered), cursor)
-            }
-            RouteClaim::Claimed => match router.route_with_body(&request) {
-                Ok(selected) => {
-                    let (parts, _) = request.into_parts();
-                    self.dispatch_replayed(selected, pursuit.protocol, parts, BodySource::Buffered(buffered))
-                }
-                Err(err) => self.reject(pursuit.protocol, err),
-            },
-        }
-    }
-
-    /// Frames a router's rejection with the rejecting protocol's own modeled-error serialization.
-    fn reject(&self, protocol: usize, err: RoutingError) -> State<B> {
-        State::Rejected {
-            response: Some(self.protocols[protocol].protocol.serialize_routing_error(&err)),
-        }
-    }
-
-    /// Hands a routed request to its handler, replaying anything routing read off the wire.
-    fn dispatch_replayed(
-        &self,
-        selected: OperationTarget,
-        protocol: usize,
-        parts: http::request::Parts,
-        source: BodySource<B>,
-    ) -> State<B> {
-        let body = source.into_replay_body();
-        State::Handling {
-            future: self.handle(selected, protocol, Request::from_parts(parts, body)),
-        }
-    }
-}
-
-/// The original body or the complete content retained for later claimants and dispatch.
-enum BodySource<B> {
-    Untouched(crate::body::RequestBody<B>),
-    Buffered(BufferedBody),
-}
-
-struct BufferedBody {
-    bytes: Bytes,
-    trailers: Option<http::HeaderMap>,
-}
-
-type CollectionFuture =
-    Pin<Box<dyn Future<Output = Result<BufferedBody, crate::schema::RequestBodyCollectionError<crate::Error>>> + Send>>;
-
-impl<B> BodySource<B> {
-    fn into_replay_body(self) -> crate::body::RequestBody<B> {
-        match self {
-            Self::Untouched(body) => body,
-            Self::Buffered(buffered) => crate::body::RequestBody::buffered(buffered.bytes, buffered.trailers),
-        }
-    }
-}
-
-impl<B> BodySource<B>
-where
-    B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
-    B::Error: Into<BoxError>,
-{
-    fn collect(self, config: RequestBodyCollectionConfig) -> CollectionFuture {
-        Box::pin(async move {
-            match self {
-                Self::Untouched(body) => {
-                    let (bytes, trailers) =
-                        crate::schema::protocol::collect_request_body_with_trailers(body, &config).await?;
-                    Ok(BufferedBody { bytes, trailers })
-                }
-                Self::Buffered(buffered) => Ok(buffered),
-            }
+        // A single body protocol owns even requests it does not recognize.
+        Ok(if self.protocols.len() == 1 {
+            self.reject(0, RoutingError::unknown_operation())
+        } else {
+            unclaimed()
         })
     }
-}
 
-/// Request-local cursor retained across collection. Recognition is computed at most once.
-#[derive(Default)]
-struct ClaimWalk {
-    next: usize,
-    streaming: Option<bool>,
-    fallback: bool,
-}
-
-/// A claim walk waiting for complete-body collection.
-struct WalkPursuit<B> {
-    parts: http::request::Parts,
-    collection: CollectionFuture,
-    pursuit: Pursuit,
-    cursor: ClaimWalk,
-    dispatch: Dispatch<B>,
+    /// Frames a routing error with the rejecting protocol's serialization.
+    fn reject(&self, protocol: usize, error: RoutingError) -> Response<BoxBody> {
+        self.protocols[protocol].protocol.serialize_routing_error(&error)
+    }
 }
 
 pin_project_lite::pin_project! {
     #[project = StateProj]
     enum State<B> {
-        // A walk suspended on a body requirement. `Option` so completion can take ownership;
-        // the pursuit is `Unpin`, so no structural pinning is needed.
-        Collecting {
-            walk: Option<WalkPursuit<B>>,
+        Routing {
+            future: Pin<Box<dyn Future<Output = Result<Response<BoxBody>, Infallible>> + Send>>,
         },
         Handling {
             #[pin]
@@ -473,42 +328,10 @@ where
 {
     type Output = Result<Response<BoxBody>, Infallible>;
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let mut this = self.project();
-        loop {
-            match this.inner.as_mut().project() {
-                StateProj::Collecting { walk } => {
-                    let outcome = match walk
-                        .as_mut()
-                        .expect("pursuit resolves once")
-                        .collection
-                        .as_mut()
-                        .poll(cx)
-                    {
-                        Poll::Pending => return Poll::Pending,
-                        Poll::Ready(outcome) => outcome,
-                    };
-                    let WalkPursuit {
-                        parts,
-                        collection: _,
-                        pursuit,
-                        cursor,
-                        dispatch,
-                    } = walk.take().expect("pursuit resolves once");
-                    match outcome {
-                        Ok(buffered) => {
-                            this.inner.set(dispatch.resumed(parts, buffered, &pursuit, cursor));
-                        }
-                        Err(error) => {
-                            let protocol = &dispatch.protocols[pursuit.protocol].protocol;
-                            return Poll::Ready(Ok(crate::schema::body_collection_rejection(&**protocol, error)));
-                        }
-                    }
-                }
-                StateProj::Handling { future } => return future.poll(cx),
-                StateProj::Rejected { response } => {
-                    return Poll::Ready(Ok(response.take().expect("polled after completion")))
-                }
-            }
+        match self.project().inner.project() {
+            StateProj::Routing { future } => future.as_mut().poll(cx),
+            StateProj::Handling { future } => future.poll(cx),
+            StateProj::Rejected { response } => Poll::Ready(Ok(response.take().expect("polled after completion"))),
         }
     }
 }
