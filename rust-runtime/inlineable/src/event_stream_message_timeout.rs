@@ -95,9 +95,12 @@ impl FrameTracker<'_> {
                 }
             } else {
                 let take = (PRELUDE_SIZE - *self.prelude_len).min(chunk.len());
+                // Accumulate the 4-byte length prefix, which may itself be split across chunks
                 self.prelude[*self.prelude_len..*self.prelude_len + take]
                     .copy_from_slice(&chunk[..take]);
                 *self.prelude_len += take;
+                // Advance our view past the bytes just accounted for; the rest of the chunk
+                // is processed on the next loop iteration
                 chunk = &chunk[take..];
                 if *self.prelude_len == PRELUDE_SIZE {
                     // `total_length` includes the length prefix itself. A length smaller
