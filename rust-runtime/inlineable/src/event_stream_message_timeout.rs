@@ -167,6 +167,10 @@ impl http_body_1x::Body for MessageTimeoutBody {
             Poll::Pending => {
                 if let Some(deadline) = this.deadline.as_mut() {
                     if deadline.as_mut().poll(cx).is_ready() {
+                        tracing::debug!(
+                            timeout_millis = this.timeout.as_millis() as u64,
+                            "event stream message read timed out"
+                        );
                         return Poll::Ready(Some(Err(Box::new(MessageTimeoutError {
                             timeout: *this.timeout,
                         }))));
