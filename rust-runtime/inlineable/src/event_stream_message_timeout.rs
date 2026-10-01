@@ -94,6 +94,10 @@ impl FrameTracker<'_> {
                     completed_a_frame = true;
                 }
             } else {
+                debug_assert!(
+                    *self.prelude_len < PRELUDE_SIZE,
+                    "the length prefix buffer always has room at a frame boundary; it is reset to 0 once full"
+                );
                 let take = (PRELUDE_SIZE - *self.prelude_len).min(chunk.len());
                 // Accumulate the 4-byte length prefix, which may itself be split across chunks
                 self.prelude[*self.prelude_len..*self.prelude_len + take]
@@ -319,6 +323,35 @@ mod tests {
             Duration::from_millis(100),
         );
         collect_body(body).await.expect_err("expected a timeout");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn timeout_fires_on_one_byte_at_a_time_drip() {
+        // A client dripping a frame one byte per 50ms never completes a 24-byte frame
+        // within the 100ms deadline, no matter how steadily it keeps sending
+        let frame = encode_frame(20);
+        let steps = frame
+            .iter()
+            .map(|byte| {
+                Step::DelayThenData(Duration::from_millis(50), Bytes::copy_from_slice(&[*byte]))
+            })
+            .collect();
+        let body = wrapped_body(steps, Duration::from_millis(100));
+        collect_body(body).await.expect_err("expected a timeout");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn one_byte_chunks_within_timeout_succeed() {
+        // Single-byte chunks (including the length prefix split into 4 chunks) are fine
+        // as long as the whole frame arrives within the deadline
+        let frame = encode_frame(20);
+        let steps = frame
+            .iter()
+            .map(|byte| Step::Data(Bytes::copy_from_slice(&[*byte])))
+            .collect();
+        let body = wrapped_body(steps, Duration::from_millis(100));
+        let chunks = collect_body(body).await.expect("no timeout expected");
+        assert_eq!(frame.len(), chunks.len());
     }
 
     #[tokio::test(start_paused = true)]
