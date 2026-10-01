@@ -2,7 +2,6 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-use super::service::ProtocolRoute;
 use super::*;
 use crate::body::{Body, BoxBody};
 use crate::error::Error;
@@ -237,6 +236,39 @@ fn config(bytes: usize, timeout_ms: u64) -> RequestBodyCollectionConfig {
 }
 fn request(body: impl Into<Bytes>) -> Request<Body> {
     Request::new(Body::from_bytes(body.into()))
+}
+
+#[tokio::test]
+async fn layering_a_clone_leaves_existing_services_and_requests_unchanged() {
+    let mut original = service(RoutingOptions::default());
+    let cloned = original.clone();
+    assert!(Arc::ptr_eq(&original.state, &cloned.state));
+    let pending = original.call(request("first\npayload"));
+    let layered = cloned.layer(&tower::layer::layer_fn(|route: SyncRoute<Body>| {
+        tower::util::MapResponse::new(route, |mut response: Response<BoxBody>| {
+            response
+                .headers_mut()
+                .insert("x-layer", HeaderValue::from_static("applied"));
+            response
+        })
+    }));
+    assert!(!Arc::ptr_eq(&original.state, &layered.state));
+    let response = layered.oneshot(request("first\npayload")).await.unwrap();
+    assert_eq!(response.headers()["x-layer"], "applied");
+    assert_eq!(
+        response.into_body().collect().await.unwrap().to_bytes(),
+        "first\npayload"
+    );
+    for response in [
+        pending.await.unwrap(),
+        original.oneshot(request("first\npayload")).await.unwrap(),
+    ] {
+        assert!(!response.headers().contains_key("x-layer"));
+        assert_eq!(
+            response.into_body().collect().await.unwrap().to_bytes(),
+            "first\npayload"
+        );
+    }
 }
 
 #[tokio::test]
@@ -492,7 +524,7 @@ fn binding_and_protocol_validation() {
     let many =
         MultiProtocolRoutingService::from_operation_handler_bindings(&MANY, [], [binding(&FIRST), binding(&SECOND)])
             .expect("every declared protocol is served");
-    assert_eq!(many.inner.protocols.len(), 2);
+    assert_eq!(many.state.protocols.len(), 2);
     static COPY: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &FIRST_INPUT, &UNIT, &[]);
     assert!(matches!(
         MultiProtocolRoutingService::from_operation_handler_bindings(
@@ -542,7 +574,7 @@ async fn all_builtins_route_without_polling_body_and_preserve_fallback_errors() 
             .iter()
             .map(|op| OperationHandlerBinding::new(op, SyncRoute::new(crate::operation::SchemaMissingFailure)));
         let app = MultiProtocolRoutingService::from_operation_handler_bindings(schema, [], bindings).unwrap();
-        let expected = app.inner.protocols[0]
+        let expected = app.state.protocols[0]
             .protocol
             .serialize_rejection(DeserializeError::InternalFailure(Error::new(String::from(
                 "the operation has not been set",
@@ -808,6 +840,8 @@ fn operation_metadata_classifies_streaming_and_cbor_routes_without_an_indexed_ta
 #[tokio::test]
 #[should_panic(expected = "router index belongs to a different operation")]
 async fn inconsistent_operation_identity_is_detected_before_handler_dispatch() {
+    use crate::schema::routing::service::ProtocolAndRouter;
+
     #[derive(Debug)]
     struct IncorrectRouter;
     impl MetadataProtocolRouter for IncorrectRouter {
@@ -820,9 +854,9 @@ async fn inconsistent_operation_identity_is_detected_before_handler_dispatch() {
         }
     }
     let mut app = service(RoutingOptions::default()); // Index zero belongs to SECOND.
-    app.inner.protocols = Arc::from([ProtocolRoute {
+    Arc::get_mut(&mut app.state).unwrap().protocols = Box::from([ProtocolAndRouter {
         router: SharedProtocolRouter::new(IncorrectRouter),
-        protocol: app.inner.protocols[0].protocol.clone(),
+        protocol: app.state.protocols[0].protocol.clone(),
     }]);
     let _ = app.oneshot(request("first\n")).await;
 }
@@ -1067,7 +1101,7 @@ mod multi_protocol {
     }
 
     fn priority(app: &MultiProtocolRoutingService) -> Vec<&'static str> {
-        app.inner
+        app.state
             .protocols
             .iter()
             .map(|route| route.protocol.protocol_id().as_str())
@@ -1460,7 +1494,7 @@ mod multi_protocol {
     #[tokio::test]
     async fn aws_json_streaming_input_defers_body_claimants_without_polling() {
         let app = streaming_app();
-        assert_eq!(app.inner.streaming_recognizers.as_ref(), &[1]);
+        assert_eq!(app.state.metadata_routers.as_deref(), Some(&[1][..]));
         let response = app
             .oneshot(
                 post("/")
@@ -1481,7 +1515,7 @@ mod multi_protocol {
     async fn media_type_alone_does_not_defer_body_claimants() {
         static BEFORE: &[ProtocolOrder] = &[ProtocolOrder::Before("aws.protocols#restJson1")];
         let app = app(&WITH_BODY_ROUTING, [body_routing(BEFORE)]);
-        assert!(app.inner.streaming_recognizers.is_empty());
+        assert!(app.state.metadata_routers.is_none());
         assert_eq!(
             send(
                 &app,
@@ -1540,8 +1574,8 @@ mod multi_protocol {
             &[&STREAM_OP, &SECOND_OP],
         );
         let all_app = app(&ALL, []);
-        assert_eq!(all_app.inner.streaming_recognizers.len(), 5);
-        for route in all_app.inner.protocols.iter() {
+        assert_eq!(all_app.state.metadata_routers.as_ref().unwrap().len(), 5);
+        for route in all_app.state.protocols.iter() {
             let SharedProtocolRouter::Metadata(router) = &route.router else {
                 unreachable!()
             };
@@ -1570,7 +1604,7 @@ mod multi_protocol {
             &[&OUTPUT_OP],
         );
         let output = app(&OUTPUT_ONLY, []);
-        assert!(output.inner.streaming_recognizers.is_empty());
+        assert!(output.state.metadata_routers.is_none());
     }
 
     #[derive(Debug)]
@@ -1628,7 +1662,7 @@ mod multi_protocol {
         let checks = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let claims = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let calls = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let mut routes = app.inner.protocols.to_vec();
+        let mut routes = app.state.protocols.to_vec();
         routes[1].router = SharedProtocolRouter::new(AdvisoryRouter {
             checks: checks.clone(),
             claims: claims.clone(),
@@ -1650,8 +1684,8 @@ mod multi_protocol {
             });
         }
         routes.push(second_body);
-        app.inner.protocols = routes.into();
-        app.inner.body_routers = vec![0, 2].into();
+        Arc::get_mut(&mut app.state).unwrap().protocols = routes.into();
+        Arc::get_mut(&mut app.state).unwrap().body_routers = vec![0, 2].into();
         (app, checks, claims, calls)
     }
 

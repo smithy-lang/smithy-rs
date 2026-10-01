@@ -36,15 +36,15 @@ use tower::Service;
 
 pub(super) struct BoundHandler<B> {
     operation: &'static OperationSchema<'static>,
-    request_body: RequestBodyCollectionConfig,
-    route: SyncRoute<crate::body::RequestBody<B>>,
+    collection_config: RequestBodyCollectionConfig,
+    handler_route: SyncRoute<crate::body::RequestBody<B>>,
 }
 impl<B> Clone for BoundHandler<B> {
     fn clone(&self) -> Self {
         Self {
             operation: self.operation,
-            request_body: self.request_body,
-            route: self.route.clone(),
+            collection_config: self.collection_config,
+            handler_route: self.handler_route.clone(),
         }
     }
 }
@@ -58,43 +58,9 @@ impl<B> fmt::Debug for BoundHandler<B> {
 
 /// A served protocol and the router it built.
 #[derive(Clone, Debug)]
-pub(super) struct ProtocolRoute {
+pub(super) struct ProtocolAndRouter {
     pub(super) router: SharedProtocolRouter,
     pub(super) protocol: SharedServerProtocol,
-}
-
-/// Routing state shared by every clone of the service.
-///
-/// hyper-util's `TowerToHyperService` clones the service for every request, so everything here is
-/// behind an `Arc`: a clone is a few reference counts, and dispatch clones only the selected route.
-pub(super) struct Dispatch<B> {
-    /// The served protocols in priority order. A single protocol routes with
-    /// [`MetadataProtocolRouter::route`]; several claim with [`MetadataProtocolRouter::claim`].
-    pub(super) protocols: Arc<[ProtocolRoute]>,
-    pub(super) bindings: Arc<[BoundHandler<B>]>,
-    pub(super) streaming_recognizers: Arc<[usize]>,
-    pub(super) body_routers: Arc<[usize]>,
-    /// The provisional allowance the service collects under for body-first routing.
-    pub(super) routing_body: RequestBodyCollectionConfig,
-}
-impl<B> Clone for Dispatch<B> {
-    fn clone(&self) -> Self {
-        Self {
-            protocols: self.protocols.clone(),
-            bindings: self.bindings.clone(),
-            streaming_recognizers: self.streaming_recognizers.clone(),
-            body_routers: self.body_routers.clone(),
-            routing_body: self.routing_body,
-        }
-    }
-}
-impl<B> fmt::Debug for Dispatch<B> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Dispatch")
-            .field("protocols", &self.protocols)
-            .field("bindings", &self.bindings)
-            .finish()
-    }
 }
 
 /// A service routing normalized requests to a shared handler collection through the protocols the
@@ -103,20 +69,39 @@ impl<B> fmt::Debug for Dispatch<B> {
 /// Generic over the transport body `B`: requests entering with the transport's own body flow to
 /// handlers unerased. The default is hyper's body; any other request body — tests, upgrade
 /// layers, other transports — is accepted and erased into a boxed state on entry.
+///
+/// Clones share all routing state through one `Arc`. Routing clones only the
+/// selected handler, so cloning the service for each request stays cheap.
 pub struct MultiProtocolRoutingService<B = hyper::body::Incoming> {
-    pub(super) inner: Dispatch<B>,
+    pub(super) state: Arc<RoutingState<B>>,
+}
+
+/// Routers, handlers, and configuration shared by service clones and in-flight requests.
+pub(super) struct RoutingState<B> {
+    /// The served protocols in priority order. A single protocol routes with
+    /// [`MetadataProtocolRouter::route`]; several claim with [`MetadataProtocolRouter::claim`].
+    pub(super) protocols: Box<[ProtocolAndRouter]>,
+    pub(super) handlers: Box<[BoundHandler<B>]>,
+    /// Indices into `protocols` of metadata routers checked for streaming inputs before body
+    /// collection. `None` when the service has no streaming-input operations; otherwise includes
+    /// all metadata routers. Recognition defers body routers until metadata routers decline.
+    pub(super) metadata_routers: Option<Box<[usize]>>,
+    pub(super) body_routers: Box<[usize]>,
+    /// The provisional allowance the service collects under for body-first routing.
+    pub(super) body_collection_config: RequestBodyCollectionConfig,
 }
 impl<B> Clone for MultiProtocolRoutingService<B> {
     fn clone(&self) -> Self {
         Self {
-            inner: self.inner.clone(),
+            state: self.state.clone(),
         }
     }
 }
 impl<B> fmt::Debug for MultiProtocolRoutingService<B> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("MultiProtocolRoutingService")
-            .field("inner", &self.inner)
+            .field("protocols", &self.state.protocols)
+            .field("handlers", &self.state.handlers)
             .finish()
     }
 }
@@ -135,7 +120,7 @@ fn unclaimed() -> Response<BoxBody> {
         .expect("a status and static body response is valid")
 }
 
-impl<B> Dispatch<B>
+impl<B> MultiProtocolRoutingService<B>
 where
     B: http_body::Body<Data = Bytes> + Send + Sync + Unpin + 'static,
     B::Error: Into<BoxError>,
@@ -147,26 +132,27 @@ where
         protocol: usize,
         mut request: Request<crate::body::RequestBody<B>>,
     ) -> crate::routing::route::SyncRouteFuture<crate::body::RequestBody<B>> {
-        let binding = &self.bindings[selected.index()];
+        let binding = &self.state.handlers[selected.index()];
         debug_assert!(
             std::ptr::eq(binding.operation, selected.operation()),
             "router index belongs to a different operation"
         );
         request.extensions_mut().insert(SelectedProtocolOperation::new(
-            self.protocols[protocol].protocol.clone(),
+            self.state.protocols[protocol].protocol.clone(),
             binding.operation,
-            binding.request_body,
+            binding.collection_config,
         ));
-        binding.route.clone().call_owned(request)
+        binding.handler_route.clone().call_owned(request)
     }
 
-    fn call(&mut self, request: Request<crate::body::RequestBody<B>>) -> MultiProtocolRoutingFuture<B> {
-        let state = match &self.protocols[..] {
-            [ProtocolRoute {
+    fn route_request(&self, request: Request<crate::body::RequestBody<B>>) -> MultiProtocolRoutingFuture<B> {
+        let state = match &self.state.protocols[..] {
+            [ProtocolAndRouter {
                 router: SharedProtocolRouter::Metadata(router),
                 ..
             }] => self.route(router, request),
             _ => State::Routing {
+                // TODO: Investigate avoiding this Arc clone when routing needs no body I/O.
                 future: Box::pin(self.clone().route_protocols(request)),
             },
         };
@@ -209,14 +195,14 @@ where
         let mut streaming = None;
 
         // Recognized streaming inputs get a metadata pass before deferred body routers.
-        let routers = (0..self.protocols.len())
+        let routers = (0..self.state.protocols.len())
             .map(|index| (index, false))
-            .chain(self.body_routers.iter().map(|&index| (index, true)));
+            .chain(self.state.body_routers.iter().map(|&index| (index, true)));
         for (index, fallback) in routers {
             if fallback && streaming != Some(true) {
                 break;
             }
-            let selected = match &self.protocols[index].router {
+            let selected = match &self.state.protocols[index].router {
                 SharedProtocolRouter::Metadata(router) => match router.claim(&probe) {
                     RouteClaim::ClaimedWithRoute(selected) => Ok(selected),
                     RouteClaim::Claimed => router.route(&probe),
@@ -225,11 +211,14 @@ where
                 SharedProtocolRouter::Body(router) => {
                     if !fallback
                         && *streaming.get_or_insert_with(|| {
-                            self.streaming_recognizers.iter().any(|index| {
-                                let SharedProtocolRouter::Metadata(router) = &self.protocols[*index].router else {
-                                    unreachable!("recognizers are metadata routers");
-                                };
-                                router.recognizes_streaming_input(&probe)
+                            self.state.metadata_routers.as_ref().is_some_and(|indices| {
+                                indices.iter().any(|index| {
+                                    let SharedProtocolRouter::Metadata(router) = &self.state.protocols[*index].router
+                                    else {
+                                        unreachable!("recognizers are metadata routers");
+                                    };
+                                    router.recognizes_streaming_input(&probe)
+                                })
                             })
                         })
                     {
@@ -244,14 +233,14 @@ where
                                 let (bytes, trailers) =
                                     match crate::schema::protocol::collect_request_body_with_trailers(
                                         body,
-                                        &self.routing_body,
+                                        &self.state.body_collection_config,
                                     )
                                     .await
                                     {
                                         Ok(collected) => collected,
                                         Err(error) => {
                                             return Ok(crate::schema::body_collection_rejection(
-                                                &*self.protocols[index].protocol,
+                                                &*self.state.protocols[index].protocol,
                                                 error,
                                             ))
                                         }
@@ -285,7 +274,7 @@ where
             };
         }
         // A single body protocol owns even requests it does not recognize.
-        Ok(if self.protocols.len() == 1 {
+        Ok(if self.state.protocols.len() == 1 {
             self.reject(0, RoutingError::unknown_operation())
         } else {
             unclaimed()
@@ -294,7 +283,7 @@ where
 
     /// Frames a routing error with the rejecting protocol's serialization.
     fn reject(&self, protocol: usize, error: RoutingError) -> Response<BoxBody> {
-        self.protocols[protocol].protocol.serialize_routing_error(&error)
+        self.state.protocols[protocol].protocol.serialize_routing_error(&error)
     }
 }
 
@@ -534,19 +523,18 @@ impl<B> MultiProtocolRoutingService<B> {
                 },
                 &non_streaming,
             )?;
-            protocols.push(ProtocolRoute { router, protocol });
+            protocols.push(ProtocolAndRouter { router, protocol });
         }
         // Whether recognition is needed comes from the service schema. Each metadata
         // router owns recognition of the streaming operations its protocol supports.
         let has_streaming_inputs = targets.iter().any(|target| target.has_streaming_input());
-        let streaming_recognizers = protocols
-            .iter()
-            .enumerate()
-            .filter_map(|(index, route)| match &route.router {
-                SharedProtocolRouter::Metadata(_) if has_streaming_inputs => Some(index),
-                _ => None,
-            })
-            .collect::<Vec<_>>();
+        let metadata_routers = has_streaming_inputs.then(|| {
+            protocols
+                .iter()
+                .enumerate()
+                .filter_map(|(index, route)| matches!(route.router, SharedProtocolRouter::Metadata(_)).then_some(index))
+                .collect::<Box<[_]>>()
+        });
         let body_routers = protocols
             .iter()
             .enumerate()
@@ -556,18 +544,18 @@ impl<B> MultiProtocolRoutingService<B> {
             .into_iter()
             .map(|binding| BoundHandler {
                 operation: binding.operation,
-                request_body: options.request_body.for_operation(binding.operation.shape_id()),
-                route: binding.route,
+                collection_config: options.request_body.for_operation(binding.operation.shape_id()),
+                handler_route: binding.route,
             })
             .collect();
         Ok(Self {
-            inner: Dispatch {
+            state: Arc::new(RoutingState {
                 protocols: protocols.into(),
-                streaming_recognizers: streaming_recognizers.into(),
+                metadata_routers,
                 body_routers: body_routers.into(),
-                bindings,
-                routing_body: options.request_body.for_routing(),
-            },
+                handlers: bindings,
+                body_collection_config: options.request_body.for_routing(),
+            }),
         })
     }
 
@@ -583,17 +571,24 @@ impl<B> MultiProtocolRoutingService<B> {
             + 'static,
         <L::Service as Service<Request<crate::body::RequestBody<B>>>>::Future: Send + 'static,
     {
-        self.inner.bindings = self
-            .inner
-            .bindings
+        let handlers = self
+            .state
+            .handlers
             .iter()
             .cloned()
             .map(|binding| BoundHandler {
                 operation: binding.operation,
-                request_body: binding.request_body,
-                route: SyncRoute::new(layer.layer(binding.route)),
+                collection_config: binding.collection_config,
+                handler_route: SyncRoute::new(layer.layer(binding.handler_route)),
             })
             .collect();
+        self.state = Arc::new(RoutingState {
+            protocols: self.state.protocols.clone(),
+            handlers,
+            metadata_routers: self.state.metadata_routers.clone(),
+            body_routers: self.state.body_routers.clone(),
+            body_collection_config: self.state.body_collection_config,
+        });
         self
     }
 }
@@ -614,6 +609,6 @@ where
         Poll::Ready(Ok(()))
     }
     fn call(&mut self, request: Request<RB>) -> Self::Future {
-        self.inner.call(request.map(crate::body::RequestBody::new))
+        self.route_request(request.map(crate::body::RequestBody::new))
     }
 }
