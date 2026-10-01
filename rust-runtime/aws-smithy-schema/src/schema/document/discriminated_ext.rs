@@ -184,21 +184,16 @@ fn number_shape_type(n: &Number) -> ShapeType {
             }
         }
         Number::Float(v) => {
-            // Per the SEP, integer-valued floats should be reported as
-            // the narrowest integer container that fits without
-            // precision loss. f64 represents integers up to 2^53
-            // exactly; beyond that the value is already lossy as f64,
-            // so `Double` is the correct report.
-            if v.is_finite() && v.fract() == 0.0 {
-                if (i32::MIN as f64..=i32::MAX as f64).contains(v) {
-                    ShapeType::Integer
-                } else if (i64::MIN as f64..=i64::MAX as f64).contains(v) {
-                    ShapeType::Long
-                } else {
-                    ShapeType::Double
-                }
-            } else {
-                ShapeType::Double
+            // Per the SEP, integer-valued floats are reported as the
+            // narrowest integer container that fits without precision
+            // loss, and the integer readers accept exactly those values
+            // (`float_as_i64` is shared with them). Beyond `i64` the value
+            // is reported as `Double`: f64 represents integers only up to
+            // 2^53 exactly, so such a value is already lossy as f64.
+            match crate::schema::document::deserializer::float_as_i64(*v) {
+                Some(i) if i32::try_from(i).is_ok() => ShapeType::Integer,
+                Some(_) => ShapeType::Long,
+                None => ShapeType::Double,
             }
         }
     }
@@ -363,6 +358,42 @@ mod tests {
         for (doc, expected) in cases {
             let wrapped = DiscriminatedDocument::new(doc);
             assert_eq!(wrapped.shape_type(), expected);
+        }
+    }
+
+    /// From review of PR #4871: `shape_type()` must report a type that the reader can then
+    /// read. It asserts agreement rather than a specific answer, extended with the `i32` and
+    /// `i64` boundaries (`i64::MAX as f64` rounds up to 2⁶³, one past `i64::MAX`).
+    #[test]
+    fn reported_shape_type_can_be_read_back() {
+        use crate::prelude::{DOUBLE, INTEGER, LONG};
+        use aws_smithy_types::{Document, Number};
+        const TWO_POW_63: f64 = 9_223_372_036_854_775_808.0;
+        for (value, expected) in [
+            (42.0, ShapeType::Integer),
+            (-1.0, ShapeType::Integer),
+            (2_147_483_647.0, ShapeType::Integer),
+            (-2_147_483_648.0, ShapeType::Integer),
+            (2_147_483_648.0, ShapeType::Long),
+            (-TWO_POW_63, ShapeType::Long),
+            (TWO_POW_63, ShapeType::Double),
+            (1e20, ShapeType::Double),
+            (1.5, ShapeType::Double),
+            (f64::NAN, ShapeType::Double),
+        ] {
+            let doc = DiscriminatedDocument::new(Document::Number(Number::Float(value)));
+            let reported = doc.shape_type();
+            assert_eq!(reported, expected, "{value}");
+            let read = match reported {
+                ShapeType::Integer => doc.as_shape(|de| de.read_integer(&INTEGER)).map(|_| ()),
+                ShapeType::Long => doc.as_shape(|de| de.read_long(&LONG)).map(|_| ()),
+                ShapeType::Double => doc.as_shape(|de| de.read_double(&DOUBLE)).map(|_| ()),
+                other => panic!("unexpected report {other:?} for {value:?}"),
+            };
+            assert!(
+                read.is_ok(),
+                "reported {reported:?} for {value:?}, read failed: {read:?}"
+            );
         }
     }
 

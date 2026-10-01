@@ -248,7 +248,7 @@ impl<C: Codec> HttpBindingProtocol<C> {
                 // This mirrors the assertion `AwsJsonRpcProtocol` and `AwsQueryProtocol` make about
                 // their own fixed routes. See `ClientProtocolInner::serialize_request` for the
                 // general rule that `endpoint` is advisory.
-                append_uri_with_labels(template, &labels, &mut uri);
+                append_uri_with_labels(template, &labels, &mut uri)?;
             }
             None => {
                 if endpoint.is_empty() {
@@ -257,7 +257,7 @@ impl<C: Codec> HttpBindingProtocol<C> {
                     // Endpoint may contain `{...}` label placeholders to
                     // substitute (this branch is for shapes without an
                     // `@http` trait, where the endpoint *is* the template).
-                    append_uri_with_labels(endpoint, &labels, &mut uri);
+                    append_uri_with_labels(endpoint, &labels, &mut uri)?;
                 }
             }
         }
@@ -380,11 +380,16 @@ pub(crate) fn percent_encode_into(input: &str, out: &mut String) {
 /// `path.replace(&format!("{{{name}}}"), ...)` per label — multiple
 /// String allocations per label and quadratic full-string scans. Top
 /// hot path on PutObject SER (~25% of bench loop pre-fix).
+///
+/// A template label with no value, or an empty one, is an error, as in the generated
+/// (non-schema) request serializer: substituting nothing would collapse the path segment, so
+/// `/{Bucket}/{Key+}` with an empty bucket would silently become `//key`. A greedy label whose
+/// value has an empty inner segment (`a//b`) is still allowed.
 fn append_uri_with_labels<'sc>(
     template: &str,
     labels: &[(Cow<'sc, str>, String)],
     out: &mut String,
-) {
+) -> Result<(), SerdeError> {
     let mut rem = template;
     while let Some(open) = rem.find('{') {
         out.push_str(&rem[..open]);
@@ -408,29 +413,33 @@ fn append_uri_with_labels<'sc>(
             .iter()
             .find(|(n, _)| n.as_ref() == name)
             .map(|(_, v)| v.as_str());
-        if let Some(v) = value {
-            if greedy {
-                // Encode each `/`-separated segment independently to preserve `/`.
-                let mut first = true;
-                for seg in v.split('/') {
-                    if !first {
-                        out.push('/');
-                    }
-                    percent_encode_into(seg, out);
-                    first = false;
-                }
-            } else {
-                percent_encode_into(v, out);
+        let v = match value {
+            Some(v) if !v.is_empty() => v,
+            _ => {
+                return Err(SerdeError::invalid_input(format!(
+                    "{name} was missing: cannot be empty or unset"
+                )))
             }
+        };
+        if greedy {
+            // Encode each `/`-separated segment independently to preserve `/`.
+            let mut first = true;
+            for seg in v.split('/') {
+                if !first {
+                    out.push('/');
+                }
+                percent_encode_into(seg, out);
+                first = false;
+            }
+        } else {
+            percent_encode_into(v, out);
         }
-        // else: label not provided — leave it as nothing (matches previous
-        // behavior where `replace` would not match because the input never
-        // contained the placeholder).
         rem = &after_open[close + 1..];
     }
     if !rem.is_empty() {
         out.push_str(rem);
     }
+    Ok(())
 }
 
 pub(crate) const HEX: &[u8; 16] = b"0123456789ABCDEF";
@@ -2844,6 +2853,87 @@ mod tests {
             )
             .unwrap();
         assert_eq!(request.uri(), "https://example.com/items/123");
+    }
+
+    /// From review of PR #4871: a missing or empty label used to be dropped, collapsing its
+    /// path segment (`/{Bucket}/{Key+}` with an empty bucket became `//my-key`). It is an
+    /// error now, worded as in the generated (non-schema) serializer.
+    #[test]
+    fn missing_or_empty_label_is_an_error() {
+        fn expand(template: &str, labels: &[(&'static str, &str)]) -> Result<String, String> {
+            let labels: Vec<(Cow<'_, str>, String)> = labels
+                .iter()
+                .map(|(n, v)| (Cow::Borrowed(*n), v.to_string()))
+                .collect();
+            let mut out = String::new();
+            append_uri_with_labels(template, &labels, &mut out)
+                .map(|()| out)
+                .map_err(|e| e.to_string())
+        }
+        let template = "/{Bucket}/{Key+}";
+        assert_eq!(
+            expand(template, &[("Bucket", "b"), ("Key", "a//b")]).unwrap(),
+            "/b/a//b",
+            "an empty inner segment of a greedy label is still allowed"
+        );
+        for (labels, missing) in [
+            (&[("Key", "k")][..], "Bucket"),
+            (&[("Bucket", ""), ("Key", "k")][..], "Bucket"),
+            (&[("Bucket", "b")][..], "Key"),
+            (&[("Bucket", "b"), ("Key", "")][..], "Key"),
+        ] {
+            let err = expand(template, labels).expect_err(&format!("{labels:?}"));
+            assert!(
+                err.contains(&format!("{missing} was missing: cannot be empty or unset")),
+                "{err}"
+            );
+        }
+        // An unmatched `{` is unrelated and still passed through verbatim.
+        assert_eq!(expand("/a{b", &[]).unwrap(), "/a{b");
+    }
+
+    #[test]
+    fn empty_label_fails_serialize_request() {
+        static BUCKET: Schema<'static> = Schema::new_member(
+            crate::shape_id!("test", "Get"),
+            ShapeType::String,
+            "Bucket",
+            0,
+        )
+        .with_http_label();
+        static KEY: Schema<'static> =
+            Schema::new_member(crate::shape_id!("test", "Get"), ShapeType::String, "Key", 1)
+                .with_http_label();
+        static GET_SCHEMA: Schema<'static> = Schema::new_struct(
+            crate::shape_id!("test", "Get"),
+            ShapeType::Structure,
+            &[&BUCKET, &KEY],
+        )
+        .with_http(crate::traits::HttpTrait::new(
+            "GET",
+            "/{Bucket}/{Key+}",
+            None,
+        ));
+        struct Get(&'static str);
+        impl SerializableStruct for Get {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_string(&BUCKET, self.0)?;
+                s.write_string(&KEY, "my-key")
+            }
+        }
+        let protocol = make_protocol();
+        let request = protocol
+            .serialize_request(&Get("b"), &GET_SCHEMA, "", &ConfigBag::base())
+            .unwrap();
+        assert_eq!(request.uri(), "/b/my-key");
+        let err = protocol
+            .serialize_request(&Get(""), &GET_SCHEMA, "", &ConfigBag::base())
+            .expect_err("an empty bucket must not produce `//my-key`");
+        assert!(
+            err.to_string()
+                .contains("Bucket was missing: cannot be empty or unset"),
+            "{err}"
+        );
     }
 
     // -- Combined: @httpHeader + @httpQuery + @httpLabel + body --
