@@ -10,6 +10,7 @@ from unittest import mock
 from released_codegen_runtime_compatibility.cargo import (
     _append_runtime_patches,
     _patch_selection_problems,
+    _resolved_runtime_packages,
     _satisfies_requirement,
     _verify_runtime_selection,
     discover_runtime_crates,
@@ -268,6 +269,130 @@ class RuntimeSelectionTest(unittest.TestCase):
 
         logger_mock.warning.assert_called_once()
         self.assertIn("aws-smithy-new-crate", str(logger_mock.warning.call_args))
+
+    def test_checkout_path_dependencies_are_ignored(self) -> None:
+        """Pass when HEAD moved a crate to a new major that checkout crates use.
+
+        Released generated code keeps its crates.io copy of the old line while a
+        patched checkout crate pulls the new line in through a path-only
+        dependency, which Cargo reports as the requirement `*`. That path
+        requirement says nothing about patch selection and must not be parsed.
+        """
+        from released_codegen_runtime_compatibility.cargo import (
+            EXPECTED_RUNTIME_CRATES,
+        )
+
+        candidates = [
+            RuntimeCrate(
+                name=name,
+                path=Path("/repo/rust-runtime") / name,
+                version="1.0.0" if name == "aws-smithy-schema" else "0.60.0",
+            )
+            for name in sorted(EXPECTED_RUNTIME_CRATES["client"])
+        ]
+        packages = [
+            {
+                "name": crate.name,
+                "version": crate.version,
+                "source": None,
+                "dependencies": [],
+            }
+            for crate in candidates
+        ]
+        runtime = next(p for p in packages if p["name"] == "aws-smithy-runtime")
+        runtime["dependencies"].append(
+            {
+                "name": "aws-smithy-schema",
+                "req": "*",
+                "path": "/repo/rust-runtime/aws-smithy-schema",
+            }
+        )
+        packages.append(
+            {
+                "name": "aws-smithy-schema",
+                "version": "0.2.1",
+                "source": CRATES_IO,
+                "dependencies": [],
+            }
+        )
+        packages.append(
+            {
+                "name": "generated-client",
+                "version": "0.0.1",
+                "source": None,
+                "dependencies": [
+                    {
+                        "name": "aws-smithy-schema",
+                        "source": CRATES_IO,
+                        "req": "^0.2.1",
+                    }
+                ],
+            }
+        )
+        with mock.patch(
+            "released_codegen_runtime_compatibility.cargo.output",
+            return_value=(0, json.dumps({"packages": packages}), ""),
+        ), mock.patch("released_codegen_runtime_compatibility.cargo.eprint"):
+            _verify_runtime_selection("client", Path("/workspace"), candidates)
+    def test_registry_requirement_is_still_checked_with_path_dependency(self) -> None:
+        """A sibling path edge must not hide a crates.io patch-selection bug."""
+        candidates = {
+            "aws-smithy-schema": RuntimeCrate(
+                name="aws-smithy-schema",
+                path=Path("/repo/rust-runtime/aws-smithy-schema"),
+                version="0.2.2",
+            )
+        }
+        metadata = {
+            "packages": [
+                {
+                    "name": "aws-smithy-runtime",
+                    "version": "1.0.0",
+                    "source": None,
+                    "dependencies": [
+                        {
+                            "name": "aws-smithy-schema",
+                            "source": None,
+                            "req": "*",
+                            "path": "/repo/rust-runtime/aws-smithy-schema",
+                        }
+                    ],
+                },
+                {
+                    "name": "aws-smithy-schema",
+                    "version": "0.2.1",
+                    "source": CRATES_IO,
+                    "dependencies": [],
+                },
+                {
+                    "name": "generated-client",
+                    "version": "0.0.1",
+                    "source": None,
+                    "dependencies": [
+                        {
+                            "name": "aws-smithy-schema",
+                            "source": CRATES_IO,
+                            "req": "^0.2.1",
+                        }
+                    ],
+                },
+            ]
+        }
+        with mock.patch(
+            "released_codegen_runtime_compatibility.cargo.output",
+            return_value=(0, json.dumps(metadata), ""),
+        ):
+            resolved, requirements = _resolved_runtime_packages(
+                Path("/workspace"), candidates
+            )
+
+        self.assertEqual(
+            {"aws-smithy-schema": {("generated-client", "^0.2.1")}},
+            requirements,
+        )
+        problems = _patch_selection_problems(candidates, resolved, requirements)
+        self.assertEqual(1, len(problems))
+        self.assertIn("aws-smithy-schema 0.2.1 resolved from crates.io", problems[0])
 
 
 if __name__ == "__main__":

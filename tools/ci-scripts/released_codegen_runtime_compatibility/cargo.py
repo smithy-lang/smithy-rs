@@ -290,7 +290,13 @@ def _resolved_runtime_packages(
 ) -> Tuple[
     Dict[str, Set[Tuple[str, Optional[str]]]], Dict[str, Set[Tuple[str, str]]]
 ]:
-    """Read resolved runtime versions/sources and the requirements on them."""
+    """Read resolved runtime versions/sources and the requirements on them.
+
+    Only crates.io dependency requirements are relevant to patch selection.
+    Dependencies between patched checkout crates are path dependencies, always
+    resolve to the checkout, and Cargo reports path-only requirements as `*`.
+    Requirements from other registries cannot be affected by [patch.crates-io].
+    """
     _, metadata_json, _ = output(
         [
             "cargo",
@@ -311,6 +317,9 @@ def _resolved_runtime_packages(
                 (package["version"], package["source"])
             )
         for dependency in package["dependencies"]:
+            source = dependency.get("source")
+            if source is None or not source.startswith(CRATES_IO_SOURCE_PREFIX):
+                continue
             if dependency["name"] in candidates:
                 requirements.setdefault(dependency["name"], set()).add(
                     (name, dependency["req"])
