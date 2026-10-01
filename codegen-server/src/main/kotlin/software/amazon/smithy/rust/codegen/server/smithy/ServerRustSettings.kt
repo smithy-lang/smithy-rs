@@ -5,14 +5,22 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.TopDownIndex
+import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
+import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.rust.codegen.core.smithy.CODEGEN_SETTINGS
 import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenConfig
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.isEventStream
+import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import java.util.Optional
 import java.util.logging.Logger
 
@@ -42,6 +50,7 @@ data class ServerRustSettings(
     override val examplesUri: String?,
     override val minimumSupportedRustVersion: String? = null,
     override val customizationConfig: ObjectNode?,
+    val requestBodyReadTimeouts: RequestBodyReadTimeouts,
 ) : CoreRustSettings(
         service,
         moduleName,
@@ -87,6 +96,214 @@ data class ServerRustSettings(
                 examplesUri = coreRustSettings.examplesUri,
                 minimumSupportedRustVersion = coreRustSettings.minimumSupportedRustVersion,
                 customizationConfig = coreRustSettings.customizationConfig,
+                requestBodyReadTimeouts =
+                    RequestBodyReadTimeouts.fromCustomizationConfig(
+                        model,
+                        coreRustSettings.service,
+                        coreRustSettings.customizationConfig,
+                    ),
+            )
+        }
+    }
+}
+
+data class RequestBodyReadTimeouts(
+    val defaultNonPayloadMillis: Long,
+    val defaultPayloadMillis: Long,
+    val defaultEventStreamMessageMillis: Long,
+    val perOperationMillis: Map<ShapeId, Long>,
+    val payloadOperationIds: Set<ShapeId>,
+    val streamingOperationIds: Set<ShapeId>,
+    val eventStreamInputOperationIds: Set<ShapeId>,
+) {
+    fun timeoutMillisFor(operationId: ShapeId): Long? =
+        if (operationId in streamingOperationIds) {
+            null
+        } else {
+            (
+                perOperationMillis[operationId]
+                    ?: if (operationId in payloadOperationIds) defaultPayloadMillis else defaultNonPayloadMillis
+            )
+                .takeIf { it > 0 }
+        }
+
+    /**
+     * Per-message completion deadline for operations with an event stream input: once the first
+     * bytes of a message arrive, the complete message frame must arrive within this duration.
+     * Returns `null` (no deadline) for non-event-stream operations, or when disabled (`0`).
+     */
+    fun eventStreamMessageTimeoutMillisFor(operationId: ShapeId): Long? =
+        if (operationId in eventStreamInputOperationIds) {
+            (perOperationMillis[operationId] ?: defaultEventStreamMessageMillis).takeIf { it > 0 }
+        } else {
+            null
+        }
+
+    companion object {
+        private const val CONFIG_KEY = "requestBodyReadTimeouts"
+        private const val DEFAULT_NON_PAYLOAD_KEY = "defaultNonPayload"
+        private const val DEFAULT_PAYLOAD_KEY = "defaultPayload"
+        private const val DEFAULT_EVENT_STREAM_MESSAGE_KEY = "defaultEventStreamMessage"
+        private const val PER_OPERATION_KEY = "perOperation"
+        const val DEFAULT_NON_PAYLOAD_REQUEST_BODY_READ_TIMEOUT_MILLIS = 60_000L
+        const val DEFAULT_REQUEST_BODY_READ_TIMEOUT_MILLIS = 3_600_000L
+
+        /** Event stream message timeouts are disabled unless explicitly configured. */
+        const val DEFAULT_EVENT_STREAM_MESSAGE_TIMEOUT_MILLIS = 0L
+
+        private fun parseTimeoutMillis(
+            node: Node,
+            configPath: String,
+        ): Long =
+            when {
+                node.isNumberNode && node.expectNumberNode().value.toDouble() == 0.0 -> 0
+                node.isStringNode -> parseTimeoutMillisString(node.expectStringNode().value, configPath)
+                else -> throw invalidTimeout(configPath)
+            }
+
+        private fun parseTimeoutMillisString(
+            value: String,
+            configPath: String,
+        ): Long {
+            val trimmed = value.trim()
+            val match =
+                TIMEOUT_VALUE_REGEX.matchEntire(trimmed)
+                    ?: throw invalidTimeout(configPath)
+            return try {
+                val amount = match.groupValues[1].toLong()
+                when (match.groupValues[2]) {
+                    "ms" -> amount
+                    "s" -> Math.multiplyExact(amount, 1000L)
+                    "m" -> Math.multiplyExact(amount, 60_000L)
+                    "h" -> Math.multiplyExact(amount, 3_600_000L)
+                    else -> throw invalidTimeout(configPath)
+                }
+            } catch (_: ArithmeticException) {
+                throw CodegenException("`$configPath` exceeds the maximum supported duration")
+            } catch (_: NumberFormatException) {
+                throw CodegenException("`$configPath` exceeds the maximum supported duration")
+            }
+        }
+
+        private fun invalidTimeout(configPath: String) =
+            CodegenException(
+                "`$configPath` must be `0` to disable the timeout or a duration string with an explicit unit, " +
+                    "such as `1000ms`, `10s`, `30m`, or `1h`",
+            )
+
+        private val TIMEOUT_VALUE_REGEX = Regex("^([0-9]+)\\s*(ms|s|m|h)$")
+
+        fun fromCustomizationConfig(
+            model: Model,
+            serviceId: ShapeId,
+            customizationConfig: ObjectNode?,
+        ): RequestBodyReadTimeouts {
+            val config = customizationConfig?.getObjectMember(CONFIG_KEY)?.orElse(null)
+            val defaultNonPayloadMillis =
+                config
+                    ?.getMember(DEFAULT_NON_PAYLOAD_KEY)
+                    ?.map { parseTimeoutMillis(it, "customizationConfig.$CONFIG_KEY.$DEFAULT_NON_PAYLOAD_KEY") }
+                    ?.orElse(null)
+                    ?: DEFAULT_NON_PAYLOAD_REQUEST_BODY_READ_TIMEOUT_MILLIS
+            val defaultPayloadMillis =
+                config
+                    ?.getMember(DEFAULT_PAYLOAD_KEY)
+                    ?.map { parseTimeoutMillis(it, "customizationConfig.$CONFIG_KEY.$DEFAULT_PAYLOAD_KEY") }
+                    ?.orElse(null)
+                    ?: DEFAULT_REQUEST_BODY_READ_TIMEOUT_MILLIS
+            val defaultEventStreamMessageMillis =
+                config
+                    ?.getMember(DEFAULT_EVENT_STREAM_MESSAGE_KEY)
+                    ?.map {
+                        parseTimeoutMillis(it, "customizationConfig.$CONFIG_KEY.$DEFAULT_EVENT_STREAM_MESSAGE_KEY")
+                    }
+                    ?.orElse(null)
+                    ?: DEFAULT_EVENT_STREAM_MESSAGE_TIMEOUT_MILLIS
+
+            val service = model.expectShape(serviceId, ServiceShape::class.java)
+            val containedOperations = TopDownIndex.of(model).getContainedOperations(service)
+            val containedOperationIds =
+                containedOperations
+                    .map { it.id }
+                    .toSet()
+            val streamingOperationIds =
+                containedOperations
+                    .filter { operation ->
+                        operation.input
+                            .map { inputId ->
+                                model.expectShape(inputId).members().any { member ->
+                                    member.isStreaming(model)
+                                }
+                            }
+                            .orElse(false)
+                    }
+                    .map { it.id }
+                    .toSet()
+            val eventStreamInputOperationIds =
+                containedOperations
+                    .filter { operation ->
+                        operation.input
+                            .map { inputId ->
+                                model.expectShape(inputId).members().any { member ->
+                                    member.isEventStream(model)
+                                }
+                            }
+                            .orElse(false)
+                    }
+                    .map { it.id }
+                    .toSet()
+            val payloadOperationIds =
+                containedOperations
+                    .filter { operation ->
+                        operation.id !in streamingOperationIds &&
+                            operation.input
+                                .map { inputId ->
+                                    model.expectShape(inputId).members().any { member ->
+                                        member.hasTrait<HttpPayloadTrait>()
+                                    }
+                                }
+                                .orElse(false)
+                    }
+                    .map { it.id }
+                    .toSet()
+            val perOperationMillis =
+                config
+                    ?.getObjectMember(PER_OPERATION_KEY)
+                    ?.orElse(null)
+                    ?.members
+                    ?.map { (key, value) ->
+                        val operationId = ShapeId.from(key.value)
+                        if (operationId !in containedOperationIds) {
+                            throw CodegenException(
+                                "`customizationConfig.$CONFIG_KEY.$PER_OPERATION_KEY` contains `$operationId`, " +
+                                    "which is not an operation attached to service `$serviceId`",
+                            )
+                        }
+                        // For operations with an event stream input, the per-operation value configures
+                        // the per-message completion deadline. Other streaming inputs (e.g. `@streaming`
+                        // blobs) have no frame boundaries and remain unsupported.
+                        if (operationId in streamingOperationIds && operationId !in eventStreamInputOperationIds) {
+                            throw CodegenException(
+                                "`customizationConfig.$CONFIG_KEY.$PER_OPERATION_KEY` contains streaming operation " +
+                                    "`$operationId`, but request body read timeouts are not supported for streaming inputs",
+                            )
+                        }
+                        operationId to
+                            parseTimeoutMillis(
+                                value,
+                                "customizationConfig.$CONFIG_KEY.$PER_OPERATION_KEY.$operationId",
+                            )
+                    }?.toMap()
+                    ?: emptyMap()
+
+            return RequestBodyReadTimeouts(
+                defaultNonPayloadMillis,
+                defaultPayloadMillis,
+                defaultEventStreamMessageMillis,
+                perOperationMillis,
+                payloadOperationIds,
+                streamingOperationIds,
+                eventStreamInputOperationIds,
             )
         }
     }
