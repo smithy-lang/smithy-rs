@@ -143,6 +143,7 @@ class ServerEventStreamMessageTimeoutHttpBindingCustomization(val codegenContext
                 CargoDependency.Tokio.toDevDependency(),
                 ServerCargoDependency.PinProjectLite,
                 ServerCargoDependency.TokioTime,
+                CargoDependency.Tracing,
             ),
         )
 }
