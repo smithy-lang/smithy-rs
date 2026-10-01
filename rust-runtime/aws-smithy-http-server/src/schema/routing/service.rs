@@ -147,6 +147,7 @@ where
 
     fn route_request(&self, request: Request<crate::body::RequestBody<B>>) -> MultiProtocolRoutingFuture<B> {
         let state = match &self.state.protocols[..] {
+            // Do we have only one protocol and that is a MetaData router?
             [ProtocolAndRouter {
                 router: SharedProtocolRouter::Metadata(router),
                 ..
