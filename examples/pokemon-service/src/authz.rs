@@ -12,6 +12,10 @@
 
 use std::{marker::PhantomData, pin::Pin};
 
+use aws_smithy_http_server_metrics::MetricsPool;
+use metrique::timers::Timer;
+use metrique::unit::Millisecond;
+use metrique::unit_of_work::metrics;
 use pokemon_service_server_sdk::server::{
     body::BoxBody,
     operation::OperationShape,
@@ -19,6 +23,19 @@ use pokemon_service_server_sdk::server::{
     response::IntoResponse,
 };
 use tower::Service;
+
+/// Authorization timing contributed to the per-request metrics entry.
+///
+/// This middleware does not share the service's metrics entry type, so it
+/// contributes through the request-scoped [`MetricsPool`] instead. The field
+/// flattens into the single per-request entry alongside the service's own
+/// metrics.
+#[metrics]
+#[derive(Default)]
+struct AuthorizationMetrics {
+    #[metrics(unit = Millisecond)]
+    authorization_time: Timer,
+}
 
 pub struct AuthorizationPlugin {
     // Private so that users are forced to use the `new` constructor.
@@ -150,7 +167,16 @@ macro_rules! impl_service {
                 let authorizer = self.authorizer.clone();
 
                 let fut = async move {
+                    // Independently-owned middleware: it cannot name the service's
+                    // metrics entry type, so it times the authorization check and
+                    // contributes the result through the request-scoped pool.
+                    let authorization_metrics = AuthorizationMetrics {
+                        authorization_time: Timer::start_now(),
+                    };
                     let is_authorized = authorizer.authorize(&input).await;
+                    if let Some(pool) = MetricsPool::current() {
+                        pool.append(authorization_metrics);
+                    }
                     if !is_authorized {
                         return Err(Self::Error::AuthorizeError {
                             message: "Not authorized!".to_owned(),

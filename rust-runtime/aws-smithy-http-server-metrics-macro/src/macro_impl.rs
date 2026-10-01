@@ -83,11 +83,29 @@ pub(crate) fn smithy_metrics_impl(
         default_response_metrics: Option<metrique::Slot<aws_smithy_http_server_metrics::default::DefaultResponseMetrics>>
     });
 
+    fields.named.push(syn::parse_quote! {
+        /// Pool that collects heterogeneous child metrics contributed by middleware,
+        /// handlers, and libraries during the request. Flattened into this entry
+        /// when the request finishes.
+        #[metrics(flatten)]
+        metrics_pool: aws_smithy_http_server_metrics::MetricsPool
+    });
+
+    let struct_ident = &metrics_struct.ident;
+    let has_metrics_pool_impl = quote! {
+        impl aws_smithy_http_server_metrics::traits::HasMetricsPool for #struct_ident {
+            fn metrics_pool_handle(&self) -> aws_smithy_http_server_metrics::MetricsPoolHandle {
+                self.metrics_pool.handle()
+            }
+        }
+    };
+
     let ext_trait = generate_ext_trait(&metrics_struct.ident);
     let ext_trait_impls = generate_ext_trait_impl(&metrics_struct.ident, &extension_fields);
 
     quote! {
         #metrics_struct
+        #has_metrics_pool_impl
         #ext_trait
         #ext_trait_impls
     }
@@ -321,6 +339,7 @@ mod tests {
         let attrs = SmithyMetricsStructAttrs {};
 
         let output = smithy_metrics_impl(attrs, input);
+        let output_str = output.to_string();
         let generated_struct = get_generated_struct(output);
 
         // Verify my_field is wrapped in double Slot
@@ -333,6 +352,19 @@ mod tests {
         // Verify default fields exist
         find_field(&generated_struct, "default_request_metrics");
         find_field(&generated_struct, "default_response_metrics");
+        find_field(&generated_struct, "metrics_pool");
+
+        // Verify the pool field is a plain flattened MetricsPool (not Slot-wrapped),
+        // referenced through the runtime crate re-export so consumers need no
+        // direct `metrique-util` dependency.
+        assert_field_type(
+            &generated_struct,
+            "metrics_pool",
+            syn::parse_quote!(aws_smithy_http_server_metrics::MetricsPool),
+        );
+
+        // Verify the HasMetricsPool impl is generated
+        assert!(output_str.contains("HasMetricsPool"));
     }
 
     #[test]

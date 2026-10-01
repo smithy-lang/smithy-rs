@@ -3,16 +3,6 @@
 version = 4
 
 [[package]]
-name = "Inflector"
-version = "0.11.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe438c63458706e03479442743baae6c88256498e6431708f6dfc520a26515d3"
-dependencies = [
- "lazy_static",
- "regex",
-]
-
-[[package]]
 name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -611,25 +601,30 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-server-metrics"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "aws-smithy-http-server 0.65.10",
  "aws-smithy-http-server 0.67.1",
  "aws-smithy-http-server-metrics-macro",
  "aws-smithy-legacy-http-server",
+ "bytes",
  "futures",
  "http 0.2.12",
  "http 1.5.0",
  "http-body 0.4.6",
  "http-body 1.1.0",
+ "http-body-util",
  "hyper 0.14.32",
  "hyper 1.11.1",
+ "hyper-util",
  "metrique",
  "metrique-core",
+ "metrique-util",
  "metrique-writer",
  "metrique-writer-format-emf",
  "pin-project-lite",
  "thiserror 2.0.21",
+ "tokio",
  "tower 0.4.13",
  "tracing",
  "tracing-appender",
@@ -637,7 +632,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-server-metrics-macro"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1605,9 +1600,9 @@ dependencies = [
 
 [[package]]
 name = "darling"
-version = "0.23.0"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25ae13da2f202d56bd7f91c25fba009e7717a1e4a1cc98a76d844b65ae912e9d"
+checksum = "ed17f5901b6630b993ca003def43f2f8ef4014fc13b047b57aad617ff32bc2ec"
 dependencies = [
  "darling_core",
  "darling_macro",
@@ -1615,26 +1610,26 @@ dependencies = [
 
 [[package]]
 name = "darling_core"
-version = "0.23.0"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9865a50f7c335f53564bb694ef660825eb8610e0a53d3e11bf1b0d3df31e03b0"
+checksum = "6837e2cf7485aaae18f86181d2f0e9a7ed297a025e220aeabf63fdebd3a2ddff"
 dependencies = [
  "ident_case",
  "proc-macro2",
  "quote",
  "strsim 0.11.1",
- "syn 2.0.119",
+ "syn 3.0.6",
 ]
 
 [[package]]
 name = "darling_macro"
-version = "0.23.0"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac3984ec7bd6cfa798e62b4a642426a5be0e68f9401cfc2a01e3fa9ea2fcdb8d"
+checksum = "2ac7135c3ef02b2f7833bbeb1be5ba7f966dcde8a87c6b87f65a778d71a02785"
 dependencies = [
  "darling_core",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.6",
 ]
 
 [[package]]
@@ -2203,6 +2198,15 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "histogram"
+version = "0.11.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "099d45a031296a7a40e01137b56c0c552f2a545568ef6058e47d674046def0db"
+dependencies = [
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -3001,13 +3005,14 @@ dependencies = [
 
 [[package]]
 name = "metrique"
-version = "0.1.31"
+version = "0.1.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b55bfa39e6f5e44a37a59a794915ce36d04371471cf62ae365cd9703f58a5e0"
+checksum = "ad0c03bf847e6e2fd90303d12400b58549f9bfcd27a06d5867787fdfedb2ce70"
 dependencies = [
  "itoa",
  "metrique-core",
  "metrique-macro",
+ "metrique-metricsrs",
  "metrique-service-metrics",
  "metrique-timesource",
  "metrique-writer",
@@ -3019,9 +3024,9 @@ dependencies = [
 
 [[package]]
 name = "metrique-core"
-version = "0.1.22"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bd60ab3f5d8e13e36aa1d1dd9cc4920012dd21a25bd7311ae3c39810648e068"
+checksum = "763cd15a486b66bb0c4e7b10d6ffd3722d25a36c06ecaffbe3aa2fc4b7a5b688"
 dependencies = [
  "itertools 0.14.0",
  "metrique-writer-core",
@@ -3029,16 +3034,33 @@ dependencies = [
 
 [[package]]
 name = "metrique-macro"
-version = "0.1.22"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7605c49951713cce25af6bee77ed4432dde0839c5d9935bcb6f9643e6e82c7c3"
+checksum = "5f875d1464f0db2782d98888f8db189fc7a6f5426a0745e1b8dcec8bb6ab4331"
 dependencies = [
- "Inflector",
  "darling",
  "metrique-core",
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.6",
+]
+
+[[package]]
+name = "metrique-metricsrs"
+version = "0.1.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96ee8acaaea571b4e4e2f6fe20f3b316693f17cd2edb5bb2658b5279614c7435"
+dependencies = [
+ "derive-where",
+ "futures",
+ "histogram",
+ "metrique-timesource",
+ "metrique-writer",
+ "metrique-writer-core",
+ "pin-project",
+ "tokio",
+ "tokio-util",
+ "tracing",
 ]
 
 [[package]]
@@ -3057,10 +3079,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2faca4e4480069ff02b1763b3b79f5cec7e8628e24d9dc5b6073f53d2577a4d9"
 
 [[package]]
-name = "metrique-writer"
-version = "0.1.27"
+name = "metrique-util"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb97854dd4e2a92fe54b30e6e19976dcc0b2b7d39da3e84e86e2ce1e2ed8ce0d"
+checksum = "6109ee611a928c890b0f01b7830133596df03e2ebc2e88ffc7b5d9ac78e04d86"
+dependencies = [
+ "metrique",
+ "metrique-core",
+ "pin-project-lite",
+ "tracing",
+]
+
+[[package]]
+name = "metrique-writer"
+version = "0.1.28"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b26adc7958136758325708230166598be20f5691aaeb1c00bd2b6c446b5c7ef"
 dependencies = [
  "ahash",
  "crossbeam-queue",
@@ -3070,6 +3104,7 @@ dependencies = [
  "metrique-core",
  "metrique-writer-core",
  "metrique-writer-macro",
+ "ordered-float",
  "rand 0.9.5",
  "smallvec",
  "tokio",
@@ -3079,21 +3114,24 @@ dependencies = [
 
 [[package]]
 name = "metrique-writer-core"
-version = "0.1.21"
+version = "0.1.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71c9fc241cff4eedc2b6c3e2edece7f3edab2920e7531f62aac864ce933cdbb6"
+checksum = "5e253373268b34ae3f1b0e0348dd56fd0924f45ea49b086913e18d273ee03098"
 dependencies = [
  "derive-where",
+ "dtoa",
  "itertools 0.14.0",
+ "itoa",
  "serde",
  "smallvec",
+ "tokio",
 ]
 
 [[package]]
 name = "metrique-writer-format-emf"
-version = "0.1.24"
+version = "0.1.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d42ae83610b3299281148ff2e0053e4498b99efaca5acb4c2b9250fb9bbbc858"
+checksum = "8401a3948f9275dd77cb96f728694f22c3160dbeb9bc7e3f934ace02c5e1f1a5"
 dependencies = [
  "bit-set",
  "dtoa",
@@ -3111,16 +3149,16 @@ dependencies = [
 
 [[package]]
 name = "metrique-writer-macro"
-version = "0.1.10"
+version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1eef190f855405b9df4166ee0495925162fb2a7985bac62c6ae44f40061fac00"
+checksum = "713754fe59992b2616974b9d9cc74fa6fd182965df7a48b39fbbfd37ac49f03b"
 dependencies = [
  "darling",
+ "metrique-core",
  "proc-macro2",
  "quote",
- "str_inflector",
- "syn 2.0.119",
- "synstructure 0.13.2",
+ "syn 3.0.6",
+ "synstructure",
 ]
 
 [[package]]
@@ -4488,16 +4526,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c0e04424e733e69714ca1bbb9204c1a57f09f5493439520f9f68c132ad25eec"
 
 [[package]]
-name = "str_inflector"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec0b848d5a7695b33ad1be00f84a3c079fe85c9278a325ff9159e6c99cef4ef7"
-dependencies = [
- "lazy_static",
- "regex",
-]
-
-[[package]]
 name = "strsim"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4561,17 +4589,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bf256ce5efdfa370213c1dabab5935a12e49f2c58d15e9eac2870d3b4f27263"
 dependencies = [
  "futures-core",
-]
-
-[[package]]
-name = "synstructure"
-version = "0.13.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "728a70f3dbaf5bab7f0c4b1ac8d7ae5ea60a4b5549c8a5914361c99147a709d2"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
 ]
 
 [[package]]
@@ -4844,6 +4861,7 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-sink",
+ "futures-util",
  "libc",
  "pin-project-lite",
  "tokio",
@@ -5508,7 +5526,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.6",
- "synstructure 0.14.0",
+ "synstructure",
 ]
 
 [[package]]
@@ -5549,7 +5567,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.6",
- "synstructure 0.14.0",
+ "synstructure",
 ]
 
 [[package]]
