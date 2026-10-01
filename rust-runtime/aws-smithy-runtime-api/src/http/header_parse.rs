@@ -306,6 +306,24 @@ pub fn one_date_or_none_bytes<'a>(
     Ok(first)
 }
 
+/// Conditionally quotes and escapes a header value if the header value contains a comma or quote.
+pub fn quote_header_value<'a>(value: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
+    let value = value.into();
+    if value.trim().len() != value.len()
+        || value.contains('"')
+        || value.contains(',')
+        || value.contains('(')
+        || value.contains(')')
+    {
+        Cow::Owned(format!(
+            "\"{}\"",
+            value.replace('\\', "\\\\").replace('"', "\\\"")
+        ))
+    } else {
+        value
+    }
+}
+
 /// Read exactly one or none from a headers iterator
 ///
 /// This function does not perform comma splitting like [`read_many_from_str`]

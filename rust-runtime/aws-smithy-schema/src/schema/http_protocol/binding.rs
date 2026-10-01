@@ -654,6 +654,28 @@ impl<'a> BindingState<'a> {
 /// zero-allocation borrow in practice. The owned arm exists so that relaxing
 /// `@httpHeader` to accept arena-borrowed names stays an additive change
 /// instead of breaking this call site.
+/// Inserts a header bound to `member`, returning an error rather than panicking when the
+/// name or value is not a valid HTTP header component.
+///
+/// The name of a prefix header comes from a map key in the input, and a header value can
+/// contain any character a string member allows (a newline, for instance), so either can be
+/// invalid. The error names the member and `location` (the header, or the prefix for a prefix
+/// header) but never the value, which may be sensitive.
+fn insert_header(
+    headers: &mut Headers,
+    name: Cow<'static, str>,
+    value: String,
+    member: &Schema<'_>,
+    location: std::fmt::Arguments<'_>,
+) -> Result<(), SerdeError> {
+    headers.try_insert(name, value).map(|_| ()).map_err(|err| {
+        SerdeError::invalid_input(format!(
+            "cannot serialize {} to {location}: {err}",
+            member.member_name().unwrap_or("member"),
+        ))
+    })
+}
+
 fn header_name(header: &crate::traits::HttpHeaderTrait<'_>) -> Cow<'static, str> {
     match header.value_static() {
         Some(name) => Cow::Borrowed(name),
@@ -755,22 +777,30 @@ impl<'s, 'b, 'a> ShapeSerializer for BindingRouter<'s, 'b, 'a> {
             }
             let mut collector = ListElementCollector::for_header();
             write_elements(&mut collector)?;
-            // RFC 7230: string values containing commas or quotes need quoting.
-            // Timestamps are NOT quoted even though http-date contains commas.
+            // RFC 7230: string values are quoted with the same rule the generated
+            // (non-schema) header serializer uses, `quote_header_value`. Timestamps are NOT
+            // quoted even though http-date contains commas; readers use `many_dates`.
             let header_val = collector
                 .values
                 .iter()
                 .zip(collector.quotable.iter())
                 .map(|(s, &quotable)| {
-                    if quotable && (s.contains(',') || s.contains('"')) {
-                        format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
+                    if quotable {
+                        aws_smithy_runtime_api::http::header_parse::quote_header_value(s.as_str())
+                            .into_owned()
                     } else {
                         s.clone()
                     }
                 })
                 .collect::<Vec<_>>()
                 .join(", ");
-            self.state.headers.insert(header_name(header), header_val);
+            insert_header(
+                self.state.headers,
+                header_name(header),
+                header_val,
+                schema,
+                format_args!("header `{}`", header.value()),
+            )?;
             return Ok(());
         }
         // @httpQuery on a list: add each element as a separate query param
@@ -810,7 +840,13 @@ impl<'s, 'b, 'a> ShapeSerializer for BindingRouter<'s, 'b, 'a> {
             write_entries(&mut collector)?;
             // Names are dynamic (prefix + map key) — owned Strings.
             for (k, v) in collector.entries {
-                self.state.headers.insert(k, v);
+                insert_header(
+                    self.state.headers,
+                    Cow::Owned(k),
+                    v,
+                    schema,
+                    format_args!("headers with prefix `{}`", prefix.value()),
+                )?;
             }
             return Ok(());
         }
@@ -966,9 +1002,14 @@ impl<'s, 'b, 'a> ShapeSerializer for BindingRouter<'s, 'b, 'a> {
                 return Ok(());
             }
             let encoded = aws_smithy_types::base64::encode(value.as_ref());
-            self.state
-                .headers
-                .insert(header_name(schema.http_header().unwrap()), encoded);
+            let header = schema.http_header().unwrap();
+            insert_header(
+                self.state.headers,
+                header_name(header),
+                encoded,
+                schema,
+                format_args!("header `{}`", header.value()),
+            )?;
             return Ok(());
         }
         if schema.http_payload().is_some() {
@@ -1065,7 +1106,13 @@ impl<'a> BindingState<'a> {
                 // recovers one from the trait, which is a zero-allocation
                 // borrow for every schema constructible today.
                 if let Some(header) = schema.http_header() {
-                    self.headers.insert(header_name(header), value.to_string());
+                    insert_header(
+                        self.headers,
+                        header_name(header),
+                        value.to_string(),
+                        schema,
+                        format_args!("header `{}`", header.value()),
+                    )?;
                 }
             }
             HttpBinding::Query => {
@@ -2425,6 +2472,43 @@ mod tests {
         assert_eq!(request.headers().get("X-Token").unwrap(), "my-token-value");
     }
 
+    /// String list headers are quoted with the rule the generated (non-schema) header
+    /// serializer uses: on `,`, `"`, `(`, `)` and surrounding whitespace.
+    #[test]
+    fn http_header_string_list_quoting_matches_legacy() {
+        static LIST_MEMBER: Schema<'static> =
+            Schema::new_member(crate::shape_id!("test", "L"), ShapeType::List, "items", 0)
+                .with_http_header("X-Items");
+        static LIST_SCHEMA: Schema<'static> = Schema::new_struct(
+            crate::shape_id!("test", "L"),
+            ShapeType::Structure,
+            &[&LIST_MEMBER],
+        );
+        struct ListStruct;
+        impl SerializableStruct for ListStruct {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_list(&LIST_MEMBER, &|e| {
+                    for v in ["plain", " a", "b ", "(x)", "c,d", "q\"q"] {
+                        e.write_string(&crate::prelude::STRING, v)?;
+                    }
+                    Ok(())
+                })
+            }
+        }
+        let request = make_protocol()
+            .serialize_request(
+                &ListStruct,
+                &LIST_SCHEMA,
+                "https://example.com",
+                &ConfigBag::base(),
+            )
+            .unwrap();
+        assert_eq!(
+            request.headers().get("X-Items").unwrap(),
+            r#"plain, " a", "b ", "(x)", "c,d", "q\"q""#
+        );
+    }
+
     /// Header binding for a schema built at *runtime*: the structural strings
     /// are borrowed from a local arena (so `'a` is a function-body lifetime,
     /// not `'static`), while the header name itself is `'static` — standing in
@@ -2860,6 +2944,90 @@ mod tests {
             .unwrap();
         assert_eq!(request.headers().get("X-Meta-Color").unwrap(), "red");
         assert_eq!(request.headers().get("X-Meta-Size").unwrap(), "large");
+    }
+
+    /// Serializes a single prefix-header entry; the map key becomes part of the header name.
+    fn serialize_prefix_entry(key: &'static str, value: &'static str) -> Result<(), SerdeError> {
+        struct Entry(&'static str, &'static str);
+        impl SerializableStruct for Entry {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_map(&PREFIX_MEMBER, &|s| {
+                    s.write_string(&STRING, self.0)?;
+                    s.write_string(&STRING, self.1)
+                })
+            }
+        }
+        make_protocol()
+            .serialize_request(
+                &Entry(key, value),
+                &PREFIX_SCHEMA,
+                "https://example.com",
+                &ConfigBag::base(),
+            )
+            .map(|_| ())
+    }
+
+    /// From review of PR #4871: an invalid header name or value used to panic inside
+    /// `Headers::insert`. It must be an error that names the member and the prefix or header,
+    /// but not the value.
+    #[test]
+    fn invalid_prefix_header_name_or_value_is_an_error_not_a_panic() {
+        for (key, value) in [
+            ("has space", "secret-1"),
+            ("colon:", "secret-2"),
+            ("non-ascii-é", "secret-3"),
+            ("Ok", "secret\nbreak"),
+        ] {
+            let err = serialize_prefix_entry(key, value)
+                .expect_err(&format!("{key:?}/{value:?} must be rejected"));
+            let message = err.to_string();
+            assert!(
+                message.contains("metadata") && message.contains("prefix `X-Meta-`"),
+                "{message}"
+            );
+            assert!(!message.contains(value), "value leaked: {message}");
+        }
+        serialize_prefix_entry("Ok", "fine").expect("a valid entry still serializes");
+    }
+
+    #[test]
+    fn invalid_header_value_is_an_error_not_a_panic() {
+        struct Scalar;
+        impl SerializableStruct for Scalar {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_string(&HEADER_MEMBER, "secret\r\ninjected: 1")
+            }
+        }
+        static LIST_MEMBER: Schema<'static> =
+            Schema::new_member(crate::shape_id!("test", "L"), ShapeType::List, "items", 0)
+                .with_http_header("X-Items");
+        static LIST_SCHEMA: Schema<'static> = Schema::new_struct(
+            crate::shape_id!("test", "L"),
+            ShapeType::Structure,
+            &[&LIST_MEMBER],
+        );
+        struct List;
+        impl SerializableStruct for List {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_list(&LIST_MEMBER, &|e| {
+                    e.write_string(&STRING, "ok")?;
+                    e.write_string(&STRING, "secret\nvalue")
+                })
+            }
+        }
+        let protocol = make_protocol();
+        let cases: [(&dyn SerializableStruct, &Schema<'static>, &str); 2] = [
+            (&Scalar, &HEADER_SCHEMA, "xToken to header `X-Token`"),
+            (&List, &LIST_SCHEMA, "items to header `X-Items`"),
+        ];
+        for (input, schema, expected) in cases {
+            let err = protocol
+                .serialize_request(input, schema, "https://example.com", &ConfigBag::base())
+                .expect_err("an invalid header value must be rejected");
+            let message = err.to_string();
+            assert!(message.contains(expected), "{message}");
+            assert!(!message.contains("secret"), "value leaked: {message}");
+        }
     }
 
     // -- @httpQueryParams tests --

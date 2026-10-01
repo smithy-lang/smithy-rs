@@ -6,7 +6,6 @@
 //! Utilities for parsing information from headers
 
 use http_1x::header::{HeaderMap, HeaderName, HeaderValue};
-use std::borrow::Cow;
 
 // The parsing primitives live in `aws-smithy-runtime-api` so that `aws-smithy-schema` can
 // share one implementation without taking on this crate's dependency tree. These are exact
@@ -16,7 +15,8 @@ use std::borrow::Cow;
 #[doc(inline)]
 pub use aws_smithy_runtime_api::http::header_parse::{
     headers_for_prefix, many_dates, many_dates_bytes, one_or_none, one_or_none_bytes,
-    read_many_from_str, read_many_from_str_bytes, read_many_primitive, read_many_primitive_bytes,
+    quote_header_value, read_many_from_str, read_many_from_str_bytes, read_many_primitive,
+    read_many_primitive_bytes,
 };
 #[doc(inline)]
 pub use aws_smithy_runtime_api::http::ParseError;
@@ -60,24 +60,6 @@ where
         response.header(key, value)
     } else {
         response
-    }
-}
-
-/// Conditionally quotes and escapes a header value if the header value contains a comma or quote.
-pub fn quote_header_value<'a>(value: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
-    let value = value.into();
-    if value.trim().len() != value.len()
-        || value.contains('"')
-        || value.contains(',')
-        || value.contains('(')
-        || value.contains(')')
-    {
-        Cow::Owned(format!(
-            "\"{}\"",
-            value.replace('\\', "\\\\").replace('"', "\\\"")
-        ))
-    } else {
-        value
     }
 }
 
