@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.protocols
 
-import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
@@ -15,6 +14,7 @@ import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -62,6 +62,13 @@ class ProtocolSwapMatrixTest {
         val uri: String,
         val contentType: String,
         val framing: List<Pair<String, String>> = emptyList(),
+        /**
+         * A response body encoding `value = "from-body"` in this protocol's wire format, as a Rust
+         * expression. This is the response-side analogue of [contentType]: which codec reads the
+         * body is a property of the selected protocol, so a body valid for one target is not valid
+         * for another, and decoding it proves the right codec was chosen.
+         */
+        val responseBody: String = "",
     )
 
     /** Every framing header any target sets; each target asserts the ones it does not set are absent. */
@@ -84,6 +91,11 @@ class ProtocolSwapMatrixTest {
                 uri = "http://localhost:1234/service/$serviceName/operation/GetStats",
                 contentType = "application/cbor",
                 framing = listOf("smithy-protocol" to "rpc-v2-cbor", "accept" to "application/cbor"),
+                // CBOR map(1) { text(5) "value": text(9) "from-body" }.
+                responseBody =
+                    """#{SdkBody}::from(
+                    &b"\xa1\x65value\x69from-body"[..],
+                    )""",
             ),
             // Fixed route; target prefix derived from the service shape name in the config bag.
             Target(
@@ -93,6 +105,7 @@ class ProtocolSwapMatrixTest {
                 uri = "http://localhost:1234/",
                 contentType = "application/x-amz-json-1.0",
                 framing = listOf("x-amz-target" to "$serviceName.GetStats"),
+                responseBody = """#{SdkBody}::from("{\"value\":\"from-body\"}")""",
             ),
             // Fixed route; service version from the config bag, no framing headers at all.
             Target(
@@ -101,6 +114,11 @@ class ProtocolSwapMatrixTest {
                 method = "POST",
                 uri = "http://localhost:1234/",
                 contentType = "application/x-www-form-urlencoded",
+                // awsQuery strips the `<...Response><...Result>` envelope before decoding.
+                responseBody =
+                    """#{SdkBody}::from(
+                    "<GetStatsResponse><GetStatsResult><value>from-body</value></GetStatsResult></GetStatsResponse>",
+                    )""",
             ),
             // Route from the operation's `@http` trait, which is a property of the operation rather
             // than of the protocol, so here the endpoint codegen computed is authoritative.
@@ -110,6 +128,7 @@ class ProtocolSwapMatrixTest {
                 method = "PUT",
                 uri = "http://localhost:1234/stats",
                 contentType = "application/json",
+                responseBody = """#{SdkBody}::from("{\"value\":\"from-body\"}")""",
             ),
             Target(
                 name = "restxml",
@@ -117,8 +136,28 @@ class ProtocolSwapMatrixTest {
                 method = "PUT",
                 uri = "http://localhost:1234/stats",
                 contentType = "application/xml",
+                responseBody =
+                    """#{SdkBody}::from("<GetStatsOutput><value>from-body</value></GetStatsOutput>")""",
             ),
         )
+
+    /**
+     * Target names whose selected protocol populates an output's `@httpHeader`,
+     * `@httpPrefixHeaders` and `@httpResponseCode` members.
+     *
+     * This is the REST protocols only, as the SEP's codec-settings table requires: awsJson,
+     * awsQuery, ec2Query and rpcv2Cbor all "ignore HTTP bindings", so for those the same members
+     * must come from the protocol's own body representation or be absent.
+     *
+     * This set was every protocol until Phase 3 of
+     * `.kiro/schema-serde-runtime-http-response-bindings-design.md` moved binding parsing out of
+     * generated response code and into the protocol-owned composite. Generated code used to parse
+     * headers and status unconditionally, before the selected protocol was consulted, so a member
+     * bound to a header was populated no matter which protocol was selected. Narrowing this set is
+     * what asserts that divergence is gone: with the old generated path these three rows fail with
+     * `left: Some("from-header"), right: None`.
+     */
+    private val targetsReadingHttpBindings: Set<String> = setOf("restjson1", "restxml")
 
     private fun protocolScope(runtimeConfig: RuntimeConfig) =
         arrayOf(
@@ -139,7 +178,7 @@ class ProtocolSwapMatrixTest {
      */
     private fun model(protocolAnnotation: String) =
         """
-        namespace test
+        namespace smithy.rust.codegen.test.schemaheaders
 
         @$protocolAnnotation
         @xmlNamespace(uri: "http://example.com/swap/")
@@ -151,7 +190,23 @@ class ProtocolSwapMatrixTest {
         @http(method: "PUT", uri: "/stats")
         operation GetStats {
             input := { name: String }
-            output := { value: String }
+            output := {
+                value: String
+
+                @httpHeader("x-marker")
+                marker: String
+
+                @httpResponseCode
+                code: Integer
+
+                @httpPrefixHeaders("x-meta-")
+                tags: TagMap
+            }
+        }
+
+        map TagMap {
+            key: String
+            value: String
         }
         """.asSmithyModel(smithyVersion = "2.0")
 
@@ -163,11 +218,18 @@ class ProtocolSwapMatrixTest {
         protocolAnnotation: String,
         protocolId: ShapeId,
     ) {
-        assumeTrue(
-            SchemaSerdeAllowlist.isProtocolEnabled(protocolId),
-            "$protocolId is not on SchemaSerdeAllowlist, so the schema-serde request path is not generated",
-        )
         clientIntegrationTest(model(protocolAnnotation)) { context: ClientCodegenContext, rustCrate ->
+            // A hard check rather than `assumeTrue`. This test gated itself on
+            // `SchemaSerdeAllowlist.isProtocolEnabled(protocolId)` until the fixture moved to the
+            // dedicated namespace, and because `allowedProtocols` is empty during rollout that gate
+            // was false for every protocol — all four matrix tests silently skipped, so the central
+            // architectural test of the SEP asserted nothing. The namespace-based mechanism exists
+            // precisely so a fixture can exercise schema-exclusive generation independently of
+            // production rollout state; a `check` makes a future regression in that wiring loud.
+            check(SchemaSerdeAllowlist.usesSchemaSerdeExclusively(context)) {
+                "the dedicated fixture namespace must exercise the schema-exclusive path, but " +
+                    "$protocolId generated a client that is not schema-exclusive"
+            }
             rustCrate.testModule {
                 val scope = protocolScope(context.runtimeConfig)
                 targets.forEach { target ->
@@ -219,6 +281,76 @@ class ProtocolSwapMatrixTest {
                             *RuntimeType.preludeScope,
                             *scope,
                             "capture_request" to RuntimeType.captureRequest(context.runtimeConfig),
+                        )
+                    }
+
+                    tokioTest("swap_to_${target.name}_reads_its_own_response") {
+                        val readsBindings = target.name in targetsReadingHttpBindings
+                        val bindingAsserts =
+                            if (readsBindings) {
+                                """
+                                assert_eq!(
+                                    #{Some}("from-header"),
+                                    output.marker(),
+                                    "this protocol reads transport-bound members from the response",
+                                );
+                                assert_eq!(#{Some}(201), output.code());
+                                assert_eq!(
+                                    #{Some}(&"from-prefix".to_string()),
+                                    output.tags().and_then(|m| m.get("k")),
+                                    "a prefix-header map is a response binding like any other",
+                                );
+                                """.trimIndent()
+                            } else {
+                                """
+                                assert_eq!(
+                                    #{None},
+                                    output.marker(),
+                                    "this protocol ignores HTTP bindings, so a header-bound member \
+                                     has no value in a body that does not carry it",
+                                );
+                                assert_eq!(#{None}, output.code());
+                                assert_eq!(#{None}, output.tags().and_then(|m| m.get("k")));
+                                """.trimIndent()
+                            }
+                        rustTemplate(
+                            """
+                            let respond = |_: #{http_1x}::Request<#{SdkBody}>| {
+                                #{http_1x}::Response::builder()
+                                    .status(201)
+                                    .header("x-marker", "from-header")
+                                    .header("x-meta-k", "from-prefix")
+                                    .body(${target.responseBody})
+                                    .unwrap()
+                            };
+                            let config = crate::Config::builder()
+                                .http_client(#{infallible_client_fn}(respond))
+                                .endpoint_url("http://localhost:1234")
+                                .behavior_version_latest()
+                                .protocol(${target.construct})
+                                .build();
+                            let client = crate::Client::from_conf(config);
+
+                            let output = client
+                                .get_stats()
+                                .name("test")
+                                .send()
+                                .await
+                                .expect("the selected protocol must decode a body in its own format");
+
+                            // The decisive swap assertion: this body is valid for the selected
+                            // protocol's codec and for no other, so decoding it proves the codec was
+                            // chosen by the selected protocol rather than by the generated one.
+                            assert_eq!(#{Some}("from-body"), output.value());
+                            $bindingAsserts
+                            """,
+                            *RuntimeType.preludeScope,
+                            *scope,
+                            "SdkBody" to RuntimeType.sdkBody(context.runtimeConfig),
+                            "http_1x" to CargoDependency.Http1x.toType(),
+                            "infallible_client_fn" to
+                                CargoDependency.smithyHttpClientTestUtil(context.runtimeConfig)
+                                    .toType().resolve("test_util::infallible_client_fn"),
                         )
                     }
                 }

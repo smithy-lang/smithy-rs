@@ -254,6 +254,81 @@ pub mod registry {
 
 use schema::traits as trait_types;
 
+/// A member's position in its parent's member array, stored in one word.
+///
+/// `Option<usize>` would be the obvious type, but it is 16 bytes on a 64-bit target:
+/// the niche-free `usize` forces a separate discriminant word. Encoding absence as `0`
+/// and a present index as `index + 1` fits the same information in 8 bytes. That matters
+/// because [`Schema`] is instantiated once per shape *and* once per member, so thousands
+/// of times in a generated client, and the reclaimed word funds the response routing word
+/// without growing the struct.
+///
+/// The encoding is contained entirely within this type. [`Schema::member_index`] returns
+/// `Option<usize>` exactly as before, and the [`std::fmt::Debug`] impl below prints the decoded
+/// `Option` so `Schema`'s derived `Debug` output is unchanged.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct MemberIndex(usize);
+
+impl MemberIndex {
+    /// Not a member schema.
+    const NONE: Self = Self(0);
+
+    /// Encodes `index`.
+    ///
+    /// # Panics
+    ///
+    /// If `index == usize::MAX`, which would overflow the encoding. Generated schemas are
+    /// built in const context, so an out-of-range index is a compile-time error rather
+    /// than a runtime one. No real model comes close: the largest structure observed
+    /// across AWS models has 42 members.
+    const fn new(index: usize) -> Self {
+        assert!(
+            index != usize::MAX,
+            "member index must be less than usize::MAX"
+        );
+        Self(index + 1)
+    }
+
+    /// Decodes back to `Option<usize>`.
+    const fn get(self) -> Option<usize> {
+        match self.0 {
+            0 => None,
+            encoded => Some(encoded - 1),
+        }
+    }
+}
+
+impl std::fmt::Debug for MemberIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Print the decoded value so the encoding never leaks into diagnostics and
+        // `Schema`'s derived `Debug` keeps its previous output.
+        self.get().fmt(f)
+    }
+}
+
+/// Bit layout of the response routing word derived by [`Schema::new_struct`].
+///
+/// The word answers, in one load, the two questions a protocol asks of a response
+/// structure: which members are bound to somewhere other than the body, and is there
+/// anything left for the body codec to read. Deriving it in const evaluation keeps the
+/// runtime off the O(all members) trait-checking path the previous implementation used.
+mod response_routing {
+    /// Member positions the mask can represent: bits `0..=61`.
+    pub(crate) const MASK_BITS: usize = 62;
+
+    /// Covers the representable member positions.
+    pub(crate) const MASK: u64 = (1u64 << MASK_BITS) - 1;
+
+    /// Bit 62: at least one member has no response binding, so on a response it belongs
+    /// to the protocol document body and the body codec must be invoked.
+    pub(crate) const HAS_BODY_MEMBERS: u64 = 1u64 << 62;
+
+    /// Bit 63: a response-bound member sits at a position the mask cannot represent.
+    /// Consumers MUST ignore [`MASK`] entirely when this is set and scan the member slice
+    /// instead; the mask is then incomplete, not merely approximate.
+    pub(crate) const NEEDS_SCAN: u64 = 1u64 << 63;
+}
+
 /// A Smithy schema — a lightweight runtime representation of a Smithy shape.
 ///
 /// Contains the shape's ID, type, traits relevant to serialization, and
@@ -268,8 +343,18 @@ pub struct Schema<'a> {
     shape_type: ShapeType,
     /// Member name if this is a member schema.
     member_name: Option<&'a str>,
-    /// Member index for position-based lookup in generated code.
-    member_index: Option<usize>,
+    /// Member index for position-based lookup in generated code, encoded so it costs
+    /// one word instead of two. See [`MemberIndex`].
+    member_index: MemberIndex,
+    /// Response binding routing, derived in const evaluation by
+    /// [`new_struct`](Schema::new_struct). See [`response_routing`] for the bit layout
+    /// and the accessors below for how to read it.
+    ///
+    /// Zero for every non-struct schema, which reads as "no bound members, no body
+    /// members, mask exact". That is the conservative default: it fails the
+    /// body-only fast path's `HAS_BODY_MEMBERS` requirement, so such a schema routes
+    /// through the full composite rather than silently skipping work.
+    response_routing: u64,
     /// Shape-type-specific member data.
     members: SchemaMembers<'a>,
 
@@ -450,7 +535,8 @@ impl<'a> Schema<'a> {
             id: ShapeId::<'a>::from_parts("", "", ""),
             shape_type: ShapeType::Boolean,
             member_name: None,
-            member_index: None,
+            member_index: MemberIndex::NONE,
+            response_routing: 0,
             members: SchemaMembers::None,
             original_name: None,
             sensitive: None,
@@ -524,9 +610,57 @@ impl<'a> Schema<'a> {
         Self {
             id,
             shape_type,
+            response_routing: Self::derive_response_routing(members),
             members: SchemaMembers::Struct { members },
             ..Self::empty_traits()
         }
+    }
+
+    /// Derives the response routing word from a structure's member slice.
+    ///
+    /// Runs in const evaluation, so generated schemas pay nothing at runtime and an
+    /// out-of-order member array is a compile error rather than a silently wrong mask.
+    ///
+    /// A member is *response-bound* when it carries `@httpHeader`,
+    /// `@httpPrefixHeaders`, `@httpResponseCode`, or `@httpPayload`. Every other member
+    /// — including one carrying only a request-side binding such as `@httpQuery` or
+    /// `@httpLabel` — belongs to the document body on a response, and so sets
+    /// [`response_routing::HAS_BODY_MEMBERS`] rather than a mask bit.
+    const fn derive_response_routing(members: &[&Schema<'a>]) -> u64 {
+        let mut word: u64 = 0;
+        let mut i = 0;
+        while i < members.len() {
+            let member = members[i];
+
+            // The mask encodes a member's identity as its position in this slice, so the
+            // two must agree. `member_schema_by_index` already depends on the same
+            // ordering; asserting here turns a silent mismatch into a build failure at
+            // the point the schema is declared.
+            let index = match member.member_index.get() {
+                Some(index) => index,
+                None => panic!("a struct member schema must carry a member index"),
+            };
+            assert!(
+                index == i,
+                "struct member schemas must be listed in member-index order, because the \
+                 response routing mask uses a member's array position as its index"
+            );
+
+            if member.has_http_response_binding() {
+                if i < response_routing::MASK_BITS {
+                    word |= 1u64 << i;
+                } else {
+                    // Out of mask range: the mask can no longer describe every bound
+                    // member, so consumers must scan. Earlier bits stay set but must be
+                    // ignored once this is flagged.
+                    word |= response_routing::NEEDS_SCAN;
+                }
+            } else {
+                word |= response_routing::HAS_BODY_MEMBERS;
+            }
+            i += 1;
+        }
+        word
     }
 
     /// Creates a schema for a list type.
@@ -560,7 +694,7 @@ impl<'a> Schema<'a> {
             id,
             shape_type,
             member_name: Some(member_name),
-            member_index: Some(member_index),
+            member_index: MemberIndex::new(member_index),
             ..Self::empty_traits()
         }
     }
@@ -629,6 +763,17 @@ impl<'a> Schema<'a> {
         self.xml_unwrapped_output
     }
 
+    /// Returns `true` if this shape has the `@streaming` trait.
+    ///
+    /// In Smithy the trait is applied to a blob or union *shape*, never to a member, so
+    /// codegen propagates it from a member's target into the combined member schema. That
+    /// makes the distinction available here without model access: a protocol can tell a
+    /// streaming payload member — whose live body or event receiver is owned elsewhere —
+    /// from a buffered one it should read itself.
+    pub fn streaming(&self) -> bool {
+        self.streaming.is_some()
+    }
+
     /// Returns `true` if this struct has at least one member that serializes
     /// to the request/response body, `false` if every member is HTTP-bound.
     pub fn has_body_members(&self) -> bool {
@@ -647,11 +792,52 @@ impl<'a> Schema<'a> {
 
     /// Returns `true` if this member schema has any HTTP response binding trait
     /// (`@httpHeader`, `@httpResponseCode`, `@httpPrefixHeaders`, or `@httpPayload`).
-    pub fn has_http_response_binding(&self) -> bool {
+    pub const fn has_http_response_binding(&self) -> bool {
         self.http_header.is_some()
             || self.http_response_code.is_some()
             || self.http_prefix_headers.is_some()
             || self.http_payload.is_some()
+    }
+
+    /// Bit set of member positions that carry a response binding.
+    ///
+    /// Bit `i` corresponds to `members()[i]`, so a set bit can be turned into a member
+    /// schema with [`member_schema_by_index`](Schema::member_schema_by_index) in O(1) and
+    /// the whole set walked in O(bound members) rather than O(all members):
+    ///
+    /// ```ignore
+    /// let mut mask = schema.response_binding_mask();
+    /// while mask != 0 {
+    ///     let index = mask.trailing_zeros() as usize;
+    ///     mask &= mask - 1;
+    ///     let member = schema.member_schema_by_index(index).expect("mask derived from members");
+    /// }
+    /// ```
+    ///
+    /// Only meaningful when [`response_bindings_need_scan`](Schema::response_bindings_need_scan)
+    /// is `false`; otherwise it is incomplete and the member slice must be scanned.
+    pub(crate) const fn response_binding_mask(&self) -> u64 {
+        self.response_routing & response_routing::MASK
+    }
+
+    /// Returns `true` if at least one member belongs to the document body on a response,
+    /// meaning the body codec has something to read.
+    ///
+    /// `false` means every member is bound elsewhere in the message, so the body codec
+    /// can be skipped entirely.
+    pub(crate) const fn has_response_body_members(&self) -> bool {
+        self.response_routing & response_routing::HAS_BODY_MEMBERS != 0
+    }
+
+    /// Returns `true` if the binding mask cannot describe every response-bound member, so
+    /// callers must scan [`members`](Schema::members) and test
+    /// [`has_http_response_binding`](Schema::has_http_response_binding) instead.
+    ///
+    /// Only reachable for a structure with a response-bound member at position 62 or
+    /// later. The largest structure observed across AWS models has 42 members, so this is
+    /// a correctness fallback rather than a path real models take.
+    pub(crate) const fn response_bindings_need_scan(&self) -> bool {
+        self.response_routing & response_routing::NEEDS_SCAN != 0
     }
 
     /// Returns the `@httpHeader` value if present.
@@ -945,7 +1131,7 @@ impl<'a> Schema<'a> {
     /// This is used internally by generated code for efficient member lookup.
     /// Consumer code should not rely on specific position values as they may change.
     pub fn member_index(&self) -> Option<usize> {
-        self.member_index
+        self.member_index.get()
     }
 
     /// Returns the original (pre-synthesis) shape name for synthetic operation
@@ -1068,7 +1254,7 @@ impl<'a> Schema<'a> {
 
 #[cfg(test)]
 mod test {
-    use crate::{shape_id, Schema, ShapeId, ShapeType, Trait, TraitMap};
+    use crate::{shape_id, MemberIndex, Schema, ShapeId, ShapeType, Trait, TraitMap};
 
     // Simple test trait implementation
     #[derive(Debug)]
@@ -1327,5 +1513,489 @@ mod test {
             Some("x-runtime-hdr")
         );
         assert_eq!(member.http_header().unwrap().value(), "x-runtime-hdr");
+    }
+
+    #[test]
+    fn streaming_accessor_reflects_the_propagated_trait() {
+        // Codegen propagates `@streaming` from a member's target (the trait's selector is
+        // `:is(blob, union)`, so a member never carries it directly). This is the accessor
+        // the protocol uses to tell a streaming payload member from a buffered one.
+        //
+        // These are `static`s rather than locals on purpose: that is the position codegen
+        // emits them in, so this also pins `with_streaming` as const-evaluable when
+        // chained after another setter.
+        static BUFFERED: Schema<'static> = Schema::new_member(
+            shape_id!("com.example", "Output", "body"),
+            ShapeType::Blob,
+            "body",
+            0,
+        );
+        assert!(
+            !BUFFERED.streaming(),
+            "a member whose target is not streaming must report false"
+        );
+
+        static STREAMING_BLOB: Schema<'static> = Schema::new_member(
+            shape_id!("com.example", "Output", "body"),
+            ShapeType::Blob,
+            "body",
+            0,
+        )
+        .with_streaming();
+        assert!(STREAMING_BLOB.streaming());
+
+        // The union half of the selector: an event-stream member.
+        static EVENT_STREAM: Schema<'static> = Schema::new_member(
+            shape_id!("com.example", "Output", "events"),
+            ShapeType::Union,
+            "events",
+            0,
+        )
+        .with_streaming();
+        assert!(EVENT_STREAM.streaming());
+
+        // Exactly the chain generated for a streaming payload member. Independent of the
+        // payload binding, so the payload branch can check both.
+        static STREAMING_PAYLOAD: Schema<'static> = Schema::new_member(
+            shape_id!("com.example", "Output", "body"),
+            ShapeType::Blob,
+            "body",
+            0,
+        )
+        .with_http_payload()
+        .with_streaming();
+        assert!(STREAMING_PAYLOAD.streaming());
+        assert!(STREAMING_PAYLOAD.http_payload().is_some());
+
+        static BUFFERED_PAYLOAD: Schema<'static> = Schema::new_member(
+            shape_id!("com.example", "Output", "body"),
+            ShapeType::Blob,
+            "body",
+            0,
+        )
+        .with_http_payload();
+        assert!(!BUFFERED_PAYLOAD.streaming());
+        assert!(BUFFERED_PAYLOAD.http_payload().is_some());
+    }
+
+    /// The size of [`Schema`] is a deliberate budget, not an accident.
+    ///
+    /// A generated client instantiates one `Schema` per shape *and* per member, so
+    /// thousands of them; every added word is multiplied by that count in both the
+    /// binary and resident memory. The running budget on a 64-bit target:
+    ///
+    /// | state | bytes | change |
+    /// | --- | --- | --- |
+    /// | baseline | 336 | — |
+    /// | `member_index` encoded in one word instead of `Option<usize>` | 328 | −8 |
+    /// | response routing word added | 336 | +8 |
+    ///
+    /// The routing word was deliberately funded by the `member_index` re-encoding, so
+    /// response binding routing cost no net memory.
+    ///
+    /// If this assertion fails, a field was added or widened. That is not automatically
+    /// wrong, but it needs to be a conscious decision with SDK-scale source and rlib
+    /// measurement behind it — so update the number deliberately rather than reflexively.
+    ///
+    /// Gated to 64-bit because the layout differs on 32-bit targets.
+    #[test]
+    #[cfg(target_pointer_width = "64")]
+    fn schema_size_stays_within_its_budget() {
+        assert_eq!(
+            std::mem::size_of::<Schema<'static>>(),
+            336,
+            "Schema changed size; see this test's documentation before updating the number"
+        );
+    }
+
+    #[test]
+    fn member_index_encoding_round_trips() {
+        assert_eq!(MemberIndex::NONE.get(), None);
+        for index in [0usize, 1, 2, 41, 61, 62, 63, 1000, usize::MAX - 1] {
+            assert_eq!(
+                MemberIndex::new(index).get(),
+                Some(index),
+                "index {index} did not round-trip"
+            );
+        }
+        // The reason for the encoding: one word instead of two.
+        assert_eq!(
+            std::mem::size_of::<MemberIndex>(),
+            std::mem::size_of::<usize>()
+        );
+        assert!(std::mem::size_of::<MemberIndex>() < std::mem::size_of::<Option<usize>>());
+    }
+
+    #[test]
+    fn member_index_zero_is_distinct_from_absent() {
+        // The encoding's whole risk is conflating index 0 with "not a member", since both
+        // are naturally zero.
+        assert_eq!(MemberIndex::new(0).get(), Some(0));
+        assert_ne!(MemberIndex::new(0), MemberIndex::NONE);
+
+        let member = Schema::new_member(
+            shape_id!("com.example", "S", "first"),
+            ShapeType::String,
+            "first",
+            0,
+        );
+        assert_eq!(
+            member.member_index(),
+            Some(0),
+            "the first member must report index 0, not absent"
+        );
+
+        let non_member = Schema::new(shape_id!("com.example", "S"), ShapeType::Structure);
+        assert_eq!(non_member.member_index(), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "member index must be less than usize::MAX")]
+    fn member_index_rejects_the_unrepresentable_index() {
+        // `usize::MAX` would overflow `index + 1`. Generated schemas are const-evaluated,
+        // so in practice this is a compile-time error; this covers the runtime path.
+        let _ = MemberIndex::new(usize::MAX);
+    }
+
+    #[test]
+    fn debug_output_shows_the_decoded_member_index() {
+        // The encoding must not leak into diagnostics. `Schema` derives `Debug`, so this
+        // pins that the newtype's `Debug` prints the decoded `Option`.
+        let member = Schema::new_member(
+            shape_id!("com.example", "S", "third"),
+            ShapeType::String,
+            "third",
+            2,
+        );
+        let rendered = format!("{member:?}");
+        assert!(
+            rendered.contains("member_index: Some(2)"),
+            "expected the decoded index in Debug output, got: {rendered}"
+        );
+        assert!(
+            !rendered.contains("member_index: Some(3)") && !rendered.contains("member_index: 3"),
+            "the raw encoded value leaked into Debug output: {rendered}"
+        );
+
+        let non_member = Schema::new(shape_id!("com.example", "S"), ShapeType::Structure);
+        assert!(
+            format!("{non_member:?}").contains("member_index: None"),
+            "absent index should render as None"
+        );
+    }
+
+    /// Walks a routing mask the way the composite does, returning visited member indices.
+    fn mask_indices(schema: &Schema<'_>) -> Vec<usize> {
+        let mut mask = schema.response_binding_mask();
+        let mut out = Vec::new();
+        while mask != 0 {
+            let index = mask.trailing_zeros() as usize;
+            mask &= mask - 1;
+            out.push(index);
+        }
+        out
+    }
+
+    #[test]
+    fn routing_word_marks_only_response_bound_members() {
+        static HEADER: Schema<'static> =
+            Schema::new_member(shape_id!("t", "O", "h"), ShapeType::String, "h", 0)
+                .with_http_header("x-h");
+        static BODY: Schema<'static> =
+            Schema::new_member(shape_id!("t", "O", "b"), ShapeType::String, "b", 1);
+        static STATUS: Schema<'static> =
+            Schema::new_member(shape_id!("t", "O", "s"), ShapeType::Integer, "s", 2)
+                .with_http_response_code();
+        static PREFIX: Schema<'static> =
+            Schema::new_member(shape_id!("t", "O", "p"), ShapeType::Map, "p", 3)
+                .with_http_prefix_headers("x-meta-");
+        static PAYLOAD: Schema<'static> =
+            Schema::new_member(shape_id!("t", "O", "pay"), ShapeType::Blob, "pay", 4)
+                .with_http_payload();
+        static OUTPUT: Schema<'static> = Schema::new_struct(
+            shape_id!("t", "O"),
+            ShapeType::Structure,
+            &[&HEADER, &BODY, &STATUS, &PREFIX, &PAYLOAD],
+        );
+
+        // All four response binding kinds set a bit; the unbound member does not.
+        assert_eq!(mask_indices(&OUTPUT), vec![0, 2, 3, 4]);
+        assert!(OUTPUT.has_response_body_members());
+        assert!(!OUTPUT.response_bindings_need_scan());
+
+        // The mask agrees with the per-member predicate it is derived from.
+        for (i, member) in OUTPUT.members().iter().enumerate() {
+            assert_eq!(
+                OUTPUT.response_binding_mask() & (1u64 << i) != 0,
+                member.has_http_response_binding(),
+                "mask bit {i} disagrees with has_http_response_binding()"
+            );
+        }
+    }
+
+    #[test]
+    fn request_only_bindings_are_body_members_on_a_response() {
+        // The distinction the design is explicit about: `@httpQuery` and `@httpLabel` bind
+        // a member on the request, but on a response it belongs to the document body. So
+        // they must NOT set a mask bit, and they MUST set the body bit.
+        static QUERY: Schema<'static> =
+            Schema::new_member(shape_id!("t", "O", "q"), ShapeType::String, "q", 0)
+                .with_http_query("q");
+        static LABEL: Schema<'static> =
+            Schema::new_member(shape_id!("t", "O", "l"), ShapeType::String, "l", 1)
+                .with_http_label();
+        static OUTPUT: Schema<'static> =
+            Schema::new_struct(shape_id!("t", "O"), ShapeType::Structure, &[&QUERY, &LABEL]);
+
+        assert_eq!(
+            mask_indices(&OUTPUT),
+            Vec::<usize>::new(),
+            "request-only bindings must not be treated as response-bound"
+        );
+        assert!(
+            OUTPUT.has_response_body_members(),
+            "request-only bound members are body members on a response"
+        );
+    }
+
+    #[test]
+    fn a_fully_bound_structure_has_no_body_members() {
+        // This is what lets the composite skip the body codec entirely.
+        static H1: Schema<'static> =
+            Schema::new_member(shape_id!("t", "O", "a"), ShapeType::String, "a", 0)
+                .with_http_header("x-a");
+        static H2: Schema<'static> =
+            Schema::new_member(shape_id!("t", "O", "b"), ShapeType::String, "b", 1)
+                .with_http_header("x-b");
+        static OUTPUT: Schema<'static> =
+            Schema::new_struct(shape_id!("t", "O"), ShapeType::Structure, &[&H1, &H2]);
+
+        assert_eq!(mask_indices(&OUTPUT), vec![0, 1]);
+        assert!(!OUTPUT.has_response_body_members());
+        assert!(!OUTPUT.response_bindings_need_scan());
+    }
+
+    #[test]
+    fn an_empty_structure_routes_through_the_composite() {
+        // Zero members: no bindings and no body members. The body bit being clear is what
+        // keeps an empty output off the bare-codec fast path, so the body codec is never
+        // invoked on it.
+        static EMPTY: Schema<'static> =
+            Schema::new_struct(shape_id!("t", "E"), ShapeType::Structure, &[]);
+        assert_eq!(EMPTY.response_binding_mask(), 0);
+        assert!(!EMPTY.has_response_body_members());
+        assert!(!EMPTY.response_bindings_need_scan());
+    }
+
+    #[test]
+    fn a_body_only_structure_reports_exactly_that() {
+        // The shape of the success fast path's precondition: exact, mask zero, body bit set.
+        static M0: Schema<'static> =
+            Schema::new_member(shape_id!("t", "O", "a"), ShapeType::String, "a", 0);
+        static M1: Schema<'static> =
+            Schema::new_member(shape_id!("t", "O", "b"), ShapeType::Integer, "b", 1);
+        static OUTPUT: Schema<'static> =
+            Schema::new_struct(shape_id!("t", "O"), ShapeType::Structure, &[&M0, &M1]);
+
+        assert_eq!(OUTPUT.response_binding_mask(), 0);
+        assert!(OUTPUT.has_response_body_members());
+        assert!(!OUTPUT.response_bindings_need_scan());
+    }
+
+    #[test]
+    fn non_struct_schemas_default_to_the_conservative_word() {
+        // Zero must read as "nothing bound, nothing in the body", which fails the fast
+        // path's body-bit requirement and so routes through the composite.
+        let scalar = Schema::new(shape_id!("t", "S"), ShapeType::String);
+        assert_eq!(scalar.response_binding_mask(), 0);
+        assert!(!scalar.has_response_body_members());
+        assert!(!scalar.response_bindings_need_scan());
+
+        let member = Schema::new_member(shape_id!("t", "O", "m"), ShapeType::String, "m", 0);
+        assert_eq!(member.response_binding_mask(), 0);
+        assert!(!member.has_response_body_members());
+    }
+
+    #[test]
+    fn unions_get_a_routing_word_too() {
+        // Codegen builds union schemas with `new_struct`, so the derivation must accept
+        // `ShapeType::Union` and the invariant must hold for union members as well.
+        static V0: Schema<'static> =
+            Schema::new_member(shape_id!("t", "U", "a"), ShapeType::String, "a", 0);
+        static V1: Schema<'static> =
+            Schema::new_member(shape_id!("t", "U", "b"), ShapeType::String, "b", 1);
+        static UNION: Schema<'static> =
+            Schema::new_struct(shape_id!("t", "U"), ShapeType::Union, &[&V0, &V1]);
+        assert_eq!(UNION.response_binding_mask(), 0);
+        assert!(UNION.has_response_body_members());
+    }
+
+    #[test]
+    fn mask_and_scan_paths_agree_on_the_same_members() {
+        // The design requires the exact-mask path and the scan fallback to produce
+        // identical results. With a hand-built schema we can compare them directly.
+        static H: Schema<'static> =
+            Schema::new_member(shape_id!("t", "O", "h"), ShapeType::String, "h", 0)
+                .with_http_header("x-h");
+        static B: Schema<'static> =
+            Schema::new_member(shape_id!("t", "O", "b"), ShapeType::String, "b", 1);
+        static S: Schema<'static> =
+            Schema::new_member(shape_id!("t", "O", "s"), ShapeType::Integer, "s", 2)
+                .with_http_response_code();
+        static OUTPUT: Schema<'static> =
+            Schema::new_struct(shape_id!("t", "O"), ShapeType::Structure, &[&H, &B, &S]);
+
+        let via_mask = mask_indices(&OUTPUT);
+        let via_scan: Vec<usize> = OUTPUT
+            .members()
+            .iter()
+            .enumerate()
+            .filter(|(_, m)| m.has_http_response_binding())
+            .map(|(i, _)| i)
+            .collect();
+        assert_eq!(via_mask, via_scan);
+    }
+
+    #[test]
+    fn mask_bits_resolve_to_member_schemas_in_o1() {
+        // What makes the mask useful: a set bit is a direct index into the member slice.
+        static H: Schema<'static> =
+            Schema::new_member(shape_id!("t", "O", "h"), ShapeType::String, "h", 0)
+                .with_http_header("x-wanted");
+        static B: Schema<'static> =
+            Schema::new_member(shape_id!("t", "O", "b"), ShapeType::String, "b", 1);
+        static OUTPUT: Schema<'static> =
+            Schema::new_struct(shape_id!("t", "O"), ShapeType::Structure, &[&H, &B]);
+
+        let indices = mask_indices(&OUTPUT);
+        assert_eq!(indices, vec![0]);
+        let member = OUTPUT
+            .member_schema_by_index(indices[0])
+            .expect("a mask bit must resolve to a member");
+        assert_eq!(member.member_name(), Some("h"));
+        assert_eq!(member.http_header().map(|h| h.value()), Some("x-wanted"));
+    }
+
+    /// Builds a structure schema at runtime with `count` members, marking those whose
+    /// index is in `bound` with `@httpHeader`. Returns owned storage plus the schema.
+    ///
+    /// `new_struct` is a `const fn` but is equally callable at runtime, which is how these
+    /// tests reach member counts that would be impractical to write out as statics.
+    fn struct_with(count: usize, bound: &[usize]) -> (Vec<Schema<'static>>, Vec<&'static str>) {
+        // Member names must outlive the schema, so leak them; this is a test.
+        let names: Vec<&'static str> = (0..count)
+            .map(|i| Box::leak(format!("m{i}").into_boxed_str()) as &'static str)
+            .collect();
+        let members: Vec<Schema<'static>> = (0..count)
+            .map(|i| {
+                let m = Schema::new_member(shape_id!("t", "Big"), ShapeType::String, names[i], i);
+                if bound.contains(&i) {
+                    m.with_http_header(names[i])
+                } else {
+                    m
+                }
+            })
+            .collect();
+        (members, names)
+    }
+
+    #[test]
+    fn a_bound_member_beyond_the_mask_forces_the_scan_fallback() {
+        // 64 members, all response-bound: positions 62 and 63 cannot be represented, so
+        // the mask is incomplete and consumers must scan.
+        let count = 64;
+        let all: Vec<usize> = (0..count).collect();
+        let (members, _names) = struct_with(count, &all);
+        let refs: Vec<&Schema<'static>> = members.iter().collect();
+        let schema = Schema::new_struct(shape_id!("t", "Big"), ShapeType::Structure, &refs);
+
+        assert!(
+            schema.response_bindings_need_scan(),
+            "a bound member at position >= 62 must set the scan flag"
+        );
+        assert!(
+            !schema.has_response_body_members(),
+            "every member is bound, so there is nothing for the body codec"
+        );
+
+        // The scan fallback must find every bound member, including the ones the mask
+        // could not represent.
+        let via_scan: Vec<usize> = schema
+            .members()
+            .iter()
+            .enumerate()
+            .filter(|(_, m)| m.has_http_response_binding())
+            .map(|(i, _)| i)
+            .collect();
+        assert_eq!(via_scan, all, "the scan path must see all 64 bound members");
+    }
+
+    #[test]
+    fn a_structure_at_the_mask_boundary_stays_exact() {
+        // Exactly 62 bound members is the largest representable case; it must NOT scan.
+        let count = crate::response_routing::MASK_BITS;
+        let all: Vec<usize> = (0..count).collect();
+        let (members, _names) = struct_with(count, &all);
+        let refs: Vec<&Schema<'static>> = members.iter().collect();
+        let schema = Schema::new_struct(shape_id!("t", "Big"), ShapeType::Structure, &refs);
+
+        assert!(
+            !schema.response_bindings_need_scan(),
+            "62 members fit the mask exactly and must not trigger a scan"
+        );
+        assert_eq!(
+            schema.response_binding_mask().count_ones() as usize,
+            count,
+            "every one of the 62 positions should be marked"
+        );
+        assert_eq!(mask_indices(&schema), all);
+    }
+
+    #[test]
+    fn many_members_stay_exact_when_the_bindings_are_within_range() {
+        // More than 62 members is fine as long as no *bound* member sits out of range: the
+        // mask still describes every binding, so the fast path is preserved.
+        let (members, _names) = struct_with(70, &[0, 5, 61]);
+        let refs: Vec<&Schema<'static>> = members.iter().collect();
+        let schema = Schema::new_struct(shape_id!("t", "Big"), ShapeType::Structure, &refs);
+
+        assert!(!schema.response_bindings_need_scan());
+        assert_eq!(mask_indices(&schema), vec![0, 5, 61]);
+        assert!(schema.has_response_body_members());
+    }
+
+    #[test]
+    fn the_mask_handles_sparse_bindings() {
+        // The §11.4 sparse layout: a few bound members among many body members.
+        let (members, _names) = struct_with(50, &[3, 17, 42, 49]);
+        let refs: Vec<&Schema<'static>> = members.iter().collect();
+        let schema = Schema::new_struct(shape_id!("t", "Big"), ShapeType::Structure, &refs);
+
+        assert_eq!(mask_indices(&schema), vec![3, 17, 42, 49]);
+        assert!(schema.has_response_body_members());
+        // O(bound), not O(all): four iterations for a fifty-member structure.
+        assert_eq!(schema.response_binding_mask().count_ones(), 4);
+    }
+
+    #[test]
+    #[should_panic(expected = "member-index order")]
+    fn out_of_order_members_are_rejected() {
+        // The mask treats a member's array position as its index, so a mismatch would
+        // silently route the wrong member. In generated code this is a compile error
+        // because the schema is const-evaluated; here it is a runtime panic.
+        static A: Schema<'static> =
+            Schema::new_member(shape_id!("t", "O", "a"), ShapeType::String, "a", 0);
+        static B: Schema<'static> =
+            Schema::new_member(shape_id!("t", "O", "b"), ShapeType::String, "b", 1);
+        // Swapped: B (index 1) is at position 0.
+        let _ = Schema::new_struct(shape_id!("t", "O"), ShapeType::Structure, &[&B, &A]);
+    }
+
+    #[test]
+    #[should_panic(expected = "must carry a member index")]
+    fn a_non_member_in_the_member_array_is_rejected() {
+        // A schema with no member index cannot be positioned in the mask.
+        static NOT_A_MEMBER: Schema<'static> = Schema::new(shape_id!("t", "X"), ShapeType::String);
+        let _ = Schema::new_struct(shape_id!("t", "O"), ShapeType::Structure, &[&NOT_A_MEMBER]);
     }
 }

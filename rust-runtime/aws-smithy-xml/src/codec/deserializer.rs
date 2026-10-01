@@ -839,6 +839,15 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
         false
     }
 
+    /// Nothing to advance. `read_struct` delimits each child before dispatching it —
+    /// either as an owned sub-slice or as pre-extracted text — and the child's
+    /// `ScopedDecoder` is dropped, which moves the parent's tokenizer past the closing
+    /// tag regardless of what the consumer did. Advancing again here would consume a
+    /// sibling element.
+    fn skip_value(&mut self) -> Result<(), SerdeError> {
+        Ok(())
+    }
+
     fn container_size(&self) -> Option<usize> {
         None
     }
@@ -1252,9 +1261,8 @@ mod tests {
     // Empty body → error. The XML codec is strict here because XML 1.0
     // requires every document to have a root element. Consumers (e.g., S3
     // HEAD operations) whose output struct has no body-bound members rely
-    // on `deserialize_with_response` skipping the body deserializer
-    // entirely (codegen passes `_deserializer`), so they never reach
-    // `read_struct`. Operations that DO have body-bound members and
+    // on the HTTP response composite skipping the body deserializer
+    // entirely, so they never reach `read_struct`. Operations that DO have body-bound members and
     // receive an empty body are responding to a malformed wire format —
     // the deserializer surfaces that as an error rather than silently
     // returning a default-built struct (which the legacy XML parser also
@@ -2017,5 +2025,160 @@ mod tests {
             .expect("list-of-map deserialization should succeed");
 
         assert_eq!(got, vec![vec![("k1".to_owned(), "v1".to_owned())]]);
+    }
+}
+
+/// Tests for the [`ShapeDeserializer::skip_value`] contract.
+///
+/// XML is the opposite case from JSON and CBOR: `read_struct` delimits each child before
+/// dispatching it, and the child's `ScopedDecoder` drop advances the parent's tokenizer
+/// past the closing tag. So the override must do nothing. These tests are written so that
+/// an implementation which *did* advance would consume a sibling and fail.
+#[cfg(test)]
+mod skip_value_contract {
+    use super::*;
+    use aws_smithy_schema::serde::ShapeDeserializer;
+    use aws_smithy_schema::{shape_id, Schema, ShapeType};
+
+    static BOUND: Schema<'static> = Schema::new_member(
+        shape_id!("test", "Output$bound"),
+        ShapeType::String,
+        "bound",
+        0,
+    );
+    static BODY: Schema<'static> = Schema::new_member(
+        shape_id!("test", "Output$body"),
+        ShapeType::String,
+        "body",
+        1,
+    );
+    static TAIL: Schema<'static> = Schema::new_member(
+        shape_id!("test", "Output$tail"),
+        ShapeType::String,
+        "tail",
+        2,
+    );
+    static OUTPUT: Schema<'static> = Schema::new_struct(
+        shape_id!("test", "Output"),
+        ShapeType::Structure,
+        &[&BOUND, &BODY, &TAIL],
+    );
+
+    /// Reads `OUTPUT` from `xml`, skipping `bound` and collecting the other two members.
+    fn skip_bound(xml: &[u8]) -> Result<(Option<String>, Option<String>), SerdeError> {
+        let mut deser = XmlDeserializer::new(xml, Arc::new(XmlCodecSettings::default()));
+        let (mut body, mut tail) = (None, None);
+        deser.read_struct(&OUTPUT, &mut |member, d| {
+            match member.member_index() {
+                Some(0) => d.skip_value()?,
+                Some(1) => body = Some(d.read_string(member)?),
+                Some(2) => tail = Some(d.read_string(member)?),
+                _ => {}
+            }
+            Ok(())
+        })?;
+        Ok((body, tail))
+    }
+
+    #[test]
+    fn skipping_a_member_does_not_consume_its_siblings() {
+        // `bound` sits between the two members we read. An implementation that advanced
+        // the tokenizer here would swallow `<body>`.
+        let xml = b"<Output><bound>skipped</bound><body>real</body><tail>end</tail></Output>";
+        let (body, tail) = skip_bound(xml).unwrap();
+        assert_eq!(body.as_deref(), Some("real"));
+        assert_eq!(tail.as_deref(), Some("end"));
+    }
+
+    #[test]
+    fn skipping_works_regardless_of_element_order() {
+        for xml in [
+            &b"<Output><bound>s</bound><body>real</body><tail>end</tail></Output>"[..],
+            &b"<Output><body>real</body><bound>s</bound><tail>end</tail></Output>"[..],
+            &b"<Output><body>real</body><tail>end</tail><bound>s</bound></Output>"[..],
+        ] {
+            let (body, tail) = skip_bound(xml).unwrap();
+            assert_eq!(
+                (body.as_deref(), tail.as_deref()),
+                (Some("real"), Some("end")),
+                "failed for {}",
+                String::from_utf8_lossy(xml)
+            );
+        }
+    }
+
+    #[test]
+    fn skipping_an_aggregate_member_with_nested_content_does_not_consume_siblings() {
+        // Nested content only reaches the consumer for an aggregate-typed member: for a
+        // scalar member `read_struct` extracts leaf text with `try_data` *before*
+        // dispatching, so nested content is rejected by the parent regardless of
+        // skipping. Here `bound` is a structure, so the parent hands the consumer a
+        // sub-slice view — and skipping that must not disturb the outer iteration.
+        // Member 0 is aggregate-typed this time, which routes it through
+        // `dispatch_subslice`; members 1 and 2 stay scalars. It needs no sub-members of
+        // its own because the consumer never reads it.
+        static AGG_BOUND: Schema<'static> = Schema::new_member(
+            shape_id!("test", "Output$bound"),
+            ShapeType::Structure,
+            "bound",
+            0,
+        );
+        static AGG_OUTPUT: Schema<'static> = Schema::new_struct(
+            shape_id!("test", "Output"),
+            ShapeType::Structure,
+            &[&AGG_BOUND, &BODY, &TAIL],
+        );
+
+        // The skipped element contains a decoy `<body>`. Because the parent delimited the
+        // whole `<bound>` element, the decoy must never surface and the outer `<body>`
+        // must still be read.
+        let xml = b"<Output><bound><inner>x</inner><body>decoy</body></bound>\
+                    <body>real</body><tail>end</tail></Output>";
+        let mut deser = XmlDeserializer::new(xml, Arc::new(XmlCodecSettings::default()));
+        let (mut body, mut tail) = (None, None);
+        deser
+            .read_struct(&AGG_OUTPUT, &mut |member, d| {
+                match member.member_index() {
+                    Some(0) => d.skip_value()?,
+                    Some(1) => body = Some(d.read_string(member)?),
+                    Some(2) => tail = Some(d.read_string(member)?),
+                    _ => {}
+                }
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(body.as_deref(), Some("real"));
+        assert_eq!(tail.as_deref(), Some("end"));
+    }
+
+    #[test]
+    fn skipping_a_self_closing_and_empty_element_is_fine() {
+        for xml in [
+            &b"<Output><bound/><body>real</body><tail>end</tail></Output>"[..],
+            &b"<Output><bound></bound><body>real</body><tail>end</tail></Output>"[..],
+        ] {
+            let (body, tail) = skip_bound(xml).unwrap();
+            assert_eq!(
+                (body.as_deref(), tail.as_deref()),
+                (Some("real"), Some("end")),
+                "failed for {}",
+                String::from_utf8_lossy(xml)
+            );
+        }
+    }
+
+    #[test]
+    fn skip_value_is_a_no_op_on_a_text_deserializer() {
+        // The leaf case: a deserializer holding pre-extracted text. Skipping must neither
+        // fail nor consume anything, and must not allocate a discarded document (the
+        // trait default would call `read_document`).
+        static V: Schema<'static> =
+            Schema::new_member(shape_id!("test", "S$v"), ShapeType::String, "v", 0);
+        let mut deser =
+            XmlDeserializer::new(b"<v>hello</v>", Arc::new(XmlCodecSettings::default()));
+        let dynamic: &mut dyn ShapeDeserializer = &mut deser;
+        dynamic.skip_value().unwrap();
+        // Still readable afterwards, confirming nothing was consumed.
+        assert_eq!(deser.read_string(&V).unwrap(), "hello");
     }
 }

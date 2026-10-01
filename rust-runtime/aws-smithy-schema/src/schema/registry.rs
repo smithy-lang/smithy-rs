@@ -431,10 +431,15 @@ impl ComposedRegistry<'_> {
 /// `None`) so a malformed or unexpected body can never change how an operation
 /// fails relative to the plain generic-error path.
 ///
-/// Body-only deserialization is correct here: the reified value is body data
-/// which carries no HTTP header or status bindings, so the entry's body
-/// [`ErrorDeserializeFn`] is sufficient — there is no lossy header/status case
-/// to account for.
+/// HTTP response bindings on a reified error *are* populated, provided the
+/// caller passes a deserializer obtained from a protocol that owns them. A REST
+/// protocol's `deserialize_error_response` returns a composite that reads
+/// `@httpHeader`, `@httpPrefixHeaders`, and `@httpResponseCode` members from the
+/// response and delegates the remaining members to the body codec, so the
+/// entry's [`ErrorDeserializeFn`] — which is the shape's protocol-agnostic
+/// member consumer — receives values from both sources. Body-only protocols
+/// return a body-only deserializer and those members stay absent, which is the
+/// correct behavior for them.
 ///
 /// Returns `None` if `error_code` matches no registered shape, if the matched
 /// entry carries no [`ErrorDeserializeFn`] (i.e. it was not registered as an

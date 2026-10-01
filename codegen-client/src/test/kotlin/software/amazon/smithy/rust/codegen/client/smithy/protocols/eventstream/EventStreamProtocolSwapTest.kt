@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.protocols.eventstream
 
-import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
@@ -150,7 +149,7 @@ class EventStreamProtocolSwapTest {
      */
     private fun model(protocolAnnotation: String) =
         """
-        namespace test
+        namespace smithy.rust.codegen.test.schemaheaders
 
         @$protocolAnnotation
         @xmlNamespace(uri: "http://example.com/eventswap/")
@@ -190,12 +189,17 @@ class EventStreamProtocolSwapTest {
         protocolAnnotation: String,
         protocolId: ShapeId,
     ) {
-        assumeTrue(
-            SchemaSerdeAllowlist.isProtocolEnabled(protocolId),
-            "$protocolId is not on SchemaSerdeAllowlist, so the schema-serde event-stream path is not generated",
-        )
         val testDir =
             clientIntegrationTest(model(protocolAnnotation)) { context: ClientCodegenContext, rustCrate ->
+                // A hard check rather than `assumeTrue`. This test gated itself on
+                // `SchemaSerdeAllowlist.isProtocolEnabled(protocolId)`, which is false for the whole
+                // rollout, so every case silently skipped. The fixture now lives in the namespace the
+                // allowlist reserves for schema-exclusive tests, so a wiring regression is a failure
+                // rather than a skip.
+                check(SchemaSerdeAllowlist.usesSchemaSerdeExclusively(context)) {
+                    "the dedicated fixture namespace must exercise the schema-exclusive event-stream " +
+                        "path, but $protocolId did not; check that the namespace is still allowlisted"
+                }
                 rustCrate.testModule {
                     val scope = protocolScope(context.runtimeConfig)
 

@@ -14,7 +14,9 @@
 //! - Content-Type: `application/json`
 
 use crate::codec::{JsonCodec, JsonCodecSettings};
-use aws_smithy_schema::http_protocol::HttpBindingProtocol;
+use aws_smithy_schema::http_protocol::{
+    http_error_deserializer, http_output_deserializer, HttpBindingProtocol,
+};
 use aws_smithy_schema::{shape_id, Schema, ShapeId};
 use aws_smithy_types::config_bag::ConfigBag;
 
@@ -112,7 +114,7 @@ impl aws_smithy_schema::protocol::ClientProtocolInner for AwsRestJsonProtocol {
         &self,
         response: &'a aws_smithy_runtime_api::http::Response,
         output_schema: &Schema<'_>,
-        cfg: &ConfigBag,
+        cfg: &'a ConfigBag,
     ) -> Result<
         Box<dyn aws_smithy_schema::serde::ShapeDeserializer + 'a>,
         aws_smithy_schema::serde::SerdeError,
@@ -121,16 +123,62 @@ impl aws_smithy_schema::protocol::ClientProtocolInner for AwsRestJsonProtocol {
         // store in the config bag, so a protocol selected at runtime can still resolve relative
         // `__type` discriminators. See `crate::protocol::codec_with_bag_namespace`.
         if let Some(codec) = crate::protocol::codec_with_bag_namespace(self.inner.codec(), cfg) {
+            // This branch builds its own body deserializer, so it has to wrap it the same way
+            // the inner protocol would. Without that, selecting restJson1 at runtime against a
+            // client that stored its namespace in the bag would silently drop every modeled
+            // header, status, and payload member.
+            //
             // Body extraction mirrors `HttpBindingProtocol::deserialize_response`, which carries
             // the rationale for tolerating an unreadable (streaming) body; `&[]` means "no body
             // members to read". Kept in step with that method.
             let body = response.body().bytes().unwrap_or(&[]);
-            return Ok(Box::new(
+            return Ok(http_output_deserializer(
                 aws_smithy_schema::codec::Codec::create_deserializer(&codec, body),
+                response,
+                output_schema,
+                cfg,
             ));
         }
         self.inner
             .deserialize_response(response, output_schema, cfg)
+    }
+
+    /// Returns a deserializer for a modeled error response.
+    ///
+    /// restJson1 has no error envelope, so the body root already *is* the error body and there is
+    /// nothing to reposition. The override is therefore **behavior-neutral today**: the default
+    /// forwarding would route the error through
+    /// [`deserialize_response`](aws_smithy_schema::protocol::ClientProtocolInner::deserialize_response), and because the JSON codec reads an
+    /// empty body as an empty object, the success wrapper's stricter empty-body handling is not
+    /// observable here. It is stated rather than relied upon.
+    ///
+    /// It is overridden anyway so that error deserialization does not *depend* on two incidental
+    /// properties of the default forwarding: that `prelude::DOCUMENT` happens not to qualify for
+    /// the body-only fast path, and that this codec happens to accept an empty body. Neither is a
+    /// contract, and an error path that silently became the success path would drop every
+    /// transport-bound member. Being explicit also keeps every REST error path structurally
+    /// incapable of reaching the success fast path, which is the property the protocol-level
+    /// error tests assert.
+    ///
+    /// The namespace fallback applies here too, so the branch structure matches
+    /// `deserialize_response`.
+    fn deserialize_error_response<'a>(
+        &self,
+        response: &'a aws_smithy_runtime_api::http::Response,
+        cfg: &'a ConfigBag,
+    ) -> Result<
+        Box<dyn aws_smithy_schema::serde::ShapeDeserializer + 'a>,
+        aws_smithy_schema::serde::SerdeError,
+    > {
+        if let Some(codec) = crate::protocol::codec_with_bag_namespace(self.inner.codec(), cfg) {
+            let body = response.body().bytes().unwrap_or(&[]);
+            return Ok(http_error_deserializer(
+                aws_smithy_schema::codec::Codec::create_deserializer(&codec, body),
+                response,
+                cfg,
+            ));
+        }
+        self.inner.deserialize_error_response(response, cfg)
     }
 
     /// Extracts canonical error metadata from a `restJson1` response.
@@ -145,11 +193,6 @@ impl aws_smithy_schema::protocol::ClientProtocolInner for AwsRestJsonProtocol {
     /// contract the request id is **not** populated here — the
     /// orchestrator's request-id pipeline attaches it separately.
     ///
-    /// `deserialize_error_response` is **not** overridden: restJson1 has no
-    /// error envelope, so the default (which forwards to
-    /// `deserialize_response` against
-    /// [`prelude::DOCUMENT`](aws_smithy_schema::prelude::DOCUMENT)) is
-    /// already correct — the body root IS the error body.
     fn parse_error_metadata(
         &self,
         response: &aws_smithy_runtime_api::http::Response,
@@ -300,5 +343,113 @@ mod tests {
             settings.default_timestamp_format(),
             aws_smithy_types::date_time::Format::EpochSeconds,
         );
+    }
+
+    // ---------------------------------------------------------------------------------
+    // the ConfigBag-namespace branch must wrap like the inner protocol does
+    //
+    // That branch builds its own body deserializer and returns early, so it is the one place
+    // restJson1 can silently lose every transport-bound member.
+    // ---------------------------------------------------------------------------------
+
+    use aws_smithy_schema::protocol::ServiceShapeNamespace;
+    use aws_smithy_schema::ShapeType;
+    use aws_smithy_types::config_bag::Layer;
+
+    static NS_NAME: Schema<'static> =
+        Schema::new_member(shape_id!("test", "Out"), ShapeType::String, "name", 0)
+            .with_http_header("x-name");
+    static NS_STATUS: Schema<'static> =
+        Schema::new_member(shape_id!("test", "Out"), ShapeType::Integer, "status", 1)
+            .with_http_response_code();
+    static NS_BODY: Schema<'static> =
+        Schema::new_member(shape_id!("test", "Out"), ShapeType::String, "note", 2);
+    static NS_OUT: Schema<'static> = Schema::new_struct(
+        shape_id!("test", "Out"),
+        ShapeType::Structure,
+        &[&NS_NAME, &NS_STATUS, &NS_BODY],
+    );
+
+    /// A bag carrying the namespace a generated client would have stored, which is what sends
+    /// `deserialize_response` down its own branch instead of delegating to the inner protocol.
+    fn bag_with_namespace() -> ConfigBag {
+        let mut layer = Layer::new("test");
+        layer.store_put(ServiceShapeNamespace::new("com.amazonaws.dynamodb"));
+        ConfigBag::of_layers(vec![layer])
+    }
+
+    fn read_bound(
+        mut deser: Box<dyn aws_smithy_schema::serde::ShapeDeserializer + '_>,
+        schema: &Schema<'_>,
+    ) -> (Option<String>, Option<i32>) {
+        let mut name = None;
+        let mut status = None;
+        deser
+            .read_struct(schema, &mut |member, d| {
+                match member.member_name() {
+                    Some("name") => name = Some(d.read_string(member)?),
+                    Some("status") => status = Some(d.read_integer(member)?),
+                    // Read and discard. A consumer that declines a *known* member leaves a
+                    // cursor-based codec mid-value, which is the same reason the response
+                    // wrapper calls `skip_value` rather than just returning.
+                    _ => {
+                        let _ = d.read_string(member)?;
+                    }
+                }
+                Ok(())
+            })
+            .expect("deserialization succeeds");
+        (name, status)
+    }
+
+    #[test]
+    fn the_namespace_branch_still_reads_modeled_headers_and_status() {
+        let proto = AwsRestJsonProtocol::new();
+        let cfg = bag_with_namespace();
+        assert!(
+            crate::protocol::codec_with_bag_namespace(proto.inner().codec(), &cfg).is_some(),
+            "precondition: this response must take the namespace branch"
+        );
+        let response = http_response(&[("x-name", "widget")], r#"{"note":"n"}"#);
+        let (name, status) = read_bound(
+            proto
+                .deserialize_response(&response, &NS_OUT, &cfg)
+                .unwrap(),
+            &NS_OUT,
+        );
+        assert_eq!(name.as_deref(), Some("widget"));
+        assert_eq!(status, Some(400));
+    }
+
+    #[test]
+    fn the_error_path_reads_modeled_headers_and_status_too() {
+        let proto = AwsRestJsonProtocol::new();
+        let cfg = bag_with_namespace();
+        let response = http_response(&[("x-name", "missing")], r#"{"note":"n"}"#);
+        let (name, status) = read_bound(
+            proto.deserialize_error_response(&response, &cfg).unwrap(),
+            &NS_OUT,
+        );
+        assert_eq!(name.as_deref(), Some("missing"));
+        assert_eq!(status, Some(400));
+    }
+
+    #[test]
+    fn the_error_path_reads_bindings_without_the_namespace_branch_too() {
+        // With no namespace in the bag the method delegates to the inner protocol's error path.
+        // Both branches must behave the same way.
+        let proto = AwsRestJsonProtocol::new();
+        let cfg = ConfigBag::base();
+        assert!(
+            crate::protocol::codec_with_bag_namespace(proto.inner().codec(), &cfg).is_none(),
+            "precondition: this response must delegate to the inner protocol"
+        );
+        let response = http_response(&[("x-name", "missing")], r#"{"note":"n"}"#);
+        let (name, status) = read_bound(
+            proto.deserialize_error_response(&response, &cfg).unwrap(),
+            &NS_OUT,
+        );
+        assert_eq!(name.as_deref(), Some("missing"));
+        assert_eq!(status, Some(400));
     }
 }
