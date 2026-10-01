@@ -936,13 +936,11 @@ class ServerServiceGenerator(
                         }
                     }
                     fn routing_options() -> #{SmithyHttpServer}::schema::routing::RoutingOptions {
-                        #{SmithyHttpServer}::schema::routing::RoutingOptions {
-                            request_body: #{SmithyHttpServer}::schema::ServiceRequestBodyConfig {
-                                global: #{SmithyHttpServer}::schema::RequestBodyCollectionConfig { max_bytes: $maxExpr, read_timeout: #{None} },
-                                per_operation: ::std::collections::HashMap::new(),
-                            },
-                            protocol_settings: ::std::collections::HashMap::from([#{ProtocolSettings}]),
-                        }
+                        #{SmithyHttpServer}::schema::routing::RoutingOptions::default()
+                            .with_request_body(#{SmithyHttpServer}::schema::ServiceRequestBodyConfig::default()
+                                .with_global(#{SmithyHttpServer}::schema::RequestBodyCollectionConfig::default()
+                                    .with_max_bytes($maxExpr)))
+                            .with_protocol_settings(::std::collections::HashMap::from([#{ProtocolSettings}]))
                     }
                     ##[deprecated(note = "use builder with a service configuration")]
                     pub fn builder_with_plugins<HttpPl: #{SmithyHttpServer}::plugin::HttpMarker, ModelPl: #{SmithyHttpServer}::plugin::ModelMarker>(

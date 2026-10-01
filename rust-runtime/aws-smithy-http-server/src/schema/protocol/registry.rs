@@ -200,14 +200,10 @@ impl ProtocolRegistry {
             "aws.protocols#awsJson1_1",
         )
         .with_order(&[ProtocolOrder::After("aws.protocols#awsJson1_0")]),
-        ProtocolRegistration::metadata_routed::<crate::schema::protocol::RestJson1Protocol>(
-            "aws.protocols#restJson1",
-        )
-        .with_order(&[ProtocolOrder::After("aws.protocols#awsJson1_1")]),
-        ProtocolRegistration::metadata_routed::<crate::schema::protocol::RestXmlProtocol>(
-            "aws.protocols#restXml",
-        )
-        .with_order(&[ProtocolOrder::After("aws.protocols#restJson1")]),
+        ProtocolRegistration::metadata_routed::<crate::schema::protocol::RestJson1Protocol>("aws.protocols#restJson1")
+            .with_order(&[ProtocolOrder::After("aws.protocols#awsJson1_1")]),
+        ProtocolRegistration::metadata_routed::<crate::schema::protocol::RestXmlProtocol>("aws.protocols#restXml")
+            .with_order(&[ProtocolOrder::After("aws.protocols#restJson1")]),
     ]);
 
     /// Creates a registry over `registrations`.
@@ -221,25 +217,26 @@ impl ProtocolRegistry {
 
     /// Builds the protocol with shape ID `protocol_id` for `service_schema`, without settings.
     ///
-    /// `None` when this registry does not register `protocol_id` or the schema does not declare
-    /// it. Used by generated protocol tests, which exercise one protocol in isolation.
+    /// Returns `Ok(None)` when this registry does not register `protocol_id` or the schema does not declare
+    /// it. Factory failures and registered-ID mismatches return `Err`.
+    /// Used by generated protocol tests, which exercise one protocol in isolation.
     pub fn resolve_id(
         &self,
         service_schema: &'static ServiceSchema<'static>,
         protocol_id: &str,
-    ) -> Option<SharedServerProtocol> {
+    ) -> Result<Option<SharedServerProtocol>, RouterBuildError> {
         let declared = service_schema
             .protocols()
             .iter()
             .any(|protocol| protocol.as_str() == protocol_id);
         if !declared {
-            return None;
+            return Ok(None);
         }
         self.registrations
             .iter()
-            .find(|registration| registration.protocol_id() == protocol_id)?
-            .build(&ProtocolBuildContext::new(service_schema))
-            .ok()
+            .find(|registration| registration.protocol_id() == protocol_id)
+            .map(|registration| registration.build(&ProtocolBuildContext::new(service_schema)))
+            .transpose()
     }
 }
 
@@ -281,7 +278,10 @@ mod tests {
             "aws.protocols#awsJson1_1",
             "smithy.protocols#rpcv2Cbor",
         ]) {
-            let protocol = ProtocolRegistry::BUILTIN.resolve_id(service, id).expect(id);
+            let protocol = ProtocolRegistry::BUILTIN
+                .resolve_id(service, id)
+                .expect("factory succeeds")
+                .expect(id);
             assert_eq!(protocol.protocol_id().as_str(), id);
         }
     }
@@ -290,6 +290,7 @@ mod tests {
     fn unknown_protocol_resolves_to_none() {
         assert!(ProtocolRegistry::BUILTIN
             .resolve_id(&UNKNOWN_SERVICE, "example.protocols#myProtocol")
+            .expect("unavailable protocol is not a build error")
             .is_none());
     }
 
@@ -297,17 +298,31 @@ mod tests {
     fn undeclared_protocol_resolves_to_none() {
         assert!(ProtocolRegistry::BUILTIN
             .resolve_id(&REST_JSON_1_SERVICE, "aws.protocols#restXml")
+            .expect("unavailable protocol is not a build error")
             .is_none());
     }
 
     #[test]
     fn a_mismatched_protocol_id_is_an_error() {
-        let registration = ProtocolRegistration::metadata_routed::<crate::schema::protocol::RestXmlProtocol>(
-            "aws.protocols#restJson1",
-        );
-        let err = registration
-            .build(&ProtocolBuildContext::new(&REST_JSON_1_SERVICE))
+        static REGISTRY: ProtocolRegistry = ProtocolRegistry::new(&[ProtocolRegistration::metadata_routed::<
+            crate::schema::protocol::RestXmlProtocol,
+        >("aws.protocols#restJson1")]);
+        let err = REGISTRY
+            .resolve_id(&REST_JSON_1_SERVICE, "aws.protocols#restJson1")
             .expect_err("IDs disagree");
         assert!(matches!(err, RouterBuildError::Configuration(_)));
+    }
+
+    #[test]
+    fn factory_failure_is_preserved() {
+        static REGISTRY: ProtocolRegistry = ProtocolRegistry::new(&[ProtocolRegistration {
+            protocol_id: "aws.protocols#restJson1",
+            build: |_| Err(RouterBuildError::Configuration("factory failed".into())),
+            order: &[],
+        }]);
+        let err = REGISTRY
+            .resolve_id(&REST_JSON_1_SERVICE, "aws.protocols#restJson1")
+            .unwrap_err();
+        assert!(matches!(err, RouterBuildError::Configuration(message) if message == "factory failed"));
     }
 }

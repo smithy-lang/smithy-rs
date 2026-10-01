@@ -123,6 +123,7 @@ impl<B> fmt::Debug for OperationHandlerBinding<B> {
 
 /// Construction options, independent of any generated router implementation.
 #[derive(Clone, Debug, Default)]
+#[non_exhaustive]
 pub struct RoutingOptions {
     /// Global and per-operation body-read allowances. Operation entries replace the whole record.
     pub request_body: ServiceRequestBodyConfig,
@@ -132,6 +133,20 @@ pub struct RoutingOptions {
     /// [`MetadataRoutedProtocol::build_router`](crate::schema::MetadataRoutedProtocol::build_router))
     /// and rejects invalid values with [`RouterBuildError::Configuration`].
     pub protocol_settings: HashMap<String, Document>,
+}
+
+impl RoutingOptions {
+    /// Sets the service body-read allowances.
+    pub fn with_request_body(mut self, request_body: ServiceRequestBodyConfig) -> Self {
+        self.request_body = request_body;
+        self
+    }
+
+    /// Sets the per-protocol settings.
+    pub fn with_protocol_settings(mut self, protocol_settings: HashMap<String, Document>) -> Self {
+        self.protocol_settings = protocol_settings;
+        self
+    }
 }
 
 /// Everything a protocol sees when building its router: the service, the
@@ -156,6 +171,7 @@ pub struct RouterBuildContext<'a> {
 
 /// Invalid schema, bindings, or protocol-specific routing configuration.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum RouterBuildError {
     #[error("no protocol registration recognizes the service schema")]
     UnknownProtocol,

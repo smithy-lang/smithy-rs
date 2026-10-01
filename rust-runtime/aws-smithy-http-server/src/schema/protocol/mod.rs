@@ -491,18 +491,46 @@ pub(crate) fn body_collection_rejection(
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct RequestBodyCollectionConfig {
     pub max_bytes: Option<NonZeroUsize>,
     pub read_timeout: Option<Duration>,
 }
 
 #[derive(Debug, Default, Clone)]
+#[non_exhaustive]
 pub struct ServiceRequestBodyConfig {
     pub global: RequestBodyCollectionConfig,
     pub per_operation: HashMap<String, RequestBodyCollectionConfig>,
 }
 
+impl RequestBodyCollectionConfig {
+    /// Sets the byte limit; `None` allows any size.
+    pub fn with_max_bytes(mut self, max_bytes: Option<NonZeroUsize>) -> Self {
+        self.max_bytes = max_bytes;
+        self
+    }
+
+    /// Sets the read timeout; `None` disables it.
+    pub fn with_read_timeout(mut self, read_timeout: Option<Duration>) -> Self {
+        self.read_timeout = read_timeout;
+        self
+    }
+}
+
 impl ServiceRequestBodyConfig {
+    /// Sets the default body-read allowances.
+    pub fn with_global(mut self, global: RequestBodyCollectionConfig) -> Self {
+        self.global = global;
+        self
+    }
+
+    /// Sets operation overrides, keyed by operation shape ID.
+    pub fn with_per_operation(mut self, per_operation: HashMap<String, RequestBodyCollectionConfig>) -> Self {
+        self.per_operation = per_operation;
+        self
+    }
+
     /// Computes the provisional allowance before the operation is known.
     /// An absent operation override inherits `global`; an unlimited field dominates the maximum.
     pub fn for_routing(&self) -> RequestBodyCollectionConfig {
@@ -529,6 +557,7 @@ impl ServiceRequestBodyConfig {
 }
 
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum RequestBodyCollectionError<E> {
     Body(E),
     TooLarge(crate::body::BodyLimitExceeded),

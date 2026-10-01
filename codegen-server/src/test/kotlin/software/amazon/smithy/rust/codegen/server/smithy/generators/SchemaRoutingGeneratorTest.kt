@@ -103,14 +103,12 @@ class SchemaRoutingGeneratorTest {
                         use #{Tower}::ServiceExt;
                         for before in [false, true] {
                             for allowed in [false, true] {
-                                let body_config = #{Server}::schema::ServiceRequestBodyConfig {
-                                    global: #{Server}::schema::RequestBodyCollectionConfig {
-                                        max_bytes: ::std::num::NonZeroUsize::new(1), read_timeout: #{None},
-                                    },
-                                    per_operation: if allowed {
+                                let body_config = #{Server}::schema::ServiceRequestBodyConfig::default()
+                                    .with_global(#{Server}::schema::RequestBodyCollectionConfig::default()
+                                        .with_max_bytes(::std::num::NonZeroUsize::new(1)))
+                                    .with_per_operation(if allowed {
                                         [("test##Ping".to_owned(), #{Server}::schema::RequestBodyCollectionConfig::default())].into()
-                                    } else { ::std::collections::HashMap::new() },
-                                };
+                                    } else { ::std::collections::HashMap::new() });
                                 let builder = crate::Example::builder(crate::ExampleConfig::builder().build());
                                 let builder = if before { builder.request_body_config(body_config.clone()) } else { builder };
                                 let builder = builder.ping(|input: crate::input::PingInput| async move {
@@ -174,12 +172,9 @@ class SchemaRoutingGeneratorTest {
                                 request
                             }).service(inner)
                         });
-                        let limit = #{Server}::schema::ServiceRequestBodyConfig {
-                            global: #{Server}::schema::RequestBodyCollectionConfig {
-                                max_bytes: ::std::num::NonZeroUsize::new(1), read_timeout: #{None},
-                            },
-                            per_operation: ::std::collections::HashMap::new(),
-                        };
+                        let limit = #{Server}::schema::ServiceRequestBodyConfig::default()
+                            .with_global(#{Server}::schema::RequestBodyCollectionConfig::default()
+                                .with_max_bytes(::std::num::NonZeroUsize::new(1)));
                         let config = crate::ExampleConfig::builder().http_plugin(#{Server}::plugin::LayerPlugin(layer)).build();
                         let service = crate::Example::builder(config)
                             // A request that reached the handler would get 200.

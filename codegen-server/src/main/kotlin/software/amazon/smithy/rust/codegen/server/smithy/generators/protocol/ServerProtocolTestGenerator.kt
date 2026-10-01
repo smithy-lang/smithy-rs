@@ -440,6 +440,7 @@ class ServerProtocolTestGenerator(
                 """
                 let protocol = #{SmithyHttpServer}::schema::ProtocolRegistry::BUILTIN
                     .resolve_id(&$serviceSchema, ${codegenContext.protocol.toString().replace("#", "##").dq()})
+                    .expect("protocol construction failed")
                     .expect("no protocol registered for the protocol under test");
                 let http_response = #{Serialize:W};
                 """,

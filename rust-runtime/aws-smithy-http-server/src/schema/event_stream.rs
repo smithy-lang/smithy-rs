@@ -91,7 +91,7 @@ impl<T: SerializableStruct> MarshallMessage for SchemaEventMarshaller<T> {
         let capability = capability_or_marshalling_error(&self.protocol)?;
         let mut router = UnionVariantSerializer {
             capability,
-            exception: false,
+            kind: FrameKind::Event,
             message: None,
         };
         input
@@ -142,7 +142,7 @@ impl<E: SerializableEventError> MarshallMessage for SchemaEventErrorMarshaller<E
     fn marshall(&self, input: Self::Input) -> Result<Message, Error> {
         let capability = capability_or_marshalling_error(&self.protocol)?;
         let (exception_type, value) = input.variant();
-        build_frame(capability, exception_type, value, true)
+        build_frame(capability, exception_type, value, FrameKind::Exception)
             .map_err(|err| Error::marshalling(format!("{err}")))
     }
 }
@@ -177,26 +177,26 @@ impl MarshallMessage for NoModeledEventErrorMarshaller {
     }
 }
 
+#[derive(Clone, Copy)]
+enum FrameKind {
+    Event,
+    Exception,
+}
+
 /// Builds one event or exception frame from a serializable event struct.
 fn build_frame(
     capability: EventStreamFraming<'_>,
     event_type: &str,
     value: &dyn SerializableStruct,
-    exception: bool,
+    kind: FrameKind,
 ) -> Result<Message, SerdeError> {
+    let (message_type, type_header) = match kind {
+        FrameKind::Event => ("event", ":event-type"),
+        FrameKind::Exception => ("exception", ":exception-type"),
+    };
     let mut headers = vec![
-        Header::new(
-            ":message-type",
-            HeaderValue::String(if exception { "exception" } else { "event" }.into()),
-        ),
-        Header::new(
-            if exception {
-                ":exception-type"
-            } else {
-                ":event-type"
-            },
-            HeaderValue::String(event_type.to_string().into()),
-        ),
+        Header::new(":message-type", HeaderValue::String(message_type.into())),
+        Header::new(type_header, HeaderValue::String(event_type.to_string().into())),
     ];
     let schema = value.schema();
     let payload_member = schema.members().iter().copied().find(|m| m.event_payload());
@@ -309,7 +309,7 @@ impl ShapeSerializer for NonHeaderSerializer<'_> {
 /// variant and builds the frame from it.
 struct UnionVariantSerializer<'a> {
     capability: EventStreamFraming<'a>,
-    exception: bool,
+    kind: FrameKind,
     message: Option<Message>,
 }
 
@@ -336,7 +336,7 @@ impl ShapeSerializer for UnionVariantSerializer<'_> {
             self.capability,
             event_type,
             value,
-            self.exception,
+            self.kind,
         )?);
         Ok(())
     }
@@ -1068,9 +1068,20 @@ where
     }
 }
 
+/// Whether to emit an initial response before output events.
+///
+/// This policy is exhaustive: callers choose whether to send or omit the initial response.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InitialResponsePolicy {
+    /// Emit an initial response only if the selected protocol supports initial-message framing.
+    Send,
+    /// Omit the initial response.
+    Omit,
+}
+
 /// Builds the response body of an event stream output: the marshalled events, preceded by an
 /// `initial-response` frame carrying the non-stream output members when the protocol frames
-/// initial messages and the service was generated with `alwaysSendEventStreamInitialResponse`.
+/// initial messages and `initial_response` is [`InitialResponsePolicy::Send`].
 ///
 /// `output_schema` and `output` describe the non-stream members; the streaming member must
 /// already have been moved out of `output` into `events`.
@@ -1081,7 +1092,7 @@ pub fn event_stream_response_body<T, E>(
     marshaller: impl MarshallMessage<Input = T> + Send + Sync + 'static,
     error_marshaller: impl MarshallMessage<Input = E> + Send + Sync + 'static,
     protocol: &SharedServerProtocol,
-    send_initial_response: bool,
+    initial_response: InitialResponsePolicy,
 ) -> Result<BoxBody, SerdeError>
 where
     T: Send + Sync + 'static,
@@ -1091,7 +1102,7 @@ where
         .event_stream_framing()
         .ok_or_else(|| SerdeError::custom(NO_EVENT_STREAM_SUPPORT))?;
     let signer = NoOpSigner {};
-    if capability.initial_messages_in_frames && send_initial_response {
+    if capability.initial_messages_in_frames && initial_response == InitialResponsePolicy::Send {
         use futures_util::StreamExt;
         let payload = {
             let mut ser = capability.payload_codec.create_serializer();
@@ -1761,7 +1772,7 @@ mod tests {
             ),
         ] {
             let capability = protocol.event_stream_framing().unwrap();
-            let message = build_frame(capability, "implicit", &Implicit, false).unwrap();
+            let message = build_frame(capability, "implicit", &Implicit, FrameKind::Event).unwrap();
             assert_eq!(string_header(&message, "header"), Some("ann"));
             assert_eq!(string_header(&message, ":content-type"), Some(media_type));
             assert_eq!(message.payload().as_ref(), expected, "{media_type}");
@@ -1795,7 +1806,7 @@ mod tests {
         }
         let protocol = json_protocol();
         let capability = protocol.event_stream_framing().unwrap();
-        let message = build_frame(capability, "headerOnly", &HeaderOnly, false).unwrap();
+        let message = build_frame(capability, "headerOnly", &HeaderOnly, FrameKind::Event).unwrap();
         assert_eq!(string_header(&message, "name"), Some("ann"));
         assert_eq!(string_header(&message, ":content-type"), None);
         assert!(message.payload().is_empty());
@@ -2273,7 +2284,7 @@ mod tests {
 
     fn response_body_for(
         protocol: &SharedServerProtocol,
-        send_initial_response: bool,
+        initial_response: InitialResponsePolicy,
     ) -> Result<BoxBody, SerdeError> {
         let events: EventStreamSender<TestEvents, TestEventsError> =
             futures_util::stream::iter([Ok(TestEvents::Text(TextEvent {
@@ -2291,13 +2302,13 @@ mod tests {
             SchemaEventMarshaller::<TestEvents>::new(protocol.clone()),
             SchemaEventErrorMarshaller::<TestEventsError>::new(protocol.clone()),
             protocol,
-            send_initial_response,
+            initial_response,
         )
     }
 
     #[tokio::test]
     async fn response_body_prepends_the_initial_response_frame_when_asked() {
-        let body = response_body_for(&cbor_protocol(), true).expect("builds");
+        let body = response_body_for(&cbor_protocol(), InitialResponsePolicy::Send).expect("builds");
         let frames = collect_frames(body).await;
         assert_eq!(frames.len(), 2);
         assert_eq!(string_header(&frames[0], ":event-type"), Some("initial-response"));
@@ -2307,7 +2318,7 @@ mod tests {
 
     #[tokio::test]
     async fn response_body_omits_the_initial_response_frame_when_disabled() {
-        let body = response_body_for(&cbor_protocol(), false).expect("builds");
+        let body = response_body_for(&cbor_protocol(), InitialResponsePolicy::Omit).expect("builds");
         let frames = collect_frames(body).await;
         assert_eq!(frames.len(), 1);
         assert_eq!(string_header(&frames[0], ":event-type"), Some("text"));
@@ -2315,7 +2326,7 @@ mod tests {
 
     #[tokio::test]
     async fn response_body_omits_the_initial_response_frame_when_the_protocol_does_not_frame_it() {
-        let body = response_body_for(&json_protocol(), true).expect("builds");
+        let body = response_body_for(&json_protocol(), InitialResponsePolicy::Send).expect("builds");
         let frames = collect_frames(body).await;
         assert_eq!(frames.len(), 1);
         assert_eq!(string_header(&frames[0], ":event-type"), Some("text"));
@@ -2337,7 +2348,7 @@ mod tests {
             SchemaEventMarshaller::<TestEvents>::new(protocol.clone()),
             SchemaEventErrorMarshaller::<TestEventsError>::new(protocol.clone()),
             &protocol,
-            false,
+            InitialResponsePolicy::Omit,
         )
         .expect("builds");
         let frames = collect_frames(body).await;

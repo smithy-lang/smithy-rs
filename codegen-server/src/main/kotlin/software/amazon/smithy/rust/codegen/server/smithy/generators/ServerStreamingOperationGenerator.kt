@@ -101,6 +101,7 @@ class ServerStreamingOperationGenerator(
             "boxed" to smithyHttpServer.resolve("body::boxed"),
             "empty" to smithyHttpServer.resolve("body::empty"),
             "event_stream_response_body" to schemaEventStream.resolve("event_stream_response_body"),
+            "InitialResponsePolicy" to schemaEventStream.resolve("InitialResponsePolicy"),
             "futures_util" to ServerCargoDependency.FuturesUtil.toType(),
             "http_body" to CargoDependency.HttpBody1x.toType(),
             "internal_server_error" to smithyHttpServer.resolve("operation::empty_internal_server_error"),
@@ -307,7 +308,7 @@ class ServerStreamingOperationGenerator(
                     marshaller,
                     error_marshaller,
                     protocol,
-                    $sendInitialResponse,
+                    #{InitialResponsePolicy}::${if (sendInitialResponse) "Send" else "Omit"},
                 ) {
                     #{Ok}(body) => body,
                     #{Err}(err) => {

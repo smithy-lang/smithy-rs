@@ -13,6 +13,7 @@ pub mod routing;
 mod service;
 
 pub use deserialize::{DeserializableShape, DeserializeError};
+pub use event_stream::InitialResponsePolicy;
 pub use modeled_error::HttpModeledError;
 pub(crate) use protocol::body_collection_rejection;
 pub use protocol::{
