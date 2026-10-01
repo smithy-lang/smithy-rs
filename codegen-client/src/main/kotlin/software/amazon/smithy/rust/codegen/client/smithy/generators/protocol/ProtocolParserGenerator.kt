@@ -319,7 +319,9 @@ class ProtocolParserGenerator(
                     #{Ok}(value) => value,
                     #{Err}(err) => {
                         let _ = &err;
-                        if #{ShouldSkip:W} {
+                        // Bound first: a block in an `if` condition trips `clippy::blocks_in_conditions`.
+                        let skip = #{ShouldSkip:W};
+                        if skip {
                             #{None}
                         } else {
                             return #{Err}(#{Error}::unhandled(${errorMessage.dq()}));

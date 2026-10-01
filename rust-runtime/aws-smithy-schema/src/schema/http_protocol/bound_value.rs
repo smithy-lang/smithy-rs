@@ -12,7 +12,7 @@
 //!
 //! # Why not `HttpStringDeserializer`
 //!
-//! [`crate::codec::HttpStringDeserializer`] cannot be reused for response headers: it takes
+//! [`crate::codec::http_string::HttpStringDeserializer`] cannot be reused for response headers: it takes
 //! `&str` (mapping invalid UTF-8 to an empty string), splits on commas without regard for
 //! quoting, and ignores the schema's `@timestampFormat`. The header semantics that AWS SDKs
 //! have shipped for years live in `aws_smithy_runtime_api::http::header_parse`, and this
