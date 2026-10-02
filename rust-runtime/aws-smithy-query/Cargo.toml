@@ -13,7 +13,7 @@ aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["clie
 aws-smithy-schema = { path = "../aws-smithy-schema" }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-1-x"] }
 aws-smithy-xml = { path = "../aws-smithy-xml" }
-urlencoding = "2.1"
+percent-encoding = "2"
 
 [dev-dependencies]
 criterion = "0.5.1"
