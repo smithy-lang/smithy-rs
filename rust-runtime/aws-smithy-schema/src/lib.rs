@@ -718,6 +718,16 @@ impl<'a> Schema<'a> {
         self.streaming.is_some()
     }
 
+    /// Returns `true` if this member has the `@eventHeader` trait.
+    pub fn event_header(&self) -> bool {
+        self.event_header.is_some()
+    }
+
+    /// Returns `true` if this member has the `@eventPayload` trait.
+    pub fn event_payload(&self) -> bool {
+        self.event_payload.is_some()
+    }
+
     // -- Const setters for builder-style construction in generated code --
 
     /// Sets the original (pre-synthesis) shape name for synthetic operation
