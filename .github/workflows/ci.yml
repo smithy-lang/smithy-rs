@@ -197,8 +197,11 @@ jobs:
           runner: smithy_ubuntu-latest_8-core
         - action: check-deterministic-codegen
           runner: smithy_ubuntu-latest_8-core
-        - action: check-codegen-version
+        # Needs full history and tags: it compares against the release tag that published the
+        # current codegenVersion.
+        - action: check-maven-central-publishing
           runner: smithy_ubuntu-latest_8-core
+          fetch-depth: 0
         # Guards that the check-aws-config --partition legs cover the whole powerset (cheap; no SDK)
         - action: check-aws-config-partition-coverage
           runner: smithy_ubuntu-latest_8-core

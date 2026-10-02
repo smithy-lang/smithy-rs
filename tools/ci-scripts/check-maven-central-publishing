@@ -1,0 +1,14 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+set -eux
+cd smithy-rs
+
+# The check compares against the release tag that published the current codegenVersion, so it needs
+# tags. GH actions does a shallow checkout without them.
+git fetch --tags --force origin
+
+./gradlew checkMavenCentralPublishingNeeded
