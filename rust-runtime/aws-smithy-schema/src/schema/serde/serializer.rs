@@ -239,6 +239,10 @@ pub trait ShapeSerializer {
 ///
 /// ```ignore
 /// impl SerializableStruct for MyStruct {
+///     fn schema(&self) -> &Schema<'_> {
+///         &MY_STRUCT_SCHEMA
+///     }
+///
 ///     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
 ///         serializer.write_string(&NAME_SCHEMA, &self.name)?;
 ///         serializer.write_integer(&AGE_SCHEMA, self.age)?;
@@ -247,12 +251,58 @@ pub trait ShapeSerializer {
 /// }
 /// ```
 pub trait SerializableStruct {
+    /// Returns the schema of this structure or union itself, not of a member targeting it.
+    ///
+    /// Borrowed from `self` so a value can report a schema built at runtime; generated
+    /// types return their `'static` schema, which coerces to the shorter lifetime.
+    fn schema(&self) -> &Schema<'_>;
+
     /// Serializes this structure's members using the provided serializer.
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError>;
 }
 
 impl<T: SerializableStruct + ?Sized> SerializableStruct for Box<T> {
+    fn schema(&self) -> &Schema<'_> {
+        (**self).schema()
+    }
+
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         (**self).serialize_members(serializer)
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+    use crate::{ShapeId, ShapeType};
+
+    #[test]
+    fn boxed_trait_object_reports_a_runtime_built_schema() {
+        struct Value<'a> {
+            schema: Schema<'a>,
+        }
+        impl SerializableStruct for Value<'_> {
+            fn schema(&self) -> &Schema<'_> {
+                &self.schema
+            }
+
+            fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                Ok(())
+            }
+        }
+
+        let shape_name = String::from("RuntimeValue");
+        let id = String::from("test#RuntimeValue");
+        let value = Value {
+            schema: Schema::new_struct(
+                ShapeId::from_parts(&id, "test", &shape_name),
+                ShapeType::Structure,
+                &[],
+            ),
+        };
+        let value: Box<dyn SerializableStruct + '_> = Box::new(value);
+        assert_eq!(value.schema().shape_id().as_str(), id);
+        let forwarded = <Box<dyn SerializableStruct> as SerializableStruct>::schema(&value);
+        assert!(std::ptr::eq(forwarded, value.as_ref().schema()));
     }
 }

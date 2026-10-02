@@ -59,7 +59,8 @@ class SchemaGeneratorTest {
 
         union MyUnion {
             stringVariant: String,
-            intVariant: Integer
+            intVariant: Integer,
+            unitVariant: Unit
         }
 
         structure NestedAggregates {
@@ -185,6 +186,10 @@ class SchemaGeneratorTest {
                 "schema_structure",
                 """
                 use aws_smithy_schema::Schema;
+                use aws_smithy_schema::serde::SerializableStruct;
+                let value = MyStruct::builder().build();
+                let erased: &dyn SerializableStruct = &value;
+                assert!(std::ptr::eq(erased.schema(), MyStruct::SCHEMA));
                 let schema = MyStruct::SCHEMA;
                 assert_eq!(schema.shape_type(), aws_smithy_schema::ShapeType::Structure);
                 assert_eq!(schema.shape_id().as_str(), "test#MyStruct");
@@ -295,6 +300,10 @@ class SchemaGeneratorTest {
                 "schema_union",
                 """
                 use aws_smithy_schema::Schema;
+                use aws_smithy_schema::serde::SerializableStruct;
+                let value = MyUnion::StringVariant("value".into());
+                let erased: &dyn SerializableStruct = &value;
+                assert!(std::ptr::eq(erased.schema(), MyUnion::SCHEMA));
                 let schema = MyUnion::SCHEMA;
                 assert_eq!(schema.shape_type(), aws_smithy_schema::ShapeType::Union);
                 assert!(schema.member_schema("stringVariant").is_some());
@@ -329,6 +338,21 @@ class SchemaGeneratorTest {
                 ser.write_struct(MyUnion::SCHEMA, &val_str).expect("serialization should succeed");
                 let json = String::from_utf8(ser.finish()).unwrap();
                 assert_eq!(json, r#"{"stringVariant":"hello"}"#);
+                """,
+            )
+            unitTest(
+                "union_serializable_struct_unit",
+                """
+                use aws_smithy_schema::serde::{SerializableStruct, ShapeSerializer};
+                use aws_smithy_json::codec::{JsonCodec, JsonCodecSettings};
+                use aws_smithy_schema::codec::Codec;
+
+                let value = MyUnion::UnitVariant;
+                assert!(std::ptr::eq(value.schema(), MyUnion::SCHEMA));
+                let codec = JsonCodec::new(JsonCodecSettings::default());
+                let mut ser = codec.create_serializer();
+                ser.write_struct(value.schema(), &value).expect("unit serialization should succeed");
+                assert_eq!(String::from_utf8(ser.finish()).unwrap(), r#"{"unitVariant":{}}"#);
                 """,
             )
             unitTest(
