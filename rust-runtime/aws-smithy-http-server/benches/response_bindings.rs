@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_smithy_http_server::response::Response;
 use aws_smithy_http_server::schema::protocol::RestJson1Protocol;
 use aws_smithy_http_server::schema::protocol::RestXmlProtocol;
-use aws_smithy_http_server::response::Response;
 use aws_smithy_http_server::schema::ServerProtocol;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::traits::HttpTrait;
@@ -103,10 +103,11 @@ static MIXED_OUTPUT: Schema<'static> =
         .with_http(HTTP);
 
 static BODY_MEMBERS: [&Schema<'static>; 3] = [&MESSAGE, &COUNT, &ENABLED];
-static BODY_OUTPUT: Schema<'static> =
-    Schema::new_struct(shape_id!("bench", "BodyOutput"), ShapeType::Structure, &BODY_MEMBERS)
+static BODY_OUTPUT: std::sync::LazyLock<Schema<'static>> = std::sync::LazyLock::new(|| {
+    Schema::new_struct_view(shape_id!("bench", "BodyOutput"), ShapeType::Structure, &BODY_MEMBERS)
         .with_original_name("BodyOutput")
-        .with_http(HTTP);
+        .with_http(HTTP)
+});
 
 static METADATA: Schema<'static> = Schema::new_member(
     shape_id!("bench", "PrefixOutput", "metadata"),
@@ -127,10 +128,6 @@ static PREFIX_OUTPUT: Schema<'static> = Schema::new_struct(
 struct HeaderOutput;
 
 impl SerializableStruct for HeaderOutput {
-    fn schema(&self) -> &Schema<'_> {
-        &HEADER_OUTPUT
-    }
-
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         serializer.write_integer(&STATUS, 202)?;
         serializer.write_string(&REQUEST_ID, "req-0123456789")?;
@@ -144,10 +141,6 @@ impl SerializableStruct for HeaderOutput {
 struct MixedOutput;
 
 impl SerializableStruct for MixedOutput {
-    fn schema(&self) -> &Schema<'_> {
-        &MIXED_OUTPUT
-    }
-
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         serializer.write_string(&TRACE_ID, "trace-abcdef")?;
         serializer.write_integer(&REVISION, 17)?;
@@ -158,10 +151,6 @@ impl SerializableStruct for MixedOutput {
 struct BodyOutput;
 
 impl SerializableStruct for BodyOutput {
-    fn schema(&self) -> &Schema<'_> {
-        &BODY_OUTPUT
-    }
-
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         write_body(serializer)
     }
@@ -176,10 +165,6 @@ fn write_body(serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
 struct PrefixOutput;
 
 impl SerializableStruct for PrefixOutput {
-    fn schema(&self) -> &Schema<'_> {
-        &PREFIX_OUTPUT
-    }
-
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         serializer.write_map(&METADATA, &|serializer| {
             serializer.write_string(&aws_smithy_schema::prelude::STRING, "color")?;
@@ -217,10 +202,10 @@ fn validate(response: Response, expected: Expected<'_>) {
 }
 
 fn bench_protocol<P: ServerProtocol>(criterion: &mut Criterion, protocol_name: &str, protocol: P) {
-    // restJson1 labels every response `application/json`, restXml only codec bodies.
+    // The explicit response status keeps the protocol media type on the header-only response.
     let empty_content_type = match protocol_name {
         "rest_json_1" => Some("application/json"),
-        "rest_xml" => None,
+        "rest_xml" => Some("application/xml"),
         _ => unreachable!(),
     };
     let content_type = match protocol_name {
@@ -281,7 +266,11 @@ fn bench_protocol<P: ServerProtocol>(criterion: &mut Criterion, protocol_name: &
                 ("x-meta-build", "release"),
                 ("x-meta-owner", "smithy"),
             ],
-            content_type: empty_content_type,
+            content_type: if protocol_name == "rest_xml" {
+                None
+            } else {
+                empty_content_type
+            },
             body: "",
         },
     );

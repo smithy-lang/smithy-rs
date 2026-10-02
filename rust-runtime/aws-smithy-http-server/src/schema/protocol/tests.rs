@@ -130,10 +130,6 @@ impl DeserializableShape for EmptyInput {
 struct TestOutput;
 
 impl SerializableStruct for TestOutput {
-    fn schema(&self) -> &Schema<'_> {
-        &OUT_SCHEMA
-    }
-
     fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         s.write_string(&OUT_MSG_MEMBER, "ok")
     }
@@ -142,10 +138,6 @@ impl SerializableStruct for TestOutput {
 struct Nothing;
 
 impl SerializableStruct for Nothing {
-    fn schema(&self) -> &Schema<'_> {
-        &EMPTY_OUT_SCHEMA
-    }
-
     fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         Ok(())
     }
@@ -244,10 +236,6 @@ fn rest_request_wire_failures_are_serde_errors() {
 fn rpc_request_round_trips_through_the_codec() {
     struct Body;
     impl SerializableStruct for Body {
-        fn schema(&self) -> &Schema<'_> {
-            &RPC_IN_SCHEMA
-        }
-
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_string(&RPC_NOTE_MEMBER, "hi")
         }
@@ -397,10 +385,6 @@ static STREAM_IN: Schema<'static> =
 struct StreamOutput;
 
 impl SerializableStruct for StreamOutput {
-    fn schema(&self) -> &Schema<'_> {
-        &STREAM_OUT
-    }
-
     fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         // Generated outputs skip their streaming member.
         s.write_string(&STREAM_TAG_MEMBER, "tagged")
@@ -694,10 +678,6 @@ async fn payload_outputs_are_labeled_from_the_schema_not_the_value() {
 
     struct Text(Option<&'static str>);
     impl SerializableStruct for Text {
-        fn schema(&self) -> &Schema<'_> {
-            &STRING_OUT
-        }
-
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             match self.0 {
                 Some(text) => s.write_string(&STRING_PAYLOAD, text),
@@ -707,10 +687,6 @@ async fn payload_outputs_are_labeled_from_the_schema_not_the_value() {
     }
     struct Data(Option<&'static [u8]>);
     impl SerializableStruct for Data {
-        fn schema(&self) -> &Schema<'_> {
-            &BLOB_OUT
-        }
-
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             match self.0 {
                 Some(data) => s.write_blob(&BLOB_PAYLOAD, aws_smithy_types::Blob::new(data)),
@@ -770,10 +746,6 @@ impl std::fmt::Display for Boom {
 impl std::error::Error for Boom {}
 
 impl SerializableStruct for Boom {
-    fn schema(&self) -> &Schema<'_> {
-        &BOOM_SCHEMA
-    }
-
     fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         s.write_string(&BOOM_MSG_MEMBER, "boom happened")?;
         s.write_string(&BOOM_HDR_MEMBER, "tagged")
@@ -781,6 +753,10 @@ impl SerializableStruct for Boom {
 }
 
 impl HttpModeledError for Boom {
+    fn schema(&self) -> &Schema<'_> {
+        &BOOM_SCHEMA
+    }
+
     fn status_code(&self) -> u16 {
         422
     }
@@ -1058,10 +1034,6 @@ async fn middleware_structs_are_framed_like_operation_outputs() {
 
     struct Teapot;
     impl SerializableStruct for Teapot {
-        fn schema(&self) -> &Schema<'_> {
-            &TEAPOT
-        }
-
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_string(&TEAPOT_MSG, "short and stout")?;
             s.write_string(&TEAPOT_TAG, "brewing")

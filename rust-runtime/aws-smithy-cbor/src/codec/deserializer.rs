@@ -564,10 +564,6 @@ mod tests {
 
         struct TestStruct;
         impl SerializableStruct for TestStruct {
-            fn schema(&self) -> &Schema<'_> {
-                &SCHEMA
-            }
-
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&NAME, "Bob")?;
                 s.write_integer(&AGE, 25)?;
@@ -1166,10 +1162,6 @@ mod tests {
         enabled: bool,
     }
     impl SerializableStruct for BConnectionDraining {
-        fn schema(&self) -> &Schema<'_> {
-            &B_CD_SCHEMA
-        }
-
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             let val = &self.enabled;
             s.write_boolean(&B_CD_ENABLED, *val)
@@ -1179,10 +1171,6 @@ mod tests {
         connection_draining: BConnectionDraining,
     }
     impl SerializableStruct for BLoadBalancerAttributes {
-        fn schema(&self) -> &Schema<'_> {
-            &B_LBA_SCHEMA
-        }
-
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_struct(&B_LBA_CD, &self.connection_draining)
         }
@@ -1362,9 +1350,6 @@ mod skip_value_contract {
     ) -> Result<Option<String>, SerdeError> {
         struct Out(fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>);
         impl SerializableStruct for Out {
-            fn schema(&self) -> &Schema<'_> {
-                &OUTPUT
-            }
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 (self.0)(s)?;
                 s.write_string(&BODY, "real")
@@ -1464,9 +1449,6 @@ mod skip_value_contract {
             Schema::new_member(shape_id!("test", "Output"), ShapeType::List, "unknown", 0);
         struct Out;
         impl SerializableStruct for Out {
-            fn schema(&self) -> &Schema<'_> {
-                &OUTPUT
-            }
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_list(&UNKNOWN, &|s| {
                     s.write_integer(&INTEGER, 1)?;

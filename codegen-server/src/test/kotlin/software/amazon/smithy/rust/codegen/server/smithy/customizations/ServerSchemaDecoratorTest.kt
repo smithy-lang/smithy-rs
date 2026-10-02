@@ -142,8 +142,8 @@ internal class ServerSchemaDecoratorTest {
                         rustTemplate(
                             """
                         use #{ShapeType};
-                        // Operation inputs and outputs are synthetic shapes, so they carry the synthetic namespace.
-                        assert_eq!(crate::input::EchoInput::SCHEMA.shape_id().as_str(), "com.aws.example.schema.synthetic##EchoInput");
+                        // Operation schemas retain their modeled shape IDs.
+                        assert_eq!(crate::input::EchoInput::SCHEMA.shape_id().as_str(), "com.aws.example.schema##EchoInput");
                         assert_eq!(crate::model::Nested::SCHEMA.shape_type(), ShapeType::Structure);
                         assert_eq!(crate::model::Nested::SCHEMA.members().len(), 2);
                         assert_eq!(crate::model::Choice::SCHEMA.shape_type(), ShapeType::Union);

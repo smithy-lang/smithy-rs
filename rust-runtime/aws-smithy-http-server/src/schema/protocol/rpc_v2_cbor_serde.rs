@@ -75,10 +75,6 @@ struct Members<'a> {
 }
 
 impl SerializableStruct for Members<'_> {
-    fn schema(&self) -> &Schema<'_> {
-        self.value.schema()
-    }
-
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         if let Some(type_id) = self.type_id {
             serializer.write_string(&TYPE_MEMBER, type_id)?;
@@ -89,7 +85,7 @@ impl SerializableStruct for Members<'_> {
 
 impl<S: SerializerStorage> ShapeSerializer for RpcV2CborSerializer<S> {
     fn write_struct(&mut self, schema: &Schema<'_>, value: &dyn SerializableStruct) -> Result<(), SerdeError> {
-        let own = value.schema();
+        let own = crate::schema::TargetSchema::resolve(schema);
         let type_id = own
             .traits()
             .is_some_and(|traits| traits.contains_fqn("smithy.api#error"))
@@ -193,26 +189,24 @@ mod tests {
             Schema::new_member(shape_id!("test", "Failure", "message"), ShapeType::String, "message", 0);
         static ERROR: Schema<'static> =
             Schema::new_struct(shape_id!("test", "Failure"), ShapeType::Structure, &[&MESSAGE]).with_traits(&TRAITS);
+        static MEMBER_TRAITS: std::sync::LazyLock<aws_smithy_schema::TraitMap> = std::sync::LazyLock::new(|| {
+            let mut traits = aws_smithy_schema::TraitMap::new();
+            traits.insert(Box::new(crate::schema::TargetSchema::new(&ERROR)));
+            traits
+        });
         static MEMBER: Schema<'static> =
-            Schema::new_member(shape_id!("test", "Output", "error"), ShapeType::Structure, "error", 0);
+            Schema::new_member(shape_id!("test", "Output", "error"), ShapeType::Structure, "error", 0)
+                .with_traits(&MEMBER_TRAITS);
         static OUTPUT: Schema<'static> =
             Schema::new_struct(shape_id!("test", "Output"), ShapeType::Structure, &[&MEMBER]);
         struct Error;
         impl SerializableStruct for Error {
-            fn schema(&self) -> &Schema<'_> {
-                &ERROR
-            }
-
             fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 ser.write_string(&MESSAGE, "failed")
             }
         }
         struct Output;
         impl SerializableStruct for Output {
-            fn schema(&self) -> &Schema<'_> {
-                &OUTPUT
-            }
-
             fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 ser.write_struct(&MEMBER, &Error)
             }
@@ -221,28 +215,56 @@ mod tests {
             let plain = CborCodec::default();
             let server = RpcV2CborSerde::default();
             let codec: &dyn aws_smithy_schema::codec::DynCodec = if enabled { &server } else { &plain };
-            for nested in [false, true] {
+            for nesting in 0..6 {
                 let mut serializer = codec.create_serializer();
-                if nested {
-                    serializer.write_struct(&OUTPUT, &Output).unwrap();
-                } else {
-                    serializer.write_struct(&ERROR, &Error).unwrap();
+                let list = Schema::new(shape_id!("test", "Errors"), ShapeType::List);
+                let map = Schema::new(shape_id!("test", "ErrorsByName"), ShapeType::Map);
+                let union_members = [&MEMBER];
+                let union = Schema::new_struct(shape_id!("test", "ErrorUnion"), ShapeType::Union, &union_members);
+                let write_error = |ser: &mut dyn ShapeSerializer| ser.write_struct(&MEMBER, &Error);
+                let write_entry = |ser: &mut dyn ShapeSerializer| {
+                    ser.write_string(&aws_smithy_schema::prelude::STRING, "error")?;
+                    write_error(ser)
+                };
+                match nesting {
+                    0 => serializer.write_struct(&ERROR, &Error),
+                    1 => serializer.write_struct(&OUTPUT, &Output),
+                    2 => serializer.write_list(&list, &write_error),
+                    3 => serializer.write_map(&map, &write_entry),
+                    4 => serializer.write_struct(&union, &Output),
+                    _ => serializer.write_map(&map, &|ser| {
+                        ser.write_string(&aws_smithy_schema::prelude::STRING, "error")?;
+                        ser.write_list(&list, &write_error)
+                    }),
                 }
+                .unwrap();
                 let actual = serializer.finish_boxed();
                 // Exact bytes also prove ordering and absence of duplicate discriminator keys.
                 let mut expected = aws_smithy_cbor::Encoder::new(Vec::new());
-                if nested {
-                    expected.begin_map().str("error");
+                match nesting {
+                    1 | 3 | 4 => {
+                        expected.begin_map().str("error");
+                    }
+                    2 => {
+                        expected.begin_array();
+                    }
+                    5 => {
+                        expected.begin_map().str("error").begin_array();
+                    }
+                    _ => {}
                 }
                 expected.begin_map();
                 if enabled {
                     expected.str("__type").str("test#Failure");
                 }
                 expected.str("message").str("failed").end();
-                if nested {
+                if nesting != 0 {
                     expected.end();
                 }
-                assert_eq!(actual, expected.into_writer());
+                if nesting == 5 {
+                    expected.end();
+                }
+                assert_eq!(actual, expected.into_writer(), "adapter={enabled}, nesting={nesting}");
             }
         }
     }

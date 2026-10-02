@@ -975,10 +975,6 @@ mod tests {
     }
 
     impl SerializableStruct for Person<'_> {
-        fn schema(&self) -> &Schema<'_> {
-            &PERSON_SCHEMA
-        }
-
         fn serialize_members(
             &self,
             serializer: &mut dyn ShapeSerializer,
@@ -1007,10 +1003,6 @@ mod tests {
     fn struct_with_no_members_self_closes() {
         struct Empty;
         impl SerializableStruct for Empty {
-            fn schema(&self) -> &Schema<'_> {
-                &EMPTY_SCHEMA
-            }
-
             fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 Ok(())
             }
@@ -1067,15 +1059,6 @@ mod tests {
             name: &'a str,
         }
         impl SerializableStruct for Inner<'_> {
-            fn schema(&self) -> &Schema<'_> {
-                static SCHEMA: Schema<'static> = Schema::new_struct(
-                    aws_smithy_schema::shape_id!("test", "Inner"),
-                    aws_smithy_schema::ShapeType::Structure,
-                    &[&INNER_NAME],
-                );
-                &SCHEMA
-            }
-
             fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 ser.write_string(&INNER_NAME, self.name)
             }
@@ -1084,10 +1067,6 @@ mod tests {
             inner: Inner<'a>,
         }
         impl SerializableStruct for Outer<'_> {
-            fn schema(&self) -> &Schema<'_> {
-                &OUTER_SCHEMA
-            }
-
             fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 // For nested structs, dispatch on the *member* schema so that
                 // the resolved element name is the field's name (or its
@@ -1120,10 +1099,6 @@ mod tests {
 
         struct P;
         impl SerializableStruct for P {
-            fn schema(&self) -> &Schema<'_> {
-                &PERSON_SCHEMA
-            }
-
             fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 ser.write_string(&RENAMED_MEMBER, "v")
             }
@@ -1160,23 +1135,14 @@ mod tests {
                 .with_xml_namespace(&arena[2], None);
 
         struct P<'a> {
-            schema: &'a Schema<'a>,
             member: &'a Schema<'a>,
         }
         impl SerializableStruct for P<'_> {
-            fn schema(&self) -> &Schema<'_> {
-                self.schema
-            }
-
             fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 ser.write_string(self.member, "v")
             }
         }
-        let value = P {
-            schema: &person,
-            member: &member,
-        };
-        assert!(std::ptr::eq(value.schema(), &person));
+        let value = P { member: &member };
 
         let out = serialize(|ser| ser.write_struct(&person, &value));
         assert_eq!(
@@ -1199,10 +1165,6 @@ mod tests {
 
         struct Empty;
         impl SerializableStruct for Empty {
-            fn schema(&self) -> &Schema<'_> {
-                &SYNTHETIC
-            }
-
             fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 Ok(())
             }
@@ -1306,10 +1268,6 @@ mod tests {
 
         struct X;
         impl SerializableStruct for X {
-            fn schema(&self) -> &Schema<'_> {
-                &X_SCHEMA
-            }
-
             fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 ser.write_string(&ATTR_MEMBER, "42")?;
                 ser.write_string(&CHILD_MEMBER, "hello")
@@ -1330,10 +1288,6 @@ mod tests {
 
         struct X;
         impl SerializableStruct for X {
-            fn schema(&self) -> &Schema<'_> {
-                &X_SCHEMA
-            }
-
             fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 ser.write_integer(&ATTR, 7)
             }
@@ -1353,10 +1307,6 @@ mod tests {
 
         struct X;
         impl SerializableStruct for X {
-            fn schema(&self) -> &Schema<'_> {
-                &X_SCHEMA
-            }
-
             fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 ser.write_string(&ATTR, "a\"b&c")
             }
@@ -1378,10 +1328,6 @@ mod tests {
 
         struct Empty;
         impl SerializableStruct for Empty {
-            fn schema(&self) -> &Schema<'_> {
-                &aws_smithy_schema::prelude::UNIT
-            }
-
             fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 Ok(())
             }
@@ -1402,10 +1348,6 @@ mod tests {
 
         struct Empty;
         impl SerializableStruct for Empty {
-            fn schema(&self) -> &Schema<'_> {
-                &NS_SCHEMA
-            }
-
             fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 Ok(())
             }
@@ -1423,10 +1365,6 @@ mod tests {
 
         struct Empty;
         impl SerializableStruct for Empty {
-            fn schema(&self) -> &Schema<'_> {
-                &NS_SCHEMA
-            }
-
             fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 Ok(())
             }
@@ -1446,10 +1384,6 @@ mod tests {
 
         struct X;
         impl SerializableStruct for X {
-            fn schema(&self) -> &Schema<'_> {
-                &NS_SCHEMA
-            }
-
             fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 ser.write_string(&CHILD, "hi")
             }
@@ -1637,10 +1571,6 @@ mod tests {
 
         struct G;
         impl SerializableStruct for G {
-            fn schema(&self) -> &Schema<'_> {
-                &GREETING
-            }
-
             fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 ser.write_string(&HI, "bye")
             }
@@ -1712,10 +1642,6 @@ mod tests {
             attr: &'a str,
         }
         impl SerializableStruct for Inner<'_> {
-            fn schema(&self) -> &Schema<'_> {
-                &INNER_TARGET
-            }
-
             fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 ser.write_string(&ATTR_FIELD_MEMBER, self.attr)
             }
@@ -1724,10 +1650,6 @@ mod tests {
             inner: Inner<'a>,
         }
         impl SerializableStruct for Outer<'_> {
-            fn schema(&self) -> &Schema<'_> {
-                &OUTER_SCHEMA
-            }
-
             fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 // Pass the *member* schema (matches codegen output), not
                 // the target struct's `INNER_TARGET`. This is the
@@ -1891,15 +1813,6 @@ mod tests {
         enabled: bool,
     }
     impl SerializableStruct for ConnectionDrainingX {
-        fn schema(&self) -> &Schema<'_> {
-            static SCHEMA: Schema<'static> = Schema::new_struct(
-                aws_smithy_schema::shape_id!("test", "ConnectionDraining"),
-                aws_smithy_schema::ShapeType::Structure,
-                &[&CD_ENABLED_X],
-            );
-            &SCHEMA
-        }
-
         fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             let val = &self.enabled;
             ser.write_boolean(&CD_ENABLED_X, *val)
@@ -1909,10 +1822,6 @@ mod tests {
         connection_draining: ConnectionDrainingX,
     }
     impl SerializableStruct for LoadBalancerAttributesX {
-        fn schema(&self) -> &Schema<'_> {
-            &LBA_SCHEMA_X
-        }
-
         fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             ser.write_struct(&LBA_CD_X, &self.connection_draining)
         }

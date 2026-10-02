@@ -156,9 +156,7 @@ fn parse_container_args(input: &DeriveInput) -> syn::Result<ContainerArgs> {
             } else if meta.path.is_ident("traits") {
                 let content;
                 syn::parenthesized!(content in meta.input);
-                for expr in
-                    content.parse_terminated(Expr::parse, Token![,])?
-                {
+                for expr in content.parse_terminated(Expr::parse, Token![,])? {
                     args.traits.push(expr);
                 }
             } else {
@@ -211,9 +209,7 @@ fn parse_field_args(field: &syn::Field) -> syn::Result<FieldArgs> {
             } else if meta.path.is_ident("traits") {
                 let content;
                 syn::parenthesized!(content in meta.input);
-                for expr in
-                    content.parse_terminated(Expr::parse, Token![,])?
-                {
+                for expr in content.parse_terminated(Expr::parse, Token![,])? {
                     args.traits.push(expr);
                 }
             } else {
@@ -341,9 +337,8 @@ fn classify(ty: &Type, field: &syn::Field) -> syn::Result<ValueKind> {
             }
         }
         "HashMap" => {
-            let is_string = |t: &Type| {
-                path_segment(t).is_some_and(|(i, a)| i == "String" && a.is_empty())
-            };
+            let is_string =
+                |t: &Type| path_segment(t).is_some_and(|(i, a)| i == "String" && a.is_empty());
             match args.as_slice() {
                 [k, v] if is_string(k) && is_string(v) => ValueKind::StringStringMap,
                 _ => {
@@ -698,9 +693,9 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
         let display = if container.no_display {
             TokenStream2::new()
         } else {
-            let message_field = fields.iter().find(|f| {
-                f.ident.as_ref().is_some_and(|i| i == "message")
-            });
+            let message_field = fields
+                .iter()
+                .find(|f| f.ident.as_ref().is_some_and(|i| i == "message"));
             let body = match message_field {
                 Some(f) => {
                     let (is_optional, _) = unwrap_option(&f.ty);
@@ -729,6 +724,10 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
         quote! {
             #display
             impl ::aws_smithy_http_server::schema::HttpModeledError for #name {
+                fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+                    Self::SCHEMA
+                }
+
                 fn status_code(&self) -> u16 {
                     #status
                 }
@@ -756,10 +755,6 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
             }
 
             impl ::aws_smithy_schema::serde::SerializableStruct for #name {
-                fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
-                    &STRUCT_SCHEMA
-                }
-
                 #[allow(unused_variables)]
                 fn serialize_members(
                     &self,

@@ -11,6 +11,7 @@ pub(crate) mod request_bindings;
 pub(crate) mod response_bindings;
 pub mod routing;
 mod service;
+mod target;
 
 pub use deserialize::{DeserializableShape, DeserializeError};
 pub use event_stream::InitialResponsePolicy;
@@ -24,6 +25,7 @@ pub use protocol::{
 };
 
 pub use service::{OperationSchema, ServiceSchema};
+pub use target::TargetSchema;
 
 /// The protocol and the operation selected by routing, with the operation's request-body limits,
 /// stored in the request extensions.

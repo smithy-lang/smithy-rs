@@ -93,6 +93,7 @@ class ServerStreamingOperationGenerator(
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "SerializableEventError" to schemaEventStream.resolve("SerializableEventError"),
             "SerializableStruct" to RuntimeType.smithySchema(runtimeConfig).resolve("serde::SerializableStruct"),
+            "Schema" to RuntimeType.smithySchema(runtimeConfig).resolve("Schema"),
             "ShapeDeserializer" to RuntimeType.smithySchema(runtimeConfig).resolve("serde::ShapeDeserializer"),
             "SharedServerProtocol" to smithyHttpServer.resolve("schema::SharedServerProtocol"),
             "StreamingInputFuture" to smithyHttpServer.resolve("operation::StreamingInputFuture"),
@@ -368,7 +369,7 @@ class ServerStreamingOperationGenerator(
                 pub type $name = #{SchemaEventErrorMarshaller}<#{OpError}>;
 
                 impl #{SerializableEventError} for #{OpError} {
-                    fn variant(&self) -> (&'static str, &dyn #{SerializableStruct}) {
+                    fn variant(&self) -> (&'static str, &#{Schema}<'_>, &dyn #{SerializableStruct}) {
                         match self {
                             #{arms:W}
                         }
@@ -383,7 +384,8 @@ class ServerStreamingOperationGenerator(
                             val target = model.expectShape(member.target, StructureShape::class.java)
                             val targetSymbol = symbolProvider.toSymbol(target)
                             rustTemplate(
-                                "Self::${targetSymbol.name}(inner) => (${member.memberName.dq()}, inner),",
+                                "Self::${targetSymbol.name}(inner) => (${member.memberName.dq()}, #{Target}::SCHEMA, inner),",
+                                "Target" to targetSymbol,
                                 *codegenScope,
                             )
                         }

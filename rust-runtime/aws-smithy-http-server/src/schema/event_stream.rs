@@ -25,16 +25,10 @@ use std::fmt;
 use std::marker::PhantomData;
 
 use aws_smithy_eventstream::error::Error;
-use aws_smithy_eventstream::frame::{
-    MarshallMessage, NoOpSigner, UnmarshallMessage, UnmarshalledMessage,
-};
+use aws_smithy_eventstream::frame::{MarshallMessage, NoOpSigner, UnmarshallMessage, UnmarshalledMessage};
 use aws_smithy_eventstream::smithy as expect_fns;
-use aws_smithy_http::event_stream::{
-    EventOrInitial, EventOrInitialMarshaller, EventStreamSender, InitialMessageType,
-};
-use aws_smithy_schema::serde::{
-    SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer,
-};
+use aws_smithy_http::event_stream::{EventOrInitial, EventOrInitialMarshaller, EventStreamSender, InitialMessageType};
+use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer};
 use aws_smithy_schema::{Schema, ShapeType};
 use aws_smithy_types::event_stream::{Header, HeaderValue, Message};
 use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
@@ -45,9 +39,7 @@ use crate::schema::{DeserializeError, EventStreamFraming, SharedServerProtocol};
 
 const NO_EVENT_STREAM_SUPPORT: &str = "protocol does not support event streams";
 
-fn capability_or_marshalling_error(
-    protocol: &SharedServerProtocol,
-) -> Result<EventStreamFraming<'_>, Error> {
+fn capability_or_marshalling_error(protocol: &SharedServerProtocol) -> Result<EventStreamFraming<'_>, Error> {
     protocol
         .event_stream_framing()
         .ok_or_else(|| Error::marshalling(NO_EVENT_STREAM_SUPPORT.to_owned()))
@@ -109,7 +101,7 @@ impl<T: SerializableStruct> MarshallMessage for SchemaEventMarshaller<T> {
 /// error in the stream union, which becomes the frame's `:exception-type`.
 pub trait SerializableEventError {
     /// Returns the `:exception-type` value and the modeled error to frame.
-    fn variant(&self) -> (&'static str, &dyn SerializableStruct);
+    fn variant(&self) -> (&'static str, &Schema<'_>, &dyn SerializableStruct);
 }
 
 /// Marshals the modeled errors of a schema-mode event stream union into `exception` frames.
@@ -141,8 +133,8 @@ impl<E: SerializableEventError> MarshallMessage for SchemaEventErrorMarshaller<E
 
     fn marshall(&self, input: Self::Input) -> Result<Message, Error> {
         let capability = capability_or_marshalling_error(&self.protocol)?;
-        let (exception_type, value) = input.variant();
-        build_frame(capability, exception_type, value, FrameKind::Exception)
+        let (exception_type, schema, value) = input.variant();
+        build_frame(capability, exception_type, schema, value, FrameKind::Exception)
             .map_err(|err| Error::marshalling(format!("{err}")))
     }
 }
@@ -169,10 +161,7 @@ impl MarshallMessage for NoModeledEventErrorMarshaller {
 
     fn marshall(&self, _input: Self::Input) -> Result<Message, Error> {
         capability_or_marshalling_error(&self.protocol)?;
-        let headers = vec![Header::new(
-            ":message-type",
-            HeaderValue::String("exception".into()),
-        )];
+        let headers = vec![Header::new(":message-type", HeaderValue::String("exception".into()))];
         Ok(Message::new_from_parts(headers, Bytes::new()))
     }
 }
@@ -187,6 +176,7 @@ enum FrameKind {
 fn build_frame(
     capability: EventStreamFraming<'_>,
     event_type: &str,
+    schema: &Schema<'_>,
     value: &dyn SerializableStruct,
     kind: FrameKind,
 ) -> Result<Message, SerdeError> {
@@ -198,7 +188,6 @@ fn build_frame(
         Header::new(":message-type", HeaderValue::String(message_type.into())),
         Header::new(type_header, HeaderValue::String(event_type.to_string().into())),
     ];
-    let schema = value.schema();
     let payload_member = schema.members().iter().copied().find(|m| m.event_payload());
     let has_header_members = schema.members().iter().any(|m| m.event_header());
 
@@ -260,10 +249,6 @@ fn build_frame(
 struct ImplicitEventPayload<'a>(&'a dyn SerializableStruct);
 
 impl SerializableStruct for ImplicitEventPayload<'_> {
-    fn schema(&self) -> &Schema<'_> {
-        self.0.schema()
-    }
-
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         self.0.serialize_members(&mut NonHeaderSerializer(serializer))
     }
@@ -324,17 +309,14 @@ macro_rules! not_a_union_variant {
 }
 
 impl ShapeSerializer for UnionVariantSerializer<'_> {
-    fn write_struct(
-        &mut self,
-        schema: &Schema<'_>,
-        value: &dyn SerializableStruct,
-    ) -> Result<(), SerdeError> {
-        let event_type = schema.member_name().ok_or_else(|| {
-            SerdeError::unsupported("event stream union variant schema has no member name")
-        })?;
+    fn write_struct(&mut self, schema: &Schema<'_>, value: &dyn SerializableStruct) -> Result<(), SerdeError> {
+        let event_type = schema
+            .member_name()
+            .ok_or_else(|| SerdeError::unsupported("event stream union variant schema has no member name"))?;
         self.message = Some(build_frame(
             self.capability,
             event_type,
+            crate::schema::TargetSchema::resolve(schema),
             value,
             self.kind,
         )?);
@@ -455,16 +437,12 @@ macro_rules! dropped_only_member {
 }
 
 impl ShapeSerializer for EventMemberSerializer<'_> {
-    fn write_struct(
-        &mut self,
-        schema: &Schema<'_>,
-        value: &dyn SerializableStruct,
-    ) -> Result<(), SerdeError> {
+    fn write_struct(&mut self, schema: &Schema<'_>, value: &dyn SerializableStruct) -> Result<(), SerdeError> {
         match member_role(schema) {
             MemberRole::Header => Err(self.unsupported("header", schema)),
             MemberRole::Payload => {
                 let mut ser = self.capability.payload_codec.create_serializer();
-                ser.write_struct(value.schema(), value)?;
+                ser.write_struct(crate::schema::TargetSchema::resolve(schema), value)?;
                 *self.payload = Some(Bytes::from(ser.finish_boxed()));
                 Ok(())
             }
@@ -498,9 +476,7 @@ impl ShapeSerializer for EventMemberSerializer<'_> {
 
     fn write_string(&mut self, schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
         match member_role(schema) {
-            MemberRole::Header => {
-                self.push_header(schema, HeaderValue::String(value.to_owned().into()))
-            }
+            MemberRole::Header => self.push_header(schema, HeaderValue::String(value.to_owned().into())),
             MemberRole::Payload => {
                 *self.payload = Some(Bytes::from(value.to_owned().into_bytes()));
                 Ok(())
@@ -511,9 +487,7 @@ impl ShapeSerializer for EventMemberSerializer<'_> {
 
     fn write_blob(&mut self, schema: &Schema<'_>, value: Blob) -> Result<(), SerdeError> {
         match member_role(schema) {
-            MemberRole::Header => {
-                self.push_header(schema, HeaderValue::ByteArray(value.into_bytes()))
-            }
+            MemberRole::Header => self.push_header(schema, HeaderValue::ByteArray(value.into_bytes())),
             MemberRole::Payload => {
                 *self.payload = Some(value.into_bytes());
                 Ok(())
@@ -569,14 +543,10 @@ pub trait DeserializableEventStream: Sized {
     type Error;
 
     /// Reads the event named by the frame's `:event-type`.
-    fn deserialize_event(event_type: &str, frame: &EventFrame<'_>)
-        -> Result<Option<Self>, Error>;
+    fn deserialize_event(event_type: &str, frame: &EventFrame<'_>) -> Result<Option<Self>, Error>;
 
     /// Reads the error named by the frame's `:exception-type`.
-    fn deserialize_error(
-        exception_type: &str,
-        frame: &EventFrame<'_>,
-    ) -> Result<Option<Self::Error>, Error>;
+    fn deserialize_error(exception_type: &str, frame: &EventFrame<'_>) -> Result<Option<Self::Error>, Error>;
 }
 
 /// Unmarshals schema-mode event stream frames into a generated stream union.
@@ -607,27 +577,19 @@ impl<T: DeserializableEventStream> UnmarshallMessage for SchemaEventUnmarshaller
     type Output = T;
     type Error = T::Error;
 
-    fn unmarshall(
-        &self,
-        message: &Message,
-    ) -> Result<UnmarshalledMessage<Self::Output, Self::Error>, Error> {
+    fn unmarshall(&self, message: &Message) -> Result<UnmarshalledMessage<Self::Output, Self::Error>, Error> {
         let capability = self
             .protocol
             .event_stream_framing()
             .ok_or_else(|| Error::unmarshalling(NO_EVENT_STREAM_SUPPORT))?;
         let response_headers = expect_fns::parse_response_headers(message)?;
-        let frame = EventFrame {
-            message,
-            capability,
-        };
+        let frame = EventFrame { message, capability };
         match response_headers.message_type.as_str() {
             "event" => {
                 let event_type = response_headers.smithy_type.as_str();
                 match T::deserialize_event(event_type, &frame)? {
                     Some(event) => Ok(UnmarshalledMessage::Event(event)),
-                    None => Err(Error::unmarshalling(format!(
-                        "unrecognized :event-type: {event_type}"
-                    ))),
+                    None => Err(Error::unmarshalling(format!("unrecognized :event-type: {event_type}"))),
                 }
             }
             "exception" => {
@@ -639,9 +601,7 @@ impl<T: DeserializableEventStream> UnmarshallMessage for SchemaEventUnmarshaller
                     ))),
                 }
             }
-            value => Err(Error::unmarshalling(format!(
-                "unrecognized :message-type: {value}"
-            ))),
+            value => Err(Error::unmarshalling(format!("unrecognized :message-type: {value}"))),
         }
     }
 }
@@ -655,10 +615,7 @@ pub struct EventFrame<'a> {
 impl<'a> EventFrame<'a> {
     /// Creates a frame view over `message`.
     pub fn new(message: &'a Message, capability: EventStreamFraming<'a>) -> Self {
-        Self {
-            message,
-            capability,
-        }
+        Self { message, capability }
     }
 
     /// Returns a [`ShapeDeserializer`] that reads an event struct from this frame, routing
@@ -790,8 +747,7 @@ impl ShapeDeserializer for EventFrameDeserializer<'_> {
             // header-bound members: a payload key sharing a header member's name is then
             // unknown to the codec and skipped, so it cannot overwrite the value already
             // decoded from the message headers.
-            let implicit_members: Vec<&Schema<'_>> =
-                members.iter().copied().filter(|m| !m.event_header()).collect();
+            let implicit_members: Vec<&Schema<'_>> = members.iter().copied().filter(|m| !m.event_header()).collect();
             let mut payload_schema =
                 Schema::new_struct_view(schema.shape_id().clone(), schema.shape_type(), &implicit_members);
             // The filtered view must retain the XML document's root identity.
@@ -891,9 +847,7 @@ impl ShapeDeserializer for EventHeaderDeserializer<'_> {
         _schema: &Schema<'_>,
         _state: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported(
-            "unsupported event stream header type",
-        ))
+        Err(SerdeError::unsupported("unsupported event stream header type"))
     }
 
     fn read_list(
@@ -901,9 +855,7 @@ impl ShapeDeserializer for EventHeaderDeserializer<'_> {
         _schema: &Schema<'_>,
         _state: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported(
-            "unsupported event stream header type",
-        ))
+        Err(SerdeError::unsupported("unsupported event stream header type"))
     }
 
     fn read_map(
@@ -911,9 +863,7 @@ impl ShapeDeserializer for EventHeaderDeserializer<'_> {
         _schema: &Schema<'_>,
         _state: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported(
-            "unsupported event stream header type",
-        ))
+        Err(SerdeError::unsupported("unsupported event stream header type"))
     }
 
     typed_header_reads!(
@@ -965,9 +915,7 @@ impl ShapeDeserializer for RawPayloadDeserializer<'_> {
         _schema: &Schema<'_>,
         _state: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported(
-            "an event stream payload is a blob or a string",
-        ))
+        Err(SerdeError::unsupported("an event stream payload is a blob or a string"))
     }
 
     fn read_list(
@@ -975,9 +923,7 @@ impl ShapeDeserializer for RawPayloadDeserializer<'_> {
         _schema: &Schema<'_>,
         _state: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported(
-            "an event stream payload is a blob or a string",
-        ))
+        Err(SerdeError::unsupported("an event stream payload is a blob or a string"))
     }
 
     fn read_map(
@@ -985,9 +931,7 @@ impl ShapeDeserializer for RawPayloadDeserializer<'_> {
         _schema: &Schema<'_>,
         _state: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported(
-            "an event stream payload is a blob or a string",
-        ))
+        Err(SerdeError::unsupported("an event stream payload is a blob or a string"))
     }
 
     fn read_string(&mut self, _schema: &Schema<'_>) -> Result<String, SerdeError> {
@@ -1047,17 +991,15 @@ where
     Fut: std::future::Future<Output = Result<Option<Message>, Err>>,
     Err: fmt::Display,
 {
-    let capability = protocol.event_stream_framing().ok_or_else(|| {
-        DeserializeError::Serde(SerdeError::custom(NO_EVENT_STREAM_SUPPORT))
-    })?;
+    let capability = protocol
+        .event_stream_framing()
+        .ok_or_else(|| DeserializeError::Serde(SerdeError::custom(NO_EVENT_STREAM_SUPPORT)))?;
     if !capability.initial_messages_in_frames {
         return Ok(());
     }
     match recv_initial(InitialMessageType::Request).await {
         Ok(Some(initial)) => {
-            let mut deser = capability
-                .payload_codec
-                .create_deserializer(&initial.payload()[..]);
+            let mut deser = capability.payload_codec.create_deserializer(&initial.payload()[..]);
             apply(&mut *deser)?;
             Ok(())
         }
@@ -1120,18 +1062,10 @@ where
             ],
             payload,
         );
-        let initial = futures_util::stream::iter([Ok(EventOrInitial::InitialMessage(
-            initial_message,
-        ))]);
-        let events = events
-            .into_inner()
-            .map(|event| event.map(EventOrInitial::Event));
+        let initial = futures_util::stream::iter([Ok(EventOrInitial::InitialMessage(initial_message))]);
+        let events = events.into_inner().map(|event| event.map(EventOrInitial::Event));
         let sender = EventStreamSender::from(initial.chain(events));
-        let adapter = sender.into_body_stream(
-            EventOrInitialMarshaller::new(marshaller),
-            error_marshaller,
-            signer,
-        );
+        let adapter = sender.into_body_stream(EventOrInitialMarshaller::new(marshaller), error_marshaller, signer);
         Ok(boxed(http_body_util::StreamBody::new(adapter)))
     } else {
         let adapter = events.into_body_stream(marshaller, error_marshaller, signer);
@@ -1142,9 +1076,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aws_smithy_http::event_stream::Receiver;
     use crate::schema::protocol::RestJson1Protocol;
     use crate::schema::protocol::RpcV2CborProtocol;
+    use aws_smithy_http::event_stream::Receiver;
     use aws_smithy_schema::ShapeId;
 
     fn json_protocol() -> SharedServerProtocol {
@@ -1182,6 +1116,20 @@ mod tests {
         };
     }
 
+    macro_rules! target_member_schema {
+        ($name:ident, $traits:ident, $shape:literal, $member:literal, $index:literal, $target:ident $(, $with:ident)*) => {
+            static $traits: std::sync::LazyLock<aws_smithy_schema::TraitMap> = std::sync::LazyLock::new(|| {
+                let mut traits = aws_smithy_schema::TraitMap::new();
+                traits.insert(Box::new(crate::schema::TargetSchema::new(&$target)));
+                traits
+            });
+            static $name: Schema<'static> = Schema::new_member(
+                ShapeId::from_parts(concat!("test#", $shape, "$", $member), "test", $shape),
+                ShapeType::Structure, $member, $index,
+            )$(.$with())*.with_traits(&$traits);
+        };
+    }
+
     macro_rules! struct_schema {
         ($name:ident, $shape:literal, [$($member:ident),*]) => {
             static $name: Schema<'static> = Schema::new_struct(
@@ -1202,7 +1150,14 @@ mod tests {
     member_schema!(AH_BLOB, "AllHeaders", "bin", ShapeType::Blob, 5, with_event_header);
     member_schema!(AH_STRING, "AllHeaders", "name", ShapeType::String, 6, with_event_header);
     member_schema!(AH_TIME, "AllHeaders", "at", ShapeType::Timestamp, 7, with_event_header);
-    member_schema!(AH_SKIPPED, "AllHeaders", "skipped", ShapeType::String, 8, with_event_header);
+    member_schema!(
+        AH_SKIPPED,
+        "AllHeaders",
+        "skipped",
+        ShapeType::String,
+        8,
+        with_event_header
+    );
     member_schema!(AH_EXTRA, "AllHeaders", "extra", ShapeType::String, 9);
     struct_schema!(
         ALL_HEADERS_SCHEMA,
@@ -1225,10 +1180,6 @@ mod tests {
     }
 
     impl SerializableStruct for AllHeaders {
-        fn schema(&self) -> &Schema<'_> {
-            &ALL_HEADERS_SCHEMA
-        }
-
         fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             if let Some(v) = self.flag {
                 ser.write_boolean(&AH_BOOL, v)?;
@@ -1303,17 +1254,20 @@ mod tests {
     }
 
     impl SerializableStruct for FloatHeader {
-        fn schema(&self) -> &Schema<'_> {
-            &FLOAT_HEADER_SCHEMA
-        }
-
         fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             ser.write_float(&FH_RATE, self.rate)
         }
     }
 
     // String and blob `@eventPayload` members carry raw bytes with fixed content types.
-    member_schema!(TEXT_VALUE, "TextEvent", "value", ShapeType::String, 0, with_event_payload);
+    member_schema!(
+        TEXT_VALUE,
+        "TextEvent",
+        "value",
+        ShapeType::String,
+        0,
+        with_event_payload
+    );
     struct_schema!(TEXT_EVENT_SCHEMA, "TextEvent", [TEXT_VALUE]);
 
     #[derive(Debug, Default, PartialEq)]
@@ -1322,10 +1276,6 @@ mod tests {
     }
 
     impl SerializableStruct for TextEvent {
-        fn schema(&self) -> &Schema<'_> {
-            &TEXT_EVENT_SCHEMA
-        }
-
         fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             if let Some(ref v) = self.value {
                 ser.write_string(&TEXT_VALUE, v)?;
@@ -1356,10 +1306,6 @@ mod tests {
     }
 
     impl SerializableStruct for BinEvent {
-        fn schema(&self) -> &Schema<'_> {
-            &BIN_EVENT_SCHEMA
-        }
-
         fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             if let Some(ref v) = self.value {
                 ser.write_blob(&BIN_VALUE, v.clone())?;
@@ -1391,10 +1337,6 @@ mod tests {
     }
 
     impl SerializableStruct for MessageBody {
-        fn schema(&self) -> &Schema<'_> {
-            &MESSAGE_BODY_SCHEMA
-        }
-
         fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             if let Some(ref v) = self.text {
                 ser.write_string(&BODY_TEXT, v)?;
@@ -1416,8 +1358,23 @@ mod tests {
         }
     }
 
-    member_schema!(STRUCT_FROM, "StructEvent", "from", ShapeType::String, 0, with_event_header);
-    member_schema!(STRUCT_BODY, "StructEvent", "body", ShapeType::Structure, 1, with_event_payload);
+    member_schema!(
+        STRUCT_FROM,
+        "StructEvent",
+        "from",
+        ShapeType::String,
+        0,
+        with_event_header
+    );
+    target_member_schema!(
+        STRUCT_BODY,
+        STRUCT_BODY_TRAITS,
+        "StructEvent",
+        "body",
+        1,
+        MESSAGE_BODY_SCHEMA,
+        with_event_payload
+    );
     struct_schema!(STRUCT_EVENT_SCHEMA, "StructEvent", [STRUCT_FROM, STRUCT_BODY]);
 
     #[derive(Debug, Default, PartialEq)]
@@ -1427,10 +1384,6 @@ mod tests {
     }
 
     impl SerializableStruct for StructEvent {
-        fn schema(&self) -> &Schema<'_> {
-            &STRUCT_EVENT_SCHEMA
-        }
-
         fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             if let Some(ref v) = self.from {
                 ser.write_string(&STRUCT_FROM, v)?;
@@ -1464,10 +1417,6 @@ mod tests {
     struct EmptyEvent;
 
     impl SerializableStruct for EmptyEvent {
-        fn schema(&self) -> &Schema<'_> {
-            &EMPTY_EVENT_SCHEMA
-        }
-
         fn serialize_members(&self, _ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             Ok(())
         }
@@ -1483,10 +1432,6 @@ mod tests {
     }
 
     impl SerializableStruct for PlainEvent {
-        fn schema(&self) -> &Schema<'_> {
-            &PLAIN_EVENT_SCHEMA
-        }
-
         fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             if let Some(ref v) = self.text {
                 ser.write_string(&PLAIN_TEXT, v)?;
@@ -1509,13 +1454,34 @@ mod tests {
     }
 
     // The stream union: one member schema per event, named by its Smithy member name.
-    member_schema!(EV_ALL_HEADERS, "TestEvents", "allHeaders", ShapeType::Structure, 0);
-    member_schema!(EV_FLOAT_HEADER, "TestEvents", "floatHeader", ShapeType::Structure, 1);
-    member_schema!(EV_TEXT, "TestEvents", "text", ShapeType::Structure, 2);
-    member_schema!(EV_BIN, "TestEvents", "bin", ShapeType::Structure, 3);
-    member_schema!(EV_STRUCTURED, "TestEvents", "structured", ShapeType::Structure, 4);
-    member_schema!(EV_EMPTY, "TestEvents", "empty", ShapeType::Structure, 5);
-    member_schema!(EV_PLAIN, "TestEvents", "plain", ShapeType::Structure, 6);
+    target_member_schema!(
+        EV_ALL_HEADERS,
+        EV_ALL_HEADERS_TRAITS,
+        "TestEvents",
+        "allHeaders",
+        0,
+        ALL_HEADERS_SCHEMA
+    );
+    target_member_schema!(
+        EV_FLOAT_HEADER,
+        EV_FLOAT_HEADER_TRAITS,
+        "TestEvents",
+        "floatHeader",
+        1,
+        FLOAT_HEADER_SCHEMA
+    );
+    target_member_schema!(EV_TEXT, EV_TEXT_TRAITS, "TestEvents", "text", 2, TEXT_EVENT_SCHEMA);
+    target_member_schema!(EV_BIN, EV_BIN_TRAITS, "TestEvents", "bin", 3, BIN_EVENT_SCHEMA);
+    target_member_schema!(
+        EV_STRUCTURED,
+        EV_STRUCTURED_TRAITS,
+        "TestEvents",
+        "structured",
+        4,
+        STRUCT_EVENT_SCHEMA
+    );
+    target_member_schema!(EV_EMPTY, EV_EMPTY_TRAITS, "TestEvents", "empty", 5, EMPTY_EVENT_SCHEMA);
+    target_member_schema!(EV_PLAIN, EV_PLAIN_TRAITS, "TestEvents", "plain", 6, PLAIN_EVENT_SCHEMA);
 
     #[derive(Debug, PartialEq)]
     enum TestEvents {
@@ -1534,26 +1500,7 @@ mod tests {
         }
     }
 
-    static TEST_EVENTS_SCHEMA: Schema<'static> = Schema::new_struct(
-        ShapeId::from_parts("test#TestEvents", "test", "TestEvents"),
-        ShapeType::Union,
-        &[
-            &EV_ALL_HEADERS,
-            &EV_FLOAT_HEADER,
-            &EV_TEXT,
-            &EV_BIN,
-            &EV_STRUCTURED,
-            &EV_EMPTY,
-            &EV_PLAIN,
-        ],
-    )
-    .with_streaming();
-
     impl SerializableStruct for TestEvents {
-        fn schema(&self) -> &Schema<'_> {
-            &TEST_EVENTS_SCHEMA
-        }
-
         fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             match self {
                 Self::AllHeaders(v) => ser.write_struct(&EV_ALL_HEADERS, v),
@@ -1589,10 +1536,6 @@ mod tests {
     }
 
     impl SerializableStruct for BoomError {
-        fn schema(&self) -> &Schema<'_> {
-            &BOOM_ERROR_SCHEMA
-        }
-
         fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             if let Some(ref v) = self.message {
                 ser.write_string(&BOOM_MESSAGE, v)?;
@@ -1615,9 +1558,9 @@ mod tests {
     }
 
     impl SerializableEventError for TestEventsError {
-        fn variant(&self) -> (&'static str, &dyn SerializableStruct) {
+        fn variant(&self) -> (&'static str, &Schema<'_>, &dyn SerializableStruct) {
             match self {
-                Self::Boom(inner) => ("boom", inner),
+                Self::Boom(inner) => ("boom", &BOOM_ERROR_SCHEMA, inner),
             }
         }
     }
@@ -1625,14 +1568,9 @@ mod tests {
     impl DeserializableEventStream for TestEvents {
         type Error = TestEventsError;
 
-        fn deserialize_event(
-            event_type: &str,
-            frame: &EventFrame<'_>,
-        ) -> Result<Option<Self>, Error> {
+        fn deserialize_event(event_type: &str, frame: &EventFrame<'_>) -> Result<Option<Self>, Error> {
             let mut deser = frame.deserializer();
-            let wrap = |err: SerdeError| {
-                Error::unmarshalling(format!("failed to unmarshall {event_type}: {err}"))
-            };
+            let wrap = |err: SerdeError| Error::unmarshalling(format!("failed to unmarshall {event_type}: {err}"));
             Ok(Some(match event_type {
                 "allHeaders" => Self::AllHeaders(AllHeaders::deserialize(&mut deser).map_err(wrap)?),
                 "text" => Self::Text(TextEvent::deserialize(&mut deser).map_err(wrap)?),
@@ -1644,16 +1582,12 @@ mod tests {
             }))
         }
 
-        fn deserialize_error(
-            exception_type: &str,
-            frame: &EventFrame<'_>,
-        ) -> Result<Option<Self::Error>, Error> {
+        fn deserialize_error(exception_type: &str, frame: &EventFrame<'_>) -> Result<Option<Self::Error>, Error> {
             match exception_type {
                 "boom" => {
                     let mut deser = frame.deserializer();
-                    let parsed = BoomError::deserialize(&mut deser).map_err(|err| {
-                        Error::unmarshalling(format!("failed to unmarshall exception: {err}"))
-                    })?;
+                    let parsed = BoomError::deserialize(&mut deser)
+                        .map_err(|err| Error::unmarshalling(format!("failed to unmarshall exception: {err}")))?;
                     Ok(Some(TestEventsError::Boom(parsed)))
                 }
                 _ => Ok(None),
@@ -1695,7 +1629,19 @@ mod tests {
         // `skipped` is absent; `extra` goes into the document, not the headers.
         assert_eq!(
             names,
-            [":message-type", ":event-type", "flag", "small", "short", "int", "long", "bin", "name", "at", ":content-type"]
+            [
+                ":message-type",
+                ":event-type",
+                "flag",
+                "small",
+                "short",
+                "int",
+                "long",
+                "bin",
+                "name",
+                "at",
+                ":content-type"
+            ]
         );
         assert_eq!(string_header(&message, ":event-type"), Some("allHeaders"));
         assert_eq!(&message.payload()[..], br#"{"extra":"payload"}"#);
@@ -1703,7 +1649,10 @@ mod tests {
         assert!(matches!(header(&message, "small"), Some(HeaderValue::Byte(-3))));
         assert!(matches!(header(&message, "short"), Some(HeaderValue::Int16(-300))));
         assert!(matches!(header(&message, "int"), Some(HeaderValue::Int32(70_000))));
-        assert!(matches!(header(&message, "long"), Some(HeaderValue::Int64(5_000_000_000))));
+        assert!(matches!(
+            header(&message, "long"),
+            Some(HeaderValue::Int64(5_000_000_000))
+        ));
         assert!(matches!(header(&message, "bin"), Some(HeaderValue::ByteArray(b)) if &b[..] == b"\x00\xff"));
         assert!(matches!(header(&message, "at"), Some(HeaderValue::Timestamp(_))));
 
@@ -1750,9 +1699,6 @@ mod tests {
         .with_xml_namespace("urn:test", None);
         struct Implicit;
         impl SerializableStruct for Implicit {
-            fn schema(&self) -> &Schema<'_> {
-                &SCHEMA
-            }
             fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 ser.write_string(&HEADER, "ann")?;
                 ser.write_string(&DATA, "hi")
@@ -1772,7 +1718,7 @@ mod tests {
             ),
         ] {
             let capability = protocol.event_stream_framing().unwrap();
-            let message = build_frame(capability, "implicit", &Implicit, FrameKind::Event).unwrap();
+            let message = build_frame(capability, "implicit", &SCHEMA, &Implicit, FrameKind::Event).unwrap();
             assert_eq!(string_header(&message, "header"), Some("ann"));
             assert_eq!(string_header(&message, ":content-type"), Some(media_type));
             assert_eq!(message.payload().as_ref(), expected, "{media_type}");
@@ -1790,7 +1736,14 @@ mod tests {
 
     #[test]
     fn header_only_event_has_no_payload_or_content_type() {
-        member_schema!(HEADER_NAME, "HeaderOnly", "name", ShapeType::String, 0, with_event_header);
+        member_schema!(
+            HEADER_NAME,
+            "HeaderOnly",
+            "name",
+            ShapeType::String,
+            0,
+            with_event_header
+        );
         static SCHEMA: Schema<'static> = Schema::new_struct(
             ShapeId::from_parts("test#HeaderOnly", "test", "HeaderOnly"),
             ShapeType::Structure,
@@ -1798,16 +1751,13 @@ mod tests {
         );
         struct HeaderOnly;
         impl SerializableStruct for HeaderOnly {
-            fn schema(&self) -> &Schema<'_> {
-                &SCHEMA
-            }
             fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 ser.write_string(&HEADER_NAME, "ann")
             }
         }
         let protocol = json_protocol();
         let capability = protocol.event_stream_framing().unwrap();
-        let message = build_frame(capability, "headerOnly", &HeaderOnly, FrameKind::Event).unwrap();
+        let message = build_frame(capability, "headerOnly", &SCHEMA, &HeaderOnly, FrameKind::Event).unwrap();
         assert_eq!(string_header(&message, "name"), Some("ann"));
         assert_eq!(string_header(&message, ":content-type"), None);
         assert!(message.payload().is_empty());
@@ -1877,7 +1827,10 @@ mod tests {
                 value: Some(Blob::new(&b"\x00\xff"[..])),
             }),
         );
-        assert_eq!(string_header(&message, ":content-type"), Some("application/octet-stream"));
+        assert_eq!(
+            string_header(&message, ":content-type"),
+            Some("application/octet-stream")
+        );
         assert_eq!(&message.payload()[..], b"\x00\xff");
         match unmarshall(&protocol, &message).expect("unmarshalls") {
             UnmarshalledMessage::Event(TestEvents::Bin(parsed)) => {
@@ -2130,11 +2083,7 @@ mod tests {
             ) -> Result<Box<dyn ShapeDeserializer + 'a>, DeserializeError> {
                 unreachable!()
             }
-            fn serialize_response(
-                &self,
-                _: &Schema<'_>,
-                _: &dyn SerializableStruct,
-            ) -> crate::response::Response {
+            fn serialize_response(&self, _: &Schema<'_>, _: &dyn SerializableStruct) -> crate::response::Response {
                 unreachable!()
             }
             fn serialize_streaming_response(
@@ -2145,10 +2094,7 @@ mod tests {
             ) -> crate::response::Response {
                 unreachable!()
             }
-            fn serialize_error(
-                &self,
-                _: &dyn crate::schema::HttpModeledError,
-            ) -> crate::response::Response {
+            fn serialize_error(&self, _: &dyn crate::schema::HttpModeledError) -> crate::response::Response {
                 unreachable!()
             }
             fn serialize_rejection(&self, _: DeserializeError) -> crate::response::Response {
@@ -2205,22 +2151,36 @@ mod tests {
             &mut body,
         );
         write_frame(
-            &marshall(&protocol, TestEvents::Text(TextEvent { value: Some("evt".to_owned()) })),
+            &marshall(
+                &protocol,
+                TestEvents::Text(TextEvent {
+                    value: Some("evt".to_owned()),
+                }),
+            ),
             &mut body,
         );
         let unmarshaller = SchemaEventUnmarshaller::<TestEvents>::new(protocol.clone());
         let mut receiver = Receiver::new(unmarshaller, aws_smithy_types::body::SdkBody::from(body));
         let mut applied = None;
-        apply_initial_request(|mt| receiver.try_recv_initial(mt), &protocol, |deser| {
-            applied = Some(PlainEvent::deserialize(deser)?);
-            Ok(())
-        })
+        apply_initial_request(
+            |mt| receiver.try_recv_initial(mt),
+            &protocol,
+            |deser| {
+                applied = Some(PlainEvent::deserialize(deser)?);
+                Ok(())
+            },
+        )
         .await
         .expect("applies");
         assert_eq!(applied.and_then(|p| p.text).as_deref(), Some("hi"));
         // The ordinary event that follows is preserved.
         let event = receiver.recv().await.expect("a frame").expect("an event");
-        assert_eq!(event, TestEvents::Text(TextEvent { value: Some("evt".to_owned()) }));
+        assert_eq!(
+            event,
+            TestEvents::Text(TextEvent {
+                value: Some("evt".to_owned())
+            })
+        );
     }
 
     #[tokio::test]
@@ -2228,31 +2188,42 @@ mod tests {
         let protocol = cbor_protocol();
         let mut body = Vec::new();
         write_frame(
-            &marshall(&protocol, TestEvents::Text(TextEvent { value: Some("evt".to_owned()) })),
+            &marshall(
+                &protocol,
+                TestEvents::Text(TextEvent {
+                    value: Some("evt".to_owned()),
+                }),
+            ),
             &mut body,
         );
         let unmarshaller = SchemaEventUnmarshaller::<TestEvents>::new(protocol.clone());
         let mut receiver = Receiver::new(unmarshaller, aws_smithy_types::body::SdkBody::from(body));
-        apply_initial_request(|mt| receiver.try_recv_initial(mt), &protocol, |_| {
-            panic!("no initial frame to apply")
-        })
+        apply_initial_request(
+            |mt| receiver.try_recv_initial(mt),
+            &protocol,
+            |_| panic!("no initial frame to apply"),
+        )
         .await
         .expect("no initial frame is fine");
         let event = receiver.recv().await.expect("a frame").expect("an event");
-        assert_eq!(event, TestEvents::Text(TextEvent { value: Some("evt".to_owned()) }));
+        assert_eq!(
+            event,
+            TestEvents::Text(TextEvent {
+                value: Some("evt".to_owned())
+            })
+        );
     }
 
     #[tokio::test]
     async fn apply_initial_request_skips_protocols_without_initial_frames() {
         let protocol = json_protocol();
         let unmarshaller = SchemaEventUnmarshaller::<TestEvents>::new(protocol.clone());
-        let mut receiver = Receiver::new(
-            unmarshaller,
-            aws_smithy_types::body::SdkBody::from(Vec::<u8>::new()),
-        );
-        apply_initial_request(|mt| receiver.try_recv_initial(mt), &protocol, |_| {
-            panic!("restJson1 carries no initial frames")
-        })
+        let mut receiver = Receiver::new(unmarshaller, aws_smithy_types::body::SdkBody::from(Vec::<u8>::new()));
+        apply_initial_request(
+            |mt| receiver.try_recv_initial(mt),
+            &protocol,
+            |_| panic!("restJson1 carries no initial frames"),
+        )
         .await
         .expect("nothing to do");
     }
@@ -2276,9 +2247,7 @@ mod tests {
         let mut bytes = body.collect().await.expect("collects").to_bytes();
         let mut frames = Vec::new();
         while !bytes.is_empty() {
-            frames.push(
-                aws_smithy_eventstream::frame::read_message_from(&mut bytes).expect("valid frame"),
-            );
+            frames.push(aws_smithy_eventstream::frame::read_message_from(&mut bytes).expect("valid frame"));
         }
         frames
     }

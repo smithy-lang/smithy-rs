@@ -14,4 +14,3 @@ pub(crate) enum MaybeConstrained<T: Constrained> {
     Constrained(T),
     Unconstrained(T::Unconstrained),
 }
-

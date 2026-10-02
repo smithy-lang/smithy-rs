@@ -111,15 +111,15 @@ impl<E: HttpModeledError> std::error::Error for AuthorizeServiceError<E> {
     }
 }
 impl<E: HttpModeledError> SerializableStruct for AuthorizeServiceError<E> {
-    fn schema(&self) -> &Schema<'_> {
-        self.error().schema()
-    }
-
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         self.error().serialize_members(serializer)
     }
 }
 impl<E: HttpModeledError> HttpModeledError for AuthorizeServiceError<E> {
+    fn schema(&self) -> &Schema<'_> {
+        self.error().schema()
+    }
+
     fn status_code(&self) -> u16 {
         self.error().status_code()
     }

@@ -207,10 +207,6 @@ mod tests {
 
         struct X;
         impl SerializableStruct for X {
-            fn schema(&self) -> &Schema<'_> {
-                &X_SCHEMA
-            }
-
             fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 ser.write_string(&NAME, "hello")
             }
