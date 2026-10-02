@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! The protocol-facing routing contract: router traits, claims, and build-time types.
+//! Protocol router interfaces, route claims, and supporting construction types.
 
 use crate::routing::SyncRoute;
 use crate::schema::routing::RoutingError;
@@ -17,7 +17,7 @@ use std::{collections::HashMap, fmt, sync::Arc};
 
 /// The kind of streaming member in an operation's input or output.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum StreamingKind {
+enum StreamingKind {
     /// A streaming blob payload.
     Blob,
     /// A streaming union of events.
@@ -75,25 +75,18 @@ impl OperationTarget {
     pub fn operation(self) -> &'static OperationSchema<'static> {
         self.operation
     }
-    /// Returns the input's streaming kind, if any.
-    pub fn input_streaming(self) -> Option<StreamingKind> {
-        self.metadata.input_streaming
-    }
-    /// Returns the output's streaming kind, if any.
-    pub fn output_streaming(self) -> Option<StreamingKind> {
-        self.metadata.output_streaming
-    }
     /// Whether the operation consumes a streaming input.
     pub fn has_streaming_input(self) -> bool {
-        self.input_streaming().is_some()
+        self.metadata.input_streaming.is_some()
     }
     /// Whether the operation produces a streaming output.
     pub fn has_streaming_output(self) -> bool {
-        self.output_streaming().is_some()
+        self.metadata.output_streaming.is_some()
     }
     /// Whether either the input or output contains a streaming blob.
     pub fn has_streaming_blob(self) -> bool {
-        self.input_streaming() == Some(StreamingKind::Blob) || self.output_streaming() == Some(StreamingKind::Blob)
+        self.metadata.input_streaming == Some(StreamingKind::Blob)
+            || self.metadata.output_streaming == Some(StreamingKind::Blob)
     }
 }
 
@@ -151,7 +144,7 @@ impl RoutingOptions {
 
 /// Everything a protocol sees when building its router: the service, the
 /// assigned targets, the server-global configuration, and the protocol's own
-/// settings section. Constructed by the routing service, so a protocol never
+/// settings section. Constructed by the routing service builder, so a protocol never
 /// sees another protocol's settings.
 #[derive(Debug)]
 #[non_exhaustive]
@@ -182,8 +175,9 @@ pub enum RouterBuildError {
     Binding(String),
     #[error("invalid routing configuration: {0}")]
     Configuration(String),
-    #[error("protocol ordering constraints form a cycle")]
-    ProtocolOrderCycle,
+    /// Registered protocols participating in ordering cycles, in registration order.
+    #[error("protocol ordering constraints form a cycle involving: {}", .protocols.join(", "))]
+    ProtocolOrderCycle { protocols: Vec<String> },
     #[error("protocol {protocol} is registered more than once")]
     DuplicateProtocol { protocol: String },
     #[error("no ordering constraint relates protocols {first} and {second}; add a `ProtocolOrder` between them")]
@@ -272,48 +266,32 @@ pub enum BodyRouteClaim {
     NoClaim,
 }
 
-/// Selects an operation for protocols that may read the request body to route.
+/// Routes operations using the request head and, when needed, the complete body.
 ///
-/// Claiming is head-first: [`claim`](Self::claim) sees the request head. The service collects
-/// the complete body after `Claimed`, or before continuing a `NeedsBodyToClaim` decision.
-/// The routing service owns all body I/O — it
-/// reads the transport under the service's provisional allowance
-/// ([`ServiceRequestBodyConfig::for_routing`]; the selected operation is not known yet, so
-/// per-operation allowances cannot apply), buffers every wire byte it reads, and replays them
-/// to later claimants and the dispatched handler, so a declined claim never damages the
-/// request. The protocol interprets the complete raw body. Declining from the head whenever
-/// possible is not an optimization —
-/// it is what keeps a body protocol from stalling requests destined for others on body bytes
-/// a client may never send.
+/// [`claim`](Self::claim) checks the head first. After `Claimed` or `NeedsBodyToClaim`,
+/// the service collects the body under [`ServiceRequestBodyConfig::for_routing`]
+/// and preserves it for later routers and the handler. Decline from the head when
+/// possible to avoid waiting for a body the client may never send.
 ///
-/// A body-routed protocol serves no streaming operation: the routing service builds its router
-/// without them, a body-routed protocol cannot express event-stream framing at all (the
-/// [`BodyRoutedProtocol`](crate::schema::BodyRoutedProtocol) subtrait has no such method), and
-/// metadata routers can recognize streaming inputs from the head. For these requests the
-/// service skips routers returning `NeedsBodyToClaim`, even if no other protocol claims.
-/// Routers that claim from the head retain their priority; `Claimed` still collects the body
-/// to select an operation.
+/// Body routers exclude streaming operations. If any metadata router recognizes
+/// streaming input, `NeedsBodyToClaim` is skipped; head claims retain priority.
 ///
-/// Routing errors are the standard [`RoutingError`], exactly as on [`MetadataProtocolRouter`]. When this
-/// is the service's only protocol the same claim path runs, with a final
-/// [`BodyRouteClaim::NoClaim`] answered as this protocol's
-/// [`RoutingError::unknown_operation`] — all rejections stay terminal and protocol-framed.
+/// Routing errors are terminal and serialized by the claiming protocol.
+/// For a single-protocol service, a final `NoClaim` becomes
+/// [`RoutingError::unknown_operation`].
 pub trait BodyProtocolRouter: Send + Sync + fmt::Debug {
-    /// Decides from the request head alone, requesting the complete body when needed.
+    /// Checks the request head, requesting body collection if needed.
     fn claim(&self, request: &Request<()>) -> BodyRouteClaim;
 
-    /// Continues an open claim over the requested body bytes. Called only after this router
-    /// returned [`BodyRouteClaim::NeedsBodyToClaim`]. The complete body is available, so
-    /// the return type cannot request more bytes. `Claimed` proceeds directly to
-    /// [`Self::route_with_body`] with the same collected body.
+    /// Continues a [`BodyRouteClaim::NeedsBodyToClaim`] decision with the complete body.
+    /// Returning `Claimed` proceeds to [`Self::route_with_body`].
     fn claim_with_body(&self, request: &Request<CollectedBody>) -> RouteClaim {
         let _ = request;
         RouteClaim::NoClaim
     }
 
-    /// Selects the operation a claimed request names in its body. Called only after this
-    /// router returned [`BodyRouteClaim::Claimed`] or [`RouteClaim::Claimed`]; the claim is settled, so an
-    /// unrecognized operation is an error serialized by this protocol, never a fall-through.
+    /// Selects an operation after [`BodyRouteClaim::Claimed`] or [`RouteClaim::Claimed`].
+    /// Errors are terminal and serialized by this protocol.
     fn route_with_body(&self, request: &Request<CollectedBody>) -> Result<OperationTarget, RoutingError> {
         let _ = request;
         Err(RoutingError::unknown_operation())

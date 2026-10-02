@@ -15,17 +15,18 @@
 //! A request no protocol claims is answered the way Coral answers one: `404` with
 //! the XML body `<UnknownOperationException/>`.
 
-mod contract;
+mod builder;
+mod protocol_router;
 pub mod route_errors;
 mod routers;
 mod service;
 #[cfg(test)]
 mod tests;
 
-pub use contract::{
+pub use builder::MultiProtocolRoutingServiceBuilder;
+pub use protocol_router::{
     BodyProtocolRouter, BodyRouteClaim, CollectedBody, MetadataProtocolRouter, OperationHandlerBinding,
     OperationTarget, RouteClaim, RouterBuildContext, RouterBuildError, RoutingOptions, SharedProtocolRouter,
-    StreamingKind,
 };
 pub use route_errors::{RoutingError, RoutingErrorKind};
 pub use routers::aws_json_router;
