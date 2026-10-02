@@ -6,8 +6,6 @@
 package software.amazon.smithy.rustsdk
 
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.condition.EnabledIf
-import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -21,37 +19,24 @@ import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
  * populating `_request_id` from the `x-amzn-requestid` response header.
  *
  * This exercises the schema-serde streaming path
- * (`deserializeStreamingEventStreamSchema` in [ResponseDeserializerGenerator]),
- * which is only generated when the service's protocol is on
- * [SchemaSerdeAllowlist]. The test's model uses restJson1, so it runs only when
- * that protocol is enabled for schema-serde and is skipped otherwise (via
- * `@EnabledIf`) — without it the generated client takes the legacy streaming
- * path and no longer covers the regression this test targets.
+ * (`deserializeStreamingEventStreamSchema` in [ResponseDeserializerGenerator]).
+ * The model lives in the dedicated schema-exclusive test namespace so it takes
+ * that path regardless of production rollout state, and the test fails loudly
+ * (rather than skipping) if it ever stops doing so.
  *
  * Before the fix, the schema-serde event-stream path skipped the
  * `MutateOutput` customization emitted by [BaseRequestIdDecorator], so
  * `output.request_id()` always returned `None` even when the service set
  * `x-amzn-requestid`.
  */
-@EnabledIf("schemaSerdeEnabled")
 class EventStreamRequestIdTest {
     companion object {
-        /**
-         * The schema-serde event-stream streaming deserializer is only generated when
-         * the service's protocol is on [SchemaSerdeAllowlist]. This test's model uses
-         * restJson1, so it runs only when that protocol is enabled for schema-serde and
-         * is skipped otherwise — keeping the regression coverage live without
-         * hard-disabling it.
-         */
-        @JvmStatic
-        fun schemaSerdeEnabled(): Boolean = SchemaSerdeAllowlist.isProtocolEnabled(RestJson1Trait.ID)
-
         // `$version` is escaped to avoid Kotlin interpolation in a raw-string.
         private const val PREFIX = "\$version: \"2\""
         val model =
             """
             $PREFIX
-            namespace test
+            namespace smithy.rust.codegen.test.schemaheaders
 
             use aws.api#service
             use aws.auth#sigv4
@@ -118,6 +103,9 @@ class EventStreamRequestIdTest {
     @Test
     fun `request_id is populated on event stream responses`() {
         awsSdkIntegrationTest(model) { context, rustCrate ->
+            check(SchemaSerdeAllowlist.usesSchemaSerdeExclusively(context)) {
+                "this test must exercise the schema-exclusive event-stream path"
+            }
             rustCrate.integrationTest("event_stream_request_id") {
                 tokioTest("request_id_is_set_from_x_amzn_requestid_header") {
                     val rc = context.runtimeConfig

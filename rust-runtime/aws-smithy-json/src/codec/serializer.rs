@@ -152,17 +152,22 @@ impl JsonSerializer {
     }
 
     /// Gets the timestamp format to use, respecting @timestampFormat trait.
-    fn get_timestamp_format(&self, schema: &Schema<'_>) -> TimestampFormat {
+    fn get_timestamp_format(&self, schema: &Schema<'_>) -> Result<TimestampFormat, SerdeError> {
         if let Some(ts_trait) = schema.timestamp_format() {
-            return match ts_trait.format() {
+            return Ok(match ts_trait.format() {
                 aws_smithy_schema::traits::TimestampFormat::EpochSeconds => {
                     TimestampFormat::EpochSeconds
                 }
                 aws_smithy_schema::traits::TimestampFormat::HttpDate => TimestampFormat::HttpDate,
                 aws_smithy_schema::traits::TimestampFormat::DateTime => TimestampFormat::DateTime,
-            };
+                other => {
+                    return Err(SerdeError::unsupported(format!(
+                        "unsupported timestamp format {other:?}"
+                    )))
+                }
+            });
         }
-        self.settings.default_timestamp_format
+        Ok(self.settings.default_timestamp_format)
     }
 
     /// Writes an arbitrary-precision numeric string.
@@ -540,7 +545,7 @@ impl ShapeSerializer for JsonSerializer {
 
     fn write_timestamp(&mut self, schema: &Schema<'_>, value: &DateTime) -> Result<(), SerdeError> {
         self.prefix(schema);
-        let format = self.get_timestamp_format(schema);
+        let format = self.get_timestamp_format(schema)?;
         let formatted = value
             .fmt(format)
             .map_err(|e| SerdeError::write_failed(format!("failed to format timestamp: {e}")))?;

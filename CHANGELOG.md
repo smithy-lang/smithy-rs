@@ -1,4 +1,13 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+September 30th, 2026
+====================
+
+September 30th, 2026
+====================
+**New this release:**
+- :tada: (client, [smithy-rs#4808](https://github.com/smithy-lang/smithy-rs/issues/4808), [smithy-rs#4824](https://github.com/smithy-lang/smithy-rs/issues/4824), [smithy-rs#4831](https://github.com/smithy-lang/smithy-rs/issues/4831), [smithy-rs#4864](https://github.com/smithy-lang/smithy-rs/issues/4864), [smithy-rs#4865](https://github.com/smithy-lang/smithy-rs/issues/4865), [smithy-rs#4866](https://github.com/smithy-lang/smithy-rs/issues/4866), [smithy-rs#4876](https://github.com/smithy-lang/smithy-rs/issues/4876)) Add an opt-in Hyper 1.x connection pool with HTTP/1.1 and HTTP/2 support, bounded per-origin connections, configurable partitions, and connection telemetry. The existing default HTTP client is unchanged.
+
+
 September 24th, 2026
 ====================
 **New this release:**

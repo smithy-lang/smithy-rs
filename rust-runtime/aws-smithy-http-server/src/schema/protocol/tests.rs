@@ -386,7 +386,9 @@ static STREAM_OUT: Schema<'static> = Schema::new_struct(
 )
 .with_original_name("StreamOut")
 .with_http(HttpTrait::new("POST", "/stream", Some(202)));
-static STREAM_IN_MEMBERS: [&Schema<'static>; 2] = [&EVENTS_MEMBER, &NAME_MEMBER];
+static STREAM_NAME_MEMBER: Schema<'static> =
+    Schema::new_member(shape_id!("test", "StreamIn", "name"), ShapeType::String, "name", 1).with_http_label();
+static STREAM_IN_MEMBERS: [&Schema<'static>; 2] = [&EVENTS_MEMBER, &STREAM_NAME_MEMBER];
 static STREAM_IN: Schema<'static> =
     Schema::new_struct(shape_id!("test", "StreamIn"), ShapeType::Structure, &STREAM_IN_MEMBERS)
         .with_original_name("StreamIn")

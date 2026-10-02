@@ -472,6 +472,11 @@ impl ShapeSerializer for QueryShapeSerializer {
                 aws_smithy_schema::traits::TimestampFormat::DateTime => {
                     aws_smithy_types::date_time::Format::DateTime
                 }
+                other => {
+                    return Err(SerdeError::unsupported(format!(
+                        "unsupported timestamp format {other:?}"
+                    )))
+                }
             }
         } else {
             aws_smithy_types::date_time::Format::DateTime

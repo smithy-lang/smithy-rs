@@ -9,13 +9,12 @@ use aws_smithy_schema::{Schema, ShapeId, ShapeType};
 /// Member schema for the synthetic `__type` discriminator member.
 ///
 /// The member index is irrelevant on the serialization path (codecs key off
-/// `member_name`); `usize::MAX` guards against accidental use for
-/// deserialization-side member lookup.
+/// `member_name`), so this standalone synthetic member uses index zero.
 pub(super) static TYPE_MEMBER: Schema<'static> = Schema::new_member(
     ShapeId::from_parts("smithy.api#String", "smithy.api", "String"),
     ShapeType::String,
     "__type",
-    usize::MAX,
+    0,
 );
 
 /// What the `__type` member carries.

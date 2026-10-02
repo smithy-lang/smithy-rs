@@ -6,8 +6,7 @@
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.condition.EnabledIf
-import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -40,18 +39,24 @@ import software.amazon.smithy.rust.codegen.core.testutil.unitTest
  * compile failure (e.g. a missing static or wrong path) or a runtime
  * test failure.
  */
-@EnabledIf("schemaSerdeEnabled")
 class ErrorRegistryDecoratorTest {
-    companion object {
-        /**
-         * `Client::error_registry()` and the per-operation error registries are only
-         * generated when the service's protocol is on [SchemaSerdeAllowlist]. This
-         * suite's model uses awsJson1_0, so it runs only when that protocol is enabled
-         * for schema-serde and is skipped otherwise — keeping the coverage live without
-         * hard-disabling it.
-         */
-        @JvmStatic
-        fun schemaSerdeEnabled(): Boolean = SchemaSerdeAllowlist.isProtocolEnabled(AwsJson1_0Trait.ID)
+    /**
+     * Both registry layers only exist when the service is generated with schema serde
+     * exclusively, so every test here depends on that wiring. The fixture model uses the
+     * dedicated schema-serde test namespace, which is allowlisted independently of the
+     * production service and protocol rollout state, so this is a hard invariant rather
+     * than a condition to skip on.
+     *
+     * A previous version of this suite gated on
+     * `SchemaSerdeAllowlist.isProtocolEnabled(AwsJson1_0Trait.ID)`, which is false while
+     * the protocol allowlist is empty during rollout. All five tests were silently
+     * skipped and asserted nothing.
+     */
+    private fun requireSchemaSerde(codegenContext: ClientCodegenContext) {
+        check(SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
+            "this suite's fixture must be generated with schema serde exclusively; " +
+                "check that its namespace is still allowlisted in SchemaSerdeAllowlist"
+        }
     }
 
     private fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> {
@@ -87,7 +92,7 @@ class ErrorRegistryDecoratorTest {
      */
     private val model =
         """
-        namespace com.example
+        namespace smithy.rust.codegen.test.schemaheaders
         use aws.protocols#awsJson1_0
 
         @awsJson1_0
@@ -147,6 +152,7 @@ class ErrorRegistryDecoratorTest {
     @Test
     fun `service-wide error registry contains every modeled error`() {
         clientIntegrationTest(model) { codegenContext, rustCrate ->
+            requireSchemaSerde(codegenContext)
             rustCrate.integrationTest("error_registry_contains_modeled_errors") {
                 val moduleName = codegenContext.moduleUseName()
                 Attribute.Test.render(this)
@@ -160,13 +166,13 @@ class ErrorRegistryDecoratorTest {
                         // registry is *service-wide*, not operation-scoped.
                         assert!(
                             registry
-                                .schema_for(&#{shape_id}!("com.example", "BirdNotFound"))
+                                .schema_for(&#{shape_id}!("smithy.rust.codegen.test.schemaheaders", "BirdNotFound"))
                                 .is_some(),
                             "BirdNotFound must be in the error registry",
                         );
                         assert!(
                             registry
-                                .schema_for(&#{shape_id}!("com.example", "NestEmpty"))
+                                .schema_for(&#{shape_id}!("smithy.rust.codegen.test.schemaheaders", "NestEmpty"))
                                 .is_some(),
                             "NestEmpty must be in the error registry",
                         );
@@ -181,6 +187,7 @@ class ErrorRegistryDecoratorTest {
     @Test
     fun `service-wide error registry excludes non-error structures`() {
         clientIntegrationTest(model) { codegenContext, rustCrate ->
+            requireSchemaSerde(codegenContext)
             rustCrate.integrationTest("error_registry_excludes_non_errors") {
                 val moduleName = codegenContext.moduleUseName()
                 Attribute.Test.render(this)
@@ -196,13 +203,13 @@ class ErrorRegistryDecoratorTest {
                         // they pin down the partition between the two registries.
                         assert!(
                             registry
-                                .schema_for(&#{shape_id}!("com.example", "Bird"))
+                                .schema_for(&#{shape_id}!("smithy.rust.codegen.test.schemaheaders", "Bird"))
                                 .is_none(),
                             "Bird (data structure) must NOT be in the error registry",
                         );
                         assert!(
                             registry
-                                .schema_for(&#{shape_id}!("com.example", "Egg"))
+                                .schema_for(&#{shape_id}!("smithy.rust.codegen.test.schemaheaders", "Egg"))
                                 .is_none(),
                             "Egg (data structure) must NOT be in the error registry",
                         );
@@ -217,6 +224,7 @@ class ErrorRegistryDecoratorTest {
     @Test
     fun `per-operation error registry holds the operation's declared errors`() {
         clientIntegrationTest(model) { codegenContext, rustCrate ->
+            requireSchemaSerde(codegenContext)
             // The per-operation error_registry module is `pub(crate)` — it
             // exists for codegen-internal dispatch and is not part of the
             // generated SDK's public API. Reach it through an in-crate unit
@@ -233,13 +241,13 @@ class ErrorRegistryDecoratorTest {
                         let get_bird_reg = &crate::operation::get_bird::error_registry::REGISTRY;
                         assert!(
                             get_bird_reg
-                                .schema_for(&#{shape_id}!("com.example", "BirdNotFound"))
+                                .schema_for(&#{shape_id}!("smithy.rust.codegen.test.schemaheaders", "BirdNotFound"))
                                 .is_some(),
                             "GetBird::error_registry must contain BirdNotFound",
                         );
                         assert!(
                             get_bird_reg
-                                .schema_for(&#{shape_id}!("com.example", "NestEmpty"))
+                                .schema_for(&#{shape_id}!("smithy.rust.codegen.test.schemaheaders", "NestEmpty"))
                                 .is_some(),
                             "GetBird::error_registry must contain NestEmpty",
                         );
@@ -251,13 +259,13 @@ class ErrorRegistryDecoratorTest {
                         let lay_egg_reg = &crate::operation::lay_egg::error_registry::REGISTRY;
                         assert!(
                             lay_egg_reg
-                                .schema_for(&#{shape_id}!("com.example", "NestEmpty"))
+                                .schema_for(&#{shape_id}!("smithy.rust.codegen.test.schemaheaders", "NestEmpty"))
                                 .is_some(),
                             "LayEgg::error_registry must contain NestEmpty",
                         );
                         assert!(
                             lay_egg_reg
-                                .schema_for(&#{shape_id}!("com.example", "BirdNotFound"))
+                                .schema_for(&#{shape_id}!("smithy.rust.codegen.test.schemaheaders", "BirdNotFound"))
                                 .is_none(),
                             "LayEgg::error_registry must NOT contain BirdNotFound — \
                             the scoping must be per-op, not service-wide",
@@ -273,6 +281,7 @@ class ErrorRegistryDecoratorTest {
     @Test
     fun `error registry deserialize_document round-trips an error variant`() {
         clientIntegrationTest(model) { codegenContext, rustCrate ->
+            requireSchemaSerde(codegenContext)
             rustCrate.integrationTest("error_registry_round_trip") {
                 val moduleName = codegenContext.moduleUseName()
                 Attribute.Test.render(this)
@@ -288,7 +297,7 @@ class ErrorRegistryDecoratorTest {
                             #{Document}::String("no bird with that name".to_owned()),
                         );
                         let doc = #{DiscriminatedDocument}::new(#{Document}::Object(members))
-                            .with_discriminator("com.example##BirdNotFound");
+                            .with_discriminator("smithy.rust.codegen.test.schemaheaders##BirdNotFound");
 
                         let typed = $moduleName::Client::error_registry()
                             .deserialize_document(&doc)
@@ -310,6 +319,7 @@ class ErrorRegistryDecoratorTest {
     @Test
     fun `error registry returns error for unknown discriminator`() {
         clientIntegrationTest(model) { codegenContext, rustCrate ->
+            requireSchemaSerde(codegenContext)
             rustCrate.integrationTest("error_registry_unknown_discriminator") {
                 val moduleName = codegenContext.moduleUseName()
                 Attribute.Test.render(this)
@@ -322,7 +332,7 @@ class ErrorRegistryDecoratorTest {
                         let doc = #{DiscriminatedDocument}::new(
                             #{Document}::Object(#{HashMap}::new()),
                         )
-                        .with_discriminator("com.example##NotAModeledError");
+                        .with_discriminator("smithy.rust.codegen.test.schemaheaders##NotAModeledError");
 
                         let result = $moduleName::Client::error_registry()
                             .deserialize_document(&doc);

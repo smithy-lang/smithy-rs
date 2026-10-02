@@ -186,7 +186,7 @@ impl aws_smithy_schema::protocol::ClientProtocolInner for AwsJsonRpcProtocol {
         &self,
         response: &'a aws_smithy_runtime_api::http::Response,
         output_schema: &Schema<'_>,
-        cfg: &ConfigBag,
+        cfg: &'a ConfigBag,
     ) -> Result<
         Box<dyn aws_smithy_schema::serde::ShapeDeserializer + 'a>,
         aws_smithy_schema::serde::SerdeError,
@@ -413,8 +413,9 @@ mod tests {
 
         for body in [r#"{ "int": 10 }abc"#, r#"{"int": 10,}"#] {
             let response = Response::new(200u16.try_into().unwrap(), SdkBody::from(body));
+            let base_cfg = ConfigBag::base();
             let mut deser = AwsJsonRpcProtocol::aws_json_1_0()
-                .deserialize_response(&response, &TEST_SCHEMA, &ConfigBag::base())
+                .deserialize_response(&response, &TEST_SCHEMA, &base_cfg)
                 .unwrap();
             let result = deser.read_struct(&TEST_SCHEMA, &mut |_, _| Ok(()));
             assert!(result.is_err(), "body {body:?} must be rejected");
@@ -424,8 +425,9 @@ mod tests {
             200u16.try_into().unwrap(),
             SdkBody::from(r#"{ "int": 10 }"#),
         );
+        let base_cfg = ConfigBag::base();
         let mut deser = AwsJsonRpcProtocol::aws_json_1_0()
-            .deserialize_response(&response, &TEST_SCHEMA, &ConfigBag::base())
+            .deserialize_response(&response, &TEST_SCHEMA, &base_cfg)
             .unwrap();
         deser
             .read_struct(&TEST_SCHEMA, &mut |_, _| Ok(()))
@@ -452,8 +454,9 @@ mod tests {
         );
         let read = |body: &str| {
             let response = Response::new(200u16.try_into().unwrap(), SdkBody::from(body));
+            let base_cfg = ConfigBag::base();
             let mut deser = AwsJsonRpcProtocol::aws_json_1_0()
-                .deserialize_response(&response, &OUTPUT, &ConfigBag::base())
+                .deserialize_response(&response, &OUTPUT, &base_cfg)
                 .unwrap();
             let mut value = None;
             deser
@@ -612,6 +615,80 @@ mod tests {
         assert_eq!(
             settings.default_timestamp_format(),
             aws_smithy_types::date_time::Format::EpochSeconds,
+        );
+    }
+
+    /// awsJson is an RPC protocol, so it must ignore HTTP response bindings — including on the
+    /// config-bag namespace branch, which builds its own body deserializer instead of delegating
+    /// to [`HttpRpcProtocol`].
+    ///
+    /// The delegating branch inherits its behavior from
+    /// `HttpRpcProtocol::deserialize_response_ignores_http_response_bindings`, but this branch
+    /// does not, so it needs its own guard. This is the deliberate mirror image of restJson1's
+    /// `the_namespace_branch_still_reads_modeled_headers_and_status`: the same branch structure,
+    /// the same schema traits, opposite required outcome. Which one applies is decided by the
+    /// protocol selected at runtime, which is the point of the whole arrangement.
+    #[test]
+    fn the_namespace_branch_still_ignores_http_response_bindings() {
+        use aws_smithy_runtime_api::http::{Response, StatusCode};
+        use aws_smithy_schema::protocol::ServiceShapeNamespace;
+        use aws_smithy_types::body::SdkBody;
+
+        static NS_NAME: Schema<'static> =
+            Schema::new_member(shape_id!("test", "Out"), ShapeType::String, "name", 0)
+                .with_http_header("x-name");
+        static NS_STATUS: Schema<'static> =
+            Schema::new_member(shape_id!("test", "Out"), ShapeType::Integer, "status", 1)
+                .with_http_response_code();
+        static NS_OUT: Schema<'static> = Schema::new_struct(
+            shape_id!("test", "Out"),
+            ShapeType::Structure,
+            &[&NS_NAME, &NS_STATUS],
+        );
+
+        let proto = AwsJsonRpcProtocol::aws_json_1_0();
+        let mut layer = Layer::new("test");
+        layer.store_put(ServiceShapeNamespace::new("com.amazonaws.dynamodb"));
+        let cfg = ConfigBag::of_layers(vec![layer]);
+        assert!(
+            crate::protocol::codec_with_bag_namespace(proto.inner.codec(), &cfg).is_some(),
+            "precondition: the namespace branch is the one being exercised"
+        );
+
+        let mut response = Response::new(
+            StatusCode::try_from(418).unwrap(),
+            SdkBody::from(r#"{"name":"from-body"}"#),
+        );
+        response
+            .headers_mut()
+            .insert("x-name", "from-header".to_string());
+
+        let mut name = None;
+        let mut status = None;
+        proto
+            .deserialize_response(&response, &NS_OUT, &cfg)
+            .unwrap()
+            .read_struct(&NS_OUT, &mut |member, d| {
+                match member.member_name() {
+                    Some("name") => name = Some(d.read_string(member)?),
+                    Some("status") => status = Some(d.read_integer(member)?),
+                    _ => {
+                        d.skip_value()?;
+                    }
+                }
+                Ok(())
+            })
+            .unwrap();
+
+        assert_eq!(
+            name.as_deref(),
+            Some("from-body"),
+            "a bound member must come from the JSON body, never from the header"
+        );
+        assert_eq!(
+            status, None,
+            "an `@httpResponseCode` member has no body representation here, so it stays absent \
+             rather than picking up the response's status"
         );
     }
 }

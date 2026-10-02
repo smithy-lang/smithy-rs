@@ -5,10 +5,8 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.protocols
 
-import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
-import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -42,11 +40,21 @@ import kotlin.io.path.readText
  * left them on a request of another protocol.
  */
 internal class RpcV2CborRequestShapeTest {
+    // A hard check rather than `assumeTrue`. These tests gated themselves on
+    // `SchemaSerdeAllowlist.isProtocolEnabled(..)`, which is false while `allowedProtocols` is
+    // empty, so they were silently skipped. The fixtures now live in the dedicated test namespace.
+    private fun requireSchemaSerde(context: ClientCodegenContext) {
+        check(SchemaSerdeAllowlist.usesSchemaSerdeExclusively(context)) {
+            "this test must generate the schema-serde request path; " +
+                "check that its namespace is still allowlisted in SchemaSerdeAllowlist"
+        }
+    }
+
     /** Operations carry inert `@http` traits, as the Pokémon model does. */
     private val modelWithHttpTraits =
         """
         ${'$'}version: "2"
-        namespace test
+        namespace smithy.rust.codegen.test.schemaheaders
 
         use smithy.protocols#rpcv2Cbor
 
@@ -82,7 +90,7 @@ internal class RpcV2CborRequestShapeTest {
     private val modelWithoutHttpTraits =
         """
         ${'$'}version: "2"
-        namespace test
+        namespace smithy.rust.codegen.test.schemaheaders
 
         use smithy.protocols#rpcv2Cbor
 
@@ -116,7 +124,7 @@ internal class RpcV2CborRequestShapeTest {
     private val awsJsonModel =
         """
         ${'$'}version: "2"
-        namespace test
+        namespace smithy.rust.codegen.test.schemaheaders
 
         use aws.protocols#awsJson1_0
 
@@ -143,12 +151,9 @@ internal class RpcV2CborRequestShapeTest {
 
     @Test
     fun `rpcv2Cbor uses the canonical RPC route even when operations carry @http traits`() {
-        assumeTrue(
-            SchemaSerdeAllowlist.isProtocolEnabled(Rpcv2CborTrait.ID),
-            "rpcv2Cbor is not on SchemaSerdeAllowlist, so the schema-serde request path is not generated",
-        )
         val testDir =
             clientIntegrationTest(modelWithHttpTraits) { context, rustCrate ->
+                requireSchemaSerde(context)
                 rustCrate.testModule {
                     tokioTest("http_trait_does_not_override_rpc_route") {
                         rustTemplate(
@@ -271,11 +276,8 @@ internal class RpcV2CborRequestShapeTest {
 
     @Test
     fun `rpcv2Cbor uses the canonical RPC route without @http traits`() {
-        assumeTrue(
-            SchemaSerdeAllowlist.isProtocolEnabled(Rpcv2CborTrait.ID),
-            "rpcv2Cbor is not on SchemaSerdeAllowlist, so the schema-serde request path is not generated",
-        )
         clientIntegrationTest(modelWithoutHttpTraits) { context, rustCrate ->
+            requireSchemaSerde(context)
             rustCrate.testModule {
                 tokioTest("rpc_route_without_http_trait") {
                     rustTemplate(
@@ -312,11 +314,8 @@ internal class RpcV2CborRequestShapeTest {
      */
     @Test
     fun `rpcv2Cbor plugged in at runtime uses the canonical RPC route`() {
-        assumeTrue(
-            SchemaSerdeAllowlist.isProtocolEnabled(AwsJson1_0Trait.ID),
-            "awsJson1_0 is not on SchemaSerdeAllowlist, so there is no protocol to swap out",
-        )
         clientIntegrationTest(awsJsonModel) { context, rustCrate ->
+            requireSchemaSerde(context)
             rustCrate.testModule {
                 tokioTest("runtime_protocol_swap_uses_rpc_route") {
                     rustTemplate(

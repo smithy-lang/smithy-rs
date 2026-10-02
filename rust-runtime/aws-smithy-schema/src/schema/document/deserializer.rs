@@ -202,12 +202,17 @@ fn resolve_member<'s>(schema: &'s Schema<'s>, wire_name: &str) -> Option<&'s Sch
 // therefore lives here, on the schema side, where the schema has already
 // established which Smithy type the caller is asking for.
 //
-// Per the SEP "Number coercion" rules, the signed-integer coercions
-// accept the bounded integer variants of [`Number`] (`PosInt` /
-// `NegInt`) and report overflow. They deliberately do **not** accept
-// `Number::Float`: the SEP forbids crossing the integer/float
-// logical-kind boundary. The reverse direction is lossless and is
-// allowed — [`coerce_float`] / [`coerce_double`] take integer sources.
+// The signed-integer coercions accept the bounded integer variants of
+// [`Number`] (`PosInt` / `NegInt`) and report overflow. They also accept a
+// `Number::Float` whose value is an integer that fits the target (`42.0`
+// reads as `42`), because `DiscriminatedDocument::shape_type` reports such
+// a value as `integer` or `long` per the SEP's ambiguous-number rule, and a
+// reported type must be readable. A float with a fractional part, or a
+// non-finite one, is rejected as lossy rather than truncated: the SEP's
+// "ignore loss of precision" wording would allow truncation, but legacy JSON
+// deserialization rejects it, and silently dropping digits is the riskier
+// choice. The reverse direction is lossless and is allowed —
+// [`coerce_float`] / [`coerce_double`] take integer sources.
 //
 // `Document` has no arbitrary-precision variant either, so the
 // schema-driven legacy representation carries `bigInteger` /
@@ -225,9 +230,9 @@ fn resolve_member<'s>(schema: &'s Schema<'s>, wire_name: &str) -> Option<&'s Sch
 /// `Number::PosInt(u64)` and `Number::NegInt(i64)` through the standard
 /// library's range-checked narrowing impls; no bespoke arithmetic.
 ///
-/// Per the SEP, `Number::Float` is rejected with
-/// [`SerdeError::TypeMismatch`] (no integer/float crossover).
-/// Out-of-range integer sources produce
+/// A `Number::Float` is accepted when it is an integer within range (see
+/// [`float_as_i64`]); a fractional or non-finite float produces
+/// [`SerdeError::NumericCoercionLossy`]. Out-of-range sources produce
 /// [`SerdeError::NumericCoercionOverflow`].
 fn coerce_signed<T>(doc: &Document, name: &str) -> Result<T, SerdeError>
 where
@@ -240,15 +245,32 @@ where
         Document::Number(Number::NegInt(v)) => {
             T::try_from(*v).map_err(|_| SerdeError::numeric_coercion_overflow(name, v.to_string()))
         }
-        // No int/float crossover. Per SEP §"Number coercion": a Float
-        // source must NOT silently truncate into an integer accessor.
-        // Callers wanting that behavior can read a double and cast
-        // explicitly.
-        Document::Number(Number::Float(_)) => Err(SerdeError::type_mismatch(format!(
-            "cannot coerce float to {name} without explicit narrowing"
-        ))),
+        Document::Number(Number::Float(v)) => {
+            if !is_integral(*v) {
+                return Err(SerdeError::numeric_coercion_lossy(name, v.to_string()));
+            }
+            float_as_i64(*v)
+                .and_then(|i| T::try_from(i).ok())
+                .ok_or_else(|| SerdeError::numeric_coercion_overflow(name, v.to_string()))
+        }
         other => Err(type_mismatch(name, other)),
     }
+}
+
+/// Whether `v` is finite and has no fractional part.
+fn is_integral(v: f64) -> bool {
+    v.is_finite() && v.fract() == 0.0
+}
+
+/// The value of `v` as an `i64`, when `v` is an integer within `i64`'s range.
+///
+/// The upper bound is exclusive and written as 2⁶³ because `i64::MAX as f64` rounds *up* to
+/// 2⁶³, which is one past `i64::MAX`. `i64::MIN` (-2⁶³) is exactly representable, so the lower
+/// bound is inclusive. Shared with `DiscriminatedDocument::shape_type` so the reported type and
+/// the reader agree.
+pub(crate) fn float_as_i64(v: f64) -> Option<i64> {
+    const TWO_POW_63: f64 = 9_223_372_036_854_775_808.0;
+    (is_integral(v) && (-TWO_POW_63..TWO_POW_63).contains(&v)).then_some(v as i64)
 }
 
 /// Coerces a numeric [`Document`] to `f64`.
@@ -274,8 +296,10 @@ fn coerce_float(doc: &Document) -> Result<f32, SerdeError> {
 /// Coerces a [`Document`] to a [`BigInteger`].
 ///
 /// Coerces from `Number::PosInt` / `Number::NegInt` by string-formatting
-/// (always lossless). `Number::Float` is rejected with
-/// [`SerdeError::TypeMismatch`] — per SEP, no integer/float crossover.
+/// (always lossless). A `Number::Float` is accepted when its value is an
+/// integer, at any magnitude, since every finite integral `f64` has an exact
+/// decimal form; a fractional or non-finite float produces
+/// [`SerdeError::NumericCoercionLossy`].
 ///
 /// A [`Document::String`] source is accepted because the schema-driven
 /// legacy representation of an arbitrary-precision shape is its numeric
@@ -286,11 +310,17 @@ fn coerce_big_integer(doc: &Document) -> Result<BigInteger, SerdeError> {
     match doc {
         Document::Number(Number::PosInt(v)) => parse_big_integer(&v.to_string()),
         Document::Number(Number::NegInt(v)) => parse_big_integer(&v.to_string()),
-        // No int/float crossover per SEP §"Number coercion". Callers
-        // wanting a float-to-integer coercion should read a long first.
-        Document::Number(Number::Float(_)) => Err(SerdeError::type_mismatch(
-            "cannot coerce float to bigInteger without explicit narrowing",
-        )),
+        Document::Number(Number::Float(v)) => {
+            if !is_integral(*v) {
+                return Err(SerdeError::numeric_coercion_lossy(
+                    "bigInteger",
+                    v.to_string(),
+                ));
+            }
+            // `{:.0}` prints every digit of an integral `f64` (no exponent); `0.0`
+            // keeps `-0.0` from printing as "-0".
+            parse_big_integer(&format!("{:.0}", v + 0.0))
+        }
         Document::String(s) => {
             if let Ok(bi) = BigInteger::from_str(s) {
                 return Ok(bi);
@@ -673,6 +703,13 @@ impl<'a> ShapeDeserializer for DocumentShapeDeserializer<'a> {
 
     fn is_null(&self) -> bool {
         matches!(self.cursor, Document::Null)
+    }
+
+    /// Nothing to advance. The cursor points at an already-parsed node of an owned
+    /// document tree, and `read_struct` hands each member its own sub-deserializer, so
+    /// declining a value has no effect on the parent's iteration.
+    fn skip_value(&mut self) -> Result<(), SerdeError> {
+        Ok(())
     }
 
     fn container_size(&self) -> Option<usize> {
@@ -1145,45 +1182,69 @@ mod tests {
     }
 
     #[test]
-    fn integer_reads_reject_float_sources_even_when_integral() {
-        // A Float source must NOT silently truncate into an integer read,
-        // even with a zero fractional part. Read a double and cast if
-        // that is what the caller wants.
-        for value in [42.0_f64, 42.7_f64] {
+    fn integer_reads_accept_integral_floats_and_reject_fractional_ones() {
+        let read_all = |value: f64| {
             let doc = num(Number::Float(value));
-            assert!(matches!(
-                DocumentShapeDeserializer::new(&doc)
-                    .read_byte(&prelude::BYTE)
-                    .unwrap_err(),
-                SerdeError::TypeMismatch { .. }
-            ));
-        }
+            let de = || DocumentShapeDeserializer::new(&doc);
+            (
+                de().read_byte(&prelude::BYTE),
+                de().read_short(&prelude::SHORT),
+                de().read_integer(&prelude::INTEGER),
+                de().read_long(&prelude::LONG),
+                de().read_big_integer(&prelude::BIG_INTEGER),
+            )
+        };
+        let (b, sh, i, l, bi) = read_all(42.0);
+        assert_eq!(
+            (b.unwrap(), sh.unwrap(), i.unwrap(), l.unwrap()),
+            (42, 42, 42, 42)
+        );
+        assert_eq!(bi.unwrap().as_ref(), "42");
+        assert_eq!(read_all(-0.0).2.unwrap(), 0);
+        assert_eq!(read_all(-0.0).4.unwrap().as_ref(), "0");
 
-        let doc = num(Number::Float(1.0));
+        // Never truncated: a fractional or non-finite float is lossy for every integer read.
+        for value in [42.7, -0.5, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let (b, sh, i, l, bi) = read_all(value);
+            for err in [b.err(), sh.err(), i.err(), l.err(), bi.err()] {
+                assert!(
+                    matches!(err, Some(SerdeError::NumericCoercionLossy { .. })),
+                    "{value}: {err:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn integral_float_range_checks_are_exact() {
+        let long = |v: f64| {
+            DocumentShapeDeserializer::new(&num(Number::Float(v))).read_long(&prelude::LONG)
+        };
+        let int = |v: f64| {
+            DocumentShapeDeserializer::new(&num(Number::Float(v))).read_integer(&prelude::INTEGER)
+        };
+        const TWO_POW_63: f64 = 9_223_372_036_854_775_808.0;
+        // -2^63 is i64::MIN exactly; 2^63 is what `i64::MAX as f64` rounds to and is out of range.
+        assert_eq!(long(-TWO_POW_63).unwrap(), i64::MIN);
         assert!(matches!(
-            DocumentShapeDeserializer::new(&doc)
-                .read_short(&prelude::SHORT)
-                .unwrap_err(),
-            SerdeError::TypeMismatch { .. }
+            long(TWO_POW_63),
+            Err(SerdeError::NumericCoercionOverflow { .. })
         ));
+        assert_eq!(int(2_147_483_647.0).unwrap(), i32::MAX);
+        assert_eq!(int(-2_147_483_648.0).unwrap(), i32::MIN);
         assert!(matches!(
-            DocumentShapeDeserializer::new(&doc)
-                .read_integer(&prelude::INTEGER)
-                .unwrap_err(),
-            SerdeError::TypeMismatch { .. }
+            int(2_147_483_648.0),
+            Err(SerdeError::NumericCoercionOverflow { .. })
         ));
-        assert!(matches!(
-            DocumentShapeDeserializer::new(&doc)
-                .read_long(&prelude::LONG)
-                .unwrap_err(),
-            SerdeError::TypeMismatch { .. }
-        ));
-        assert!(matches!(
-            DocumentShapeDeserializer::new(&doc)
-                .read_big_integer(&prelude::BIG_INTEGER)
-                .unwrap_err(),
-            SerdeError::TypeMismatch { .. }
-        ));
+        // Beyond i64, an integral float is still a bigInteger, digit for digit.
+        let big = DocumentShapeDeserializer::new(&num(Number::Float(1e20)))
+            .read_big_integer(&prelude::BIG_INTEGER)
+            .unwrap();
+        assert_eq!(big.as_ref(), "100000000000000000000");
+        let big = DocumentShapeDeserializer::new(&num(Number::Float(TWO_POW_63)))
+            .read_big_integer(&prelude::BIG_INTEGER)
+            .unwrap();
+        assert_eq!(big.as_ref(), "9223372036854775808");
     }
 
     #[test]
@@ -1445,5 +1506,105 @@ mod tests {
         );
         // An i64-underflowing negative exponent cannot reach this helper:
         // BigDecimal rejects it because its resulting scale is out of range.
+    }
+}
+
+/// Tests for the [`ShapeDeserializer::skip_value`] contract.
+///
+/// This deserializer walks an already-parsed document tree and hands each member its own
+/// sub-deserializer, so skipping must be a no-op: there is no shared cursor to advance.
+#[cfg(test)]
+mod skip_value_contract {
+    use super::*;
+    use crate::serde::ShapeDeserializer;
+    use crate::{shape_id, Schema, ShapeType};
+    use std::collections::HashMap;
+
+    static NAME: Schema<'static> = Schema::new_member(
+        shape_id!("smithy.example", "Person", "name"),
+        ShapeType::String,
+        "name",
+        0,
+    );
+    static AGE: Schema<'static> = Schema::new_member(
+        shape_id!("smithy.example", "Person", "age"),
+        ShapeType::Integer,
+        "age",
+        1,
+    );
+    static PERSON: Schema<'static> = Schema::new_struct(
+        shape_id!("smithy.example", "Person"),
+        ShapeType::Structure,
+        &[&NAME, &AGE],
+    );
+
+    #[test]
+    fn skipping_one_member_leaves_the_others_readable() {
+        let doc = Document::Object(HashMap::from([
+            ("name".to_string(), Document::String("Alex".into())),
+            (
+                "age".to_string(),
+                Document::Number(aws_smithy_types::Number::PosInt(30)),
+            ),
+        ]));
+        let mut deser = DocumentShapeDeserializer::new(&doc);
+        let mut age = None;
+        deser
+            .read_struct(&PERSON, &mut |member, d| {
+                match member.member_index() {
+                    Some(0) => d.skip_value()?,
+                    Some(1) => age = Some(d.read_integer(member)?),
+                    _ => {}
+                }
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(age, Some(30));
+    }
+
+    #[test]
+    fn skipping_an_aggregate_member_is_a_no_op() {
+        // Nested content must not disturb anything, since the sub-deserializer is a
+        // separate view over its own node.
+        let doc = Document::Object(HashMap::from([
+            (
+                "name".to_string(),
+                Document::Array(vec![
+                    Document::String("nested".into()),
+                    Document::Object(HashMap::from([(
+                        "age".to_string(),
+                        Document::Number(aws_smithy_types::Number::PosInt(999)),
+                    )])),
+                ]),
+            ),
+            (
+                "age".to_string(),
+                Document::Number(aws_smithy_types::Number::PosInt(30)),
+            ),
+        ]));
+        let mut deser = DocumentShapeDeserializer::new(&doc);
+        let mut age = None;
+        deser
+            .read_struct(&PERSON, &mut |member, d| {
+                match member.member_index() {
+                    Some(0) => d.skip_value()?,
+                    Some(1) => age = Some(d.read_integer(member)?),
+                    _ => {}
+                }
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(age, Some(30), "the decoy nested `age` must not be read");
+    }
+
+    #[test]
+    fn skip_value_does_not_consume_the_cursor() {
+        // Skipping then reading the same value must still work: the override must not
+        // have side effects.
+        let doc = Document::String("still here".into());
+        let mut deser = DocumentShapeDeserializer::new(&doc);
+        let dynamic: &mut dyn ShapeDeserializer = &mut deser;
+        dynamic.skip_value().unwrap();
+        assert_eq!(deser.read_string(&NAME).unwrap(), "still here");
     }
 }

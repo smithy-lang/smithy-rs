@@ -173,6 +173,7 @@ pub struct TimestampFormatTrait {
 
 /// Timestamp serialization formats.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum TimestampFormat {
     /// Epoch seconds (e.g. `1515531081.123`).
     EpochSeconds,

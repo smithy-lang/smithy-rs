@@ -201,7 +201,7 @@ fn resolve_timestamp_format(read_schema: &Schema<'_>, member: &Schema<'_>, locat
         Some(SchemaFormat::EpochSeconds) => Format::EpochSeconds,
         Some(SchemaFormat::HttpDate) => Format::HttpDate,
         Some(SchemaFormat::DateTime) => Format::DateTime,
-        None => match location {
+        Some(_) | None => match location {
             BindingLocation::Header => Format::HttpDate,
             BindingLocation::Query | BindingLocation::Label => Format::DateTime,
         },
@@ -1201,7 +1201,7 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
                 .copied()
                 .filter(|m| m.http_payload().is_none() && is_body_member(m))
                 .collect();
-            let mut body_schema = Schema::new_struct(schema.shape_id().clone(), schema.shape_type(), &members);
+            let mut body_schema = Schema::new_struct_view(schema.shape_id().clone(), schema.shape_type(), &members);
             if let Some(name) = schema.original_name() {
                 body_schema = body_schema.with_original_name(name);
             }

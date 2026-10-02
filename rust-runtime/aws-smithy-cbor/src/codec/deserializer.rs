@@ -279,6 +279,13 @@ impl ShapeDeserializer for CborDeserializer<'_> {
         self.decoder.null().map_err(deser_err)
     }
 
+    /// CBOR shares one decoder across the whole map, so declining a value still has to
+    /// move past it. `Decoder::skip` consumes exactly one item, including nested
+    /// containers, which is the same mechanism used for unknown members.
+    fn skip_value(&mut self) -> Result<(), SerdeError> {
+        self.decoder.skip().map_err(deser_err)
+    }
+
     fn container_size(&self) -> Option<usize> {
         let mut peek = self.decoder.clone();
         let (declared, min_bytes_per_element) = match peek.datatype().ok()? {
@@ -1311,5 +1318,189 @@ mod unknown_member_tests {
         let (a, unknown) = read_s(&e.into_writer(), false);
         assert_eq!(a.as_deref(), Some("x"));
         assert!(unknown.is_empty());
+    }
+}
+
+/// Tests for the [`ShapeDeserializer::skip_value`] contract.
+///
+/// CBOR is cursor-based, so the override must consume exactly one complete item,
+/// including nested containers. The scenario is the one the HTTP response composite
+/// relies on: a body field for a member whose value came from a header is declined, and
+/// the remaining members must still parse.
+#[cfg(test)]
+mod skip_value_contract {
+    use super::*;
+    use aws_smithy_schema::codec::{Codec, FinishSerializer};
+    use aws_smithy_schema::prelude::*;
+    use aws_smithy_schema::serde::{SerializableStruct, ShapeSerializer};
+    use aws_smithy_schema::{shape_id, ShapeType};
+
+    use crate::codec::{CborCodec, CborSerializer};
+
+    // Member 0 is what the reader resolves the key "bound" to. The aggregate-typed
+    // variants below share that member name so they serialize under the same key; only
+    // the encoded value differs, which is all that matters for a skip.
+    static BOUND: Schema =
+        Schema::new_member(shape_id!("test", "Output"), ShapeType::String, "bound", 0);
+    static BOUND_LIST: Schema =
+        Schema::new_member(shape_id!("test", "Output"), ShapeType::List, "bound", 0);
+    static BOUND_MAP: Schema =
+        Schema::new_member(shape_id!("test", "Output"), ShapeType::Map, "bound", 0);
+    static BODY: Schema =
+        Schema::new_member(shape_id!("test", "Output"), ShapeType::String, "body", 1);
+    static OUTPUT: Schema = Schema::new_struct(
+        shape_id!("test", "Output"),
+        ShapeType::Structure,
+        &[&BOUND, &BODY],
+    );
+
+    /// Encodes `{bound: <whatever `write_bound` writes>, body: "real"}`, then reads it
+    /// back while skipping `bound`. Returns the value read for `body`, so a successful
+    /// assertion proves the decoder resumed at exactly the right item.
+    fn skip_bound_read_body(
+        write_bound: fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
+    ) -> Result<Option<String>, SerdeError> {
+        struct Out(fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>);
+        impl SerializableStruct for Out {
+            fn schema(&self) -> &Schema<'_> {
+                &OUTPUT
+            }
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                (self.0)(s)?;
+                s.write_string(&BODY, "real")
+            }
+        }
+        let mut ser: CborSerializer = CborCodec::default().create_serializer();
+        ser.write_struct(&OUTPUT, &Out(write_bound))?;
+        let bytes = ser.finish();
+
+        let mut de = CborDeserializer::new(&bytes, 128);
+        let mut body = None;
+        de.read_struct(&OUTPUT, &mut |member, d| {
+            match member.member_index() {
+                Some(0) => d.skip_value()?,
+                Some(1) => body = Some(d.read_string(member)?),
+                _ => {}
+            }
+            Ok(())
+        })?;
+        Ok(body)
+    }
+
+    fn assert_skips(name: &str, write: fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>) {
+        let got =
+            skip_bound_read_body(write).unwrap_or_else(|e| panic!("skipping {name} failed: {e}"));
+        assert_eq!(
+            got.as_deref(),
+            Some("real"),
+            "after skipping a {name}, `body` should still be read"
+        );
+    }
+
+    #[test]
+    fn skipping_a_scalar_member_lets_the_rest_of_the_struct_parse() {
+        assert_skips("string", |s| s.write_string(&BOUND, "skipped"));
+        assert_skips("empty string", |s| s.write_string(&BOUND, ""));
+        assert_skips("integer", |s| s.write_integer(&BOUND, -12345));
+        assert_skips("long", |s| s.write_long(&BOUND, i64::MIN));
+        assert_skips("double", |s| s.write_double(&BOUND, 1.5e300));
+        assert_skips("boolean", |s| s.write_boolean(&BOUND, true));
+        assert_skips("blob", |s| {
+            s.write_blob(&BOUND, aws_smithy_types::Blob::new(vec![1, 2, 3]))
+        });
+        assert_skips("null", |s| s.write_null(&BOUND));
+    }
+
+    #[test]
+    fn skipping_an_aggregate_member_consumes_the_whole_container() {
+        // `Decoder::skip` must consume the entire nested item, not just its header.
+        assert_skips("list", |s| {
+            s.write_list(&BOUND_LIST, &|s| {
+                s.write_integer(&INTEGER, 1)?;
+                s.write_integer(&INTEGER, 2)?;
+                s.write_integer(&INTEGER, 3)
+            })
+        });
+        assert_skips("empty list", |s| s.write_list(&BOUND_LIST, &|_| Ok(())));
+        assert_skips("map", |s| {
+            s.write_map(&BOUND_MAP, &|s| {
+                s.write_string(&STRING, "k1")?;
+                s.write_string(&STRING, "v1")?;
+                s.write_string(&STRING, "k2")?;
+                s.write_string(&STRING, "v2")
+            })
+        });
+        assert_skips("empty map", |s| s.write_map(&BOUND_MAP, &|_| Ok(())));
+        assert_skips("nested list of maps", |s| {
+            s.write_list(&BOUND_LIST, &|s| {
+                for _ in 0..2 {
+                    s.write_map(&BOUND_MAP, &|s| {
+                        s.write_string(&STRING, "deep")?;
+                        s.write_list(&BOUND_LIST, &|s| {
+                            s.write_integer(&INTEGER, 1)?;
+                            s.write_integer(&INTEGER, 2)
+                        })
+                    })?;
+                }
+                Ok(())
+            })
+        });
+        // A nested map carrying a key with the same name as the member read next:
+        // skipping must not surface it to the consumer.
+        assert_skips("map containing a decoy `body` key", |s| {
+            s.write_map(&BOUND_MAP, &|s| {
+                s.write_string(&STRING, "body")?;
+                s.write_string(&STRING, "decoy")
+            })
+        });
+    }
+
+    #[test]
+    fn skip_value_on_an_unknown_member_does_not_double_skip() {
+        // `read_struct` skips the unknown-member value only when the consumer left the
+        // decoder position untouched. An explicit skip must not trigger a second one,
+        // which would swallow the following member.
+        static UNKNOWN: Schema =
+            Schema::new_member(shape_id!("test", "Output"), ShapeType::List, "unknown", 0);
+        struct Out;
+        impl SerializableStruct for Out {
+            fn schema(&self) -> &Schema<'_> {
+                &OUTPUT
+            }
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_list(&UNKNOWN, &|s| {
+                    s.write_integer(&INTEGER, 1)?;
+                    s.write_integer(&INTEGER, 2)
+                })?;
+                s.write_string(&BODY, "real")
+            }
+        }
+        let mut ser: CborSerializer = CborCodec::default().create_serializer();
+        ser.write_struct(&OUTPUT, &Out).unwrap();
+        let bytes = ser.finish();
+
+        let mut de = CborDeserializer::new(&bytes, 128);
+        let mut body = None;
+        let mut saw_unknown = false;
+        de.read_struct(&OUTPUT, &mut |member, d| {
+            match member.member_index() {
+                Some(1) => body = Some(d.read_string(member)?),
+                // The index-less prelude `DOCUMENT` schema: the unknown-key report that
+                // union consumers rely on.
+                None => {
+                    saw_unknown = true;
+                    d.skip_value()?;
+                }
+                _ => {}
+            }
+            Ok(())
+        })
+        .unwrap();
+        assert!(saw_unknown, "unknown key should still be reported");
+        assert_eq!(
+            body.as_deref(),
+            Some("real"),
+            "`body` must not be swallowed by a second skip"
+        );
     }
 }

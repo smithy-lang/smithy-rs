@@ -793,7 +793,7 @@ impl ShapeDeserializer for EventFrameDeserializer<'_> {
             let implicit_members: Vec<&Schema<'_>> =
                 members.iter().copied().filter(|m| !m.event_header()).collect();
             let mut payload_schema =
-                Schema::new_struct(schema.shape_id().clone(), schema.shape_type(), &implicit_members);
+                Schema::new_struct_view(schema.shape_id().clone(), schema.shape_type(), &implicit_members);
             // The filtered view must retain the XML document's root identity.
             if let Some(name) = schema.xml_name() {
                 payload_schema = payload_schema.with_xml_name(name.value());
@@ -1790,10 +1790,11 @@ mod tests {
 
     #[test]
     fn header_only_event_has_no_payload_or_content_type() {
+        member_schema!(HEADER_NAME, "HeaderOnly", "name", ShapeType::String, 0, with_event_header);
         static SCHEMA: Schema<'static> = Schema::new_struct(
             ShapeId::from_parts("test#HeaderOnly", "test", "HeaderOnly"),
             ShapeType::Structure,
-            &[&AH_STRING],
+            &[&HEADER_NAME],
         );
         struct HeaderOnly;
         impl SerializableStruct for HeaderOnly {
@@ -1801,7 +1802,7 @@ mod tests {
                 &SCHEMA
             }
             fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
-                ser.write_string(&AH_STRING, "ann")
+                ser.write_string(&HEADER_NAME, "ann")
             }
         }
         let protocol = json_protocol();

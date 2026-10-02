@@ -48,7 +48,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.RecursiveShapeClassifier
 import software.amazon.smithy.rust.codegen.core.smithy.generators.SchemaTraitExtension
 import software.amazon.smithy.rust.codegen.core.smithy.generators.SchemaTraitFilter
-import software.amazon.smithy.rust.codegen.core.smithy.generators.SyntheticSchemaMember
 import software.amazon.smithy.rust.codegen.core.smithy.generators.isAnnotationTrait
 import software.amazon.smithy.rust.codegen.core.smithy.generators.stringValue
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -85,7 +84,6 @@ class ServerSchemaGenerator(
     private val traitFilter: SchemaTraitFilter =
         SchemaTraitFilter(codegenContext.model, additionalTraits = setOf(ErrorTrait.ID)),
     private val traitExtension: SchemaTraitExtension = SchemaTraitExtension(),
-    private val syntheticMembers: List<SyntheticSchemaMember> = emptyList(),
     /** Override the prefix used for generated static names. Defaults to the symbol name uppercased. */
     val schemaPrefix: String? = null,
 ) {
@@ -1405,11 +1403,7 @@ class ServerSchemaGenerator(
                         val memberName = symbolProvider.toMemberName(member)
                         "&${schemaPrefix}_MEMBER_${constantName(memberName)}"
                     }
-                val synthRefs =
-                    syntheticMembers.map { synth ->
-                        "&${schemaPrefix}_MEMBER_${constantName(synth.fieldName)}"
-                    }
-                val allRefs = modelRefs + synthRefs
+                val allRefs = modelRefs
                 val membersArray =
                     if (allRefs.isEmpty()) {
                         "&[]"
@@ -1533,26 +1527,6 @@ class ServerSchemaGenerator(
                             ${templateEscape(smithyMemberName.dq())},
                             $idx,
                         )$traitChain$mapMembersChain;
-                        """,
-                        *codegenScope,
-                    )
-                }
-                // Render synthetic members (e.g., _request_id from response headers)
-                val baseIndex = shape.members().size
-                syntheticMembers.forEachIndexed { i, synth ->
-                    val synthIdx = baseIndex + i
-                    writer.rustTemplate(
-                        """
-                        static ${schemaPrefix}_MEMBER_${constantName(synth.fieldName)}: #{Schema}<'static> = #{Schema}::new_member(
-                            #{ShapeId}::from_parts(
-                                "synthetic##${synth.schemaMemberName}",
-                                "synthetic",
-                                "${synth.schemaMemberName}",
-                            ),
-                            #{ShapeType}::${synth.shapeType},
-                            ${synth.schemaMemberName.dq()},
-                            $synthIdx,
-                        ).with_http_header(${synth.httpHeaderName.dq()});
                         """,
                         *codegenScope,
                     )

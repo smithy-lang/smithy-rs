@@ -27,6 +27,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
+import software.amazon.smithy.rust.codegen.core.smithy.generators.http.nonUtf8HeaderShouldBeSkipped
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
@@ -318,11 +319,9 @@ class ProtocolParserGenerator(
                     #{Ok}(value) => value,
                     #{Err}(err) => {
                         let _ = &err;
-                        let has_unreadable_value = #{unreadable_scan:W};
-                        if has_unreadable_value
-                            && _cfg.load::<#{NonUtf8HeaderHandling}>()
-                                == #{Some}(&#{NonUtf8HeaderHandling}::Skip)
-                        {
+                        // Bound first: a block in an `if` condition trips `clippy::blocks_in_conditions`.
+                        let skip = #{ShouldSkip:W};
+                        if skip {
                             #{None}
                         } else {
                             return #{Err}(#{Error}::unhandled(${errorMessage.dq()}));
@@ -333,10 +332,12 @@ class ProtocolParserGenerator(
                 *preludeScope,
                 "deserializer" to deserializer,
                 "Error" to errorSymbol,
-                "unreadable_scan" to unreadableScan,
-                "NonUtf8HeaderHandling" to
-                    RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
-                        .resolve("http::NonUtf8HeaderHandling"),
+                "ShouldSkip" to
+                    nonUtf8HeaderShouldBeSkipped(
+                        codegenContext.runtimeConfig,
+                        "_cfg",
+                        unreadableScan,
+                    ),
             )
         }
 

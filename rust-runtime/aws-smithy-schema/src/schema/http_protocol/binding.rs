@@ -5,6 +5,7 @@
 
 //! HTTP binding protocol for REST-style APIs.
 
+use super::response::{http_error_deserializer, http_output_deserializer};
 use crate::codec::{Codec, FinishSerializer};
 use crate::protocol::{apply_http_endpoint, ClientProtocolInner};
 use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer};
@@ -247,7 +248,7 @@ impl<C: Codec> HttpBindingProtocol<C> {
                 // This mirrors the assertion `AwsJsonRpcProtocol` and `AwsQueryProtocol` make about
                 // their own fixed routes. See `ClientProtocolInner::serialize_request` for the
                 // general rule that `endpoint` is advisory.
-                append_uri_with_labels(template, &labels, &mut uri);
+                append_uri_with_labels(template, &labels, &mut uri)?;
             }
             None => {
                 if endpoint.is_empty() {
@@ -256,7 +257,7 @@ impl<C: Codec> HttpBindingProtocol<C> {
                     // Endpoint may contain `{...}` label placeholders to
                     // substitute (this branch is for shapes without an
                     // `@http` trait, where the endpoint *is* the template).
-                    append_uri_with_labels(endpoint, &labels, &mut uri);
+                    append_uri_with_labels(endpoint, &labels, &mut uri)?;
                 }
             }
         }
@@ -379,11 +380,16 @@ pub(crate) fn percent_encode_into(input: &str, out: &mut String) {
 /// `path.replace(&format!("{{{name}}}"), ...)` per label — multiple
 /// String allocations per label and quadratic full-string scans. Top
 /// hot path on PutObject SER (~25% of bench loop pre-fix).
+///
+/// A template label with no value, or an empty one, is an error, as in the generated
+/// (non-schema) request serializer: substituting nothing would collapse the path segment, so
+/// `/{Bucket}/{Key+}` with an empty bucket would silently become `//key`. A greedy label whose
+/// value has an empty inner segment (`a//b`) is still allowed.
 fn append_uri_with_labels<'sc>(
     template: &str,
     labels: &[(Cow<'sc, str>, String)],
     out: &mut String,
-) {
+) -> Result<(), SerdeError> {
     let mut rem = template;
     while let Some(open) = rem.find('{') {
         out.push_str(&rem[..open]);
@@ -407,29 +413,33 @@ fn append_uri_with_labels<'sc>(
             .iter()
             .find(|(n, _)| n.as_ref() == name)
             .map(|(_, v)| v.as_str());
-        if let Some(v) = value {
-            if greedy {
-                // Encode each `/`-separated segment independently to preserve `/`.
-                let mut first = true;
-                for seg in v.split('/') {
-                    if !first {
-                        out.push('/');
-                    }
-                    percent_encode_into(seg, out);
-                    first = false;
-                }
-            } else {
-                percent_encode_into(v, out);
+        let v = match value {
+            Some(v) if !v.is_empty() => v,
+            _ => {
+                return Err(SerdeError::invalid_input(format!(
+                    "{name} was missing: cannot be empty or unset"
+                )))
             }
+        };
+        if greedy {
+            // Encode each `/`-separated segment independently to preserve `/`.
+            let mut first = true;
+            for seg in v.split('/') {
+                if !first {
+                    out.push('/');
+                }
+                percent_encode_into(seg, out);
+                first = false;
+            }
+        } else {
+            percent_encode_into(v, out);
         }
-        // else: label not provided — leave it as nothing (matches previous
-        // behavior where `replace` would not match because the input never
-        // contained the placeholder).
         rem = &after_open[close + 1..];
     }
     if !rem.is_empty() {
         out.push_str(rem);
     }
+    Ok(())
 }
 
 pub(crate) const HEX: &[u8; 16] = b"0123456789ABCDEF";
@@ -653,6 +663,28 @@ impl<'a> BindingState<'a> {
 /// zero-allocation borrow in practice. The owned arm exists so that relaxing
 /// `@httpHeader` to accept arena-borrowed names stays an additive change
 /// instead of breaking this call site.
+/// Inserts a header bound to `member`, returning an error rather than panicking when the
+/// name or value is not a valid HTTP header component.
+///
+/// The name of a prefix header comes from a map key in the input, and a header value can
+/// contain any character a string member allows (a newline, for instance), so either can be
+/// invalid. The error names the member and `location` (the header, or the prefix for a prefix
+/// header) but never the value, which may be sensitive.
+fn insert_header(
+    headers: &mut Headers,
+    name: Cow<'static, str>,
+    value: String,
+    member: &Schema<'_>,
+    location: std::fmt::Arguments<'_>,
+) -> Result<(), SerdeError> {
+    headers.try_insert(name, value).map(|_| ()).map_err(|err| {
+        SerdeError::invalid_input(format!(
+            "cannot serialize {} to {location}: {err}",
+            member.member_name().unwrap_or("member"),
+        ))
+    })
+}
+
 fn header_name(header: &crate::traits::HttpHeaderTrait<'_>) -> Cow<'static, str> {
     match header.value_static() {
         Some(name) => Cow::Borrowed(name),
@@ -758,22 +790,30 @@ impl<'s, 'b, 'a> ShapeSerializer for BindingRouter<'s, 'b, 'a> {
             }
             let mut collector = ListElementCollector::for_header();
             write_elements(&mut collector)?;
-            // RFC 7230: string values containing commas or quotes need quoting.
-            // Timestamps are NOT quoted even though http-date contains commas.
+            // RFC 7230: string values are quoted with the same rule the generated
+            // (non-schema) header serializer uses, `quote_header_value`. Timestamps are NOT
+            // quoted even though http-date contains commas; readers use `many_dates`.
             let header_val = collector
                 .values
                 .iter()
                 .zip(collector.quotable.iter())
                 .map(|(s, &quotable)| {
-                    if quotable && (s.contains(',') || s.contains('"')) {
-                        format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
+                    if quotable {
+                        aws_smithy_runtime_api::http::header_parse::quote_header_value(s.as_str())
+                            .into_owned()
                     } else {
                         s.clone()
                     }
                 })
                 .collect::<Vec<_>>()
                 .join(", ");
-            self.state.headers.insert(header_name(header), header_val);
+            insert_header(
+                self.state.headers,
+                header_name(header),
+                header_val,
+                schema,
+                format_args!("header `{}`", header.value()),
+            )?;
             return Ok(());
         }
         // @httpQuery on a list: add each element as a separate query param
@@ -813,7 +853,13 @@ impl<'s, 'b, 'a> ShapeSerializer for BindingRouter<'s, 'b, 'a> {
             write_entries(&mut collector)?;
             // Names are dynamic (prefix + map key) — owned Strings.
             for (k, v) in collector.entries {
-                self.state.headers.insert(k, v);
+                insert_header(
+                    self.state.headers,
+                    Cow::Owned(k),
+                    v,
+                    schema,
+                    format_args!("headers with prefix `{}`", prefix.value()),
+                )?;
             }
             return Ok(());
         }
@@ -969,9 +1015,14 @@ impl<'s, 'b, 'a> ShapeSerializer for BindingRouter<'s, 'b, 'a> {
                 return Ok(());
             }
             let encoded = aws_smithy_types::base64::encode(value.as_ref());
-            self.state
-                .headers
-                .insert(header_name(schema.http_header().unwrap()), encoded);
+            let header = schema.http_header().unwrap();
+            insert_header(
+                self.state.headers,
+                header_name(header),
+                encoded,
+                schema,
+                format_args!("header `{}`", header.value()),
+            )?;
             return Ok(());
         }
         if schema.http_payload().is_some() {
@@ -996,24 +1047,13 @@ impl<'s, 'b, 'a> ShapeSerializer for BindingRouter<'s, 'b, 'a> {
         let schema = self.state.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
             // Headers default to http-date, query/label default to date-time
-            let format = if let Some(ts_trait) = schema.timestamp_format() {
-                match ts_trait.format() {
-                    crate::traits::TimestampFormat::EpochSeconds => {
-                        aws_smithy_types::date_time::Format::EpochSeconds
-                    }
-                    crate::traits::TimestampFormat::HttpDate => {
-                        aws_smithy_types::date_time::Format::HttpDate
-                    }
-                    crate::traits::TimestampFormat::DateTime => {
-                        aws_smithy_types::date_time::Format::DateTime
-                    }
-                }
-            } else {
+            let format = super::timestamp_format_or(
+                schema,
                 match binding {
                     HttpBinding::Header => aws_smithy_types::date_time::Format::HttpDate,
                     _ => aws_smithy_types::date_time::Format::DateTime,
-                }
-            };
+                },
+            );
             let formatted = value
                 .fmt(format)
                 .map_err(|e| SerdeError::custom(format!("failed to format timestamp: {e}")))?;
@@ -1079,7 +1119,13 @@ impl<'a> BindingState<'a> {
                 // recovers one from the trait, which is a zero-allocation
                 // borrow for every schema constructible today.
                 if let Some(header) = schema.http_header() {
-                    self.headers.insert(header_name(header), value.to_string());
+                    insert_header(
+                        self.headers,
+                        header_name(header),
+                        value.to_string(),
+                        schema,
+                        format_args!("header `{}`", header.value()),
+                    )?;
                 }
             }
             HttpBinding::Query => {
@@ -1212,24 +1258,14 @@ impl ShapeSerializer for ListElementCollector {
         schema: &Schema<'_>,
         value: &aws_smithy_types::DateTime,
     ) -> Result<(), SerdeError> {
-        let format = match schema.timestamp_format() {
-            Some(ts) => match ts.format() {
-                crate::traits::TimestampFormat::EpochSeconds => {
-                    aws_smithy_types::date_time::Format::EpochSeconds
-                }
-                crate::traits::TimestampFormat::HttpDate => {
-                    aws_smithy_types::date_time::Format::HttpDate
-                }
-                crate::traits::TimestampFormat::DateTime => {
-                    aws_smithy_types::date_time::Format::DateTime
-                }
-            },
+        let format = super::timestamp_format_or(
+            schema,
             // Default: headers use http-date, query params use date-time
-            None => match self.target {
+            match self.target {
                 HttpListTarget::Header => aws_smithy_types::date_time::Format::HttpDate,
                 HttpListTarget::Query => aws_smithy_types::date_time::Format::DateTime,
             },
-        };
+        );
         self.push_unquotable(
             value
                 .fmt(format)
@@ -1377,26 +1413,63 @@ where
         self.serialize_request_with_body(body, input, input_schema, endpoint, cfg)
     }
 
+    /// Returns a deserializer that reads the **whole** response: `@httpHeader`,
+    /// `@httpPrefixHeaders`, `@httpResponseCode`, and `@httpPayload` members from the HTTP
+    /// message, everything else from the body codec.
+    ///
+    /// This is what makes binding applicability a property of the protocol selected at runtime
+    /// rather than of the protocol the client was generated from. An output with no
+    /// response-bound members still gets the bare codec deserializer.
+    ///
+    /// # On the body
+    ///
+    /// For a non-streaming response the orchestrator has already loaded the body into an
+    /// in-memory `Once(..)`, so `bytes()` returns the payload. For a streaming response — whose
+    /// output has a `@streaming` `@httpPayload` blob or event-stream member — the body is left
+    /// as a `BoxBody`, possibly further wrapped by an interceptor such as
+    /// `ResponseChecksumInterceptor`, and `bytes()` returns `None`.
+    ///
+    /// The codec is therefore built over `unwrap_or(&[])`, which it reads as "no body members",
+    /// while the true `Option` is what the wrapper uses to tell an unbuffered body apart from an
+    /// empty one. A `@streaming` payload is skipped outright, so the live body is never consumed
+    /// here.
     fn deserialize_response<'a>(
         &self,
         response: &'a Response,
-        _output_schema: &Schema<'_>,
-        _cfg: &ConfigBag,
+        output_schema: &Schema<'_>,
+        cfg: &'a ConfigBag,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
-        // For non-streaming responses the orchestrator has already loaded
-        // the body into an in-memory `Once(...)`, so `bytes()` returns the
-        // payload to feed into the codec. For streaming responses (whose
-        // outputs have an `@httpPayload` streaming blob or event-stream
-        // member) the body is left as a streaming `BoxBody` — possibly
-        // further wrapped by interceptors such as `ResponseChecksumInterceptor`
-        // — and `bytes()` returns `None`. The streaming codegen path
-        // doesn't actually feed the body through this deserializer (it
-        // passes `&[]` to `deserialize_with_response`), so we hand back an
-        // empty-input deserializer instead of erroring. Empty input is
-        // interpreted by the codec as "no body members to read", which
-        // matches the streaming path's contract.
         let body = response.body().bytes().unwrap_or(&[]);
-        Ok(Box::new(self.codec.create_deserializer(body)))
+        Ok(http_output_deserializer(
+            self.codec.create_deserializer(body),
+            response,
+            output_schema,
+            cfg,
+        ))
+    }
+
+    /// Returns a deserializer for a modeled error response.
+    ///
+    /// Overridden rather than left to the default forwarding, which would hand the error to
+    /// [`deserialize_response`](Self::deserialize_response) and therefore to a success-mode
+    /// wrapper. A success-mode wrapper gives an empty body to the codec, but services do send
+    /// empty error bodies — an S3 `HEAD` is the standard case — and those responses must still
+    /// populate their header and status members. The error helper tolerates that while reading
+    /// the same bindings.
+    ///
+    /// A protocol with an error envelope (restXml, awsQuery) overrides this again to position
+    /// the body inside the envelope before wrapping.
+    fn deserialize_error_response<'a>(
+        &self,
+        response: &'a Response,
+        cfg: &'a ConfigBag,
+    ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
+        let body = response.body().bytes().unwrap_or(&[]);
+        Ok(http_error_deserializer(
+            self.codec.create_deserializer(body),
+            response,
+            cfg,
+        ))
     }
 
     fn payload_codec(&self) -> Option<&dyn crate::codec::DynCodec> {
@@ -1567,11 +1640,17 @@ mod tests {
     }
 
     impl ShapeDeserializer for TestDeserializer<'_> {
+        /// Rejects an empty body, which is what the real JSON and XML codecs do. Without that,
+        /// "was the body handed to the codec?" is unobservable and the error path's empty-body
+        /// tolerance cannot be told apart from the success path.
         fn read_struct(
             &mut self,
             _: &Schema<'_>,
             _: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
         ) -> Result<(), SerdeError> {
+            if self.input.is_empty() {
+                return Err(SerdeError::invalid_input("expected a body, found none"));
+            }
             Ok(())
         }
         fn read_list(
@@ -2346,8 +2425,9 @@ mod tests {
             200u16.try_into().unwrap(),
             SdkBody::from(r#"{"name":"Bob"}"#),
         );
+        let base_cfg = ConfigBag::base();
         let mut deser = make_protocol()
-            .deserialize_response(&response, &TEST_SCHEMA, &ConfigBag::base())
+            .deserialize_response(&response, &TEST_SCHEMA, &base_cfg)
             .unwrap();
         assert_eq!(deser.read_string(&STRING).unwrap(), r#"{"name":"Bob"}"#);
     }
@@ -2433,6 +2513,46 @@ mod tests {
         assert_eq!(request.headers().get("X-Token").unwrap(), "my-token-value");
     }
 
+    /// String list headers are quoted with the rule the generated (non-schema) header
+    /// serializer uses: on `,`, `"`, `(`, `)` and surrounding whitespace.
+    #[test]
+    fn http_header_string_list_quoting_matches_legacy() {
+        static LIST_MEMBER: Schema<'static> =
+            Schema::new_member(crate::shape_id!("test", "L"), ShapeType::List, "items", 0)
+                .with_http_header("X-Items");
+        static LIST_SCHEMA: Schema<'static> = Schema::new_struct(
+            crate::shape_id!("test", "L"),
+            ShapeType::Structure,
+            &[&LIST_MEMBER],
+        );
+        struct ListStruct;
+        impl SerializableStruct for ListStruct {
+            fn schema(&self) -> &Schema<'_> {
+                &LIST_SCHEMA
+            }
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_list(&LIST_MEMBER, &|e| {
+                    for v in ["plain", " a", "b ", "(x)", "c,d", "q\"q"] {
+                        e.write_string(&crate::prelude::STRING, v)?;
+                    }
+                    Ok(())
+                })
+            }
+        }
+        let request = make_protocol()
+            .serialize_request(
+                &ListStruct,
+                &LIST_SCHEMA,
+                "https://example.com",
+                &ConfigBag::base(),
+            )
+            .unwrap();
+        assert_eq!(
+            request.headers().get("X-Items").unwrap(),
+            r#"plain, " a", "b ", "(x)", "c,d", "q\"q""#
+        );
+    }
+
     /// Header binding for a schema built at *runtime*: the structural strings
     /// are borrowed from a local arena (so `'a` is a function-body lifetime,
     /// not `'static`), while the header name itself is `'static` — standing in
@@ -2495,12 +2615,7 @@ mod tests {
         assert!(std::ptr::eq(input.schema(), &schema));
 
         let request = make_protocol()
-            .serialize_request(
-                &input,
-                &schema,
-                "https://example.com",
-                &ConfigBag::base(),
-            )
+            .serialize_request(&input, &schema, "https://example.com", &ConfigBag::base())
             .unwrap();
 
         assert_eq!(
@@ -2820,6 +2935,90 @@ mod tests {
         assert_eq!(request.uri(), "https://example.com/items/123");
     }
 
+    /// From review of PR #4871: a missing or empty label used to be dropped, collapsing its
+    /// path segment (`/{Bucket}/{Key+}` with an empty bucket became `//my-key`). It is an
+    /// error now, worded as in the generated (non-schema) serializer.
+    #[test]
+    fn missing_or_empty_label_is_an_error() {
+        fn expand(template: &str, labels: &[(&'static str, &str)]) -> Result<String, String> {
+            let labels: Vec<(Cow<'_, str>, String)> = labels
+                .iter()
+                .map(|(n, v)| (Cow::Borrowed(*n), v.to_string()))
+                .collect();
+            let mut out = String::new();
+            append_uri_with_labels(template, &labels, &mut out)
+                .map(|()| out)
+                .map_err(|e| e.to_string())
+        }
+        let template = "/{Bucket}/{Key+}";
+        assert_eq!(
+            expand(template, &[("Bucket", "b"), ("Key", "a//b")]).unwrap(),
+            "/b/a//b",
+            "an empty inner segment of a greedy label is still allowed"
+        );
+        for (labels, missing) in [
+            (&[("Key", "k")][..], "Bucket"),
+            (&[("Bucket", ""), ("Key", "k")][..], "Bucket"),
+            (&[("Bucket", "b")][..], "Key"),
+            (&[("Bucket", "b"), ("Key", "")][..], "Key"),
+        ] {
+            let err = expand(template, labels).expect_err(&format!("{labels:?}"));
+            assert!(
+                err.contains(&format!("{missing} was missing: cannot be empty or unset")),
+                "{err}"
+            );
+        }
+        // An unmatched `{` is unrelated and still passed through verbatim.
+        assert_eq!(expand("/a{b", &[]).unwrap(), "/a{b");
+    }
+
+    #[test]
+    fn empty_label_fails_serialize_request() {
+        static BUCKET: Schema<'static> = Schema::new_member(
+            crate::shape_id!("test", "Get"),
+            ShapeType::String,
+            "Bucket",
+            0,
+        )
+        .with_http_label();
+        static KEY: Schema<'static> =
+            Schema::new_member(crate::shape_id!("test", "Get"), ShapeType::String, "Key", 1)
+                .with_http_label();
+        static GET_SCHEMA: Schema<'static> = Schema::new_struct(
+            crate::shape_id!("test", "Get"),
+            ShapeType::Structure,
+            &[&BUCKET, &KEY],
+        )
+        .with_http(crate::traits::HttpTrait::new(
+            "GET",
+            "/{Bucket}/{Key+}",
+            None,
+        ));
+        struct Get(&'static str);
+        impl SerializableStruct for Get {
+            fn schema(&self) -> &Schema<'_> {
+                &GET_SCHEMA
+            }
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_string(&BUCKET, self.0)?;
+                s.write_string(&KEY, "my-key")
+            }
+        }
+        let protocol = make_protocol();
+        let request = protocol
+            .serialize_request(&Get("b"), &GET_SCHEMA, "", &ConfigBag::base())
+            .unwrap();
+        assert_eq!(request.uri(), "/b/my-key");
+        let err = protocol
+            .serialize_request(&Get(""), &GET_SCHEMA, "", &ConfigBag::base())
+            .expect_err("an empty bucket must not produce `//my-key`");
+        assert!(
+            err.to_string()
+                .contains("Bucket was missing: cannot be empty or unset"),
+            "{err}"
+        );
+    }
+
     // -- Combined: @httpHeader + @httpQuery + @httpLabel + body --
 
     static COMBINED_LABEL: Schema<'static> =
@@ -2926,6 +3125,99 @@ mod tests {
             .unwrap();
         assert_eq!(request.headers().get("X-Meta-Color").unwrap(), "red");
         assert_eq!(request.headers().get("X-Meta-Size").unwrap(), "large");
+    }
+
+    /// Serializes a single prefix-header entry; the map key becomes part of the header name.
+    fn serialize_prefix_entry(key: &'static str, value: &'static str) -> Result<(), SerdeError> {
+        struct Entry(&'static str, &'static str);
+        impl SerializableStruct for Entry {
+            fn schema(&self) -> &Schema<'_> {
+                &PREFIX_SCHEMA
+            }
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_map(&PREFIX_MEMBER, &|s| {
+                    s.write_string(&STRING, self.0)?;
+                    s.write_string(&STRING, self.1)
+                })
+            }
+        }
+        make_protocol()
+            .serialize_request(
+                &Entry(key, value),
+                &PREFIX_SCHEMA,
+                "https://example.com",
+                &ConfigBag::base(),
+            )
+            .map(|_| ())
+    }
+
+    /// From review of PR #4871: an invalid header name or value used to panic inside
+    /// `Headers::insert`. It must be an error that names the member and the prefix or header,
+    /// but not the value.
+    #[test]
+    fn invalid_prefix_header_name_or_value_is_an_error_not_a_panic() {
+        for (key, value) in [
+            ("has space", "secret-1"),
+            ("colon:", "secret-2"),
+            ("non-ascii-é", "secret-3"),
+            ("Ok", "secret\nbreak"),
+        ] {
+            let err = serialize_prefix_entry(key, value)
+                .expect_err(&format!("{key:?}/{value:?} must be rejected"));
+            let message = err.to_string();
+            assert!(
+                message.contains("metadata") && message.contains("prefix `X-Meta-`"),
+                "{message}"
+            );
+            assert!(!message.contains(value), "value leaked: {message}");
+        }
+        serialize_prefix_entry("Ok", "fine").expect("a valid entry still serializes");
+    }
+
+    #[test]
+    fn invalid_header_value_is_an_error_not_a_panic() {
+        struct Scalar;
+        impl SerializableStruct for Scalar {
+            fn schema(&self) -> &Schema<'_> {
+                &HEADER_SCHEMA
+            }
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_string(&HEADER_MEMBER, "secret\r\ninjected: 1")
+            }
+        }
+        static LIST_MEMBER: Schema<'static> =
+            Schema::new_member(crate::shape_id!("test", "L"), ShapeType::List, "items", 0)
+                .with_http_header("X-Items");
+        static LIST_SCHEMA: Schema<'static> = Schema::new_struct(
+            crate::shape_id!("test", "L"),
+            ShapeType::Structure,
+            &[&LIST_MEMBER],
+        );
+        struct List;
+        impl SerializableStruct for List {
+            fn schema(&self) -> &Schema<'_> {
+                &LIST_SCHEMA
+            }
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_list(&LIST_MEMBER, &|e| {
+                    e.write_string(&STRING, "ok")?;
+                    e.write_string(&STRING, "secret\nvalue")
+                })
+            }
+        }
+        let protocol = make_protocol();
+        let cases: [(&dyn SerializableStruct, &Schema<'static>, &str); 2] = [
+            (&Scalar, &HEADER_SCHEMA, "xToken to header `X-Token`"),
+            (&List, &LIST_SCHEMA, "items to header `X-Items`"),
+        ];
+        for (input, schema, expected) in cases {
+            let err = protocol
+                .serialize_request(input, schema, "https://example.com", &ConfigBag::base())
+                .expect_err("an invalid header value must be rejected");
+            let message = err.to_string();
+            assert!(message.contains(expected), "{message}");
+            assert!(!message.contains("secret"), "value leaked: {message}");
+        }
     }
 
     // -- @httpQueryParams tests --
@@ -3108,5 +3400,206 @@ mod tests {
             "body should NOT contain header-bound member"
         );
         assert_eq!(request.headers().get("X-Val").unwrap(), "in-header");
+    }
+
+    // ---------------------------------------------------------------------------------
+    // response bindings are owned by the protocol
+    //
+    // A populated header member is only reachable through the response wrapper, so these are
+    // the assertions that the wiring exists at all. The wrapper's own branch decisions are
+    // covered in `super::response`.
+    // ---------------------------------------------------------------------------------
+
+    static RESP_NAME: Schema<'static> = Schema::new_member(
+        crate::shape_id!("test", "Out"),
+        ShapeType::String,
+        "name",
+        0,
+    )
+    .with_http_header("x-name");
+    static RESP_STATUS: Schema<'static> = Schema::new_member(
+        crate::shape_id!("test", "Out"),
+        ShapeType::Integer,
+        "status",
+        1,
+    )
+    .with_http_response_code();
+    static RESP_BOUND: Schema<'static> = Schema::new_struct(
+        crate::shape_id!("test", "Out"),
+        ShapeType::Structure,
+        &[&RESP_NAME, &RESP_STATUS],
+    );
+
+    static RESP_BODY_FIELD: Schema<'static> = Schema::new_member(
+        crate::shape_id!("test", "Out"),
+        ShapeType::String,
+        "note",
+        2,
+    );
+    /// Bound *and* body members, so the body codec is invoked and its empty-input strictness is
+    /// reachable.
+    static RESP_MIXED: Schema<'static> = Schema::new_struct(
+        crate::shape_id!("test", "Out"),
+        ShapeType::Structure,
+        &[&RESP_NAME, &RESP_STATUS, &RESP_BODY_FIELD],
+    );
+
+    static RESP_STREAM: Schema<'static> = Schema::new_member(
+        crate::shape_id!("test", "Stream"),
+        ShapeType::Blob,
+        "body",
+        0,
+    )
+    .with_http_payload()
+    .with_streaming();
+    static RESP_STREAM_HEADER: Schema<'static> = Schema::new_member(
+        crate::shape_id!("test", "Stream"),
+        ShapeType::String,
+        "name",
+        1,
+    )
+    .with_http_header("x-name");
+    static RESP_STREAMING_OUT: Schema<'static> = Schema::new_struct(
+        crate::shape_id!("test", "Stream"),
+        ShapeType::Structure,
+        &[&RESP_STREAM, &RESP_STREAM_HEADER],
+    );
+
+    fn response_with(
+        status: u16,
+        headers: &[(&str, &str)],
+        body: aws_smithy_types::body::SdkBody,
+    ) -> Response {
+        let mut builder = http::Response::builder().status(status);
+        for (name, value) in headers {
+            builder = builder.header(*name, *value);
+        }
+        Response::try_from(builder.body(body).expect("response")).expect("convertible")
+    }
+
+    /// Collects whatever the consumer was handed, keyed by member name.
+    fn collect<'c>(
+        strings: &'c mut Vec<(String, String)>,
+        integers: &'c mut Vec<(String, i32)>,
+    ) -> impl FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError> + 'c {
+        move |member, deser| {
+            let name = member.member_name().unwrap_or("?").to_string();
+            match member.shape_type() {
+                ShapeType::Integer => integers.push((name, deser.read_integer(member)?)),
+                _ => strings.push((name, deser.read_string(member)?)),
+            }
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn deserialize_response_reads_modeled_headers_and_status() {
+        let response = response_with(
+            201,
+            &[("x-name", "widget")],
+            aws_smithy_types::body::SdkBody::from("{}"),
+        );
+        let mut strings = Vec::new();
+        let mut integers = Vec::new();
+        make_protocol()
+            .deserialize_response(&response, &RESP_BOUND, &ConfigBag::base())
+            .unwrap()
+            .read_struct(&RESP_BOUND, &mut collect(&mut strings, &mut integers))
+            .unwrap();
+        assert_eq!(strings, vec![("name".to_string(), "widget".to_string())]);
+        assert_eq!(integers, vec![("status".to_string(), 201)]);
+    }
+
+    #[test]
+    fn deserialize_error_response_tolerates_an_empty_body_and_still_reads_bindings() {
+        // The reason this method is overridden rather than left to the default forwarding: a
+        // service may send a modeled error with no body at all — an S3 `HEAD` is the standard
+        // case — and the response must still populate its header and status members.
+        //
+        // The schema has a body member on purpose. Without one the body is skipped regardless of
+        // mode, and the default forwarding would pass this test while being wrong.
+        let response = response_with(
+            404,
+            &[("x-name", "missing")],
+            aws_smithy_types::body::SdkBody::empty(),
+        );
+        let mut strings = Vec::new();
+        let mut integers = Vec::new();
+        make_protocol()
+            .deserialize_error_response(&response, &ConfigBag::base())
+            .unwrap()
+            .read_struct(&RESP_MIXED, &mut collect(&mut strings, &mut integers))
+            .expect("an empty error body must not be handed to the codec");
+        assert_eq!(strings, vec![("name".to_string(), "missing".to_string())]);
+        assert_eq!(integers, vec![("status".to_string(), 404)]);
+    }
+
+    #[test]
+    fn deserialize_response_keeps_the_codecs_empty_body_strictness_for_a_success() {
+        // The counterpart to the test above: the empty-body tolerance is specific to errors, not
+        // a general loosening. The same response through the success path still reaches the codec.
+        let response = response_with(
+            200,
+            &[("x-name", "here")],
+            aws_smithy_types::body::SdkBody::empty(),
+        );
+        let mut strings = Vec::new();
+        let mut integers = Vec::new();
+        let err = make_protocol()
+            .deserialize_response(&response, &RESP_MIXED, &ConfigBag::base())
+            .unwrap()
+            .read_struct(&RESP_MIXED, &mut collect(&mut strings, &mut integers))
+            .expect_err("a successful response still hands an empty body to the codec");
+        assert!(
+            format!("{err}").contains("expected a body"),
+            "unexpected: {err}"
+        );
+    }
+
+    #[test]
+    fn deserialize_response_reads_headers_without_consuming_a_streaming_payload() {
+        // A streaming response leaves the body unbuffered. The payload member is owned by the
+        // generated streaming path, so it must be left alone while its siblings are still read —
+        // this is the case event-stream and streaming-blob outputs miss today.
+        let response = response_with(
+            200,
+            &[("x-name", "stream")],
+            aws_smithy_types::body::SdkBody::taken(),
+        );
+        assert!(
+            response.body().bytes().is_none(),
+            "precondition: the body is not buffered"
+        );
+        let mut strings = Vec::new();
+        let mut integers = Vec::new();
+        make_protocol()
+            .deserialize_response(&response, &RESP_STREAMING_OUT, &ConfigBag::base())
+            .unwrap()
+            .read_struct(
+                &RESP_STREAMING_OUT,
+                &mut collect(&mut strings, &mut integers),
+            )
+            .unwrap();
+        assert_eq!(
+            strings,
+            vec![("name".to_string(), "stream".to_string())],
+            "the header must be read and the streaming payload left untouched"
+        );
+    }
+
+    #[test]
+    fn deserialize_response_still_hands_a_body_only_output_to_the_codec() {
+        // The common REST case. `STRUCT_WITH_MEMBER` has one unbound member, so it takes the
+        // body-only fast path and the returned deserializer is the codec's own.
+        let response = response_with(
+            200,
+            &[],
+            aws_smithy_types::body::SdkBody::from(r#"{"name":"Bob"}"#),
+        );
+        let base_cfg = ConfigBag::base();
+        let mut deser = make_protocol()
+            .deserialize_response(&response, &STRUCT_WITH_MEMBER, &base_cfg)
+            .unwrap();
+        assert_eq!(deser.read_string(&STRING).unwrap(), r#"{"name":"Bob"}"#);
     }
 }

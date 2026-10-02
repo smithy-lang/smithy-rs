@@ -6,8 +6,7 @@
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.condition.EnabledIf
-import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -39,17 +38,24 @@ import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
  * Sibling suite: [ErrorRegistryDecoratorTest] for the error-registry
  * counterpart.
  */
-@EnabledIf("schemaSerdeEnabled")
 class TypeRegistryDecoratorTest {
-    companion object {
-        /**
-         * `Client::registry()` is only generated when the service's protocol is on
-         * [SchemaSerdeAllowlist]. This suite's model uses awsJson1_0, so it runs only
-         * when that protocol is enabled for schema-serde and is skipped otherwise —
-         * keeping the coverage live without hard-disabling it.
-         */
-        @JvmStatic
-        fun schemaSerdeEnabled(): Boolean = SchemaSerdeAllowlist.isProtocolEnabled(AwsJson1_0Trait.ID)
+    /**
+     * `Client::registry()` only exists when the service is generated with schema serde
+     * exclusively, so every test here depends on that wiring. The fixture model uses the
+     * dedicated schema-serde test namespace, which is allowlisted independently of the
+     * production service and protocol rollout state, so this is a hard invariant rather
+     * than a condition to skip on.
+     *
+     * A previous version of this suite gated on
+     * `SchemaSerdeAllowlist.isProtocolEnabled(AwsJson1_0Trait.ID)`, which is false while
+     * the protocol allowlist is empty during rollout. All seven tests were silently
+     * skipped and asserted nothing.
+     */
+    private fun requireSchemaSerde(codegenContext: ClientCodegenContext) {
+        check(SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
+            "this suite's fixture must be generated with schema serde exclusively; " +
+                "check that its namespace is still allowlisted in SchemaSerdeAllowlist"
+        }
     }
 
     private fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> {
@@ -85,7 +91,7 @@ class TypeRegistryDecoratorTest {
      */
     private val model =
         """
-        namespace com.example
+        namespace smithy.rust.codegen.test.schemaheaders
         use aws.protocols#awsJson1_0
 
         @awsJson1_0
@@ -147,6 +153,7 @@ class TypeRegistryDecoratorTest {
     @Test
     fun `registry contains user-modeled structures including nested-only ones`() {
         clientIntegrationTest(model) { codegenContext, rustCrate ->
+            requireSchemaSerde(codegenContext)
             rustCrate.integrationTest("registry_contains_modeled_structures") {
                 val moduleName = codegenContext.moduleUseName()
                 Attribute.Test.render(this)
@@ -158,7 +165,7 @@ class TypeRegistryDecoratorTest {
                         // Bird is a top-level operation output member — present.
                         assert!(
                             registry
-                                .schema_for(&#{shape_id}!("com.example", "Bird"))
+                                .schema_for(&#{shape_id}!("smithy.rust.codegen.test.schemaheaders", "Bird"))
                                 .is_some(),
                             "Bird must be registered",
                         );
@@ -169,7 +176,7 @@ class TypeRegistryDecoratorTest {
                         // shapes, not just direct operation I/O.
                         assert!(
                             registry
-                                .schema_for(&#{shape_id}!("com.example", "Habitat"))
+                                .schema_for(&#{shape_id}!("smithy.rust.codegen.test.schemaheaders", "Habitat"))
                                 .is_some(),
                             "Habitat (transitively referenced) must be registered",
                         );
@@ -179,13 +186,13 @@ class TypeRegistryDecoratorTest {
                         // should be registered.
                         assert!(
                             registry
-                                .schema_for(&#{shape_id}!("com.example", "Sighted"))
+                                .schema_for(&#{shape_id}!("smithy.rust.codegen.test.schemaheaders", "Sighted"))
                                 .is_some(),
                             "Sighted (union variant target) must be registered",
                         );
                         assert!(
                             registry
-                                .schema_for(&#{shape_id}!("com.example", "Departed"))
+                                .schema_for(&#{shape_id}!("smithy.rust.codegen.test.schemaheaders", "Departed"))
                                 .is_some(),
                             "Departed (union variant target) must be registered",
                         );
@@ -200,6 +207,7 @@ class TypeRegistryDecoratorTest {
     @Test
     fun `registry excludes union shapes`() {
         clientIntegrationTest(model) { codegenContext, rustCrate ->
+            requireSchemaSerde(codegenContext)
             rustCrate.integrationTest("registry_excludes_unions") {
                 val moduleName = codegenContext.moduleUseName()
                 Attribute.Test.render(this)
@@ -213,7 +221,7 @@ class TypeRegistryDecoratorTest {
                         // they share structural traits with structures.
                         assert!(
                             registry
-                                .schema_for(&#{shape_id}!("com.example", "BirdEvent"))
+                                .schema_for(&#{shape_id}!("smithy.rust.codegen.test.schemaheaders", "BirdEvent"))
                                 .is_none(),
                             "BirdEvent (union) must NOT be in the primary registry",
                         );
@@ -228,6 +236,7 @@ class TypeRegistryDecoratorTest {
     @Test
     fun `registry includes error shapes`() {
         clientIntegrationTest(model) { codegenContext, rustCrate ->
+            requireSchemaSerde(codegenContext)
             rustCrate.integrationTest("registry_includes_errors") {
                 val moduleName = codegenContext.moduleUseName()
                 Attribute.Test.render(this)
@@ -243,7 +252,7 @@ class TypeRegistryDecoratorTest {
                         // both registries.
                         assert!(
                             registry
-                                .schema_for(&#{shape_id}!("com.example", "BirdNotFound"))
+                                .schema_for(&#{shape_id}!("smithy.rust.codegen.test.schemaheaders", "BirdNotFound"))
                                 .is_some(),
                             "@error structures must appear in the primary registry",
                         );
@@ -258,6 +267,7 @@ class TypeRegistryDecoratorTest {
     @Test
     fun `registry excludes synthetic operation input and output shapes`() {
         clientIntegrationTest(model) { codegenContext, rustCrate ->
+            requireSchemaSerde(codegenContext)
             rustCrate.integrationTest("registry_excludes_synthetics") {
                 val moduleName = codegenContext.moduleUseName()
                 Attribute.Test.render(this)
@@ -267,20 +277,20 @@ class TypeRegistryDecoratorTest {
                         let registry = $moduleName::Client::registry();
 
                         // OperationNormalizer renames operation input/output shapes,
-                        // putting them under a `com.example.synthetic` namespace with
+                        // putting them under a `smithy.rust.codegen.test.schemaheaders.synthetic` namespace with
                         // names like `GetBirdInput` and `GetBirdOutput`. They're
                         // codegen artifacts; the decorator's SyntheticInputTrait /
                         // SyntheticOutputTrait filter excludes them so callers can't
                         // accidentally look them up under codegen-internal IDs.
                         assert!(
                             registry
-                                .schema_for(&#{shape_id}!("com.example.synthetic", "GetBirdInput"))
+                                .schema_for(&#{shape_id}!("smithy.rust.codegen.test.schemaheaders.synthetic", "GetBirdInput"))
                                 .is_none(),
                             "synthetic operation input must NOT be in the registry",
                         );
                         assert!(
                             registry
-                                .schema_for(&#{shape_id}!("com.example.synthetic", "GetBirdOutput"))
+                                .schema_for(&#{shape_id}!("smithy.rust.codegen.test.schemaheaders.synthetic", "GetBirdOutput"))
                                 .is_none(),
                             "synthetic operation output must NOT be in the registry",
                         );
@@ -295,6 +305,7 @@ class TypeRegistryDecoratorTest {
     @Test
     fun `registry deserialize_document round-trips a typed shape`() {
         clientIntegrationTest(model) { codegenContext, rustCrate ->
+            requireSchemaSerde(codegenContext)
             rustCrate.integrationTest("registry_deserialize_document_round_trip") {
                 val moduleName = codegenContext.moduleUseName()
                 Attribute.Test.render(this)
@@ -311,7 +322,7 @@ class TypeRegistryDecoratorTest {
                             #{Document}::Number(#{Number}::PosInt(1200)),
                         );
                         let doc = #{DiscriminatedDocument}::new(#{Document}::Object(members))
-                            .with_discriminator("com.example##Habitat");
+                            .with_discriminator("smithy.rust.codegen.test.schemaheaders##Habitat");
 
                         let typed = $moduleName::Client::registry()
                             .deserialize_document(&doc)
@@ -334,6 +345,7 @@ class TypeRegistryDecoratorTest {
     @Test
     fun `registry returns error for unknown discriminator`() {
         clientIntegrationTest(model) { codegenContext, rustCrate ->
+            requireSchemaSerde(codegenContext)
             rustCrate.integrationTest("registry_unknown_discriminator_errors") {
                 val moduleName = codegenContext.moduleUseName()
                 Attribute.Test.render(this)
@@ -346,7 +358,7 @@ class TypeRegistryDecoratorTest {
                         let doc = #{DiscriminatedDocument}::new(
                             #{Document}::Object(#{HashMap}::new()),
                         )
-                        .with_discriminator("com.example##NotAModeledShape");
+                        .with_discriminator("smithy.rust.codegen.test.schemaheaders##NotAModeledShape");
 
                         let result = $moduleName::Client::registry().deserialize_document(&doc);
                         assert!(result.is_err(), "unregistered shape must error");
@@ -361,6 +373,7 @@ class TypeRegistryDecoratorTest {
     @Test
     fun `registry returns error for document without discriminator`() {
         clientIntegrationTest(model) { codegenContext, rustCrate ->
+            requireSchemaSerde(codegenContext)
             rustCrate.integrationTest("registry_missing_discriminator_errors") {
                 val moduleName = codegenContext.moduleUseName()
                 Attribute.Test.render(this)

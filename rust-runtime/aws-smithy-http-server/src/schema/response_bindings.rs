@@ -210,7 +210,7 @@ fn compile_member_plan(schema: &Schema<'_>, bindings: ResponseBindings) -> Respo
         let timestamp_format = match schema.timestamp_format().map(|value| value.format()) {
             Some(aws_smithy_schema::traits::TimestampFormat::EpochSeconds) => HeaderTimestampFormat::EpochSeconds,
             Some(aws_smithy_schema::traits::TimestampFormat::DateTime) => HeaderTimestampFormat::DateTime,
-            Some(aws_smithy_schema::traits::TimestampFormat::HttpDate) | None => HeaderTimestampFormat::HttpDate,
+            Some(_) | None => HeaderTimestampFormat::HttpDate,
         };
         return ResponseMemberPlan::Header {
             name,
@@ -1028,7 +1028,21 @@ mod tests {
     )
     .with_http_payload()
     .with_streaming();
-    static STREAM_MEMBERS: [&Schema<'static>; 3] = [&EVENTS_MEMBER, &CODE_MEMBER, &HDR_MEMBER];
+    static STREAM_CODE_MEMBER: Schema<'static> = Schema::new_member(
+        ShapeId::from_parts("test#StreamOut$code", "test", "StreamOut"),
+        ShapeType::Integer,
+        "code",
+        1,
+    )
+    .with_http_response_code();
+    static STREAM_HDR_MEMBER: Schema<'static> = Schema::new_member(
+        ShapeId::from_parts("test#StreamOut$hdr", "test", "StreamOut"),
+        ShapeType::String,
+        "hdr",
+        2,
+    )
+    .with_http_header("x-hdr");
+    static STREAM_MEMBERS: [&Schema<'static>; 3] = [&EVENTS_MEMBER, &STREAM_CODE_MEMBER, &STREAM_HDR_MEMBER];
     static STREAM_OUT_SCHEMA: Schema<'static> = Schema::new_struct(
         ShapeId::from_parts("test#StreamOut", "test", "StreamOut"),
         ShapeType::Structure,
@@ -1043,8 +1057,8 @@ mod tests {
 
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             // Generated outputs skip their streaming member.
-            s.write_integer(&CODE_MEMBER, 202)?;
-            s.write_string(&HDR_MEMBER, "hval")
+            s.write_integer(&STREAM_CODE_MEMBER, 202)?;
+            s.write_string(&STREAM_HDR_MEMBER, "hval")
         }
     }
 
@@ -1086,13 +1100,26 @@ mod tests {
         assert_eq!(output_plan(&OUT_SCHEMA).strategy, ResponseStrategy::SplitBody);
         assert_eq!(output_plan(&BLOB_OUT_SCHEMA).strategy, ResponseStrategy::Payload);
 
-        static HEADER_MEMBERS: [&Schema<'static>; 1] = [&HDR_MEMBER];
+        static ONLY_HEADER: Schema<'static> = Schema::new_member(
+            ShapeId::from_parts("test#HeaderOnly$hdr", "test", "HeaderOnly"),
+            ShapeType::String,
+            "hdr",
+            0,
+        )
+        .with_http_header("x-hdr");
+        static ONLY_BODY: Schema<'static> = Schema::new_member(
+            ShapeId::from_parts("test#BodyOnly$msg", "test", "BodyOnly"),
+            ShapeType::String,
+            "msg",
+            0,
+        );
+        static HEADER_MEMBERS: [&Schema<'static>; 1] = [&ONLY_HEADER];
         static HEADER_ONLY: Schema<'static> = Schema::new_struct(
             ShapeId::from_parts("test#HeaderOnly", "test", "HeaderOnly"),
             ShapeType::Structure,
             &HEADER_MEMBERS,
         );
-        static BODY_MEMBERS: [&Schema<'static>; 1] = [&BODY_MEMBER];
+        static BODY_MEMBERS: [&Schema<'static>; 1] = [&ONLY_BODY];
         static BODY_ONLY: Schema<'static> = Schema::new_struct(
             ShapeId::from_parts("test#BodyOnly", "test", "BodyOnly"),
             ShapeType::Structure,

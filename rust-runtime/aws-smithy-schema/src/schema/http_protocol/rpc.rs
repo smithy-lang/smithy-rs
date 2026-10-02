@@ -128,13 +128,13 @@ where
         &self,
         response: &'a Response,
         _output_schema: &Schema<'_>,
-        _cfg: &ConfigBag,
+        _cfg: &'a ConfigBag,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
-        // See `HttpBindingProtocol::deserialize_response` for the rationale
-        // behind tolerating an unreadable (streaming) body. RPC protocols
-        // also flow through `deserialize_with_response` for streaming
-        // outputs and the `&[]` body slice signals "no body members to
-        // read".
+        // A streaming output's body has already been taken by the caller, so
+        // `bytes()` is `None`. The `&[]` slice reads as an empty structure, so
+        // no body member is populated; for event streams the initial-response
+        // members arrive later in the first frame. HTTP bindings are
+        // deliberately ignored: this protocol is body-only.
         let body = response.body().bytes().unwrap_or(&[]);
         Ok(Box::new(self.codec.create_deserializer(body)))
     }
@@ -264,11 +264,24 @@ mod tests {
     }
 
     impl ShapeDeserializer for TestDeserializer<'_> {
+        /// Reports every member of the schema, as a real codec would for a body that carried
+        /// them all.
+        ///
+        /// A stub that ignored the consumer could not discriminate *where* a member's value
+        /// came from, which is exactly what the body-only protocol tests below need to observe:
+        /// an RPC protocol must read an `@httpHeader` member from the body representation and
+        /// never from the header.
         fn read_struct(
             &mut self,
-            _: &Schema<'_>,
-            _: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+            schema: &Schema<'_>,
+            consumer: &mut dyn FnMut(
+                &Schema<'_>,
+                &mut dyn ShapeDeserializer,
+            ) -> Result<(), SerdeError>,
         ) -> Result<(), SerdeError> {
+            for member in schema.members() {
+                consumer(member, self)?;
+            }
             Ok(())
         }
         fn read_list(
@@ -398,6 +411,122 @@ mod tests {
         }
     }
 
+    // Fixtures for the body-only guard below: a structure whose members carry the response
+    // bindings an RPC protocol is required to ignore.
+    static BOUND_NAME: Schema<'static> = Schema::new_member(
+        crate::shape_id!("test", "BoundStruct"),
+        ShapeType::String,
+        "name",
+        0,
+    )
+    .with_http_header("x-name");
+    static BOUND_STATUS: Schema<'static> = Schema::new_member(
+        crate::shape_id!("test", "BoundStruct"),
+        ShapeType::Integer,
+        "status",
+        1,
+    )
+    .with_http_response_code();
+    static BOUND_MEMBERS: &[&Schema<'_>] = &[&BOUND_NAME, &BOUND_STATUS];
+    static BOUND_STRUCT: Schema<'static> = Schema::new_struct(
+        crate::shape_id!("test", "BoundStruct"),
+        ShapeType::Structure,
+        BOUND_MEMBERS,
+    );
+
+    /// A response carrying values for both bound members, so a test can tell whether the
+    /// protocol read them from the transport or from the body.
+    fn bound_response(body: &'static str) -> Response {
+        let response = http::Response::builder()
+            .status(418)
+            .header("x-name", "from-header")
+            .body(SdkBody::from(body))
+            .expect("response");
+        Response::try_from(response).expect("convertible")
+    }
+
+    fn collect<'c>(
+        strings: &'c mut Vec<(String, String)>,
+        integers: &'c mut Vec<(String, i32)>,
+    ) -> impl FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError> + 'c {
+        move |member, deser| {
+            let name = member.member_name().unwrap_or("?").to_string();
+            match member.shape_type() {
+                ShapeType::Integer => integers.push((name, deser.read_integer(member)?)),
+                _ => strings.push((name, deser.read_string(member)?)),
+            }
+            Ok(())
+        }
+    }
+
+    /// An RPC protocol must ignore HTTP response bindings and read every member from the body.
+    ///
+    /// This is the complement of the REST behavior and the reason binding applicability has to
+    /// be owned by the protocol selected at runtime rather than by the generated shape: the same
+    /// schema, carrying the same `@httpHeader` and `@httpResponseCode` traits, must produce
+    /// transport-sourced members under a REST protocol and body-sourced members here. See the
+    /// codec settings table in the Serialization and Schema Decoupling SEP, under which
+    /// awsJson, awsQuery, ec2Query and rpcv2Cbor all ignore HTTP bindings.
+    #[test]
+    fn deserialize_response_ignores_http_response_bindings() {
+        let protocol = HttpRpcProtocol::new(
+            crate::shape_id!("test", "rpc"),
+            TestCodec,
+            "application/x-amz-json-1.0",
+        );
+        let response = bound_response("body-value");
+        let mut strings = Vec::new();
+        let mut integers = Vec::new();
+        protocol
+            .deserialize_response(&response, &BOUND_STRUCT, &ConfigBag::base())
+            .unwrap()
+            .read_struct(&BOUND_STRUCT, &mut collect(&mut strings, &mut integers))
+            .unwrap();
+
+        // The stub codec answers `read_string` with the body bytes, so "body-value" here means
+        // the member was read from the body. "from-header" would mean the composite had been
+        // wired in and the transport had won.
+        assert_eq!(
+            strings,
+            vec![("name".to_string(), "body-value".to_string())],
+            "a bound member must be read from the body, not from the header"
+        );
+        // Likewise the response code member: 0 is the stub codec's integer, 418 is the
+        // response's status.
+        assert_eq!(integers, vec![("status".to_string(), 0)]);
+    }
+
+    /// The error path must be body-only too, including through the default forwarding.
+    ///
+    /// `HttpRpcProtocol` does not override `deserialize_error_response`, so this exercises
+    /// [`ClientProtocolInner::deserialize_error_response`]'s default, which forwards to
+    /// `deserialize_response` against `prelude::DOCUMENT`. That forwarding must stay body-only
+    /// for an RPC protocol even though the identical default is what a REST protocol has to
+    /// avoid.
+    #[test]
+    fn deserialize_error_response_ignores_http_response_bindings() {
+        let protocol = HttpRpcProtocol::new(
+            crate::shape_id!("test", "rpc"),
+            TestCodec,
+            "application/x-amz-json-1.0",
+        );
+        let response = bound_response("body-value");
+        let mut strings = Vec::new();
+        let mut integers = Vec::new();
+        protocol
+            .deserialize_error_response(&response, &ConfigBag::base())
+            .unwrap()
+            .read_struct(&BOUND_STRUCT, &mut collect(&mut strings, &mut integers))
+            .unwrap();
+
+        assert_eq!(
+            strings,
+            vec![("name".to_string(), "body-value".to_string())],
+            "a bound error member must be read from the body, not from the header"
+        );
+        assert_eq!(integers, vec![("status".to_string(), 0)]);
+    }
+
     #[test]
     fn serialize_sets_content_type() {
         let protocol = HttpRpcProtocol::new(
@@ -461,8 +590,9 @@ mod tests {
             200u16.try_into().unwrap(),
             SdkBody::from(r#"{"result":42}"#),
         );
+        let base_cfg = ConfigBag::base();
         let mut deser = protocol
-            .deserialize_response(&response, &TEST_SCHEMA, &ConfigBag::base())
+            .deserialize_response(&response, &TEST_SCHEMA, &base_cfg)
             .unwrap();
         assert_eq!(deser.read_string(&STRING).unwrap(), r#"{"result":42}"#);
     }

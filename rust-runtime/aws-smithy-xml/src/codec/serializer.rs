@@ -397,17 +397,22 @@ impl XmlSerializer {
     /// Resolve the timestamp format for a member. Member-level
     /// `@timestampFormat` wins; otherwise the codec's default (`date-time`
     /// for REST XML body bindings).
-    fn resolve_timestamp_format(&self, schema: &Schema<'_>) -> TimestampFormat {
-        schema
-            .timestamp_format()
-            .map(|t| match t.format() {
-                aws_smithy_schema::traits::TimestampFormat::EpochSeconds => {
-                    TimestampFormat::EpochSeconds
-                }
-                aws_smithy_schema::traits::TimestampFormat::DateTime => TimestampFormat::DateTime,
-                aws_smithy_schema::traits::TimestampFormat::HttpDate => TimestampFormat::HttpDate,
-            })
-            .unwrap_or(self.settings.default_timestamp_format())
+    fn resolve_timestamp_format(&self, schema: &Schema<'_>) -> Result<TimestampFormat, SerdeError> {
+        let Some(t) = schema.timestamp_format() else {
+            return Ok(self.settings.default_timestamp_format());
+        };
+        Ok(match t.format() {
+            aws_smithy_schema::traits::TimestampFormat::EpochSeconds => {
+                TimestampFormat::EpochSeconds
+            }
+            aws_smithy_schema::traits::TimestampFormat::DateTime => TimestampFormat::DateTime,
+            aws_smithy_schema::traits::TimestampFormat::HttpDate => TimestampFormat::HttpDate,
+            other => {
+                return Err(SerdeError::unsupported(format!(
+                    "unsupported timestamp format {other:?}"
+                )))
+            }
+        })
     }
 }
 
@@ -919,7 +924,7 @@ impl ShapeSerializer for XmlSerializer {
     }
 
     fn write_timestamp(&mut self, schema: &Schema<'_>, value: &DateTime) -> Result<(), SerdeError> {
-        let format = self.resolve_timestamp_format(schema);
+        let format = self.resolve_timestamp_format(schema)?;
         let formatted = value
             .fmt(format)
             .map_err(|e| SerdeError::custom(e.to_string()))?;

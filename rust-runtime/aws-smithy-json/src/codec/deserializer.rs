@@ -235,14 +235,14 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                 consumer(member_schema, self)?;
             } else if &*key_str == "__type" {
                 // Protocol discriminator, never a member.
-                self.skip_value()?;
+                self.skip_json_value()?;
             } else {
                 // Let the consumer decide how to handle an unknown member. If it
                 // leaves the value unread, validate and skip it here.
                 let start = self.position;
                 consumer(&aws_smithy_schema::prelude::DOCUMENT, self)?;
                 if self.position == start {
-                    self.skip_value()?;
+                    self.skip_json_value()?;
                 }
             }
         }
@@ -596,6 +596,11 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             Some(TimestampFormat::EpochSeconds) => Format::EpochSeconds,
             Some(TimestampFormat::DateTime) => Format::DateTime,
             Some(TimestampFormat::HttpDate) => Format::HttpDate,
+            Some(other) => {
+                return Err(SerdeError::unsupported(format!(
+                    "unsupported timestamp format {other:?}"
+                )))
+            }
             None => self.settings.default_timestamp_format(),
         };
         match self.remaining().first() {
@@ -619,6 +624,11 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                         Some(TimestampFormat::HttpDate) => Format::HttpDate,
                         Some(TimestampFormat::EpochSeconds) => Format::EpochSeconds,
                         Some(TimestampFormat::DateTime) => Format::DateTimeWithOffset,
+                        Some(other) => {
+                            return Err(SerdeError::unsupported(format!(
+                                "unsupported timestamp format {other:?}"
+                            )))
+                        }
                         None => crate::codec::string_timestamp_format(
                             self.settings.default_timestamp_format(),
                         ),
@@ -810,6 +820,14 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             self.advance_by(4);
         }
         Ok(())
+    }
+
+    /// JSON shares one cursor across the whole object, so declining a value still has to
+    /// move past it. Delegates to the same validating skip used for unknown members: a
+    /// body copy of a transport-bound member is discarded, but it must still be
+    /// well-formed JSON, so malformed content is reported rather than stepped over.
+    fn skip_value(&mut self) -> Result<(), SerdeError> {
+        self.skip_json_value()
     }
 
     fn container_size(&self) -> Option<usize> {
@@ -1141,8 +1159,8 @@ impl<'a> JsonDeserializer<'a> {
 
     /// Skips one JSON value, validating its syntax as it goes so that an unknown member
     /// cannot smuggle malformed JSON past the deserializer. Like `read_string`, raw control
-    /// characters inside strings are not rejected.
-    fn skip_value(&mut self) -> Result<(), SerdeError> {
+    /// characters inside strings are rejected only when strictness is enabled.
+    fn skip_json_value(&mut self) -> Result<(), SerdeError> {
         self.skip_whitespace();
         match self.remaining().first().copied() {
             Some(b'{') => {
@@ -1163,7 +1181,7 @@ impl<'a> JsonDeserializer<'a> {
                         return Err(SerdeError::invalid_input("expected colon after key"));
                     }
                     self.advance_by(1);
-                    self.skip_value()?;
+                    self.skip_json_value()?;
                 }
                 self.depth -= 1;
                 Ok(())
@@ -1177,7 +1195,7 @@ impl<'a> JsonDeserializer<'a> {
                         break;
                     }
                     first = false;
-                    self.skip_value()?;
+                    self.skip_json_value()?;
                 }
                 self.depth -= 1;
                 Ok(())
@@ -4078,5 +4096,174 @@ mod unknown_member_tests {
             read_union(br#"{"__type":"ns#U","int":2}"#).unwrap(),
             "int=2"
         );
+    }
+}
+
+/// Tests for the [`ShapeDeserializer::skip_value`] contract.
+///
+/// JSON is cursor-based, so the override must advance past the complete value. The
+/// scenario these reproduce is the one the HTTP response composite relies on: a body
+/// carries a field for a member whose authoritative value came from a header or the
+/// status code, so the consumer declines it and the remaining members must still parse.
+#[cfg(test)]
+mod skip_value_contract {
+    use super::*;
+    use aws_smithy_schema::Schema;
+
+    static BOUND: Schema<'static> = Schema::new_member(
+        aws_smithy_schema::shape_id!("test", "Output"),
+        aws_smithy_schema::ShapeType::String,
+        "bound",
+        0,
+    );
+    static BODY: Schema<'static> = Schema::new_member(
+        aws_smithy_schema::shape_id!("test", "Output"),
+        aws_smithy_schema::ShapeType::String,
+        "body",
+        1,
+    );
+    static OUTPUT: Schema<'static> = Schema::new_struct(
+        aws_smithy_schema::shape_id!("test", "Output"),
+        aws_smithy_schema::ShapeType::Structure,
+        &[&BOUND, &BODY],
+    );
+
+    /// Reads `OUTPUT`, calling `skip_value` for `bound` and reading `body` normally.
+    /// Returns the value of `body`, proving the parse continued correctly past the
+    /// skipped member.
+    fn skip_bound_read_body(json: &[u8]) -> Result<Option<String>, SerdeError> {
+        let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
+        let mut body = None;
+        deser.read_struct(&OUTPUT, &mut |member, d| {
+            match member.member_index() {
+                Some(0) => d.skip_value()?,
+                Some(1) => body = Some(d.read_string(member)?),
+                _ => {}
+            }
+            Ok(())
+        })?;
+        Ok(body)
+    }
+
+    #[test]
+    fn skipping_a_known_member_lets_the_rest_of_the_struct_parse() {
+        // Each case puts a differently-shaped value in the skipped member. The cursor
+        // must land exactly on the following comma in every one.
+        for value in [
+            r#""a string""#,
+            r#""a string with a \" escape and , comma""#,
+            "123",
+            "-4.5e10",
+            "true",
+            "false",
+            "null",
+            "{}",
+            "[]",
+            r#"{"nested":{"deeper":[1,2,{"x":"y"}]}}"#,
+            r#"[[[["deep"]]]]"#,
+            r#"[{"a":1},{"b":[true,null]}]"#,
+            // A nested object containing a key with the same name as the member we go
+            // on to read: skipping must not surface it to the consumer.
+            r#"{"body":"decoy"}"#,
+        ] {
+            let json = format!(r#"{{"bound":{value},"body":"real"}}"#);
+            let got = skip_bound_read_body(json.as_bytes())
+                .unwrap_or_else(|e| panic!("skipping {value} failed: {e}"));
+            assert_eq!(
+                got.as_deref(),
+                Some("real"),
+                "after skipping {value}, `body` should still be read"
+            );
+        }
+    }
+
+    #[test]
+    fn skipping_the_last_member_closes_the_object() {
+        let json = br#"{"body":"real","bound":{"nested":[1,2]}}"#;
+        assert_eq!(skip_bound_read_body(json).unwrap().as_deref(), Some("real"));
+    }
+
+    #[test]
+    fn a_skipped_value_is_still_validated() {
+        // Discarding the value must not mean tolerating malformed JSON, matching the
+        // existing behavior for skipped unknown members.
+        for bad in [
+            r#"{"bound":{"unclosed":1,"body":"real"}"#,
+            r#"{"bound":01,"body":"real"}"#,
+            r#"{"bound":tru,"body":"real"}"#,
+            r#"{"bound":"unterminated,"body":"real"}"#,
+        ] {
+            assert!(
+                skip_bound_read_body(bad.as_bytes()).is_err(),
+                "malformed skipped value should be rejected: {bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn skip_value_via_trait_object_matches_the_inherent_skip() {
+        // The trait method must be the same validating skip, not the allocating default.
+        let json = br#"{"a":{"b":[1,2,3]},"tail":1}"#;
+        let settings = Arc::new(JsonCodecSettings::default());
+
+        let mut inherent = JsonDeserializer::new(json, settings.clone());
+        inherent.advance_by(5); // position at the value of "a"
+        inherent.skip_json_value().unwrap();
+        let inherent_pos = inherent.position;
+
+        let mut via_trait = JsonDeserializer::new(json, settings);
+        via_trait.advance_by(5);
+        let dynamic: &mut dyn ShapeDeserializer = &mut via_trait;
+        dynamic.skip_value().unwrap();
+        assert_eq!(via_trait.position, inherent_pos);
+    }
+
+    #[test]
+    fn skip_value_on_an_unknown_member_does_not_double_skip() {
+        // `read_struct` guards the unknown-member callback by skipping only when the
+        // consumer left the position untouched. A consumer that skips explicitly must
+        // not cause a second skip, which would swallow the following member.
+        let json = br#"{"unknown":{"x":1},"body":"real"}"#;
+        let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
+        let mut body = None;
+        let mut saw_unknown = false;
+        deser
+            .read_struct(&OUTPUT, &mut |member, d| {
+                match member.member_index() {
+                    Some(1) => body = Some(d.read_string(member)?),
+                    // The index-less prelude `DOCUMENT` schema: the unknown-key report
+                    // that union consumers rely on.
+                    None => {
+                        saw_unknown = true;
+                        d.skip_value()?;
+                    }
+                    _ => {}
+                }
+                Ok(())
+            })
+            .unwrap();
+        assert!(saw_unknown, "unknown key should still be reported");
+        assert_eq!(
+            body.as_deref(),
+            Some("real"),
+            "`body` must not be swallowed by a second skip"
+        );
+    }
+
+    #[test]
+    fn unknown_member_is_still_reported_and_skipped_when_the_consumer_ignores_it() {
+        // The pre-existing position-unchanged fallback must keep working unchanged.
+        let json = br#"{"unknown":{"x":[1,2]},"body":"real"}"#;
+        let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
+        let mut body = None;
+        deser
+            .read_struct(&OUTPUT, &mut |member, d| {
+                if member.member_index() == Some(1) {
+                    body = Some(d.read_string(member)?);
+                }
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(body.as_deref(), Some("real"));
     }
 }
