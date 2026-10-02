@@ -51,6 +51,20 @@ use crate::types::HttpStatusCode;
 ///     metrics.get_pokemon_species_metrics = Some("hello world".to_string());
 /// }
 /// ```
+///
+/// # Missing `MetricsLayer`
+///
+/// Extraction needs the request to have passed through a [`MetricsLayer`](crate::MetricsLayer)
+/// built from a `#[smithy_metrics]` struct with a matching `#[smithy_metrics(operation)]` field.
+/// If it didn't, this is treated as a misconfiguration:
+///
+/// - With debug assertions enabled, extraction panics, so tests that call
+///   the operation surface the problem.
+/// - Otherwise, extraction fails with [`MetricsError::UnknownExtension`], which responds with a
+///   500 Internal Server Error.
+///
+/// Use [`Metrics::test`] to call handlers directly in unit tests.
+///
 pub struct Metrics<T>
 where
     T: ThreadSafeCloseEntry,
@@ -122,6 +136,16 @@ where
         // Get a reference to the MetricsInExtensions without removing it from the request.
         // This keeps the outer guard alive in the extensions.
         let Some(metrics_slot) = parts.extensions.get::<MetricsExtension<T>>() else {
+            // No metrics layer populated this request. Fail loudly in debug builds so tests catch
+            // the misconfiguration with a clear message.
+            debug_assert!(
+                false,
+                "`Metrics<{}>` was extracted in an operation handler, but no `MetricsLayer` added \
+                these metrics to the request. Add a `MetricsLayer` built from a `#[smithy_metrics]` \
+                struct with a `#[smithy_metrics(operation)]` field of this type. In release builds, \
+                the request fails with a 500 instead.",
+                std::any::type_name::<T>()
+            );
             return Err(MetricsError::UnknownExtension);
         };
 
@@ -176,6 +200,8 @@ where
 /// A type of error which can be returned when attempting to set metrics.
 #[derive(Error, Debug)]
 pub enum MetricsError {
+    /// Returned in release builds when no `MetricsLayer` added the metrics to the request.
+    /// See [Missing `MetricsLayer`](Metrics#missing-metricslayer).
     #[error("Unknown extension")]
     UnknownExtension,
     #[error("Slot has already been opened. Perhaps the extensions were cloned and the slot was opened multiple times.")]
@@ -187,5 +213,45 @@ impl<Protocol> IntoResponse<Protocol> for MetricsError {
         let mut response = HttpResponse::new(empty_response_body());
         *response.status_mut() = HttpStatusCode::INTERNAL_SERVER_ERROR;
         response
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use metrique::unit_of_work::metrics;
+
+    use super::*;
+    use crate::types::GenericHttpRequest;
+
+    #[metrics]
+    #[derive(Default, Clone)]
+    struct TestOperationMetrics {
+        value: Option<u64>,
+    }
+
+    fn extract(
+        parts: &mut HttpRequestParts,
+    ) -> Result<Metrics<TestOperationMetrics>, MetricsError> {
+        <Metrics<TestOperationMetrics> as FromParts<()>>::from_parts(parts)
+    }
+
+    fn empty_parts() -> HttpRequestParts {
+        GenericHttpRequest::new(()).into_parts().0
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic(expected = "no `MetricsLayer` added these metrics")]
+    fn missing_extension_panics_in_debug_builds() {
+        let _ = extract(&mut empty_parts());
+    }
+
+    #[test]
+    #[cfg(not(debug_assertions))]
+    fn missing_extension_is_an_error_in_release_builds() {
+        assert!(matches!(
+            extract(&mut empty_parts()),
+            Err(MetricsError::UnknownExtension)
+        ));
     }
 }
