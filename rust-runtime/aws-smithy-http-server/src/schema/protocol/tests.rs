@@ -1073,3 +1073,112 @@ async fn middleware_structs_are_framed_like_operation_outputs() {
         assert_eq!(again_body.collect().await.unwrap().to_bytes(), body, "{id}");
     }
 }
+
+// --- a restXml operation with a wrapped list and a wrapped map in the body ---
+
+const COLLECTIONS_HTTP: HttpTrait<'static> = HttpTrait::new("POST", "/collections", None);
+static TAG_MEMBER: Schema<'static> =
+    Schema::new_member(shape_id!("test", "Tags", "member"), ShapeType::String, "member", 0);
+static TAGS_MEMBER: Schema<'static> =
+    Schema::new_member(shape_id!("test", "Collections", "tags"), ShapeType::List, "tags", 0)
+        .with_list_member(&TAG_MEMBER);
+static ATTR_KEY: Schema<'static> = Schema::new_member(shape_id!("test", "Attrs", "key"), ShapeType::String, "key", 0);
+static ATTR_VALUE: Schema<'static> =
+    Schema::new_member(shape_id!("test", "Attrs", "value"), ShapeType::String, "value", 1);
+static ATTRS_MEMBER: Schema<'static> =
+    Schema::new_member(shape_id!("test", "Collections", "attrs"), ShapeType::Map, "attrs", 1)
+        .with_map_members(&ATTR_KEY, &ATTR_VALUE);
+static COLLECTIONS_MEMBERS: [&Schema<'static>; 2] = [&TAGS_MEMBER, &ATTRS_MEMBER];
+static COLLECTIONS_SCHEMA: Schema<'static> = Schema::new_struct(
+    shape_id!("test", "Collections"),
+    ShapeType::Structure,
+    &COLLECTIONS_MEMBERS,
+)
+.with_http(COLLECTIONS_HTTP);
+static COLLECTIONS_SERVICE: crate::schema::ServiceSchema<'static> = crate::schema::ServiceSchema::new(
+    shape_id!("test", "CollectionsService"),
+    None,
+    &[shape_id!("aws.protocols", "restXml")],
+    &[],
+);
+
+#[derive(Debug, Default, PartialEq)]
+struct Collections {
+    tags: Vec<String>,
+    attrs: Vec<(String, String)>,
+}
+
+impl DeserializableShape for Collections {
+    fn deserialize(deserializer: &mut dyn ShapeDeserializer) -> Result<Self, DeserializeError> {
+        let mut out = Collections::default();
+        deserializer.read_struct(&COLLECTIONS_SCHEMA, &mut |member, d| {
+            match member.member_name() {
+                Some("tags") => out.tags = d.read_string_list(member)?,
+                Some("attrs") => out.attrs = d.read_string_string_map(member)?.into_iter().collect(),
+                _ => {}
+            }
+            Ok(())
+        })?;
+        out.attrs.sort();
+        Ok(out)
+    }
+}
+
+fn rest_xml_with_settings(settings: Option<&str>) -> Result<RestXmlProtocol, crate::schema::routing::RouterBuildError> {
+    use crate::schema::protocol::MetadataRoutedProtocol;
+    let settings = settings.map(|json| crate::schema::parse_settings_json(json.as_bytes()));
+    RestXmlProtocol::from_build_context(
+        &crate::schema::ProtocolBuildContext::new(&COLLECTIONS_SERVICE).with_settings(settings.as_ref()),
+    )
+}
+
+/// restXml reads every child of a wrapped list or map whatever it is named, as Coral does;
+/// `legacyMode` reads only the children named as items and entries, as legacy smithy-rs servers do.
+#[test]
+fn rest_xml_legacy_mode_is_a_protocol_setting() {
+    let req = request(
+        "/collections",
+        &[("content-type", "application/xml")],
+        b"<Collections>\
+            <tags><item>a</item><member>b</member></tags>\
+            <attrs>\
+              <item><key>x</key><value>9</value></item>\
+              <entry><key>a</key><value>1</value></entry>\
+            </attrs>\
+          </Collections>",
+    );
+    let pair = |k: &str, v: &str| (k.to_owned(), v.to_owned());
+    let every_child = Collections {
+        tags: vec!["a".to_owned(), "b".to_owned()],
+        attrs: vec![pair("a", "1"), pair("x", "9")],
+    };
+    let named_children = Collections {
+        tags: vec!["b".to_owned()],
+        attrs: vec![pair("a", "1")],
+    };
+    for (settings, expected) in [
+        (None, &every_child),
+        (Some("{}"), &every_child),
+        (Some(r#"{"legacyMode":false}"#), &every_child),
+        (Some(r#"{"legacyMode":true}"#), &named_children),
+    ] {
+        let protocol = rest_xml_with_settings(settings).unwrap();
+        let input: Collections = deserialize(&protocol, &COLLECTIONS_SCHEMA, &EMPTY_OUT_SCHEMA, &req).unwrap();
+        assert_eq!(&input, expected, "{settings:?}");
+    }
+    let default: Collections = deserialize(&*REST_XML, &COLLECTIONS_SCHEMA, &EMPTY_OUT_SCHEMA, &req).unwrap();
+    assert_eq!(default, every_child);
+}
+
+#[test]
+fn rest_xml_legacy_mode_must_be_a_boolean() {
+    for settings in [r#"{"legacyMode":"yes"}"#, r#""not an object""#] {
+        assert!(
+            matches!(
+                rest_xml_with_settings(Some(settings)),
+                Err(crate::schema::routing::RouterBuildError::Configuration(_))
+            ),
+            "{settings}"
+        );
+    }
+}

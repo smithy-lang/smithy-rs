@@ -21,18 +21,26 @@ use super::rest::RestPolicy;
 use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerProtocol};
 
 /// Stateful schema-driven restXml protocol implementation.
+///
+/// A wrapped list or map in a request body reads every child element as an item or entry,
+/// whatever the element is named, as Coral servers do. Setting
+/// `customizationConfig.protocols."aws.protocols#restXml".legacyMode` to `true` in
+/// `smithy-build.json` restores what legacy smithy-rs servers do instead: a wrapped list reads
+/// only the children named as its member (`member`, or the member's `@xmlName`) and a wrapped
+/// map only its `entry` children, skipping the others.
 #[derive(Debug)]
 pub struct RestXmlProtocol {
     pub(crate) inner: crate::schema::protocol::rest::RestProtocol<aws_smithy_xml::codec::XmlCodec>,
 }
 
-impl Default for RestXmlProtocol {
-    fn default() -> Self {
+impl RestXmlProtocol {
+    fn new(legacy_mode: bool) -> Self {
         Self {
             inner: crate::schema::protocol::rest::RestProtocol::new(
                 aws_smithy_xml::codec::XmlCodec::new(
                     aws_smithy_xml::codec::XmlCodecSettings::builder()
                         .enforce_strictness(true)
+                        .strict_collection_element_names(legacy_mode)
                         .build(),
                 ),
                 crate::schema::protocol::rest_xml::POLICY,
@@ -41,8 +49,17 @@ impl Default for RestXmlProtocol {
     }
 }
 
+impl Default for RestXmlProtocol {
+    fn default() -> Self {
+        Self::new(false)
+    }
+}
+
 static PROTOCOL_ID: ShapeId<'static> = shape_id!("aws.protocols", "restXml");
 const CONTENT_TYPE: &str = "application/xml";
+
+/// The opt-in boolean in this protocol's settings section; see [`RestXmlProtocol`].
+const LEGACY_MODE_KEY: &str = "legacyMode";
 
 /// restXml labels a response only when the output schema binds something to the body, gives an
 /// untyped blob payload `application/octet-stream`, and sends an empty body for an output with
@@ -56,9 +73,9 @@ pub(crate) const POLICY: RestPolicy = RestPolicy {
 
 impl MetadataRoutedProtocol for RestXmlProtocol {
     fn from_build_context(
-        _ctx: &crate::schema::ProtocolBuildContext<'_>,
+        ctx: &crate::schema::ProtocolBuildContext<'_>,
     ) -> Result<Self, crate::schema::routing::RouterBuildError> {
-        Ok(Self::default())
+        Ok(Self::new(super::settings_bool(ctx.settings, LEGACY_MODE_KEY)?))
     }
 
     fn build_router(

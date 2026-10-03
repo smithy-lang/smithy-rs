@@ -33,6 +33,7 @@ pub struct XmlCodecSettings {
     default_timestamp_format: TimestampFormat,
     max_depth: u32,
     enforce_strictness: bool,
+    strict_collection_element_names: bool,
 }
 
 impl XmlCodecSettings {
@@ -53,6 +54,13 @@ impl XmlCodecSettings {
     pub fn max_depth(&self) -> u32 {
         self.max_depth
     }
+
+    /// Whether a wrapped list or map reads only the children named as its
+    /// items or entries. See
+    /// [`XmlCodecSettingsBuilder::strict_collection_element_names`].
+    pub fn strict_collection_element_names(&self) -> bool {
+        self.strict_collection_element_names
+    }
 }
 
 impl Default for XmlCodecSettings {
@@ -61,6 +69,7 @@ impl Default for XmlCodecSettings {
             default_timestamp_format: TimestampFormat::DateTime,
             max_depth: crate::codec::deserializer::MAX_DESERIALIZE_DEPTH,
             enforce_strictness: false,
+            strict_collection_element_names: false,
         }
     }
 }
@@ -71,6 +80,7 @@ pub struct XmlCodecSettingsBuilder {
     default_timestamp_format: TimestampFormat,
     max_depth: u32,
     enforce_strictness: bool,
+    strict_collection_element_names: bool,
 }
 
 impl Default for XmlCodecSettingsBuilder {
@@ -79,14 +89,28 @@ impl Default for XmlCodecSettingsBuilder {
             default_timestamp_format: TimestampFormat::DateTime,
             max_depth: crate::codec::deserializer::MAX_DESERIALIZE_DEPTH,
             enforce_strictness: false,
+            strict_collection_element_names: false,
         }
     }
 }
 
 impl XmlCodecSettingsBuilder {
-    /// Validates the document root against the request schema. Disabled by default.
+    /// Rejects ill-formed XML and a document root other than the one the
+    /// request schema names. Disabled by default.
     pub fn enforce_strictness(mut self, value: bool) -> Self {
         self.enforce_strictness = value;
+        self
+    }
+
+    /// Reads only the children of a wrapped list that are named as its member
+    /// (`member`, or the member's `@xmlName`) and only the `entry` children of
+    /// a wrapped map, skipping the others, as the legacy generated parsers do.
+    ///
+    /// Off by default: every child element is an item or an entry whatever its
+    /// name. Flattened lists and maps are not affected; their elements are
+    /// selected by the structure member's name either way.
+    pub fn strict_collection_element_names(mut self, value: bool) -> Self {
+        self.strict_collection_element_names = value;
         self
     }
 
@@ -109,6 +133,7 @@ impl XmlCodecSettingsBuilder {
             default_timestamp_format: self.default_timestamp_format,
             max_depth: self.max_depth,
             enforce_strictness: self.enforce_strictness,
+            strict_collection_element_names: self.strict_collection_element_names,
         }
     }
 }

@@ -444,4 +444,106 @@ class SchemaRoutingGeneratorTest {
             }
         }
     }
+
+    @Test
+    fun `restXml reads every child of a wrapped list or map by default`() {
+        restXmlCollectionElementNames(legacyMode = null, tags = 2, attrs = 2)
+        restXmlCollectionElementNames(legacyMode = false, tags = 2, attrs = 2)
+    }
+
+    @Test
+    fun `restXml legacyMode reads only the children named as items and entries`() {
+        restXmlCollectionElementNames(legacyMode = true, tags = 1, attrs = 1)
+    }
+
+    /**
+     * Sends a restXml request whose wrapped list and map each hold one child named as the model says
+     * (`member`, `entry`) and one that is not, and checks how many of them the handler receives under
+     * `customizationConfig.protocols."aws.protocols#restXml".legacyMode`.
+     */
+    private fun restXmlCollectionElementNames(
+        legacyMode: Boolean?,
+        tags: Int,
+        attrs: Int,
+    ) {
+        val model =
+            """
+            namespace test
+            use aws.protocols#restXml
+            @restXml
+            service Example { operations: [Collect] }
+            @http(method: "POST", uri: "/collect")
+            operation Collect {
+                input := { tags: TagList attrs: AttrMap }
+                output := {
+                    @httpHeader("x-tags") tags: Integer
+                    @httpHeader("x-attrs") attrs: Integer
+                }
+            }
+            list TagList { member: String }
+            map AttrMap { key: String value: String }
+            """.asSmithyModel(smithyVersion = "2")
+        val settings =
+            ObjectNode.builder()
+                .withMember("codegen", ObjectNode.builder().withMember("schemaSerde", true).build())
+        if (legacyMode != null) {
+            settings.withMember(
+                "customizationConfig",
+                ObjectNode.builder().withMember(
+                    "protocols",
+                    ObjectNode.builder()
+                        .withMember(
+                            "aws.protocols#restXml",
+                            ObjectNode.builder().withMember("legacyMode", legacyMode).build(),
+                        )
+                        .build(),
+                ).build(),
+            )
+        }
+        serverIntegrationTest(
+            model,
+            IntegrationTestParams(additionalSettings = settings.build()),
+            testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
+        ) { context, crate ->
+            crate.testModule {
+                tokioTest("wrapped_collections_read_the_expected_children") {
+                    rustTemplate(
+                        """
+                        use #{Tower}::ServiceExt;
+                        let service = crate::Example::builder(crate::ExampleConfig::builder().build())
+                            .collect(|input: crate::input::CollectInput| async move {
+                                crate::output::CollectOutput {
+                                    tags: input.tags.map(|tags| tags.len() as i32),
+                                    attrs: input.attrs.map(|attrs| attrs.len() as i32),
+                                }
+                            })
+                            .build()
+                            .unwrap();
+                        let body = "<CollectInput>\
+                            <tags><item>a</item><member>b</member></tags>\
+                            <attrs>\
+                            <item><key>x</key><value>9</value></item>\
+                            <entry><key>a</key><value>1</value></entry>\
+                            </attrs>\
+                            </CollectInput>";
+                        let request = #{Http}::Request::builder()
+                            .method("POST")
+                            .uri("/collect")
+                            .header("content-type", "application/xml")
+                            .body(#{Server}::body::Body::from_bytes(body.as_bytes().to_vec().into()))
+                            .unwrap();
+                        let response = service.oneshot(request).await.unwrap();
+                        assert_eq!(response.status(), 200);
+                        assert_eq!(response.headers().get("x-tags").unwrap(), "$tags");
+                        assert_eq!(response.headers().get("x-attrs").unwrap(), "$attrs");
+                        """,
+                        "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
+                        "Http" to RuntimeType.http(context.runtimeConfig),
+                        "Tower" to ServerCargoDependency.Tower.toType(),
+                        *RuntimeType.preludeScope,
+                    )
+                }
+            }
+        }
+    }
 }
