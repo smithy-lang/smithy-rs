@@ -99,11 +99,11 @@ async fn simple_integration_test() {
 async fn health_check() {
     let server = common::run_server().await;
 
-    let url = common::base_url(server.port) + "/ping";
+    let url = common::base_url(server.port) + "/health";
     let uri = url.parse::<hyper::Uri>().expect("invalid URL");
 
-    // Since the `/ping` route is not modeled in Smithy, we use a regular
-    // Hyper HTTP client to make a request to it.
+    // `/health` is served by the `AlbHealthCheckLayer` wrapping the router, and is not a modeled
+    // operation, so we use a regular Hyper HTTP client to make a request to it.
     let request = hyper::Request::builder()
         .uri(uri)
         .body(http_body_util::Empty::<bytes::Bytes>::new())
