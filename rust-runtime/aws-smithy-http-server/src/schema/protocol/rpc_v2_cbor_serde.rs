@@ -5,14 +5,13 @@
 
 //! Server RPC v2 CBOR serialization policy, layered over the ordinary CBOR codec.
 //!
-//! Every aggregate callback must receive the adapter again: handing a modeled value
-//! directly to the codec would let its nested structures bypass the error policy.
+//! A structure-prefix hook emits error discriminators before modeled members,
+//! including errors nested through structures, lists, maps, and unions.
 
 use aws_smithy_cbor::codec::{CborCodec, CborDeserializer, CborSerializer};
-use aws_smithy_schema::codec::{Codec, FinishSerializer};
-use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
+use aws_smithy_schema::codec::Codec;
+use aws_smithy_schema::serde::{SerdeError, ShapeSerializer};
 use aws_smithy_schema::Schema;
-use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
 
 use super::discriminator::TYPE_MEMBER;
 
@@ -30,11 +29,11 @@ impl Default for RpcV2CborSerde {
 }
 
 impl Codec for RpcV2CborSerde {
-    type Serializer = RpcV2CborSerializer<CborSerializer>;
+    type Serializer = CborSerializer;
     type Deserializer<'a> = CborDeserializer<'a>;
 
     fn create_serializer(&self) -> Self::Serializer {
-        RpcV2CborSerializer(self.0.create_serializer())
+        self.0.create_serializer().with_struct_prefix(write_error_type)
     }
 
     fn create_deserializer<'a>(&self, input: &'a [u8]) -> Self::Deserializer<'a> {
@@ -42,145 +41,45 @@ impl Codec for RpcV2CborSerde {
     }
 }
 
-/// The outer adapter owns the byte serializer; aggregate callbacks borrow it.
-pub(crate) struct RpcV2CborSerializer<S>(S);
-
-pub(crate) trait SerializerStorage {
-    fn serializer(&mut self) -> &mut dyn ShapeSerializer;
-}
-
-impl SerializerStorage for CborSerializer {
-    fn serializer(&mut self) -> &mut dyn ShapeSerializer {
-        self
+fn write_error_type(schema: &Schema<'_>, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+    if schema
+        .traits()
+        .is_some_and(|traits| traits.contains_fqn("smithy.api#error"))
+    {
+        serializer.write_string(&TYPE_MEMBER, schema.shape_id().as_str())?;
     }
-}
-
-impl SerializerStorage for &mut dyn ShapeSerializer {
-    fn serializer(&mut self) -> &mut dyn ShapeSerializer {
-        *self
-    }
-}
-
-impl<S: FinishSerializer> FinishSerializer for RpcV2CborSerializer<S> {
-    fn finish(self) -> Vec<u8> {
-        self.0.finish()
-    }
-}
-
-/// The codec calls this after opening the structure's map. Even ordinary structures
-/// use this wrapper so errors below them still pass through the server adapter.
-struct Members<'a> {
-    type_id: Option<&'a str>,
-    value: &'a dyn SerializableStruct,
-}
-
-impl SerializableStruct for Members<'_> {
-    fn schema(&self) -> &Schema<'_> {
-        self.value.schema()
-    }
-
-    fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
-        if let Some(type_id) = self.type_id {
-            serializer.write_string(&TYPE_MEMBER, type_id)?;
-        }
-        self.value.serialize_members(&mut RpcV2CborSerializer(serializer))
-    }
-}
-
-impl<S: SerializerStorage> ShapeSerializer for RpcV2CborSerializer<S> {
-    fn write_struct(&mut self, schema: &Schema<'_>, value: &dyn SerializableStruct) -> Result<(), SerdeError> {
-        let own = value.schema();
-        let type_id = own
-            .traits()
-            .is_some_and(|traits| traits.contains_fqn("smithy.api#error"))
-            .then(|| own.shape_id().as_str());
-        self.0.serializer().write_struct(schema, &Members { type_id, value })
-    }
-
-    fn write_list(
-        &mut self,
-        schema: &Schema<'_>,
-        write_elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        self.0.serializer().write_list(schema, &|serializer| {
-            write_elements(&mut RpcV2CborSerializer(serializer))
-        })
-    }
-
-    fn write_map(
-        &mut self,
-        schema: &Schema<'_>,
-        write_entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        self.0.serializer().write_map(schema, &|serializer| {
-            write_entries(&mut RpcV2CborSerializer(serializer))
-        })
-    }
-
-    fn write_boolean(&mut self, schema: &Schema<'_>, value: bool) -> Result<(), SerdeError> {
-        self.0.serializer().write_boolean(schema, value)
-    }
-
-    fn write_byte(&mut self, schema: &Schema<'_>, value: i8) -> Result<(), SerdeError> {
-        self.0.serializer().write_byte(schema, value)
-    }
-
-    fn write_short(&mut self, schema: &Schema<'_>, value: i16) -> Result<(), SerdeError> {
-        self.0.serializer().write_short(schema, value)
-    }
-
-    fn write_integer(&mut self, schema: &Schema<'_>, value: i32) -> Result<(), SerdeError> {
-        self.0.serializer().write_integer(schema, value)
-    }
-
-    fn write_long(&mut self, schema: &Schema<'_>, value: i64) -> Result<(), SerdeError> {
-        self.0.serializer().write_long(schema, value)
-    }
-
-    fn write_float(&mut self, schema: &Schema<'_>, value: f32) -> Result<(), SerdeError> {
-        self.0.serializer().write_float(schema, value)
-    }
-
-    fn write_double(&mut self, schema: &Schema<'_>, value: f64) -> Result<(), SerdeError> {
-        self.0.serializer().write_double(schema, value)
-    }
-
-    fn write_big_integer(&mut self, schema: &Schema<'_>, value: &BigInteger) -> Result<(), SerdeError> {
-        self.0.serializer().write_big_integer(schema, value)
-    }
-
-    fn write_big_decimal(&mut self, schema: &Schema<'_>, value: &BigDecimal) -> Result<(), SerdeError> {
-        self.0.serializer().write_big_decimal(schema, value)
-    }
-
-    fn write_string(&mut self, schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
-        self.0.serializer().write_string(schema, value)
-    }
-
-    fn write_blob(&mut self, schema: &Schema<'_>, value: Blob) -> Result<(), SerdeError> {
-        self.0.serializer().write_blob(schema, value)
-    }
-
-    fn write_timestamp(&mut self, schema: &Schema<'_>, value: &DateTime) -> Result<(), SerdeError> {
-        self.0.serializer().write_timestamp(schema, value)
-    }
-
-    fn write_document(&mut self, schema: &Schema<'_>, value: &Document) -> Result<(), SerdeError> {
-        self.0.serializer().write_document(schema, value)
-    }
-
-    fn write_null(&mut self, schema: &Schema<'_>) -> Result<(), SerdeError> {
-        self.0.serializer().write_null(schema)
-    }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aws_smithy_schema::codec::FinishSerializer;
+    use aws_smithy_schema::serde::SerializableStruct;
     use aws_smithy_schema::{shape_id, ShapeType};
 
     #[test]
-    fn only_the_server_adapter_adds_error_types() {
+    fn ordinary_structure_has_no_discriminator() {
+        static NAME: Schema = Schema::new_member(shape_id!("test", "Output", "name"), ShapeType::String, "name", 0);
+        static OUTPUT: Schema = Schema::new_struct(shape_id!("test", "Output"), ShapeType::Structure, &[&NAME]);
+        struct Output;
+        impl SerializableStruct for Output {
+            fn schema(&self) -> &Schema<'_> {
+                &OUTPUT
+            }
+            fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                serializer.write_string(&NAME, "hello")
+            }
+        }
+        let mut serializer = RpcV2CborSerde::default().create_serializer();
+        serializer.write_struct(&OUTPUT, &Output).unwrap();
+        let mut expected = aws_smithy_cbor::Encoder::new(Vec::new());
+        expected.begin_map().str("name").str("hello").end();
+        assert_eq!(serializer.finish(), expected.into_writer());
+    }
+
+    #[test]
+    fn only_the_server_adds_error_types() {
         static TRAITS: std::sync::LazyLock<aws_smithy_schema::TraitMap> = std::sync::LazyLock::new(|| {
             let mut traits = aws_smithy_schema::TraitMap::new();
             traits.insert(Box::new(aws_smithy_schema::StringTrait::new(
@@ -270,7 +169,7 @@ mod tests {
                 if nesting == 5 {
                     expected.end();
                 }
-                assert_eq!(actual, expected.into_writer(), "adapter={enabled}, nesting={nesting}");
+                assert_eq!(actual, expected.into_writer(), "server={enabled}, nesting={nesting}");
             }
         }
     }
