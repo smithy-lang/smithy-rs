@@ -35,6 +35,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParse
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserSection
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.RestXmlParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.ReturnSymbolToParse
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.restJsonFieldName
@@ -280,8 +281,8 @@ class ServerRestJsonProtocol(
 }
 
 class ServerRestXmlProtocol(
-    codegenContext: CodegenContext,
-) : RestXml(codegenContext), ServerProtocol {
+    private val serverCodegenContext: ServerCodegenContext,
+) : RestXml(serverCodegenContext), ServerProtocol {
     val runtimeConfig = codegenContext.runtimeConfig
     override val protocolModulePath = "rest_xml"
 
@@ -303,6 +304,18 @@ class ServerRestXmlProtocol(
     override fun serverRouterRuntimeConstructor() = "new_rest_xml_router"
 
     override fun serverContentTypeCheckNoModeledInput() = true
+
+    // Resolve constrained-reachable shapes to their unconstrained wrappers when picking what the XML
+    // parser should hand back. The input builder accepts those wrappers via
+    // `From<Unconstrained> for MaybeConstrained<Constrained>` (emitted by the unconstrained
+    // generators), so the constraint check is deferred to builder validation just like every other
+    // protocol does.
+    override fun structuredDataParser(): StructuredDataParserGenerator =
+        RestXmlParserGenerator(
+            serverCodegenContext,
+            restXmlErrors,
+            returnSymbolToParseFn(serverCodegenContext),
+        )
 
     override fun deserializePayloadErrorType(binding: HttpBindingDescriptor): RuntimeType =
         deserializePayloadErrorType(
