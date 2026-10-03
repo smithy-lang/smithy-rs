@@ -81,15 +81,15 @@ impl<T: SerializableStruct> MarshallMessage for SchemaEventMarshaller<T> {
 
     fn marshall(&self, input: Self::Input) -> Result<Message, Error> {
         let capability = capability_or_marshalling_error(&self.protocol)?;
-        let mut router = UnionVariantSerializer {
+        let mut serializer = UnionVariantSerializer {
             capability,
             kind: FrameKind::Event,
             message: None,
         };
         input
-            .serialize_members(&mut router)
+            .serialize_members(&mut serializer)
             .map_err(|err| Error::marshalling(format!("{err}")))?;
-        router
+        serializer
             .message
             .ok_or_else(|| Error::marshalling("event stream union serialized no variant".to_owned()))
     }
@@ -101,7 +101,7 @@ impl<T: SerializableStruct> MarshallMessage for SchemaEventMarshaller<T> {
 /// error in the stream union, which becomes the frame's `:exception-type`.
 pub trait SerializableEventError {
     /// Returns the `:exception-type` value and the modeled error to frame.
-    fn variant(&self) -> (&'static str, &Schema<'_>, &dyn SerializableStruct);
+    fn variant(&self) -> (&'static str, &dyn SerializableStruct);
 }
 
 /// Marshals the modeled errors of a schema-mode event stream union into `exception` frames.
@@ -133,8 +133,8 @@ impl<E: SerializableEventError> MarshallMessage for SchemaEventErrorMarshaller<E
 
     fn marshall(&self, input: Self::Input) -> Result<Message, Error> {
         let capability = capability_or_marshalling_error(&self.protocol)?;
-        let (exception_type, schema, value) = input.variant();
-        build_frame(capability, exception_type, schema, value, FrameKind::Exception)
+        let (exception_type, value) = input.variant();
+        build_frame(capability, exception_type, value.schema(), value, FrameKind::Exception)
             .map_err(|err| Error::marshalling(format!("{err}")))
     }
 }
@@ -249,6 +249,10 @@ fn build_frame(
 struct ImplicitEventPayload<'a>(&'a dyn SerializableStruct);
 
 impl SerializableStruct for ImplicitEventPayload<'_> {
+    fn schema(&self) -> &Schema<'_> {
+        self.0.schema()
+    }
+
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         self.0.serialize_members(&mut NonHeaderSerializer(serializer))
     }
@@ -316,7 +320,7 @@ impl ShapeSerializer for UnionVariantSerializer<'_> {
         self.message = Some(build_frame(
             self.capability,
             event_type,
-            crate::schema::TargetSchema::resolve(schema),
+            value.schema(),
             value,
             self.kind,
         )?);
@@ -442,7 +446,7 @@ impl ShapeSerializer for EventMemberSerializer<'_> {
             MemberRole::Header => Err(self.unsupported("header", schema)),
             MemberRole::Payload => {
                 let mut ser = self.capability.payload_codec.create_serializer();
-                ser.write_struct(crate::schema::TargetSchema::resolve(schema), value)?;
+                ser.write_struct(value.schema(), value)?;
                 *self.payload = Some(Bytes::from(ser.finish_boxed()));
                 Ok(())
             }
@@ -1116,20 +1120,6 @@ mod tests {
         };
     }
 
-    macro_rules! target_member_schema {
-        ($name:ident, $traits:ident, $shape:literal, $member:literal, $index:literal, $target:ident $(, $with:ident)*) => {
-            static $traits: std::sync::LazyLock<aws_smithy_schema::TraitMap> = std::sync::LazyLock::new(|| {
-                let mut traits = aws_smithy_schema::TraitMap::new();
-                traits.insert(Box::new(crate::schema::TargetSchema::new(&$target)));
-                traits
-            });
-            static $name: Schema<'static> = Schema::new_member(
-                ShapeId::from_parts(concat!("test#", $shape, "$", $member), "test", $shape),
-                ShapeType::Structure, $member, $index,
-            )$(.$with())*.with_traits(&$traits);
-        };
-    }
-
     macro_rules! struct_schema {
         ($name:ident, $shape:literal, [$($member:ident),*]) => {
             static $name: Schema<'static> = Schema::new_struct(
@@ -1180,6 +1170,10 @@ mod tests {
     }
 
     impl SerializableStruct for AllHeaders {
+        fn schema(&self) -> &Schema<'_> {
+            &ALL_HEADERS_SCHEMA
+        }
+
         fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             if let Some(v) = self.flag {
                 ser.write_boolean(&AH_BOOL, v)?;
@@ -1254,6 +1248,10 @@ mod tests {
     }
 
     impl SerializableStruct for FloatHeader {
+        fn schema(&self) -> &Schema<'_> {
+            &FLOAT_HEADER_SCHEMA
+        }
+
         fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             ser.write_float(&FH_RATE, self.rate)
         }
@@ -1276,6 +1274,10 @@ mod tests {
     }
 
     impl SerializableStruct for TextEvent {
+        fn schema(&self) -> &Schema<'_> {
+            &TEXT_EVENT_SCHEMA
+        }
+
         fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             if let Some(ref v) = self.value {
                 ser.write_string(&TEXT_VALUE, v)?;
@@ -1306,6 +1308,10 @@ mod tests {
     }
 
     impl SerializableStruct for BinEvent {
+        fn schema(&self) -> &Schema<'_> {
+            &BIN_EVENT_SCHEMA
+        }
+
         fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             if let Some(ref v) = self.value {
                 ser.write_blob(&BIN_VALUE, v.clone())?;
@@ -1337,6 +1343,10 @@ mod tests {
     }
 
     impl SerializableStruct for MessageBody {
+        fn schema(&self) -> &Schema<'_> {
+            &MESSAGE_BODY_SCHEMA
+        }
+
         fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             if let Some(ref v) = self.text {
                 ser.write_string(&BODY_TEXT, v)?;
@@ -1366,13 +1376,12 @@ mod tests {
         0,
         with_event_header
     );
-    target_member_schema!(
+    member_schema!(
         STRUCT_BODY,
-        STRUCT_BODY_TRAITS,
         "StructEvent",
         "body",
+        ShapeType::Structure,
         1,
-        MESSAGE_BODY_SCHEMA,
         with_event_payload
     );
     struct_schema!(STRUCT_EVENT_SCHEMA, "StructEvent", [STRUCT_FROM, STRUCT_BODY]);
@@ -1384,6 +1393,10 @@ mod tests {
     }
 
     impl SerializableStruct for StructEvent {
+        fn schema(&self) -> &Schema<'_> {
+            &STRUCT_EVENT_SCHEMA
+        }
+
         fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             if let Some(ref v) = self.from {
                 ser.write_string(&STRUCT_FROM, v)?;
@@ -1417,6 +1430,10 @@ mod tests {
     struct EmptyEvent;
 
     impl SerializableStruct for EmptyEvent {
+        fn schema(&self) -> &Schema<'_> {
+            &EMPTY_EVENT_SCHEMA
+        }
+
         fn serialize_members(&self, _ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             Ok(())
         }
@@ -1432,6 +1449,10 @@ mod tests {
     }
 
     impl SerializableStruct for PlainEvent {
+        fn schema(&self) -> &Schema<'_> {
+            &PLAIN_EVENT_SCHEMA
+        }
+
         fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             if let Some(ref v) = self.text {
                 ser.write_string(&PLAIN_TEXT, v)?;
@@ -1454,34 +1475,13 @@ mod tests {
     }
 
     // The stream union: one member schema per event, named by its Smithy member name.
-    target_member_schema!(
-        EV_ALL_HEADERS,
-        EV_ALL_HEADERS_TRAITS,
-        "TestEvents",
-        "allHeaders",
-        0,
-        ALL_HEADERS_SCHEMA
-    );
-    target_member_schema!(
-        EV_FLOAT_HEADER,
-        EV_FLOAT_HEADER_TRAITS,
-        "TestEvents",
-        "floatHeader",
-        1,
-        FLOAT_HEADER_SCHEMA
-    );
-    target_member_schema!(EV_TEXT, EV_TEXT_TRAITS, "TestEvents", "text", 2, TEXT_EVENT_SCHEMA);
-    target_member_schema!(EV_BIN, EV_BIN_TRAITS, "TestEvents", "bin", 3, BIN_EVENT_SCHEMA);
-    target_member_schema!(
-        EV_STRUCTURED,
-        EV_STRUCTURED_TRAITS,
-        "TestEvents",
-        "structured",
-        4,
-        STRUCT_EVENT_SCHEMA
-    );
-    target_member_schema!(EV_EMPTY, EV_EMPTY_TRAITS, "TestEvents", "empty", 5, EMPTY_EVENT_SCHEMA);
-    target_member_schema!(EV_PLAIN, EV_PLAIN_TRAITS, "TestEvents", "plain", 6, PLAIN_EVENT_SCHEMA);
+    member_schema!(EV_ALL_HEADERS, "TestEvents", "allHeaders", ShapeType::Structure, 0);
+    member_schema!(EV_FLOAT_HEADER, "TestEvents", "floatHeader", ShapeType::Structure, 1);
+    member_schema!(EV_TEXT, "TestEvents", "text", ShapeType::Structure, 2);
+    member_schema!(EV_BIN, "TestEvents", "bin", ShapeType::Structure, 3);
+    member_schema!(EV_STRUCTURED, "TestEvents", "structured", ShapeType::Structure, 4);
+    member_schema!(EV_EMPTY, "TestEvents", "empty", ShapeType::Structure, 5);
+    member_schema!(EV_PLAIN, "TestEvents", "plain", ShapeType::Structure, 6);
 
     #[derive(Debug, PartialEq)]
     enum TestEvents {
@@ -1500,7 +1500,26 @@ mod tests {
         }
     }
 
+    static TEST_EVENTS_SCHEMA: Schema<'static> = Schema::new_struct(
+        ShapeId::from_parts("test#TestEvents", "test", "TestEvents"),
+        ShapeType::Union,
+        &[
+            &EV_ALL_HEADERS,
+            &EV_FLOAT_HEADER,
+            &EV_TEXT,
+            &EV_BIN,
+            &EV_STRUCTURED,
+            &EV_EMPTY,
+            &EV_PLAIN,
+        ],
+    )
+    .with_streaming();
+
     impl SerializableStruct for TestEvents {
+        fn schema(&self) -> &Schema<'_> {
+            &TEST_EVENTS_SCHEMA
+        }
+
         fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             match self {
                 Self::AllHeaders(v) => ser.write_struct(&EV_ALL_HEADERS, v),
@@ -1536,6 +1555,10 @@ mod tests {
     }
 
     impl SerializableStruct for BoomError {
+        fn schema(&self) -> &Schema<'_> {
+            &BOOM_ERROR_SCHEMA
+        }
+
         fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             if let Some(ref v) = self.message {
                 ser.write_string(&BOOM_MESSAGE, v)?;
@@ -1558,9 +1581,9 @@ mod tests {
     }
 
     impl SerializableEventError for TestEventsError {
-        fn variant(&self) -> (&'static str, &Schema<'_>, &dyn SerializableStruct) {
+        fn variant(&self) -> (&'static str, &dyn SerializableStruct) {
             match self {
-                Self::Boom(inner) => ("boom", &BOOM_ERROR_SCHEMA, inner),
+                Self::Boom(inner) => ("boom", inner),
             }
         }
     }
@@ -1699,6 +1722,9 @@ mod tests {
         .with_xml_namespace("urn:test", None);
         struct Implicit;
         impl SerializableStruct for Implicit {
+            fn schema(&self) -> &Schema<'_> {
+                &SCHEMA
+            }
             fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 ser.write_string(&HEADER, "ann")?;
                 ser.write_string(&DATA, "hi")
@@ -1751,6 +1777,10 @@ mod tests {
         );
         struct HeaderOnly;
         impl SerializableStruct for HeaderOnly {
+            fn schema(&self) -> &Schema<'_> {
+                &SCHEMA
+            }
+
             fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 ser.write_string(&HEADER_NAME, "ann")
             }

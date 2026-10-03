@@ -28,6 +28,9 @@ use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerPro
 /// `smithy-build.json` restores what legacy smithy-rs servers do instead: a wrapped list reads
 /// only the children named as its member (`member`, or the member's `@xmlName`) and a wrapped
 /// map only its `entry` children, skipping the others.
+///
+/// A request body may be labeled `text/xml` as well as `application/xml`, as Coral servers accept;
+/// responses are always `application/xml`. With `legacyMode` only `application/xml` is accepted.
 #[derive(Debug)]
 pub struct RestXmlProtocol {
     pub(crate) inner: crate::schema::protocol::rest::RestProtocol<aws_smithy_xml::codec::XmlCodec>,
@@ -43,7 +46,10 @@ impl RestXmlProtocol {
                         .strict_collection_element_names(legacy_mode)
                         .build(),
                 ),
-                crate::schema::protocol::rest_xml::POLICY,
+                RestPolicy {
+                    request_content_type_aliases: if legacy_mode { &[] } else { REQUEST_CONTENT_TYPE_ALIASES },
+                    ..POLICY
+                },
             ),
         }
     }
@@ -58,6 +64,9 @@ impl Default for RestXmlProtocol {
 static PROTOCOL_ID: ShapeId<'static> = shape_id!("aws.protocols", "restXml");
 const CONTENT_TYPE: &str = "application/xml";
 
+/// Media types a request may use for an XML body besides [`CONTENT_TYPE`].
+const REQUEST_CONTENT_TYPE_ALIASES: &[&str] = &["text/xml"];
+
 /// The opt-in boolean in this protocol's settings section; see [`RestXmlProtocol`].
 const LEGACY_MODE_KEY: &str = "legacyMode";
 
@@ -66,6 +75,7 @@ const LEGACY_MODE_KEY: &str = "legacyMode";
 /// no body members whether or not the user modeled it.
 pub(crate) const POLICY: RestPolicy = RestPolicy {
     codec_content_type: CONTENT_TYPE,
+    request_content_type_aliases: REQUEST_CONTENT_TYPE_ALIASES,
     default_response_content_type: None,
     untyped_blob_payload_content_type: Some("application/octet-stream"),
     empty_document: false,
@@ -85,7 +95,11 @@ impl MetadataRoutedProtocol for RestXmlProtocol {
         impl crate::schema::routing::MetadataProtocolRouter + 'static + use<>,
         crate::schema::routing::RouterBuildError,
     > {
-        crate::schema::routing::rest_router(ctx.targets, CONTENT_TYPE)
+        crate::schema::routing::rest_router(
+            ctx.targets,
+            CONTENT_TYPE,
+            self.inner.policy().request_content_type_aliases,
+        )
     }
 
     fn event_stream_framing(&self) -> Option<EventStreamFraming<'_>> {

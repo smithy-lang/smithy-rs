@@ -42,7 +42,6 @@ fn per_target<T>(
     table
 }
 
-
 mod aws_json;
 mod rest;
 mod rpc_v2_cbor;

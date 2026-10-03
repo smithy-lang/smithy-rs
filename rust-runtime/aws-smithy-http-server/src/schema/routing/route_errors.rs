@@ -131,12 +131,6 @@ impl std::error::Error for RoutingError {
 // the `404`, exactly as routing rejections have always answered. A protocol wanting a
 // different wire form overrides `serialize_routing_error` rather than these impls.
 impl SerializableStruct for RoutingError {
-    fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
-        Ok(())
-    }
-}
-
-impl HttpModeledError for RoutingError {
     fn schema(&self) -> &Schema<'_> {
         match self.kind {
             RoutingErrorKind::MethodNotAllowed => &METHOD_NOT_ALLOWED,
@@ -144,6 +138,12 @@ impl HttpModeledError for RoutingError {
         }
     }
 
+    fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+        Ok(())
+    }
+}
+
+impl HttpModeledError for RoutingError {
     fn status_code(&self) -> u16 {
         match self.kind {
             RoutingErrorKind::MethodNotAllowed => 405,

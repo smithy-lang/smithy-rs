@@ -130,6 +130,10 @@ impl DeserializableShape for EmptyInput {
 struct TestOutput;
 
 impl SerializableStruct for TestOutput {
+    fn schema(&self) -> &Schema<'_> {
+        &OUT_SCHEMA
+    }
+
     fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         s.write_string(&OUT_MSG_MEMBER, "ok")
     }
@@ -138,6 +142,10 @@ impl SerializableStruct for TestOutput {
 struct Nothing;
 
 impl SerializableStruct for Nothing {
+    fn schema(&self) -> &Schema<'_> {
+        &EMPTY_OUT_SCHEMA
+    }
+
     fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         Ok(())
     }
@@ -236,6 +244,10 @@ fn rest_request_wire_failures_are_serde_errors() {
 fn rpc_request_round_trips_through_the_codec() {
     struct Body;
     impl SerializableStruct for Body {
+        fn schema(&self) -> &Schema<'_> {
+            &RPC_IN_SCHEMA
+        }
+
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_string(&RPC_NOTE_MEMBER, "hi")
         }
@@ -385,6 +397,10 @@ static STREAM_IN: Schema<'static> =
 struct StreamOutput;
 
 impl SerializableStruct for StreamOutput {
+    fn schema(&self) -> &Schema<'_> {
+        &STREAM_OUT
+    }
+
     fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         // Generated outputs skip their streaming member.
         s.write_string(&STREAM_TAG_MEMBER, "tagged")
@@ -678,6 +694,10 @@ async fn payload_outputs_are_labeled_from_the_schema_not_the_value() {
 
     struct Text(Option<&'static str>);
     impl SerializableStruct for Text {
+        fn schema(&self) -> &Schema<'_> {
+            &STRING_OUT
+        }
+
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             match self.0 {
                 Some(text) => s.write_string(&STRING_PAYLOAD, text),
@@ -687,6 +707,10 @@ async fn payload_outputs_are_labeled_from_the_schema_not_the_value() {
     }
     struct Data(Option<&'static [u8]>);
     impl SerializableStruct for Data {
+        fn schema(&self) -> &Schema<'_> {
+            &BLOB_OUT
+        }
+
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             match self.0 {
                 Some(data) => s.write_blob(&BLOB_PAYLOAD, aws_smithy_types::Blob::new(data)),
@@ -746,6 +770,10 @@ impl std::fmt::Display for Boom {
 impl std::error::Error for Boom {}
 
 impl SerializableStruct for Boom {
+    fn schema(&self) -> &Schema<'_> {
+        &BOOM_SCHEMA
+    }
+
     fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         s.write_string(&BOOM_MSG_MEMBER, "boom happened")?;
         s.write_string(&BOOM_HDR_MEMBER, "tagged")
@@ -753,10 +781,6 @@ impl SerializableStruct for Boom {
 }
 
 impl HttpModeledError for Boom {
-    fn schema(&self) -> &Schema<'_> {
-        &BOOM_SCHEMA
-    }
-
     fn status_code(&self) -> u16 {
         422
     }
@@ -1034,6 +1058,10 @@ async fn middleware_structs_are_framed_like_operation_outputs() {
 
     struct Teapot;
     impl SerializableStruct for Teapot {
+        fn schema(&self) -> &Schema<'_> {
+            &TEAPOT
+        }
+
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_string(&TEAPOT_MSG, "short and stout")?;
             s.write_string(&TEAPOT_TAG, "brewing")
@@ -1181,4 +1209,37 @@ fn rest_xml_legacy_mode_must_be_a_boolean() {
             "{settings}"
         );
     }
+}
+
+/// restXml reads a request body labeled `text/xml` as well as `application/xml`, as Coral does;
+/// `legacyMode` accepts only `application/xml`, as legacy smithy-rs servers do.
+#[test]
+fn rest_xml_accepts_text_xml_request_bodies_unless_in_legacy_mode() {
+    let body = b"<Collections><tags><member>a</member></tags></Collections>";
+    let read = |protocol: &dyn ServerProtocol, content_type: &str| {
+        let req = request("/collections", &[("content-type", content_type)], body);
+        deserialize::<Collections>(protocol, &COLLECTIONS_SCHEMA, &EMPTY_OUT_SCHEMA, &req)
+    };
+
+    for content_type in ["application/xml", "text/xml", "text/xml; charset=utf-8", "TEXT/XML"] {
+        let input = read(&*REST_XML, content_type).unwrap_or_else(|err| panic!("{content_type}: {err}"));
+        assert_eq!(input.tags, ["a"], "{content_type}");
+    }
+    for content_type in ["text/plain", "application/json", "application/atom+xml"] {
+        let err = read(&*REST_XML, content_type).unwrap_err();
+        assert!(
+            matches!(err, DeserializeError::UnsupportedMediaType(_)),
+            "{content_type}: {err}"
+        );
+    }
+
+    let legacy = rest_xml_with_settings(Some(r#"{"legacyMode":true}"#)).unwrap();
+    assert_eq!(read(&legacy, "application/xml").unwrap().tags, ["a"]);
+    let err = read(&legacy, "text/xml").unwrap_err();
+    assert!(matches!(err, DeserializeError::UnsupportedMediaType(_)), "{err}");
+
+    // The alias belongs to restXml alone.
+    let req = request("/pets/rex", &[("content-type", "text/xml")], br#"{"note":"hi"}"#);
+    let err = deserialize::<TestInput>(&*REST_JSON, &IN_SCHEMA, &OUT_SCHEMA, &req).unwrap_err();
+    assert!(matches!(err, DeserializeError::UnsupportedMediaType(_)), "{err}");
 }

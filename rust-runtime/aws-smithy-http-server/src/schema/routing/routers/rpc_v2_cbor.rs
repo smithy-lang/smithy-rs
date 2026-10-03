@@ -8,7 +8,9 @@
 use crate::schema::routing::RoutingError;
 use http::Request;
 
-use crate::schema::routing::{OperationTarget, MetadataProtocolRouter, RouteClaim, RouterBuildContext, RouterBuildError};
+use crate::schema::routing::{
+    MetadataProtocolRouter, OperationTarget, RouteClaim, RouterBuildContext, RouterBuildError,
+};
 
 /// Routes rpcv2Cbor on the `/service/{service}/operation/{operation}` path.
 ///

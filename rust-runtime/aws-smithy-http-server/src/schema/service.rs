@@ -163,8 +163,12 @@ mod test {
     static PUT: OperationSchema<'static> = OperationSchema::new(shape_id!("example", "Put"), &UNIT, &UNIT, &[]);
     static PROTOCOLS: &[ShapeId<'static>] = &[shape_id!("aws.protocols", "restJson1")];
     static OPERATIONS: &[&OperationSchema<'static>] = &[&GET, &PUT];
-    static SERVICE: ServiceSchema<'static> =
-        ServiceSchema::new(shape_id!("example", "Service"), Some("2024-01-01"), PROTOCOLS, OPERATIONS);
+    static SERVICE: ServiceSchema<'static> = ServiceSchema::new(
+        shape_id!("example", "Service"),
+        Some("2024-01-01"),
+        PROTOCOLS,
+        OPERATIONS,
+    );
 
     #[test]
     fn operation_descriptor_exposes_shapes_and_http_binding() {
@@ -191,7 +195,9 @@ mod test {
 
     #[test]
     fn service_descriptor_looks_up_operations_by_shape_id() {
-        let put = SERVICE.operation(&shape_id!("example", "Put")).expect("bound operation");
+        let put = SERVICE
+            .operation(&shape_id!("example", "Put"))
+            .expect("bound operation");
         assert!(std::ptr::eq(put, &PUT));
         assert!(SERVICE.operation(&shape_id!("example", "Missing")).is_none());
     }

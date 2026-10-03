@@ -54,6 +54,7 @@ const ERROR_TYPE_HEADER: http::HeaderName = http::HeaderName::from_static("x-amz
 /// type on an untyped blob payload, and answers a user-modeled empty output with `{}`.
 pub(crate) const POLICY: RestPolicy = RestPolicy {
     codec_content_type: CONTENT_TYPE,
+    request_content_type_aliases: &[],
     default_response_content_type: Some(CONTENT_TYPE),
     untyped_blob_payload_content_type: None,
     empty_document: true,
@@ -73,7 +74,7 @@ impl MetadataRoutedProtocol for RestJson1Protocol {
         impl crate::schema::routing::MetadataProtocolRouter + 'static + use<>,
         crate::schema::routing::RouterBuildError,
     > {
-        crate::schema::routing::rest_router(ctx.targets, CONTENT_TYPE)
+        crate::schema::routing::rest_router(ctx.targets, CONTENT_TYPE, &[])
     }
 
     fn event_stream_framing(&self) -> Option<EventStreamFraming<'_>> {

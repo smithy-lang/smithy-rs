@@ -29,6 +29,9 @@ use super::response::{assemble_response, assemble_streaming_response, resolve_st
 pub(crate) struct RestPolicy {
     /// The codec's media type: codec-framed bodies and structured payloads.
     pub(crate) codec_content_type: &'static str,
+    /// Further media types a request may carry wherever `codec_content_type` is expected.
+    /// Responses always use `codec_content_type`.
+    pub(crate) request_content_type_aliases: &'static [&'static str],
     /// The response media type when nothing in the output schema determines one. restJson1
     /// stamps `application/json` on every such response, restXml stamps nothing.
     pub(crate) default_response_content_type: Option<&'static str>,
@@ -54,6 +57,10 @@ impl<C> RestProtocol<C> {
 
     pub(crate) fn codec(&self) -> &C {
         &self.codec
+    }
+
+    pub(crate) fn policy(&self) -> &RestPolicy {
+        &self.policy
     }
 
     /// The `Content-Type` a response for `output` carries, if any: the runtime mirror of the
@@ -97,7 +104,11 @@ impl<C: Codec> RestProtocol<C> {
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, DeserializeError> {
         enforce_content_type(
             request.headers(),
-            &expected_request_content_type(input, self.policy.codec_content_type),
+            &expected_request_content_type(
+                input,
+                self.policy.codec_content_type,
+                self.policy.request_content_type_aliases,
+            ),
             request.body(),
         )?;
         Ok(Box::new(RestRequestDeserializer::new(

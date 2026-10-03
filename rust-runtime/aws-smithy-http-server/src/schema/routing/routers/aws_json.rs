@@ -9,7 +9,9 @@ use crate::schema::routing::RoutingError;
 use http::Request;
 
 use super::content_type_is;
-use crate::schema::routing::{OperationTarget, MetadataProtocolRouter, RouteClaim, RouterBuildContext, RouterBuildError};
+use crate::schema::routing::{
+    MetadataProtocolRouter, OperationTarget, RouteClaim, RouterBuildContext, RouterBuildError,
+};
 
 #[derive(Debug)]
 struct AwsJsonProtocolRouter {

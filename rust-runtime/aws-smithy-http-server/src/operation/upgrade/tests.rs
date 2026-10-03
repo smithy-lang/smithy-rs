@@ -163,6 +163,9 @@ impl DeserializableShape for EmptyShape {
     }
 }
 impl SerializableStruct for EmptyShape {
+    fn schema(&self) -> &Schema<'_> {
+        &EMPTY
+    }
     fn serialize_members(
         &self,
         _: &mut dyn aws_smithy_schema::serde::ShapeSerializer,

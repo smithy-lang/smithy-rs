@@ -30,8 +30,9 @@ pub(crate) enum ExpectedContentType {
     Skip,
     /// The header must be absent.
     Absent,
-    /// The header must carry this media type when the body is not empty.
-    Expect(mime::Mime),
+    /// The header must carry this media type, or one of the aliases the protocol also accepts for
+    /// it, when the body is not empty.
+    Expect(mime::Mime, &'static [&'static str]),
 }
 
 fn parse_mime(value: &str) -> mime::Mime {
@@ -56,9 +57,14 @@ pub(super) fn has_streaming_payload(schema: &Schema<'_>) -> bool {
 /// must have no `Content-Type` at all, unless the input was modeled by the user (the schema then
 /// carries an original name) in which case the header is ignored. Otherwise the codec's type is
 /// expected when any member is bound to the body.
+///
+/// `codec_aliases` are further media types the protocol accepts wherever the codec's own type is
+/// expected (restXml accepts `text/xml` for `application/xml`). They do not apply to a payload
+/// whose media type the model fixes.
 pub(crate) fn expected_request_content_type(
     input: &Schema<'_>,
     codec_content_type: &'static str,
+    codec_aliases: &'static [&'static str],
 ) -> ExpectedContentType {
     if let Some(payload) = payload_member(input) {
         if payload.streaming() {
@@ -67,9 +73,9 @@ pub(crate) fn expected_request_content_type(
         let media_type = payload.media_type().map(|m| m.value());
         return match (payload.shape_type(), media_type) {
             (ShapeType::Blob, None) => ExpectedContentType::Skip,
-            (ShapeType::Blob, Some(media)) => ExpectedContentType::Expect(parse_mime(media)),
-            (ShapeType::String, media) => ExpectedContentType::Expect(parse_mime(media.unwrap_or("text/plain"))),
-            _ => ExpectedContentType::Expect(parse_mime(codec_content_type)),
+            (ShapeType::Blob, Some(media)) => ExpectedContentType::Expect(parse_mime(media), &[]),
+            (ShapeType::String, media) => ExpectedContentType::Expect(parse_mime(media.unwrap_or("text/plain")), &[]),
+            _ => ExpectedContentType::Expect(parse_mime(codec_content_type), codec_aliases),
         };
     }
     if input.members().is_empty() {
@@ -80,13 +86,14 @@ pub(crate) fn expected_request_content_type(
         };
     }
     if input.members().iter().any(|m| is_body_member(m)) {
-        ExpectedContentType::Expect(parse_mime(codec_content_type))
+        ExpectedContentType::Expect(parse_mime(codec_content_type), codec_aliases)
     } else {
         ExpectedContentType::Skip
     }
 }
 
-fn check_content_type(headers: &Headers, expected: Option<&str>) -> Result<(), DeserializeError> {
+/// Checks the `Content-Type` header against `expected`, or against one of `aliases` for it.
+fn check_content_type(headers: &Headers, expected: Option<&str>, aliases: &[&str]) -> Result<(), DeserializeError> {
     let actual = headers.get(http::header::CONTENT_TYPE.as_str());
     let parse = |s: &str| {
         s.parse::<mime::Mime>()
@@ -104,7 +111,7 @@ fn check_content_type(headers: &Headers, expected: Option<&str>) -> Result<(), D
         (Some(actual), None) => Err(unexpected(None, Some(parse(actual)?))),
         (Some(actual), Some(expected)) => {
             let found = parse(actual)?;
-            if expected != found.essence_str() {
+            if expected != found.essence_str() && !aliases.contains(&found.essence_str()) {
                 Err(unexpected(Some(expected), Some(found)))
             } else {
                 Ok(())
@@ -122,9 +129,11 @@ pub(super) fn enforce_content_type(
 ) -> Result<(), DeserializeError> {
     match expected {
         ExpectedContentType::Skip => Ok(()),
-        ExpectedContentType::Absent => check_content_type(headers, None),
-        ExpectedContentType::Expect(_) if body.is_empty() => Ok(()),
-        ExpectedContentType::Expect(content_type) => check_content_type(headers, Some(content_type.essence_str())),
+        ExpectedContentType::Absent => check_content_type(headers, None, &[]),
+        ExpectedContentType::Expect(..) if body.is_empty() => Ok(()),
+        ExpectedContentType::Expect(content_type, aliases) => {
+            check_content_type(headers, Some(content_type.essence_str()), aliases)
+        }
     }
 }
 
@@ -190,6 +199,6 @@ where
     if request.body().is_empty() || input.members().is_empty() {
         return Ok(Box::new(EmptyStructDeserializer));
     }
-    check_content_type(request.headers(), Some(codec_content_type))?;
+    check_content_type(request.headers(), Some(codec_content_type), &[])?;
     Ok(Box::new(codec.create_deserializer(request.body())))
 }

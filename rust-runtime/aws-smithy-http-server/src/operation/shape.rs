@@ -9,10 +9,10 @@ use std::pin::Pin;
 
 use super::{Handler, IntoService, Normalize, OperationService};
 use crate::response::Response;
+use crate::schema::OperationSchema;
 use crate::schema::{DeserializeError, SharedServerProtocol};
 use crate::shape_id::ShapeId;
 use aws_smithy_schema::serde::ShapeDeserializer;
-use crate::schema::OperationSchema;
 use aws_smithy_types::body::SdkBody;
 
 /// Models the [Smithy Operation shape].

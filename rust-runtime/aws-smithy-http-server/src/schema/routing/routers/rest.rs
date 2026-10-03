@@ -9,7 +9,7 @@ use crate::schema::routing::RoutingError;
 use http::Request;
 
 use super::{announces_no_body, content_type_is, per_target};
-use crate::schema::routing::{OperationTarget, MetadataProtocolRouter, RouteClaim, RouterBuildError};
+use crate::schema::routing::{MetadataProtocolRouter, OperationTarget, RouteClaim, RouterBuildError};
 
 #[derive(Debug)]
 enum ClaimContentType {
@@ -17,12 +17,17 @@ enum ClaimContentType {
     Any,
     /// The header must be absent.
     Absent,
-    /// The header must name this media type, or be absent with an empty body.
-    Expect(mime::Mime),
+    /// The header must name this media type or one of the aliases the protocol accepts for it, or
+    /// be absent with an empty body.
+    Expect(mime::Mime, &'static [&'static str]),
 }
 
 impl ClaimContentType {
-    fn for_input(input: &aws_smithy_schema::Schema<'_>, codec_content_type: &'static str) -> Self {
+    fn for_input(
+        input: &aws_smithy_schema::Schema<'_>,
+        codec_content_type: &'static str,
+        codec_aliases: &'static [&'static str],
+    ) -> Self {
         use crate::schema::protocol::request::{expected_request_content_type, ExpectedContentType};
         let custom = input.members().iter().any(|member| {
             member
@@ -32,10 +37,10 @@ impl ClaimContentType {
         if custom {
             return Self::Any;
         }
-        match expected_request_content_type(input, codec_content_type) {
+        match expected_request_content_type(input, codec_content_type, codec_aliases) {
             ExpectedContentType::Skip => Self::Any,
             ExpectedContentType::Absent => Self::Absent,
-            ExpectedContentType::Expect(mime) => Self::Expect(mime),
+            ExpectedContentType::Expect(mime, aliases) => Self::Expect(mime, aliases),
         }
     }
 
@@ -44,8 +49,11 @@ impl ClaimContentType {
         match self {
             Self::Any => true,
             Self::Absent => !present,
-            Self::Expect(mime) if present => content_type_is(request, mime.essence_str()),
-            Self::Expect(_) => announces_no_body(request),
+            Self::Expect(mime, aliases) if present => {
+                content_type_is(request, mime.essence_str())
+                    || aliases.iter().any(|alias| content_type_is(request, alias))
+            }
+            Self::Expect(..) => announces_no_body(request),
         }
     }
 }
@@ -99,6 +107,7 @@ impl MetadataProtocolRouter for RestProtocolRouter {
 pub(crate) fn rest_router(
     targets: &[OperationTarget],
     codec_content_type: &'static str,
+    codec_aliases: &'static [&'static str],
 ) -> Result<impl MetadataProtocolRouter + 'static, RouterBuildError> {
     use crate::routing::request_spec::{PathSegment, QuerySegment, RequestSpec};
     let entries = targets
@@ -150,7 +159,7 @@ pub(crate) fn rest_router(
     let content_types = per_target(
         targets,
         || ClaimContentType::Any,
-        |target| ClaimContentType::for_input(target.operation().input(), codec_content_type),
+        |target| ClaimContentType::for_input(target.operation().input(), codec_content_type, codec_aliases),
     );
     Ok(RestProtocolRouter {
         router: crate::protocol::rest::router::RestRouter::from_iter(entries),

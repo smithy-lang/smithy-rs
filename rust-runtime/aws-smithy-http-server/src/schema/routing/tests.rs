@@ -792,8 +792,8 @@ async fn cancelling_body_routing_drops_the_pending_stream() {
 #[tokio::test]
 async fn immediate_routing_uses_ready_future_and_rejects_unknown_routes() {
     let targets = [OperationTarget::new(0, &FIRST), OperationTarget::new(1, &SECOND)];
-    let router = rest_router(&targets, "application/json").unwrap();
-    let shared = SharedProtocolRouter::new(rest_router(&targets, "application/json").unwrap());
+    let router = rest_router(&targets, "application/json", &[]).unwrap();
+    let shared = SharedProtocolRouter::new(rest_router(&targets, "application/json", &[]).unwrap());
     assert!(matches!(shared, SharedProtocolRouter::Metadata(_)));
     let req = Request::builder().method("POST").uri("/first").body(()).unwrap();
     assert_eq!(router.route(&req).unwrap().index(), 0);
@@ -2168,4 +2168,42 @@ async fn builder_supports_custom_transport_bodies_with_handler_layers() {
             "first\npayload"
         );
     }
+}
+
+#[test]
+fn rest_router_claims_the_codec_content_type_and_its_aliases() {
+    static NOTE: Schema<'static> =
+        Schema::new_member(shape_id!("test", "noteInput", "note"), ShapeType::String, "note", 0);
+    static NOTE_INPUT: Schema<'static> = Schema::new_struct(
+        shape_id!("test", "noteInput"),
+        ShapeType::Structure,
+        &[&NOTE],
+    )
+    .with_http(HttpTrait::new("POST", "/note", Some(200)));
+    static NOTE_OPERATION: OperationSchema<'static> =
+        OperationSchema::new(shape_id!("test", "note"), &NOTE_INPUT, &UNIT, &[]);
+
+    let targets = [OperationTarget::new(0, &NOTE_OPERATION)];
+    let claims = |aliases: &'static [&'static str], content_type: &str| {
+        let router = rest_router(&targets, "application/xml", aliases).unwrap();
+        let request = Request::builder()
+            .method("POST")
+            .uri("/note")
+            .header("content-type", content_type)
+            .header("content-length", "10")
+            .body(())
+            .unwrap();
+        matches!(router.claim(&request), RouteClaim::ClaimedWithRoute(_))
+    };
+
+    for content_type in ["application/xml", "text/xml", "text/xml; charset=utf-8"] {
+        assert!(claims(&["text/xml"], content_type), "{content_type}");
+    }
+    // Another protocol's media type, or one nothing accepts, is left for the next protocol.
+    for content_type in ["application/json", "text/plain"] {
+        assert!(!claims(&["text/xml"], content_type), "{content_type}");
+    }
+    // Without the alias only the codec's own media type is claimed.
+    assert!(claims(&[], "application/xml"));
+    assert!(!claims(&[], "text/xml"));
 }
