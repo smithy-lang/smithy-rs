@@ -44,7 +44,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.RecursiveShapeClassifier
 import software.amazon.smithy.rust.codegen.core.smithy.generators.SchemaTraitExtension
@@ -57,7 +56,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrai
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
-import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 
 /**
  * Server-side copy of [software.amazon.smithy.rust.codegen.core.smithy.generators.SchemaGenerator]
@@ -291,6 +289,10 @@ class ServerSchemaGenerator(
         writer.rustTemplate(
             """
             impl #{SerializableStruct} for $structName {
+                fn schema(&self) -> &#{Schema}<'_> {
+                    Self::SCHEMA
+                }
+
                 ##[allow(unused_variables, clippy::diverging_sub_expression)]
                 fn serialize_members(&self, ser: &mut dyn #{ShapeSerializer}) -> ::std::result::Result<(), #{SerdeError}> {
                     #{memberWrites}
@@ -334,6 +336,7 @@ class ServerSchemaGenerator(
                             Self::$variantName => {
                                 struct Empty;
                                 impl #{SerializableStruct} for Empty {
+                                    fn schema(&self) -> &#{Schema}<'_> { &#{UNIT} }
                                     fn serialize_members(&self, _ser: &mut dyn #{ShapeSerializer}) -> #{Result}<(), #{SerdeError}> { #{Ok}(()) }
                                 }
                                 ser.write_struct(&$memberSchemaRef, &Empty)?;
@@ -354,6 +357,10 @@ class ServerSchemaGenerator(
         writer.rustTemplate(
             """
             impl #{SerializableStruct} for $unionName {
+                fn schema(&self) -> &#{Schema}<'_> {
+                    Self::SCHEMA
+                }
+
                 ##[allow(unused_variables, clippy::diverging_sub_expression)]
                 fn serialize_members(&self, ser: &mut dyn #{ShapeSerializer}) -> ::std::result::Result<(), #{SerdeError}> {
                     match self {
@@ -1036,11 +1043,7 @@ class ServerSchemaGenerator(
      * schema constant. Mirrors Smithy semantics that target-shape traits apply
      * transitively unless overridden by the member.
      */
-    private fun memberTraitChain(
-        writer: RustWriter,
-        member: software.amazon.smithy.model.shapes.MemberShape,
-        prefix: String,
-    ): String {
+    private fun memberTraitChain(member: software.amazon.smithy.model.shapes.MemberShape): String {
         val target = model.expectShape(member.target)
         val baseChain = traitSetterChain(member)
         val targetTimestampFormat =
@@ -1072,32 +1075,7 @@ class ServerSchemaGenerator(
             } else {
                 ""
             }
-        val targetSchemaChain =
-            if (runtimeConfig.httpVersion == HttpVersion.Http1x && (target is StructureShape || target is UnionShape)) {
-                val targetRef =
-                    if (member.isTargetUnit()) {
-                        "&#{UnitSchema}"
-                    } else {
-                        "#{Target}::SCHEMA"
-                    }
-                writer.rustTemplate(
-                    """
-                    static ${prefix}_TARGET_TRAITS: std::sync::LazyLock<#{TraitMap}> = std::sync::LazyLock::new(|| {
-                        let mut map = #{TraitMap}::new();
-                        map.insert(::std::boxed::Box::new(#{TargetSchema}::new($targetRef)));
-                        map
-                    });
-                    """,
-                    "TraitMap" to smithySchema.resolve("TraitMap"),
-                    "TargetSchema" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType().resolve("schema::TargetSchema"),
-                    "Target" to symbolProvider.toSymbol(target),
-                    "UnitSchema" to smithySchema.resolve("prelude::UNIT"),
-                )
-                "\n    .with_traits(&${prefix}_TARGET_TRAITS)"
-            } else {
-                ""
-            }
-        return baseChain + targetTimestampFormat + targetMediaType + targetStreaming + targetSchemaChain
+        return baseChain + targetTimestampFormat + targetMediaType + targetStreaming
     }
 
     /**
@@ -1108,8 +1086,14 @@ class ServerSchemaGenerator(
      * (`deserialize_request` label re-matching); the output schema drives
      * success-status resolution (`serialize_response`: `@httpResponseCode`
      * member if set, else `schema.http().code()`, else 200).
+     * Error shapes carrying `@httpError` expose its status code through the
+     * same metadata, with empty method and URI since errors are responses.
      */
     private fun httpTraitChain(shape: Shape): String {
+        val httpError = shape.getTrait(software.amazon.smithy.model.traits.HttpErrorTrait::class.java).orElse(null)
+        if (httpError != null) {
+            return "\n    .with_http(#{HttpTrait}::new(\"\", \"\", #{Some}(${httpError.code})))"
+        }
         val operationIndex = software.amazon.smithy.model.knowledge.OperationIndex.of(model)
         for (operation in model.operationShapes) {
             if (operationIndex.getInputShape(operation).orElse(null)?.id == shape.id ||
@@ -1263,8 +1247,8 @@ class ServerSchemaGenerator(
                 val valueTarget = model.expectShape(target.value.target)
                 val escapedKeyId = target.key.id.toString().replace("#", "##")
                 val escapedValueId = target.value.id.toString().replace("#", "##")
-                val keyTraitChain = memberTraitChain(writer, target.key, "${prefix}_KEY")
-                val valueTraitChain = memberTraitChain(writer, target.value, "${prefix}_VALUE")
+                val keyTraitChain = memberTraitChain(target.key)
+                val valueTraitChain = memberTraitChain(target.value)
                 // Recurse before emitting so nested chains attach correctly.
                 val keyAggChain = emitAggregateMemberChain(writer, "${prefix}_KEY", keyTarget, codegenScope)
                 val valueAggChain = emitAggregateMemberChain(writer, "${prefix}_VALUE", valueTarget, codegenScope)
@@ -1298,7 +1282,7 @@ class ServerSchemaGenerator(
             is ListShape -> {
                 val listMemberTarget = model.expectShape(target.member.target)
                 val escapedListMemberId = target.member.id.toString().replace("#", "##")
-                val listMemberTraitChain = memberTraitChain(writer, target.member, "${prefix}_MEMBER")
+                val listMemberTraitChain = memberTraitChain(target.member)
                 val nestedChain =
                     emitAggregateMemberChain(writer, "${prefix}_MEMBER", listMemberTarget, codegenScope)
                 writer.rustTemplate(
@@ -1404,6 +1388,8 @@ class ServerSchemaGenerator(
                 "Schema" to smithySchema.resolve("Schema"),
                 "ShapeId" to smithySchema.resolve("ShapeId"),
                 "ShapeType" to smithySchema.resolve("ShapeType"),
+                "HttpTrait" to smithySchema.resolve("traits::HttpTrait"),
+                *RuntimeType.preludeScope,
             )
 
         // The shape ID is constructed inline in the `Schema::new_*` call below
@@ -1528,7 +1514,7 @@ class ServerSchemaGenerator(
                     val memberId = ShapeId.fromParts(schemaShapeId.namespace, schemaShapeId.name, member.memberName)
                     val escapedMemberId = memberId.toString().replace("#", "##")
                     val memberConstName = "${schemaPrefix}_MEMBER_${constantName(rustMemberName)}"
-                    val traitChain = memberTraitChain(writer, member, memberConstName)
+                    val traitChain = memberTraitChain(member)
 
                     // For map / list members, emit key/value/element sub-schemas so the XML
                     // codec can resolve entry element names. Recurses through nested
@@ -1558,7 +1544,7 @@ class ServerSchemaGenerator(
             is ListShape -> {
                 val target = model.expectShape(shape.member.target)
                 val escapedMemberId = shape.member.id.toString().replace("#", "##")
-                val traitChain = memberTraitChain(writer, shape.member, "${schemaPrefix}_MEMBER")
+                val traitChain = memberTraitChain(shape.member)
                 writer.rustTemplate(
                     """
                     static ${schemaPrefix}_MEMBER: #{Schema}<'static> = #{Schema}::new_member(
@@ -1581,8 +1567,8 @@ class ServerSchemaGenerator(
                 val valueTarget = model.expectShape(shape.value.target)
                 val escapedKeyId = shape.key.id.toString().replace("#", "##")
                 val escapedValueId = shape.value.id.toString().replace("#", "##")
-                val keyTraitChain = memberTraitChain(writer, shape.key, "${schemaPrefix}_KEY")
-                val valueTraitChain = memberTraitChain(writer, shape.value, "${schemaPrefix}_VALUE")
+                val keyTraitChain = memberTraitChain(shape.key)
+                val valueTraitChain = memberTraitChain(shape.value)
                 writer.rustTemplate(
                     """
                     static ${schemaPrefix}_KEY: #{Schema}<'static> = #{Schema}::new_member(

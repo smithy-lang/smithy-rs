@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenConfig
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersion
@@ -100,8 +101,38 @@ internal class ServerSchemaDecoratorTest {
         val servers =
             serverIntegrationTest(model, schemaSerdeParams) { context, rustCrate ->
                 rustCrate.testModule {
+                    unitTest("erased_values_report_their_own_schema") {
+                        rustTemplate(
+                            """
+                            fn assert_schema(value: &dyn #{SerializableStruct}, schema: &#{Schema}<'_>) {
+                                assert!(::std::ptr::eq(value.schema(), schema));
+                            }
+                            let nested = crate::model::Nested { message: None, tags: None };
+                            assert_schema(&nested, crate::model::Nested::SCHEMA);
+                            let choice = crate::model::Choice::Nested(nested);
+                            assert_schema(&choice, crate::model::Choice::SCHEMA);
+                            let error = crate::error::BadThing { message: None };
+                            assert_schema(&error, crate::error::BadThing::SCHEMA);
+                            """,
+                            "SerializableStruct" to RuntimeType.smithySchema(context.runtimeConfig).resolve("serde::SerializableStruct"),
+                            "Schema" to RuntimeType.smithySchema(context.runtimeConfig).resolve("Schema"),
+                        )
+                    }
                     // The descriptors belong to the schema router, which only HTTP 1.x services use.
                     if (context.runtimeConfig.httpVersion == HttpVersion.Http1x) {
+                        unitTest("operation_error_reports_the_active_variant_schema") {
+                            rustTemplate(
+                                """
+                                let error = crate::error::EchoError::BadThing(crate::error::BadThing { message: None });
+                                let erased: &dyn #{SerializableStruct} = &error;
+                                assert!(::std::ptr::eq(erased.schema(), crate::error::BadThing::SCHEMA));
+                                let http_error: &dyn #{HttpModeledError} = &error;
+                                assert!(::std::ptr::eq(http_error.schema(), erased.schema()));
+                                """,
+                                "SerializableStruct" to RuntimeType.smithySchema(context.runtimeConfig).resolve("serde::SerializableStruct"),
+                                "HttpModeledError" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType().resolve("schema::HttpModeledError"),
+                            )
+                        }
                         unitTest("operation_descriptor_reports_the_modeled_http_binding") {
                             rust(
                                 """
@@ -169,6 +200,23 @@ internal class ServerSchemaDecoratorTest {
                 src.toFile().walkTopDown().filter { it.isFile }.forEach {
                     it.readText() shouldNotContain "protocol_serde"
                 }
+            }
+        }
+    }
+
+    @Test
+    fun `error schemas preserve explicit httpError status codes`() {
+        serverIntegrationTest(model, schemaSerdeParams) { _, rustCrate ->
+            rustCrate.testModule {
+                unitTest(
+                    "http_error_status",
+                    """
+                    let http = crate::error::BadThing::SCHEMA.http().expect("should preserve @httpError");
+                    assert_eq!(http.code(), 400);
+                    assert_eq!(http.method(), "");
+                    assert_eq!(http.uri(), "");
+                    """,
+                )
             }
         }
     }

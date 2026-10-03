@@ -369,7 +369,7 @@ class ServerStreamingOperationGenerator(
                 pub type $name = #{SchemaEventErrorMarshaller}<#{OpError}>;
 
                 impl #{SerializableEventError} for #{OpError} {
-                    fn variant(&self) -> (&'static str, &#{Schema}<'_>, &dyn #{SerializableStruct}) {
+                    fn variant(&self) -> (&'static str, &dyn #{SerializableStruct}) {
                         match self {
                             #{arms:W}
                         }
@@ -384,8 +384,7 @@ class ServerStreamingOperationGenerator(
                             val target = model.expectShape(member.target, StructureShape::class.java)
                             val targetSymbol = symbolProvider.toSymbol(target)
                             rustTemplate(
-                                "Self::${targetSymbol.name}(inner) => (${member.memberName.dq()}, #{Target}::SCHEMA, inner),",
-                                "Target" to targetSymbol,
+                                "Self::${targetSymbol.name}(inner) => (${member.memberName.dq()}, inner),",
                                 *codegenScope,
                             )
                         }

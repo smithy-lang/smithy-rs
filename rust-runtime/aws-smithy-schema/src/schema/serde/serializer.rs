@@ -239,7 +239,6 @@ pub trait ShapeSerializer {
 ///
 /// ```ignore
 /// impl SerializableStruct for MyStruct {
-///
 ///     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
 ///         serializer.write_string(&NAME_SCHEMA, &self.name)?;
 ///         serializer.write_integer(&AGE_SCHEMA, self.age)?;

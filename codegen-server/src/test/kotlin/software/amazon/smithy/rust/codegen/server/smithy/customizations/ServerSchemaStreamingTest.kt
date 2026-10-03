@@ -600,9 +600,9 @@ internal class ServerSchemaStreamingTest {
         servers.forEach { check(!it.path.resolve("src/protocol_serde").toFile().exists()) }
     }
 
-    /// A `@sigv4` service wraps its event stream receivers in the generated `SigV4Receiver`;
-    /// the streaming glue must accept that wrapper wherever it accepts the plain `Receiver`
-    /// (`apply_initial_request` takes the initial-frame receive as a closure for this reason).
+    // / A `@sigv4` service wraps its event stream receivers in the generated `SigV4Receiver`;
+    // / the streaming glue must accept that wrapper wherever it accepts the plain `Receiver`
+    // / (`apply_initial_request` takes the initial-frame receive as a closure for this reason).
     @Test
     fun `sigv4 event stream receivers compile against the schema streaming glue`() {
         serverIntegrationTest(

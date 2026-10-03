@@ -872,10 +872,9 @@ class ServerServiceGenerator(
                 {
                     #{Checks}
                     #{Patterns}
-                    let svc = #{SmithyHttpServer}::schema::routing::MultiProtocolRoutingService::from_operation_handler_bindings_with_options(
+                    let svc = #{SmithyHttpServer}::schema::routing::MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings_with_options(
                         &$schema, #{Registries}, [#{Bindings}], self.routing_options,
-                    )$unwrap;
-                    let svc = svc.layer(&self.layer);
+                    ).layer(self.layer).build()$unwrap;
                     ${if (unchecked) "$serviceName { svc }" else "#{Ok}($serviceName { svc })"}
                 }
                 """,
@@ -968,13 +967,6 @@ class ServerServiceGenerator(
                 impl $serviceName {
                     /// Routes are already erased on the schema path.
                     pub fn boxed(self) -> Self { self }
-                    /// Applies a layer after routing to each operation handler.
-                    pub fn layer<L>(self, layer: &L) -> Self
-                    where
-                        L: #{Tower}::Layer<#{SmithyHttpServer}::routing::SyncRoute<Body>>,
-                        L::Service: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + Sync + 'static,
-                        <L::Service as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
-                    { Self { svc: self.svc.layer(layer) } }
                 }
                 impl<S> $serviceName<S> {
                     pub fn into_make_service(self) -> #{SmithyHttpServer}::routing::IntoMakeService<Self> {

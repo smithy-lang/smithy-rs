@@ -297,8 +297,8 @@ class SchemaRoutingGeneratorTest {
                                             fn serialize_rejection(&self, _: #{Server}::schema::DeserializeError) -> Response<BoxBody> { unreachable!() }
                                         }
                                         ${
-                        if (bodyRouting) {
-                            """
+                                        if (bodyRouting) {
+                                            """
                                         impl #{Server}::schema::BodyRoutedProtocol for TestProtocol {
                                             fn from_build_context(_ctx: &ProtocolBuildContext<'_>) -> #{Result}<Self, RouterBuildError> {
                                                 #{Ok}(TestProtocol)
@@ -312,8 +312,8 @@ class SchemaRoutingGeneratorTest {
                                             ProtocolRegistration::body_routed::<TestProtocol>("test##bodyRouting"),
                                         ]);
                             """
-                        } else {
-                            """
+                                        } else {
+                                            """
                                         impl #{Server}::schema::MetadataRoutedProtocol for TestProtocol {
                                             fn from_build_context(_ctx: &ProtocolBuildContext<'_>) -> #{Result}<Self, RouterBuildError> {
                                                 #{Ok}(TestProtocol)
@@ -329,8 +329,8 @@ class SchemaRoutingGeneratorTest {
                                             ProtocolRegistration::metadata_routed::<TestProtocol>("test##bodyRouting"),
                                         ]);
                             """
-                        }
-                    }
+                                        }
+                                    }
                                         &REGISTRY
                                     }
                                     """,
