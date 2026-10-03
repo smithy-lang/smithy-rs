@@ -1176,9 +1176,9 @@ mod tests {
             schema: &person,
             member: &member,
         };
-        assert!(std::ptr::eq(value.schema(), &person));
-
-        let out = serialize(|ser| ser.write_struct(&person, &value));
+        let erased: &dyn SerializableStruct = &value;
+        assert!(std::ptr::eq(erased.schema(), &person));
+        let out = serialize(|ser| ser.write_struct(&person, erased));
         assert_eq!(
             out,
             "<Person xmlns=\"https://ns.example/\"><RuntimeFullName>v</RuntimeFullName></Person>"

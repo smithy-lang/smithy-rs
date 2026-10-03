@@ -348,10 +348,11 @@ class SchemaGeneratorTest {
                 use aws_smithy_schema::codec::Codec;
 
                 let value = MyUnion::UnitVariant;
-                assert!(std::ptr::eq(value.schema(), MyUnion::SCHEMA));
+                let erased: &dyn SerializableStruct = &value;
+                assert!(std::ptr::eq(erased.schema(), MyUnion::SCHEMA));
                 let codec = JsonCodec::new(JsonCodecSettings::default());
                 let mut ser = codec.create_serializer();
-                ser.write_struct(value.schema(), &value).expect("unit serialization should succeed");
+                ser.write_struct(erased.schema(), erased).expect("unit serialization should succeed");
                 assert_eq!(String::from_utf8(ser.finish()).unwrap(), r#"{"unitVariant":{}}"#);
                 """,
             )
