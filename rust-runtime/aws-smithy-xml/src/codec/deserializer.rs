@@ -192,8 +192,9 @@ impl<'a> XmlDeserializer<'a> {
     /// `None` means every child element is an item. That is the case when the
     /// setting is off; for a flattened list, whose siblings `read_struct` has
     /// already selected by name before handing them over; and for a schema
-    /// that does not describe the list's member (codegen passes a placeholder
-    /// for some nested aggregates), where the name is not known.
+    /// that does not describe the list's member, such as the
+    /// `prelude::DOCUMENT` placeholder codegen falls back to when it has no
+    /// sub-schema for a nested aggregate, where the name is not known.
     fn list_item_name<'s>(check_names: bool, schema: &'s Schema<'_>) -> Option<&'s str> {
         if !check_names || schema.xml_flattened() {
             return None;
@@ -2179,8 +2180,9 @@ mod tests {
         );
     }
 
-    /// A schema that does not describe the list's member (codegen passes a
-    /// placeholder for some nested aggregates) gives no item name to check.
+    /// A schema that does not describe the list's member (the placeholder
+    /// codegen falls back to when it has no sub-schema for a nested aggregate)
+    /// gives no item name to check.
     #[test]
     fn element_name_check_without_a_member_schema_reads_every_child() {
         let xml = b"<l><a>1</a><b>2</b></l>";
@@ -2241,6 +2243,179 @@ mod tests {
             entries.sort();
             assert_eq!(entries, expected);
         }
+    }
+
+    /// The element-name check applies at every nesting level: each nested
+    /// list or map is read against the sub-schema that names its own items.
+    #[test]
+    fn element_name_check_applies_to_nested_collections() {
+        // `grid: list<list<String>>`, the inner member renamed to `Cell`.
+        static CELL: Schema<'static> = Schema::new_member(
+            shape_id!("test", "Row$member"),
+            ShapeType::String,
+            "member",
+            0,
+        )
+        .with_xml_name("Cell");
+        static ROW: Schema<'static> = Schema::new_member(
+            shape_id!("test", "Grid$member"),
+            ShapeType::List,
+            "member",
+            0,
+        )
+        .with_list_member(&CELL);
+        static GRID: Schema<'static> =
+            Schema::new_member(shape_id!("test", "S$grid"), ShapeType::List, "grid", 0)
+                .with_list_member(&ROW);
+        // `attrs: map<String, list<String>>`.
+        static ATTR_KEY: Schema<'static> =
+            Schema::new_member(shape_id!("test", "Attrs$key"), ShapeType::String, "key", 0);
+        static ATTR_ITEM: Schema<'static> = Schema::new_member(
+            shape_id!("test", "Values$member"),
+            ShapeType::String,
+            "member",
+            0,
+        );
+        static ATTR_VALUE: Schema<'static> = Schema::new_member(
+            shape_id!("test", "Attrs$value"),
+            ShapeType::List,
+            "value",
+            1,
+        )
+        .with_list_member(&ATTR_ITEM);
+        static ATTRS: Schema<'static> =
+            Schema::new_member(shape_id!("test", "S$attrs"), ShapeType::Map, "attrs", 1)
+                .with_map_members(&ATTR_KEY, &ATTR_VALUE);
+
+        fn grid(check_names: bool) -> Vec<Vec<String>> {
+            let xml = b"<grid>\
+                <member><Cell>1</Cell><member>x</member></member>\
+                <row><Cell>9</Cell></row>\
+                <member><Cell>2</Cell></member>\
+                </grid>";
+            let mut rows = Vec::new();
+            XmlDeserializer::new(xml, element_name_settings(check_names))
+                .read_list(&GRID, &mut |d| {
+                    let mut row = Vec::new();
+                    d.read_list(&ROW, &mut |d| {
+                        row.push(d.read_string(&CELL)?);
+                        Ok(())
+                    })?;
+                    rows.push(row);
+                    Ok(())
+                })
+                .unwrap();
+            rows
+        }
+        assert_eq!(grid(true), vec![vec!["1"], vec!["2"]]);
+        assert_eq!(grid(false), vec![vec!["1", "x"], vec!["9"], vec!["2"]]);
+
+        fn attrs(check_names: bool) -> Vec<(String, Vec<String>)> {
+            let xml = b"<attrs>\
+                <entry><key>k</key><value><member>a</member><item>b</item></value></entry>\
+                <other><key>z</key><value><member>q</member></value></other>\
+                </attrs>";
+            let mut entries = Vec::new();
+            XmlDeserializer::new(xml, element_name_settings(check_names))
+                .read_map(&ATTRS, &mut |key, d| {
+                    entries.push((key, d.read_string_list(&ATTR_VALUE)?));
+                    Ok(())
+                })
+                .unwrap();
+            entries.sort();
+            entries
+        }
+        assert_eq!(attrs(true), vec![("k".to_owned(), vec!["a".to_owned()])]);
+        assert_eq!(
+            attrs(false),
+            vec![
+                ("k".to_owned(), vec!["a".to_owned(), "b".to_owned()]),
+                ("z".to_owned(), vec!["q".to_owned()]),
+            ]
+        );
+    }
+
+    /// A recursive structure (`Node { name, children: list<Node> }`) is read
+    /// against its own schema at every depth, so the check applies at each
+    /// level of the tree.
+    #[test]
+    fn element_name_check_applies_to_recursive_structures() {
+        static NODE_NAME: Schema<'static> =
+            Schema::new_member(shape_id!("test", "Node$name"), ShapeType::String, "name", 0);
+        static NODE_LIST_MEMBER: Schema<'static> = Schema::new_member(
+            shape_id!("test", "NodeList$member"),
+            ShapeType::Structure,
+            "member",
+            0,
+        );
+        static NODE_CHILDREN: Schema<'static> = Schema::new_member(
+            shape_id!("test", "Node$children"),
+            ShapeType::List,
+            "children",
+            1,
+        )
+        .with_list_member(&NODE_LIST_MEMBER);
+        static NODE: Schema<'static> = Schema::new_struct(
+            shape_id!("test", "Node"),
+            ShapeType::Structure,
+            &[&NODE_NAME, &NODE_CHILDREN],
+        );
+
+        #[derive(Debug, PartialEq)]
+        struct Node(String, Vec<Node>);
+
+        fn read_node(d: &mut dyn ShapeDeserializer) -> Result<Node, SerdeError> {
+            let mut node = Node(String::new(), Vec::new());
+            d.read_struct(&NODE, &mut |member, d| {
+                match member.member_name() {
+                    Some("name") => node.0 = d.read_string(member)?,
+                    Some("children") => d.read_list(member, &mut |d| {
+                        node.1.push(read_node(d)?);
+                        Ok(())
+                    })?,
+                    _ => {}
+                }
+                Ok(())
+            })?;
+            Ok(node)
+        }
+        fn leaf(name: &str) -> Node {
+            Node(name.to_owned(), Vec::new())
+        }
+
+        let xml = b"<Node><name>root</name><children>\
+            <member><name>a</name><children>\
+                <bogus><name>x</name></bogus>\
+                <member><name>a1</name></member>\
+            </children></member>\
+            <item><name>skipped</name></item>\
+            <member><name>b</name></member>\
+            </children></Node>";
+        let read = |check_names: bool| {
+            read_node(&mut XmlDeserializer::new(
+                xml,
+                element_name_settings(check_names),
+            ))
+            .unwrap()
+        };
+        assert_eq!(
+            read(true),
+            Node(
+                "root".to_owned(),
+                vec![Node("a".to_owned(), vec![leaf("a1")]), leaf("b")]
+            )
+        );
+        assert_eq!(
+            read(false),
+            Node(
+                "root".to_owned(),
+                vec![
+                    Node("a".to_owned(), vec![leaf("x"), leaf("a1")]),
+                    leaf("skipped"),
+                    leaf("b")
+                ]
+            )
+        );
     }
 
     #[test]
