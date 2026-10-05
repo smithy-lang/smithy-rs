@@ -712,6 +712,19 @@ mod message_tests {
         );
     }
 
+    /// A timestamp whose millisecond representation overflows `i64` is the one fixed-width value
+    /// that can fail to serialize, so it must error rather than write a wrong-width field.
+    #[test]
+    fn write_message_rejects_timestamp_too_large() {
+        write_message_expect_err!(
+            message_with_header(
+                "time",
+                HeaderValue::Timestamp(DateTime::from_secs(i64::MAX))
+            ),
+            ErrorKind::TimestampValueTooLarge(_)
+        );
+    }
+
     /// Fixed-width values are unrepresentable at the wrong width on the write side (they are
     /// `i8`/`i16`/`i32`/`i64`/`u128`), so the only place a short one can appear is an inbound
     /// frame. Assert the decoder rejects those rather than under-reading the next header.
@@ -760,13 +773,14 @@ mod message_tests {
                 HeaderValue::String("a".repeat(MAX_HEADER_VALUE_LEN + 1).into()),
             ),
         ];
-        let mut buffer = Vec::new();
+        // Seeded so the assertion catches an append as well as a bare partial write.
+        let mut buffer = b"PREVIOUS-CONTENT".to_vec();
         let result = write_headers_to(&headers, &mut buffer);
         assert!(result.is_err(), "Expected error, got {result:?}");
-        assert!(
-            buffer.is_empty(),
-            "no bytes may be written when a header is rejected, wrote {:?}",
-            buffer
+        assert_eq!(
+            b"PREVIOUS-CONTENT".to_vec(),
+            buffer,
+            "no bytes may be written when a header is rejected"
         );
     }
 }
@@ -800,9 +814,12 @@ mod independent_decoder_tests {
         u32::from_be_bytes([b[i], b[i + 1], b[i + 2], b[i + 3]]) as usize
     }
 
+    /// The headers and payload of a successfully decoded frame.
+    type Decoded = (Vec<(String, Value)>, Vec<u8>);
+
     /// Decodes a frame per the specification, returning the headers and payload, or the first
     /// invariant it violates.
-    fn decode(frame: &[u8]) -> Result<(Vec<(String, Value)>, Vec<u8>), String> {
+    fn decode(frame: &[u8]) -> Result<Decoded, String> {
         if frame.len() < 16 {
             return Err("shorter than prelude plus message crc".into());
         }

@@ -241,10 +241,6 @@ mod tests {
 
     #[test]
     fn sign_message_fails_when_the_message_cannot_be_encoded() {
-        let message_to_sign = Message::new(&b"test payload"[..]).add_header(Header::new(
-            "some-header",
-            HeaderValue::String("a".repeat(i16::MAX as usize + 1).into()),
-        ));
         let params = SigningParams {
             identity: &Credentials::for_tests().into(),
             region: "us-east-1",
@@ -252,8 +248,25 @@ mod tests {
             time: (UNIX_EPOCH + Duration::new(123_456_789_u64, 1234u32)),
             settings: (),
         };
-
         let last_signature = sha256_hex_string(b"last message sts");
-        assert!(sign_message(&message_to_sign, &last_signature, &params).is_err());
+
+        // A value over the protocol limit, and a name over the 255-byte limit: both must surface as
+        // an error from `sign_message` rather than panicking inside the encoder.
+        let unencodable = [
+            Header::new(
+                "some-header",
+                HeaderValue::String("a".repeat(i16::MAX as usize + 1).into()),
+            ),
+            Header::new("n".repeat(256), HeaderValue::String("value".into())),
+        ];
+
+        for header in unencodable {
+            let message = Message::new(&b"test payload"[..]).add_header(header.clone());
+            assert!(
+                sign_message(&message, &last_signature, &params).is_err(),
+                "expected an error for {:?}",
+                header.name()
+            );
+        }
     }
 }
