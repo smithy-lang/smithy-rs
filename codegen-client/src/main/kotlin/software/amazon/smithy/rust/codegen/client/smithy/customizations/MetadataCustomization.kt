@@ -20,7 +20,7 @@ class MetadataCustomization(
     private val codegenContext: ClientCodegenContext,
     operation: OperationShape,
 ) : OperationCustomization() {
-    private val operationName = codegenContext.symbolProvider.toSymbol(operation).name
+    private val operationName = operation.id.name
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope by lazy {
         arrayOf(
