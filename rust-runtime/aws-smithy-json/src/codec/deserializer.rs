@@ -608,7 +608,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                 let string_format = if strict {
                     // Strict: the string must be in exactly the prescribed format, and
                     // `epoch-seconds` is never a string. This mirrors the token-based
-                    // parser's `expect_timestamp_or_null`, which the legacy server uses.
+                    // parser's `expect_timestamp_or_null`.
                     if matches!(format, Format::EpochSeconds) {
                         return Err(SerdeError::type_mismatch(
                             "expected a JSON number for an epoch-seconds timestamp",
@@ -1381,12 +1381,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn strict_strings_and_client_defaults() {
+    fn strict_strings_and_lenient_defaults() {
         for input in [b"\"raw\ncontrol\"".as_slice(), b"\"raw\x00control\""] {
-            let mut client = JsonDeserializer::new(input, Arc::new(JsonCodecSettings::default()));
-            assert!(client.read_string(dummy_schema()).is_ok());
+            let mut lenient = JsonDeserializer::new(input, Arc::new(JsonCodecSettings::default()));
+            assert!(lenient.read_string(dummy_schema()).is_ok());
             for key in [false, true] {
-                let mut server = JsonDeserializer::new(
+                let mut strict = JsonDeserializer::new(
                     input,
                     Arc::new(
                         JsonCodecSettings::builder()
@@ -1395,12 +1395,12 @@ mod tests {
                     ),
                 );
                 assert!(if key {
-                    server.parse_key().map(|_| ())
+                    strict.parse_key().map(|_| ())
                 } else {
-                    server.read_string(dummy_schema()).map(|_| ())
+                    strict.read_string(dummy_schema()).map(|_| ())
                 }
                 .is_err());
-                let mut server = JsonDeserializer::new(
+                let mut strict = JsonDeserializer::new(
                     input,
                     Arc::new(
                         JsonCodecSettings::builder()
@@ -1408,11 +1408,11 @@ mod tests {
                             .build(),
                     ),
                 );
-                assert!(server.skip_string().is_ok());
+                assert!(strict.skip_string().is_ok());
             }
         }
         for input in [b"\"ok\\n\\u0041\"".as_slice(), "\"hello 世界\"".as_bytes()] {
-            let mut server = JsonDeserializer::new(
+            let mut strict = JsonDeserializer::new(
                 input,
                 Arc::new(
                     JsonCodecSettings::builder()
@@ -1420,7 +1420,7 @@ mod tests {
                         .build(),
                 ),
             );
-            assert!(server.skip_string().is_ok());
+            assert!(strict.skip_string().is_ok());
         }
         for strict in [false, true] {
             let settings = Arc::new(
@@ -3819,7 +3819,7 @@ mod union_deserialization_tests {
     mod timestamp_formats {
         //! With `strict_timestamp_formats`, a timestamp must use exactly the wire form its
         //! format prescribes, as the restJson1 `MalformedTimestampBody*` protocol tests require.
-        //! Without it the lenient client behavior is unchanged.
+        //! Without it the lenient behavior is unchanged.
         use super::*;
         use aws_smithy_schema::traits::TimestampFormat;
         use aws_smithy_schema::{shape_id, ShapeType};
@@ -3928,7 +3928,7 @@ mod union_deserialization_tests {
         }
 
         #[test]
-        fn lenient_default_keeps_the_client_behavior() {
+        fn default_is_lenient() {
             // A number is epoch seconds whatever the format; a string for a `date-time` or
             // `epoch-seconds` member parses as offset-aware `date-time`.
             assert_eq!(
@@ -3985,7 +3985,7 @@ mod unknown_member_tests {
     }
 
     #[test]
-    fn server_strictness_applies_to_read_values_not_skipped_values() {
+    fn strictness_applies_to_read_values_not_skipped_values() {
         let settings = Arc::new(
             JsonCodecSettings::builder()
                 .enforce_strictness(true)
@@ -4168,7 +4168,7 @@ mod unknown_member_tests {
         assert_eq!(a.as_deref(), Some("x"));
     }
 
-    /// The shape of a generated server union deserializer: a second key of any kind is
+    /// The shape of a generated union deserializer: a second key of any kind is
     /// "mixed variants", and an unknown key is an error.
     fn read_union(input: &[u8]) -> Result<String, SerdeError> {
         let mut result: Option<String> = None;

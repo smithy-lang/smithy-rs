@@ -120,11 +120,10 @@ pub struct JsonCodecSettings {
     /// When `true`, a timestamp must use exactly the wire form its resolved
     /// `@timestampFormat` (or the codec default) prescribes: a JSON number for
     /// `epoch-seconds`, an RFC 3339 string without a UTC offset for `date-time`,
-    /// and an IMF-fixdate string for `http-date`. Servers enable this so that
-    /// malformed requests are rejected. When `false` (default) the deserializer
-    /// is tolerant, as clients are: a number is always read as epoch seconds and
-    /// a string for a `date-time` or `epoch-seconds` member is parsed as an
-    /// offset-aware `date-time`.
+    /// and an IMF-fixdate string for `http-date`. Any other form is rejected.
+    /// When `false` (default) the deserializer is tolerant: a number is always
+    /// read as epoch seconds and a string for a `date-time` or `epoch-seconds`
+    /// member is parsed as an offset-aware `date-time`.
     strict_timestamp_formats: bool,
     enforce_strictness: bool,
     validate_skipped_values: bool,
@@ -364,7 +363,7 @@ impl JsonCodecSettingsBuilder {
     /// Require timestamps to use exactly the wire form their resolved format
     /// prescribes: a JSON number for `epoch-seconds`, an RFC 3339 string without
     /// a UTC offset for `date-time`, an IMF-fixdate string for `http-date`.
-    /// Off by default; servers turn it on so malformed requests are rejected.
+    /// Off by default; when enabled, any other form is rejected.
     pub fn strict_timestamp_formats(mut self, value: bool) -> Self {
         self.strict_timestamp_formats = value;
         self
