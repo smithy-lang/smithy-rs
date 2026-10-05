@@ -4,6 +4,7 @@
  */
 
 use super::SharedServerProtocol;
+use crate::protocol::rpc_v2_cbor::SMITHY_PROTOCOL_HEADER;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer};
 use aws_smithy_schema::traits::HttpTrait;
 use aws_smithy_schema::{shape_id, Schema, ShapeType};
@@ -484,7 +485,7 @@ async fn streaming_responses_carry_the_head_only() {
         response.headers().get("content-type").unwrap(),
         "application/vnd.amazon.eventstream"
     );
-    assert_eq!(response.headers().get("smithy-protocol").unwrap(), "rpc-v2-cbor");
+    assert_eq!(response.headers().get(&SMITHY_PROTOCOL_HEADER).unwrap(), "rpc-v2-cbor");
     assert_eq!(body_bytes(response).await.as_ref(), b"frames");
 }
 
@@ -634,7 +635,7 @@ async fn responses_take_the_status_from_the_output_schema() {
 
     let response = RPC_V2_CBOR.serialize_response(&RPC_OUT_SCHEMA, &TestOutput);
     assert_eq!(response.status(), http::StatusCode::OK);
-    assert_eq!(response.headers().get("smithy-protocol").unwrap(), "rpc-v2-cbor");
+    assert_eq!(response.headers().get(&SMITHY_PROTOCOL_HEADER).unwrap(), "rpc-v2-cbor");
     assert_eq!(response.headers().get("content-type").unwrap(), "application/cbor");
 }
 
@@ -655,7 +656,7 @@ async fn empty_outputs_follow_the_legacy_framing() {
     assert_eq!(get_body_as_string(response.into_body()).await, "");
     let response = RPC_V2_CBOR.serialize_response(&EMPTY_OUT_SCHEMA, &Nothing);
     assert!(response.headers().get("content-type").is_none());
-    assert_eq!(response.headers().get("smithy-protocol").unwrap(), "rpc-v2-cbor");
+    assert_eq!(response.headers().get(&SMITHY_PROTOCOL_HEADER).unwrap(), "rpc-v2-cbor");
     assert_eq!(body_bytes(response).await.len(), 0);
 
     // A user-modeled empty output is an empty document on the JSON and CBOR protocols and an
@@ -823,7 +824,7 @@ async fn aws_json_frames_errors_with_a_trailing_type_member() {
 #[tokio::test]
 async fn rpc_v2_cbor_frames_errors_with_a_leading_type_member() {
     let response = RPC_V2_CBOR.serialize_error(&Boom);
-    assert_eq!(response.headers().get("smithy-protocol").unwrap(), "rpc-v2-cbor");
+    assert_eq!(response.headers().get(&SMITHY_PROTOCOL_HEADER).unwrap(), "rpc-v2-cbor");
     let bytes = body_bytes(response).await;
     let type_pos = bytes.windows(6).position(|w| w == b"__type").expect("__type present");
     let msg_pos = bytes.windows(7).position(|w| w == b"message").expect("message present");
@@ -912,7 +913,7 @@ async fn rpc_v2_cbor_rejections_collapse_to_a_400_without_the_protocol_header() 
         assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
         assert_eq!(response.headers().get("content-type").unwrap(), "application/cbor");
         // Legacy never sets `smithy-protocol` on the runtime-error path.
-        assert!(response.headers().get("smithy-protocol").is_none());
+        assert!(response.headers().get(&SMITHY_PROTOCOL_HEADER).is_none());
         // The body is an empty CBOR map with no `__type` (upstream #3716, preserved).
         assert_eq!(body_bytes(response).await.as_ref(), &[0xa0]);
     }
@@ -953,7 +954,7 @@ async fn rpc_v2_cbor_constraint_violations_have_no_protocol_header() {
     // `smithy-protocol` header: legacy's runtime-error path never sets it.
     let response = RPC_V2_CBOR.serialize_rejection(DeserializeError::ConstraintViolation(Box::new(Boom)));
     assert_eq!(response.status(), http::StatusCode::UNPROCESSABLE_ENTITY);
-    assert!(response.headers().get("smithy-protocol").is_none());
+    assert!(response.headers().get(&SMITHY_PROTOCOL_HEADER).is_none());
     assert_eq!(
         **response.extensions().get::<RuntimeErrorExtension>().unwrap(),
         "ValidationException"
@@ -1154,7 +1155,7 @@ impl DeserializableShape for Collections {
 
 fn rest_xml_with_settings(settings: Option<&str>) -> Result<RestXmlProtocol, crate::schema::routing::RouterBuildError> {
     use crate::schema::protocol::MetadataRoutedProtocol;
-    let settings = settings.map(|json| crate::schema::parse_settings_json(json.as_bytes()));
+    let settings = settings.map(|json| crate::schema::settings::parse_settings_json(json.as_bytes()));
     RestXmlProtocol::from_build_context(
         &crate::schema::ProtocolBuildContext::new(&COLLECTIONS_SERVICE).with_settings(settings.as_ref()),
     )
@@ -1242,4 +1243,30 @@ fn rest_xml_accepts_text_xml_request_bodies_unless_in_legacy_mode() {
     let req = request("/pets/rex", &[("content-type", "text/xml")], br#"{"note":"hi"}"#);
     let err = deserialize::<TestInput>(&*REST_JSON, &IN_SCHEMA, &OUT_SCHEMA, &req).unwrap_err();
     assert!(matches!(err, DeserializeError::UnsupportedMediaType(_)), "{err}");
+}
+
+#[test]
+fn json_legacy_mode_must_be_a_boolean() {
+    use crate::schema::protocol::MetadataRoutedProtocol;
+    for json in [
+        r#"{"legacyMode":"yes"}"#,
+        r#"{"legacyMode":1}"#,
+        r#"{"legacyMode":null}"#,
+        r#""not an object""#,
+    ] {
+        let settings = crate::schema::settings::parse_settings_json(json.as_bytes());
+        let context = crate::schema::ProtocolBuildContext::new(&COLLECTIONS_SERVICE).with_settings(Some(&settings));
+        assert!(matches!(
+            AwsJson1_0Protocol::from_build_context(&context),
+            Err(crate::schema::routing::RouterBuildError::Configuration(_))
+        ));
+        assert!(matches!(
+            AwsJson1_1Protocol::from_build_context(&context),
+            Err(crate::schema::routing::RouterBuildError::Configuration(_))
+        ));
+        assert!(matches!(
+            RestJson1Protocol::from_build_context(&context),
+            Err(crate::schema::routing::RouterBuildError::Configuration(_))
+        ));
+    }
 }

@@ -18,15 +18,30 @@ struct AwsJsonProtocolRouter {
     router: crate::protocol::aws_json::router::AwsJsonRouter<OperationTarget>,
     content_type: &'static str,
 }
+impl AwsJsonProtocolRouter {
+    fn matching_target(&self, request: &Request<()>) -> Option<OperationTarget> {
+        // Match the operation before admitting the event-stream media type. It must
+        // not make ordinary or output-only streaming operations claim this request.
+        if request.method() != http::Method::POST || request.uri().path() != "/" {
+            return None;
+        }
+        let target = self.router.match_target(request)?;
+        let event_stream_input = target
+            .operation()
+            .input()
+            .members()
+            .iter()
+            .any(|member| member.streaming() && member.shape_type() == aws_smithy_schema::ShapeType::Union);
+        (content_type_is(request, self.content_type)
+            || (event_stream_input && content_type_is(request, "application/vnd.amazon.eventstream")))
+        .then_some(target)
+    }
+}
+
 impl MetadataProtocolRouter for AwsJsonProtocolRouter {
     fn recognizes_streaming_input(&self, request: &Request<()>) -> bool {
-        request.method() == http::Method::POST
-            && request.uri().path() == "/"
-            && content_type_is(request, self.content_type)
-            && self
-                .router
-                .match_target(request)
-                .is_some_and(|target| target.has_streaming_input())
+        self.matching_target(request)
+            .is_some_and(|target| target.has_streaming_input())
     }
 
     fn route(&self, request: &Request<()>) -> Result<OperationTarget, RoutingError> {
@@ -35,14 +50,7 @@ impl MetadataProtocolRouter for AwsJsonProtocolRouter {
     }
 
     fn claim(&self, request: &Request<()>) -> RouteClaim {
-        // The path, not the whole URI: clients may add query parameters awsJson ignores.
-        if request.method() != http::Method::POST
-            || request.uri().path() != "/"
-            || !content_type_is(request, self.content_type)
-        {
-            return RouteClaim::NoClaim;
-        }
-        match self.router.match_target(request) {
+        match self.matching_target(request) {
             Some(target) => RouteClaim::ClaimedWithRoute(target),
             None => RouteClaim::NoClaim,
         }
@@ -51,7 +59,9 @@ impl MetadataProtocolRouter for AwsJsonProtocolRouter {
 
 /// Builds the awsJson-style target router (`Service.Operation`). Exposed for out-of-tree
 /// protocols that route on the same key. Among several protocols, the router claims `POST /`
-/// requests whose `Content-Type` is `content_type`. Rejections are awsJson's routing errors,
+/// requests whose `Content-Type` is `content_type`, or the event-stream media type for
+/// an operation with an event-stream input. Event-stream requests carry no AWS JSON
+/// version marker, so the normal protocol priority resolves 1.0/1.1 ties. Rejections are awsJson's routing errors,
 /// framed by whichever protocol registers the router.
 #[doc(hidden)]
 pub fn aws_json_router(

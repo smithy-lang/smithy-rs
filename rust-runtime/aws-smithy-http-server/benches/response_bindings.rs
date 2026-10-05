@@ -6,13 +6,16 @@
 use aws_smithy_http_server::response::Response;
 use aws_smithy_http_server::schema::protocol::RestJson1Protocol;
 use aws_smithy_http_server::schema::protocol::RestXmlProtocol;
-use aws_smithy_http_server::schema::ServerProtocol;
+use aws_smithy_http_server::schema::{
+    MetadataRoutedProtocol, OperationSchema, ProtocolBuildContext, ServerProtocol, ServiceSchema,
+};
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::traits::HttpTrait;
 use aws_smithy_schema::{shape_id, Schema, ShapeType};
 use criterion::{criterion_group, criterion_main, Criterion};
 use http_body_util::BodyExt;
 use std::hint::black_box;
+use std::sync::LazyLock;
 
 // The operation's `@http` trait is transcribed onto the output schemas by codegen.
 const HTTP: HttpTrait<'static> = HttpTrait::new("GET", "/benchmark", Some(200));
@@ -320,8 +323,30 @@ fn bench_protocol<P: ServerProtocol>(criterion: &mut Criterion, protocol_name: &
 }
 
 fn response_bindings(criterion: &mut Criterion) {
-    bench_protocol(criterion, "rest_json_1", RestJson1Protocol::default());
-    bench_protocol(criterion, "rest_xml", RestXmlProtocol::default());
+    static HEADER_OP: LazyLock<OperationSchema<'static>> =
+        LazyLock::new(|| OperationSchema::new(shape_id!("bench", "Headers"), &BODY_OUTPUT, &HEADER_OUTPUT, &[]));
+    static MIXED_OP: LazyLock<OperationSchema<'static>> =
+        LazyLock::new(|| OperationSchema::new(shape_id!("bench", "Mixed"), &BODY_OUTPUT, &MIXED_OUTPUT, &[]));
+    static BODY_OP: LazyLock<OperationSchema<'static>> =
+        LazyLock::new(|| OperationSchema::new(shape_id!("bench", "Body"), &BODY_OUTPUT, &BODY_OUTPUT, &[]));
+    static PREFIX_OP: LazyLock<OperationSchema<'static>> =
+        LazyLock::new(|| OperationSchema::new(shape_id!("bench", "Prefix"), &BODY_OUTPUT, &PREFIX_OUTPUT, &[]));
+    static OPERATIONS: LazyLock<[&OperationSchema<'static>; 4]> =
+        LazyLock::new(|| [&HEADER_OP, &MIXED_OP, &BODY_OP, &PREFIX_OP]);
+    static SERVICE: LazyLock<ServiceSchema<'static>> =
+        LazyLock::new(|| ServiceSchema::new(shape_id!("bench", "Service"), None, &[], OPERATIONS.as_slice()));
+    // Build through the same factory as a generated service so response plans are prepared.
+    let ctx = ProtocolBuildContext::new(&SERVICE);
+    bench_protocol(
+        criterion,
+        "rest_json_1",
+        RestJson1Protocol::from_build_context(&ctx).unwrap(),
+    );
+    bench_protocol(
+        criterion,
+        "rest_xml",
+        RestXmlProtocol::from_build_context(&ctx).unwrap(),
+    );
 }
 
 criterion_group!(benches, response_bindings);

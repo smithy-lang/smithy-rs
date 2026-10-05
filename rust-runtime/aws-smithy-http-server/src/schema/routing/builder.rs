@@ -121,9 +121,14 @@ impl<B, L> MultiProtocolRoutingServiceBuilder<B, L> {
             service,
             registries,
             bindings,
-            options,
+            mut options,
             layer,
         } = self;
+        options.request_body = std::mem::take(&mut options.request_body).with_global_settings(
+            options
+                .protocol_settings
+                .get(crate::schema::settings::GLOBAL_SETTINGS_KEY),
+        )?;
         let resolved = resolve_protocols(service, registries, &options)?;
         let mut seen = HashSet::new();
         for binding in &bindings {
@@ -156,7 +161,8 @@ impl<B, L> MultiProtocolRoutingServiceBuilder<B, L> {
             .map(|(index, binding)| OperationTarget::new(index, binding.operation))
             .collect();
         // A body-routed protocol may buffer the body to select, so it never sees a streaming
-        // operation. Streaming-input recognition defers it until metadata routers have passed.
+        // operation. Recognized streaming inputs skip claims that require body bytes;
+        // claims already made from the head retain their priority.
         let non_streaming: Vec<_> = targets
             .iter()
             .filter(|target| !target.has_streaming_input() && !target.has_streaming_output())
@@ -335,7 +341,11 @@ fn resolve_protocols(
             let registration = &registrations[index];
             let context = ProtocolBuildContext::new(service)
                 .with_settings(options.protocol_settings.get(registration.protocol_id()))
-                .with_global(options.protocol_settings.get("global"));
+                .with_global(
+                    options
+                        .protocol_settings
+                        .get(crate::schema::settings::GLOBAL_SETTINGS_KEY),
+                );
             registration.build(&context)
         })
         .collect()

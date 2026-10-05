@@ -5,6 +5,7 @@
 
 //! The built-in rpcv2Cbor router: the `/service/{s}/operation/{o}` path under `smithy-protocol`.
 
+use crate::protocol::rpc_v2_cbor::SMITHY_PROTOCOL_HEADER;
 use crate::schema::routing::RoutingError;
 use http::Request;
 
@@ -27,7 +28,7 @@ impl MetadataProtocolRouter for RpcV2CborProtocolRouter {
         request.method() == http::Method::POST
             && request
                 .headers()
-                .get("smithy-protocol")
+                .get(&SMITHY_PROTOCOL_HEADER)
                 .is_some_and(|value| value.as_bytes() == b"rpc-v2-cbor")
             && self
                 .router
@@ -48,7 +49,7 @@ impl MetadataProtocolRouter for RpcV2CborProtocolRouter {
         let identified = request.method() == http::Method::POST
             && request
                 .headers()
-                .get("smithy-protocol")
+                .get(&SMITHY_PROTOCOL_HEADER)
                 .is_some_and(|value| value.as_bytes() == b"rpc-v2-cbor");
         if identified {
             RouteClaim::Claimed
@@ -61,7 +62,8 @@ impl MetadataProtocolRouter for RpcV2CborProtocolRouter {
 pub(crate) fn rpc_v2_cbor_router(
     ctx: &RouterBuildContext<'_>,
 ) -> Result<impl MetadataProtocolRouter + 'static, RouterBuildError> {
-    let capitalize_routes = crate::schema::protocol::settings_bool(ctx.protocol_settings, "capitalizeRoutes")?;
+    let capitalize_routes =
+        crate::schema::settings::get::<bool>(ctx.protocol_settings, "capitalizeRoutes")?.unwrap_or(false);
     let entries = ctx.targets.iter().flat_map(|target| {
         let name = target.operation().shape_id().shape_name();
         let mut names = vec![name.to_owned()];
@@ -74,9 +76,12 @@ pub(crate) fn rpc_v2_cbor_router(
                 }
             }
         }
-        names
-            .into_iter()
-            .map(move |name| (format!("{}.{}", ctx.service.shape_id().shape_name(), name), *target))
+        names.into_iter().map(move |name| {
+            (
+                format!("{}/operation/{}", ctx.service.shape_id().shape_name(), name),
+                *target,
+            )
+        })
     });
     Ok(RpcV2CborProtocolRouter {
         router: crate::protocol::rpc_v2_cbor::router::RpcV2CborRouter::from_owned(entries),

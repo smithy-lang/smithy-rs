@@ -57,13 +57,12 @@ pub(crate) fn percent_decode(input: &str) -> Result<String, SerdeError> {
 /// Parses a raw query string into decoded `(key, value)` pairs with form-urlencoded semantics:
 /// order of appearance is preserved, a key without `=` gets an empty value, `+` decodes to a
 /// space, and invalid UTF-8 decodes lossily rather than failing.
-pub(crate) fn parse_query_pairs(query: Option<&str>) -> Vec<(String, String)> {
+/// Unchanged text borrows from the query; decoded text owns its storage.
+pub(crate) fn parse_query_pairs(query: Option<&str>) -> Vec<(Cow<'_, str>, Cow<'_, str>)> {
     let Some(query) = query else {
         return Vec::new();
     };
-    form_urlencoded::parse(query.as_bytes())
-        .map(|(k, v)| (k.into_owned(), v.into_owned()))
-        .collect()
+    form_urlencoded::parse(query.as_bytes()).collect()
 }
 
 // ============================================================================
@@ -383,72 +382,138 @@ impl ShapeDeserializer for DecodedValuesDeserializer<'_> {
 // Header values
 // ============================================================================
 
-/// Deserializer over the raw values of one `@httpHeader`-bound member,
-/// applying the `aws_smithy_http::header` parsing semantics
-/// (comma/quote-aware list splitting, `many_dates` for timestamp lists,
-/// single-instance rule for scalar strings).
+/// A single-use deserializer for one Smithy `@httpHeader` binding.
+///
+/// Header splitting follows `aws_smithy_http::header`: quoted/comma-separated text,
+/// format-aware timestamps, and a single raw instance for plain scalar strings.
+/// Parsed values are retained and consumed without re-tokenizing the headers.
 pub(crate) struct HeaderValuesDeserializer<'a> {
-    /// One entry per header instance (a repeated header name yields several).
-    values: Vec<&'a str>,
+    values: ParsedHeaderValues<'a>,
     member: &'a Schema<'a>,
-    /// Tokenized list elements, populated by `read_list`.
-    tokens: Vec<HeaderToken>,
-    cursor: Option<usize>,
+    list_size: Option<usize>,
+    list_started: bool,
 }
 
-enum HeaderToken {
-    Text(String),
-    Date(DateTime),
+enum ParsedHeaderValues<'a> {
+    Raw(Option<&'a str>),
+    Text(std::vec::IntoIter<String>),
+    Dates(std::vec::IntoIter<DateTime>),
 }
 
 impl<'a> HeaderValuesDeserializer<'a> {
-    pub(crate) fn new(values: Vec<&'a str>, member: &'a Schema<'a>) -> Self {
-        debug_assert!(!values.is_empty());
-        Self {
+    /// Prepares a member's header values, returning `None` when the member should
+    /// remain unset: no header instances, or no tokens for a tokenized binding.
+    /// An empty plain string is present, unlike an empty tokenized header.
+    ///
+    /// Tokenization errors are returned here; type conversion and token cardinality
+    /// errors can also occur during reads. Lists cannot be replayed after consumption.
+    pub(crate) fn try_new(
+        values: impl IntoIterator<Item = &'a str>,
+        member: &'a Schema<'a>,
+    ) -> Result<Option<Self>, SerdeError> {
+        let mut values = values.into_iter().peekable();
+        if values.peek().is_none() {
+            return Ok(None);
+        }
+        let date_element = match member.shape_type() {
+            ShapeType::Timestamp => Some(member),
+            ShapeType::List => member
+                .member()
+                .filter(|element| element.shape_type() == ShapeType::Timestamp),
+            _ => None,
+        };
+        let values = if let Some(element) = date_element {
+            let format = resolve_timestamp_format(element, member, BindingLocation::Header);
+            let dates = aws_smithy_http::header::many_dates(values, format)
+                .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
+            if dates.is_empty() {
+                return Ok(None);
+            }
+            ParsedHeaderValues::Dates(dates.into_iter())
+        } else {
+            let tokenized = match member.shape_type() {
+                ShapeType::List
+                | ShapeType::Boolean
+                | ShapeType::Byte
+                | ShapeType::Short
+                | ShapeType::Integer
+                | ShapeType::Long
+                | ShapeType::Float
+                | ShapeType::Double => true,
+                ShapeType::String => member.media_type().is_some(),
+                _ => false,
+            };
+            if tokenized {
+                let tokens = aws_smithy_http::header::read_many_from_str::<String>(values)
+                    .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
+                if tokens.is_empty() {
+                    return Ok(None);
+                }
+                ParsedHeaderValues::Text(tokens.into_iter())
+            } else {
+                let first = values.next();
+                if values.next().is_some() {
+                    return Err(SerdeError::invalid_input(
+                        "expected a single header value but found multiple",
+                    ));
+                }
+                ParsedHeaderValues::Raw(first)
+            }
+        };
+        Ok(Some(Self {
             values,
             member,
-            tokens: Vec::new(),
-            cursor: None,
-        }
+            list_size: None,
+            list_started: false,
+        }))
     }
 
-    fn next_token(&mut self) -> Result<&HeaderToken, SerdeError> {
-        let idx = self
-            .cursor
-            .ok_or_else(|| SerdeError::invalid_input("header list element read outside a list"))?;
-        self.cursor = Some(idx + 1);
-        self.tokens
-            .get(idx)
-            .ok_or_else(|| SerdeError::invalid_input("header list element read past the end"))
+    fn check_read(&self) -> Result<(), SerdeError> {
+        if self.member.shape_type() == ShapeType::List && self.list_size.is_none() {
+            return Err(SerdeError::invalid_input("header list element read outside a list"));
+        }
+        Ok(())
     }
 
     fn next_text(&mut self) -> Result<String, SerdeError> {
-        match self.next_token()? {
-            HeaderToken::Text(s) => Ok(s.clone()),
-            HeaderToken::Date(_) => Err(SerdeError::invalid_input(
-                "expected a string header element, found a timestamp",
-            )),
+        self.check_read()?;
+        match &mut self.values {
+            ParsedHeaderValues::Text(tokens) => tokens
+                .next()
+                .ok_or_else(|| SerdeError::invalid_input("header value read past the end")),
+            _ => Err(SerdeError::invalid_input("expected text header tokens")),
         }
     }
 
-    /// Tokenizes scalar primitives just as legacy `read_many_primitive` does.
-    fn primitive_value<T: aws_smithy_types::primitive::Parse>(&self) -> Result<T, SerdeError> {
-        let mut values = aws_smithy_http::header::read_many_primitive::<T>(self.values.iter().copied())
-            .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
-        if values.len() != 1 {
+    fn primitive_value<T: aws_smithy_types::primitive::Parse>(&mut self) -> Result<T, SerdeError> {
+        self.check_read()?;
+        let ParsedHeaderValues::Text(tokens) = &mut self.values else {
+            return Err(SerdeError::invalid_input("expected primitive header tokens"));
+        };
+        // Convert every token before checking cardinality, matching read_many_primitive.
+        let mut first = None;
+        let count = tokens.len();
+        for token in tokens {
+            let value = T::parse_smithy_primitive(&token)
+                .map_err(|_| SerdeError::invalid_input("failed reading a list of primitives"))?;
+            if first.is_none() {
+                first = Some(value);
+            }
+        }
+        if count != 1 {
             return Err(SerdeError::invalid_input("expected one primitive header value"));
         }
-        Ok(values.remove(0))
+        first.ok_or_else(|| SerdeError::invalid_input("header value read past the end"))
     }
 
-    /// The single raw value for a scalar string, matching `one_or_none`.
-    fn single_value(&self) -> Result<&'a str, SerdeError> {
-        if self.values.len() > 1 {
-            return Err(SerdeError::invalid_input(
-                "expected a single header value but found multiple",
-            ));
+    fn single_value(&mut self) -> Result<&'a str, SerdeError> {
+        self.check_read()?;
+        match &mut self.values {
+            ParsedHeaderValues::Raw(value) => value
+                .take()
+                .ok_or_else(|| SerdeError::invalid_input("header value read past the end")),
+            _ => Err(SerdeError::invalid_input("expected a raw header value")),
         }
-        Ok(self.values[0])
     }
 }
 
@@ -466,32 +531,30 @@ impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
         schema: &Schema<'_>,
         consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
-        // Element schema (when resolvable) decides the tokenization:
-        // timestamps use `many_dates` (comma-aware `http-date` parsing);
-        // everything else uses the RFC-7230 quote-aware splitter.
-        let element = schema.member();
-        let element_is_timestamp = element.map(|e| e.shape_type() == ShapeType::Timestamp).unwrap_or(false);
-        self.tokens = if element_is_timestamp {
-            let format =
-                resolve_timestamp_format(element.expect("checked above"), self.member, BindingLocation::Header);
-            aws_smithy_http::header::many_dates(self.values.iter().copied(), format)
-                .map_err(|err| SerdeError::invalid_input(format!("{err}")))?
-                .into_iter()
-                .map(HeaderToken::Date)
-                .collect()
-        } else {
-            aws_smithy_http::header::read_many_from_str::<String>(self.values.iter().copied())
-                .map_err(|err| SerdeError::invalid_input(format!("{err}")))?
-                .into_iter()
-                .map(HeaderToken::Text)
-                .collect()
-        };
-        self.cursor = Some(0);
-        for _ in 0..self.tokens.len() {
-            consumer(self)?;
+        if self.member.shape_type() != ShapeType::List || self.list_started {
+            return Err(SerdeError::invalid_input("expected an unconsumed header list"));
         }
-        self.cursor = None;
-        Ok(())
+        // Tokenization (including timestamp format resolution) used this exact schema.
+        // Nested/repeated list reads are rejected above without changing the outer state.
+        debug_assert!(
+            std::ptr::eq(schema, self.member),
+            "header list schema must match the schema used to prepare its values"
+        );
+        let count = match &self.values {
+            ParsedHeaderValues::Text(tokens) => tokens.len(),
+            ParsedHeaderValues::Dates(dates) => dates.len(),
+            ParsedHeaderValues::Raw(_) => return Err(SerdeError::invalid_input("expected header list tokens")),
+        };
+        self.list_started = true;
+        self.list_size = Some(count);
+        let result = (|| {
+            for _ in 0..count {
+                consumer(self)?;
+            }
+            Ok(())
+        })();
+        self.list_size = None;
+        result
     }
 
     fn read_map(
@@ -505,49 +568,49 @@ impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
     }
 
     fn read_boolean(&mut self, _schema: &Schema<'_>) -> Result<bool, SerdeError> {
-        match self.cursor {
+        match self.list_size {
             Some(_) => parse_primitive::<bool>(&self.next_text()?, "boolean"),
             None => self.primitive_value::<bool>(),
         }
     }
 
     fn read_byte(&mut self, _schema: &Schema<'_>) -> Result<i8, SerdeError> {
-        match self.cursor {
+        match self.list_size {
             Some(_) => parse_primitive::<i8>(&self.next_text()?, "byte"),
             None => self.primitive_value::<i8>(),
         }
     }
 
     fn read_short(&mut self, _schema: &Schema<'_>) -> Result<i16, SerdeError> {
-        match self.cursor {
+        match self.list_size {
             Some(_) => parse_primitive::<i16>(&self.next_text()?, "short"),
             None => self.primitive_value::<i16>(),
         }
     }
 
     fn read_integer(&mut self, _schema: &Schema<'_>) -> Result<i32, SerdeError> {
-        match self.cursor {
+        match self.list_size {
             Some(_) => parse_primitive::<i32>(&self.next_text()?, "integer"),
             None => self.primitive_value::<i32>(),
         }
     }
 
     fn read_long(&mut self, _schema: &Schema<'_>) -> Result<i64, SerdeError> {
-        match self.cursor {
+        match self.list_size {
             Some(_) => parse_primitive::<i64>(&self.next_text()?, "long"),
             None => self.primitive_value::<i64>(),
         }
     }
 
     fn read_float(&mut self, _schema: &Schema<'_>) -> Result<f32, SerdeError> {
-        match self.cursor {
+        match self.list_size {
             Some(_) => parse_primitive::<f32>(&self.next_text()?, "float"),
             None => self.primitive_value::<f32>(),
         }
     }
 
     fn read_double(&mut self, _schema: &Schema<'_>) -> Result<f64, SerdeError> {
-        match self.cursor {
+        match self.list_size {
             Some(_) => parse_primitive::<f64>(&self.next_text()?, "double"),
             None => self.primitive_value::<f64>(),
         }
@@ -555,7 +618,7 @@ impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
 
     fn read_big_integer(&mut self, _schema: &Schema<'_>) -> Result<BigInteger, SerdeError> {
         use std::str::FromStr;
-        let v = match self.cursor {
+        let v = match self.list_size {
             Some(_) => self.next_text()?,
             None => self.single_value()?.trim().to_string(),
         };
@@ -564,7 +627,7 @@ impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
 
     fn read_big_decimal(&mut self, _schema: &Schema<'_>) -> Result<BigDecimal, SerdeError> {
         use std::str::FromStr;
-        let v = match self.cursor {
+        let v = match self.list_size {
             Some(_) => self.next_text()?,
             None => self.single_value()?.trim().to_string(),
         };
@@ -574,21 +637,22 @@ impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
     fn read_string(&mut self, schema: &Schema<'_>) -> Result<String, SerdeError> {
         // `@mediaType` on a header-bound string travels base64-encoded.
         let media_typed = schema.media_type().is_some() || self.member.media_type().is_some();
-        let raw = match self.cursor {
+        let raw = match self.list_size {
             Some(_) => self.next_text()?,
             // Like legacy, a scalar `@mediaType` string is tokenized as a list
             // (`read_many_from_str`: quote-aware, so `"eyJ..."` is unquoted) and
             // must be exactly one item.
             None if media_typed => {
-                let mut tokens = aws_smithy_http::header::read_many_from_str::<String>(self.values.iter().copied())
-                    .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
+                let ParsedHeaderValues::Text(tokens) = &self.values else {
+                    return Err(SerdeError::invalid_input("expected text header tokens"));
+                };
                 if tokens.len() != 1 {
                     return Err(SerdeError::invalid_input(format!(
                         "expected one item but found {}",
                         tokens.len()
                     )));
                 }
-                tokens.remove(0)
+                self.next_text()?
             }
             // Other scalar strings use the full single value (no comma splitting),
             // trimmed — matching `one_or_none::<String>`.
@@ -609,28 +673,25 @@ impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
     }
 
     fn read_timestamp(&mut self, schema: &Schema<'_>) -> Result<DateTime, SerdeError> {
-        match self.cursor {
-            Some(_) => match self.next_token()? {
-                HeaderToken::Date(dt) => Ok(*dt),
-                HeaderToken::Text(s) => {
-                    let s = s.clone();
-                    let format = resolve_timestamp_format(schema, self.member, BindingLocation::Header);
-                    DateTime::from_str(&s, format)
-                        .map_err(|err| SerdeError::invalid_input(format!("invalid timestamp: {err}")))
-                }
-            },
-            None => {
-                let format = resolve_timestamp_format(schema, self.member, BindingLocation::Header);
-                let dates = aws_smithy_http::header::many_dates(self.values.iter().copied(), format)
-                    .map_err(|err| SerdeError::invalid_input(format!("{err}")))?;
-                match dates.len() {
-                    1 => Ok(dates[0]),
-                    0 => Err(SerdeError::invalid_input("expected a timestamp header value")),
-                    _ => Err(SerdeError::invalid_input(
+        self.check_read()?;
+        match &mut self.values {
+            ParsedHeaderValues::Dates(dates) => {
+                if self.list_size.is_none() && dates.len() > 1 {
+                    return Err(SerdeError::invalid_input(
                         "expected a single timestamp header value but found multiple",
-                    )),
+                    ));
                 }
+                dates
+                    .next()
+                    .ok_or_else(|| SerdeError::invalid_input("header value read past the end"))
             }
+            ParsedHeaderValues::Text(_) if self.list_size.is_some() => {
+                let text = self.next_text()?;
+                let format = resolve_timestamp_format(schema, self.member, BindingLocation::Header);
+                DateTime::from_str(&text, format)
+                    .map_err(|err| SerdeError::invalid_input(format!("invalid timestamp: {err}")))
+            }
+            _ => Err(SerdeError::invalid_input("expected timestamp header tokens")),
         }
     }
 
@@ -643,7 +704,7 @@ impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
     }
 
     fn container_size(&self) -> Option<usize> {
-        self.cursor.map(|_| self.tokens.len())
+        self.list_size
     }
 }
 
@@ -651,16 +712,19 @@ impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
 // Prefix headers and query-params maps
 // ============================================================================
 
-/// Deserializer for one `@httpPrefixHeaders`-bound map member: each request
-/// header starting with the prefix becomes a `suffix → value` entry.
-pub(crate) struct StringMapDeserializer {
-    entries: Vec<(String, Vec<String>)>,
+/// Deserializer over borrowed, decoded entries for a query-params or prefix-header map.
+/// Strings are allocated only when returning owned keys and values to the consumer.
+pub(crate) struct StringMapDeserializer<'a> {
+    entries: Vec<(&'a str, Vec<&'a str>)>,
     cursor: usize,
     element_cursor: Option<usize>,
 }
 
-impl StringMapDeserializer {
-    pub(crate) fn new(entries: Vec<(String, Vec<String>)>) -> Self {
+impl<'a> StringMapDeserializer<'a> {
+    /// Entries must have unique, already-decoded keys with values grouped in wire order.
+    /// Binding-specific validation belongs to the caller. The source strings must remain
+    /// alive while this deserializer is used; ownership of the grouping vectors is transferred.
+    pub(crate) fn new(entries: Vec<(&'a str, Vec<&'a str>)>) -> Self {
         Self {
             entries,
             cursor: 0,
@@ -668,15 +732,15 @@ impl StringMapDeserializer {
         }
     }
 
-    fn current_values(&self) -> Result<&Vec<String>, SerdeError> {
+    fn current_values(&self) -> Result<&[&'a str], SerdeError> {
         self.entries
             .get(self.cursor)
-            .map(|(_, v)| v)
+            .map(|(_, v)| v.as_slice())
             .ok_or_else(|| SerdeError::invalid_input("map value read without a current entry"))
     }
 }
 
-impl ShapeDeserializer for StringMapDeserializer {
+impl ShapeDeserializer for StringMapDeserializer<'_> {
     fn read_struct(
         &mut self,
         _schema: &Schema<'_>,
@@ -710,7 +774,7 @@ impl ShapeDeserializer for StringMapDeserializer {
     ) -> Result<(), SerdeError> {
         for idx in 0..self.entries.len() {
             self.cursor = idx;
-            let key = self.entries[idx].0.clone();
+            let key = self.entries[idx].0.to_owned();
             consumer(key, self)?;
         }
         Ok(())
@@ -722,7 +786,7 @@ impl ShapeDeserializer for StringMapDeserializer {
                 let value = self
                     .current_values()?
                     .get(idx)
-                    .cloned()
+                    .map(|value| (*value).to_owned())
                     .ok_or_else(|| SerdeError::invalid_input("list element read past the end"))?;
                 self.element_cursor = Some(idx + 1);
                 Ok(value)
@@ -731,7 +795,7 @@ impl ShapeDeserializer for StringMapDeserializer {
             None => self
                 .current_values()?
                 .first()
-                .cloned()
+                .map(|value| (*value).to_owned())
                 .ok_or_else(|| SerdeError::invalid_input("map value read without a value")),
         }
     }
@@ -991,12 +1055,6 @@ impl<'a, C: Codec> RestRequestDeserializer<'a, C> {
             body,
         }
     }
-
-    // Header values are valid UTF-8 by construction: the runtime-api `Headers` rejects
-    // non-UTF-8 values at `Request::try_from`, exactly where the generated deserializers do.
-    fn header_values(&self, name: &str) -> Vec<&'a str> {
-        self.headers.get_all(name).collect()
-    }
 }
 
 impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
@@ -1021,7 +1079,7 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
             .members()
             .iter()
             .any(|m| m.http_query().is_some() || m.http_query_params().is_some());
-        let query_pairs: Vec<(String, String)> = if needs_query {
+        let query_pairs = if needs_query {
             parse_query_pairs(self.uri.query())
         } else {
             Vec::new()
@@ -1043,7 +1101,7 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
                 let values: Vec<Cow<'_, str>> = query_pairs
                     .iter()
                     .filter(|(k, _)| k == query.value())
-                    .map(|(_, v)| Cow::Borrowed(v.as_str()))
+                    .map(|(_, v)| Cow::Borrowed(v.as_ref()))
                     .collect();
                 if !values.is_empty() {
                     let mut deser = DecodedValuesDeserializer::new(values, member, BindingLocation::Query);
@@ -1054,90 +1112,45 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
                 // also bound to explicit `@httpQuery` members.
                 // Grouped in order of first appearance. The index keeps this linear: a search of
                 // `entries` per pair made many distinct keys quadratic.
-                let mut entries: Vec<(String, Vec<String>)> = Vec::new();
+                let mut entries: Vec<(&str, Vec<&str>)> = Vec::new();
                 let mut index: HashMap<&str, usize> = HashMap::new();
                 for (k, v) in &query_pairs {
-                    match index.entry(k.as_str()) {
-                        Entry::Occupied(slot) => entries[*slot.get()].1.push(v.clone()),
+                    match index.entry(k.as_ref()) {
+                        Entry::Occupied(slot) => entries[*slot.get()].1.push(v.as_ref()),
                         Entry::Vacant(slot) => {
                             slot.insert(entries.len());
-                            entries.push((k.clone(), vec![v.clone()]));
+                            entries.push((k.as_ref(), vec![v.as_ref()]));
                         }
                     }
                 }
                 let mut deser = StringMapDeserializer::new(entries);
                 consumer(member, &mut deser)?;
             } else if let Some(header) = member.http_header() {
-                let values = self.header_values(header.value());
-                if !values.is_empty() {
-                    // Legacy parses these through `read_many_*` / `many_dates` and leaves the
-                    // member unset when that yields no tokens (e.g. `x-list:`). A `@mediaType`
-                    // string takes the same path, unlike a plain string (`one_or_none`).
-                    let list_element = match member.shape_type() {
-                        ShapeType::List => member.member(),
-                        _ => None,
-                    };
-                    let date_element = match list_element {
-                        Some(element) if element.shape_type() == ShapeType::Timestamp => Some(element),
-                        None if member.shape_type() == ShapeType::Timestamp => Some(*member),
-                        _ => None,
-                    };
-                    let text_tokens = match member.shape_type() {
-                        ShapeType::Boolean
-                        | ShapeType::Byte
-                        | ShapeType::Short
-                        | ShapeType::Integer
-                        | ShapeType::Long
-                        | ShapeType::Float
-                        | ShapeType::Double => true,
-                        ShapeType::String => member.media_type().is_some(),
-                        ShapeType::List => date_element.is_none(),
-                        _ => false,
-                    };
-                    if text_tokens {
-                        let tokens = aws_smithy_http::header::read_many_from_str::<String>(values.iter().copied())
-                            .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
-                        if tokens.is_empty() {
-                            continue;
-                        }
-                    }
-                    if let Some(element) = date_element {
-                        let format = resolve_timestamp_format(element, member, BindingLocation::Header);
-                        if aws_smithy_http::header::many_dates(values.iter().copied(), format)
-                            .map_err(|e| SerdeError::invalid_input(e.to_string()))?
-                            .is_empty()
-                        {
-                            continue;
-                        }
-                    }
-                    let mut deser = HeaderValuesDeserializer::new(values, member);
+                if let Some(mut deser) =
+                    HeaderValuesDeserializer::try_new(self.headers.get_all(header.value()), member)?
+                {
                     consumer(member, &mut deser)?;
                 }
             } else if let Some(prefix) = member.http_prefix_headers() {
                 let prefix = prefix.value();
                 // Each header name once, in order of first appearance (`Headers::iter` yields
                 // one entry per value).
-                let mut names: Vec<&str> = Vec::new();
                 let mut seen: HashSet<&str> = HashSet::new();
-                for (name, _) in self.headers.iter() {
-                    if seen.insert(name) {
-                        names.push(name);
-                    }
-                }
-                let mut entries: Vec<(String, Vec<String>)> = Vec::new();
-                for (suffix, full_name) in aws_smithy_http::header::headers_for_prefix(names.into_iter(), prefix) {
-                    let values: Vec<String> = self
-                        .header_values(full_name)
-                        .into_iter()
-                        .map(|v| v.to_string())
-                        .collect();
+                let names = self
+                    .headers
+                    .iter()
+                    .map(|(name, _)| name)
+                    .filter(|name| seen.insert(*name));
+                let mut entries: Vec<(&str, Vec<&str>)> = Vec::new();
+                for (suffix, full_name) in aws_smithy_http::header::headers_for_prefix(names, prefix) {
+                    let values: Vec<&str> = self.headers.get_all(full_name).collect();
                     if values.len() > 1 && !member.member().is_some_and(|v| v.shape_type() == ShapeType::List) {
                         return Err(SerdeError::invalid_input(
                             "expected a single prefix header value but found multiple",
                         ));
                     }
                     if !values.is_empty() {
-                        entries.push((suffix.to_string(), values));
+                        entries.push((suffix, values));
                     }
                 }
                 // Always set, even with no matching header: legacy servers yield `Some({})`.
@@ -1280,12 +1293,12 @@ mod tests {
         assert_eq!(
             parse_query_pairs(Some("a=1&b=x%20y&flag&c=&d=x+y&e=%FF")),
             vec![
-                ("a".to_string(), "1".to_string()),
-                ("b".to_string(), "x y".to_string()),
-                ("flag".to_string(), "".to_string()),
-                ("c".to_string(), "".to_string()),
-                ("d".to_string(), "x y".to_string()),
-                ("e".to_string(), "\u{FFFD}".to_string()),
+                (Cow::Borrowed("a"), Cow::Borrowed("1")),
+                (Cow::Borrowed("b"), Cow::Borrowed("x y")),
+                (Cow::Borrowed("flag"), Cow::Borrowed("")),
+                (Cow::Borrowed("c"), Cow::Borrowed("")),
+                (Cow::Borrowed("d"), Cow::Borrowed("x y")),
+                (Cow::Borrowed("e"), Cow::Borrowed("\u{FFFD}")),
             ]
         );
         assert!(parse_query_pairs(None).is_empty());
@@ -1481,6 +1494,11 @@ mod tests {
             collect_params("/qp?b=1&a=2&b=3&c=&a=4"),
             owned(&[("b", &["1", "3"]), ("a", &["2", "4"]), ("c", &[""])])
         );
+        assert_eq!(
+            collect_params("/qp?%61=x%20y&b=first&a=x+y&flag&b=%FF"),
+            owned(&[("a", &["x y", "x y"]), ("b", &["first", "\u{FFFD}"]), ("flag", &[""])])
+        );
+        assert!(collect_params("/qp").is_empty());
         // Many distinct keys keep their order (and stay linear to group).
         let uri = format!(
             "/qp?{}",
@@ -1492,6 +1510,125 @@ mod tests {
             .iter()
             .enumerate()
             .all(|(i, (k, vs))| *k == format!("k{i}") && *vs == [i.to_string()]));
+    }
+
+    #[test]
+    fn query_pairs_borrow_unchanged_text_and_own_decoded_text() {
+        let query = String::from("key=value&%61=x+y&bad=%FF&flag");
+        let pairs = parse_query_pairs(Some(&query));
+        assert!(matches!(&pairs[0], (Cow::Borrowed(_), Cow::Borrowed(_))));
+        assert_eq!(pairs[0].0.as_ptr(), query.as_ptr());
+        assert_eq!(pairs[0].1.as_ptr(), query[4..].as_ptr());
+        assert!(matches!(&pairs[1], (Cow::Owned(_), Cow::Owned(_))));
+        assert!(matches!(pairs[2].1, Cow::Owned(_)));
+        assert_eq!(pairs[2].1, "\u{FFFD}");
+        assert_eq!(pairs[3].1, "");
+
+        let mut map = StringMapDeserializer::new(vec![(pairs[1].0.as_ref(), vec![pairs[1].1.as_ref()])]);
+        assert_eq!(map.entries[0].0.as_ptr(), pairs[1].0.as_ptr());
+        assert_eq!(map.entries[0].1[0].as_ptr(), pairs[1].1.as_ptr());
+        map.read_map(&QUERY_PARAMS_MEMBER, &mut |key, d| {
+            assert_eq!(key, "a");
+            assert_eq!(d.read_string(&HP_STRING)?, "x y");
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn query_map_and_explicit_binding_share_values_in_either_member_order() {
+        for explicit_index in [0, 1] {
+            let explicit = Schema::new_member(
+                ShapeId::from_parts("test#Shared$query", "test", "Shared"),
+                ShapeType::String,
+                "query",
+                explicit_index,
+            )
+            .with_http_query("a");
+            let map = Schema::new_member(
+                ShapeId::from_parts("test#Shared$params", "test", "Shared"),
+                ShapeType::Map,
+                "params",
+                1 - explicit_index,
+            )
+            .with_http_query_params();
+            let members = if explicit_index == 0 {
+                [&explicit, &map]
+            } else {
+                [&map, &explicit]
+            };
+            let schema = Schema::new_struct(
+                ShapeId::from_parts("test#Shared", "test", "Shared"),
+                ShapeType::Structure,
+                &members,
+            );
+            let codec = json_codec();
+            let (uri, headers) = request_parts("/qp?%61=x%20y&a=second", &[]);
+            let mut deser = RestRequestDeserializer::new(&codec, &uri, &headers, b"");
+            let mut seen = 0;
+            deser
+                .read_struct(&schema, &mut |member, d| {
+                    if member.http_query().is_some() {
+                        assert_eq!(d.read_string(member)?, "x y");
+                    } else {
+                        d.read_map(member, &mut |key, d| {
+                            assert_eq!(key, "a");
+                            assert_eq!(d.read_string(&HP_STRING)?, "x y");
+                            Ok(())
+                        })?;
+                    }
+                    seen += 1;
+                    Ok(())
+                })
+                .unwrap();
+            assert_eq!(seen, 2);
+        }
+    }
+
+    #[test]
+    fn prefix_header_lists_preserve_values_and_empty_map_presence() {
+        let map = Schema::new_member(
+            ShapeId::from_parts("test#Prefix$map", "test", "Prefix"),
+            ShapeType::Map,
+            "map",
+            0,
+        )
+        .with_map_members(&HP_STRING, &HP_LIST_MEMBER)
+        .with_http_prefix_headers("X-Meta-");
+        let members = [&map];
+        let schema = Schema::new_struct(
+            ShapeId::from_parts("test#Prefix", "test", "Prefix"),
+            ShapeType::Structure,
+            &members,
+        );
+        for headers in [
+            vec![],
+            vec![("x-meta-key", "one,two"), ("x-meta-key", ""), ("unrelated", "ignored")],
+        ] {
+            let codec = json_codec();
+            let (uri, headers) = request_parts("/prefix", &headers);
+            let mut deser = RestRequestDeserializer::new(&codec, &uri, &headers, b"");
+            let mut calls = 0;
+            let mut values = Vec::new();
+            deser
+                .read_struct(&schema, &mut |member, d| {
+                    calls += 1;
+                    d.read_map(member, &mut |key, d| {
+                        assert_eq!(key, "key");
+                        d.read_list(&HP_LIST_MEMBER, &mut |d| {
+                            values.push(d.read_string(&HP_STRING)?);
+                            Ok(())
+                        })
+                    })
+                })
+                .unwrap();
+            assert_eq!(calls, 1);
+            if headers.get_all("x-meta-key").next().is_some() {
+                assert_eq!(values, ["one,two", ""]);
+            } else {
+                assert!(values.is_empty());
+            }
+        }
     }
 
     #[test]
@@ -1760,12 +1897,158 @@ mod tests {
         assert!(deser.read_integer(&AGE_MEMBER).is_err());
     }
 
+    fn header_deserializer<'a>(
+        values: Vec<&'a str>,
+        member: &'a Schema<'a>,
+    ) -> Result<HeaderValuesDeserializer<'a>, SerdeError> {
+        HeaderValuesDeserializer::try_new(values, member)?.ok_or_else(|| SerdeError::invalid_input("header is unset"))
+    }
+
+    #[test]
+    fn prepared_headers_distinguish_absent_empty_and_consumed() {
+        for member in [
+            &TOKEN_MEMBER,
+            &HP_LIST_MEMBER,
+            &HP_TIMESTAMPS_MEMBER,
+            &HP_JSON_MEMBER,
+            &AGE_MEMBER,
+        ] {
+            assert!(HeaderValuesDeserializer::try_new([], member).unwrap().is_none());
+        }
+        for member in [&HP_LIST_MEMBER, &HP_TIMESTAMPS_MEMBER, &HP_JSON_MEMBER, &AGE_MEMBER] {
+            assert!(HeaderValuesDeserializer::try_new([""], member).unwrap().is_none());
+        }
+        let mut plain = HeaderValuesDeserializer::try_new([""], &TOKEN_MEMBER).unwrap().unwrap();
+        assert_eq!(plain.read_string(&TOKEN_MEMBER).unwrap(), "");
+        assert!(plain.read_string(&TOKEN_MEMBER).is_err());
+        assert!(HeaderValuesDeserializer::try_new(["a", "b"], &TOKEN_MEMBER).is_err());
+    }
+
+    #[test]
+    fn prepared_header_list_moves_strings_and_keeps_original_size() {
+        let mut list = HeaderValuesDeserializer::try_new(["\"a,b\", c", "d"], &HP_LIST_MEMBER)
+            .unwrap()
+            .unwrap();
+        // The returned strings should reuse the tokenizer's allocations.
+        let pointers: Vec<_> = match &list.values {
+            ParsedHeaderValues::Text(tokens) => tokens.as_slice().iter().map(|s| s.as_ptr()).collect(),
+            _ => panic!("expected text tokens"),
+        };
+        assert!(list.read_string(&HP_STRING).is_err());
+        let mut values = Vec::new();
+        list.read_list(&HP_LIST_MEMBER, &mut |d| {
+            assert_eq!(d.container_size(), Some(3));
+            let value = d.read_string(&HP_STRING)?;
+            assert_eq!(value.as_ptr(), pointers[values.len()]);
+            values.push(value);
+            assert_eq!(d.container_size(), Some(3));
+            if values.len() == 3 {
+                assert!(d.read_string(&HP_STRING).is_err());
+            }
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(values, ["a,b", "c", "d"]);
+        assert_eq!(list.container_size(), None);
+        assert!(list.read_list(&HP_LIST_MEMBER, &mut |_| Ok(())).is_err());
+    }
+
+    #[test]
+    fn prepared_header_list_cleans_up_after_consumer_error() {
+        let mut list = HeaderValuesDeserializer::try_new(["a,b"], &HP_LIST_MEMBER)
+            .unwrap()
+            .unwrap();
+        assert!(list
+            .read_list(&HP_LIST_MEMBER, &mut |_| Err(SerdeError::invalid_input("stop")))
+            .is_err());
+        assert_eq!(list.container_size(), None);
+        assert!(list.read_string(&HP_STRING).is_err());
+        assert!(list.read_list(&HP_LIST_MEMBER, &mut |_| Ok(())).is_err());
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic(expected = "header list schema must match the schema used to prepare its values")]
+    fn prepared_header_list_rejects_different_schema() {
+        let mut list = HeaderValuesDeserializer::try_new(["a,b"], &HP_LIST_MEMBER)
+            .unwrap()
+            .unwrap();
+        list.read_list(&HP_TIMESTAMPS_MEMBER, &mut |_| Ok(())).unwrap();
+    }
+
+    #[test]
+    fn scalar_primitive_validates_later_tokens_before_cardinality() {
+        let read = |values| {
+            header_deserializer(values, &AGE_MEMBER)
+                .unwrap()
+                .read_integer(&AGE_MEMBER)
+        };
+        let cardinality = read(vec!["7,8"]).unwrap_err().to_string();
+        let malformed = read(vec!["7,invalid"]).unwrap_err().to_string();
+        assert!(cardinality.contains("expected one primitive"));
+        assert!(malformed.contains("failed reading a list of primitives"));
+    }
+
+    #[test]
+    fn prepared_timestamp_headers_preserve_http_date_splitting() {
+        let raw = "Thu, 01 Jan 1970 00:00:00 GMT";
+        let mut scalar = HeaderValuesDeserializer::try_new([raw], &HP_TIMESTAMP)
+            .unwrap()
+            .unwrap();
+        assert_eq!(scalar.read_timestamp(&HP_TIMESTAMP).unwrap(), DateTime::from_secs(0));
+        assert!(scalar.read_timestamp(&HP_TIMESTAMP).is_err());
+        let mut multiple = HeaderValuesDeserializer::try_new([raw, raw], &HP_TIMESTAMP)
+            .unwrap()
+            .unwrap();
+        assert!(multiple.read_timestamp(&HP_TIMESTAMP).is_err());
+        let combined = format!("{raw}, {raw}");
+        let mut list = HeaderValuesDeserializer::try_new([combined.as_str()], &HP_TIMESTAMPS_MEMBER)
+            .unwrap()
+            .unwrap();
+        let mut count = 0;
+        list.read_list(&HP_TIMESTAMPS_MEMBER, &mut |d| {
+            assert_eq!(d.container_size(), Some(2));
+            assert!(d.read_string(&HP_STRING).is_err());
+            assert_eq!(d.read_timestamp(&HP_TIMESTAMP)?, DateTime::from_secs(0));
+            count += 1;
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn prepared_timestamp_headers_honor_format_overrides() {
+        use aws_smithy_schema::traits::TimestampFormat;
+        let timestamp = Schema::new(
+            ShapeId::from_parts("test#Timestamp", "test", "Timestamp"),
+            ShapeType::Timestamp,
+        )
+        .with_timestamp_format(TimestampFormat::EpochSeconds);
+        let mut scalar = HeaderValuesDeserializer::try_new(["7"], &timestamp).unwrap().unwrap();
+        assert_eq!(scalar.read_timestamp(&timestamp).unwrap(), DateTime::from_secs(7));
+        let list_schema = Schema::new(
+            ShapeId::from_parts("test#Timestamps", "test", "Timestamps"),
+            ShapeType::List,
+        )
+        .with_list_member(&timestamp);
+        let mut list = HeaderValuesDeserializer::try_new(["7,8"], &list_schema)
+            .unwrap()
+            .unwrap();
+        let mut dates = Vec::new();
+        list.read_list(&list_schema, &mut |d| {
+            dates.push(d.read_timestamp(&timestamp)?);
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(dates, [DateTime::from_secs(7), DateTime::from_secs(8)]);
+    }
+
     /// A scalar `@mediaType` header is tokenized like legacy's `read_many_from_str`: a quoted
     /// value is unquoted before base64 decoding, and more than one item is rejected.
     #[test]
     fn media_type_header_is_tokenized_like_legacy() {
-        let read =
-            |values: Vec<&str>| HeaderValuesDeserializer::new(values, &HP_JSON_MEMBER).read_string(&HP_JSON_MEMBER);
+        let read = |values: Vec<&str>| header_deserializer(values, &HP_JSON_MEMBER)?.read_string(&HP_JSON_MEMBER);
         assert_eq!(read(vec!["e30="]).unwrap(), "{}");
         assert_eq!(read(vec!["\"e30=\""]).unwrap(), "{}");
         for values in [vec!["e30=, e30="], vec!["e30=", "e30="], vec!["\"e3,0=\""]] {
@@ -1773,7 +2056,8 @@ mod tests {
         }
         // A plain string header keeps the whole value, quotes and commas included.
         assert_eq!(
-            HeaderValuesDeserializer::new(vec!["\"a, b\""], &TOKEN_MEMBER)
+            header_deserializer(vec!["\"a, b\""], &TOKEN_MEMBER)
+                .unwrap()
                 .read_string(&TOKEN_MEMBER)
                 .unwrap(),
             "\"a, b\""
@@ -1807,7 +2091,7 @@ mod tests {
     fn header_primitives_are_still_trimmed() {
         // Headers keep legacy `read_many` semantics: surrounding whitespace is ignored.
         for values in [vec![" 7 "], vec!["\t7"], vec![" 7, 8 "]] {
-            let mut deser = HeaderValuesDeserializer::new(values, &TAGS_MEMBER);
+            let mut deser = header_deserializer(values, &TAGS_MEMBER).unwrap();
             let mut seen = vec![];
             deser
                 .read_list(&TAGS_MEMBER, &mut |element| {
@@ -1818,7 +2102,8 @@ mod tests {
             assert!(seen.iter().all(|n| *n == 7 || *n == 8), "{seen:?}");
         }
         assert_eq!(
-            HeaderValuesDeserializer::new(vec![" 7 "], &AGE_MEMBER)
+            header_deserializer(vec![" 7 "], &AGE_MEMBER)
+                .unwrap()
                 .read_integer(&AGE_MEMBER)
                 .unwrap(),
             7
@@ -1829,18 +2114,19 @@ mod tests {
     fn primitive_header_tokenization() {
         for values in [vec!["7,"], vec!["", "7"], vec!["\"7\""]] {
             assert_eq!(
-                HeaderValuesDeserializer::new(values, &AGE_MEMBER)
+                header_deserializer(values, &AGE_MEMBER)
+                    .unwrap()
                     .read_integer(&AGE_MEMBER)
                     .unwrap(),
                 7
             );
         }
         for values in [vec!["7", "8"], vec!["7,8"], vec![" "], vec![r#"" 7 ""#]] {
-            assert!(HeaderValuesDeserializer::new(values, &AGE_MEMBER)
-                .read_integer(&AGE_MEMBER)
+            assert!(header_deserializer(values, &AGE_MEMBER)
+                .and_then(|mut d| d.read_integer(&AGE_MEMBER))
                 .is_err());
         }
-        let mut list = HeaderValuesDeserializer::new(vec!["7,8", "9"], &TAGS_MEMBER);
+        let mut list = header_deserializer(vec!["7,8", "9"], &TAGS_MEMBER).unwrap();
         let mut seen = Vec::new();
         list.read_list(&TAGS_MEMBER, &mut |d| {
             seen.push(d.read_integer(&AGE_MEMBER)?);

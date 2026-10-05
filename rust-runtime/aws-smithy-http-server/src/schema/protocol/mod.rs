@@ -67,7 +67,7 @@ use super::{DeserializeError, HttpModeledError};
 /// [`body_routed`](Self::body_routed) — or a routing-less serde handle
 /// ([`serde_only`](Self::serde_only)). The kind decides which
 /// [`SharedProtocolRouter`](crate::schema::routing::SharedProtocolRouter) variant
-/// [`build_router`](Self::build_router) produces and whether the protocol can answer the
+/// is constructed and whether the protocol can answer the
 /// event-stream question; everything after routing works through the [`ServerProtocol`] this
 /// dereferences to. The kind stays private: the constructors' trait bounds are what guarantee
 /// each variant builds the matching router, so nothing else may assemble one.
@@ -222,6 +222,8 @@ pub struct EventStreamFraming<'a> {
     pub media_type: &'a str,
     /// Whether non-stream members travel in initial-message frames.
     pub initial_messages_in_frames: bool,
+    /// Optional body discriminator for modeled exception frames.
+    pub exception_discriminator: Option<discriminator::BodyDiscriminator>,
 }
 
 impl<'a> EventStreamFraming<'a> {
@@ -233,7 +235,14 @@ impl<'a> EventStreamFraming<'a> {
             payload_codec,
             media_type,
             initial_messages_in_frames: false,
+            exception_discriminator: None,
         }
+    }
+
+    /// Sets the body discriminator used for modeled exception payloads.
+    pub fn exception_discriminator(mut self, discriminator: discriminator::BodyDiscriminator) -> Self {
+        self.exception_discriminator = Some(discriminator);
+        self
     }
 
     /// Sets whether non-stream members travel in initial-message frames.
@@ -278,9 +287,7 @@ impl<'a> EventStreamFraming<'a> {
 /// struct Teapot;
 ///
 /// impl SerializableStruct for Teapot {
-///     fn schema(&self) -> &Schema<'_> {
-///         &TEAPOT
-///     }
+///     fn schema(&self) -> &Schema<'_> { &TEAPOT }
 ///
 ///     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
 ///         serializer.write_string(&MESSAGE, "short and stout")
@@ -437,47 +444,8 @@ pub trait BodyRoutedProtocol: ServerProtocol + Sized {
     ) -> Result<impl crate::schema::routing::BodyProtocolRouter + 'static + use<Self>, RouterBuildError>;
 }
 
-/// Parses a JSON object emitted by codegen into a settings [`Document`].
-///
-/// Generated `routing_options()` functions embed each protocol's section of
-/// `customizationConfig.protocols` as a JSON byte-string and call this once at
-/// service build time. The input is printed by codegen from a validated node,
-/// so malformed JSON is a codegen bug: this panics rather than returning an
-/// error.
-///
-/// [`Document`]: aws_smithy_types::Document
-pub fn parse_settings_json(json: &[u8]) -> aws_smithy_types::Document {
-    let mut tokens = aws_smithy_json::deserialize::json_token_iter(json).peekable();
-    let document = aws_smithy_json::deserialize::token::expect_document(&mut tokens)
-        .expect("codegen emits well-formed settings JSON");
-    assert!(tokens.next().is_none(), "codegen emits a single settings JSON document");
-    document
-}
-
-/// Reads an opt-in boolean flag from a protocol's settings section.
-///
-/// Absent section or key is `false`. A section that is not an object, or a
-/// value that is not a boolean, is a configuration error.
-pub fn settings_bool(
-    settings: Option<&aws_smithy_types::Document>,
-    key: &str,
-) -> Result<bool, crate::schema::routing::RouterBuildError> {
-    let Some(settings) = settings else {
-        return Ok(false);
-    };
-    let aws_smithy_types::Document::Object(object) = settings else {
-        return Err(crate::schema::routing::RouterBuildError::Configuration(format!(
-            "protocol settings must be a JSON object, got {settings:?}"
-        )));
-    };
-    match object.get(key) {
-        None => Ok(false),
-        Some(aws_smithy_types::Document::Bool(value)) => Ok(*value),
-        Some(other) => Err(crate::schema::routing::RouterBuildError::Configuration(format!(
-            "protocol setting `{key}` must be a boolean, got {other:?}"
-        ))),
-    }
-}
+/// The key in the shared settings section that sets the default request body byte limit.
+const REQUEST_BODY_MAX_BYTES_KEY: &str = "requestBodyMaxBytes";
 
 /// Converts a body collection failure into the protocol's rejection response, retaining
 /// legacy wire behavior: the failure surfaces as an ordinary request-deserialization error.
@@ -523,6 +491,30 @@ impl ServiceRequestBodyConfig {
     pub fn with_global(mut self, global: RequestBodyCollectionConfig) -> Self {
         self.global = global;
         self
+    }
+
+    /// Applies the shared settings section, `customizationConfig.protocols.global`.
+    ///
+    /// Its `requestBodyMaxBytes` becomes the default byte limit unless this configuration
+    /// already sets one. An absent key, or `0`, means no limit.
+    pub fn with_global_settings(
+        mut self,
+        global: Option<&aws_smithy_types::Document>,
+    ) -> Result<Self, crate::schema::routing::RouterBuildError> {
+        let max_bytes = crate::schema::settings::get::<u64>(global, REQUEST_BODY_MAX_BYTES_KEY)?
+            .map(|max_bytes| {
+                usize::try_from(max_bytes).map_err(|_| {
+                    crate::schema::routing::RouterBuildError::Configuration(format!(
+                        "protocol setting `{REQUEST_BODY_MAX_BYTES_KEY}` does not fit in usize, got {max_bytes}"
+                    ))
+                })
+            })
+            .transpose()?
+            .and_then(NonZeroUsize::new);
+        if self.global.max_bytes.is_none() {
+            self.global.max_bytes = max_bytes;
+        }
+        Ok(self)
     }
 
     /// Sets operation overrides, keyed by operation shape ID.

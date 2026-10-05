@@ -120,7 +120,7 @@ impl<B> Future for RouteFuture<B> {
 }
 
 /// A `Sync` HTTP [`Service`] representing a single route, used by the schema-driven router
-/// ([`MultiProtocolRoutingService`](super::MultiProtocolRoutingService)).
+/// ([`MultiProtocolRoutingService`](crate::schema::routing::MultiProtocolRoutingService)).
 ///
 /// Like [`Route`], constructing it erases the type of the wrapped service. Unlike [`Route`], it is
 /// `Sync`, so the schema router can share one handler set across threads instead of copying it for

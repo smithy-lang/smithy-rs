@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::protocol::rpc_v2_cbor::SMITHY_PROTOCOL_HEADER;
 use aws_smithy_runtime_api::http::Headers;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
 use aws_smithy_schema::{shape_id, Schema, ShapeId};
@@ -43,7 +44,6 @@ impl Default for RpcV2CborProtocol {
 
 static PROTOCOL_ID: ShapeId<'static> = shape_id!("smithy.protocols", "rpcv2Cbor");
 const CONTENT_TYPE: &str = "application/cbor";
-const SMITHY_PROTOCOL_HEADER: http::HeaderName = http::HeaderName::from_static("smithy-protocol");
 const SMITHY_PROTOCOL_VALUE: http::HeaderValue = http::HeaderValue::from_static("rpc-v2-cbor");
 
 /// The `smithy-protocol` and `Accept` request headers are validated by the router; responses

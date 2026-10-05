@@ -28,15 +28,24 @@ use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerPro
 
 /// Stateful schema-driven AWS JSON 1.0 protocol implementation.
 #[derive(Debug)]
+/// Defaults to validating escape syntax in skipped strings without decoding Unicode.
+/// Set `customizationConfig.protocols` for this protocol to `{"validateSkippedValues":true}`
+/// to skip escape validation, matching legacy smithy-rs servers.
 pub struct AwsJson1_0Protocol {
     pub(crate) inner: crate::schema::protocol::rpc::RpcProtocol<aws_smithy_json::codec::JsonCodec>,
 }
 
 impl Default for AwsJson1_0Protocol {
     fn default() -> Self {
+        Self::new(false)
+    }
+}
+
+impl AwsJson1_0Protocol {
+    fn new(validate_skipped_values: bool) -> Self {
         Self {
             inner: crate::schema::protocol::rpc::RpcProtocol::new(
-                schema_codec(),
+                schema_codec(validate_skipped_values),
                 "application/x-amz-json-1.0",
                 Some("application/x-amz-json-1.0"),
                 crate::schema::protocol::rpc::RpcAccept::Always,
@@ -48,15 +57,24 @@ impl Default for AwsJson1_0Protocol {
 
 /// Stateful schema-driven AWS JSON 1.1 protocol implementation.
 #[derive(Debug)]
+/// Defaults to validating escape syntax in skipped strings without decoding Unicode.
+/// Set `customizationConfig.protocols` for this protocol to `{"validateSkippedValues":true}`
+/// to skip escape validation, matching legacy smithy-rs servers.
 pub struct AwsJson1_1Protocol {
     pub(crate) inner: crate::schema::protocol::rpc::RpcProtocol<aws_smithy_json::codec::JsonCodec>,
 }
 
 impl Default for AwsJson1_1Protocol {
     fn default() -> Self {
+        Self::new(false)
+    }
+}
+
+impl AwsJson1_1Protocol {
+    fn new(validate_skipped_values: bool) -> Self {
         Self {
             inner: crate::schema::protocol::rpc::RpcProtocol::new(
-                schema_codec(),
+                schema_codec(validate_skipped_values),
                 "application/x-amz-json-1.1",
                 Some("application/x-amz-json-1.1"),
                 crate::schema::protocol::rpc::RpcAccept::Always,
@@ -66,12 +84,13 @@ impl Default for AwsJson1_1Protocol {
     }
 }
 
-fn schema_codec() -> aws_smithy_json::codec::JsonCodec {
+fn schema_codec(validate_skipped_values: bool) -> aws_smithy_json::codec::JsonCodec {
     aws_smithy_json::codec::JsonCodec::new(
         aws_smithy_json::codec::JsonCodecSettings::builder()
             .use_json_name(false)
             .default_timestamp_format(aws_smithy_types::date_time::Format::EpochSeconds)
             .enforce_strictness(true)
+            .validate_skipped_values(validate_skipped_values)
             .allow_integral_float_numbers(true)
             .strict_timestamp_formats(true)
             .build(),
@@ -113,9 +132,11 @@ macro_rules! aws_json_protocol {
     ($protocol:ty, $marker:ty, $protocol_id:expr, $content_type:literal, $type_value:expr) => {
         impl MetadataRoutedProtocol for $protocol {
             fn from_build_context(
-                _ctx: &crate::schema::ProtocolBuildContext<'_>,
+                ctx: &crate::schema::ProtocolBuildContext<'_>,
             ) -> Result<Self, crate::schema::routing::RouterBuildError> {
-                Ok(Self::default())
+                Ok(Self::new(
+                    crate::schema::settings::get::<bool>(ctx.settings, "validateSkippedValues")?.unwrap_or(false),
+                ))
             }
 
             fn build_router(
@@ -129,7 +150,11 @@ macro_rules! aws_json_protocol {
             }
 
             fn event_stream_framing(&self) -> Option<EventStreamFraming<'_>> {
-                Some(EventStreamFraming::new(self.inner.codec(), "application/json").initial_messages_in_frames(true))
+                Some(
+                    EventStreamFraming::new(self.inner.codec(), "application/json")
+                        .initial_messages_in_frames(true)
+                        .exception_discriminator(BodyDiscriminator { value: $type_value }),
+                )
             }
         }
 

@@ -5,10 +5,13 @@
 
 //! The built-in restJson1/restXml router: `@http` method and URI, content-type claims.
 
+use crate::routing::request_spec::{PathSegment, QuerySegment, RequestSpec};
+use crate::routing::Router;
+use crate::schema::protocol::request::{expected_request_content_type, ExpectedContentType};
 use crate::schema::routing::RoutingError;
 use http::Request;
 
-use super::{announces_no_body, content_type_is, per_target};
+use super::{announces_no_body, content_type_is};
 use crate::schema::routing::{MetadataProtocolRouter, OperationTarget, RouteClaim, RouterBuildError};
 
 #[derive(Debug)]
@@ -28,7 +31,6 @@ impl ClaimContentType {
         codec_content_type: &'static str,
         codec_aliases: &'static [&'static str],
     ) -> Self {
-        use crate::schema::protocol::request::{expected_request_content_type, ExpectedContentType};
         let custom = input.members().iter().any(|member| {
             member
                 .http_header()
@@ -47,12 +49,21 @@ impl ClaimContentType {
     fn admits(&self, request: &Request<()>) -> bool {
         let present = request.headers().contains_key(http::header::CONTENT_TYPE);
         match self {
+            // The model gives us no content-type restriction for choosing a protocol.
             Self::Any => true,
+            // The modeled input requires the header to be omitted. An empty or
+            // malformed header still counts as present and therefore fails this check.
             Self::Absent => !present,
             Self::Expect(mime, aliases) if present => {
+                // An explicit header must match the modeled media type or an accepted
+                // alias. Compare type/subtype, ignoring parameters such as charset.
+                // Invalid or mismatched headers cannot use the empty-body fallback.
                 content_type_is(request, mime.essence_str())
                     || aliases.iter().any(|alias| content_type_is(request, alias))
             }
+            // Without Content-Type, allow a request whose headers announce no body:
+            // no Transfer-Encoding, and Content-Length either absent or exactly "0".
+            // This is a routing decision based on the request head, not a body check.
             Self::Expect(..) => announces_no_body(request),
         }
     }
@@ -77,21 +88,19 @@ struct RestProtocolRouter {
     /// Indexed by [`OperationTarget::index`].
     content_types: Vec<ClaimContentType>,
 }
+
 impl MetadataProtocolRouter for RestProtocolRouter {
     fn recognizes_streaming_input(&self, request: &Request<()>) -> bool {
-        use crate::routing::Router;
         self.router
             .match_route(request)
             .is_ok_and(|target| target.has_streaming_input() && self.content_types[target.index()].admits(request))
     }
 
     fn route(&self, request: &Request<()>) -> Result<OperationTarget, RoutingError> {
-        use crate::routing::Router;
         self.router.match_route(request).map_err(RoutingError::from)
     }
 
     fn claim(&self, request: &Request<()>) -> RouteClaim {
-        use crate::routing::Router;
         match self.router.match_route(request) {
             Ok(target) if self.content_types[target.index()].admits(request) => RouteClaim::ClaimedWithRoute(target),
             Ok(_) | Err(_) => RouteClaim::NoClaim,
@@ -109,7 +118,6 @@ pub(crate) fn rest_router(
     codec_content_type: &'static str,
     codec_aliases: &'static [&'static str],
 ) -> Result<impl MetadataProtocolRouter + 'static, RouterBuildError> {
-    use crate::routing::request_spec::{PathSegment, QuerySegment, RequestSpec};
     let entries = targets
         .iter()
         .map(|target| {
@@ -156,11 +164,15 @@ pub(crate) fn rest_router(
             ))
         })
         .collect::<Result<Vec<_>, RouterBuildError>>()?;
-    let content_types = per_target(
-        targets,
-        || ClaimContentType::Any,
-        |target| ClaimContentType::for_input(target.operation().input(), codec_content_type, codec_aliases),
-    );
+    // REST receives all targets in handler order, including streaming operations.
+    let content_types = targets
+        .iter()
+        .enumerate()
+        .map(|(index, target)| {
+            debug_assert_eq!(target.index(), index);
+            ClaimContentType::for_input(target.operation().input(), codec_content_type, codec_aliases)
+        })
+        .collect();
     Ok(RestProtocolRouter {
         router: crate::protocol::rest::router::RestRouter::from_iter(entries),
         content_types,

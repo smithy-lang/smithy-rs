@@ -134,7 +134,7 @@ pub(crate) struct CompiledResponsePlan {
 }
 
 impl CompiledResponsePlan {
-    fn compile(schema: &Schema<'_>, bindings: ResponseBindings, value_kind: ResponseValueKind) -> Self {
+    pub(crate) fn compile(schema: &Schema<'_>, bindings: ResponseBindings, value_kind: ResponseValueKind) -> Self {
         let has_bindings = bindings == ResponseBindings::Rest && has_response_bound_members(schema);
         let writes_body = match value_kind {
             ResponseValueKind::ModeledError => true,

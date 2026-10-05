@@ -22,32 +22,27 @@ use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerPro
 
 /// Stateful schema-driven restXml protocol implementation.
 ///
-/// A wrapped list or map in a request body reads every child element as an item or entry,
-/// whatever the element is named, as Coral servers do. Setting
-/// `customizationConfig.protocols."aws.protocols#restXml".legacyMode` to `true` in
-/// `smithy-build.json` restores what legacy smithy-rs servers do instead: a wrapped list reads
-/// only the children named as its member (`member`, or the member's `@xmlName`) and a wrapped
-/// map only its `entry` children, skipping the others.
-///
-/// A request body may be labeled `text/xml` as well as `application/xml`, as Coral servers accept;
-/// responses are always `application/xml`. With `legacyMode` only `application/xml` is accepted.
+/// Wrapped collections read only their modeled item and entry names. Requests accept
+/// `application/xml`, and parsing checks the modeled root while retaining the legacy
+/// parser's recovery from malformed XML.
 #[derive(Debug)]
 pub struct RestXmlProtocol {
     pub(crate) inner: crate::schema::protocol::rest::RestProtocol<aws_smithy_xml::codec::XmlCodec>,
 }
 
 impl RestXmlProtocol {
-    fn new(legacy_mode: bool) -> Self {
+    fn new(strict_collection_element_names: bool, validate_document: bool, accept_text_xml: bool) -> Self {
         Self {
             inner: crate::schema::protocol::rest::RestProtocol::new(
                 aws_smithy_xml::codec::XmlCodec::new(
                     aws_smithy_xml::codec::XmlCodecSettings::builder()
-                        .enforce_strictness(true)
-                        .strict_collection_element_names(legacy_mode)
+                        .validate_root_name(true)
+                        .validate_document(validate_document)
+                        .strict_collection_element_names(strict_collection_element_names)
                         .build(),
                 ),
                 RestPolicy {
-                    request_content_type_aliases: if legacy_mode { &[] } else { REQUEST_CONTENT_TYPE_ALIASES },
+                    request_content_type_aliases: if accept_text_xml { REQUEST_CONTENT_TYPE_ALIASES } else { &[] },
                     ..POLICY
                 },
             ),
@@ -57,7 +52,7 @@ impl RestXmlProtocol {
 
 impl Default for RestXmlProtocol {
     fn default() -> Self {
-        Self::new(false)
+        Self::new(true, false, false)
     }
 }
 
@@ -67,15 +62,13 @@ const CONTENT_TYPE: &str = "application/xml";
 /// Media types a request may use for an XML body besides [`CONTENT_TYPE`].
 const REQUEST_CONTENT_TYPE_ALIASES: &[&str] = &["text/xml"];
 
-/// The opt-in boolean in this protocol's settings section; see [`RestXmlProtocol`].
-const LEGACY_MODE_KEY: &str = "legacyMode";
 
 /// restXml labels a response only when the output schema binds something to the body, gives an
 /// untyped blob payload `application/octet-stream`, and sends an empty body for an output with
 /// no body members whether or not the user modeled it.
 pub(crate) const POLICY: RestPolicy = RestPolicy {
     codec_content_type: CONTENT_TYPE,
-    request_content_type_aliases: REQUEST_CONTENT_TYPE_ALIASES,
+    request_content_type_aliases: &[],
     default_response_content_type: None,
     untyped_blob_payload_content_type: Some("application/octet-stream"),
     empty_document: false,
@@ -85,7 +78,13 @@ impl MetadataRoutedProtocol for RestXmlProtocol {
     fn from_build_context(
         ctx: &crate::schema::ProtocolBuildContext<'_>,
     ) -> Result<Self, crate::schema::routing::RouterBuildError> {
-        Ok(Self::new(super::settings_bool(ctx.settings, LEGACY_MODE_KEY)?))
+        let mut protocol = Self::new(
+            crate::schema::settings::get::<bool>(ctx.settings, "strictCollectionElementNames")?.unwrap_or(true),
+            crate::schema::settings::get::<bool>(ctx.settings, "validateDocument")?.unwrap_or(false),
+            crate::schema::settings::get::<bool>(ctx.settings, "acceptTextXml")?.unwrap_or(false),
+        );
+        protocol.inner.prepare_response_plans(ctx.service);
+        Ok(protocol)
     }
 
     fn build_router(

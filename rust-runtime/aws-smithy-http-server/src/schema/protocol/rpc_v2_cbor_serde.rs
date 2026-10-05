@@ -67,6 +67,7 @@ mod tests {
             fn schema(&self) -> &Schema<'_> {
                 &OUTPUT
             }
+
             fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 serializer.write_string(&NAME, "hello")
             }
@@ -111,7 +112,6 @@ mod tests {
             fn schema(&self) -> &Schema<'_> {
                 &OUTPUT
             }
-
             fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 ser.write_struct(&MEMBER, &Error)
             }

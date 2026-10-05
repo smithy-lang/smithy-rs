@@ -7,8 +7,6 @@
 
 use http::Request;
 
-use super::OperationTarget;
-
 fn content_type_is(request: &Request<()>, expected: &str) -> bool {
     request
         .headers()
@@ -25,21 +23,6 @@ fn announces_no_body(request: &Request<()>) -> bool {
         && headers
             .get(http::header::CONTENT_LENGTH)
             .is_none_or(|length| length.as_bytes() == b"0")
-}
-
-/// The `Content-Type` a REST protocol requires to claim a request for one operation.
-
-fn per_target<T>(
-    targets: &[OperationTarget],
-    default: impl Fn() -> T,
-    mut value: impl FnMut(OperationTarget) -> T,
-) -> Vec<T> {
-    let len = targets.iter().map(|target| target.index() + 1).max().unwrap_or(0);
-    let mut table: Vec<T> = (0..len).map(|_| default()).collect();
-    for target in targets {
-        table[target.index()] = value(*target);
-    }
-    table
 }
 
 mod aws_json;

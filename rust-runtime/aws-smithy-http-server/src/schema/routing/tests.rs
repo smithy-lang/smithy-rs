@@ -5,6 +5,7 @@
 use super::*;
 use crate::body::{Body, BoxBody};
 use crate::error::Error;
+use crate::protocol::rpc_v2_cbor::SMITHY_PROTOCOL_HEADER;
 use crate::response::Response;
 use crate::routing::SyncRoute;
 use crate::schema::{DeserializeError, HttpModeledError, RequestBodyCollectionConfig, ServerProtocol};
@@ -604,7 +605,7 @@ async fn all_builtins_route_without_polling_body_and_preserve_fallback_errors() 
         let mut req = Request::builder()
             .method("POST")
             .uri(path)
-            .header("smithy-protocol", "rpc-v2-cbor");
+            .header(SMITHY_PROTOCOL_HEADER, "rpc-v2-cbor");
         if let Some(target) = target {
             req = req.header("x-amz-target", target);
         }
@@ -631,7 +632,7 @@ async fn rpc_capitalized_alias_is_a_protocol_setting() {
         let options = RoutingOptions {
             protocol_settings: HashMap::from([(
                 "smithy.protocols#rpcv2Cbor".to_owned(),
-                crate::schema::parse_settings_json(settings.as_bytes()),
+                crate::schema::settings::parse_settings_json(settings.as_bytes()),
             )]),
             ..Default::default()
         };
@@ -646,11 +647,21 @@ async fn rpc_capitalized_alias_is_a_protocol_setting() {
         for (path, status) in [
             ("/service/Service/operation/First", capitalized_status),
             ("/service/Service/operation/first", StatusCode::OK),
+            (
+                "/prefix/service/com.example.Service/operation/first?trace=true",
+                StatusCode::OK,
+            ),
+            (
+                "/prefix/service/com.example.Service/operation/First",
+                capitalized_status,
+            ),
+            ("/service/Other/operation/first", StatusCode::NOT_FOUND),
+            ("/service/Service/operation/first/", StatusCode::NOT_FOUND),
         ] {
             let req = Request::builder()
                 .method("POST")
                 .uri(path)
-                .header("smithy-protocol", "rpc-v2-cbor")
+                .header(SMITHY_PROTOCOL_HEADER, "rpc-v2-cbor")
                 .body(Body::empty())
                 .unwrap();
             assert_eq!(
@@ -668,7 +679,7 @@ fn invalid_protocol_settings_fail_the_build() {
         let options = RoutingOptions {
             protocol_settings: HashMap::from([(
                 "smithy.protocols#rpcv2Cbor".to_owned(),
-                crate::schema::parse_settings_json(settings.as_bytes()),
+                crate::schema::settings::parse_settings_json(settings.as_bytes()),
             )]),
             ..Default::default()
         };
@@ -682,6 +693,70 @@ fn invalid_protocol_settings_fail_the_build() {
             .build(),
             Err(RouterBuildError::Configuration(_))
         ));
+    }
+}
+
+fn global_settings(json: &str) -> RoutingOptions {
+    RoutingOptions::default().with_protocol_settings(HashMap::from([(
+        "global".to_owned(),
+        crate::schema::settings::parse_settings_json(json.as_bytes()),
+    )]))
+}
+
+/// `customizationConfig.protocols.global.requestBodyMaxBytes` is the default byte limit.
+#[tokio::test]
+async fn global_settings_supply_the_default_body_limit() {
+    let oversized = || request(format!("first\n{}", "x".repeat(100)));
+    let response = service(global_settings(r#"{"requestBodyMaxBytes":8}"#))
+        .oneshot(oversized())
+        .await
+        .unwrap();
+    assert!(rejection_message(response)
+        .await
+        .contains("exceeded the configured maximum"));
+    // Absent and zero both mean no limit.
+    for settings in ["{}", r#"{"requestBodyMaxBytes":0}"#] {
+        let response = service(global_settings(settings)).oneshot(oversized()).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK, "{settings}");
+    }
+    // A limit set in code is kept.
+    let mut options = global_settings(r#"{"requestBodyMaxBytes":8}"#);
+    options.request_body.global = config(1024, 1000);
+    let response = service(options).oneshot(oversized()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    // So is an operation override, which replaces the whole record.
+    let mut options = global_settings(r#"{"requestBodyMaxBytes":8}"#);
+    options
+        .request_body
+        .per_operation
+        .insert(FIRST.shape_id().to_string(), RequestBodyCollectionConfig::default());
+    let response = service(options).oneshot(oversized()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[test]
+fn invalid_global_settings_fail_the_build() {
+    for settings in [
+        r#"{"requestBodyMaxBytes":"8"}"#,
+        r#"{"requestBodyMaxBytes":-1}"#,
+        r#"{"requestBodyMaxBytes":1.5}"#,
+        r#"{"requestBodyMaxBytes":true}"#,
+        r#""not an object""#,
+    ] {
+        // Reported even when a limit set in code would take precedence.
+        for code_limit in [false, true] {
+            let mut options = global_settings(settings);
+            if code_limit {
+                options.request_body.global = config(1024, 1000);
+            }
+            assert!(
+                matches!(
+                    service_builder(options).build(),
+                    Err(RouterBuildError::Configuration(_))
+                ),
+                "{settings}"
+            );
+        }
     }
 }
 
@@ -844,7 +919,7 @@ fn operation_metadata_classifies_streaming_and_cbor_routes_without_an_indexed_ta
         let request = Request::builder()
             .method("POST")
             .uri("/service/Service/operation/first")
-            .header("smithy-protocol", "rpc-v2-cbor")
+            .header(SMITHY_PROTOCOL_HEADER, "rpc-v2-cbor")
             .body(())
             .unwrap();
         assert_eq!(router.recognizes_streaming_input(&request), input && !blob);
@@ -1180,7 +1255,7 @@ mod multi_protocol {
         let app = app(&BUILTINS, []);
         let cases = [
             (
-                post("/service/Service/operation/first").header("smithy-protocol", "rpc-v2-cbor"),
+                post("/service/Service/operation/first").header(SMITHY_PROTOCOL_HEADER, "rpc-v2-cbor"),
                 "smithy.protocols#rpcv2Cbor first ",
             ),
             (
@@ -1299,7 +1374,7 @@ mod multi_protocol {
                 .clone()
                 .oneshot(
                     post(path)
-                        .header("smithy-protocol", "rpc-v2-cbor")
+                        .header(SMITHY_PROTOCOL_HEADER, "rpc-v2-cbor")
                         .header("content-type", "application/json")
                         .body(untouchable_body())
                         .unwrap(),
@@ -1321,7 +1396,7 @@ mod multi_protocol {
             .clone()
             .oneshot(
                 post("/service/Service/operation/first")
-                    .header("smithy-protocol", "rpc-v2-cbor")
+                    .header(SMITHY_PROTOCOL_HEADER, "rpc-v2-cbor")
                     .header("x-amz-target", "Service.first")
                     .header("content-type", "application/x-amz-json-1.0")
                     .body(Body::from_bytes(Bytes::new()))
@@ -1366,7 +1441,7 @@ mod multi_protocol {
             &[shape_id!("smithy.protocols", "rpcv2Cbor")],
             &[&STREAMING],
         );
-        let rpc = || post("/service/Service/operation/first").header("smithy-protocol", "rpc-v2-cbor");
+        let rpc = || post("/service/Service/operation/first").header(SMITHY_PROTOCOL_HEADER, "rpc-v2-cbor");
         for service in [&BOTH, &CBOR_ONLY] {
             let (status, _) = send(&app(service, []), rpc(), "").await;
             assert_eq!(status, StatusCode::NOT_FOUND, "{:?}", service.protocols());
@@ -1527,21 +1602,88 @@ mod multi_protocol {
 
     #[tokio::test]
     async fn aws_json_streaming_input_skips_body_claimants_without_polling() {
-        let app = streaming_app();
-        assert_eq!(app.state.metadata_routers.as_deref(), Some(&[1][..]));
-        let response = app
-            .oneshot(
-                post("/")
-                    .header("content-type", "application/x-amz-json-1.1; charset=UTF-8")
+        for content_type in [
+            "application/x-amz-json-1.1; charset=UTF-8",
+            "application/vnd.amazon.eventstream",
+            "application/vnd.amazon.eventstream; charset=UTF-8",
+        ] {
+            let app = streaming_app();
+            assert_eq!(app.state.metadata_routers.as_deref(), Some(&[1][..]));
+            let response = app
+                .oneshot(
+                    post("/?ignored=true")
+                        .header("content-type", content_type)
+                        .header("x-amz-target", "Service.first")
+                        .body(untouchable_body())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(
+                response.into_body().collect().await.unwrap().to_bytes(),
+                "aws.protocols#awsJson1_1 first "
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn aws_json_event_stream_claims_only_matching_input_streams_and_uses_protocol_priority() {
+        static BLOB_MEMBER: Schema<'static> =
+            Schema::new_member(shape_id!("test", "BlobInput", "data"), ShapeType::Blob, "data", 0).with_streaming();
+        static BLOB_INPUT: Schema<'static> =
+            Schema::new_struct(shape_id!("test", "BlobInput"), ShapeType::Structure, &[&BLOB_MEMBER]);
+        static BLOB_OP: OperationSchema<'static> =
+            OperationSchema::new(shape_id!("test", "blob"), &BLOB_INPUT, &UNIT, &[]);
+        static SERVICE: ServiceSchema<'static> = ServiceSchema::new(
+            SERVICE_ID,
+            None,
+            &[
+                shape_id!("aws.protocols", "awsJson1_1"),
+                shape_id!("aws.protocols", "awsJson1_0"),
+            ],
+            &[&STREAM_OP, &SECOND_OP, &OUTPUT_OP, &BLOB_OP],
+        );
+        let app = app(&SERVICE, []);
+        for route in app.state.protocols.iter() {
+            let SharedProtocolRouter::Metadata(router) = &route.router else {
+                unreachable!()
+            };
+            for target in ["Service.second", "Service.output", "Service.unknown", "Service.blob"] {
+                let request = post("/")
+                    .header("content-type", "application/vnd.amazon.eventstream")
+                    .header("x-amz-target", target)
+                    .body(())
+                    .unwrap();
+                assert!(matches!(router.claim(&request), RouteClaim::NoClaim));
+                assert!(!router.recognizes_streaming_input(&request));
+            }
+            let request = post("/")
+                .header("content-type", "application/vnd.amazon.eventstream")
+                .header("x-amz-target", "Service.first")
+                .body(())
+                .unwrap();
+            assert!(matches!(router.claim(&request), RouteClaim::ClaimedWithRoute(_)));
+            assert!(router.recognizes_streaming_input(&request));
+            for builder in [post("/other"), Request::builder().method("GET").uri("/")] {
+                let request = builder
+                    .header("content-type", "application/vnd.amazon.eventstream")
                     .header("x-amz-target", "Service.first")
-                    .body(untouchable_body())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+                    .body(())
+                    .unwrap();
+                assert!(matches!(router.claim(&request), RouteClaim::NoClaim));
+                assert!(!router.recognizes_streaming_input(&request));
+            }
+        }
         assert_eq!(
-            response.into_body().collect().await.unwrap().to_bytes(),
-            "aws.protocols#awsJson1_1 first "
+            send(
+                &app,
+                post("/")
+                    .header("content-type", "application/vnd.amazon.eventstream")
+                    .header("x-amz-target", "Service.first"),
+                ""
+            )
+            .await,
+            (StatusCode::OK, "aws.protocols#awsJson1_0 first ".into())
         );
     }
 
@@ -1624,7 +1766,7 @@ mod multi_protocol {
                     .header("content-type", "application/x-amz-json-1.1")
                     .header("x-amz-target", "Service.first"),
                 "smithy.protocols#rpcv2Cbor" => {
-                    post("/service/Service/operation/first").header("smithy-protocol", "rpc-v2-cbor")
+                    post("/service/Service/operation/first").header(SMITHY_PROTOCOL_HEADER, "rpc-v2-cbor")
                 }
                 _ => unreachable!(),
             };

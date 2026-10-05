@@ -100,8 +100,8 @@ impl<T: SerializableStruct> MarshallMessage for SchemaEventMarshaller<T> {
 /// Implemented by generated code; the returned name is the original Smithy member name of the
 /// error in the stream union, which becomes the frame's `:exception-type`.
 pub trait SerializableEventError {
-    /// Returns the `:exception-type` value and the modeled error to frame.
-    fn variant(&self) -> (&'static str, &dyn SerializableStruct);
+    /// Returns the `:exception-type` value, target schema, and modeled error to frame.
+    fn variant(&self) -> (&'static str, &Schema<'_>, &dyn SerializableStruct);
 }
 
 /// Marshals the modeled errors of a schema-mode event stream union into `exception` frames.
@@ -133,8 +133,8 @@ impl<E: SerializableEventError> MarshallMessage for SchemaEventErrorMarshaller<E
 
     fn marshall(&self, input: Self::Input) -> Result<Message, Error> {
         let capability = capability_or_marshalling_error(&self.protocol)?;
-        let (exception_type, value) = input.variant();
-        build_frame(capability, exception_type, value.schema(), value, FrameKind::Exception)
+        let (exception_type, schema, value) = input.variant();
+        build_frame(capability, exception_type, schema, value, FrameKind::Exception)
             .map_err(|err| Error::marshalling(format!("{err}")))
     }
 }
@@ -198,6 +198,14 @@ fn build_frame(
             ":content-type",
             HeaderValue::String(capability.media_type.to_string().into()),
         ));
+        let framed = capability
+            .exception_discriminator
+            .filter(|_| matches!(kind, FrameKind::Exception))
+            .map(|discriminator| discriminator.frame(schema, value));
+        let value = framed
+            .as_ref()
+            .map(|framed| framed as &dyn SerializableStruct)
+            .unwrap_or(value);
         let mut ser = capability.payload_codec.create_serializer();
         ser.write_struct(schema, value)?;
         let payload = Bytes::from(ser.finish_boxed());
@@ -1581,9 +1589,9 @@ mod tests {
     }
 
     impl SerializableEventError for TestEventsError {
-        fn variant(&self) -> (&'static str, &dyn SerializableStruct) {
+        fn variant(&self) -> (&'static str, &Schema<'_>, &dyn SerializableStruct) {
             match self {
-                Self::Boom(inner) => ("boom", inner),
+                Self::Boom(inner) => ("boom", &BOOM_ERROR_SCHEMA, inner),
             }
         }
     }
@@ -1725,6 +1733,7 @@ mod tests {
             fn schema(&self) -> &Schema<'_> {
                 &SCHEMA
             }
+
             fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 ser.write_string(&HEADER, "ann")?;
                 ser.write_string(&DATA, "hi")
@@ -2079,6 +2088,36 @@ mod tests {
                 assert_eq!(parsed.message.as_deref(), Some("failure"));
             }
             other => panic!("unexpected result: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn aws_json_exception_frames_include_the_protocol_discriminator() {
+        use crate::schema::protocol::{AwsJson1_0Protocol, AwsJson1_1Protocol};
+        for (protocol, expected) in [
+            (
+                SharedServerProtocol::metadata_routed(AwsJson1_0Protocol::default()),
+                "test#BoomError",
+            ),
+            (
+                SharedServerProtocol::metadata_routed(AwsJson1_1Protocol::default()),
+                "BoomError",
+            ),
+        ] {
+            let marshaller = SchemaEventErrorMarshaller::<TestEventsError>::new(protocol.clone());
+            let message = marshaller
+                .marshall(TestEventsError::Boom(BoomError {
+                    message: Some("failure".into()),
+                }))
+                .unwrap();
+            assert_eq!(
+                message.payload().as_ref(),
+                format!(r#"{{"message":"failure","__type":"{expected}"}}"#).as_bytes()
+            );
+            assert!(matches!(
+                unmarshall(&protocol, &message).unwrap(),
+                UnmarshalledMessage::Error(TestEventsError::Boom(_))
+            ));
         }
     }
 

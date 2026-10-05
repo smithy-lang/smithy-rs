@@ -74,8 +74,8 @@ pub struct MultiProtocolRoutingService<B = hyper::body::Incoming> {
 
 /// Routers, handlers, and configuration shared by service clones and in-flight requests.
 pub(super) struct RoutingState<B> {
-    /// The served protocols in priority order. A single protocol routes with
-    /// [`MetadataProtocolRouter::route`]; several claim with [`MetadataProtocolRouter::claim`].
+    /// The served protocols in priority order. A single metadata router uses
+    /// [`MetadataProtocolRouter::route`] directly; all other configurations use the claim loop.
     pub(super) protocols: Box<[ProtocolAndRouter]>,
     pub(super) handlers: Box<[BoundHandler<B>]>,
     /// Indices into `protocols` of metadata routers checked for streaming inputs before body
@@ -142,7 +142,7 @@ where
 
     fn route_request(&self, request: Request<crate::body::RequestBody<B>>) -> MultiProtocolRoutingFuture<B> {
         let state = match &self.state.protocols[..] {
-            // Do we have only one protocol and that is a MetaData router?
+            // Only a single metadata router bypasses the claim loop.
             [ProtocolAndRouter {
                 router: SharedProtocolRouter::Metadata(router),
                 ..
@@ -203,7 +203,8 @@ where
                         BodyRouteClaim::ClaimedWithRoute(selected) => Ok(selected),
                         BodyRouteClaim::NoClaim => continue,
                         BodyRouteClaim::NeedsBodyToClaim | BodyRouteClaim::Claimed => {
-                            // A streaming operation cannot be given to a body claiming protocol.
+                            // Skip body-dependent claims for recognized streaming inputs.
+                            // An ownership claim already made from the head retains priority.
                             if matches!(claim, BodyRouteClaim::NeedsBodyToClaim)
                                 && *streaming.get_or_insert_with(|| {
                                     self.state.metadata_routers.as_ref().is_some_and(|indices| {

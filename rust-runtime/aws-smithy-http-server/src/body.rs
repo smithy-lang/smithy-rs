@@ -9,7 +9,7 @@
 //! `http-body` and `http-body-util` crates.
 
 use crate::error::{BoxError, Error};
-use bytes::Bytes;
+use bytes::{Buf, BufMut, Bytes};
 use std::fmt;
 
 // Used in the codegen in trait bounds.
@@ -77,8 +77,8 @@ impl<B> RequestBody<B> {
         T: http_body::Body<Data = Bytes> + Send + Sync + 'static,
         T::Error: Into<BoxError>,
     {
-        try_downcast(body)
-            .or_else(|body| try_downcast(body).map(|body| Self(BodyInner::Passthrough(body))))
+        try_downcast::<Self, T>(body)
+            .or_else(|body| try_downcast::<B, T>(body).map(|body| Self(BodyInner::Passthrough(body))))
             .unwrap_or_else(|body| Self(BodyInner::Boxed(boxed_sync(body))))
     }
 
@@ -354,7 +354,7 @@ impl<E: std::error::Error + 'static> std::error::Error for CollectBodyError<E> {
 ///
 /// Passing `limit == 0` disables the check and collects the entire body (the
 /// historical behavior, *not* recommended — see the security notes on the
-/// `requestBodyMaxBytes` codegen setting).
+/// `customizationConfig.protocols.global.requestBodyMaxBytes` setting).
 #[doc(hidden)]
 pub async fn collect_body_limited<B>(body: B, limit: usize) -> Result<Bytes, CollectBodyError<B::Error>>
 where
@@ -376,38 +376,57 @@ where
     // Walk frames ourselves (rather than using `http_body_util::Limited`) so we
     // don't require `B::Error: Send + Sync + 'static`. The generated server
     // deserializer only carries a `Send` bound on body errors.
-    let lower = body.size_hint().lower() as usize;
-    if limit != 0 && lower > limit {
+    let lower = body.size_hint().lower();
+    if limit != 0 && lower > limit as u64 {
+        tracing::trace!(limit, size_hint_lower = lower, "request body limit exceeded");
         return Err(CollectBodyError::TooLarge(BodyLimitExceeded { limit }));
     }
 
     let mut body = std::pin::pin!(body);
-    let mut collected = bytes::BytesMut::with_capacity(lower);
+    // A size hint may come from an untrusted Content-Length. Reserve at most 32 KiB
+    // upfront; larger buffers grow only as data arrives, subject to the total-body limit.
+    const MAX_INITIAL_CAPACITY: u64 = 32 * 1024;
+    let mut collected = bytes::BytesMut::with_capacity(lower.min(MAX_INITIAL_CAPACITY) as usize);
     let mut trailers = None;
-    let mut frame_budget = 64;
-    while let Some(frame) = std::future::poll_fn(|cx| {
-        // Always-ready streams must yield so other tasks and read timeouts can run.
-        if frame_budget == 0 {
-            frame_budget = 64;
-            cx.waker().wake_by_ref();
-            return std::task::Poll::Pending;
-        }
-        frame_budget -= 1;
-        let frame = body.as_mut().poll_frame(cx);
-        if frame.is_pending() {
-            frame_budget = 64;
-        }
-        frame
-    })
-    .await
-    .transpose()
-    .map_err(CollectBodyError::Body)?
-    {
+    let mut frame_budget = 64; // TODO: keep this configurable
+    loop {
+        let next_frame = std::future::poll_fn(|cx| {
+            // Always-ready streams must yield so other tasks and read timeouts can run.
+            if frame_budget == 0 {
+                frame_budget = 64;
+                cx.waker().wake_by_ref();
+                return std::task::Poll::Pending;
+            }
+
+            frame_budget -= 1;
+            let result = body.as_mut().poll_frame(cx);
+
+            // Frames are yielding, we can reset the budget.
+            if result.is_pending() {
+                frame_budget = 64;
+            }
+            result
+        })
+        .await;
+
+        // None means the body has ended.
+        let Some(frame) = next_frame else {
+            break;
+        };
+
+        // Propagate an error from the underlying body.
+        let frame = frame.map_err(CollectBodyError::Body)?;
+
         match frame.into_data() {
             Ok(data) => {
-                use bytes::{Buf, BufMut};
                 let data_len = data.remaining();
                 if limit != 0 && collected.len().saturating_add(data_len) > limit {
+                    tracing::trace!(
+                        limit,
+                        buffered_bytes = collected.len(),
+                        frame_bytes = data_len,
+                        "request body limit exceeded"
+                    );
                     return Err(CollectBodyError::TooLarge(BodyLimitExceeded { limit }));
                 }
                 collected.put(data);
@@ -900,6 +919,67 @@ mod tests {
             let (bytes, actual_trailers) = collect_body_limited_with_trailers(body, limit).await.unwrap();
             assert_eq!(bytes, "payload");
             assert_eq!(actual_trailers, Some(trailers));
+        }
+    }
+
+    #[tokio::test]
+    async fn collection_handles_huge_size_hints_without_huge_reservations() {
+        struct FailingBody<'a> {
+            lower: u64,
+            polled: &'a mut bool,
+        }
+
+        impl HttpBody for FailingBody<'_> {
+            type Data = Bytes;
+            type Error = std::io::Error;
+
+            fn poll_frame(
+                mut self: std::pin::Pin<&mut Self>,
+                _: &mut std::task::Context<'_>,
+            ) -> std::task::Poll<Option<Result<http_body::Frame<Bytes>, Self::Error>>> {
+                *self.polled = true;
+                std::task::Poll::Ready(Some(Err(std::io::Error::other("body read failed"))))
+            }
+
+            fn size_hint(&self) -> http_body::SizeHint {
+                http_body::SizeHint::with_exact(self.lower)
+            }
+        }
+
+        // Both an unlimited body and a large allowed body must reach the read error
+        // without attempting to allocate the advertised size first.
+        for limit in [0, usize::MAX] {
+            let mut polled = false;
+            let body = FailingBody {
+                lower: usize::MAX as u64,
+                polled: &mut polled,
+            };
+            assert!(matches!(
+                collect_body_limited(body, limit).await,
+                Err(CollectBodyError::Body(_))
+            ));
+            assert!(polled);
+        }
+
+        // Check the full hint before narrowing to usize or applying the reservation cap.
+        let mut polled = false;
+        let body = FailingBody {
+            lower: u64::MAX,
+            polled: &mut polled,
+        };
+        assert!(matches!(
+            collect_body_limited(body, 1024).await,
+            Err(CollectBodyError::TooLarge(BodyLimitExceeded { limit: 1024 }))
+        ));
+        assert!(!polled);
+    }
+
+    #[tokio::test]
+    async fn collection_grows_beyond_initial_reservation() {
+        let bytes = Bytes::from(vec![b'x'; 16 * 1024]);
+        for limit in [0, bytes.len()] {
+            let body = http_body_util::Full::new(bytes.clone());
+            assert_eq!(collect_body_limited(body, limit).await.unwrap(), bytes);
         }
     }
 

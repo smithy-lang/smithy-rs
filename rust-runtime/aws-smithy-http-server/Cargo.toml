@@ -58,6 +58,7 @@ nom = "7.1.3"
 percent-encoding = "2"
 pin-project-lite = "0.2.14"
 regex = "1.12.2"
+rustc-hash = "2.1.3"
 serde_urlencoded = "0.7"
 thiserror = "2"
 tokio = { version = "1.49.0", features = ["full"] }
@@ -93,6 +94,10 @@ harness = false
 
 [[bench]]
 name = "request_bindings"
+harness = false
+
+[[bench]]
+name = "rpc_v2_cbor_router"
 harness = false
 
 [package.metadata.docs.rs]

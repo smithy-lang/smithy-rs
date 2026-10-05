@@ -23,12 +23,21 @@ use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerPro
 
 /// Stateful schema-driven restJson1 protocol implementation.
 #[derive(Debug)]
+/// Defaults to validating escape syntax in skipped strings without decoding Unicode.
+/// Set `customizationConfig.protocols` for this protocol to `{"validateSkippedValues":true}`
+/// to skip escape validation, matching legacy smithy-rs servers.
 pub struct RestJson1Protocol {
     pub(crate) inner: crate::schema::protocol::rest::RestProtocol<aws_smithy_json::codec::JsonCodec>,
 }
 
 impl Default for RestJson1Protocol {
     fn default() -> Self {
+        Self::new(false)
+    }
+}
+
+impl RestJson1Protocol {
+    fn new(validate_skipped_values: bool) -> Self {
         Self {
             inner: crate::schema::protocol::rest::RestProtocol::new(
                 aws_smithy_json::codec::JsonCodec::new(
@@ -36,6 +45,7 @@ impl Default for RestJson1Protocol {
                         .use_json_name(true)
                         .default_timestamp_format(aws_smithy_types::date_time::Format::EpochSeconds)
                         .enforce_strictness(true)
+                        .validate_skipped_values(validate_skipped_values)
                         .allow_integral_float_numbers(true)
                         .strict_timestamp_formats(true)
                         .build(),
@@ -62,9 +72,12 @@ pub(crate) const POLICY: RestPolicy = RestPolicy {
 
 impl MetadataRoutedProtocol for RestJson1Protocol {
     fn from_build_context(
-        _ctx: &crate::schema::ProtocolBuildContext<'_>,
+        ctx: &crate::schema::ProtocolBuildContext<'_>,
     ) -> Result<Self, crate::schema::routing::RouterBuildError> {
-        Ok(Self::default())
+        let mut protocol =
+            Self::new(crate::schema::settings::get::<bool>(ctx.settings, "validateSkippedValues")?.unwrap_or(false));
+        protocol.inner.prepare_response_plans(ctx.service);
+        Ok(protocol)
     }
 
     fn build_router(
