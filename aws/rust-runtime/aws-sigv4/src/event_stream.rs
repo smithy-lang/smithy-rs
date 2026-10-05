@@ -103,7 +103,7 @@ pub fn sign_message<'a>(
 ) -> Result<SigningOutput<Message>, SigningError> {
     let message_payload = {
         let mut payload = Vec::new();
-        write_message_to(message, &mut payload).unwrap();
+        write_message_to(message, &mut payload).map_err(SigningError::failed_to_encode_message)?;
         payload
     };
     sign_payload(Some(message_payload), last_signature, params)
@@ -237,5 +237,23 @@ mod tests {
         } else {
             panic!("expected timestamp for :date header");
         }
+    }
+
+    #[test]
+    fn sign_message_fails_when_the_message_cannot_be_encoded() {
+        let message_to_sign = Message::new(&b"test payload"[..]).add_header(Header::new(
+            "some-header",
+            HeaderValue::String("a".repeat(i16::MAX as usize + 1).into()),
+        ));
+        let params = SigningParams {
+            identity: &Credentials::for_tests().into(),
+            region: "us-east-1",
+            name: "testservice",
+            time: (UNIX_EPOCH + Duration::new(123_456_789_u64, 1234u32)),
+            settings: (),
+        };
+
+        let last_signature = sha256_hex_string(b"last message sts");
+        assert!(sign_message(&message_to_sign, &last_signature, &params).is_err());
     }
 }
