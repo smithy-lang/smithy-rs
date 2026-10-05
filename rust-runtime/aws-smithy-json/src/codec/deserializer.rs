@@ -1084,11 +1084,8 @@ impl<'a> JsonDeserializer<'a> {
         Ok(())
     }
 
-    /// Skips a JSON string, accepting exactly the escape sequences `read_string` accepts.
+    /// Skips a string according to the configured discarded-value validation.
     fn skip_string(&mut self) -> Result<(), SerdeError> {
-        if self.settings.enforce_strictness {
-            return self.parse_key().map(|_| ());
-        }
         let rem = self.remaining();
         debug_assert_eq!(rem.first(), Some(&b'"'));
         let mut i = 1;
@@ -1099,6 +1096,7 @@ impl<'a> JsonDeserializer<'a> {
                     i += 1;
                     break;
                 }
+                Some(b'\\') if !self.settings.validate_skipped_values => i += 2,
                 Some(b'\\') => match rem.get(i + 1) {
                     Some(b'"' | b'\\' | b'/' | b'b' | b'f' | b'n' | b'r' | b't') => i += 2,
                     Some(b'u')
@@ -1158,8 +1156,8 @@ impl<'a> JsonDeserializer<'a> {
     }
 
     /// Skips one JSON value, validating its syntax as it goes so that an unknown member
-    /// cannot smuggle malformed JSON past the deserializer. Like `read_string`, raw control
-    /// characters inside strings are rejected only when strictness is enabled.
+    /// cannot disrupt the enclosing container. Discarded strings (including nested
+    /// object keys) follow `validate_skipped_values`.
     fn skip_json_value(&mut self) -> Result<(), SerdeError> {
         self.skip_whitespace();
         match self.remaining().first().copied() {
@@ -1175,7 +1173,7 @@ impl<'a> JsonDeserializer<'a> {
                     if self.remaining().first() != Some(&b'"') {
                         return Err(SerdeError::invalid_input("expected object key"));
                     }
-                    self.parse_key()?;
+                    self.skip_string()?;
                     self.skip_whitespace();
                     if self.remaining().first() != Some(&b':') {
                         return Err(SerdeError::invalid_input("expected colon after key"));
@@ -1410,7 +1408,7 @@ mod tests {
                             .build(),
                     ),
                 );
-                assert!(server.skip_string().is_err());
+                assert!(server.skip_string().is_ok());
             }
         }
         for input in [b"\"ok\\n\\u0041\"".as_slice(), "\"hello 世界\"".as_bytes()] {
@@ -1454,7 +1452,7 @@ mod tests {
             )
         )
         .skip_string()
-        .is_err());
+        .is_ok());
     }
 
     #[test]
@@ -3984,6 +3982,117 @@ mod unknown_member_tests {
 
     fn deser(input: &[u8]) -> JsonDeserializer<'_> {
         JsonDeserializer::new(input, Arc::new(JsonCodecSettings::default()))
+    }
+
+    #[test]
+    fn server_strictness_applies_to_read_values_not_skipped_values() {
+        let settings = Arc::new(
+            JsonCodecSettings::builder()
+                .enforce_strictness(true)
+                .validate_skipped_values(false)
+                .build(),
+        );
+        for value in [
+            br#""\udee9""#.as_slice(),
+            br#""\i""#,
+            br#""\u12""#,
+            b"\"raw\ncontrol\"",
+            b"\"\xff\"",
+        ] {
+            // Both automatic unknown-member skipping and explicit skip_value must
+            // consume exactly one value, including nested object keys and values.
+            for (prefix, suffix) in [
+                (b"".as_slice(), b"".as_slice()),
+                (b"[", b"]"),
+                (b"{\"nested\":", b"}"),
+                (b"{", b":null}"),
+            ] {
+                let input = [
+                    b"{\"unknown\":".as_slice(),
+                    prefix,
+                    value,
+                    suffix,
+                    b",\"a\":\"ok\"}",
+                ]
+                .concat();
+                for explicit_skip in [false, true] {
+                    let mut a = None;
+                    JsonDeserializer::new(&input, settings.clone())
+                        .read_struct(&S, &mut |member, d| {
+                            if member.member_index() == Some(0) {
+                                a = Some(d.read_string(member)?);
+                            } else if explicit_skip {
+                                d.skip_value()?;
+                            }
+                            Ok(())
+                        })
+                        .unwrap();
+                    assert_eq!(a.as_deref(), Some("ok"));
+                    let validating =
+                        Arc::new(settings.to_builder().validate_skipped_values(true).build());
+                    let rejected = JsonDeserializer::new(&input, validating)
+                        .read_struct(&S, &mut |member, d| {
+                            if member.member_index() == Some(0) {
+                                d.read_string(member)?;
+                            } else if explicit_skip {
+                                d.skip_value()?;
+                            }
+                            Ok(())
+                        })
+                        .is_err();
+                    assert_eq!(rejected, value == br#""\i""# || value == br#""\u12""#);
+                }
+            }
+            // Strictness must still apply when the same value is actually read,
+            // including a known field following an ignored field.
+            let input = [b"{\"unknown\":[],\"a\":".as_slice(), value, b"}"].concat();
+            assert!(JsonDeserializer::new(&input, settings.clone())
+                .read_struct(&S, &mut |member, d| {
+                    if member.member_index() == Some(0) {
+                        d.read_string(member)?;
+                    }
+                    Ok(())
+                })
+                .is_err());
+        }
+    }
+
+    #[test]
+    fn skipping_without_content_validation_retains_boundaries_and_limits() {
+        let settings = Arc::new(
+            JsonCodecSettings::builder()
+                .enforce_strictness(true)
+                .validate_skipped_values(false)
+                .max_depth(3)
+                .build(),
+        );
+        for input in [
+            br#"{"unknown":"unterminated}"#.as_slice(),
+            br#"{"unknown":"escaped\"}"#,
+            br#"{"unknown":[1,2}"#,
+            br#"{"unknown":[1,,2]}"#,
+            br#"{"unknown":01}"#,
+            br#"{"unknown":tru}"#,
+            br#"{"unknown":[[[[]]]]}"#,
+        ] {
+            assert!(
+                JsonDeserializer::new(input, settings.clone())
+                    .read_struct(&S, &mut |_, _| Ok(()))
+                    .is_err(),
+                "{input:?}"
+            );
+        }
+        let input = br#"{"unknown":"\i\"still ignored\\","a":"ok"}"#;
+        let mut a = None;
+        JsonDeserializer::new(input, settings)
+            .read_struct(&S, &mut |member, d| {
+                if member.member_index() == Some(0) {
+                    a = Some(d.read_string(member)?);
+                }
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(a.as_deref(), Some("ok"));
     }
 
     /// Reads `S`, recording every unknown key (and its value when asked) and returning `a`.

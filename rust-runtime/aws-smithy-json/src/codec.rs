@@ -127,6 +127,7 @@ pub struct JsonCodecSettings {
     /// offset-aware `date-time`.
     strict_timestamp_formats: bool,
     enforce_strictness: bool,
+    validate_skipped_values: bool,
     allow_integral_float_numbers: bool,
     /// Identifies the protocol that produced this codec — used by
     /// `DocumentSettings` for diagnostics on coercion failures.
@@ -218,6 +219,7 @@ impl JsonCodecSettings {
             default_timestamp_format: self.default_timestamp_format,
             max_depth: self.max_depth,
             enforce_strictness: self.enforce_strictness,
+            validate_skipped_values: self.validate_skipped_values,
             allow_integral_float_numbers: self.allow_integral_float_numbers,
             strict_timestamp_formats: self.strict_timestamp_formats,
             protocol_id: self.protocol_id.clone(),
@@ -248,6 +250,7 @@ impl Default for JsonCodecSettings {
             default_timestamp_format: TimestampFormat::EpochSeconds,
             max_depth: crate::codec::deserializer::MAX_DESERIALIZE_DEPTH,
             enforce_strictness: false,
+            validate_skipped_values: true,
             allow_integral_float_numbers: false,
             strict_timestamp_formats: false,
             protocol_id: DEFAULT_JSON_CODEC_ID,
@@ -289,6 +292,7 @@ pub struct JsonCodecSettingsBuilder {
     max_depth: u32,
     strict_timestamp_formats: bool,
     enforce_strictness: bool,
+    validate_skipped_values: bool,
     allow_integral_float_numbers: bool,
     protocol_id: ShapeId<'static>,
     use_string_for_arbitrary_precision: bool,
@@ -302,6 +306,7 @@ impl Default for JsonCodecSettingsBuilder {
             default_timestamp_format: TimestampFormat::EpochSeconds,
             max_depth: crate::codec::deserializer::MAX_DESERIALIZE_DEPTH,
             enforce_strictness: false,
+            validate_skipped_values: true,
             allow_integral_float_numbers: false,
             strict_timestamp_formats: false,
             protocol_id: DEFAULT_JSON_CODEC_ID,
@@ -315,6 +320,18 @@ impl JsonCodecSettingsBuilder {
     /// Enforces JSON grammar and request document validity. Disabled by default.
     pub fn enforce_strictness(mut self, value: bool) -> Self {
         self.enforce_strictness = value;
+        self
+    }
+
+    /// Whether discarded string contents are validated. Enabled by default.
+    ///
+    /// When enabled, escape syntax is checked without decoding Unicode escapes.
+    /// `enforce_strictness` applies only to values read. When disabled, strings and keys inside
+    /// discarded objects are scanned without decoding or validating escapes.
+    /// Container syntax, number/literal grammar, truncation, and depth limits
+    /// are still checked. Values actually read are unaffected.
+    pub fn validate_skipped_values(mut self, value: bool) -> Self {
+        self.validate_skipped_values = value;
         self
     }
 
@@ -401,6 +418,7 @@ impl JsonCodecSettingsBuilder {
             default_timestamp_format: self.default_timestamp_format,
             max_depth: self.max_depth,
             enforce_strictness: self.enforce_strictness,
+            validate_skipped_values: self.validate_skipped_values,
             allow_integral_float_numbers: self.allow_integral_float_numbers,
             strict_timestamp_formats: self.strict_timestamp_formats,
             protocol_id: self.protocol_id,
@@ -715,6 +733,7 @@ mod tests {
             .use_string_for_arbitrary_precision(true)
             .default_namespace("com.example")
             .enforce_strictness(true)
+            .validate_skipped_values(false)
             .allow_integral_float_numbers(true)
             .strict_timestamp_formats(true)
             .build();
@@ -737,6 +756,7 @@ mod tests {
         assert!(round_tripped.use_string_for_arbitrary_precision());
         assert_eq!(round_tripped.default_namespace(), Some("com.example"));
         assert!(round_tripped.enforce_strictness);
+        assert!(!round_tripped.validate_skipped_values);
         assert!(round_tripped.allow_integral_float_numbers);
         assert!(round_tripped.strict_timestamp_formats());
     }
