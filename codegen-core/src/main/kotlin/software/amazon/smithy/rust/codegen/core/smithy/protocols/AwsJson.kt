@@ -187,7 +187,7 @@ open class AwsJson(
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
 
-    override fun additionalRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> =
+    override fun protocolFramingHeaders(operationShape: OperationShape): List<Pair<String, String>> =
         listOf("x-amz-target" to "${codegenContext.serviceShape.id.name}.${operationShape.id.name}")
 
     override fun structuredDataParser(): StructuredDataParserGenerator =
