@@ -31,6 +31,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
@@ -72,7 +73,7 @@ data class TargetCrate(
     /** Whether the target server routes through the schema-serde path rather than a per-protocol router. */
     fun isSchemaServer(): Boolean =
         Path.of(relativePath).resolve("src/service.rs").toFile().let {
-            it.exists() && it.readText().contains("routing::MultiProtocolRoutingService")
+            it.exists() && it.readText().contains("schema::routing::MultiProtocolRoutingService")
         }
 }
 
@@ -113,6 +114,7 @@ class FuzzHarnessBuildPlugin : SmithyBuildPlugin {
 
         val model =
             context.model.let(OperationNormalizer::transform)
+                .let(EventStreamNormalizer::transform)
                 .let(AttachValidationExceptionToConstrainedOperationInputsInAllowList::transform)
         val targets =
             fuzzSettings.targetServers.map { target ->

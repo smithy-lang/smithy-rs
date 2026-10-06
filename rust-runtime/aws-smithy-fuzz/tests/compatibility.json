@@ -1,0 +1,662 @@
+[
+  {
+    "name": "JSON member order",
+    "a": {
+      "response": {
+        "body": [
+          123,
+          34,
+          122,
+          34,
+          58,
+          49,
+          44,
+          34,
+          97,
+          34,
+          58,
+          50,
+          125
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "b": {
+      "response": {
+        "body": [
+          123,
+          34,
+          97,
+          34,
+          58,
+          50,
+          44,
+          34,
+          122,
+          34,
+          58,
+          49,
+          125
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "agree": true
+  },
+  {
+    "name": "CBOR map order and widths",
+    "a": {
+      "response": {
+        "body": [
+          162,
+          97,
+          97,
+          1,
+          97,
+          98,
+          2
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "b": {
+      "response": {
+        "body": [
+          191,
+          97,
+          98,
+          24,
+          2,
+          97,
+          97,
+          24,
+          1,
+          255
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "agree": true
+  },
+  {
+    "name": "CBOR array lengths",
+    "a": {
+      "response": {
+        "body": [
+          130,
+          1,
+          2
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "b": {
+      "response": {
+        "body": [
+          159,
+          1,
+          2,
+          255
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "agree": true
+  },
+  {
+    "name": "JSON list order",
+    "a": {
+      "response": {
+        "body": [
+          91,
+          49,
+          44,
+          50,
+          93
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "b": {
+      "response": {
+        "body": [
+          91,
+          50,
+          44,
+          49,
+          93
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "agree": false
+  },
+  {
+    "name": "JSON boolean versus integer",
+    "a": {
+      "response": {
+        "body": [
+          123,
+          34,
+          97,
+          34,
+          58,
+          116,
+          114,
+          117,
+          101,
+          125
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "b": {
+      "response": {
+        "body": [
+          123,
+          34,
+          97,
+          34,
+          58,
+          49,
+          125
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "agree": false
+  },
+  {
+    "name": "JSON float versus integer",
+    "a": {
+      "response": {
+        "body": [
+          123,
+          34,
+          97,
+          34,
+          58,
+          49,
+          46,
+          48,
+          125
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "b": {
+      "response": {
+        "body": [
+          123,
+          34,
+          97,
+          34,
+          58,
+          49,
+          125
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "agree": false
+  },
+  {
+    "name": "float precision",
+    "a": {
+      "response": {
+        "body": [
+          123,
+          34,
+          97,
+          34,
+          58,
+          48,
+          46,
+          49,
+          125
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "b": {
+      "response": {
+        "body": [
+          123,
+          34,
+          97,
+          34,
+          58,
+          48,
+          46,
+          49,
+          48,
+          48,
+          48,
+          48,
+          48,
+          48,
+          48,
+          49,
+          52,
+          57,
+          48,
+          49,
+          49,
+          54,
+          49,
+          50,
+          125
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "agree": false
+  },
+  {
+    "name": "invalid JSON number",
+    "a": {
+      "response": {
+        "body": [
+          123,
+          34,
+          97,
+          34,
+          58,
+          48,
+          49,
+          125
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "b": {
+      "response": {
+        "body": [
+          123,
+          34,
+          97,
+          34,
+          58,
+          49,
+          125
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "agree": false
+  },
+  {
+    "name": "changed timestamp",
+    "a": {
+      "response": {
+        "body": [
+          123,
+          34,
+          116,
+          105,
+          109,
+          101,
+          34,
+          58,
+          49,
+          125
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "b": {
+      "response": {
+        "body": [
+          123,
+          34,
+          116,
+          105,
+          109,
+          101,
+          34,
+          58,
+          50,
+          125
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "agree": false
+  },
+  {
+    "name": "XML member order",
+    "a": {
+      "response": {
+        "body": [
+          60,
+          69,
+          62,
+          60,
+          98,
+          62,
+          50,
+          60,
+          47,
+          98,
+          62,
+          60,
+          97,
+          62,
+          49,
+          60,
+          47,
+          97,
+          62,
+          60,
+          47,
+          69,
+          62
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "b": {
+      "response": {
+        "body": [
+          60,
+          69,
+          62,
+          60,
+          97,
+          62,
+          49,
+          60,
+          47,
+          97,
+          62,
+          60,
+          98,
+          62,
+          50,
+          60,
+          47,
+          98,
+          62,
+          60,
+          47,
+          69,
+          62
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "agree": true
+  },
+  {
+    "name": "XML list order",
+    "a": {
+      "response": {
+        "body": [
+          60,
+          69,
+          62,
+          60,
+          97,
+          62,
+          49,
+          60,
+          47,
+          97,
+          62,
+          60,
+          97,
+          62,
+          50,
+          60,
+          47,
+          97,
+          62,
+          60,
+          47,
+          69,
+          62
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "b": {
+      "response": {
+        "body": [
+          60,
+          69,
+          62,
+          60,
+          97,
+          62,
+          50,
+          60,
+          47,
+          97,
+          62,
+          60,
+          97,
+          62,
+          49,
+          60,
+          47,
+          97,
+          62,
+          60,
+          47,
+          69,
+          62
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "agree": false
+  },
+  {
+    "name": "omitted length",
+    "a": {
+      "response": {
+        "body": [
+          123,
+          125
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "b": {
+      "response": {
+        "body": [
+          123,
+          125
+        ],
+        "headers": {
+          "Content-Length": "2"
+        },
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "agree": true
+  },
+  {
+    "name": "incorrect length",
+    "a": {
+      "response": {
+        "body": [
+          123,
+          125
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "b": {
+      "response": {
+        "body": [
+          123,
+          125
+        ],
+        "headers": {
+          "content-length": "3"
+        },
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "agree": false
+  },
+  {
+    "name": "header name case",
+    "a": {
+      "response": {
+        "body": [
+          123,
+          125
+        ],
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "b": {
+      "response": {
+        "body": [
+          123,
+          125
+        ],
+        "headers": {
+          "content-type": "application/json"
+        },
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "agree": true
+  },
+  {
+    "name": "changed status",
+    "a": {
+      "response": {
+        "body": [
+          123,
+          125
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "b": {
+      "response": {
+        "body": [
+          123,
+          125
+        ],
+        "headers": {},
+        "status": 400
+      },
+      "input": "handler input"
+    },
+    "agree": false
+  },
+  {
+    "name": "changed input",
+    "a": {
+      "response": {
+        "body": [
+          123,
+          125
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "b": {
+      "response": {
+        "body": [
+          123,
+          125
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "different"
+    },
+    "agree": false
+  },
+  {
+    "name": "handler not called",
+    "a": {
+      "response": {
+        "body": [
+          123,
+          125
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": "handler input"
+    },
+    "b": {
+      "response": {
+        "body": [
+          123,
+          125
+        ],
+        "headers": {},
+        "status": 200
+      },
+      "input": null
+    },
+    "agree": false
+  }
+]

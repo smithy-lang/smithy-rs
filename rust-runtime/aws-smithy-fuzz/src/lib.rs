@@ -18,8 +18,10 @@ use std::pin::pin;
 use std::sync::Mutex;
 use std::task::{Context, Poll};
 use tower::ServiceExt;
+mod protocol;
 mod types;
 pub use lazy_static;
+pub use protocol::pin_protocol;
 pub use types::{Body, FuzzResult, HttpRequest, HttpResponse};
 
 #[macro_export]
@@ -66,6 +68,14 @@ impl FuzzTarget {
     }
 
     pub fn invoke_bytes(&self, input: &[u8]) -> FuzzResult {
+        // The driver applies the same campaign identity to both shared libraries,
+        // including direct invocation and replay. The baseline crate is untouched.
+        let normalized = std::env::var("SMITHY_FUZZ_PROTOCOL").ok().map(|protocol| {
+            let mut request = HttpRequest::from_bytes(input);
+            pin_protocol(&mut request, &protocol);
+            request.as_bytes()
+        });
+        let input = normalized.as_deref().unwrap_or(input);
         let buffer = unsafe { (self.0)(input.as_ptr(), input.len()) };
         let data = buffer.destroy_into_vec();
         FuzzResult::from_bytes(&data)

@@ -180,6 +180,9 @@ struct Lexicon {
 
 #[derive(Serialize, Deserialize, Debug)]
 struct FuzzConfig {
+    /// Fixed protocol identity for isolated A/B campaigns; absent for general fuzzing.
+    #[serde(default)]
+    protocol: Option<String>,
     seed: PathBuf,
     targets: Vec<Target>,
     afl_input_dir: PathBuf,
@@ -443,9 +446,24 @@ fn force_load_libraries(libraries: &[Target]) -> Vec<FuzzTarget> {
 /// it ensures everything is set up properly, then it invokes AFL, passing through
 /// all the relevant flags. AFL is actually going to come right back in here—(but with `enter_fuzzing_loop`)
 /// set to true. In that case, we just prepare to start actually fuzzing the targets.
+fn configure_protocol(config: &FuzzConfig) {
+    if let Some(protocol) = &config.protocol {
+        if let Ok(inherited) = std::env::var("SMITHY_FUZZ_PROTOCOL") {
+            assert_eq!(
+                &inherited, protocol,
+                "campaign protocol does not match its configuration"
+            );
+        }
+        // Validate before launching workers; subprocesses inherit the fixed identity.
+        aws_smithy_fuzz::pin_protocol(&mut HttpRequest::default(), protocol);
+        std::env::set_var("SMITHY_FUZZ_PROTOCOL", protocol);
+    }
+}
+
 fn fuzz(args: FuzzArgs) {
     let config = fs::read_to_string(&args.config_path).unwrap();
     let config: FuzzConfig = serde_json::from_str(&config).unwrap();
+    configure_protocol(&config);
     if args.enter_fuzzing_loop {
         let libraries = force_load_libraries(&config.targets);
         enter_fuzz_loop(libraries, None)
@@ -560,6 +578,7 @@ fn initialize(
     let afl_output_dir = Path::new("afl-output");
 
     let mut config = FuzzConfig {
+        protocol: None,
         seed: lexicon,
         targets,
         afl_input_dir: afl_input_dir.into(),
@@ -631,6 +650,7 @@ fn replay(
 ) {
     let config = fs::read_to_string(config_path).unwrap();
     let config: FuzzConfig = serde_json::from_str(&config).unwrap();
+    configure_protocol(&config);
     let crashes = if let Some(path) = invoke_only {
         vec![path.into()]
     } else {
@@ -644,12 +664,26 @@ fn replay(
         eprintln!("{}", crash.display());
         let data = fs::read(&crash).unwrap();
         let http_request = HttpRequest::from_unknown_bytes(&data);
+        let comparison_request = http_request.as_ref().map(|request| {
+            let mut request = request.clone();
+            if let Ok(protocol) = std::env::var("SMITHY_FUZZ_PROTOCOL") {
+                aws_smithy_fuzz::pin_protocol(&mut request, &protocol);
+            }
+            request
+        });
+        let mut baseline = None;
         let mut results: HashMap<String, CrashResult> = HashMap::new();
         #[derive(Debug, Serialize)]
         #[serde(tag = "type")]
         enum CrashResult {
-            Panic { message: String },
-            FuzzResult { result: String },
+            Panic {
+                message: String,
+            },
+            FuzzResult {
+                result: String,
+                #[serde(skip_serializing_if = "Option::is_none")]
+                expected_divergence: Option<&'static str>,
+            },
         }
 
         impl Display for CrashResult {
@@ -662,12 +696,21 @@ fn replay(
                         }
                         Ok(())
                     }
-                    CrashResult::FuzzResult { result } => f.pad(result),
+                    CrashResult::FuzzResult {
+                        result,
+                        expected_divergence,
+                    } => {
+                        f.pad(result)?;
+                        if let Some(reason) = expected_divergence {
+                            write!(f, "\nExpected compatibility divergence: {reason}")?;
+                        }
+                        Ok(())
+                    }
                 }
             }
         }
 
-        for library in &config.targets {
+        for (index, library) in config.targets.iter().enumerate() {
             let result = Command::new(env::current_exe().unwrap())
                 .arg("invoke-test-case")
                 .arg("--shared-library-path")
@@ -677,9 +720,21 @@ fn replay(
                 .output()
                 .unwrap();
             let result = match serde_json::from_slice::<FuzzResult>(&result.stdout) {
-                Ok(result) => CrashResult::FuzzResult {
-                    result: format!("{:?}", result),
-                },
+                Ok(result) => {
+                    let expected_divergence = comparison_request
+                        .as_ref()
+                        .zip(baseline.as_ref())
+                        .and_then(|(request, baseline)| {
+                            semantic::expected_compatibility_divergence(request, baseline, &result)
+                        });
+                    if index == 0 {
+                        baseline = Some(result.clone());
+                    }
+                    CrashResult::FuzzResult {
+                        result: format!("{:?}", result),
+                        expected_divergence,
+                    }
+                }
                 Err(_err) => CrashResult::Panic {
                     message: String::from_utf8_lossy(&result.stderr).to_string(),
                 },
@@ -731,6 +786,11 @@ fn enter_fuzz_loop(libraries: Vec<FuzzTarget>, mut log: Option<BufWriter<fs::Fil
         let http_request = HttpRequest::from_unknown_bytes(data);
         if let Some(request) = http_request {
             if request.into_http_request_04x().is_some() {
+                // Compare the same campaign-normalized request that both libraries receive.
+                let mut comparison_request = request.clone();
+                if let Ok(protocol) = std::env::var("SMITHY_FUZZ_PROTOCOL") {
+                    aws_smithy_fuzz::pin_protocol(&mut comparison_request, &protocol);
+                }
                 let mut results = vec![];
                 for library in &libraries {
                     results.push(library.invoke_bytes(data));
@@ -749,7 +809,18 @@ fn enter_fuzz_loop(libraries: Vec<FuzzTarget>, mut log: Option<BufWriter<fs::Fil
                     .unwrap();
                 });
                 for result in &results {
-                    if !semantic::results_agree(result, &results[0]) {
+                    if !semantic::results_agree(&results[0], result) {
+                        if let Some(reason) = semantic::expected_compatibility_divergence(
+                            &comparison_request,
+                            &results[0],
+                            result,
+                        ) {
+                            if let Some(log) = &mut log {
+                                writeln!(log, "expected compatibility divergence: {reason}")
+                                    .unwrap();
+                            }
+                            continue;
+                        }
                         if check_for_nondeterminism(data, &libraries) {
                             break;
                         }

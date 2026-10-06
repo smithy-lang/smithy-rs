@@ -12,6 +12,9 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ArrayNode
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
+import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
@@ -31,6 +34,15 @@ import java.nio.file.Path
  * <suite>/<protocol>/single-server/     <suite>/<protocol>/single-harness/{single/,lexicon.json}
  * <suite>/multi-server/                 <suite>/multi-harness/{multi/,lexicon.json}
  * <suite>/multi-xml-server/             <suite>/multi-xml-harness/{multi/,lexicon.json}
+ * ```
+ *
+ * The `single` checkout's fuzz target generator may implement a different set of operations than this one, and
+ * an operation only one target implements diverges on every request. So when `MP_FUZZ_SINGLE_RUNTIME` names the
+ * `rust-runtime` directory of the checkout that generated the single-protocol servers, the `multi` side also
+ * generates both targets of each comparison itself:
+ * ```
+ * <suite>/<protocol>/ab-harness/{single/,multi/,lexicon.json}       against multi-server
+ * <suite>/rest-xml/ab-harness-xml/{single/,multi/,lexicon.json}     against multi-xml-server
  * ```
  */
 @EnabledIfEnvironmentVariable(named = "MP_FUZZ_GENERATE", matches = "true")
@@ -52,6 +64,7 @@ class MultiProtocolAbFuzzHarnessTest {
     private val output = File(System.getenv("MP_FUZZ_OUTPUT") ?: error("MP_FUZZ_OUTPUT is required"))
     private val models = File(System.getenv("MP_FUZZ_MODELS") ?: error("MP_FUZZ_MODELS is required"))
     private val suites = (System.getenv("MP_FUZZ_SUITES") ?: "pokemon,multiprotocol").split(",")
+    private val singleRuntime = System.getenv("MP_FUZZ_SINGLE_RUNTIME")?.let { File(it) }
     private val selected =
         System.getenv("MP_FUZZ_PROTOCOLS")?.split(",")?.let { names -> protocols.filter { it.dir in names } }
             ?: protocols
@@ -64,14 +77,17 @@ class MultiProtocolAbFuzzHarnessTest {
     /**
      * The Pokémon service with its `@restJson1` trait replaced by [with].
      *
-     * The streaming operations are dropped: fuzz targets skip them anyway, and legacy codegen rejects
-     * `CapturePokemon` on RPC protocols, where its `@httpLabel` member joins the event stream in the body.
+     * Only the plain blob stream is removed. The capture stream's region is omitted because legacy
+     * RPC codegen rejects streaming inputs with additional body members.
      */
     private fun pokemon(with: List<Protocol>): Model {
         val service =
             models.resolve("pokemon.smithy").readText()
-                .replace("        CapturePokemon\n", "")
                 .replace("        StreamPokemonRadio\n", "")
+                // Legacy RPC codegen requires the event stream to be the sole input member.
+                // Apply the same reduced shape on both sides and on every protocol.
+                .replace("/capture-pokemon-event/{region}", "/capture-pokemon-event")
+                .replace(Regex("@httpLabel\\s+@required\\s+region: String"), "")
                 .replace(
                     "use aws.protocols#restJson1\n",
                     with.joinToString("") { "use ${it.shapeId}\n" },
@@ -84,18 +100,42 @@ class MultiProtocolAbFuzzHarnessTest {
         )
     }
 
-    /** The multi-protocol test service bound in [file], without its streaming operations, as for [pokemon]. */
+    /**
+     * The multi-protocol test service bound in [file], without its plain blob streaming operation, as for [pokemon].
+     *
+     * `Greet`'s `@http(code: 201)` is dropped as well. A legacy awsJson server answers with that status and a
+     * schema server with `200`, so every successful awsJson `Greet` would otherwise be a divergence, and the
+     * fuzzer would explore no further than the first one.
+     */
     private fun multiProtocol(
         file: String,
         edit: (String) -> String = { it },
-    ): Model =
-        assemble(
+    ): Model {
+        val common =
+            models.resolve("multi-protocol-common.smithy").readText()
+                .replace(
+                    "operation Publish {\n    input := {\n        @required\n        @httpHeader(\"x-topic\")\n        topic: String",
+                    "operation Publish {\n    input := {",
+                )
+        check(common.contains(", code: 201)")) { "expected `Greet` to declare `code: 201`" }
+        return assemble(
             file to
-                listOf("Upload", "Subscribe", "Publish").fold(edit(models.resolve(file).readText())) { text, op ->
+                listOf("Upload").fold(edit(models.resolve(file).readText())) { text, op ->
                     text.replace("        $op\n", "")
                 },
-            "multi-protocol-common.smithy" to models.resolve("multi-protocol-common.smithy").readText(),
-        )
+            "multi-protocol-common.smithy" to common.replace(", code: 201)", ")"),
+        ).let { model ->
+            // serverIntegrationTest adds validation errors for constrained inputs. Include them
+            // explicitly so the fuzz target sees the same handler return types as the server.
+            ModelTransformer.create().mapShapes(model) { shape ->
+                if (shape is OperationShape && shape.id.name in listOf("Subscribe", "Publish")) {
+                    shape.toBuilder().addErrors(listOf(ShapeId.from("smithy.framework#ValidationException"))).build()
+                } else {
+                    shape
+                }
+            }
+        }
+    }
 
     private fun serviceOf(suite: String) =
         when (suite) {
@@ -128,9 +168,7 @@ class MultiProtocolAbFuzzHarnessTest {
         dest: File,
     ): File {
         val codegen = Node.objectNodeBuilder().withMember("http-1x", true)
-        if (side == "multi") {
-            codegen.withMember("schemaSerde", true)
-        }
+        codegen.withMember("schemaSerde", side == "multi")
         val servers =
             serverIntegrationTest(
                 model,
@@ -147,13 +185,15 @@ class MultiProtocolAbFuzzHarnessTest {
         return dest
     }
 
+    /** Generates the fuzz target [name] for [server] under [dest], alongside any targets already there. */
     private fun generateFuzzTarget(
         model: Model,
         service: String,
         server: File,
         dest: File,
+        name: String = side,
+        runtime: File = File(TestRuntimeConfig.runtimeCrateLocation.path!!),
     ) {
-        dest.deleteRecursively()
         val context =
             PluginContext.builder()
                 .model(model)
@@ -167,7 +207,7 @@ class MultiProtocolAbFuzzHarnessTest {
                                 listOf(
                                     ObjectNode.objectNode()
                                         .withMember("relativePath", server.absolutePath)
-                                        .withMember("name", side),
+                                        .withMember("name", name),
                                 ),
                             ),
                         )
@@ -175,11 +215,34 @@ class MultiProtocolAbFuzzHarnessTest {
                             "runtimeConfig",
                             Node.objectNode().withMember(
                                 "relativePath",
-                                Node.from(Path.of(TestRuntimeConfig.runtimeCrateLocation.path!!).toAbsolutePath().toString()),
+                                Node.from(Path.of(runtime.path).toAbsolutePath().toString()),
                             ),
                         ),
                 ).build()
         FuzzHarnessBuildPlugin().execute(context)
+    }
+
+    /**
+     * Generates both targets of one comparison: the single-protocol server from the other checkout, linked
+     * against that checkout's runtime, and [multiServer].
+     */
+    private fun generateAbHarness(
+        suite: String,
+        protocol: Protocol,
+        multiModel: Model,
+        multiServer: File,
+        dest: File,
+        singleRuntime: File,
+    ) {
+        val service = serviceOf(suite)
+        val singleServer = output.resolve(suite).resolve(protocol.dir).resolve("single-server")
+        check(singleServer.resolve("Cargo.toml").exists()) {
+            "no single-protocol server at $singleServer; run the `single` side first"
+        }
+        dest.deleteRecursively()
+        generateFuzzTarget(multiModel, service, multiServer, dest, name = "multi")
+        // Last, so that the lexicon comes from the protocol under test.
+        generateFuzzTarget(singleModel(suite, protocol), service, singleServer, dest, "single", singleRuntime)
     }
 
     @Test
@@ -193,10 +256,23 @@ class MultiProtocolAbFuzzHarnessTest {
                         val model = singleModel(suite, protocol)
                         val protocolDir = suiteDir.resolve(protocol.dir)
                         val server = generateServer(model, service, protocolDir.resolve("single-server"))
-                        generateFuzzTarget(model, service, server, protocolDir.resolve("single-harness"))
+                        val harness = protocolDir.resolve("single-harness")
+                        harness.deleteRecursively()
+                        generateFuzzTarget(model, service, server, harness)
                     }
 
                 "multi" -> {
+                    if (System.getenv("MP_FUZZ_ISOLATE_PROTOCOLS") == "true") {
+                        for (protocol in selected) {
+                            val model = singleModel(suite, protocol)
+                            val protocolDir = suiteDir.resolve(protocol.dir)
+                            val server = generateServer(model, service, protocolDir.resolve("schema-server"))
+                            if (singleRuntime != null) {
+                                generateAbHarness(suite, protocol, model, server, protocolDir.resolve("ab-harness"), singleRuntime)
+                            }
+                        }
+                        continue
+                    }
                     // restJson1 claims every REST request that carries neither a body nor a `Content-Type`, so
                     // restXml is compared against a server serving every protocol but restJson1.
                     val variants =
@@ -207,7 +283,25 @@ class MultiProtocolAbFuzzHarnessTest {
                     for ((name, served) in variants) {
                         val model = multiModel(suite, served)
                         val server = generateServer(model, service, suiteDir.resolve("$name-server"))
-                        generateFuzzTarget(model, service, server, suiteDir.resolve("$name-harness"))
+                        val harness = suiteDir.resolve("$name-harness")
+                        harness.deleteRecursively()
+                        generateFuzzTarget(model, service, server, harness)
+                        if (singleRuntime == null) continue
+                        for (protocol in selected.filter { it in served }) {
+                            val abHarness =
+                                when (name) {
+                                    "multi" -> "ab-harness"
+                                    else -> if (protocol.dir == "rest-xml") "ab-harness-xml" else continue
+                                }
+                            generateAbHarness(
+                                suite,
+                                protocol,
+                                model,
+                                server,
+                                suiteDir.resolve(protocol.dir).resolve(abHarness),
+                                singleRuntime,
+                            )
+                        }
                     }
                 }
 
