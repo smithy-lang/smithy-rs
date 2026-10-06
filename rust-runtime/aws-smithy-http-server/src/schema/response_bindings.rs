@@ -270,6 +270,7 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
                 status: &status,
                 payload: &payload,
                 payload_mode: false,
+                capture_bindings: true,
                 plan,
             };
             value.serialize_members(&mut splitter)?;
@@ -308,6 +309,7 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
             status: &status,
             payload: &payload,
             payload_mode: true,
+            capture_bindings: true,
             plan,
         };
         value.serialize_members(&mut splitter)?;
@@ -322,6 +324,7 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
                 status: &status,
                 payload: &payload,
                 plan,
+                capture_bindings: Cell::new(true),
             };
             body_serializer.write_struct(schema, &wrapper)?;
         }
@@ -394,6 +397,9 @@ struct SplitBindings<'a, C> {
     status: &'a Cell<Option<u16>>,
     payload: &'a RefCell<Option<CapturedPayload>>,
     plan: &'a CompiledResponsePlan,
+    // XML may walk members once for attributes and again for child elements.
+    // Capture bindings on the first walk, and let every walk forward body members.
+    capture_bindings: Cell<bool>,
 }
 
 impl<C: Codec> SerializableStruct for SplitBindings<'_, C> {
@@ -409,6 +415,7 @@ impl<C: Codec> SerializableStruct for SplitBindings<'_, C> {
             status: self.status,
             payload: self.payload,
             payload_mode: false,
+            capture_bindings: self.capture_bindings.replace(false),
             plan: self.plan,
         };
         self.inner.serialize_members(&mut splitter)
@@ -525,10 +532,15 @@ struct ResponseBindingSplitter<'a, C> {
     /// callers pass the payload member's TARGET schema, which carries the
     /// framing but not the member's binding traits.
     payload_mode: bool,
+    capture_bindings: bool,
     plan: &'a CompiledResponsePlan,
 }
 
 impl<C: Codec> ResponseBindingSplitter<'_, C> {
+    fn skip_binding(&self, schema: &Schema<'_>) -> bool {
+        !self.capture_bindings && !matches!(self.plan.member(schema), ResponseMemberPlan::Body)
+    }
+
     fn capture_status(&self, value: i64) -> Result<(), SerdeError> {
         let status = u16::try_from(value)
             .ok()
@@ -550,6 +562,9 @@ impl<C: Codec> ResponseBindingSplitter<'_, C> {
 macro_rules! split_int {
     ($fn_name:ident, $ty:ty) => {
         fn $fn_name(&mut self, schema: &Schema<'_>, value: $ty) -> Result<(), SerdeError> {
+            if self.skip_binding(schema) {
+                return Ok(());
+            }
             match self.plan.member(schema) {
                 ResponseMemberPlan::Status => self.capture_status(value as i64),
                 ResponseMemberPlan::Header { name, sensitive, .. } => {
@@ -565,6 +580,9 @@ macro_rules! split_int {
 macro_rules! split_scalar {
     ($fn_name:ident, $ty:ty) => {
         fn $fn_name(&mut self, schema: &Schema<'_>, value: $ty) -> Result<(), SerdeError> {
+            if self.skip_binding(schema) {
+                return Ok(());
+            }
             match self.plan.member(schema) {
                 ResponseMemberPlan::Header { name, sensitive, .. } => {
                     let mut encoder = aws_smithy_types::primitive::Encoder::from(value);
@@ -578,6 +596,9 @@ macro_rules! split_scalar {
 
 impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
     fn write_struct(&mut self, schema: &Schema<'_>, value: &dyn SerializableStruct) -> Result<(), SerdeError> {
+        if self.skip_binding(schema) {
+            return Ok(());
+        }
         if self.payload_mode {
             // Structure/union payload: the payload member's own framing IS
             // the body — serialize it standalone through the codec.
@@ -595,6 +616,9 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
         schema: &Schema<'_>,
         write_elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
+        if self.skip_binding(schema) {
+            return Ok(());
+        }
         if let ResponseMemberPlan::Header {
             name,
             timestamp_format,
@@ -622,6 +646,9 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
         schema: &Schema<'_>,
         write_entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
+        if self.skip_binding(schema) {
+            return Ok(());
+        }
         if let ResponseMemberPlan::PrefixHeaders {
             prefix,
             key_sensitive,
@@ -650,6 +677,9 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
     split_scalar!(write_double, f64);
 
     fn write_big_integer(&mut self, schema: &Schema<'_>, value: &BigInteger) -> Result<(), SerdeError> {
+        if self.skip_binding(schema) {
+            return Ok(());
+        }
         match self.plan.member(schema) {
             ResponseMemberPlan::Header { name, sensitive, .. } => {
                 capture_header(self.headers, name, value.as_ref(), *sensitive)
@@ -659,6 +689,9 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
     }
 
     fn write_big_decimal(&mut self, schema: &Schema<'_>, value: &BigDecimal) -> Result<(), SerdeError> {
+        if self.skip_binding(schema) {
+            return Ok(());
+        }
         match self.plan.member(schema) {
             ResponseMemberPlan::Header { name, sensitive, .. } => {
                 capture_header(self.headers, name, value.as_ref(), *sensitive)
@@ -668,6 +701,9 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
     }
 
     fn write_string(&mut self, schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
+        if self.skip_binding(schema) {
+            return Ok(());
+        }
         if let ResponseMemberPlan::Payload { raw: true } = self.plan.member(schema) {
             self.capture_payload(bytes::Bytes::copy_from_slice(value.as_bytes()));
             return Ok(());
@@ -690,6 +726,9 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
     }
 
     fn write_blob(&mut self, schema: &Schema<'_>, value: aws_smithy_types::Blob) -> Result<(), SerdeError> {
+        if self.skip_binding(schema) {
+            return Ok(());
+        }
         if let ResponseMemberPlan::Payload { raw: true } = self.plan.member(schema) {
             // `into_bytes` hands over the blob's `Bytes` (a reference count); `into_inner` would
             // copy the whole payload into a `Vec`.
@@ -708,6 +747,9 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
     }
 
     fn write_timestamp(&mut self, schema: &Schema<'_>, value: &DateTime) -> Result<(), SerdeError> {
+        if self.skip_binding(schema) {
+            return Ok(());
+        }
         match self.plan.member(schema) {
             ResponseMemberPlan::Header {
                 name,
@@ -723,6 +765,9 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
     }
 
     fn write_document(&mut self, schema: &Schema<'_>, value: &Document) -> Result<(), SerdeError> {
+        if self.skip_binding(schema) {
+            return Ok(());
+        }
         if self.payload_mode {
             // The document VALUE is the body: serialize against the prelude
             // document schema, not the member schema — a member schema would
@@ -1029,6 +1074,92 @@ mod tests {
         assert!(body.contains("\"code\":202"));
         assert!(body.contains("\"hdr\":\"hval\""));
         assert!(body.contains("\"msg\":\"hello\""));
+    }
+
+    #[test]
+    fn xml_attribute_passes_capture_each_binding_and_collection_callback_once() {
+        static ITEMS: Schema<'static> = Schema::new_member(
+            ShapeId::from_parts("test#XmlOutput$items", "test", "XmlOutput"),
+            ShapeType::List,
+            "items",
+            4,
+        )
+        .with_list_member(&aws_smithy_schema::prelude::STRING)
+        .with_http_header("x-items");
+        static ATTRIBUTE: Schema<'static> = Schema::new_member(
+            ShapeId::from_parts("test#XmlOutput$attr", "test", "XmlOutput"),
+            ShapeType::String,
+            "attr",
+            5,
+        )
+        .with_xml_attribute();
+        static SCHEMA: Schema<'static> = Schema::new_struct(
+            ShapeId::from_parts("test#XmlOutput", "test", "XmlOutput"),
+            ShapeType::Structure,
+            &[
+                &CODE_MEMBER,
+                &HDR_MEMBER,
+                &META_MEMBER,
+                &BODY_MEMBER,
+                &ITEMS,
+                &ATTRIBUTE,
+            ],
+        );
+        #[derive(Default)]
+        struct XmlOutput {
+            walks: Cell<usize>,
+            lists: Cell<usize>,
+            maps: Cell<usize>,
+        }
+        impl SerializableStruct for XmlOutput {
+            fn schema(&self) -> &Schema<'_> {
+                &SCHEMA
+            }
+
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                self.walks.set(self.walks.get() + 1);
+                s.write_integer(&CODE_MEMBER, 200 + self.walks.get() as i32)?;
+                s.write_string(&HDR_MEMBER, "scalar")?;
+                s.write_list(&ITEMS, &|s| {
+                    self.lists.set(self.lists.get() + 1);
+                    s.write_string(&aws_smithy_schema::prelude::STRING, "one")?;
+                    s.write_string(&aws_smithy_schema::prelude::STRING, "two")
+                })?;
+                s.write_map(&META_MEMBER, &|s| {
+                    self.maps.set(self.maps.get() + 1);
+                    s.write_string(&META_MEMBER, "color")?;
+                    s.write_string(&META_MEMBER, "red")
+                })?;
+                s.write_string(&ATTRIBUTE, "attr")?;
+                s.write_string(&BODY_MEMBER, "body")
+            }
+        }
+        let codec = aws_smithy_xml::codec::XmlCodec::default();
+        let plan = CompiledResponsePlan::compile(&SCHEMA, ResponseBindings::Rest, ResponseValueKind::ModeledError);
+        for compiled in [false, true] {
+            let value = XmlOutput::default();
+            let split = if compiled {
+                serialize_response_parts_compiled(&codec, &SCHEMA, &value, &plan)
+            } else {
+                serialize_response_parts(
+                    &codec,
+                    &SCHEMA,
+                    &value,
+                    ResponseBindings::Rest,
+                    ResponseValueKind::ModeledError,
+                )
+            }
+            .unwrap();
+            assert_eq!(split.headers.len(), 4);
+            assert_eq!(split.status, Some(201));
+            assert_eq!(value.walks.get(), 2, "XML still needs its two body passes");
+            assert_eq!(value.lists.get(), 1);
+            assert_eq!(value.maps.get(), 1);
+            assert_eq!(
+                split.body.as_ref(),
+                b"<XmlOutput attr=\"attr\"><msg>body</msg></XmlOutput>"
+            );
+        }
     }
 
     static EMPTY_OUT_SCHEMA: Schema<'static> = Schema::new_struct(

@@ -21,8 +21,8 @@ use crate::schema::{DeserializeError, HttpModeledError};
 
 use super::discriminator::{BodyDiscriminator, TypeValue};
 use super::response::{
-    log_serialize_failure, serialize_modeled_error_response, stamp_error_extension, stamp_validation_extension,
-    ResponseBindings,
+    log_serialize_failure, normalize_content_length, serialize_modeled_error_response, stamp_error_extension,
+    stamp_validation_extension, ResponseBindings,
 };
 use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerProtocol};
 
@@ -116,9 +116,27 @@ fn apply_response_bindings(
         ResponseBindings::Rest,
         crate::schema::response_bindings::ResponseValueKind::StreamingOutput,
     )?;
-    for (name, value) in parts.headers {
-        response.headers_mut().insert(name, value);
+    // The body-only assembly sets the actual buffered length; streaming heads have none.
+    // Retain that size before replacing protocol defaults with modeled headers.
+    let buffered_length = response
+        .headers()
+        .get(http::header::CONTENT_LENGTH)
+        .map(|value| {
+            value
+                .to_str()
+                .ok()
+                .and_then(|value| value.parse::<u64>().ok())
+                .ok_or_else(|| SerdeError::custom("invalid protocol Content-Length"))
+        })
+        .transpose()?;
+    // Remove defaults before appending the entire modeled group, preserving list multiplicity.
+    for (name, _) in &parts.headers {
+        response.headers_mut().remove(name);
     }
+    for (name, value) in parts.headers {
+        response.headers_mut().append(name, value);
+    }
+    normalize_content_length(response.headers_mut(), buffered_length)?;
     if success {
         *response.status_mut() =
             http::StatusCode::from_u16(super::response::resolve_status(parts.status, schema.http()))
