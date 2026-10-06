@@ -378,6 +378,70 @@ class SchemaRoutingGeneratorTest {
     }
 
     @Test
+    fun `schema CBOR defaults to 405 and supports Java method mismatch responses`() {
+        val model =
+            """
+            namespace test
+            use smithy.protocols#rpcv2Cbor
+            @rpcv2Cbor
+            service Example { operations: [Ping] }
+            operation Ping { input := {} output := {} }
+            """.asSmithyModel(smithyVersion = "2")
+        for (asNotFound in listOf(null, false, true)) {
+            val settings =
+                ObjectNode.builder()
+                    .withMember("codegen", ObjectNode.builder().withMember("schemaSerde", true).build())
+            if (asNotFound != null) {
+                settings.withMember(
+                    "customizationConfig",
+                    ObjectNode.builder().withMember(
+                        "protocols",
+                        ObjectNode.builder().withMember(
+                            "smithy.protocols#rpcv2Cbor",
+                            ObjectNode.builder().withMember("methodNotAllowedAsNotFound", asNotFound).build(),
+                        ).build(),
+                    ).build(),
+                )
+            }
+            val expectedStatus = if (asNotFound == true) 404 else 405
+            serverIntegrationTest(
+                model,
+                IntegrationTestParams(additionalSettings = settings.build()),
+                testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
+            ) { context, crate ->
+                crate.testModule {
+                    tokioTest("get_returns_configured_status_and_post_dispatches") {
+                        rustTemplate(
+                            """
+                            use #{Tower}::ServiceExt;
+                            let service = crate::Example::builder(crate::ExampleConfig::builder().build())
+                                .ping(|_input: crate::input::PingInput| async { crate::output::PingOutput {} })
+                                .build()
+                                .unwrap();
+                            for (method, expected) in [("GET", $expectedStatus), ("POST", 200)] {
+                                let request = #{Http}::Request::builder()
+                                    .method(method)
+                                    .uri("/service/Example/operation/Ping")
+                                    .header("content-type", "application/cbor")
+                                    .header("smithy-protocol", "rpc-v2-cbor")
+                                    .body(#{Server}::body::Body::from_bytes(vec![0xA0u8].into()))
+                                    .unwrap();
+                                let response = service.clone().oneshot(request).await.unwrap();
+                                assert_eq!(response.status(), expected, "{method}");
+                            }
+                            """,
+                            "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
+                            "Http" to RuntimeType.http(context.runtimeConfig),
+                            "Tower" to ServerCargoDependency.Tower.toType(),
+                            *RuntimeType.preludeScope,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
     fun `customizationConfig protocols sections reach the schema router`() {
         val model =
             """

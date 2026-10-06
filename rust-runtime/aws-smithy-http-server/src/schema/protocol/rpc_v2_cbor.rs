@@ -22,10 +22,15 @@ use super::response::{
 use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerProtocol};
 
 /// Stateful schema-driven Smithy RPC v2 CBOR protocol implementation.
+///
+/// Non-POST requests return `405` by default. Set the boolean
+/// `customizationConfig.protocols["smithy.protocols#rpcv2Cbor"].methodNotAllowedAsNotFound`
+/// to `true` to return the Java server's unknown-operation `404` instead.
 #[derive(Debug)]
 pub struct RpcV2CborProtocol {
     pub(crate) inner:
         crate::schema::protocol::rpc::RpcProtocol<crate::schema::protocol::rpc_v2_cbor_serde::RpcV2CborSerde>,
+    method_not_allowed_as_not_found: bool,
 }
 
 impl Default for RpcV2CborProtocol {
@@ -38,6 +43,7 @@ impl Default for RpcV2CborProtocol {
                 crate::schema::protocol::rpc::RpcAccept::ModeledOutput,
                 crate::schema::protocol::rpc::RpcStreaming::EventStreamContentType,
             ),
+            method_not_allowed_as_not_found: false,
         }
     }
 }
@@ -57,9 +63,16 @@ fn with_protocol_header(mut response: Response) -> Response {
 
 impl MetadataRoutedProtocol for RpcV2CborProtocol {
     fn from_build_context(
-        _ctx: &crate::schema::ProtocolBuildContext<'_>,
+        ctx: &crate::schema::ProtocolBuildContext<'_>,
     ) -> Result<Self, crate::schema::routing::RouterBuildError> {
-        Ok(Self::default())
+        Ok(Self {
+            method_not_allowed_as_not_found: crate::schema::settings::get::<bool>(
+                ctx.settings,
+                "methodNotAllowedAsNotFound",
+            )?
+            .unwrap_or(false),
+            ..Self::default()
+        })
     }
 
     fn build_router(
@@ -140,15 +153,19 @@ impl ServerProtocol for RpcV2CborProtocol {
         .unwrap_or_else(serialization_failure)
     }
 
-    /// Routing rejections answer the way Coral's rpcv2 handler does. A framing violation —
+    /// Method mismatches return the legacy server's bare `405` by default. The
+    /// `methodNotAllowedAsNotFound` setting selects the Java server's unknown-operation
+    /// `404` instead. Other routing rejections answer the way Coral's rpcv2 handler does.
+    /// A framing violation —
     /// forbidden `x-amz-target`/`x-amzn-target` headers, a malformed rpcv2 path — is `400`
     /// with no `Content-Type`, the bare body `<MalformedHttpRequestException/>` and
     /// `Connection: close` (Coral tears the connection down on these). Every other kind is
-    /// Coral's unknown-operation response, `404` with the CBOR `__type` body — including
-    /// `MethodNotAllowed`, because Coral has no `405`: a wrong method never matches the
-    /// handler and falls to the unknown-operation answer.
+    /// Coral's unknown-operation response, `404` with the CBOR `__type` body.
     fn serialize_routing_error(&self, err: &crate::schema::routing::RoutingError) -> Response {
         match err.kind() {
+            crate::schema::routing::RoutingErrorKind::MethodNotAllowed if !self.method_not_allowed_as_not_found => {
+                crate::routing::method_disallowed()
+            }
             crate::schema::routing::RoutingErrorKind::MalformedRequest => http::Response::builder()
                 .status(http::StatusCode::BAD_REQUEST)
                 .header(http::header::CONNECTION, "close")

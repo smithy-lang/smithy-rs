@@ -15,9 +15,9 @@ use crate::schema::routing::{
 
 /// Routes rpcv2Cbor on the `/service/{service}/operation/{operation}` path.
 ///
-/// Claims a `POST` carrying `Smithy-Protocol: rpc-v2-cbor`. Routing then validates the path
-/// and headers. Unknown operations and operations with streaming blobs return an unknown
-/// operation error; forbidden headers return a malformed request error.
+/// Claims a request carrying `Smithy-Protocol: rpc-v2-cbor`. Routing then validates the
+/// method, path and headers. Unknown operations and operations with streaming blobs return
+/// an unknown operation error; forbidden headers return a malformed request error.
 #[derive(Debug)]
 struct RpcV2CborProtocolRouter {
     router: crate::protocol::rpc_v2_cbor::router::RpcV2CborRouter<OperationTarget>,
@@ -46,11 +46,10 @@ impl MetadataProtocolRouter for RpcV2CborProtocolRouter {
     }
 
     fn claim(&self, request: &Request<()>) -> RouteClaim {
-        let identified = request.method() == http::Method::POST
-            && request
-                .headers()
-                .get(&SMITHY_PROTOCOL_HEADER)
-                .is_some_and(|value| value.as_bytes() == b"rpc-v2-cbor");
+        let identified = request
+            .headers()
+            .get(&SMITHY_PROTOCOL_HEADER)
+            .is_some_and(|value| value.as_bytes() == b"rpc-v2-cbor");
         if identified {
             RouteClaim::Claimed
         } else {

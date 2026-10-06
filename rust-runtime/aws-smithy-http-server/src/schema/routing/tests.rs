@@ -675,7 +675,12 @@ async fn rpc_capitalized_alias_is_a_protocol_setting() {
 
 #[test]
 fn invalid_protocol_settings_fail_the_build() {
-    for settings in [r#"{"capitalizeRoutes":"yes"}"#, r#""not an object""#] {
+    for settings in [
+        r#"{"capitalizeRoutes":"yes"}"#,
+        r#"{"methodNotAllowedAsNotFound":"yes"}"#,
+        r#"{"methodNotAllowedAsNotFound":null}"#,
+        r#""not an object""#,
+    ] {
         let options = RoutingOptions {
             protocol_settings: HashMap::from([(
                 "smithy.protocols#rpcv2Cbor".to_owned(),
@@ -1383,6 +1388,75 @@ mod multi_protocol {
                 .unwrap();
             assert_eq!(response.status(), StatusCode::NOT_FOUND);
             assert_eq!(response.headers()[http::header::CONTENT_TYPE], "application/cbor");
+        }
+    }
+
+    #[tokio::test]
+    async fn rpc_v2_cbor_method_mismatch_defaults_to_405_and_can_return_404() {
+        for service in [&RPC, &BUILTINS] {
+            for (settings, expected) in [
+                (r#"{}"#, StatusCode::METHOD_NOT_ALLOWED),
+                (
+                    r#"{"methodNotAllowedAsNotFound":false}"#,
+                    StatusCode::METHOD_NOT_ALLOWED,
+                ),
+                (r#"{"methodNotAllowedAsNotFound":true}"#, StatusCode::NOT_FOUND),
+            ] {
+                let options = RoutingOptions::default().with_protocol_settings(HashMap::from([(
+                    "smithy.protocols#rpcv2Cbor".to_owned(),
+                    crate::schema::settings::parse_settings_json(settings.as_bytes()),
+                )]));
+                let app = MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings_with_options(
+                    service,
+                    [],
+                    service.operations().iter().map(|operation| echo(operation)),
+                    options,
+                )
+                .build()
+                .unwrap();
+                for method in ["GET", "PUT", "DELETE", "HEAD", "OPTIONS"] {
+                    // The method is checked before the path, as in the legacy router.
+                    for path in [
+                        "/service/Service/operation/first",
+                        "/service/Service/operation/unknown",
+                        "/first",
+                    ] {
+                        let response = app
+                            .clone()
+                            .oneshot(
+                                Request::builder()
+                                    .method(method)
+                                    .uri(path)
+                                    .header(SMITHY_PROTOCOL_HEADER, "rpc-v2-cbor")
+                                    .header("content-type", "application/json")
+                                    .body(untouchable_body())
+                                    .unwrap(),
+                            )
+                            .await
+                            .unwrap();
+                        assert_eq!(response.status(), expected, "{settings} {method} {path}");
+                        if expected == StatusCode::METHOD_NOT_ALLOWED {
+                            assert!(response.headers().is_empty());
+                            assert!(response.into_body().collect().await.unwrap().to_bytes().is_empty());
+                        } else {
+                            assert_eq!(response.headers()[http::header::CONTENT_TYPE], "application/cbor");
+                            assert_eq!(response.headers()[SMITHY_PROTOCOL_HEADER], "rpc-v2-cbor");
+                            let body = response.into_body().collect().await.unwrap().to_bytes();
+                            assert!(body
+                                .windows(b"UnknownOperationException".len())
+                                .any(|window| window == b"UnknownOperationException"));
+                        }
+                    }
+                }
+                // POST continues to dispatch normally with either setting.
+                let (status, _) = send(
+                    &app,
+                    post("/service/Service/operation/first").header(SMITHY_PROTOCOL_HEADER, "rpc-v2-cbor"),
+                    "",
+                )
+                .await;
+                assert_eq!(status, StatusCode::OK);
+            }
         }
     }
 
