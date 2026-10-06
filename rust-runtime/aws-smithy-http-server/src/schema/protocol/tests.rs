@@ -31,6 +31,42 @@ static AWS_JSON_10: LazyLock<AwsJson1_0Protocol> = LazyLock::new(AwsJson1_0Proto
 static AWS_JSON_11: LazyLock<AwsJson1_1Protocol> = LazyLock::new(AwsJson1_1Protocol::default);
 static RPC_V2_CBOR: LazyLock<RpcV2CborProtocol> = LazyLock::new(RpcV2CborProtocol::default);
 
+#[test]
+fn json_protocols_accept_verified_legacy_number_spellings() {
+    static TIMES: Schema<'static> =
+        Schema::new_member(shape_id!("test", "Numbers$times"), ShapeType::Integer, "times", 0);
+    static INPUT: Schema<'static> = Schema::new_struct(shape_id!("test", "Numbers"), ShapeType::Structure, &[&TIMES]);
+    for (protocol, content_type) in [
+        (&*AWS_JSON_10 as &dyn ServerProtocol, "application/x-amz-json-1.0"),
+        (&*AWS_JSON_11 as &dyn ServerProtocol, "application/x-amz-json-1.1"),
+        (&*REST_JSON as &dyn ServerProtocol, "application/json"),
+    ] {
+        for (number, expected) in [
+            ("214748364.", 214748364),
+            ("0147483648", 147483648),
+            ("0214748364\r", 214748364),
+        ] {
+            let body = format!(r#"{{"times":{number}}}"#);
+            let req = request("/", &[("content-type", content_type)], body.as_bytes());
+            let mut d = protocol.deserialize_request(&INPUT, &req).unwrap();
+            let mut value = None;
+            d.read_struct(&INPUT, &mut |member, d| {
+                value = Some(d.read_integer(member)?);
+                Ok(())
+            })
+            .unwrap();
+            assert_eq!(value, Some(expected), "{content_type} {number}");
+        }
+        for body in [b"{\"times\":1e+}".as_slice(), b"{\"times\":1.5}", b"{} garbage"] {
+            let req = request("/", &[("content-type", content_type)], body);
+            let mut d = protocol.deserialize_request(&INPUT, &req).unwrap();
+            assert!(d
+                .read_struct(&INPUT, &mut |member, d| d.read_integer(member).map(|_| ()))
+                .is_err());
+        }
+    }
+}
+
 // The operation's `@http` trait is transcribed onto the input and output schemas by codegen.
 const PET_HTTP: HttpTrait<'static> = HttpTrait::new("POST", "/pets/{name}", Some(201));
 const EMPTY_HTTP: HttpTrait<'static> = HttpTrait::new("POST", "/empty", None);

@@ -45,7 +45,10 @@ impl RestJson1Protocol {
                         .use_json_name(true)
                         .default_timestamp_format(aws_smithy_types::date_time::Format::EpochSeconds)
                         .enforce_strictness(true)
+                        .allow_leading_zeros(true)
+                        .allow_trailing_decimal_point(true)
                         .validate_skipped_values(validate_skipped_values)
+                        .validate_skipped_string_encoding(true)
                         .allow_integral_float_numbers(true)
                         .strict_timestamp_formats(true)
                         .build(),

@@ -1040,7 +1040,8 @@ impl<'a> JsonDeserializer<'a> {
 
     /// Skips a JSON number, validating it against the RFC 8259 grammar
     /// `-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?`. Whatever follows is left for the
-    /// enclosing container's separator check, so `01` fails there as "expected `,`".
+    /// enclosing container's separator check. The configured leading-zero and
+    /// empty-fraction allowances apply to both read and discarded values.
     fn skip_number(&mut self) -> Result<(), SerdeError> {
         let rem = self.remaining();
         let invalid = || SerdeError::invalid_input("invalid number");
@@ -1049,7 +1050,12 @@ impl<'a> JsonDeserializer<'a> {
             i += 1;
         }
         match rem.get(i) {
-            Some(b'0') => i += 1,
+            Some(b'0') if !self.settings.allow_leading_zeros => i += 1,
+            Some(b'0') => {
+                while rem.get(i).is_some_and(|b| b.is_ascii_digit()) {
+                    i += 1;
+                }
+            }
             Some(b'1'..=b'9') => {
                 while rem.get(i).is_some_and(|b| b.is_ascii_digit()) {
                     i += 1;
@@ -1063,7 +1069,7 @@ impl<'a> JsonDeserializer<'a> {
             while rem.get(i).is_some_and(|b| b.is_ascii_digit()) {
                 i += 1;
             }
-            if i == start {
+            if i == start && !self.settings.allow_trailing_decimal_point {
                 return Err(invalid());
             }
         }
@@ -1112,8 +1118,17 @@ impl<'a> JsonDeserializer<'a> {
                         ))
                     }
                 },
+                Some(byte) if self.settings.validate_skipped_string_encoding && *byte < 0x20 => {
+                    return Err(SerdeError::invalid_input(
+                        "raw control character in skipped string",
+                    ));
+                }
                 Some(_) => i += 1,
             }
+        }
+        if self.settings.validate_skipped_string_encoding {
+            std::str::from_utf8(&rem[..i])
+                .map_err(|_| SerdeError::invalid_input("invalid UTF-8 in skipped string"))?;
         }
         self.advance_by(i);
         Ok(())
@@ -1333,7 +1348,7 @@ impl<'a> JsonDeserializer<'a> {
 /// as `9007199254740992` with no error. Accumulating into an `i128` instead
 /// cannot overflow for 19 digits, and `i64::try_from` does the range check.
 ///
-/// `text` has already passed `skip_number`, so it is a well-formed JSON number.
+/// `text` has passed `skip_number`, including any configured grammar allowances.
 /// An exponent that does not fit an `i64` is rejected even when the digits are
 /// all zero.
 fn parse_integral_decimal(text: &str) -> Result<i64, SerdeError> {
@@ -1379,6 +1394,82 @@ fn parse_integral_decimal(text: &str) -> Result<i64, SerdeError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn number_allowances_preserve_other_strict_checks() {
+        for leading in [false, true] {
+            for trailing in [false, true] {
+                let settings = Arc::new(
+                    JsonCodecSettings::builder()
+                        .enforce_strictness(true)
+                        .allow_integral_float_numbers(true)
+                        .allow_leading_zeros(leading)
+                        .allow_trailing_decimal_point(trailing)
+                        .build(),
+                );
+                for (text, value, accepted) in [
+                    ("214748364.", 214748364, trailing),
+                    ("0147483648", 147483648, leading),
+                    ("0214748364\r", 214748364, leading),
+                    ("012.e2", 1200, leading && trailing),
+                    ("12e2", 1200, true),
+                ] {
+                    let result = JsonDeserializer::new(text.as_bytes(), settings.clone())
+                        .read_integer(dummy_schema());
+                    assert_eq!(
+                        result.is_ok(),
+                        accepted,
+                        "{text} leading={leading} trailing={trailing}"
+                    );
+                    if accepted {
+                        assert_eq!(result.unwrap(), value);
+                    }
+                    let body = format!(r#"{{"ignored":{text}}}"#);
+                    assert_eq!(
+                        JsonDeserializer::new(body.as_bytes(), settings.clone())
+                            .read_struct(dummy_schema(), &mut |_, _| Ok(()))
+                            .is_ok(),
+                        accepted
+                    );
+                    assert_eq!(
+                        JsonDeserializer::new(text.as_bytes(), settings.clone())
+                            .read_double(dummy_schema())
+                            .is_ok(),
+                        accepted
+                    );
+                    assert_eq!(
+                        JsonDeserializer::new(text.as_bytes(), settings.clone())
+                            .read_document(dummy_schema())
+                            .is_ok(),
+                        accepted
+                    );
+                }
+                for text in [
+                    "1e",
+                    "1e+",
+                    "1..0",
+                    "1e2e3",
+                    "--1",
+                    "+1",
+                    "2147483648",
+                    "1.5",
+                ] {
+                    assert!(
+                        JsonDeserializer::new(text.as_bytes(), settings.clone())
+                            .read_integer(dummy_schema())
+                            .is_err(),
+                        "{text}"
+                    );
+                }
+                assert!(JsonDeserializer::new(b"\"raw\ncontrol\"", settings.clone())
+                    .read_string(dummy_schema())
+                    .is_err());
+                assert!(JsonDeserializer::new(b"{} garbage", settings)
+                    .read_struct(dummy_schema(), &mut |_, _| Ok(()))
+                    .is_err());
+            }
+        }
+    }
 
     #[test]
     fn strict_strings_and_lenient_defaults() {
@@ -3982,6 +4073,36 @@ mod unknown_member_tests {
 
     fn deser(input: &[u8]) -> JsonDeserializer<'_> {
         JsonDeserializer::new(input, Arc::new(JsonCodecSettings::default()))
+    }
+
+    #[test]
+    fn skipped_string_encoding_and_escape_validation_are_independent() {
+        let settings = Arc::new(
+            JsonCodecSettings::builder()
+                .enforce_strictness(true)
+                .validate_skipped_values(false)
+                .validate_skipped_string_encoding(true)
+                .build(),
+        );
+        for (value, valid) in [
+            (br#""\i""#.as_slice(), true),
+            (br#""\udee9""#, true),
+            (b"\"raw\ncontrol\"", false),
+            (b"\"\xff\"", false),
+        ] {
+            let input = [b"{\"unknown\":".as_slice(), value, b",\"a\":\"ok\"}"].concat();
+            let result = JsonDeserializer::new(&input, settings.clone()).read_struct(
+                &S,
+                &mut |member, d| {
+                    if member.member_index().is_some() {
+                        d.read_string(member).map(|_| ())
+                    } else {
+                        Ok(())
+                    }
+                },
+            );
+            assert_eq!(result.is_ok(), valid, "{value:?}");
+        }
     }
 
     #[test]

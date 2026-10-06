@@ -127,7 +127,10 @@ pub struct JsonCodecSettings {
     strict_timestamp_formats: bool,
     enforce_strictness: bool,
     validate_skipped_values: bool,
+    validate_skipped_string_encoding: bool,
     allow_integral_float_numbers: bool,
+    allow_leading_zeros: bool,
+    allow_trailing_decimal_point: bool,
     /// Identifies the protocol that produced this codec — used by
     /// `DocumentSettings` for diagnostics on coercion failures.
     /// Default: `aws.smithy.json#JsonCodec`. AWS protocols (awsJson1_0,
@@ -219,7 +222,10 @@ impl JsonCodecSettings {
             max_depth: self.max_depth,
             enforce_strictness: self.enforce_strictness,
             validate_skipped_values: self.validate_skipped_values,
+            validate_skipped_string_encoding: self.validate_skipped_string_encoding,
             allow_integral_float_numbers: self.allow_integral_float_numbers,
+            allow_leading_zeros: self.allow_leading_zeros,
+            allow_trailing_decimal_point: self.allow_trailing_decimal_point,
             strict_timestamp_formats: self.strict_timestamp_formats,
             protocol_id: self.protocol_id.clone(),
             use_string_for_arbitrary_precision: self.use_string_for_arbitrary_precision,
@@ -250,7 +256,10 @@ impl Default for JsonCodecSettings {
             max_depth: crate::codec::deserializer::MAX_DESERIALIZE_DEPTH,
             enforce_strictness: false,
             validate_skipped_values: true,
+            validate_skipped_string_encoding: false,
             allow_integral_float_numbers: false,
+            allow_leading_zeros: false,
+            allow_trailing_decimal_point: false,
             strict_timestamp_formats: false,
             protocol_id: DEFAULT_JSON_CODEC_ID,
             use_string_for_arbitrary_precision: false,
@@ -292,7 +301,10 @@ pub struct JsonCodecSettingsBuilder {
     strict_timestamp_formats: bool,
     enforce_strictness: bool,
     validate_skipped_values: bool,
+    validate_skipped_string_encoding: bool,
     allow_integral_float_numbers: bool,
+    allow_leading_zeros: bool,
+    allow_trailing_decimal_point: bool,
     protocol_id: ShapeId<'static>,
     use_string_for_arbitrary_precision: bool,
     default_namespace: Option<String>,
@@ -306,7 +318,10 @@ impl Default for JsonCodecSettingsBuilder {
             max_depth: crate::codec::deserializer::MAX_DESERIALIZE_DEPTH,
             enforce_strictness: false,
             validate_skipped_values: true,
+            validate_skipped_string_encoding: false,
             allow_integral_float_numbers: false,
+            allow_leading_zeros: false,
+            allow_trailing_decimal_point: false,
             strict_timestamp_formats: false,
             protocol_id: DEFAULT_JSON_CODEC_ID,
             use_string_for_arbitrary_precision: false,
@@ -334,10 +349,34 @@ impl JsonCodecSettingsBuilder {
         self
     }
 
-    /// Accepts exactly integral JSON decimal/exponent numbers for integer members.
+    /// Checks discarded strings for UTF-8 and unescaped control characters without
+    /// decoding or validating their escape sequences. Disabled by default.
+    pub fn validate_skipped_string_encoding(mut self, value: bool) -> Self {
+        self.validate_skipped_string_encoding = value;
+        self
+    }
+
+    /// Accepts exactly integral decimal/exponent numbers for integer members.
     /// Disabled by default; ordinary integer spellings retain exact parsing.
     pub fn allow_integral_float_numbers(mut self, value: bool) -> Self {
         self.allow_integral_float_numbers = value;
+        self
+    }
+
+    /// Permits leading zeros in JSON numbers even with `enforce_strictness(true)`.
+    /// Disabled by default. This matches the legacy JSON parser without relaxing
+    /// other grammar checks. Applies to read and skipped numbers alike.
+    pub fn allow_leading_zeros(mut self, value: bool) -> Self {
+        self.allow_leading_zeros = value;
+        self
+    }
+
+    /// Permits an empty fraction after a decimal point, such as `12.` or `12.e2`,
+    /// even with `enforce_strictness(true)`. Disabled by default. Integer members
+    /// additionally require `allow_integral_float_numbers(true)` and a whole value.
+    /// Applies to read and skipped numbers alike.
+    pub fn allow_trailing_decimal_point(mut self, value: bool) -> Self {
+        self.allow_trailing_decimal_point = value;
         self
     }
 
@@ -418,7 +457,10 @@ impl JsonCodecSettingsBuilder {
             max_depth: self.max_depth,
             enforce_strictness: self.enforce_strictness,
             validate_skipped_values: self.validate_skipped_values,
+            validate_skipped_string_encoding: self.validate_skipped_string_encoding,
             allow_integral_float_numbers: self.allow_integral_float_numbers,
+            allow_leading_zeros: self.allow_leading_zeros,
+            allow_trailing_decimal_point: self.allow_trailing_decimal_point,
             strict_timestamp_formats: self.strict_timestamp_formats,
             protocol_id: self.protocol_id,
             use_string_for_arbitrary_precision: self.use_string_for_arbitrary_precision,
@@ -734,6 +776,8 @@ mod tests {
             .enforce_strictness(true)
             .validate_skipped_values(false)
             .allow_integral_float_numbers(true)
+            .allow_leading_zeros(true)
+            .allow_trailing_decimal_point(true)
             .strict_timestamp_formats(true)
             .build();
 
@@ -757,6 +801,8 @@ mod tests {
         assert!(round_tripped.enforce_strictness);
         assert!(!round_tripped.validate_skipped_values);
         assert!(round_tripped.allow_integral_float_numbers);
+        assert!(round_tripped.allow_leading_zeros);
+        assert!(round_tripped.allow_trailing_decimal_point);
         assert!(round_tripped.strict_timestamp_formats());
     }
 }
