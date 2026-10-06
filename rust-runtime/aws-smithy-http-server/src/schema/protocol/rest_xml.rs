@@ -106,7 +106,7 @@ impl MetadataRoutedProtocol for RestXmlProtocol {
     }
 
     fn event_stream_framing(&self) -> Option<EventStreamFraming<'_>> {
-        Some(EventStreamFraming::new(self.inner.codec(), CONTENT_TYPE))
+        Some(EventStreamFraming::new(self.inner.codec(), CONTENT_TYPE).exception_http_bindings(true))
     }
 }
 

@@ -206,6 +206,12 @@ fn build_frame(
             .as_ref()
             .map(|framed| framed as &dyn SerializableStruct)
             .unwrap_or(value);
+        let projected = ExceptionBody(value);
+        let value = if capability.exception_http_bindings && matches!(kind, FrameKind::Exception) {
+            &projected as &dyn SerializableStruct
+        } else {
+            value
+        };
         let mut ser = capability.payload_codec.create_serializer();
         ser.write_struct(schema, value)?;
         let payload = Bytes::from(ser.finish_boxed());
@@ -236,42 +242,27 @@ fn build_frame(
             ));
             Ok(Message::new_from_parts(headers, payload.unwrap_or_default()))
         }
-        None if schema.members().iter().any(|m| !m.event_header()) => {
-            // Headers are carried separately; the remaining members form one protocol
-            // document. Keep the original schema so codecs retain structure-level traits.
-            let mut ser = capability.payload_codec.create_serializer();
-            ser.write_struct(schema, &ImplicitEventPayload(value))?;
-            headers.push(Header::new(
-                ":content-type",
-                HeaderValue::String(capability.media_type.to_string().into()),
-            ));
-            Ok(Message::new_from_parts(headers, Bytes::from(ser.finish_boxed())))
-        }
-        // Header-only events: empty payload and no `:content-type`.
+        // Legacy marshallers emit an empty payload whenever headers are modeled and
+        // there is no explicit payload, even if ordinary members are also present.
         None => Ok(Message::new_from_parts(headers, Bytes::new())),
     }
 }
 
-/// Presents the ordinary members as a payload document while retaining the event schema's
-/// codec traits. Filtering applies only to the event's top-level members, not nested values.
-struct ImplicitEventPayload<'a>(&'a dyn SerializableStruct);
-
-impl SerializableStruct for ImplicitEventPayload<'_> {
+/// REST exception frames use the same document members as HTTP modeled errors.
+struct ExceptionBody<'a>(&'a dyn SerializableStruct);
+impl SerializableStruct for ExceptionBody<'_> {
     fn schema(&self) -> &Schema<'_> {
         self.0.schema()
     }
-
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
-        self.0.serialize_members(&mut NonHeaderSerializer(serializer))
+        self.0.serialize_members(&mut ExceptionBodySerializer(serializer))
     }
 }
-
-struct NonHeaderSerializer<'a>(&'a mut dyn ShapeSerializer);
-
-macro_rules! forward_non_header_members {
+struct ExceptionBodySerializer<'a>(&'a mut dyn ShapeSerializer);
+macro_rules! exception_body_members {
     ($($method:ident($($argument:ident: $ty:ty),*);)*) => {
         $(fn $method(&mut self, schema: &Schema<'_>, $($argument: $ty),*) -> Result<(), SerdeError> {
-            if schema.event_header() {
+            if schema.http_header().is_some() || schema.http_prefix_headers().is_some() || schema.http_response_code().is_some() {
                 Ok(())
             } else {
                 self.0.$method(schema, $($argument),*)
@@ -279,12 +270,11 @@ macro_rules! forward_non_header_members {
         })*
     };
 }
-
-impl ShapeSerializer for NonHeaderSerializer<'_> {
-    forward_non_header_members! {
+impl ShapeSerializer for ExceptionBodySerializer<'_> {
+    exception_body_members! {
         write_struct(value: &dyn SerializableStruct);
-        write_list(write_elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>);
-        write_map(write_entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>);
+        write_list(elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>);
+        write_map(entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>);
         write_boolean(value: bool);
         write_byte(value: i8);
         write_short(value: i16);
@@ -381,7 +371,7 @@ impl ShapeSerializer for UnionVariantSerializer<'_> {
 /// Routes the members of one event struct into the frame being built.
 ///
 /// `@eventHeader` members become message headers in write order; the `@eventPayload` member
-/// becomes the payload. Ordinary members are handled separately by [`ImplicitEventPayload`].
+/// becomes the payload. Ordinary members are omitted when event headers are modeled.
 struct EventMemberSerializer<'a> {
     capability: EventStreamFraming<'a>,
     headers: &'a mut Vec<Header>,
@@ -1657,7 +1647,7 @@ mod tests {
         let message = marshall(&protocol, TestEvents::AllHeaders(event));
 
         let names: Vec<_> = message.headers().iter().map(|h| h.name().as_str()).collect();
-        // `skipped` is absent; `extra` goes into the document, not the headers.
+        // Without an explicit payload, ordinary members are omitted by legacy marshallers.
         assert_eq!(
             names,
             [
@@ -1670,12 +1660,11 @@ mod tests {
                 "long",
                 "bin",
                 "name",
-                "at",
-                ":content-type"
+                "at"
             ]
         );
         assert_eq!(string_header(&message, ":event-type"), Some("allHeaders"));
-        assert_eq!(&message.payload()[..], br#"{"extra":"payload"}"#);
+        assert!(message.payload().is_empty());
         assert!(matches!(header(&message, "flag"), Some(HeaderValue::Bool(true))));
         assert!(matches!(header(&message, "small"), Some(HeaderValue::Byte(-3))));
         assert!(matches!(header(&message, "short"), Some(HeaderValue::Int16(-300))));
@@ -1698,14 +1687,14 @@ mod tests {
                 assert_eq!(parsed.name.as_deref(), Some("ann"));
                 assert_eq!(parsed.at, Some(DateTime::from_secs(1_700_000_000)));
                 assert_eq!(parsed.skipped, None);
-                assert_eq!(parsed.extra.as_deref(), Some("payload"));
+                assert_eq!(parsed.extra, None);
             }
             other => panic!("unexpected result: {other:?}"),
         }
     }
 
     #[test]
-    fn implicit_payload_uses_selected_codec_and_preserves_wire_names() {
+    fn headers_without_explicit_payload_omit_ordinary_members() {
         static HEADER: Schema<'static> = Schema::new_member(
             ShapeId::from_parts("test#Implicit$header", "test", "Implicit"),
             ShapeType::String,
@@ -1739,7 +1728,7 @@ mod tests {
                 ser.write_string(&DATA, "hi")
             }
         }
-        for (protocol, media_type, expected) in [
+        for (protocol, _media_type, expected) in [
             (json_protocol(), "application/json", br#"{"wireData":"hi"}"#.as_slice()),
             (
                 cbor_protocol(),
@@ -1755,8 +1744,10 @@ mod tests {
             let capability = protocol.event_stream_framing().unwrap();
             let message = build_frame(capability, "implicit", &SCHEMA, &Implicit, FrameKind::Event).unwrap();
             assert_eq!(string_header(&message, "header"), Some("ann"));
-            assert_eq!(string_header(&message, ":content-type"), Some(media_type));
-            assert_eq!(message.payload().as_ref(), expected, "{media_type}");
+            assert_eq!(string_header(&message, ":content-type"), None);
+            assert!(message.payload().is_empty());
+            // Received implicit payloads still parse as the legacy unmarshaller does.
+            let message = Message::new_from_parts(message.headers().to_vec(), Bytes::copy_from_slice(expected));
             let mut values = [None, None];
             EventFrame::new(&message, capability)
                 .deserializer()
@@ -1803,7 +1794,7 @@ mod tests {
     }
 
     #[test]
-    fn absent_implicit_members_still_form_a_payload_document() {
+    fn absent_implicit_members_do_not_form_a_payload_document() {
         let protocol = json_protocol();
         let message = marshall(
             &protocol,
@@ -1812,8 +1803,8 @@ mod tests {
                 ..Default::default()
             }),
         );
-        assert_eq!(message.payload().as_ref(), b"{}");
-        assert_eq!(string_header(&message, ":content-type"), Some("application/json"));
+        assert!(message.payload().is_empty());
+        assert_eq!(string_header(&message, ":content-type"), None);
         match unmarshall(&protocol, &message).unwrap() {
             UnmarshalledMessage::Event(TestEvents::AllHeaders(parsed)) => {
                 assert_eq!(parsed.name.as_deref(), Some("ann"));

@@ -224,6 +224,8 @@ pub struct EventStreamFraming<'a> {
     pub initial_messages_in_frames: bool,
     /// Optional body discriminator for modeled exception frames.
     pub exception_discriminator: Option<discriminator::BodyDiscriminator>,
+    /// Whether HTTP-bound exception members are excluded from the frame payload.
+    pub exception_http_bindings: bool,
 }
 
 impl<'a> EventStreamFraming<'a> {
@@ -236,12 +238,19 @@ impl<'a> EventStreamFraming<'a> {
             media_type,
             initial_messages_in_frames: false,
             exception_discriminator: None,
+            exception_http_bindings: false,
         }
     }
 
     /// Sets the body discriminator used for modeled exception payloads.
     pub fn exception_discriminator(mut self, discriminator: discriminator::BodyDiscriminator) -> Self {
         self.exception_discriminator = Some(discriminator);
+        self
+    }
+
+    /// Applies REST error-body bindings to structured exception payloads.
+    pub fn exception_http_bindings(mut self, enabled: bool) -> Self {
+        self.exception_http_bindings = enabled;
         self
     }
 
