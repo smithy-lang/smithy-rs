@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+import java.io.ByteArrayOutputStream
 
 plugins {
     id("smithy-rs.kotlin-conventions")
@@ -30,4 +30,33 @@ dependencies {
 
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.kotest.assertions.core.jvm)
+}
+
+// Server Cargo metadata records the artifact version separately from its source commit.
+val generateServerCodegenVersion by tasks.registering {
+    val resourcesDir = layout.buildDirectory.dir("generated/server-version")
+    val versionFile = resourcesDir.get().file("software/amazon/smithy/rust/codegen/server/server-codegen-version.json")
+    val codegenVersion = project.version.toString()
+    val gitHash =
+        System.getenv("SMITHY_RS_VERSION_COMMIT_HASH_OVERRIDE") ?: try {
+            val output = ByteArrayOutputStream()
+            exec {
+                commandLine = listOf("git", "rev-parse", "HEAD")
+                standardOutput = output
+            }
+            output.toString().trim()
+        } catch (ex: Exception) {
+            "unknown"
+        }
+    inputs.property("codegenVersion", codegenVersion)
+    inputs.property("gitHash", gitHash)
+    outputs.dir(resourcesDir)
+    doLast {
+        versionFile.asFile.parentFile.mkdirs()
+        versionFile.asFile.writeText(groovy.json.JsonOutput.toJson(mapOf("codegenVersion" to codegenVersion, "gitHash" to gitHash)))
+    }
+}
+
+sourceSets.main {
+    resources.srcDir(generateServerCodegenVersion)
 }
