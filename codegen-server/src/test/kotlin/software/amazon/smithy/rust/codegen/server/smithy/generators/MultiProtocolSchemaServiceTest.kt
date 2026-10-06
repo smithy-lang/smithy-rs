@@ -7,6 +7,8 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import io.kotest.assertions.throwables.shouldThrowAny
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -70,7 +72,7 @@ class MultiProtocolSchemaServiceTest {
             {
                 id: "MultiProtocolGreetAwsJson10Response",
                 protocol: awsJson1_0,
-                code: 200,
+                code: 201,
                 body: "{\"message\":\"hi\"}",
                 bodyMediaType: "application/json",
                 params: { message: "hi" },
@@ -101,11 +103,28 @@ class MultiProtocolSchemaServiceTest {
         blob StreamingBlob
         """.asSmithyModel(smithyVersion = "2")
 
-    @Test
-    fun `one service serves every declared protocol`() {
+    @ParameterizedTest
+    @ValueSource(ints = [0, 1, 2, 3])
+    fun `one service serves every declared protocol`(mode: Int) {
+        // Absent, explicit false, explicit true, and independently configured protocols.
+        val settings =
+            if (mode == 0) {
+                schemaSerde
+            } else {
+                IntegrationTestParams(
+                    additionalSettings =
+                        ObjectNode.parse(
+                            """{"codegen":{"schemaSerde":true},"customizationConfig":{"protocols":{
+                    "aws.protocols#awsJson1_0":{"validateSkippedValues":${mode >= 2}},
+                    "aws.protocols#awsJson1_1":{"validateSkippedValues":${mode == 2}},
+                    "aws.protocols#restJson1":{"validateSkippedValues":${mode == 2}}
+                }}}""",
+                        ).expectObjectNode(),
+                )
+            }
         serverIntegrationTest(
             model,
-            schemaSerde,
+            settings,
             testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
         ) { context, crate ->
             val scope =
@@ -156,7 +175,7 @@ class MultiProtocolSchemaServiceTest {
                 tokioTest("each_protocol_claims_its_own_requests") {
                     rustTemplate(
                         """
-                        // REST protocols honor `@http(code: 201)`; RPC protocols answer 200 whatever the model says.
+                        // REST and AWS JSON honor the legacy modeled HTTP success status.
                         let (status, headers, body) =
                             send(post("/greet").header("content-type", "application/json"), r##"{"name":"json"}"##).await;
                         assert_eq!((status, headers["content-type"].to_str().unwrap()), (201, "application/json"));
@@ -173,7 +192,7 @@ class MultiProtocolSchemaServiceTest {
                         for (content_type, name) in [("application/x-amz-json-1.0", "one-zero"), ("application/x-amz-json-1.1", "one-one")] {
                             let request = post("/").header("content-type", content_type).header("x-amz-target", "Example.Greet");
                             let (status, headers, text) = send(request, &format!(r##"{{"name":"{name}"}}"##)).await;
-                            assert_eq!((status, headers["content-type"].to_str().unwrap()), (200, content_type));
+                            assert_eq!((status, headers["content-type"].to_str().unwrap()), (201, content_type));
                             assert!(text.contains(&format!("hello {name}")), "{text}");
                         }
 
@@ -185,6 +204,59 @@ class MultiProtocolSchemaServiceTest {
                         )
                         .await;
                         assert_eq!((status, headers["content-type"].to_str().unwrap()), (200, "application/cbor"));
+                        """,
+                        *scope,
+                    )
+                }
+                tokioTest("json_unknown_fields_skip_server_strictness_but_known_fields_do_not") {
+                    rustTemplate(
+                        """
+                        for (content_type, uri, expected_status) in [
+                            ("application/x-amz-json-1.0", "/", 201),
+                            ("application/x-amz-json-1.1", "/", 201),
+                            ("application/json", "/greet", 201),
+                        ] {
+                            // Reproduce the fuzzed unknown-field surrogate, including
+                            // a known member after the ignored value to check cursor advancement.
+                            for payload in [
+                                r##"{"name":"ccwpl","iscp":6084662234,"ucis":["","\udee9"]}"##,
+                                r##"{"unknown":["\udee9"],"name":"ccwpl"}"##,
+                                r##"{"unknown":{"\udee9":"\udee9"},"name":"ccwpl"}"##,
+                            ] {
+                                let request = post(uri)
+                                    .header("content-type", content_type)
+                                    .header("x-amz-target", "Example.Greet");
+                                let (status, headers, body) = send(request, payload).await;
+                                assert_eq!(status, expected_status, "{content_type}: {payload}: {body}");
+                                assert_eq!(headers["content-type"].to_str().unwrap(), content_type);
+                                assert_eq!(body, r##"{"message":"hello ccwpl"}"##);
+                            }
+                            let accept_invalid_escapes = !(${mode == 2} || (${mode == 3} && content_type == "application/x-amz-json-1.0"));
+                            for payload in [
+                                r##"{"unknown":["\i"],"name":"ccwpl"}"##,
+                                r##"{"unknown":{"\i":"\u12"},"name":"ccwpl"}"##,
+                            ] {
+                                let request = post(uri).header("content-type", content_type)
+                                    .header("x-amz-target", "Example.Greet");
+                                let (status, _, body) = send(request, payload).await;
+                                assert_eq!(status, if accept_invalid_escapes { expected_status } else { 400 }, "{content_type}: {body}");
+                                if accept_invalid_escapes { assert_eq!(body, r##"{"message":"hello ccwpl"}"##); }
+                            }
+                            // Reading the same strings must still enforce server strictness.
+                            for payload in [
+                                "{\"unknown\":\"raw\ncontrol\",\"name\":\"ccwpl\"}",
+                                r##"{"unknown":[],"name":"\udee9"}"##,
+                                r##"{"unknown":[],"name":"\i"}"##,
+                                "{\"unknown\":[],\"name\":\"raw\ncontrol\"}",
+                            ] {
+                                let request = post(uri)
+                                    .header("content-type", content_type)
+                                    .header("x-amz-target", "Example.Greet");
+                                let (status, _, body) = send(request, payload).await;
+                                assert_eq!(status, 400, "{content_type}: {payload}: {body}");
+                                assert!(!body.contains("hello ccwpl"));
+                            }
+                        }
                         """,
                         *scope,
                     )

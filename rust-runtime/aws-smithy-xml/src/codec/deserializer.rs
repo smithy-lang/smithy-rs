@@ -350,7 +350,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
             // differently from the handler. Every byte of the body passes
             // through this `doc`'s tokenizer (child elements are drained
             // through it), so checking here covers nested content too.
-            let top_level_strict = self.settings.enforce_strictness && self.depth == 1;
+            let top_level_strict = self.settings.validate_document && self.depth == 1;
             let mut doc = self.document()?;
             if top_level_strict {
                 doc.check_well_formedness();
@@ -359,7 +359,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                 .root_element()
                 .map_err(|e| SerdeError::custom(e.to_string()))?;
 
-            if top_level_strict {
+            if self.settings.validate_root_name && self.depth == 1 {
                 let expected = schema
                     .xml_name()
                     .map(|t| t.value())

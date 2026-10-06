@@ -36,13 +36,18 @@ impl RestXmlProtocol {
             inner: crate::schema::protocol::rest::RestProtocol::new(
                 aws_smithy_xml::codec::XmlCodec::new(
                     aws_smithy_xml::codec::XmlCodecSettings::builder()
+                        .error_root_name("Error")
                         .validate_root_name(true)
                         .validate_document(validate_document)
                         .strict_collection_element_names(strict_collection_element_names)
                         .build(),
                 ),
                 RestPolicy {
-                    request_content_type_aliases: if accept_text_xml { REQUEST_CONTENT_TYPE_ALIASES } else { &[] },
+                    request_content_type_aliases: if accept_text_xml {
+                        REQUEST_CONTENT_TYPE_ALIASES
+                    } else {
+                        &[]
+                    },
                     ..POLICY
                 },
             ),
@@ -61,7 +66,6 @@ const CONTENT_TYPE: &str = "application/xml";
 
 /// Media types a request may use for an XML body besides [`CONTENT_TYPE`].
 const REQUEST_CONTENT_TYPE_ALIASES: &[&str] = &["text/xml"];
-
 
 /// restXml labels a response only when the output schema binds something to the body, gives an
 /// untyped blob payload `application/octet-stream`, and sends an empty body for an output with
@@ -165,6 +169,16 @@ impl ServerProtocol for RestXmlProtocol {
         )
         .map(|response| stamp_error_extension(response, schema.shape_id().shape_name()))
         .unwrap_or_else(serialization_failure)
+    }
+
+    fn serialize_routing_error(&self, err: &crate::schema::routing::RoutingError) -> Response {
+        use crate::protocol::rest::router::Error;
+        use crate::schema::routing::RoutingErrorKind;
+        let error = match err.kind() {
+            RoutingErrorKind::MethodNotAllowed => Error::MethodNotAllowed,
+            _ => Error::NotFound,
+        };
+        IntoResponse::<RestXml>::into_response(error)
     }
 
     /// restXml keeps 415 for `Content-Type` failures, but its `From<RequestRejection>` has no

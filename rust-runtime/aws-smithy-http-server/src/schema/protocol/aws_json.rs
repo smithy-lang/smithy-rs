@@ -100,6 +100,33 @@ fn schema_codec(validate_skipped_values: bool) -> aws_smithy_json::codec::JsonCo
     )
 }
 
+// Legacy AWS JSON writes all members to the body and also applies modeled HTTP
+// response headers. These headers override the protocol defaults.
+fn apply_response_bindings(
+    mut response: Response,
+    codec: &JsonCodec,
+    schema: &Schema<'_>,
+    value: &dyn SerializableStruct,
+    success: bool,
+) -> Result<Response, SerdeError> {
+    let parts = crate::schema::response_bindings::serialize_response_parts(
+        codec,
+        schema,
+        value,
+        ResponseBindings::Rest,
+        crate::schema::response_bindings::ResponseValueKind::StreamingOutput,
+    )?;
+    for (name, value) in parts.headers {
+        response.headers_mut().insert(name, value);
+    }
+    if success {
+        *response.status_mut() =
+            http::StatusCode::from_u16(super::response::resolve_status(parts.status, schema.http()))
+                .map_err(|error| SerdeError::custom(error.to_string()))?;
+    }
+    Ok(response)
+}
+
 fn serialize_error<P>(
     codec: &JsonCodec,
     error: &dyn HttpModeledError,
@@ -119,6 +146,7 @@ where
         ResponseBindings::BodyOnly,
         content_type,
     )
+    .and_then(|response| apply_response_bindings(response, codec, schema, error, false))
     .map(|response| stamp_error_extension(response, schema.shape_id().shape_name()))
     .unwrap_or_else(serialization_failure::<P>)
 }
@@ -194,6 +222,7 @@ macro_rules! aws_json_protocol {
             fn serialize_response(&self, output: &Schema<'_>, value: &dyn SerializableStruct) -> Response {
                 self.inner
                     .serialize_response(output, value)
+                    .and_then(|response| apply_response_bindings(response, self.inner.codec(), output, value, true))
                     .unwrap_or_else(serialization_failure::<$marker>)
             }
 
@@ -205,6 +234,7 @@ macro_rules! aws_json_protocol {
             ) -> Response {
                 self.inner
                     .serialize_streaming_response(output, value, body)
+                    .and_then(|response| apply_response_bindings(response, self.inner.codec(), output, value, true))
                     .unwrap_or_else(serialization_failure::<$marker>)
             }
 
@@ -215,6 +245,16 @@ macro_rules! aws_json_protocol {
                     $content_type,
                     BodyDiscriminator { value: $type_value },
                 )
+            }
+
+            fn serialize_routing_error(&self, err: &crate::schema::routing::RoutingError) -> Response {
+                use crate::protocol::aws_json::router::Error;
+                use crate::schema::routing::RoutingErrorKind;
+                let error = match err.kind() {
+                    RoutingErrorKind::MethodNotAllowed => Error::MethodNotAllowed,
+                    _ => Error::NotFound,
+                };
+                IntoResponse::<$marker>::into_response(error)
             }
 
             /// awsJson's `From<RequestRejection>` collapses every transport failure, `Accept`

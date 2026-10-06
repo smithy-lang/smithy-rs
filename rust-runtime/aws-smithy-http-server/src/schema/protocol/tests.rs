@@ -515,7 +515,7 @@ async fn streaming_responses_carry_the_head_only() {
         response.headers().get("content-type").unwrap(),
         "application/x-amz-json-1.0"
     );
-    assert!(response.headers().get("x-tag").is_none());
+    assert_eq!(response.headers().get("x-tag").unwrap(), "tagged");
     let response = RPC_V2_CBOR.serialize_streaming_response(&STREAM_OUT, &StreamOutput, body());
     assert_eq!(
         response.headers().get("content-type").unwrap(),
@@ -1127,9 +1127,18 @@ async fn middleware_structs_are_framed_like_operation_outputs() {
             assert_eq!(status, http::StatusCode::IM_A_TEAPOT, "{id}");
             assert_eq!(headers.get("x-tag").unwrap(), "brewing", "{id}");
         } else {
-            // RPC protocols ignore HTTP bindings, `@http` status codes included.
-            assert_eq!(status, http::StatusCode::OK, "{id}");
-            assert!(!headers.contains_key("x-tag"), "{id}");
+            // AWS JSON honors modeled success statuses; CBOR ignores HTTP bindings.
+            let expected = if id.starts_with("aws.protocols#awsJson") {
+                http::StatusCode::IM_A_TEAPOT
+            } else {
+                http::StatusCode::OK
+            };
+            assert_eq!(status, expected, "{id}");
+            assert_eq!(
+                headers.contains_key("x-tag"),
+                id.starts_with("aws.protocols#awsJson"),
+                "{id}"
+            );
         }
 
         // The same struct serialized as the output of an operation with the same schema.
@@ -1199,10 +1208,9 @@ fn rest_xml_with_settings(settings: Option<&str>) -> Result<RestXmlProtocol, cra
     )
 }
 
-/// restXml reads every child of a wrapped list or map whatever it is named, as Coral does;
-/// `legacyMode` reads only the children named as items and entries, as legacy smithy-rs servers do.
+/// Collection-name validation is independent of document validation and media-type aliases.
 #[test]
-fn rest_xml_legacy_mode_is_a_protocol_setting() {
+fn rest_xml_collection_names_are_a_codec_setting() {
     let req = request(
         "/collections",
         &[("content-type", "application/xml")],
@@ -1224,22 +1232,22 @@ fn rest_xml_legacy_mode_is_a_protocol_setting() {
         attrs: vec![pair("a", "1")],
     };
     for (settings, expected) in [
-        (None, &every_child),
-        (Some("{}"), &every_child),
-        (Some(r#"{"legacyMode":false}"#), &every_child),
-        (Some(r#"{"legacyMode":true}"#), &named_children),
+        (None, &named_children),
+        (Some("{}"), &named_children),
+        (Some(r#"{"strictCollectionElementNames":false}"#), &every_child),
+        (Some(r#"{"strictCollectionElementNames":true}"#), &named_children),
     ] {
         let protocol = rest_xml_with_settings(settings).unwrap();
         let input: Collections = deserialize(&protocol, &COLLECTIONS_SCHEMA, &EMPTY_OUT_SCHEMA, &req).unwrap();
         assert_eq!(&input, expected, "{settings:?}");
     }
     let default: Collections = deserialize(&*REST_XML, &COLLECTIONS_SCHEMA, &EMPTY_OUT_SCHEMA, &req).unwrap();
-    assert_eq!(default, every_child);
+    assert_eq!(default, named_children);
 }
 
 #[test]
-fn rest_xml_legacy_mode_must_be_a_boolean() {
-    for settings in [r#"{"legacyMode":"yes"}"#, r#""not an object""#] {
+fn rest_xml_collection_name_setting_must_be_a_boolean() {
+    for settings in [r#"{"strictCollectionElementNames":"yes"}"#, r#""not an object""#] {
         assert!(
             matches!(
                 rest_xml_with_settings(Some(settings)),
@@ -1250,46 +1258,38 @@ fn rest_xml_legacy_mode_must_be_a_boolean() {
     }
 }
 
-/// restXml reads a request body labeled `text/xml` as well as `application/xml`, as Coral does;
-/// `legacyMode` accepts only `application/xml`, as legacy smithy-rs servers do.
+/// Media-type aliases do not change XML parsing strictness.
 #[test]
-fn rest_xml_accepts_text_xml_request_bodies_unless_in_legacy_mode() {
+fn rest_xml_text_xml_is_a_separate_protocol_setting() {
     let body = b"<Collections><tags><member>a</member></tags></Collections>";
     let read = |protocol: &dyn ServerProtocol, content_type: &str| {
         let req = request("/collections", &[("content-type", content_type)], body);
         deserialize::<Collections>(protocol, &COLLECTIONS_SCHEMA, &EMPTY_OUT_SCHEMA, &req)
     };
-
-    for content_type in ["application/xml", "text/xml", "text/xml; charset=utf-8", "TEXT/XML"] {
-        let input = read(&*REST_XML, content_type).unwrap_or_else(|err| panic!("{content_type}: {err}"));
-        assert_eq!(input.tags, ["a"], "{content_type}");
+    assert_eq!(read(&*REST_XML, "application/xml").unwrap().tags, ["a"]);
+    let aliases = rest_xml_with_settings(Some(r#"{"acceptTextXml":true}"#)).unwrap();
+    for content_type in ["text/xml", "text/xml; charset=utf-8", "TEXT/XML"] {
+        assert!(matches!(
+            read(&*REST_XML, content_type),
+            Err(DeserializeError::UnsupportedMediaType(_))
+        ));
+        assert_eq!(read(&aliases, content_type).unwrap().tags, ["a"]);
     }
     for content_type in ["text/plain", "application/json", "application/atom+xml"] {
-        let err = read(&*REST_XML, content_type).unwrap_err();
-        assert!(
-            matches!(err, DeserializeError::UnsupportedMediaType(_)),
-            "{content_type}: {err}"
-        );
+        assert!(matches!(
+            read(&aliases, content_type),
+            Err(DeserializeError::UnsupportedMediaType(_))
+        ));
     }
-
-    let legacy = rest_xml_with_settings(Some(r#"{"legacyMode":true}"#)).unwrap();
-    assert_eq!(read(&legacy, "application/xml").unwrap().tags, ["a"]);
-    let err = read(&legacy, "text/xml").unwrap_err();
-    assert!(matches!(err, DeserializeError::UnsupportedMediaType(_)), "{err}");
-
-    // The alias belongs to restXml alone.
-    let req = request("/pets/rex", &[("content-type", "text/xml")], br#"{"note":"hi"}"#);
-    let err = deserialize::<TestInput>(&*REST_JSON, &IN_SCHEMA, &OUT_SCHEMA, &req).unwrap_err();
-    assert!(matches!(err, DeserializeError::UnsupportedMediaType(_)), "{err}");
 }
 
 #[test]
-fn json_legacy_mode_must_be_a_boolean() {
+fn json_skipped_value_setting_must_be_a_boolean() {
     use crate::schema::protocol::MetadataRoutedProtocol;
     for json in [
-        r#"{"legacyMode":"yes"}"#,
-        r#"{"legacyMode":1}"#,
-        r#"{"legacyMode":null}"#,
+        r#"{"validateSkippedValues":"yes"}"#,
+        r#"{"validateSkippedValues":1}"#,
+        r#"{"validateSkippedValues":null}"#,
         r#""not an object""#,
     ] {
         let settings = crate::schema::settings::parse_settings_json(json.as_bytes());
@@ -1307,4 +1307,27 @@ fn json_legacy_mode_must_be_a_boolean() {
             Err(crate::schema::routing::RouterBuildError::Configuration(_))
         ));
     }
+}
+
+#[test]
+fn rest_xml_document_validation_is_independent_of_root_and_collection_names() {
+    let strict = rest_xml_with_settings(Some(r#"{"validateDocument":true}"#)).unwrap();
+    for body in [
+        "<Collections><tags><member>a</member></tags></Collections>junk",
+        "<Collections><tags><member>a</member></tags></Collections><Collections/>",
+        "<Collections><tags><member>a</member></tags></Collections></Collections>",
+        "<Collections><tags><member>a</member></tags>",
+        "<Collections><tags><member>a</wrong></tags></Collections>",
+        "<Collections><tags><member>a</mem",
+    ] {
+        let req = request("/collections", &[("content-type", "application/xml")], body.as_bytes());
+        let parsed = deserialize::<Collections>(&*REST_XML, &COLLECTIONS_SCHEMA, &EMPTY_OUT_SCHEMA, &req).unwrap();
+        assert_eq!(parsed.tags, ["a"], "{body}");
+        assert!(
+            deserialize::<Collections>(&strict, &COLLECTIONS_SCHEMA, &EMPTY_OUT_SCHEMA, &req).is_err(),
+            "{body}"
+        );
+    }
+    let wrong_root = request("/collections", &[("content-type", "application/xml")], b"<Wrong/>");
+    assert!(deserialize::<Collections>(&*REST_XML, &COLLECTIONS_SCHEMA, &EMPTY_OUT_SCHEMA, &wrong_root).is_err());
 }

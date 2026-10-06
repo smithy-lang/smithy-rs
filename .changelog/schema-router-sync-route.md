@@ -7,17 +7,19 @@ new_feature: true
 bug_fix: false
 ---
 
-The schema-driven router (`SchemaRoutingService`) now shares one handler set across all clones of
+The schema-driven router (`MultiProtocolRoutingService`) now shares one handler set across all clones of
 the service instead of copying every route per request. To make that possible, schema-path routes
 are stored as the new `aws_smithy_http_server::routing::SyncRoute`, which, unlike `Route`, is
 `Sync`:
 
 - Generated schema-path service builders require handlers, HTTP plugin outputs and layers
   (`build`, `build_unchecked`, `layer`, `*_custom`) to be `Send + Sync`.
-- `OperationHandlerBinding::new` and `SchemaRoutingService::layer` take and produce `SyncRoute`.
+- `OperationHandlerBinding::new` binds a `SyncRoute`. `MultiProtocolRoutingService::builder(schema)`
+  collects bindings, registries, routing options, and handler layers; validation and construction
+  happen in `MultiProtocolRoutingServiceBuilder::build`. Handler layers run after routing.
 - The operation's request-body limits now travel with the routed request in
   `SelectedProtocolOperation` (read them with `request_body_config()`), and
-  `DynUpgradePlugin::new()` / `StreamingUpgradePlugin::new()` no longer take a config argument.
+  `DynUpgradePlugin::new()` / `DynStreamingUpgradePlugin::new()` no longer take a config argument.
   Only the router can create a `SelectedProtocolOperation`: its constructor is crate-private, so
   middleware cannot replace the limits. Middleware that routes an operation through another
   protocol uses `SelectedProtocolOperation::with_protocol`, which keeps the operation and its

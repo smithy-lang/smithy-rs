@@ -246,7 +246,7 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
         let status = Cell::new(None);
         if matches!(plan.strategy, ResponseStrategy::BindingsOnly) {
             let payload = RefCell::new(None);
-            let mut sink = NoBodySerializer;
+            let mut sink = NoBodySerializer { discard: true };
             let mut splitter = ResponseBindingSplitter {
                 body: &mut sink,
                 codec,
@@ -284,7 +284,7 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
         // `@httpPayload` forbids other body members: drive the members
         // directly through the splitter (no codec framing) and take the
         // captured payload as the body.
-        let mut sink = NoBodySerializer;
+        let mut sink = NoBodySerializer { discard: false };
         let mut splitter = ResponseBindingSplitter {
             body: &mut sink,
             codec,
@@ -399,18 +399,23 @@ impl<C: Codec> SerializableStruct for SplitBindings<'_, C> {
     }
 }
 
-/// Body sink for the `@httpPayload` path: no non-bound body members can
-/// exist alongside a payload member, so any write reaching this is a bug in
-/// the model/schema.
-struct NoBodySerializer;
+/// A body sink: discard ordinary members when only the response head is needed,
+/// or reject them when an explicit payload forbids other body members.
+struct NoBodySerializer {
+    discard: bool,
+}
 
 macro_rules! no_body_writes {
     ($($method:ident($($arg:ty),*)),+ $(,)?) => {
         $(
             fn $method(&mut self, _: &Schema<'_>, $(_: $arg),*) -> Result<(), SerdeError> {
-                Err(SerdeError::custom(
-                    "a member without a response binding cannot coexist with an @httpPayload member",
-                ))
+                if self.discard {
+                    Ok(())
+                } else {
+                    Err(SerdeError::custom(
+                        "a member without a response binding cannot coexist with an @httpPayload member",
+                    ))
+                }
             }
         )+
     };

@@ -509,7 +509,13 @@ impl ShapeSerializer for XmlSerializer {
             // surface), consume it here. Only applies at the document root —
             // nested struct calls always have at least one open frame.
             let root_override = if self.frames.is_empty() {
-                self.next_root_xml_name.take()
+                self.next_root_xml_name.take().or_else(|| {
+                    schema
+                        .traits()
+                        .and_then(|traits| traits.get_fqn("smithy.api#error"))
+                        .and(self.settings.error_root_name)
+                        .map(str::to_owned)
+                })
             } else {
                 None
             };
@@ -1054,6 +1060,10 @@ mod tests {
             values: std::collections::HashMap<String, Vec<bool>>,
         }
         impl SerializableStruct for NestedCollections {
+            fn schema(&self) -> &Schema<'_> {
+                &COLLECTIONS
+            }
+
             fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 ser.write_list(&MATRIX, &|ser| {
                     for row in &self.matrix {

@@ -158,13 +158,25 @@ impl ServerProtocol for RestJson1Protocol {
         match result {
             Ok(mut response) => {
                 // The discriminator travels in the header, as the shape name only.
-                if let Ok(value) = http::HeaderValue::try_from(name) {
-                    response.headers_mut().insert(ERROR_TYPE_HEADER, value);
+                if !response.headers().contains_key(&ERROR_TYPE_HEADER) {
+                    if let Ok(value) = http::HeaderValue::try_from(name) {
+                        response.headers_mut().insert(ERROR_TYPE_HEADER, value);
+                    }
                 }
                 stamp_error_extension(response, name)
             }
             Err(err) => serialization_failure(err),
         }
+    }
+
+    fn serialize_routing_error(&self, err: &crate::schema::routing::RoutingError) -> Response {
+        use crate::protocol::rest::router::Error;
+        use crate::schema::routing::RoutingErrorKind;
+        let error = match err.kind() {
+            RoutingErrorKind::MethodNotAllowed => Error::MethodNotAllowed,
+            _ => Error::NotFound,
+        };
+        IntoResponse::<RestJson1>::into_response(error)
     }
 
     /// restJson1 is the only protocol that keeps `Accept` and `Content-Type` failures distinct:

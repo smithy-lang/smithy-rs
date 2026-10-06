@@ -32,8 +32,10 @@ pub use serializer::XmlSerializer;
 pub struct XmlCodecSettings {
     default_timestamp_format: TimestampFormat,
     max_depth: u32,
-    enforce_strictness: bool,
+    validate_document: bool,
+    validate_root_name: bool,
     strict_collection_element_names: bool,
+    error_root_name: Option<&'static str>,
 }
 
 impl XmlCodecSettings {
@@ -68,8 +70,10 @@ impl Default for XmlCodecSettings {
         Self {
             default_timestamp_format: TimestampFormat::DateTime,
             max_depth: crate::codec::deserializer::MAX_DESERIALIZE_DEPTH,
-            enforce_strictness: false,
+            validate_document: false,
+            validate_root_name: false,
             strict_collection_element_names: false,
+            error_root_name: None,
         }
     }
 }
@@ -79,8 +83,10 @@ impl Default for XmlCodecSettings {
 pub struct XmlCodecSettingsBuilder {
     default_timestamp_format: TimestampFormat,
     max_depth: u32,
-    enforce_strictness: bool,
+    validate_document: bool,
+    validate_root_name: bool,
     strict_collection_element_names: bool,
+    error_root_name: Option<&'static str>,
 }
 
 impl Default for XmlCodecSettingsBuilder {
@@ -88,8 +94,10 @@ impl Default for XmlCodecSettingsBuilder {
         Self {
             default_timestamp_format: TimestampFormat::DateTime,
             max_depth: crate::codec::deserializer::MAX_DESERIALIZE_DEPTH,
-            enforce_strictness: false,
+            validate_document: false,
+            validate_root_name: false,
             strict_collection_element_names: false,
+            error_root_name: None,
         }
     }
 }
@@ -98,7 +106,20 @@ impl XmlCodecSettingsBuilder {
     /// Rejects ill-formed XML and a document root other than the one the
     /// request schema names. Disabled by default.
     pub fn enforce_strictness(mut self, value: bool) -> Self {
-        self.enforce_strictness = value;
+        self.validate_document = value;
+        self.validate_root_name = value;
+        self
+    }
+
+    /// Rejects malformed XML and trailing content without changing root-name validation.
+    pub fn validate_document(mut self, value: bool) -> Self {
+        self.validate_document = value;
+        self
+    }
+
+    /// Checks the document root against the schema without changing XML recovery.
+    pub fn validate_root_name(mut self, value: bool) -> Self {
+        self.validate_root_name = value;
         self
     }
 
@@ -111,6 +132,12 @@ impl XmlCodecSettingsBuilder {
     /// selected by the structure member's name either way.
     pub fn strict_collection_element_names(mut self, value: bool) -> Self {
         self.strict_collection_element_names = value;
+        self
+    }
+
+    /// Overrides the root element of modeled errors while retaining their namespace.
+    pub fn error_root_name(mut self, name: &'static str) -> Self {
+        self.error_root_name = Some(name);
         self
     }
 
@@ -132,8 +159,10 @@ impl XmlCodecSettingsBuilder {
         XmlCodecSettings {
             default_timestamp_format: self.default_timestamp_format,
             max_depth: self.max_depth,
-            enforce_strictness: self.enforce_strictness,
+            validate_document: self.validate_document,
+            validate_root_name: self.validate_root_name,
             strict_collection_element_names: self.strict_collection_element_names,
+            error_root_name: self.error_root_name,
         }
     }
 }

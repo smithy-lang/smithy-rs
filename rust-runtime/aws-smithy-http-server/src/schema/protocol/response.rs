@@ -25,11 +25,18 @@ pub(crate) fn resolve_status(captured: Option<u16>, http: Option<&HttpTrait<'_>>
 fn response_head(split: &ResponseParts, status: u16, content_type: Option<&str>) -> http::response::Builder {
     let mut builder = http::Response::builder()
         .status(http::StatusCode::from_u16(status).unwrap_or(http::StatusCode::INTERNAL_SERVER_ERROR));
-    if let Some(content_type) = content_type {
-        builder = builder.header(http::header::CONTENT_TYPE, content_type);
-    }
     for (name, value) in &split.headers {
-        builder = builder.header(name, value);
+        if !builder.headers_ref().is_some_and(|headers| headers.contains_key(name)) {
+            builder = builder.header(name, value);
+        }
+    }
+    if let Some(content_type) = content_type {
+        if !builder
+            .headers_ref()
+            .is_some_and(|headers| headers.contains_key(http::header::CONTENT_TYPE))
+        {
+            builder = builder.header(http::header::CONTENT_TYPE, content_type);
+        }
     }
     builder
 }
@@ -89,6 +96,8 @@ pub fn stamp_error_extension(mut response: Response, error_name: &str) -> Respon
 /// Marks a modeled validation response with the same `RuntimeErrorExtension` that
 /// `RuntimeError::Validation` responses carry, so instrumentation sees one shape.
 pub fn stamp_validation_extension(mut response: Response) -> Response {
+    // Generated validation rejections do not stamp an entity length.
+    response.headers_mut().remove(http::header::CONTENT_LENGTH);
     response
         .extensions_mut()
         .insert(RuntimeErrorExtension::new("ValidationException".to_string()));

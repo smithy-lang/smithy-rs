@@ -549,23 +549,23 @@ class SchemaRoutingGeneratorTest {
     }
 
     @Test
-    fun `restXml reads every child of a wrapped list or map by default`() {
-        restXmlCollectionElementNames(legacyMode = null, tags = 2, attrs = 2)
-        restXmlCollectionElementNames(legacyMode = false, tags = 2, attrs = 2)
+    fun `restXml reads modeled collection children by default`() {
+        restXmlCollectionElementNames(strictCollectionElementNames = null, tags = 1, attrs = 1)
+        restXmlCollectionElementNames(strictCollectionElementNames = true, tags = 1, attrs = 1)
     }
 
     @Test
-    fun `restXml legacyMode reads only the children named as items and entries`() {
-        restXmlCollectionElementNames(legacyMode = true, tags = 1, attrs = 1)
+    fun `restXml collection names can be configured independently`() {
+        restXmlCollectionElementNames(strictCollectionElementNames = false, tags = 2, attrs = 2)
     }
 
     /**
      * Sends a restXml request whose wrapped list and map each hold one child named as the model says
      * (`member`, `entry`) and one that is not, and checks how many of them the handler receives under
-     * `customizationConfig.protocols."aws.protocols#restXml".legacyMode`.
+     * `customizationConfig.protocols."aws.protocols#restXml".strictCollectionElementNames`.
      */
     private fun restXmlCollectionElementNames(
-        legacyMode: Boolean?,
+        strictCollectionElementNames: Boolean?,
         tags: Int,
         attrs: Int,
     ) {
@@ -589,7 +589,7 @@ class SchemaRoutingGeneratorTest {
         val settings =
             ObjectNode.builder()
                 .withMember("codegen", ObjectNode.builder().withMember("schemaSerde", true).build())
-        if (legacyMode != null) {
+        if (strictCollectionElementNames != null) {
             settings.withMember(
                 "customizationConfig",
                 ObjectNode.builder().withMember(
@@ -597,7 +597,7 @@ class SchemaRoutingGeneratorTest {
                     ObjectNode.builder()
                         .withMember(
                             "aws.protocols#restXml",
-                            ObjectNode.builder().withMember("legacyMode", legacyMode).build(),
+                            ObjectNode.builder().withMember("strictCollectionElementNames", strictCollectionElementNames).build(),
                         )
                         .build(),
                 ).build(),
