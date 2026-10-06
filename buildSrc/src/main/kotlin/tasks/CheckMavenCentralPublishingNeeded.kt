@@ -90,6 +90,28 @@ open class CheckMavenCentralPublishingNeeded : DefaultTask() {
 
         logger.lifecycle(diagnosticReport(codegenVersion, headRev, baseTag, changes, publishState))
 
+        // repo1 unreachable or answering oddly. Decide from git, which needs no network. A release
+        // tag carrying this codegenVersion means a release already went out at it, so if anything
+        // feeding a published artifact has changed since that tag, the version needs bumping no
+        // matter what repo1 says. Anything else defers to the publisher, which runs its own check
+        // against repo1 at release time. This must not fail: the task gates Matrix Success, so
+        // failing here would block every pull request whenever Maven Central is down.
+        if (publishState.isInconclusive) {
+            val changedPaths = changes?.changedPaths.orEmpty()
+            if (baseTag != null && changedPaths.isNotEmpty()) {
+                throw GradleException(needsBumpMessage(codegenVersion, baseTag, changes!!))
+            }
+            logger.warn(
+                "==> PUBLISH (unverified): repo1 gave no conclusive answer for " +
+                    "${publishState.inconclusive.joinToString(", ")}, so this was decided from git " +
+                    "alone. No source feeding a published artifact changed since " +
+                    "${baseTag?.name ?: "any release at this version"}, so a bump is not required. " +
+                    "The publisher checks Maven Central again before uploading.",
+            )
+            writeResult(publishingNeeded = true)
+            return
+        }
+
         // A partially published version can never be completed: the artifacts that landed are
         // immutable, so the missing ones can never join them under the same coordinates.
         if (publishState.isPartial) {
@@ -285,29 +307,41 @@ open class CheckMavenCentralPublishingNeeded : DefaultTask() {
         val version: String,
         val present: List<String>,
         val missing: List<String>,
+        val inconclusive: List<String> = emptyList(),
     ) {
-        val isFullyPublished: Boolean get() = missing.isEmpty()
+        val isFullyPublished: Boolean get() = missing.isEmpty() && inconclusive.isEmpty()
         val isPartial: Boolean get() = present.isNotEmpty() && missing.isNotEmpty()
+
+        /** repo1 gave no usable answer for at least one artifact, so decide from git alone. */
+        val isInconclusive: Boolean get() = inconclusive.isNotEmpty()
     }
 
     private fun probePublishState(codegenVersion: String): PublishState {
         val present = mutableListOf<String>()
         val missing = mutableListOf<String>()
+        val inconclusive = mutableListOf<String>()
         for (artifactId in PublishedMavenArtifacts.artifactIds) {
-            if (isPublished(artifactId, codegenVersion)) present += artifactId else missing += artifactId
+            when (isPublished(artifactId, codegenVersion)) {
+                true -> present += artifactId
+                false -> missing += artifactId
+                null -> inconclusive += artifactId
+            }
         }
-        return PublishState(codegenVersion, present, missing)
+        return PublishState(codegenVersion, present, missing, inconclusive)
     }
 
     /**
-     * HEADs the artifact's POM. Only a 404 counts as "not published" — treating any other non-200
-     * as absent would let a repo1 outage wave a duplicate version through to Sonatype, which is
-     * the failure this task exists to prevent.
+     * HEADs the artifact's POM. Returns null when repo1 gives no conclusive answer.
+     *
+     * Only a 404 counts as "not published" — treating any other non-200 as absent would let an
+     * outage wave a duplicate version through to Sonatype. But it must not throw either: this task
+     * runs in `test-codegen`, which gates `Matrix Success`, so a thrown exception here would block
+     * every pull request in the repository on repo1's availability. The caller falls back to git.
      */
     private fun isPublished(
         artifactId: String,
         codegenVersion: String,
-    ): Boolean {
+    ): Boolean? {
         val url = PublishedMavenArtifacts.pomUrl(artifactId, codegenVersion)
 
         val connection =
@@ -319,7 +353,8 @@ open class CheckMavenCentralPublishingNeeded : DefaultTask() {
                     instanceFollowRedirects = false
                 }
             } catch (e: IOException) {
-                throw GradleException("Could not open a connection to $url: ${e.message}", e)
+                logger.warn("Could not open a connection to $url: ${e.message}")
+                return null
             }
 
         try {
@@ -327,13 +362,8 @@ open class CheckMavenCentralPublishingNeeded : DefaultTask() {
                 try {
                     connection.responseCode
                 } catch (e: IOException) {
-                    throw GradleException(
-                        "Could not reach Maven Central to check whether codegenVersion " +
-                            "$codegenVersion is already published.\n\n  URL: $url\n  Cause: ${e.message}\n\n" +
-                            "Refusing to guess: publishing a version that already exists fails the " +
-                            "deployment, and Maven Central coordinates are immutable.",
-                        e,
-                    )
+                    logger.warn("Could not reach $url: ${e.message}")
+                    return null
                 }
 
             logger.info("HEAD $url -> $responseCode")
@@ -341,14 +371,10 @@ open class CheckMavenCentralPublishingNeeded : DefaultTask() {
             return when (responseCode) {
                 HttpURLConnection.HTTP_OK -> true
                 HttpURLConnection.HTTP_NOT_FOUND -> false
-                else ->
-                    throw GradleException(
-                        "Unexpected HTTP $responseCode from Maven Central while checking whether " +
-                            "codegenVersion $codegenVersion is already published.\n\n  URL: $url\n\n" +
-                            "Only 200 (published) and 404 (not published) are conclusive. Treating " +
-                            "anything else as 'not published' risks publishing a duplicate version, " +
-                            "which fails the deployment.",
-                    )
+                else -> {
+                    logger.warn("Unexpected HTTP $responseCode from $url; treating as inconclusive")
+                    null
+                }
             }
         } finally {
             connection.disconnect()
