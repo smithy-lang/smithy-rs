@@ -358,7 +358,7 @@ The current comparison defaults are:
   404 without invoking it. Only this route, GET with an empty body, an absent
   header, and a legacy XML 200/404 lookup result qualify. Correct Content-Type
   and other lost handler dispatch remain failures. Rust and Python share
-  `xml-claim-divergences.json`; live wire evidence is recorded in `fuzz-results.md`.
+  `xml-claim-divergences.json`.
   F3 is the accepted restXml modeled event-error framing divergence. Schema
   retains shape-root encoding/decoding. Only the recorded single, CRC-valid
   Pokemon `masterball_unsuccessful` exception with message "failed" qualifies:
@@ -366,7 +366,7 @@ The current comparison defaults are:
   root produces legacy generic/schema modeled errors. Other input fields and
   HTTP 200 responses must agree. Additional events, corrupt frames, other
   payloads, or response differences remain failures. Shared cases are in
-  `xml-event-error-divergences.json`; live SDK captures are in `fuzz-results.md`.
+  `xml-event-error-divergences.json`.
 - `SMITHY_FUZZ_IGNORE_UNROUTED` (disabled by default): opt in to allowing documented routing differences for requests
   rejected by the single-protocol side before a handler runs. Requests that reach
   a baseline handler must reach the same handler on the after side.
