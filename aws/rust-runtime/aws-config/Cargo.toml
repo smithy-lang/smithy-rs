@@ -15,7 +15,13 @@ rust-version = "1.94.1"
 [features]
 behavior-version-latest = []
 credentials-process = ["tokio/process"]
-default = ["default-https-client", "rt-tokio", "credentials-process", "sso"]
+default = ["default-https-client", "rt-tokio", "credentials-process", "sso", "rustcrypto"]
+# Forwards the RustCrypto signing backend through `aws-runtime` to `aws-sigv4`. Declared here, and in
+# `default`, because this crate declares `aws-runtime` with `default-features = false` -- without this
+# a consumer of this crate would get an `aws-sigv4` with no crypto backend. A FIPS consumer disables
+# the default features and names `aws-lc-fips` instead, which is what makes the FIPS arm substitute
+# for RustCrypto rather than stack on top of it.
+rustcrypto = ["aws-runtime/rustcrypto"]
 rt-tokio = ["aws-smithy-async/rt-tokio", "aws-smithy-runtime/rt-tokio", "tokio/rt"]
 # NOTE: `client-hyper` and `rustls` were proxies for enabling the default HTTP client plugin of `aws-smithy-runtime`
 # there is no direct usage otherwise on hyper or rustls in this crate. These are superceded by the more appropriately
@@ -68,7 +74,11 @@ allow-compilation = []
 
 [dependencies]
 aws-credential-types = { path = "../../sdk/build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
-aws-runtime = { path = "../../sdk/build/aws-sdk/sdk/aws-runtime" }
+# `default-features = false` so that the crypto backend is chosen from here rather than inherited.
+# `aws-runtime`'s only default is `rustcrypto`, which it forwards to `aws-sigv4`; leaving it on would
+# re-enable the RustCrypto backend even for a consumer who asked for `aws-lc-fips`. See this crate's
+# `rustcrypto` feature.
+aws-runtime = { path = "../../sdk/build/aws-sdk/sdk/aws-runtime", default-features = false }
 aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sdk/sts", default-features = false }
 aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async" }
 aws-smithy-http = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http" }

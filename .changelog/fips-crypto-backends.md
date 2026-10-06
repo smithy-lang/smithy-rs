@@ -2,13 +2,15 @@
 applies_to: ["client", "aws-sdk-rust"]
 authors: ["yychen23"]
 references: ["smithy-rs#4681"]
-breaking: false
+breaking: true
 new_feature: true
 bug_fix: false
 ---
 `aws-sigv4` and `aws-smithy-checksums` can now perform their cryptography with [aws-lc-rs](https://github.com/aws/aws-lc-rs) instead of the RustCrypto crates, including the FIPS 140-3 validated build of AWS-LC. That covers SigV4 HMAC-SHA256 signing, SigV4a ECDSA-P256 signing, and SHA-1/SHA-256 request checksums.
 
-Nothing changes unless you ask for it. The RustCrypto crates stay unconditional dependencies and remain the backend unless you select an AWS-LC one, so a default build behaves exactly as before, byte for byte. Selecting AWS-LC changes which implementation runs; it does not remove RustCrypto from the dependency tree.
+A default build behaves exactly as before, byte for byte: RustCrypto is still the default backend, and it is still the only one that builds on every target the SDK supports. What is new is that selecting AWS-LC can now *remove* RustCrypto from the dependency graph rather than merely routing around it — the RustCrypto crates are optional dependencies behind a `rustcrypto` feature, so a build that disables default features and names an AWS-LC backend does not compile them at all. That is the point: a FIPS deployment that has to show which implementations are present can show their absence, not just their disuse.
+
+The cost is that disabling default features now has consequences, on four crates. See the "Breaking changes" section at the end of this entry.
 
 ```toml
 # non-FIPS AWS-LC
@@ -22,9 +24,10 @@ aws-smithy-checksums = { version = "...", features = ["aws-lc-rs-fips"] }
 Notes on the new features:
 
 - `aws-lc-rs-fips` takes precedence over `aws-lc-rs`, and either takes precedence over `rustcrypto`, so enabling more than one (which Cargo feature unification does routinely) resolves to the strongest backend rather than failing to build.
-- The `aws-lc-rs` floor is 1.17.3, chosen to exclude `-sys` versions with open advisories rather than for its API — the APIs used here compile against 1.16.1. Because these crates offer both AWS-LC arms, the floor has to be clean for both `-sys` crates, and 1.17.3 is the lowest version that is: `aws-lc-sys` needs >= 0.39.0 (RUSTSEC-2026-0044, -0048) and `aws-lc-fips-sys` needs >= 0.13.13 (RUSTSEC-2026-0042, -0043). 1.16.2 already reaches a clean `aws-lc-sys` (^0.39.0), but every version before 1.17.3 — 1.17.0 included — declares `aws-lc-fips-sys = "^0.13.1"` and so permits an affected FIPS `-sys`. Cargo normally resolves to the highest version, so this is a latent rather than active exposure, but the floor is what guards it.
-- Which FIPS module you get follows `aws-lc-rs`, and the choice is not simply "newer is worse". 1.17.x resolves `aws-lc-fips-sys` 0.13.x, FIPS module 3, which held CMVP certificates #5314 (static) and #5298 (dynamic) as of September 2026 but sits on a non-LTS branch, which [AWS-LC's versioning policy](https://github.com/aws/aws-lc/blob/main/VERSIONING.md) says consumers should not depend on and which carries no stated support window. 1.18.x resolves 0.14.x, FIPS module 4, which is on the CMVP Modules In Process list but sits on the LTS branch, with a five-year support commitment. Both lines are in fact still being maintained — `aws-lc-fips-sys` 0.13.17 and 0.14.2 were published the same day — so this is a difference in commitment rather than in current patch availability. Cargo resolves to the highest compatible version, so a fresh lockfile takes module 4; for most deployments that is the right default.
-- If you nevertheless need module 3, request it as `aws-lc-rs = "~1.17"` and be aware of the cost. Do **not** write `aws-lc-rs = "<1.18.0"`: it has no lower bound, so Cargo can satisfy it with a placeholder version that has no lib target, leaving your real dependency on module 4 with only a warning. Also note `rustls` 0.23.44 and later require `aws-lc-rs = "1.18"`, so a `~1.17` request resolves by downgrading `rustls` to 0.23.43 — silently, since it is a successful resolution rather than a conflict. A module-3 build today means an older TLS stack.
+- The `aws-lc-rs` requirement is a bounded range, `>=1.17.4, <1.18`, and the upper bound is deliberate. `aws-lc-rs` 1.18 moved `aws-lc-fips-sys` to 0.14.x, which is AWS-LC-FIPS 4.1.0 — on the CMVP Modules In Process list, not certificated. A feature whose purpose is a FIPS 140-3 claim must not resolve to a module without a certificate, and a plain floor cannot prevent that, because Cargo takes the highest compatible version. The bound holds the FIPS arm on `aws-lc-fips-sys` 0.13.x, AWS-LC-FIPS 3.x, which does hold certificates — #5314 (static) and #5298 (dynamic) as of September 2026. Revisit when 4.x certificates.
+- The lower bound excludes `-sys` versions with open advisories rather than serving an API need; the APIs used here compile against 1.16.1. Because these crates offer both AWS-LC arms, it has to be clean for both `-sys` crates: `aws-lc-sys` needs >= 0.39.0 (RUSTSEC-2026-0044, -0048) and `aws-lc-fips-sys` needs >= 0.13.13 (RUSTSEC-2026-0042, -0043). Every `aws-lc-rs` before 1.17.3 — 1.17.0 included — declares `aws-lc-fips-sys = "^0.13.1"` and so permits an affected FIPS `-sys`. 1.17.4 is chosen over 1.17.3 because it reaches the same `aws-lc-sys` 0.45.0 as 1.18.1, so holding the FIPS module at 3.x costs nothing on the non-FIPS library. It is also evidence the line is maintained rather than abandoned: 1.17.4 was published *after* 1.18.0.
+- **The upper bound sets a ceiling on your rustls version.** Note that nothing here pins `rustls` directly; its version is a consequence. `rustls` 0.23.44 and later require `aws-lc-rs = "1.18"`, so excluding 1.18 means the newest usable `rustls` is **0.23.43**, the last release whose requirement (`^1.14`) a 1.17.x `aws-lc-rs` satisfies. The concrete cost is one advisory: RUSTSEC-2026-0285 affects `rustls` 0.23.13 through 0.23.44 and is patched only in 0.23.45 — which requires `aws-lc-rs` 1.18. **So a certificated FIPS module and a rustls carrying that fix are mutually exclusive today.** That advisory is a TLS 1.3 conformance failure, CVSS `C:L` with no integrity or availability impact: handshake messages that should have been encrypted were accepted in plaintext, with the transcript still authenticated, so it cannot be used to alter or complete a handshake. Weigh that against an uncertificated crypto module. If your graph needs `rustls` >= 0.23.45 for any other reason, resolution fails outright with a version conflict naming `aws-lc-rs` — loudly, not silently. A build that installs its own HTTP client, or uses `s2n-tls`, has no `rustls` in the graph and so no conflict at all.
+- **This bound is not something you can opt out of.** Cargo intersects version requirements rather than unioning them, so naming `aws-lc-rs = "1.18"` in your own manifest does not override it — it produces a resolution failure, since no single version satisfies both. A consumer who wants module 4 and rustls 0.23.45 needs a `[patch]` entry or a fork. That is a real cost of the bound, and the reason it is set where it is rather than left to each consumer: the alternative was a default that silently fails the FIPS claim the feature exists to make.
 - Both aws-lc-rs backends are a per-target capability, which is why `rustcrypto` stays the default — it is the only backend that builds everywhere the SDK does. `aws-lc-rs` needs only a C/C++ compiler and works on every target [aws-lc-rs supports](https://aws.github.io/aws-lc-rs/platform_support.html); the only WASM target it supports is `wasm32-unknown-emscripten`, so `wasm32-unknown-unknown` and the WASI targets have to stay on `rustcrypto`. `aws-lc-rs-fips` always additionally needs CMake and Go, plus bindgen on any target without pre-generated FIPS bindings — which is everything except 64-bit Linux (gnu and musl) and macOS, so Windows MSVC and FreeBSD FIPS builds need it. FIPS also covers a narrower target set than the non-FIPS arm: per that table it is x86_64 and aarch64 Linux (gnu and musl), `arm` musleabi/musleabihf, powerpc/powerpc64/powerpc64le gnu, macOS, 64-bit Windows MSVC, and x86_64 FreeBSD. Notably **not** `i686-unknown-linux-gnu`, riscv64, s390x, mips, NetBSD, iOS, Android, or WASM — the missing i686 support is why CI excludes these crates from its i686 `--all-features` leg.
 - You usually don't need to set these per crate. Generated SDK crates and `aws-config` now carry a single `aws-lc-fips` feature that turns on all of it at once — see below.
 
@@ -47,6 +50,29 @@ aws-sdk-s3 = { version = "...", features = ["aws-lc-fips"] }
 aws-config = { version = "...", features = ["aws-lc-fips"] }
 ```
 
+That routes the cryptography through the validated module but leaves the RustCrypto crates compiled, because the `rustcrypto` default is still on. To keep them out of the build as well, turn the defaults off and name back the ones you want:
+
+```toml
+aws-sdk-dynamodb = { version = "...", default-features = false, features = [
+    "aws-lc-fips",
+    # The defaults you still want. Omit `rustcrypto`, which is the point of the exercise, and
+    # omit `rustls`, which is the *legacy* TLS stack and would pull `ring` back in. Check your
+    # crate's own `default` list -- a service crate with SigV4a or presigning defaults to more
+    # than this one.
+    "default-https-client", "rt-tokio",
+] }
+```
+
+Measured on a generated `aws-sdk-dynamodb`, that shape resolves no `hmac`, `sha2`, `sha1`, `md-5`, or `ring`. Keeping the defaults and just adding `aws-lc-fips` resolves `hmac`, `sha2`, and `ring` — which is what the previous release did and why `default-features = false` is the part that matters.
+
+Three things remain in such a build, none of them a non-validated implementation of a FIPS-relevant primitive:
+
+- `aws-lc-sys`, the non-FIPS AWS-LC build, as soon as any TLS client is enabled. This is unchanged and is explained in the last bullet of the previous section: rustls stacks its `fips` feature on its `aws_lc_rs` feature, so the non-validated library is built but nothing references it and the linker drops it.
+- `subtle`, pulled in by rustls. Constant-time comparison helpers, not a cryptographic primitive.
+- With `sigv4a`, additionally `crypto-bigint`, `p256`, and — transitively through `p256` — `ecdsa`, `rfc6979`, and an older `hmac`/`sha2` pair (0.12/0.10, distinct from the 0.13/0.11 the backend would use). `crypto-bigint` does the integer math of the signing key derivation. `p256` is no longer called but cannot be dropped, because Cargo features are additive and `sigv4a` has to keep declaring it; the rest arrive as its dependencies. None of them is linked: a release build of an S3 client with `aws-lc-fips` and `sigv4a` contains zero `p256`, `ecdsa`, `rfc6979`, `hmac`, and `sha2` symbols, so this is build presence only.
+
+Separately, a few generated crates declare a crypto crate directly, outside this mechanism and unaffected by these features: `aws-sdk-s3` (`hmac`, `sha2`, for the S3 Express session cache key), `aws-sdk-s3control` (`md-5`), and `aws-sdk-glacier` (`ring`).
+
 The three paths reach a service crate by different routes, so enabling this feature fans out to `aws-smithy-runtime/aws-lc-fips` (TLS, via `aws-smithy-http-client`'s `rustls-aws-lc-fips`), `aws-runtime/aws-lc-fips` (signing, via `aws-sigv4/aws-lc-rs-fips`), and `aws-smithy-checksums/aws-lc-rs-fips`. The checksums arm is only present on service crates that have checksum operations, so a service without them doesn't gain the dependency. Two intermediate features are new and can also be used directly: `aws-runtime/aws-lc-fips` and `aws-smithy-runtime/aws-lc-fips`.
 
 What this feature does not cover:
@@ -56,4 +82,27 @@ What this feature does not cover:
   - **An HTTP client installed explicitly** — `s2n-tls` or a custom connector — is unaffected, since this feature does not install a client for you. That case can't be detected and isn't warned about. If you use `s2n-tls`, note it reaches the same validated module by a different route — `s2n-tls/fips` forwards to `s2n-tls-sys/fips`, which is `aws-lc-rs/fips` — so enabling `s2n-tls`'s `fips` feature in your manifest does give you FIPS TLS; `aws-smithy-http-client` does not forward it for you.
 - `aws-config`'s `credentials-login` feature signs DPoP (RFC 9449) proof JWTs with `p256` ECDSA itself, and that is not routed through AWS-LC. A FIPS deployment using `credentials-login` is not fully covered.
 - `aws-config`'s `sso` and `credentials-login` features hash a start URL or session string with SHA-1 and SHA-256 to name a cache file. Those are RustCrypto and stay that way; they are not security functions.
-- A build with `aws-lc-fips` compiles both AWS-LC libraries, because rustls's own `fips` feature stacks on its `aws_lc_rs` feature and so keeps `aws-lc-sys` in the graph. Only the validated one reaches the binary, though: `aws-lc-rs` routes every call to its FIPS build, so nothing references `aws-lc-sys` and the linker drops it. An unstripped release build of an SDK program with this feature contains 2144 `aws_lc_fips_0_14_2_*` symbols and zero `aws_lc_0_45_0_*` symbols. So you pay the non-validated library's build time but do not ship it.
+- A build with `aws-lc-fips` compiles both AWS-LC libraries, because rustls's own `fips` feature stacks on its `aws_lc_rs` feature and so keeps `aws-lc-sys` in the graph. Only the validated one reaches the binary, though: `aws-lc-rs` routes every call to its FIPS build, so nothing references `aws-lc-sys` and the linker drops it. Measured on an unstripped release build of a minimal DynamoDB program with this feature plus the default HTTPS client: 1489 `aws_lc_fips_0_13_17_*` symbols and **zero** `aws_lc_0_45_0_*` symbols. So you pay the non-validated library's build time but do not ship it. The same binary also carries zero `hmac`, `sha2`, `sha1`, `md5`, and `ring` symbols, which is the binary-level counterpart to the dependency-graph result above. The absolute symbol count depends on the program; the zeroes are the point.
+
+## Breaking changes
+
+Making the RustCrypto crates optional means a build that names no backend has no crypto, and Cargo features are additive, so there is no way to express "RustCrypto unless AWS-LC is selected" without a `rustcrypto` feature that a FIPS build leaves off. The consequence is that `default-features = false` now drops the backend on four crates. Each affected build fails to compile with a message naming the fix, rather than silently losing cryptography:
+
+```
+error: aws-sigv4 requires a crypto backend: enable the `rustcrypto` (default), `aws-lc-rs`, or `aws-lc-rs-fips` feature.
+```
+
+`aws-sigv4` **1.6.0 → 2.0.0** and `aws-smithy-checksums` **0.65.0 → 0.66.0**: `--no-default-features` builds need a backend named.
+
+```toml
+# before
+aws-sigv4 = { version = "1.6", default-features = false, features = ["sign-http", "http1"] }
+# after
+aws-sigv4 = { version = "2.0", default-features = false, features = ["sign-http", "http1", "rustcrypto"] }
+```
+
+`aws-runtime` **1.10.0 → 2.0.0**: this crate declares `aws-sigv4` with its defaults off now, which is how the choice reaches the signer, so it has a `default = ["rustcrypto"]` of its own. It previously had no `default` list at all, which means `default-features = false` on it used to be a no-op and now is not. If you wrote it, add `rustcrypto`.
+
+Generated SDK crates and `aws-config` gain a default-on `rustcrypto` feature for the same reason. Their `default` list already existed, so a build on defaults is unaffected; a build with `default-features = false` needs `rustcrypto` added unless it is naming `aws-lc-fips` on purpose.
+
+Why the choice has to be forwarded at every level: Cargo offers a consumer no way to switch off a *transitive* crate's default features. Only the crate that declares a dependency can do that. So "no RustCrypto in this build" has to be expressible at each link in the chain, and the chain from an application to the signer is three deep — service crate, `aws-runtime`, `aws-sigv4`.

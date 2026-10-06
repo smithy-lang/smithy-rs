@@ -1,6 +1,6 @@
 [package]
 name = "aws-runtime"
-version = "1.11.0"
+version = "2.0.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Runtime support code for the AWS SDK. This crate isn't intended to be used directly."
 edition = "2021"
@@ -9,6 +9,16 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 rust-version = "1.94.1"
 
 [features]
+# This crate declares `aws-sigv4` with `default-features = false` so that a FIPS build can keep the
+# RustCrypto crates out of the dependency graph entirely. That choice has to be forwarded from here,
+# because Cargo gives a consumer no way to switch off a transitive crate's default features -- only
+# the crate that declares the dependency can do that. Without this `default`, every consumer of this
+# crate would get an `aws-sigv4` with no crypto backend.
+default = ["rustcrypto"]
+# Forwards to `aws-sigv4`'s RustCrypto backend. Named here rather than inherited, for the reason
+# above. A FIPS consumer disables the default features of their SDK crate, which drops this, and
+# names `aws-lc-fips` instead.
+rustcrypto = ["aws-sigv4/rustcrypto"]
 event-stream = ["dep:aws-smithy-eventstream", "aws-sigv4/sign-eventstream"]
 # `aws-smithy-types/http-body-0-4-x` gives `SdkBody: http_body_04x::Body`, which the
 # `AwsChunkedBody` 0.4 impl needs. Previously inherited transitively from `aws-smithy-runtime`.
@@ -29,7 +39,11 @@ aws-lc-fips = ["aws-sigv4/aws-lc-rs-fips"]
 
 [dependencies]
 aws-credential-types = { path = "../aws-credential-types" }
-aws-sigv4 = { path = "../aws-sigv4" }
+# `default-features = false` so that the crypto backend is chosen from here rather than inherited --
+# see the `rustcrypto` feature above. The two non-backend defaults are named back explicitly:
+# `sign-http` gates the `http_request` module this crate uses throughout `auth`, and `http1` gates
+# its `http` 1.x support.
+aws-sigv4 = { path = "../aws-sigv4", default-features = false, features = ["sign-http", "http1"] }
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }
 aws-smithy-eventstream = { path = "../../../rust-runtime/aws-smithy-eventstream", optional = true }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }

@@ -111,6 +111,25 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
             fipsDeps += "aws-smithy-checksums/aws-lc-rs-fips"
         }
         rustCrate.mergeFeature(Feature("aws-lc-fips", default = false, fipsDeps))
+
+        // The counterpart to the switch above: the RustCrypto backend, on by default.
+        //
+        // `aws-sigv4` and `aws-smithy-checksums` are both declared with `default-features = false`, so that a
+        // consumer who opts into `aws-lc-fips` does not also compile RustCrypto. Cargo gives a consumer no way
+        // to switch off a transitive crate's default features, so the choice has to be forwarded from here --
+        // without this feature those two crates would have no backend at all and would stop compiling.
+        //
+        // Default, unlike `aws-lc-fips`: RustCrypto is pure Rust and builds on every target the SDK supports,
+        // so it stays the backend a plain `cargo add aws-sdk-s3` gets. A FIPS consumer disables default
+        // features and names `aws-lc-fips` instead, which is what makes the FIPS arm substitute rather than
+        // stack.
+        val rustCryptoDeps = mutableListOf("aws-runtime/rustcrypto")
+        // Same reasoning as the checksums arm above: only name the crate for services that have checksum
+        // operations, so the others do not acquire a dependency on it.
+        if (serviceHasHttpChecksumOperation(codegenContext)) {
+            rustCryptoDeps += "aws-smithy-checksums/rustcrypto"
+        }
+        rustCrate.mergeFeature(Feature("rustcrypto", default = true, rustCryptoDeps))
     }
 
     override fun libRsCustomizations(

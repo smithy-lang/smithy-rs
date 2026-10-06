@@ -10,8 +10,16 @@ C_RESET='\033[0m'
 # shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/lib-doctest-helper.sh"
 
+CI_SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 set -eux
 cd aws-sdk
+
+# Runs before the test suite because it is the one check here that no test can replace: it asserts
+# on resolved features, and the thing it guards -- a non-validated crypto crate re-entering a FIPS
+# build -- changes nothing a test could observe. Takes seconds, so it fails fast.
+echo "${C_YELLOW}## Checking FIPS crypto isolation...${C_RESET}"
+"${CI_SCRIPTS_DIR}/check-fips-crypto-isolation"
 
 ENABLE_SMOKETESTS="${ENABLE_SMOKETESTS:-false}"
 

@@ -364,14 +364,14 @@ impl Checksum for Sha256 {
 
 // MD5 is deprecated (`ChecksumAlgorithm::Md5` resolves to CRC-32) and is only available on the
 // RustCrypto backend: aws-lc-rs doesn't expose MD5, and it isn't FIPS-approved.
-#[cfg(not(feature = "__aws-lc-rs"))]
+#[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
 #[allow(dead_code)]
 #[derive(Debug, Default)]
 struct Md5 {
     hasher: crypto::Md5,
 }
 
-#[cfg(not(feature = "__aws-lc-rs"))]
+#[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
 impl Md5 {
     #[warn(dead_code)]
     fn update(&mut self, bytes: &[u8]) {
@@ -390,7 +390,7 @@ impl Md5 {
     }
 }
 
-#[cfg(not(feature = "__aws-lc-rs"))]
+#[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
 impl Checksum for Md5 {
     fn update(&mut self, bytes: &[u8]) {
         Self::update(self, bytes)
@@ -405,7 +405,7 @@ impl Checksum for Md5 {
 
 #[cfg(test)]
 mod tests {
-    #[cfg(not(feature = "__aws-lc-rs"))]
+    #[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
     use super::{http::MD5_HEADER_NAME, Md5};
     use super::{
         http::{CRC_32_C_HEADER_NAME, CRC_32_HEADER_NAME, SHA_1_HEADER_NAME, SHA_256_HEADER_NAME},
@@ -505,7 +505,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(feature = "__aws-lc-rs"))]
+    #[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
     fn test_md5_checksum() {
         let mut checksum = Md5::default();
         checksum.update(TEST_DATA.as_bytes());

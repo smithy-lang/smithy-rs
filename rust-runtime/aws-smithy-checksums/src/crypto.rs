@@ -35,6 +35,15 @@ pub(crate) trait Digest: Default + Debug + Send + Sync {
     fn output_size() -> u64;
 }
 
+// Both backends are selected by feature and both sets of dependencies are optional, so a build
+// that names neither has no digests at all. Say so here, rather than letting it surface as an
+// unresolved `sha2` import from inside this module.
+#[cfg(not(any(feature = "rustcrypto", feature = "__aws-lc-rs")))]
+compile_error!(
+    "aws-smithy-checksums requires a digest backend: enable the `rustcrypto` (default), \
+     `aws-lc-rs`, or `aws-lc-rs-fips` feature."
+);
+
 #[cfg(feature = "__aws-lc-rs")]
 mod aws_lc_rs_impl;
 #[cfg(feature = "__aws-lc-rs")]
@@ -42,9 +51,9 @@ pub(crate) use aws_lc_rs_impl::{Sha1, Sha256};
 
 // The RustCrypto backend is only compiled when it is the selected backend, so that enabling
 // `aws-lc-rs` alongside the default features doesn't pull RustCrypto into the digest path.
-#[cfg(not(feature = "__aws-lc-rs"))]
+#[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
 mod rustcrypto_impl;
-#[cfg(not(feature = "__aws-lc-rs"))]
+#[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
 pub(crate) use rustcrypto_impl::{Md5, Sha1, Sha256};
 
 #[cfg(test)]
