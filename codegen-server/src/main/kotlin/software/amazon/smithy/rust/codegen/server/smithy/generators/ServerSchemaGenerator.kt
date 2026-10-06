@@ -30,6 +30,7 @@ import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
@@ -1037,6 +1038,7 @@ class ServerSchemaGenerator(
      *    doesn't carry it itself and the target is a timestamp.
      *  - `@mediaType` propagated from the target shape when the member doesn't
      *    carry it itself.
+     *  - `@sensitive` propagated from scalar and collection targets for diagnostic redaction.
      *
      * Used for struct/union members, list members, map keys, and map values —
      * any [MemberShape] that gets emitted as a `_MEMBER` / `_KEY` / `_VALUE`
@@ -1075,7 +1077,13 @@ class ServerSchemaGenerator(
             } else {
                 ""
             }
-        return baseChain + targetTimestampFormat + targetMediaType + targetStreaming
+        val targetSensitive =
+            if (!member.hasTrait(SensitiveTrait::class.java) && target.hasTrait(SensitiveTrait::class.java)) {
+                "\n    .with_sensitive()"
+            } else {
+                ""
+            }
+        return baseChain + targetTimestampFormat + targetMediaType + targetStreaming + targetSensitive
     }
 
     /**

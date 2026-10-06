@@ -106,9 +106,12 @@ enum ResponseMemberPlan {
         name: http::HeaderName,
         media_type: bool,
         timestamp_format: HeaderTimestampFormat,
+        sensitive: bool,
     },
     PrefixHeaders {
         prefix: String,
+        key_sensitive: bool,
+        value_sensitive: bool,
     },
     Status,
     Payload {
@@ -171,7 +174,7 @@ impl CompiledResponsePlan {
             let mut members = vec![ResponseMemberPlan::Body; member_count];
             for member in schema.members() {
                 if let Some(index) = member.member_index() {
-                    members[index] = compile_member_plan(member, bindings);
+                    members[index] = compile_member_plan(member, bindings, schema.sensitive().is_some());
                 }
             }
             members.into_boxed_slice()
@@ -193,7 +196,11 @@ impl CompiledResponsePlan {
     }
 }
 
-fn compile_member_plan(schema: &Schema<'_>, bindings: ResponseBindings) -> ResponseMemberPlan {
+fn compile_member_plan(
+    schema: &Schema<'_>,
+    bindings: ResponseBindings,
+    container_sensitive: bool,
+) -> ResponseMemberPlan {
     if bindings == ResponseBindings::BodyOnly {
         return ResponseMemberPlan::Body;
     }
@@ -216,11 +223,20 @@ fn compile_member_plan(schema: &Schema<'_>, bindings: ResponseBindings) -> Respo
             name,
             media_type: schema.media_type().is_some(),
             timestamp_format,
+            sensitive: container_sensitive
+                || schema.sensitive().is_some()
+                || schema.member().is_some_and(|element| element.sensitive().is_some()),
         };
     }
     if let Some(prefix) = schema.http_prefix_headers() {
         return ResponseMemberPlan::PrefixHeaders {
             prefix: prefix.value().to_string(),
+            key_sensitive: container_sensitive
+                || schema.sensitive().is_some()
+                || schema.key().is_some_and(|key| key.sensitive().is_some()),
+            value_sensitive: container_sensitive
+                || schema.sensitive().is_some()
+                || schema.member().is_some_and(|value| value.sensitive().is_some()),
         };
     }
     if schema.http_payload().is_some() {
@@ -443,14 +459,40 @@ impl ShapeSerializer for NoBodySerializer {
     }
 }
 
-fn capture_header(sink: &CapturedHeaders, name: &http::HeaderName, formatted: &str) -> Result<(), SerdeError> {
+// Serialization errors may reach both logs and response bodies. Redact before constructing
+// the error, even when instrumentation's `unredacted-logging` feature is enabled.
+fn header_diagnostic(value: &str, sensitive: bool) -> String {
+    format!(
+        "{:?}",
+        if sensitive {
+            crate::instrumentation::sensitivity::REDACTED
+        } else {
+            value
+        }
+    )
+}
+
+fn header_value(formatted: &str, sensitive: bool) -> Result<http::HeaderValue, SerdeError> {
+    http::HeaderValue::try_from(formatted).map_err(|err| {
+        SerdeError::custom(format!(
+            "{} cannot be used as a header value: {err}",
+            header_diagnostic(formatted, sensitive)
+        ))
+    })
+}
+
+fn capture_header(
+    sink: &CapturedHeaders,
+    name: &http::HeaderName,
+    formatted: &str,
+    sensitive: bool,
+) -> Result<(), SerdeError> {
     // Mirror the generated `ser_*_headers` functions: empty string
     // values are skipped rather than sent as empty headers.
     if formatted.is_empty() {
         return Ok(());
     }
-    let value = http::HeaderValue::try_from(formatted)
-        .map_err(|err| SerdeError::custom(format!("`{formatted}` cannot be used as a header value: {err}")))?;
+    let value = header_value(formatted, sensitive)?;
     sink.borrow_mut().push((name.clone(), value));
     Ok(())
 }
@@ -510,9 +552,9 @@ macro_rules! split_int {
         fn $fn_name(&mut self, schema: &Schema<'_>, value: $ty) -> Result<(), SerdeError> {
             match self.plan.member(schema) {
                 ResponseMemberPlan::Status => self.capture_status(value as i64),
-                ResponseMemberPlan::Header { name, .. } => {
+                ResponseMemberPlan::Header { name, sensitive, .. } => {
                     let mut encoder = aws_smithy_types::primitive::Encoder::from(value);
-                    capture_header(self.headers, name, encoder.encode())
+                    capture_header(self.headers, name, encoder.encode(), *sensitive)
                 }
                 _ => self.body.$fn_name(schema, value),
             }
@@ -524,9 +566,9 @@ macro_rules! split_scalar {
     ($fn_name:ident, $ty:ty) => {
         fn $fn_name(&mut self, schema: &Schema<'_>, value: $ty) -> Result<(), SerdeError> {
             match self.plan.member(schema) {
-                ResponseMemberPlan::Header { name, .. } => {
+                ResponseMemberPlan::Header { name, sensitive, .. } => {
                     let mut encoder = aws_smithy_types::primitive::Encoder::from(value);
-                    capture_header(self.headers, name, encoder.encode())
+                    capture_header(self.headers, name, encoder.encode(), *sensitive)
                 }
                 _ => self.body.$fn_name(schema, value),
             }
@@ -554,7 +596,10 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
         write_elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         if let ResponseMemberPlan::Header {
-            name, timestamp_format, ..
+            name,
+            timestamp_format,
+            sensitive,
+            ..
         } = self.plan.member(schema)
         {
             // Each element becomes its own header value under the same name;
@@ -564,6 +609,7 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
                 sink: self.headers,
                 name,
                 timestamp_format: *timestamp_format,
+                sensitive: *sensitive,
             };
             write_elements(&mut collector)
         } else {
@@ -576,11 +622,18 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
         schema: &Schema<'_>,
         write_entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
-        if let ResponseMemberPlan::PrefixHeaders { prefix } = self.plan.member(schema) {
+        if let ResponseMemberPlan::PrefixHeaders {
+            prefix,
+            key_sensitive,
+            value_sensitive,
+        } = self.plan.member(schema)
+        {
             let mut collector = PrefixHeaderCollector {
                 prefix,
                 sink: self.headers,
                 pending_key: None,
+                key_sensitive: *key_sensitive,
+                value_sensitive: *value_sensitive,
             };
             write_entries(&mut collector)
         } else {
@@ -598,14 +651,18 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
 
     fn write_big_integer(&mut self, schema: &Schema<'_>, value: &BigInteger) -> Result<(), SerdeError> {
         match self.plan.member(schema) {
-            ResponseMemberPlan::Header { name, .. } => capture_header(self.headers, name, value.as_ref()),
+            ResponseMemberPlan::Header { name, sensitive, .. } => {
+                capture_header(self.headers, name, value.as_ref(), *sensitive)
+            }
             _ => self.body.write_big_integer(schema, value),
         }
     }
 
     fn write_big_decimal(&mut self, schema: &Schema<'_>, value: &BigDecimal) -> Result<(), SerdeError> {
         match self.plan.member(schema) {
-            ResponseMemberPlan::Header { name, .. } => capture_header(self.headers, name, value.as_ref()),
+            ResponseMemberPlan::Header { name, sensitive, .. } => {
+                capture_header(self.headers, name, value.as_ref(), *sensitive)
+            }
             _ => self.body.write_big_decimal(schema, value),
         }
     }
@@ -615,13 +672,19 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
             self.capture_payload(bytes::Bytes::copy_from_slice(value.as_bytes()));
             return Ok(());
         }
-        if let ResponseMemberPlan::Header { name, media_type, .. } = self.plan.member(schema) {
+        if let ResponseMemberPlan::Header {
+            name,
+            media_type,
+            sensitive,
+            ..
+        } = self.plan.member(schema)
+        {
             // `@mediaType` on a header-bound string: base64-encode.
             if *media_type {
                 let encoded = aws_smithy_types::base64::encode(value.as_bytes());
-                return capture_header(self.headers, name, &encoded);
+                return capture_header(self.headers, name, &encoded, *sensitive);
             }
-            return capture_header(self.headers, name, value);
+            return capture_header(self.headers, name, value, *sensitive);
         }
         self.body.write_string(schema, value)
     }
@@ -633,8 +696,13 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
             self.capture_payload(value.into_bytes());
             return Ok(());
         }
-        if let ResponseMemberPlan::Header { name, .. } = self.plan.member(schema) {
-            return capture_header(self.headers, name, &aws_smithy_types::base64::encode(value.as_ref()));
+        if let ResponseMemberPlan::Header { name, sensitive, .. } = self.plan.member(schema) {
+            return capture_header(
+                self.headers,
+                name,
+                &aws_smithy_types::base64::encode(value.as_ref()),
+                *sensitive,
+            );
         }
         self.body.write_blob(schema, value)
     }
@@ -642,10 +710,13 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
     fn write_timestamp(&mut self, schema: &Schema<'_>, value: &DateTime) -> Result<(), SerdeError> {
         match self.plan.member(schema) {
             ResponseMemberPlan::Header {
-                name, timestamp_format, ..
+                name,
+                timestamp_format,
+                sensitive,
+                ..
             } => {
                 let formatted = format_header_timestamp(*timestamp_format, value)?;
-                capture_header(self.headers, name, &formatted)
+                capture_header(self.headers, name, &formatted, *sensitive)
             }
             _ => self.body.write_timestamp(schema, value),
         }
@@ -680,13 +751,14 @@ struct HeaderListCollector<'a> {
     sink: &'a CapturedHeaders,
     name: &'a http::HeaderName,
     timestamp_format: HeaderTimestampFormat,
+    sensitive: bool,
 }
 
 macro_rules! collect_scalar {
     ($fn_name:ident, $ty:ty) => {
         fn $fn_name(&mut self, _schema: &Schema<'_>, value: $ty) -> Result<(), SerdeError> {
             let mut encoder = aws_smithy_types::primitive::Encoder::from(value);
-            capture_header(self.sink, self.name, encoder.encode())
+            capture_header(self.sink, self.name, encoder.encode(), self.sensitive)
         }
     };
 }
@@ -725,11 +797,11 @@ impl ShapeSerializer for HeaderListCollector<'_> {
     collect_scalar!(write_double, f64);
 
     fn write_big_integer(&mut self, _schema: &Schema<'_>, value: &BigInteger) -> Result<(), SerdeError> {
-        capture_header(self.sink, self.name, value.as_ref())
+        capture_header(self.sink, self.name, value.as_ref(), self.sensitive)
     }
 
     fn write_big_decimal(&mut self, _schema: &Schema<'_>, value: &BigDecimal) -> Result<(), SerdeError> {
-        capture_header(self.sink, self.name, value.as_ref())
+        capture_header(self.sink, self.name, value.as_ref(), self.sensitive)
     }
 
     fn write_string(&mut self, _schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
@@ -737,16 +809,21 @@ impl ShapeSerializer for HeaderListCollector<'_> {
         // `"` (RFC 9110 list syntax) — mirroring the generated
         // serializers' `quote_header_value` usage.
         let quoted = aws_smithy_http::header::quote_header_value(value);
-        capture_header(self.sink, self.name, quoted.as_ref())
+        capture_header(self.sink, self.name, quoted.as_ref(), self.sensitive)
     }
 
     fn write_blob(&mut self, _schema: &Schema<'_>, value: aws_smithy_types::Blob) -> Result<(), SerdeError> {
-        capture_header(self.sink, self.name, &aws_smithy_types::base64::encode(value.as_ref()))
+        capture_header(
+            self.sink,
+            self.name,
+            &aws_smithy_types::base64::encode(value.as_ref()),
+            self.sensitive,
+        )
     }
 
     fn write_timestamp(&mut self, _schema: &Schema<'_>, value: &DateTime) -> Result<(), SerdeError> {
         let formatted = format_header_timestamp(self.timestamp_format, value)?;
-        capture_header(self.sink, self.name, &formatted)
+        capture_header(self.sink, self.name, &formatted, self.sensitive)
     }
 
     fn write_document(&mut self, _schema: &Schema<'_>, _value: &Document) -> Result<(), SerdeError> {
@@ -768,6 +845,8 @@ struct PrefixHeaderCollector<'a> {
     prefix: &'a str,
     sink: &'a CapturedHeaders,
     pending_key: Option<String>,
+    key_sensitive: bool,
+    value_sensitive: bool,
 }
 
 macro_rules! prefix_reject {
@@ -792,14 +871,14 @@ impl ShapeSerializer for PrefixHeaderCollector<'_> {
             Some(key) => {
                 // An empty value is still sent (`x-p-empty:`), as legacy does: unlike bound
                 // headers, prefix headers have no skip-empty rule.
-                let name = http::HeaderName::try_from(format!("{}{}", self.prefix, key)).map_err(|err| {
+                let full_name = format!("{}{}", self.prefix, key);
+                let name = http::HeaderName::try_from(full_name.as_str()).map_err(|err| {
                     SerdeError::custom(format!(
-                        "`{}{}` cannot be used as a header name: {err}",
-                        self.prefix, key
+                        "{} cannot be used as a header name: {err}",
+                        header_diagnostic(&full_name, self.key_sensitive)
                     ))
                 })?;
-                let header_value = http::HeaderValue::try_from(value)
-                    .map_err(|err| SerdeError::custom(format!("`{value}` cannot be used as a header value: {err}")))?;
+                let header_value = header_value(value, self.value_sensitive)?;
                 self.sink.borrow_mut().push((name, header_value));
                 Ok(())
             }

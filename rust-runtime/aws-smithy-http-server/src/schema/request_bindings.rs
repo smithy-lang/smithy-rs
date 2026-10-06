@@ -407,8 +407,8 @@ impl<'a> HeaderValuesDeserializer<'a> {
     ///
     /// Tokenization errors are returned here; type conversion and token cardinality
     /// errors can also occur during reads. Lists cannot be replayed after consumption.
-    pub(crate) fn try_new(
-        values: impl IntoIterator<Item = &'a str>,
+    pub(crate) fn try_new_bytes(
+        values: impl IntoIterator<Item = &'a [u8]>,
         member: &'a Schema<'a>,
     ) -> Result<Option<Self>, SerdeError> {
         let mut values = values.into_iter().peekable();
@@ -424,7 +424,7 @@ impl<'a> HeaderValuesDeserializer<'a> {
         };
         let values = if let Some(element) = date_element {
             let format = resolve_timestamp_format(element, member, BindingLocation::Header);
-            let dates = aws_smithy_http::header::many_dates(values, format)
+            let dates = aws_smithy_http::header::many_dates_bytes(values, format)
                 .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
             if dates.is_empty() {
                 return Ok(None);
@@ -444,7 +444,7 @@ impl<'a> HeaderValuesDeserializer<'a> {
                 _ => false,
             };
             if tokenized {
-                let tokens = aws_smithy_http::header::read_many_from_str::<String>(values)
+                let tokens = aws_smithy_http::header::read_many_from_str_bytes::<String>(values)
                     .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
                 if tokens.is_empty() {
                     return Ok(None);
@@ -457,7 +457,7 @@ impl<'a> HeaderValuesDeserializer<'a> {
                         "expected a single header value but found multiple",
                     ));
                 }
-                ParsedHeaderValues::Raw(first)
+                ParsedHeaderValues::Raw(first.map(header_text).transpose()?)
             }
         };
         Ok(Some(Self {
@@ -515,6 +515,12 @@ impl<'a> HeaderValuesDeserializer<'a> {
             _ => Err(SerdeError::invalid_input("expected a raw header value")),
         }
     }
+}
+
+fn header_text(bytes: &[u8]) -> Result<&str, SerdeError> {
+    std::str::from_utf8(bytes).map_err(|_| {
+        SerdeError::invalid_input(aws_smithy_http::header::ParseError::new("header was not valid utf-8").to_string())
+    })
 }
 
 impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
@@ -1127,23 +1133,27 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
                 consumer(member, &mut deser)?;
             } else if let Some(header) = member.http_header() {
                 if let Some(mut deser) =
-                    HeaderValuesDeserializer::try_new(self.headers.get_all(header.value()), member)?
+                    HeaderValuesDeserializer::try_new_bytes(self.headers.get_all_bytes(header.value()), member)?
                 {
                     consumer(member, &mut deser)?;
                 }
             } else if let Some(prefix) = member.http_prefix_headers() {
                 let prefix = prefix.value();
-                // Each header name once, in order of first appearance (`Headers::iter` yields
+                // Each header name once, in order of first appearance (`Headers::iter_bytes` yields
                 // one entry per value).
                 let mut seen: HashSet<&str> = HashSet::new();
                 let names = self
                     .headers
-                    .iter()
+                    .iter_bytes()
                     .map(|(name, _)| name)
                     .filter(|name| seen.insert(*name));
                 let mut entries: Vec<(&str, Vec<&str>)> = Vec::new();
                 for (suffix, full_name) in aws_smithy_http::header::headers_for_prefix(names, prefix) {
-                    let values: Vec<&str> = self.headers.get_all(full_name).collect();
+                    let values: Vec<&str> = self
+                        .headers
+                        .get_all_bytes(full_name)
+                        .map(header_text)
+                        .collect::<Result<_, _>>()?;
                     if values.len() > 1 && !member.member().is_some_and(|v| v.shape_type() == ShapeType::List) {
                         return Err(SerdeError::invalid_input(
                             "expected a single prefix header value but found multiple",
@@ -1277,6 +1287,13 @@ mod tests {
     use aws_smithy_json::codec::{JsonCodec, JsonCodecSettings};
     use aws_smithy_schema::traits::HttpTrait;
     use aws_smithy_schema::ShapeId;
+
+    fn header_values<'a>(
+        values: impl IntoIterator<Item = &'a str>,
+        member: &'a Schema<'a>,
+    ) -> Result<Option<HeaderValuesDeserializer<'a>>, SerdeError> {
+        HeaderValuesDeserializer::try_new_bytes(values.into_iter().map(str::as_bytes), member)
+    }
 
     #[test]
     fn uri_parsing() {
@@ -1901,7 +1918,7 @@ mod tests {
         values: Vec<&'a str>,
         member: &'a Schema<'a>,
     ) -> Result<HeaderValuesDeserializer<'a>, SerdeError> {
-        HeaderValuesDeserializer::try_new(values, member)?.ok_or_else(|| SerdeError::invalid_input("header is unset"))
+        header_values(values, member)?.ok_or_else(|| SerdeError::invalid_input("header is unset"))
     }
 
     #[test]
@@ -1913,22 +1930,20 @@ mod tests {
             &HP_JSON_MEMBER,
             &AGE_MEMBER,
         ] {
-            assert!(HeaderValuesDeserializer::try_new([], member).unwrap().is_none());
+            assert!(header_values([], member).unwrap().is_none());
         }
         for member in [&HP_LIST_MEMBER, &HP_TIMESTAMPS_MEMBER, &HP_JSON_MEMBER, &AGE_MEMBER] {
-            assert!(HeaderValuesDeserializer::try_new([""], member).unwrap().is_none());
+            assert!(header_values([""], member).unwrap().is_none());
         }
-        let mut plain = HeaderValuesDeserializer::try_new([""], &TOKEN_MEMBER).unwrap().unwrap();
+        let mut plain = header_values([""], &TOKEN_MEMBER).unwrap().unwrap();
         assert_eq!(plain.read_string(&TOKEN_MEMBER).unwrap(), "");
         assert!(plain.read_string(&TOKEN_MEMBER).is_err());
-        assert!(HeaderValuesDeserializer::try_new(["a", "b"], &TOKEN_MEMBER).is_err());
+        assert!(header_values(["a", "b"], &TOKEN_MEMBER).is_err());
     }
 
     #[test]
     fn prepared_header_list_moves_strings_and_keeps_original_size() {
-        let mut list = HeaderValuesDeserializer::try_new(["\"a,b\", c", "d"], &HP_LIST_MEMBER)
-            .unwrap()
-            .unwrap();
+        let mut list = header_values(["\"a,b\", c", "d"], &HP_LIST_MEMBER).unwrap().unwrap();
         // The returned strings should reuse the tokenizer's allocations.
         let pointers: Vec<_> = match &list.values {
             ParsedHeaderValues::Text(tokens) => tokens.as_slice().iter().map(|s| s.as_ptr()).collect(),
@@ -1955,9 +1970,7 @@ mod tests {
 
     #[test]
     fn prepared_header_list_cleans_up_after_consumer_error() {
-        let mut list = HeaderValuesDeserializer::try_new(["a,b"], &HP_LIST_MEMBER)
-            .unwrap()
-            .unwrap();
+        let mut list = header_values(["a,b"], &HP_LIST_MEMBER).unwrap().unwrap();
         assert!(list
             .read_list(&HP_LIST_MEMBER, &mut |_| Err(SerdeError::invalid_input("stop")))
             .is_err());
@@ -1970,9 +1983,7 @@ mod tests {
     #[cfg(debug_assertions)]
     #[should_panic(expected = "header list schema must match the schema used to prepare its values")]
     fn prepared_header_list_rejects_different_schema() {
-        let mut list = HeaderValuesDeserializer::try_new(["a,b"], &HP_LIST_MEMBER)
-            .unwrap()
-            .unwrap();
+        let mut list = header_values(["a,b"], &HP_LIST_MEMBER).unwrap().unwrap();
         list.read_list(&HP_TIMESTAMPS_MEMBER, &mut |_| Ok(())).unwrap();
     }
 
@@ -1992,17 +2003,13 @@ mod tests {
     #[test]
     fn prepared_timestamp_headers_preserve_http_date_splitting() {
         let raw = "Thu, 01 Jan 1970 00:00:00 GMT";
-        let mut scalar = HeaderValuesDeserializer::try_new([raw], &HP_TIMESTAMP)
-            .unwrap()
-            .unwrap();
+        let mut scalar = header_values([raw], &HP_TIMESTAMP).unwrap().unwrap();
         assert_eq!(scalar.read_timestamp(&HP_TIMESTAMP).unwrap(), DateTime::from_secs(0));
         assert!(scalar.read_timestamp(&HP_TIMESTAMP).is_err());
-        let mut multiple = HeaderValuesDeserializer::try_new([raw, raw], &HP_TIMESTAMP)
-            .unwrap()
-            .unwrap();
+        let mut multiple = header_values([raw, raw], &HP_TIMESTAMP).unwrap().unwrap();
         assert!(multiple.read_timestamp(&HP_TIMESTAMP).is_err());
         let combined = format!("{raw}, {raw}");
-        let mut list = HeaderValuesDeserializer::try_new([combined.as_str()], &HP_TIMESTAMPS_MEMBER)
+        let mut list = header_values([combined.as_str()], &HP_TIMESTAMPS_MEMBER)
             .unwrap()
             .unwrap();
         let mut count = 0;
@@ -2025,16 +2032,14 @@ mod tests {
             ShapeType::Timestamp,
         )
         .with_timestamp_format(TimestampFormat::EpochSeconds);
-        let mut scalar = HeaderValuesDeserializer::try_new(["7"], &timestamp).unwrap().unwrap();
+        let mut scalar = header_values(["7"], &timestamp).unwrap().unwrap();
         assert_eq!(scalar.read_timestamp(&timestamp).unwrap(), DateTime::from_secs(7));
         let list_schema = Schema::new(
             ShapeId::from_parts("test#Timestamps", "test", "Timestamps"),
             ShapeType::List,
         )
         .with_list_member(&timestamp);
-        let mut list = HeaderValuesDeserializer::try_new(["7,8"], &list_schema)
-            .unwrap()
-            .unwrap();
+        let mut list = header_values(["7,8"], &list_schema).unwrap().unwrap();
         let mut dates = Vec::new();
         list.read_list(&list_schema, &mut |d| {
             dates.push(d.read_timestamp(&timestamp)?);
