@@ -24,6 +24,12 @@ use crate::arch::Arch;
 struct RequiredDependency {
     name: &'static str,
     features: Option<Vec<&'static str>>,
+    /// Features named only when building against a local SDK path, not a published release.
+    ///
+    /// Needed for features that exist in the current checkout but not in the older releases the
+    /// canary is also built against: naming one of those on a published crate fails the build with
+    /// "unknown feature". See the use of `rustcrypto` in `WASM_REQUIRED_SDK_CRATES`.
+    path_only_features: Option<Vec<&'static str>>,
     disable_default_feature: bool,
 }
 
@@ -32,11 +38,16 @@ impl RequiredDependency {
         Self {
             name,
             features: None,
+            path_only_features: None,
             disable_default_feature: false,
         }
     }
     fn with_features(mut self, features: impl IntoIterator<Item = &'static str>) -> Self {
         self.features = Some(features.into_iter().collect());
+        self
+    }
+    fn with_path_only_features(mut self, features: impl IntoIterator<Item = &'static str>) -> Self {
+        self.path_only_features = Some(features.into_iter().collect());
         self
     }
     fn with_default_feature_disabled(mut self) -> Self {
@@ -56,7 +67,17 @@ impl RequiredDependency {
                     name = self.name,
                     path = crate_path.to_string_lossy(),
                 );
-                if let Some(features) = &self.features {
+                let features: Option<Vec<&'static str>> =
+                    match (&self.features, &self.path_only_features) {
+                        (None, None) => None,
+                        (base, extra) => Some(
+                            base.iter()
+                                .flat_map(|f| f.iter().copied())
+                                .chain(extra.iter().flat_map(|f| f.iter().copied()))
+                                .collect(),
+                        ),
+                    };
+                if let Some(features) = &features {
                     self.write_features(features, &mut result);
                 }
                 if self.disable_default_feature {
@@ -181,11 +202,22 @@ wit-bindgen = "0.51.0"
 "#;
 
 lazy_static! {
+    // `rustcrypto` is path-only: the crypto backend is an optional dependency in the current
+    // checkout, so these `default-features = false` declarations would otherwise leave `aws-sigv4`
+    // with no backend. Older published SDKs have no such feature and compile RustCrypto
+    // unconditionally, so naming it there would fail with "unknown feature" instead. It is also the
+    // only valid backend for this bundle regardless: aws-lc-rs does not build for WASM.
+    //
+    // Once a release containing the optional backend is added to NOTABLE_SDK_RELEASE_TAGS, this can
+    // become unconditional for those tags.
     static ref WASM_REQUIRED_SDK_CRATES: Vec<RequiredDependency> = vec![
         RequiredDependency::new("aws-config")
             .with_features(["behavior-version-latest"])
+            .with_path_only_features(["rustcrypto"])
             .with_default_feature_disabled(),
-        RequiredDependency::new("aws-sdk-s3").with_default_feature_disabled(),
+        RequiredDependency::new("aws-sdk-s3")
+            .with_path_only_features(["rustcrypto"])
+            .with_default_feature_disabled(),
         RequiredDependency::new("aws-smithy-async").with_default_feature_disabled(),
         RequiredDependency::new("aws-smithy-wasm"),
     ];
@@ -812,8 +844,8 @@ package = "aws:component"
 [dependencies]
 wstd = "0.6.5"
 wit-bindgen = "0.51.0"
-aws-config = { path = "some/sdk/path/aws-config", features = ["behavior-version-latest"], default-features = false }
-aws-sdk-s3 = { path = "some/sdk/path/s3", default-features = false }
+aws-config = { path = "some/sdk/path/aws-config", features = ["behavior-version-latest","rustcrypto"], default-features = false }
+aws-sdk-s3 = { path = "some/sdk/path/s3", features = ["rustcrypto"], default-features = false }
 aws-smithy-async = { path = "some/sdk/path/aws-smithy-async", default-features = false }
 aws-smithy-wasm = { path = "some/sdk/path/aws-smithy-wasm" }
 "#,
