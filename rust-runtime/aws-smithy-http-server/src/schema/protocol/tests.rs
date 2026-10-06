@@ -537,6 +537,7 @@ async fn collection_enforces_limits_timeouts_and_body_errors() {
     let limited = RequestBodyCollectionConfig {
         max_bytes: NonZeroUsize::new(3),
         read_timeout: None,
+        ..Default::default()
     };
     let body = http_body_util::Full::new(bytes::Bytes::from_static(b"four"));
     assert!(matches!(
@@ -547,6 +548,7 @@ async fn collection_enforces_limits_timeouts_and_body_errors() {
     let timed = RequestBodyCollectionConfig {
         max_bytes: None,
         read_timeout: Some(Duration::from_millis(1)),
+        ..Default::default()
     };
     let body = http_body_util::StreamBody::new(futures_util::stream::pending::<
         Result<http_body::Frame<bytes::Bytes>, std::io::Error>,

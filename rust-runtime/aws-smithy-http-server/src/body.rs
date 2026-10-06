@@ -11,6 +11,7 @@
 use crate::error::{BoxError, Error};
 use bytes::{Buf, BufMut, Bytes};
 use std::fmt;
+use std::num::NonZeroUsize;
 
 // Used in the codegen in trait bounds.
 #[doc(hidden)]
@@ -355,12 +356,33 @@ impl<E: std::error::Error + 'static> std::error::Error for CollectBodyError<E> {
 /// Passing `limit == 0` disables the check and collects the entire body (the
 /// historical behavior, *not* recommended — see the security notes on the
 /// `customizationConfig.protocols.global.requestBodyMaxBytes` setting).
+/// Collection yields after 64 ready frame polls, including empty frames and trailers.
 #[doc(hidden)]
 pub async fn collect_body_limited<B>(body: B, limit: usize) -> Result<Bytes, CollectBodyError<B::Error>>
 where
     B: HttpBody,
 {
-    collect_body_limited_with_trailers(body, limit)
+    collect_body_limited_with_frame_budget(body, limit, DEFAULT_FRAME_BUDGET).await
+}
+
+/// Default number of ready frame polls before body collection yields.
+pub(crate) const DEFAULT_FRAME_BUDGET: NonZeroUsize = NonZeroUsize::new(64).unwrap();
+
+/// Collect a body with a byte limit and a positive budget of ready frame polls.
+///
+/// Empty data frames and trailers count toward the budget. A pending body poll resets
+/// the budget. When the budget is exhausted, collection yields and wakes itself to
+/// schedule another poll. Passing `limit == 0` disables the byte limit.
+#[doc(hidden)]
+pub async fn collect_body_limited_with_frame_budget<B>(
+    body: B,
+    limit: usize,
+    frame_budget: NonZeroUsize,
+) -> Result<Bytes, CollectBodyError<B::Error>>
+where
+    B: HttpBody,
+{
+    collect_body_limited_with_trailers(body, limit, frame_budget)
         .await
         .map(|(bytes, _)| bytes)
 }
@@ -369,6 +391,7 @@ where
 pub(crate) async fn collect_body_limited_with_trailers<B>(
     body: B,
     limit: usize,
+    frame_budget: NonZeroUsize,
 ) -> Result<(Bytes, Option<http::HeaderMap>), CollectBodyError<B::Error>>
 where
     B: HttpBody,
@@ -388,12 +411,13 @@ where
     const MAX_INITIAL_CAPACITY: u64 = 32 * 1024;
     let mut collected = bytes::BytesMut::with_capacity(lower.min(MAX_INITIAL_CAPACITY) as usize);
     let mut trailers = None;
-    let mut frame_budget = 64; // TODO: keep this configurable
+    let max_ready_frames = frame_budget.get();
+    let mut frame_budget = max_ready_frames;
     loop {
         let next_frame = std::future::poll_fn(|cx| {
             // Always-ready streams must yield so other tasks and read timeouts can run.
             if frame_budget == 0 {
-                frame_budget = 64;
+                frame_budget = max_ready_frames;
                 cx.waker().wake_by_ref();
                 return std::task::Poll::Pending;
             }
@@ -403,7 +427,7 @@ where
 
             // Frames are yielding, we can reset the budget.
             if result.is_pending() {
-                frame_budget = 64;
+                frame_budget = max_ready_frames;
             }
             result
         })
@@ -501,6 +525,103 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn collection_yields_and_self_wakes_with_default_and_explicit_frame_budgets() {
+        use std::future::Future;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+        use std::task::{Context, Poll, Wake, Waker};
+
+        struct WakeCount(AtomicUsize);
+        impl Wake for WakeCount {
+            fn wake(self: Arc<Self>) {
+                self.0.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        for budget in [None, NonZeroUsize::new(1), NonZeroUsize::new(7)] {
+            for limit in [0, 1024] {
+                let polls = Arc::new(AtomicUsize::new(0));
+                let observed = polls.clone();
+                let frames = futures_util::stream::poll_fn(move |_| {
+                    let index = observed.fetch_add(1, Ordering::SeqCst);
+                    Poll::Ready(match index {
+                        0 => Some(Ok::<_, Error>(http_body::Frame::data(Bytes::from_static(b"x")))),
+                        1..=129 => Some(Ok(http_body::Frame::data(Bytes::new()))),
+                        130 => Some(Ok(http_body::Frame::trailers(http::HeaderMap::new()))),
+                        _ => None,
+                    })
+                });
+                let body = http_body_util::StreamBody::new(frames);
+                let mut future = Box::pin(async move {
+                    match budget {
+                        Some(budget) => collect_body_limited_with_frame_budget(body, limit, budget).await,
+                        None => collect_body_limited(body, limit).await,
+                    }
+                });
+                let wakes = Arc::new(WakeCount(AtomicUsize::new(0)));
+                let waker = Waker::from(wakes.clone());
+                let mut cx = Context::from_waker(&waker);
+                let expected_budget = budget.map(NonZeroUsize::get).unwrap_or(64);
+                let mut yields = 0;
+                loop {
+                    match future.as_mut().poll(&mut cx) {
+                        Poll::Pending => {
+                            yields += 1;
+                            assert_eq!(polls.load(Ordering::SeqCst), yields * expected_budget);
+                            assert_eq!(wakes.0.load(Ordering::SeqCst), yields);
+                        }
+                        Poll::Ready(result) => {
+                            assert_eq!(result.unwrap(), "x");
+                            assert_eq!(polls.load(Ordering::SeqCst), 132);
+                            assert_eq!(yields, 131 / expected_budget);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn collection_resets_frame_budget_after_pending_and_counts_trailers() {
+        use std::future::Future;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+        use std::task::{Context, Poll};
+
+        let polls = Arc::new(AtomicUsize::new(0));
+        let observed = polls.clone();
+        let frames = futures_util::stream::poll_fn(move |cx| {
+            let index = observed.fetch_add(1, Ordering::SeqCst);
+            match index {
+                0 | 2 | 4 => Poll::Ready(Some(Ok::<_, Error>(http_body::Frame::data(Bytes::from_static(b"x"))))),
+                1 => {
+                    cx.waker().wake_by_ref();
+                    Poll::Pending
+                }
+                3 => Poll::Ready(Some(Ok(http_body::Frame::trailers(http::HeaderMap::new())))),
+                _ => Poll::Ready(None),
+            }
+        });
+        let body = http_body_util::StreamBody::new(frames);
+        let mut future = Box::pin(collect_body_limited_with_frame_budget(
+            body,
+            0,
+            NonZeroUsize::new(3).unwrap(),
+        ));
+        let mut cx = Context::from_waker(std::task::Waker::noop());
+        assert!(future.as_mut().poll(&mut cx).is_pending());
+        assert_eq!(polls.load(Ordering::SeqCst), 2);
+        assert!(future.as_mut().poll(&mut cx).is_pending());
+        // A fresh budget permits three more frames, including the trailer.
+        assert_eq!(polls.load(Ordering::SeqCst), 5);
+        let Poll::Ready(Ok(bytes)) = future.as_mut().poll(&mut cx) else {
+            panic!("collection should finish after yielding");
+        };
+        assert_eq!(bytes, "xxx");
+    }
 
     /// Collect all bytes from a body (test utility).
     ///
@@ -916,7 +1037,9 @@ mod tests {
                 Ok(http_body::Frame::trailers(trailers.clone())),
             ];
             let body = http_body_util::StreamBody::new(futures_util::stream::iter(frames));
-            let (bytes, actual_trailers) = collect_body_limited_with_trailers(body, limit).await.unwrap();
+            let (bytes, actual_trailers) = collect_body_limited_with_trailers(body, limit, DEFAULT_FRAME_BUDGET)
+                .await
+                .unwrap();
             assert_eq!(bytes, "payload");
             assert_eq!(actual_trailers, Some(trailers));
         }
