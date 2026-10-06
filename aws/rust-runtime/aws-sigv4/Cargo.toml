@@ -99,43 +99,30 @@ p256 = { version = "0.13.2", features = ["ecdsa"], optional = true }
 # so that the AWS-LC build (non-FIPS vs FIPS) is chosen explicitly by those features rather than
 # defaulting to the non-FIPS one.
 #
-# This is a bounded range rather than the usual floor, and the upper bound is the load-bearing half.
-# `aws-lc-rs` 1.18 moved `aws-lc-fips-sys` to 0.14.x, which is AWS-LC-FIPS 4.1.0 — on the CMVP
-# Modules In Process list, not certificated. A feature whose entire purpose is a FIPS 140-3 claim
-# cannot resolve to a module that does not hold a certificate, and a plain floor cannot prevent that,
-# because Cargo takes the highest compatible version. Hence `<1.18`, which holds the FIPS arm on
-# `aws-lc-fips-sys` 0.13.x — AWS-LC-FIPS 3.x, which does hold certificates.
+# The floor is 1.18 to match the requirement `rustls` declares, so that the signing path and the TLS
+# path ask for the same AWS-LC line. Cargo would unify them to one version either way — it resolves a
+# single `aws-lc-rs` 1.x for the whole graph, and incompatible requirements force a downgrade
+# elsewhere or fail outright rather than producing two copies — so this is not about preventing
+# duplicate builds. It is about the requirements saying the same thing as the crate they will be
+# resolved alongside, and about `minimal-versions --direct`: that leg pins direct dependencies to
+# their declared minimum, so a lower floor here would have CI exercising an AWS-LC line no build
+# actually ships.
 #
-# The lower bound is an advisory bound, not an API one: the aws-lc-rs APIs used here compile against
-# 1.16.1. 1.17.4 is the lowest version whose declared ranges for *both* `-sys` crates exclude every
-# version with an open advisory, which matters because this crate offers both AWS-LC arms:
+# The floor is also an advisory floor, not an API one: the aws-lc-rs APIs used here compile against
+# 1.16.1. Every version from 1.17.3 up has declared ranges for *both* `-sys` crates that exclude
+# every version with an open advisory, which matters because this crate offers both AWS-LC arms:
 #
 #   aws-lc-rs   aws-lc-sys req   aws-lc-fips-sys req
 #   1.16.1      ^0.38.0   BAD    ^0.13.1           BAD
 #   1.16.2      ^0.39.0   ok     ^0.13.1           BAD
 #   1.17.0      ^0.41.0   ok     ^0.13.1           BAD
 #   1.17.3      ^0.43.0   ok     ^0.13.16          ok
-#   1.17.4      ^0.45.0   ok     ^0.13.17          ok   <- same aws-lc-sys as 1.18.1
+#   1.18.1      ^0.45.0   ok     ^0.14.2           ok
 #
 # `aws-lc-sys` needs >= 0.39.0 for RUSTSEC-2026-0044 and -0048 (and >= 0.38.0 for -0045, -0046,
-# -0047); `aws-lc-fips-sys` needs >= 0.13.13 for RUSTSEC-2026-0042 and >= 0.13.12 for -0043.
-#
-# 1.17.4 rather than 1.17.3 because it reaches the same `aws-lc-sys` 0.45.0 as 1.18.1, so holding the
-# FIPS module at 3.x costs nothing on the non-FIPS library. Note 1.17.4 was published *after* 1.18.0,
-# so the 1.17 line is actively maintained rather than abandoned.
-#
-# The bound must be spelled with a lower bound. A bare `<1.18` admits `aws-lc-rs` 0.0.1 — a published
-# placeholder with no features — which makes CI's `cargo minimal-versions check --direct` fail to
-# select a version, since the `aws-lc-rs?/aws-lc-sys` feature reference below cannot be satisfied.
-#
-# Cost of the upper bound, which is real and belongs here rather than only in the changelog: `rustls`
-# 0.23.44+ requires `aws-lc-rs = "1.18"`, so a build with a rustls TLS client resolves `rustls`
-# 0.23.43 instead. RUSTSEC-2026-0285 is patched only in 0.23.45, so such a build carries that
-# advisory. A certificated FIPS module and a patched rustls are mutually exclusive today. If a
-# consumer's graph requires rustls >= 0.23.45 for any other reason, resolution fails outright with a
-# version-conflict error naming `aws-lc-rs` — loudly, not silently. Revisit this bound when
-# AWS-LC-FIPS 4.x certificates.
-aws-lc-rs = { version = ">=1.17.4, <1.18", optional = true, default-features = false }
+# -0047); `aws-lc-fips-sys` needs >= 0.13.13 for RUSTSEC-2026-0042 and >= 0.13.12 for -0043, which
+# the 0.14 line satisfies as well.
+aws-lc-rs = { version = "1.18", optional = true, default-features = false }
 crypto-bigint = { version = "0.5.4", optional = true }
 subtle = { version = "2.5.0", optional = true }
 # 0.3.35 is the minimum version that compiles on Rust 1.80+ (earlier versions hit a type inference bug)

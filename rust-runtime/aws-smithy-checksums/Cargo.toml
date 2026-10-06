@@ -86,19 +86,17 @@ sha2 = { version = "0.11", optional = true }
 # `default-features = false` so that the AWS-LC build (non-FIPS vs FIPS) is chosen
 # explicitly by those features rather than defaulting to the non-FIPS one.
 #
-# The upper bound is the load-bearing half: `aws-lc-rs` 1.18 moved `aws-lc-fips-sys` to 0.14.x, which
-# is AWS-LC-FIPS 4.1.0 — in process, not certificated — and a plain floor cannot keep a build off it,
-# since Cargo takes the highest compatible version. `<1.18` holds the FIPS arm on `aws-lc-fips-sys`
-# 0.13.x, which does hold certificates.
+# The floor is 1.18 to match the requirement `rustls` declares, so the digest path asks for the same
+# AWS-LC line as the TLS path.
 #
-# The lower bound is an advisory bound, not an API one: the aws-lc-rs APIs used here compile against
-# 1.16.1. It also must be present — a bare `<1.18` admits the featureless `aws-lc-rs` 0.0.1
-# placeholder and breaks CI's `minimal-versions --direct` leg.
+# It is also an advisory floor, not an API one: the aws-lc-rs APIs used here compile against 1.16.1.
+# Versions before 1.17.3 allow `aws-lc-fips-sys` 0.13.1, which RUSTSEC-2026-0042 and -0043 patch only
+# in 0.13.13 and 0.13.12.
 #
-# This range must stay in step with `aws-sigv4`'s, because Cargo unifies on a single `aws-lc-rs`
-# version graph-wide. See that crate's Cargo.toml for the advisory table, and for the rustls cost the
-# upper bound carries.
-aws-lc-rs = { version = ">=1.17.4, <1.18", optional = true, default-features = false }
+# Keep this in step with `aws-sigv4`'s. Cargo resolves one `aws-lc-rs` 1.x for the whole graph, so
+# they cannot drift apart at build time, but the declared requirements should still agree. See that
+# crate's Cargo.toml for the advisory table and the full rationale.
+aws-lc-rs = { version = "1.18", optional = true, default-features = false }
 
 [dev-dependencies]
 bytes-utils = "0.1.2"
