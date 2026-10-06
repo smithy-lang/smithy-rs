@@ -99,7 +99,9 @@ open class CheckMavenCentralPublishingNeeded : DefaultTask() {
         if (publishState.isInconclusive) {
             val changedPaths = changes?.changedPaths.orEmpty()
             if (baseTag != null && changedPaths.isNotEmpty()) {
-                throw GradleException(needsBumpMessage(codegenVersion, baseTag, changes!!))
+                reportBumpNeeded(needsBumpMessage(codegenVersion, baseTag, changes!!))
+                writeResult(publishingNeeded = true)
+                return
             }
             logger.warn(
                 "==> PUBLISH (unverified): repo1 gave no conclusive answer for " +
@@ -130,7 +132,9 @@ open class CheckMavenCentralPublishingNeeded : DefaultTask() {
         // Fully published from here on.
         val changedPaths = changes?.changedPaths.orEmpty()
         if (changedPaths.isNotEmpty()) {
-            throw GradleException(needsBumpMessage(codegenVersion, baseTag!!, changes!!))
+            reportBumpNeeded(needsBumpMessage(codegenVersion, baseTag!!, changes!!))
+            writeResult(publishingNeeded = true)
+            return
         }
 
         val since = baseTag?.let { "since ${it.name}" } ?: "since it was published"
@@ -478,6 +482,24 @@ open class CheckMavenCentralPublishingNeeded : DefaultTask() {
                     "release at it; that only happens when checking a historical version.",
             )
         }
+
+    /**
+     * Records that `codegenVersion` needs bumping, without failing the build.
+     *
+     * This task runs in `test-codegen`, which gates `Matrix Success`, so throwing here would block
+     * the merge. Instead the finding is written where CI can pick it up and surface it as a pull
+     * request comment, and as a workflow annotation on fork runs where commenting is not permitted.
+     *
+     * The tradeoff is deliberate and worth stating: a comment informs, it does not prevent. If it is
+     * ignored, the release publishes jars whose contents no longer match the codegen that built
+     * them, and the Maven publisher cannot catch that because it only sees repo1.
+     */
+    private fun reportBumpNeeded(message: String) {
+        val outputDir = project.layout.buildDirectory.dir("maven-central").get().asFile
+        outputDir.mkdirs()
+        File(outputDir, "bump-needed.md").writeText(message.trimEnd() + "\n")
+        logger.warn("==> BUMP NEEDED\n\n$message")
+    }
 
     private fun writeResult(publishingNeeded: Boolean) {
         val outputDir = project.layout.buildDirectory.dir("maven-central").get().asFile
