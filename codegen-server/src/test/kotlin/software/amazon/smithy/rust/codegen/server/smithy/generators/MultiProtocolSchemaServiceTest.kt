@@ -309,6 +309,123 @@ class MultiProtocolSchemaServiceTest {
     }
 
     @Test
+    fun `custom payload media type reaches the handler through multi protocol routing`() {
+        val payloadModel =
+            """
+            namespace test
+
+            @aws.protocols#awsJson1_1
+            @aws.protocols#restJson1
+            @aws.protocols#restXml
+            service Images { version: "1", operations: [EchoImage] }
+
+            @http(method: "POST", uri: "/image")
+            operation EchoImage {
+                input := { @required @httpPayload data: Png }
+                output := { @required @httpPayload data: Png }
+            }
+
+            @mediaType("image/png")
+            blob Png
+            """.asSmithyModel(smithyVersion = "2")
+        serverIntegrationTest(
+            payloadModel,
+            schemaSerde,
+            testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
+        ) { context, crate ->
+            val scope =
+                arrayOf(
+                    "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
+                    "Http" to RuntimeType.http(context.runtimeConfig),
+                    "Tower" to ServerCargoDependency.Tower.toType(),
+                    "BodyUtil" to CargoDependency.HttpBodyUtil01x.toType(),
+                    "Bytes" to RuntimeType.Bytes,
+                    *RuntimeType.preludeScope,
+                )
+            crate.testModule {
+                rustTemplate(
+                    """
+                    use #{Tower}::ServiceExt;
+                    use #{BodyUtil}::BodyExt;
+                    use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
+
+                    // Include non-UTF-8 bytes to prove the payload is not parsed as JSON or XML.
+                    const IMAGE: &[u8] = b"\x89PNG\r\n\x1a\n\x00\xff";
+
+                    async fn send(content_type: &str, accept: #{Option}<&str>) -> (u16, #{Http}::HeaderMap, #{Bytes}, usize) {
+                        let calls = Arc::new(AtomicUsize::new(0));
+                        let handler_calls = calls.clone();
+                        let service = crate::Images::builder(crate::ImagesConfig::builder().build())
+                            .echo_image(move |input: crate::input::EchoImageInput| {
+                                let calls = handler_calls.clone();
+                                async move {
+                                    calls.fetch_add(1, Ordering::SeqCst);
+                                    assert_eq!(input.data.as_ref(), IMAGE);
+                                    #{Ok}::<_, crate::error::EchoImageError>(crate::output::EchoImageOutput { data: input.data })
+                                }
+                            })
+                            .build()
+                            .unwrap();
+                        let mut request = #{Http}::Request::builder().method("POST").uri("/image")
+                            .header("content-type", content_type)
+                            .header("content-length", IMAGE.len());
+                        if let #{Some}(accept) = accept {
+                            request = request.header("accept", accept);
+                        }
+                        let response = service.oneshot(request
+                            .body(#{Server}::body::Body::from_bytes(#{Bytes}::from_static(IMAGE))).unwrap())
+                            .await.unwrap();
+                        let status = response.status().as_u16();
+                        let headers = response.headers().clone();
+                        let body = response.into_body().collect().await.unwrap().to_bytes();
+                        (status, headers, body, calls.load(Ordering::SeqCst))
+                    }
+                    """,
+                    *scope,
+                )
+                tokioTest("modeled_media_type_is_accepted_and_binary_payload_round_trips") {
+                    rustTemplate(
+                        """
+                        for accept in [#{None}, #{Some}("image/png"), #{Some}("image/*"), #{Some}("*/*")] {
+                            let (status, headers, body, calls) = send("image/png", accept).await;
+                            assert_eq!(status, 200);
+                            assert_eq!(calls, 1);
+                            assert_eq!(headers["content-type"], "image/png");
+                            assert_eq!(body.as_ref(), IMAGE);
+                        }
+                        """,
+                        *scope,
+                    )
+                }
+                tokioTest("incorrect_request_media_type_is_not_claimed") {
+                    rustTemplate(
+                        """
+                        for content_type in ["application/json", "application/xml", "application/octet-stream"] {
+                            let (status, _, _, calls) = send(content_type, #{Some}("image/png")).await;
+                            assert_eq!(status, 404, "{content_type}");
+                            assert_eq!(calls, 0);
+                        }
+                        """,
+                        *scope,
+                    )
+                }
+                tokioTest("accept_is_checked_against_the_modeled_response_media_type") {
+                    rustTemplate(
+                        """
+                        let (status, _, _, calls) = send("image/png", #{Some}("application/json")).await;
+                        // Both REST protocols can claim image/png; restJson1 wins by priority
+                        // and rejects an Accept header that excludes the operation's image output.
+                        assert_eq!(status, 406);
+                        assert_eq!(calls, 0);
+                        """,
+                        *scope,
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
     fun `a declared protocol code generation does not support fails the build`() {
         val query =
             """
