@@ -613,6 +613,7 @@ dependencies = [
  "pin-project-lite",
  "pretty_assertions",
  "regex",
+ "rustc-hash",
  "serde_urlencoded",
  "thiserror 2.0.21",
  "tokio",
