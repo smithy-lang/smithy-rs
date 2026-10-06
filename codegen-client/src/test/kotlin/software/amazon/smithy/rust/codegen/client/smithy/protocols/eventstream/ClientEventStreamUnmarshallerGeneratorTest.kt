@@ -7,7 +7,11 @@ package software.amazon.smithy.rust.codegen.client.smithy.protocols.eventstream
 
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ArgumentsSource
+import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -87,7 +91,37 @@ class ClientEventStreamUnmarshallerGeneratorTest {
 
     @ParameterizedTest
     @ArgumentsSource(RpcEventStreamTestCasesProvider::class)
-    fun rpcEventStreamTest(rpcEventStreamTestCase: RpcEventStreamTestCase) {
+    fun rpcEventStreamTest(rpcEventStreamTestCase: RpcEventStreamTestCase) =
+        runRpcEventStreamTest(rpcEventStreamTestCase, rpcEventStreamTestCase.inner.model, "test#TestService")
+
+    /**
+     * The same cases on the schema-serde path. The fixture models live in `namespace test`, which
+     * only reaches legacy codegen, so they are moved into the schema-exclusive test namespace here.
+     *
+     * This is the guard that RPC initial-response members still come from the first event frame
+     * after event-stream outputs started populating members from the selected protocol's response
+     * deserializer. The fixture's non-stream member carries `@httpHeader`, which an RPC protocol
+     * must ignore, so its value can only come from the initial-response frame.
+     */
+    @ParameterizedTest
+    @ArgumentsSource(RpcEventStreamTestCasesProvider::class)
+    fun rpcEventStreamTestOnTheSchemaSerdePath(rpcEventStreamTestCase: RpcEventStreamTestCase) {
+        val namespace = "smithy.rust.codegen.test.schemaheaders"
+        val model = rpcEventStreamTestCase.inner.model
+        val renames =
+            model.shapeIds
+                .filter { it.namespace == "test" && !it.hasMember() }
+                .associateWith { ShapeId.fromParts(namespace, it.name) }
+        val renamed = ModelTransformer.create().renameShapes(model, renames)
+        runRpcEventStreamTest(rpcEventStreamTestCase, renamed, "$namespace#TestService", requireSchemaSerde = true)
+    }
+
+    private fun runRpcEventStreamTest(
+        rpcEventStreamTestCase: RpcEventStreamTestCase,
+        model: Model,
+        service: String,
+        requireSchemaSerde: Boolean = false,
+    ) {
         val defaultEventStreamReceiver =
             writable {
                 rust(
@@ -184,9 +218,14 @@ class ClientEventStreamUnmarshallerGeneratorTest {
         }
 
         clientIntegrationTest(
-            rpcEventStreamTestCase.inner.model,
-            IntegrationTestParams(service = "test#TestService"),
+            model,
+            IntegrationTestParams(service = service),
         ) { codegenContext, rustCrate ->
+            if (requireSchemaSerde) {
+                check(SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
+                    "this case must exercise the schema-exclusive event-stream path"
+                }
+            }
             rustCrate.testModule {
                 rust("##![allow(unused_imports, dead_code)]")
                 writeUnmarshallTestUtil(codegenContext)
