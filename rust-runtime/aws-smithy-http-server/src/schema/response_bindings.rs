@@ -221,7 +221,8 @@ fn compile_member_plan(
         };
         return ResponseMemberPlan::Header {
             name,
-            media_type: schema.media_type().is_some(),
+            media_type: schema.media_type().is_some()
+                || schema.member().is_some_and(|element| element.media_type().is_some()),
             timestamp_format,
             sensitive: container_sensitive
                 || schema.sensitive().is_some()
@@ -621,17 +622,18 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
         }
         if let ResponseMemberPlan::Header {
             name,
+            media_type,
             timestamp_format,
             sensitive,
             ..
         } = self.plan.member(schema)
         {
-            // Each element becomes its own header value under the same name;
-            // the collector formats elements against the outer
-            // (header-carrying) member schema.
+            // Each element becomes its own header value under the same name.
+            // Formatting also uses element traits inherited from its target.
             let mut collector = HeaderListCollector {
                 sink: self.headers,
                 name,
+                media_type: *media_type,
                 timestamp_format: *timestamp_format,
                 sensitive: *sensitive,
             };
@@ -795,6 +797,7 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
 struct HeaderListCollector<'a> {
     sink: &'a CapturedHeaders,
     name: &'a http::HeaderName,
+    media_type: bool,
     timestamp_format: HeaderTimestampFormat,
     sensitive: bool,
 }
@@ -849,7 +852,13 @@ impl ShapeSerializer for HeaderListCollector<'_> {
         capture_header(self.sink, self.name, value.as_ref(), self.sensitive)
     }
 
-    fn write_string(&mut self, _schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
+    fn write_string(&mut self, schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
+        // Legacy encodes media-typed strings before emitting each list element.
+        // Base64 has no list delimiters to quote; capture_header also skips empty values.
+        if self.media_type || schema.media_type().is_some() {
+            let encoded = aws_smithy_types::base64::encode(value.as_bytes());
+            return capture_header(self.sink, self.name, &encoded, self.sensitive);
+        }
         // Elements of a header-bound list are quoted when they contain `,` or
         // `"` (RFC 9110 list syntax) — mirroring the generated
         // serializers' `quote_header_value` usage.
