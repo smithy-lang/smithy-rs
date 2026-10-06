@@ -28,8 +28,9 @@ enum Container {
 /// Callback for writing members into the currently open structure map.
 ///
 /// Runs after the map and its container state are opened, before modeled members.
-/// The schema is the member's target schema when available, otherwise the supplied
-/// schema. Any error is returned immediately without writing modeled members.
+/// The schema is the value's structure or union schema, obtained through
+/// [`SerializableStruct::schema`]. Any error is returned immediately without
+/// writing modeled members.
 pub type StructPrefix = fn(&Schema<'_>, &mut dyn ShapeSerializer) -> Result<(), SerdeError>;
 
 /// CBOR serializer that implements the [`ShapeSerializer`] trait.
@@ -52,8 +53,8 @@ impl CborSerializer {
     }
 
     /// Installs a callback that writes members into each currently open structure
-    /// map before its modeled members. The callback receives the target schema
-    /// attached to a member, or the supplied schema if none is attached. Errors stop
+    /// map before its modeled members. The callback receives the value's schema,
+    /// preserving the supplied member schema for field naming. Errors stop
     /// serialization immediately. By default, no callback is installed.
     pub fn with_struct_prefix(mut self, prefix: StructPrefix) -> Self {
         self.struct_prefix = Some(prefix);
@@ -89,7 +90,7 @@ impl ShapeSerializer for CborSerializer {
         self.encoder.begin_map();
         self.container_stack.push(Container::Struct);
         if let Some(prefix) = self.struct_prefix {
-            prefix(schema.target_schema().unwrap_or(schema), self)?;
+            prefix(value.schema(), self)?;
         }
         value.serialize_members(self)?;
         self.container_stack.pop();
@@ -395,8 +396,7 @@ mod tests {
             ShapeType::Structure,
             "value",
             0,
-        )
-        .with_target_schema(&VALUE);
+        );
         static PREFIX: Schema = Schema::new_member(
             shape_id!("test", "Value", "prefix"),
             ShapeType::String,
@@ -406,6 +406,10 @@ mod tests {
 
         struct Value;
         impl SerializableStruct for Value {
+            fn schema(&self) -> &Schema<'_> {
+                &VALUE
+            }
+
             fn serialize_members(
                 &self,
                 serializer: &mut dyn ShapeSerializer,
@@ -424,11 +428,12 @@ mod tests {
         }
 
         #[test]
-        fn prefix_precedes_members_and_receives_target_schema() {
+        fn prefix_precedes_members_and_receives_value_schema() {
             let mut serializer = CborCodec::default().create_serializer().with_struct_prefix(
                 |schema, serializer| {
-                    assert_eq!(schema.shape_id(), VALUE.shape_id());
-                    assert_eq!(schema.member_name(), None);
+                    let expected = &VALUE;
+                    assert_eq!(schema.shape_id(), expected.shape_id());
+                    assert_eq!(schema.member_name(), expected.member_name());
                     serializer.write_string(&PREFIX, schema.shape_id().as_str())
                 },
             );
@@ -443,7 +448,7 @@ mod tests {
                 .begin_array()
                 .begin_map()
                 .str("prefix")
-                .str("test#Value")
+                .str(VALUE.shape_id().as_str())
                 .str("name")
                 .str("Alice")
                 .end()
@@ -455,6 +460,10 @@ mod tests {
         fn prefix_failure_prevents_modeled_members() {
             struct UnreachableMembers;
             impl SerializableStruct for UnreachableMembers {
+                fn schema(&self) -> &Schema<'_> {
+                    &VALUE
+                }
+
                 fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                     panic!("modeled members must not be serialized after prefix failure")
                 }
