@@ -355,9 +355,9 @@ pub trait ServerProtocol: Send + Sync + std::fmt::Debug + 'static {
     /// serialization failure is logged and answered with the protocol's `RuntimeError::Serialization`
     /// response, so this never fails outward.
     ///
-    /// For a successfully serialized output, built-in protocols emit one `Content-Length`
-    /// matching the body. Any modeled length must agree with that size; malformed or conflicting
-    /// values cause a serialization failure.
+    /// Built-in protocols add the buffered body's byte count as `Content-Length` only when
+    /// no modeled value is present. Matching legacy generated responses, modeled values take
+    /// precedence without length-specific validation or normalization.
     fn serialize_response(&self, output: &Schema<'_>, value: &dyn SerializableStruct) -> Response;
 
     /// Serializes the head of a streaming response for `output` around a caller-supplied `body`.
@@ -366,9 +366,9 @@ pub trait ServerProtocol: Send + Sync + std::fmt::Debug + 'static {
     /// no body member is written. The generated streaming glue builds `body` from the event
     /// stream or streaming blob member.
     ///
-    /// Built-in protocols do not infer a length or collect the stream. Modeled `Content-Length`
-    /// values must be valid and agree with each other, but their agreement with the live body's
-    /// size remains the caller's responsibility.
+    /// Built-in protocols do not infer a length or collect the stream. Matching legacy generated
+    /// responses, modeled `Content-Length` values are preserved without length-specific validation
+    /// or normalization.
     fn serialize_streaming_response(
         &self,
         output: &Schema<'_>,

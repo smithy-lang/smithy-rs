@@ -11,7 +11,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aws_smithy_http_server::body::empty;
-use aws_smithy_http_server::extension::RuntimeErrorExtension;
 use aws_smithy_http_server::routing::IntoMakeService;
 use aws_smithy_http_server::schema::protocol::{
     AwsJson1_0Protocol, AwsJson1_1Protocol, RestJson1Protocol, RestXmlProtocol, RpcV2CborProtocol,
@@ -152,14 +151,6 @@ fn assert_bound_headers(headers: &http::HeaderMap) {
     assert_eq!(values(headers, "content-color"), ["red"]);
 }
 
-fn assert_serialization_rejection(response: &aws_smithy_http_server::response::Response) {
-    assert_eq!(response.status(), 400);
-    assert_eq!(
-        response.extensions().get::<RuntimeErrorExtension>().unwrap().as_str(),
-        "SerializationException"
-    );
-}
-
 #[test]
 fn all_header_values_survive_outputs_errors_and_streaming_heads() {
     for protocol in protocols() {
@@ -254,61 +245,74 @@ async fn matching_modeled_lengths_are_emitted_once() {
 }
 
 #[test]
-fn invalid_or_mismatched_buffered_lengths_are_rejected() {
+fn modeled_buffered_lengths_are_preserved_without_validation() {
     for protocol in protocols() {
         for length in ["0", "1", "-1", "+1", "1, 1", "18446744073709551616", "invalid"] {
-            let value = HeadersOutput {
-                length: Some(length.into()),
-                ..Default::default()
-            };
-            assert_serialization_rejection(&protocol.serialize_response(&OUTPUT, &value));
-            assert_serialization_rejection(&protocol.serialize_error(&value));
-            let value = HeadersOutput {
-                prefix: vec![("length".into(), length.into())],
-                ..Default::default()
-            };
-            assert_serialization_rejection(&protocol.serialize_response(&OUTPUT, &value));
+            for prefix in [false, true] {
+                let value = if prefix {
+                    HeadersOutput {
+                        prefix: vec![("length".into(), length.into())],
+                        ..Default::default()
+                    }
+                } else {
+                    HeadersOutput {
+                        length: Some(length.into()),
+                        ..Default::default()
+                    }
+                };
+                for (response, status) in [
+                    (protocol.serialize_response(&OUTPUT, &value), 200),
+                    (protocol.serialize_error(&value), 422),
+                ] {
+                    assert_eq!(response.status(), status);
+                    assert_eq!(values(response.headers(), "content-length"), [length]);
+                    assert!(response
+                        .extensions()
+                        .get::<aws_smithy_http_server::extension::RuntimeErrorExtension>()
+                        .is_none());
+                }
+            }
         }
         let value = HeadersOutput {
             prefix: vec![("length".into(), "".into())],
             ..Default::default()
         };
-        assert_serialization_rejection(&protocol.serialize_response(&OUTPUT, &value));
+        let response = protocol.serialize_response(&OUTPUT, &value);
+        assert_eq!(response.status(), 200);
+        assert_eq!(values(response.headers(), "content-length"), [""]);
     }
 }
 
-#[tokio::test]
-async fn prefix_length_collisions_are_coalesced_or_rejected() {
-    for protocol in [
-        Box::new(RestJson1Protocol::default()) as Box<dyn ServerProtocol>,
-        Box::new(RestXmlProtocol::default()),
-    ] {
-        let mut value = HeadersOutput::default();
-        let response = protocol.serialize_response(&OUTPUT, &value);
-        let length = response
-            .into_body()
-            .collect()
-            .await
-            .unwrap()
-            .to_bytes()
-            .len()
-            .to_string();
-        value.length = Some(length.clone());
-        value.prefix.push(("length".into(), length.clone()));
-        let response = protocol.serialize_response(&OUTPUT, &value);
-        assert_eq!(response.status(), 200);
-        assert_eq!(values(response.headers(), "content-length"), [length.as_str()]);
-        assert_bound_headers(response.headers());
-        value.prefix.last_mut().unwrap().1 = "0".into();
-        assert_serialization_rejection(&protocol.serialize_response(&OUTPUT, &value));
-    }
+#[test]
+fn modeled_length_collisions_match_legacy_generated_header_assembly() {
     for protocol in protocols() {
-        let value = HeadersOutput {
-            length: Some("0".into()),
-            prefix: vec![("length".into(), "1".into())],
-            ..Default::default()
-        };
-        assert_serialization_rejection(&protocol.serialize_response(&OUTPUT, &value));
+        for (prefix, explicit) in [("6", "6"), ("6", "006"), ("1", "0"), ("invalid", "-1")] {
+            // Legacy HttpBindingGenerator appends modeled bindings, then
+            // ServerHttpBoundProtocolGenerator adds payload.len() only if absent.
+            let builder = http::Response::builder()
+                .header(http::header::CONTENT_LENGTH, prefix)
+                .header(http::header::CONTENT_LENGTH, explicit);
+            let expected =
+                aws_smithy_http::header::set_response_header_if_absent(builder, http::header::CONTENT_LENGTH, 123)
+                    .body(())
+                    .unwrap();
+            let value = HeadersOutput {
+                length: Some(explicit.into()),
+                prefix: vec![("length".into(), prefix.into())],
+                ..Default::default()
+            };
+            for (response, status) in [
+                (protocol.serialize_response(&OUTPUT, &value), 200),
+                (protocol.serialize_error(&value), 422),
+                (protocol.serialize_streaming_response(&OUTPUT, &value, empty()), 200),
+            ] {
+                assert_eq!(response.status(), status);
+                assert_eq!(
+                    values(response.headers(), "content-length"),
+                    values(expected.headers(), "content-length")
+                );
+            }
+        }
     }
 }
 
@@ -335,7 +339,7 @@ fn modeled_content_type_overrides_defaults_without_losing_other_values() {
 }
 
 #[test]
-fn streaming_lengths_are_not_inferred_and_modeled_duplicates_are_normalized() {
+fn streaming_lengths_are_not_inferred_or_validated_and_bodies_are_not_polled() {
     for protocol in protocols() {
         let polls = Arc::new(AtomicUsize::new(0));
         let body = || {
@@ -352,10 +356,14 @@ fn streaming_lengths_are_not_inferred_and_modeled_duplicates_are_normalized() {
         value.prefix.push(("length".into(), "6".into()));
         let response = protocol.serialize_streaming_response(&OUTPUT, &value, body());
         assert_eq!(response.status(), 200);
-        assert_eq!(values(response.headers(), "content-length"), ["6"]);
+        assert_eq!(values(response.headers(), "content-length"), ["6", "006"]);
         assert_bound_headers(response.headers());
-        value.prefix.last_mut().unwrap().1 = "7".into();
-        assert_serialization_rejection(&protocol.serialize_streaming_response(&OUTPUT, &value, body()));
+        for length in ["7", "invalid", "-1", "1, 1", "18446744073709551616", ""] {
+            value.prefix.last_mut().unwrap().1 = length.into();
+            let response = protocol.serialize_streaming_response(&OUTPUT, &value, body());
+            assert_eq!(response.status(), 200);
+            assert_eq!(values(response.headers(), "content-length"), [length, "006"]);
+        }
         assert_eq!(polls.load(Ordering::SeqCst), 0);
     }
 }
@@ -392,15 +400,14 @@ async fn hyper_preserves_lists_and_uses_one_consistent_content_length() {
     let baseline = RestXmlProtocol::default().serialize_response(&OUTPUT, &value);
     let expected_body = baseline.into_body().collect().await.unwrap().to_bytes();
     value.length = Some(expected_body.len().to_string());
-    value.prefix.push(("length".into(), expected_body.len().to_string()));
     let value = Arc::new(value);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
     let service = tower::service_fn(move |request: http::Request<hyper::body::Incoming>| {
         let mut value = value.as_ref().clone();
-        if request.uri().path() == "/invalid" {
-            value.length = Some("0".into());
+        if request.uri().path() == "/computed" {
+            value.length = None;
         }
         let response = RestXmlProtocol::default().serialize_response(&OUTPUT, &value);
         async move { Ok::<_, Infallible>(response) }
@@ -414,7 +421,7 @@ async fn hyper_preserves_lists_and_uses_one_consistent_content_length() {
             .unwrap();
     });
     let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
-    for path in ["/valid", "/invalid", "/valid"] {
+    for path in ["/modeled", "/computed", "/modeled"] {
         let request = http::Request::builder()
             .uri(format!("http://{addr}{path}"))
             .body(http_body_util::Empty::<Bytes>::new())
@@ -423,18 +430,13 @@ async fn hyper_preserves_lists_and_uses_one_consistent_content_length() {
             .await
             .unwrap()
             .unwrap();
-        if path == "/invalid" {
-            assert_eq!(response.status(), 400);
-            response.into_body().collect().await.unwrap();
-        } else {
-            assert_eq!(response.status(), 200);
-            assert_bound_headers(response.headers());
-            assert_eq!(
-                values(response.headers(), "content-length"),
-                [expected_body.len().to_string()]
-            );
-            assert_eq!(response.into_body().collect().await.unwrap().to_bytes(), expected_body);
-        }
+        assert_eq!(response.status(), 200);
+        assert_bound_headers(response.headers());
+        assert_eq!(
+            values(response.headers(), "content-length"),
+            [expected_body.len().to_string()]
+        );
+        assert_eq!(response.into_body().collect().await.unwrap().to_bytes(), expected_body);
     }
     shutdown_tx.send(()).unwrap();
     tokio::time::timeout(Duration::from_secs(2), server)
