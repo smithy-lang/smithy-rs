@@ -620,6 +620,8 @@ mod tests {
             ser.write_double(&DOUBLE, 1.0)?;
             ser.write_float(&FLOAT, 0.0)?;
             ser.write_double(&DOUBLE, 0.0)?;
+            ser.write_float(&FLOAT, -0.0)?;
+            ser.write_double(&DOUBLE, -0.0)?;
             ser.write_float(&FLOAT, 1.01)?;
             ser.write_double(&DOUBLE, 1.01)?;
             ser.write_float(&FLOAT, 3.15)?;
@@ -636,7 +638,7 @@ mod tests {
         let output = String::from_utf8(ser.finish()).unwrap();
         assert_eq!(
             output,
-            r#"[1.0,1.0,0.0,0.0,1.01,1.01,3.15,3.15,"Infinity","-Infinity","NaN","Infinity","-Infinity","NaN"]"#
+            r#"[1.0,1.0,0.0,0.0,-0.0,-0.0,1.01,1.01,3.15,3.15,"Infinity","-Infinity","NaN","Infinity","-Infinity","NaN"]"#
         );
     }
 
