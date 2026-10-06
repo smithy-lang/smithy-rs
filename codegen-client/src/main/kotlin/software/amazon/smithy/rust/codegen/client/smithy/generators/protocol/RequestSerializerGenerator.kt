@@ -62,7 +62,7 @@ class RequestSerializerGenerator(
             "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder1x,
             "Input" to interceptorContext.resolve("Input"),
             "SerializeRequest" to runtimeApi.resolve("client::ser_de::SerializeRequest"),
-            "SharedClientProtocol" to RuntimeType.smithySchema(codegenContext.runtimeConfig).resolve("protocol::SharedClientProtocol"),
+            "SchemaProtocol" to RuntimeType.smithySchema(codegenContext.runtimeConfig).resolve("protocol::SchemaProtocol"),
             "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
             "HeaderSerializationSettings" to
                 RuntimeType.forInlineDependency(
@@ -174,8 +174,7 @@ class RequestSerializerGenerator(
                 fn serialize_input(&self, input: #{Input}, _cfg: &mut #{ConfigBag}) -> #{Result}<#{HttpRequest}, #{BoxError}> {
                     let input = input.downcast::<#{ConcreteInput}>().expect("correct type");
                     #{validate_required}
-                    let protocol = _cfg.load::<#{SharedClientProtocol}>()
-                        .expect("a SharedClientProtocol is required");
+                    let protocol = #{SchemaProtocol}::from_config_bag(_cfg).and_then(#{SchemaProtocol}::v1).map_err(#{BoxError}::from)?;
                     #{schema_serialize}
                 }
             }

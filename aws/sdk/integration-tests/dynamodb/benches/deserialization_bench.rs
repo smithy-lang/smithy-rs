@@ -45,11 +45,11 @@ fn do_bench() {
         .load::<SharedResponseDeserializer>()
         .expect("operation should set a deserializer");
 
-    // Create a config bag with the required SharedClientProtocol
+    // Create a config bag with the required protocol, stored as a version-stable ConfiguredProtocol
     let mut config_bag = ConfigBag::base();
     let protocol = aws_smithy_json::protocol::aws_json_rpc::AwsJsonRpcProtocol::aws_json_1_0()
         .with_target_prefix("DynamoDB_20120810");
-    let shared_protocol = aws_smithy_schema::protocol::SharedClientProtocol::new(protocol);
+    let shared_protocol = aws_smithy_schema::protocol::SharedClientProtocol::configured(protocol);
     let mut layer = aws_smithy_types::config_bag::Layer::new("bench");
     layer.store_put(shared_protocol);
     config_bag.push_shared_layer(layer.freeze());

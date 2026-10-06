@@ -110,6 +110,8 @@ pub mod interceptors;
 
 pub mod orchestrator;
 
+pub mod protocol;
+
 pub mod result;
 
 pub mod retries;

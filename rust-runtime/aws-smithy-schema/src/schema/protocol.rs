@@ -10,8 +10,14 @@
 //! this out as a requirement).
 //!
 //! [`ClientProtocol`] is the object-safe view that callers use through `dyn`. It's
-//! parameterized over concrete request/response types (defaulted to HTTP) so
-//! [`SharedClientProtocol`] can be stored in a [`ConfigBag`] and swapped at runtime.
+//! parameterized over concrete request/response types (defaulted to HTTP) so a
+//! [`SharedClientProtocol`] can be configured and swapped at runtime.
+//!
+//! A configured protocol is stored in the [`ConfigBag`] as a [`ConfiguredProtocol`], a
+//! version-stable wrapper owned by `aws-smithy-runtime-api`, rather than as a type from this
+//! crate. Build one with [`SharedClientProtocol::configured`]. Clients recover it with
+//! [`SchemaProtocol::from_config_bag`] and [`SchemaProtocol::v1`]; see [`SchemaProtocol`] for how
+//! the protocol trait can evolve within 1.x.
 //!
 //! A blanket impl (`impl<P: ClientProtocolInner> ClientProtocol<P::Request, P::Response> for P`)
 //! means implementors only write `ClientProtocolInner`; the object-safe view comes for
@@ -72,9 +78,15 @@
 
 use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
 use crate::{Schema, ShapeId};
+use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::protocol::ProtocolHandle;
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::endpoint::Endpoint;
 use aws_smithy_types::error::metadata::{Builder as ErrorMetadataBuilder, ErrorMetadata};
+
+/// Re-exported from `aws-smithy-runtime-api`, which owns the type so that its identity does not
+/// depend on this crate's major version.
+pub use aws_smithy_runtime_api::client::protocol::ConfiguredProtocol;
 
 /// Statically-dispatched client protocol trait — the one implementors write.
 ///
@@ -734,15 +746,15 @@ impl aws_smithy_types::config_bag::Storable for ServiceXmlNamespace {
     type Storer = aws_smithy_types::config_bag::StoreReplace<Self>;
 }
 
-/// A shared, type-erased client protocol stored in a [`ConfigBag`].
+/// A shared, type-erased client protocol.
 ///
-/// Wraps `Arc<dyn ClientProtocol<Req, Res>>` so a protocol can be stored and
-/// retrieved from the config bag for runtime protocol selection.
+/// Wraps `Arc<dyn ClientProtocol<Req, Res>>` so a protocol can be selected at runtime. To
+/// configure a client with it, convert it into a [`ConfiguredProtocol`], which is what the
+/// `protocol(..)` setters accept and what the [`ConfigBag`] stores.
 ///
-/// Defaults to HTTP transport types. Custom transports would use
-/// `SharedClientProtocol<MyReq, MyRes>` and would need their own `Storable`
-/// adaptation (not provided here — today only HTTP has a `Storable` impl,
-/// reflecting the fact that the orchestrator is HTTP-concrete).
+/// Defaults to HTTP transport types. Only the HTTP specialization converts into a
+/// [`ConfiguredProtocol`], reflecting the fact that the orchestrator is HTTP-concrete; a custom
+/// transport using `SharedClientProtocol<MyReq, MyRes>` would need its own handle type.
 #[derive(Debug)]
 pub struct SharedClientProtocol<
     Req = aws_smithy_runtime_api::http::Request,
@@ -791,25 +803,161 @@ impl<Req, Res> std::ops::Deref for SharedClientProtocol<Req, Res> {
     }
 }
 
-// Only the HTTP specialization is storable in the config bag, matching the
-// orchestrator's HTTP-concrete wiring today. This is paired with the three
-// `protocol(…)` setters — `aws_types::SdkConfig::Builder::protocol`,
-// `aws_config::ConfigLoader::protocol`, and the generated
-// `ConfigBuilder::protocol` — all of which accept `impl ClientProtocol +
-// 'static` (resolving via defaults to the HTTP specialization) and store
-// the resulting `SharedClientProtocol<http::Request, http::Response>` here.
-//
-// Non-HTTP transports would add their own Storable newtype alongside their
-// transport integration (with its own dedicated setter) rather than
-// generalizing this impl — see §10.2 of the implementation overview.
-impl aws_smithy_types::config_bag::Storable
-    for SharedClientProtocol<
-        aws_smithy_runtime_api::http::Request,
-        aws_smithy_runtime_api::http::Response,
-    >
-{
-    type Storer = aws_smithy_types::config_bag::StoreReplace<Self>;
+/// Identifies this crate's protocol handles in [`ConfiguredProtocol`] error messages.
+const PROTOCOL_HANDLE_ORIGIN: &str =
+    concat!("aws-smithy-schema ", env!("CARGO_PKG_VERSION_MAJOR"), ".x");
+
+/// The protocol handle this crate stores in a [`ConfiguredProtocol`], with one variant per version
+/// of the client protocol trait.
+///
+/// The config bag is keyed by `TypeId`, so [`SharedClientProtocol`] is deliberately not `Storable`.
+/// The bag entry, and the `protocol(..)` setters on `SdkConfig`, `ConfigLoader` and generated
+/// configs, use the version-stable [`ConfiguredProtocol`] owned by `aws-smithy-runtime-api`, which
+/// wraps a `SchemaProtocol`. Clients load it with [`from_config_bag`](Self::from_config_bag) and
+/// then ask for the trait version they were generated against, today [`v1`](Self::v1).
+///
+/// # Evolving the protocol trait within 1.x
+///
+/// Additive changes to [`ClientProtocol`] should use default method bodies. A change that a default
+/// cannot express, such as a changed signature, can ship in a minor release as a parallel trait
+/// and a new variant:
+///
+/// ```text
+/// pub enum SchemaProtocol {
+///     V1(SharedClientProtocol),
+///     V2(SharedClientProtocolV2), // ClientProtocolInnerV2 / ClientProtocolV2, added in 1.y
+/// }
+///
+/// impl SchemaProtocol {
+///     pub fn v1(&self) -> Result<SharedClientProtocol, ConfiguredProtocolError> {
+///         match self {
+///             Self::V1(p) => Ok(p.clone()),
+///             // Or an error, if a V2 protocol cannot be expressed through the V1 trait.
+///             Self::V2(p) => Ok(SharedClientProtocol::new(V2AsV1(p.clone()))),
+///         }
+///     }
+///
+///     pub fn v2(&self) -> Result<SharedClientProtocolV2, ConfiguredProtocolError> {
+///         match self {
+///             Self::V1(p) => Ok(SharedClientProtocolV2::new(V1AsV2(p.clone()))),
+///             Self::V2(p) => Ok(p.clone()),
+///         }
+///     }
+/// }
+/// ```
+///
+/// Clients generated before 1.y keep calling `v1`; later ones call `v2`. Cargo builds every crate in
+/// a dependency tree against the same 1.x release, so the `v1` an old client calls is the newest
+/// one, which knows how to adapt a newer protocol. That is why `v1` returns an owned value and is
+/// fallible even though neither is needed while `V1` is the only variant: both let a later release
+/// return an adapter, or refuse, without changing the signature old clients were compiled against.
+///
+/// Only the HTTP specialization of [`SharedClientProtocol`] is held, matching the orchestrator's
+/// HTTP-concrete wiring; a non-HTTP transport would bring its own handle type.
+#[non_exhaustive]
+#[derive(Clone, Debug)]
+pub enum SchemaProtocol {
+    /// A protocol implementing version 1 of the client protocol trait, [`ClientProtocol`].
+    V1(SharedClientProtocol),
 }
+
+impl SchemaProtocol {
+    /// Returns the schema protocol inside `configured`, if this major version of
+    /// `aws-smithy-schema` produced it.
+    pub fn from_configured(
+        configured: &ConfiguredProtocol,
+    ) -> Result<&Self, ConfiguredProtocolError> {
+        configured
+            .downcast_ref::<Self>()
+            .ok_or(ConfiguredProtocolError {
+                found: Some(configured.origin()),
+            })
+    }
+
+    /// Loads the configured schema protocol from `cfg`.
+    ///
+    /// Fails if no protocol is configured, or if the configured protocol was built against a
+    /// different major version of this crate than the client using it.
+    pub fn from_config_bag(cfg: &ConfigBag) -> Result<&Self, ConfiguredProtocolError> {
+        let configured = cfg
+            .load::<ConfiguredProtocol>()
+            .ok_or(ConfiguredProtocolError { found: None })?;
+        Self::from_configured(configured)
+    }
+
+    /// Returns this protocol through version 1 of the client protocol trait, [`ClientProtocol`].
+    ///
+    /// This is what generated clients call. It returns an owned, cheaply cloned handle and is
+    /// fallible so that a later 1.x release can adapt a protocol written against a newer trait
+    /// version, or reject one it cannot adapt; see the [type-level docs](Self).
+    pub fn v1(&self) -> Result<SharedClientProtocol, ConfiguredProtocolError> {
+        match self {
+            Self::V1(protocol) => Ok(protocol.clone()),
+        }
+    }
+}
+
+impl ProtocolHandle for SchemaProtocol {
+    fn origin(&self) -> &'static str {
+        PROTOCOL_HANDLE_ORIGIN
+    }
+
+    fn update_endpoint(
+        &self,
+        request: &mut aws_smithy_runtime_api::http::Request,
+        endpoint: &aws_smithy_types::endpoint::Endpoint,
+        cfg: &ConfigBag,
+    ) -> Result<(), BoxError> {
+        match self {
+            Self::V1(protocol) => {
+                ClientProtocol::update_endpoint(&*protocol.inner, request, endpoint, cfg)
+                    .map_err(Into::into)
+            }
+        }
+    }
+}
+
+impl From<SharedClientProtocol> for ConfiguredProtocol {
+    fn from(protocol: SharedClientProtocol) -> Self {
+        ConfiguredProtocol::new(SchemaProtocol::V1(protocol))
+    }
+}
+
+impl SharedClientProtocol {
+    /// Wraps a protocol for the version-stable `protocol(..)` setters and config-bag entry.
+    ///
+    /// Equivalent to `ConfiguredProtocol::from(SharedClientProtocol::new(protocol))`.
+    pub fn configured(protocol: impl ClientProtocol + 'static) -> ConfiguredProtocol {
+        Self::new(protocol).into()
+    }
+}
+
+/// The configured client protocol cannot be used by this client.
+///
+/// Returned by [`SchemaProtocol::from_config_bag`] when no protocol is configured, or when the
+/// configured protocol was built against a different major version of `aws-smithy-schema` than the
+/// client that loads it. A later release may also return it from a `SchemaProtocol::v*` accessor
+/// for a protocol that cannot be expressed through the requested trait version.
+#[derive(Debug)]
+pub struct ConfiguredProtocolError {
+    /// The origin of the configured handle, or `None` if no protocol was configured.
+    found: Option<&'static str>,
+}
+
+impl std::fmt::Display for ConfiguredProtocolError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.found {
+            None => write!(f, "no client protocol is configured"),
+            Some(found) => write!(
+                f,
+                "the configured client protocol was built for {found}, \
+                 but this client requires a protocol built for {PROTOCOL_HANDLE_ORIGIN}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for ConfiguredProtocolError {}
 
 #[cfg(test)]
 mod tests {
@@ -1020,5 +1168,103 @@ mod tests {
             .clone()
             .expect("schema id was captured");
         assert_eq!(observed, crate::prelude::DOCUMENT.shape_id().as_str());
+    }
+
+    // -- ConfiguredProtocol integration --
+
+    fn bag_with(protocol: ConfiguredProtocol) -> ConfigBag {
+        let mut layer = Layer::new("test");
+        layer.store_put(protocol);
+        ConfigBag::of_layers(vec![layer])
+    }
+
+    #[test]
+    fn configured_protocol_round_trips_through_config_bag() {
+        let cfg = bag_with(SharedClientProtocol::configured(StubProtocol));
+        let protocol = SchemaProtocol::from_config_bag(&cfg)
+            .and_then(SchemaProtocol::v1)
+            .expect("configured");
+        assert_eq!("test#StubProtocol", protocol.protocol_id().as_str());
+    }
+
+    #[test]
+    fn shared_client_protocol_converts_into_the_v1_variant() {
+        let configured = ConfiguredProtocol::from(SharedClientProtocol::new(StubProtocol));
+        assert!(matches!(
+            SchemaProtocol::from_configured(&configured),
+            Ok(SchemaProtocol::V1(_))
+        ));
+    }
+
+    #[test]
+    fn v1_returns_an_owned_handle_sharing_the_protocol() {
+        let cfg = bag_with(SharedClientProtocol::configured(StubProtocol));
+        let schema_protocol = SchemaProtocol::from_config_bag(&cfg).unwrap();
+        let (a, b) = (schema_protocol.v1().unwrap(), schema_protocol.v1().unwrap());
+        assert!(std::sync::Arc::ptr_eq(&a.inner, &b.inner));
+    }
+
+    #[test]
+    fn configured_protocol_reports_this_crate_as_origin() {
+        let configured = SharedClientProtocol::configured(StubProtocol);
+        assert_eq!(
+            concat!("aws-smithy-schema ", env!("CARGO_PKG_VERSION_MAJOR"), ".x"),
+            configured.origin()
+        );
+    }
+
+    #[test]
+    fn missing_protocol_is_an_error() {
+        let err = SchemaProtocol::from_config_bag(&ConfigBag::base()).unwrap_err();
+        assert_eq!("no client protocol is configured", err.to_string());
+    }
+
+    /// Stands in for the handle type of a future major version of this crate.
+    #[derive(Debug)]
+    struct FutureMajorHandle;
+
+    impl ProtocolHandle for FutureMajorHandle {
+        fn origin(&self) -> &'static str {
+            "aws-smithy-schema 99.x"
+        }
+
+        fn update_endpoint(
+            &self,
+            _request: &mut Request,
+            _endpoint: &Endpoint,
+            _cfg: &ConfigBag,
+        ) -> Result<(), BoxError> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn protocol_from_another_major_version_is_a_descriptive_error() {
+        let cfg = bag_with(ConfiguredProtocol::new(FutureMajorHandle));
+        let err = SchemaProtocol::from_config_bag(&cfg).unwrap_err();
+        let message = err.to_string();
+        assert!(
+            message.contains("built for aws-smithy-schema 99.x"),
+            "{message}"
+        );
+        assert!(
+            message.contains(concat!(
+                "requires a protocol built for aws-smithy-schema ",
+                env!("CARGO_PKG_VERSION_MAJOR"),
+                ".x"
+            )),
+            "{message}"
+        );
+    }
+
+    #[test]
+    fn configured_protocol_applies_endpoints_through_the_wrapped_protocol() {
+        let configured = SharedClientProtocol::configured(StubProtocol);
+        let mut req = request_with_uri("/path");
+        let endpoint = Endpoint::builder().url("https://example.com").build();
+        configured
+            .update_endpoint(&mut req, &endpoint, &ConfigBag::base())
+            .unwrap();
+        assert_eq!(req.uri(), "https://example.com/path");
     }
 }

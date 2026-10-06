@@ -204,9 +204,9 @@ private fun renderEventStreamBodyInline(
     val marshallerNew =
         if (useSchemaSerde) {
             """
-            let protocol = _cfg.load::<#{SharedClientProtocol}>()
-                .expect("a SharedClientProtocol is required")
-                .clone();
+            let protocol = #{SchemaProtocol}::from_config_bag(_cfg)
+                .and_then(#{SchemaProtocol}::v1)
+                .map_err(#{BoxError}::from)?;
             let error_marshaller = #{errorMarshallerConstructorFn}(protocol.clone());
             let marshaller = #{marshallerConstructorFn}(protocol.clone());
             """
@@ -232,9 +232,10 @@ private fun renderEventStreamBodyInline(
         "DeferredSigner" to
             RuntimeType.smithyEventStream(codegenContext.runtimeConfig)
                 .resolve("frame::DeferredSigner"),
-        "SharedClientProtocol" to
+        "SchemaProtocol" to
             RuntimeType.smithySchema(codegenContext.runtimeConfig)
-                .resolve("protocol::SharedClientProtocol"),
+                .resolve("protocol::SchemaProtocol"),
+        "BoxError" to RuntimeType.boxError(codegenContext.runtimeConfig),
         "marshallerConstructorFn" to params.eventStreamMarshallerGenerator.render(),
         "errorMarshallerConstructorFn" to params.errorMarshallerConstructorFn,
         "event_stream" to (

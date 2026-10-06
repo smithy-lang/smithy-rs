@@ -9,6 +9,7 @@ use aws_smithy_runtime_api::client::endpoint::{
 use aws_smithy_runtime_api::client::identity::Identity;
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+use aws_smithy_runtime_api::client::protocol::ConfiguredProtocol;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_runtime_api::{box_error::BoxError, client::endpoint::EndpointPrefix};
 use aws_smithy_types::config_bag::ConfigBag;
@@ -104,11 +105,11 @@ pub(super) fn apply_endpoint(
     tracing::debug!(endpoint_prefix = ?endpoint_prefix, "will apply endpoint {:?}", endpoint);
     let request = ctx.request_mut().expect("set during serialization");
 
-    // If a schema-driven protocol is in use, delegate endpoint application to it.
-    if let Some(protocol) = cfg.load::<aws_smithy_schema::protocol::SharedClientProtocol>() {
-        protocol
-            .update_endpoint(request, endpoint, cfg)
-            .map_err(BoxError::from)?;
+    // If a schema-driven protocol is in use, delegate endpoint application to it. The bag entry is
+    // the version-stable `ConfiguredProtocol`, so this works without depending on the crate (or
+    // the major version of the crate) that defines the protocol.
+    if let Some(protocol) = cfg.load::<ConfiguredProtocol>() {
+        protocol.update_endpoint(request, endpoint, cfg)?;
     } else {
         apply_endpoint_to_request(request, endpoint, endpoint_prefix)?;
     }
@@ -185,5 +186,49 @@ mod test {
             req.uri(),
             "https://prefix.subdomain.s3.amazon.com/foo?bar=1"
         );
+    }
+
+    #[derive(Debug)]
+    struct HeaderOnlyProtocol;
+
+    impl aws_smithy_runtime_api::client::protocol::ProtocolHandle for HeaderOnlyProtocol {
+        fn update_endpoint(
+            &self,
+            request: &mut HttpRequest,
+            endpoint: &Endpoint,
+            _cfg: &aws_smithy_types::config_bag::ConfigBag,
+        ) -> Result<(), aws_smithy_runtime_api::box_error::BoxError> {
+            request
+                .headers_mut()
+                .insert("x-endpoint", endpoint.url().to_owned());
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn configured_protocol_owns_endpoint_application() {
+        use aws_smithy_runtime_api::client::interceptors::context::{Input, InterceptorContext};
+        use aws_smithy_runtime_api::client::protocol::ConfiguredProtocol;
+        use aws_smithy_types::config_bag::{ConfigBag, Layer};
+
+        let mut layer = Layer::new("test");
+        layer.store_put(ConfiguredProtocol::new(HeaderOnlyProtocol));
+        let cfg = ConfigBag::of_layers(vec![layer]);
+
+        let mut ctx = InterceptorContext::new(Input::doesnt_matter());
+        ctx.enter_serialization_phase();
+        let _ = ctx.take_input();
+        let mut req = HttpRequest::empty();
+        req.set_uri("/foo").unwrap();
+        ctx.set_request(req);
+        ctx.enter_before_transmit_phase();
+
+        let endpoint = Endpoint::builder().url("https://example.com").build();
+        super::apply_endpoint(&endpoint, &mut ctx, &cfg).expect("should succeed");
+
+        let req = ctx.request().unwrap();
+        // The protocol, not the default implementation, applied the endpoint.
+        assert_eq!(req.uri(), "/foo");
+        assert_eq!(req.headers().get("x-endpoint"), Some("https://example.com"));
     }
 }

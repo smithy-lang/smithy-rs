@@ -843,7 +843,6 @@ dependencies = [
  "aws-smithy-http-client",
  "aws-smithy-observability",
  "aws-smithy-runtime-api 1.19.1",
- "aws-smithy-schema 1.0.0",
  "aws-smithy-types 1.9.0",
  "bytes",
  "fastrand 2.5.0",
