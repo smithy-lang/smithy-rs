@@ -124,10 +124,14 @@ impl BodyProtocolRouter for BodyRouter {
         match claim_mode(request.headers()) {
             Some("known-route") => BodyRouteClaim::ClaimedWithRoute(self.targets[0]),
             Some("envelope") => BodyRouteClaim::Claimed,
+            Some("defer-head") => BodyRouteClaim::DeferredRejection(RoutingError::malformed(InvalidName)),
             _ => BodyRouteClaim::NeedsBodyToClaim,
         }
     }
     fn claim_with_body(&self, request: &Request<CollectedBody>) -> RouteClaim {
+        if claim_mode(request.headers()) == Some("defer-body") {
+            return RouteClaim::DeferredRejection(RoutingError::malformed(InvalidName));
+        }
         if claim_mode(request.headers()) == Some("deferred-route") {
             return RouteClaim::Claimed;
         }
@@ -607,7 +611,14 @@ async fn all_builtins_route_without_polling_body_and_preserve_fallback_errors() 
             .uri(path)
             .header(SMITHY_PROTOCOL_HEADER, "rpc-v2-cbor");
         if let Some(target) = target {
-            req = req.header("x-amz-target", target);
+            req = req.header("x-amz-target", target).header(
+                "content-type",
+                if std::ptr::eq(schema, &AWS_JSON_10) {
+                    "application/x-amz-json-1.0"
+                } else {
+                    "application/x-amz-json-1.1"
+                },
+            );
         }
         let body = Body::new(http_body_util::StreamBody::new(futures_util::stream::poll_fn(
             |_| -> Poll<Option<Result<Frame<Bytes>, Error>>> { panic!("metadata routing or fallback polled the body") },
@@ -935,6 +946,111 @@ fn operation_metadata_classifies_streaming_and_cbor_routes_without_an_indexed_ta
             assert_eq!(router.route(&request).unwrap().index(), usize::MAX);
         }
     }
+}
+
+#[test]
+fn cbor_claim_requires_the_header_post_and_a_known_service_operation() {
+    let options = RoutingOptions::default();
+    let targets = [OperationTarget::new(0, &FIRST)];
+    let router = rpc_v2_cbor_router(&RouterBuildContext {
+        service: &RPC,
+        targets: &targets,
+        config: &options.request_body,
+        protocol_settings: None,
+    })
+    .unwrap();
+    for (method, path, expected) in [
+        (
+            "GET",
+            "/service/Service/operation/first",
+            RoutingErrorKind::MethodNotAllowed,
+        ),
+        (
+            "POST",
+            "/service/Other/operation/first",
+            RoutingErrorKind::UnknownOperation,
+        ),
+        (
+            "POST",
+            "/service/Service/operation/unknown",
+            RoutingErrorKind::UnknownOperation,
+        ),
+        ("POST", "/invalid", RoutingErrorKind::UnknownOperation),
+    ] {
+        let request = Request::builder()
+            .method(method)
+            .uri(path)
+            .header(SMITHY_PROTOCOL_HEADER, "rpc-v2-cbor")
+            .body(())
+            .unwrap();
+        let RouteClaim::DeferredRejection(error) = router.claim(&request) else {
+            panic!("{method} {path} must defer rather than claim");
+        };
+        assert_eq!(error.kind(), expected);
+    }
+    let request = Request::builder()
+        .method("POST")
+        .uri("/service/Service/operation/first")
+        .header(SMITHY_PROTOCOL_HEADER, "rpc-v2-cbor")
+        .body(())
+        .unwrap();
+    assert!(matches!(router.claim(&request), RouteClaim::Claimed));
+    for value in [None, Some("rpc-v2-json"), Some("invalid")] {
+        let mut builder = Request::builder()
+            .method("POST")
+            .uri("/service/Service/operation/first");
+        if let Some(value) = value {
+            builder = builder.header(SMITHY_PROTOCOL_HEADER, value);
+        }
+        assert!(matches!(router.claim(&builder.body(()).unwrap()), RouteClaim::NoClaim));
+    }
+}
+
+#[tokio::test]
+async fn a_single_protocol_checks_claims_and_unidentified_requests_remain_neutral() {
+    for schema in [&RPC, &AWS_JSON_10, &REST_JSON] {
+        let app = MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings(
+            schema,
+            [],
+            schema.operations().iter().map(|operation| binding(operation)),
+        )
+        .build()
+        .unwrap();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/unknown")
+                    .body(Body::new(http_body_util::StreamBody::new(
+                        futures_util::stream::poll_fn(|_| -> Poll<Option<Result<Frame<Bytes>, Error>>> {
+                            panic!("unclaimed request read its body")
+                        }),
+                    )))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert!(response.headers().is_empty());
+        assert_eq!(
+            response.into_body().collect().await.unwrap().to_bytes(),
+            "<UnknownOperationException/>\n"
+        );
+    }
+    let response = service(RoutingOptions::default())
+        .oneshot(
+            Request::builder()
+                .header("x-body-claim", "defer-head")
+                .body(Body::new(http_body_util::StreamBody::new(
+                    futures_util::stream::poll_fn(|_| -> Poll<Option<Result<Frame<Bytes>, Error>>> {
+                        panic!("head deferred rejection read its body")
+                    }),
+                )))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
 #[cfg(debug_assertions)]
@@ -1290,8 +1406,6 @@ mod multi_protocol {
                 post("/second").header("content-type", "application/xml"),
                 "aws.protocols#restXml second ",
             ),
-            // Without `Content-Type` or a body, REST protocols tie and priority decides.
-            (post("/first"), "aws.protocols#restJson1 first "),
         ];
         for (request, expected) in cases {
             assert_eq!(send(&app, request, "").await, (StatusCode::OK, expected.to_owned()));
@@ -1302,12 +1416,10 @@ mod multi_protocol {
     async fn requests_no_protocol_identifies_get_corals_unknown_operation_response() {
         let app = app(&BUILTINS, []);
         let unclaimed = [
-            // awsJson requires a known target to claim the request.
-            post("/")
-                .header("content-type", "application/x-amz-json-1.0")
-                .header("x-amz-target", "Service.unknown"),
             // A REST route whose `Content-Type` no REST protocol derives.
             post("/first").header("content-type", "text/plain"),
+            // An empty body does not waive the required content type for claiming.
+            post("/first"),
             // awsJson without its media type.
             post("/").header("x-amz-target", "Service.first"),
             Request::builder().method("GET").uri("/nowhere"),
@@ -1324,11 +1436,9 @@ mod multi_protocol {
         }
     }
 
-    /// A routing rejection goes out as the rejecting protocol's modeled error: the same
-    /// discriminator framing as any handler-returned error, status and shape from the
-    /// rejection's schema.
+    /// Built-in protocols preserve the legacy routing status, headers, and empty bodies.
     #[tokio::test]
-    async fn routing_rejections_are_protocol_framed_modeled_errors() {
+    async fn routing_rejections_preserve_legacy_responses() {
         // restJson1 alone matched `/first` by URI but not by method: MethodNotAllowedException,
         // 405. (Among several protocols a method mismatch is `NoClaim`, not a rejection.)
         static REST_ONLY: ServiceSchema<'static> =
@@ -1345,11 +1455,8 @@ mod multi_protocol {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
-        assert_eq!(
-            response.headers().get("x-amzn-errortype").unwrap(),
-            "MethodNotAllowedException"
-        );
-        assert_eq!(response.into_body().collect().await.unwrap().to_bytes(), "{}");
+        assert!(response.headers().is_empty());
+        assert!(response.into_body().collect().await.unwrap().to_bytes().is_empty());
         // awsJson1_0 alone routes an unknown target to UnknownOperationException, 404, with the
         // discriminator in its JSON body. (Among several protocols an unknown target is
         // `NoClaim`, answered by the service-level unclaimed response instead.)
@@ -1364,17 +1471,14 @@ mod multi_protocol {
         )
         .await;
         assert_eq!(status, StatusCode::NOT_FOUND);
-        assert!(
-            body.starts_with('{') && body.contains("UnknownOperationException"),
-            "{body}"
-        );
+        assert!(body.is_empty(), "{body}");
     }
 
     #[tokio::test]
-    async fn rpc_v2_cbor_claims_unknown_routes_without_falling_through_or_reading_body() {
+    async fn rpc_v2_cbor_defers_unknown_routes_without_reading_body() {
         let app = app(&BUILTINS, []);
-        for path in ["/service/Service/operation/unknown", "/first"] {
-            // `/first` could be handled by REST JSON, but CBOR has already claimed it.
+        for path in ["/service/Service/operation/unknown", "/unknown"] {
+            // No later protocol claims, so the first deferred rejection (CBOR) wins.
             let response = app
                 .clone()
                 .oneshot(
@@ -1388,6 +1492,120 @@ mod multi_protocol {
                 .unwrap();
             assert_eq!(response.status(), StatusCode::NOT_FOUND);
             assert_eq!(response.headers()[http::header::CONTENT_TYPE], "application/cbor");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_later_rest_claim_supersedes_cbor_deferred_rejection() {
+        let app = app(&BUILTINS, []);
+        assert_eq!(
+            send(
+                &app,
+                post("/first")
+                    .header(SMITHY_PROTOCOL_HEADER, "rpc-v2-cbor")
+                    .header("content-type", "application/json"),
+                "payload",
+            )
+            .await,
+            (StatusCode::OK, "aws.protocols#restJson1 first payload".into()),
+        );
+    }
+
+    #[tokio::test]
+    async fn a_later_rest_get_claim_supersedes_cbor_method_rejection() {
+        static GET_INPUT: Schema<'static> =
+            Schema::new_struct(shape_id!("test", "GetInput"), ShapeType::Structure, &IN_MEMBERS)
+                .with_http(HttpTrait::new("GET", "/first", Some(200)));
+        static GET_OP: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &GET_INPUT, &UNIT, &[]);
+        static BOTH: ServiceSchema<'static> = ServiceSchema::new(
+            SERVICE_ID,
+            None,
+            &[
+                shape_id!("smithy.protocols", "rpcv2Cbor"),
+                shape_id!("aws.protocols", "restJson1"),
+            ],
+            &[&GET_OP],
+        );
+        let (status, body) = send(
+            &app(&BOTH, []),
+            Request::builder()
+                .method("GET")
+                .uri("/first")
+                .header(SMITHY_PROTOCOL_HEADER, "rpc-v2-cbor")
+                .header("content-type", "application/json"),
+            "payload",
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body, "aws.protocols#restJson1 first payload");
+    }
+
+    #[tokio::test]
+    async fn deferred_rejections_use_precision_order_and_body_claims_can_defer() {
+        static MIXED: ServiceSchema<'static> = ServiceSchema::new(
+            SERVICE_ID,
+            None,
+            &[
+                shape_id!("smithy.protocols", "rpcv2Cbor"),
+                shape_id!("test", "bodyRouting"),
+                shape_id!("aws.protocols", "restJson1"),
+            ],
+            OPS,
+        );
+        for (order, status) in [
+            (
+                ProtocolOrder::Before("smithy.protocols#rpcv2Cbor"),
+                StatusCode::BAD_REQUEST,
+            ),
+            (
+                ProtocolOrder::After("aws.protocols#restJson1"),
+                StatusCode::METHOD_NOT_ALLOWED,
+            ),
+        ] {
+            let registry = body_routing(Box::leak(Box::new([order])));
+            for mode in ["defer-head", "defer-body"] {
+                let body = if mode == "defer-head" {
+                    untouchable_body()
+                } else {
+                    Body::empty()
+                };
+                let response = app(&MIXED, [registry])
+                    .oneshot(
+                        Request::builder()
+                            .method("GET")
+                            .uri("/unknown")
+                            .header(SMITHY_PROTOCOL_HEADER, "rpc-v2-cbor")
+                            .header("content-type", "application/json")
+                            .header("x-body-claim", mode)
+                            .body(body)
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                assert_eq!(response.status(), status, "{order:?} {mode}");
+                if status == StatusCode::BAD_REQUEST {
+                    assert_eq!(
+                        response.into_body().collect().await.unwrap().to_bytes(),
+                        "malformed request"
+                    );
+                }
+            }
+            // A successful later REST claim overrides all deferred rejections, and
+            // a body collected while considering a claim is replayed intact.
+            for mode in ["defer-head", "defer-body"] {
+                assert_eq!(
+                    send(
+                        &app(&MIXED, [registry]),
+                        post("/first")
+                            .header("content-type", "application/json")
+                            .header(SMITHY_PROTOCOL_HEADER, "rpc-v2-cbor")
+                            .header("x-body-claim", mode),
+                        "payload",
+                    )
+                    .await,
+                    (StatusCode::OK, "aws.protocols#restJson1 first payload".into())
+                );
+            }
         }
     }
 
@@ -1520,7 +1738,12 @@ mod multi_protocol {
             let (status, _) = send(&app(service, []), rpc(), "").await;
             assert_eq!(status, StatusCode::NOT_FOUND, "{:?}", service.protocols());
         }
-        let (status, text) = send(&app(&BOTH, []), post("/first"), "").await;
+        let (status, text) = send(
+            &app(&BOTH, []),
+            post("/first").header("content-type", "application/octet-stream"),
+            "",
+        )
+        .await;
         assert_eq!(
             (status, text.as_str()),
             (StatusCode::OK, "aws.protocols#restJson1 first ")

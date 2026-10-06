@@ -15,9 +15,12 @@ use crate::schema::routing::{
 
 /// Routes rpcv2Cbor on the `/service/{service}/operation/{operation}` path.
 ///
-/// Claims a request carrying `Smithy-Protocol: rpc-v2-cbor`. Routing then validates the
-/// method, path and headers. Unknown operations and operations with streaming blobs return
-/// an unknown operation error; forbidden headers return a malformed request error.
+/// Claims only a `POST` carrying `Smithy-Protocol: rpc-v2-cbor` whose path names this
+/// service and a bound operation, as required by Smithy's identification rules.
+/// The header alone can offer a deferred rejection but cannot claim a request.
+/// Routing after a claim rejects forbidden headers and unsupported streaming blobs.
+/// Route identity retains the legacy acceptance of URI prefixes and service namespaces;
+/// configured capitalized operation aliases also participate in the known-route check.
 #[derive(Debug)]
 struct RpcV2CborProtocolRouter {
     router: crate::protocol::rpc_v2_cbor::router::RpcV2CborRouter<OperationTarget>,
@@ -50,10 +53,16 @@ impl MetadataProtocolRouter for RpcV2CborProtocolRouter {
             .headers()
             .get(&SMITHY_PROTOCOL_HEADER)
             .is_some_and(|value| value.as_bytes() == b"rpc-v2-cbor");
-        if identified {
+        if !identified {
+            return RouteClaim::NoClaim;
+        }
+        if request.method() == http::Method::POST && self.router.match_target(request.uri().path()).is_some() {
             RouteClaim::Claimed
         } else {
-            RouteClaim::NoClaim
+            RouteClaim::DeferredRejection(
+                self.route(request)
+                    .expect_err("a wrong method or unknown target cannot route"),
+            )
         }
     }
 }

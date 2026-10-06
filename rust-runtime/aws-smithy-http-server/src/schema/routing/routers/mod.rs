@@ -16,15 +16,6 @@ fn content_type_is(request: &Request<()>, expected: &str) -> bool {
         .is_some_and(|mime| mime.essence_str() == expected)
 }
 
-/// Whether the request head announces an empty body.
-fn announces_no_body(request: &Request<()>) -> bool {
-    let headers = request.headers();
-    !headers.contains_key(http::header::TRANSFER_ENCODING)
-        && headers
-            .get(http::header::CONTENT_LENGTH)
-            .is_none_or(|length| length.as_bytes() == b"0")
-}
-
 mod aws_json;
 mod rest;
 mod rpc_v2_cbor;

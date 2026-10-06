@@ -7,21 +7,19 @@
 
 use crate::routing::request_spec::{PathSegment, QuerySegment, RequestSpec};
 use crate::routing::Router;
-use crate::schema::protocol::request::{expected_request_content_type, ExpectedContentType};
 use crate::schema::routing::RoutingError;
 use http::Request;
 
-use super::{announces_no_body, content_type_is};
+use super::content_type_is;
 use crate::schema::routing::{MetadataProtocolRouter, OperationTarget, RouteClaim, RouterBuildError};
 
 #[derive(Debug)]
 enum ClaimContentType {
-    /// The header does not tell the protocol apart; method and path decide.
+    /// A modeled custom header must be present, but its value does not distinguish protocols.
     Any,
-    /// The header must be absent.
+    /// Synthetic Unit inputs retain the legacy contract that the header is absent.
     Absent,
-    /// The header must name this media type or one of the aliases the protocol accepts for it, or
-    /// be absent with an empty body.
+    /// The header must name the derived media type or an explicitly configured alias.
     Expect(mime::Mime, &'static [&'static str]),
 }
 
@@ -31,6 +29,12 @@ impl ClaimContentType {
         codec_content_type: &'static str,
         codec_aliases: &'static [&'static str],
     ) -> Self {
+        // Compatibility exception: generated operations without a modeled input
+        // omit Content-Type, and the existing deserializer requires its absence.
+        // Do not make these operations impossible to invoke by demanding a codec header.
+        if input.members().is_empty() && input.original_name().is_none() {
+            return Self::Absent;
+        }
         let custom = input.members().iter().any(|member| {
             member
                 .http_header()
@@ -39,20 +43,40 @@ impl ClaimContentType {
         if custom {
             return Self::Any;
         }
-        match expected_request_content_type(input, codec_content_type, codec_aliases) {
-            ExpectedContentType::Skip => Self::Any,
-            ExpectedContentType::Absent => Self::Absent,
-            ExpectedContentType::Expect(mime, aliases) => Self::Expect(mime, aliases),
-        }
+        // Claiming follows the published derived-content-type rules, independently
+        // of the legacy deserializer's permissive checks for empty or blob bodies.
+        let media_type = input
+            .members()
+            .iter()
+            .copied()
+            .find(|member| member.http_payload().is_some())
+            .map(|payload| {
+                payload.media_type().map(|media| media.value()).unwrap_or_else(|| {
+                    use aws_smithy_schema::ShapeType;
+                    match payload.shape_type() {
+                        ShapeType::Union if payload.streaming() => "application/vnd.amazon.eventstream",
+                        ShapeType::Blob => "application/octet-stream",
+                        ShapeType::String => "text/plain",
+                        _ => codec_content_type,
+                    }
+                })
+            })
+            .unwrap_or(codec_content_type);
+        Self::Expect(
+            media_type.parse().expect("modeled media types are valid MIME"),
+            if media_type == codec_content_type {
+                codec_aliases
+            } else {
+                &[]
+            },
+        )
     }
 
     fn admits(&self, request: &Request<()>) -> bool {
         let present = request.headers().contains_key(http::header::CONTENT_TYPE);
         match self {
-            // The model gives us no content-type restriction for choosing a protocol.
-            Self::Any => true,
-            // The modeled input requires the header to be omitted. An empty or
-            // malformed header still counts as present and therefore fails this check.
+            // The model permits a custom value, but claiming still requires the header.
+            Self::Any => present,
             Self::Absent => !present,
             Self::Expect(mime, aliases) if present => {
                 // An explicit header must match the modeled media type or an accepted
@@ -61,10 +85,8 @@ impl ClaimContentType {
                 content_type_is(request, mime.essence_str())
                     || aliases.iter().any(|alias| content_type_is(request, alias))
             }
-            // Without Content-Type, allow a request whose headers announce no body:
-            // no Transfer-Encoding, and Content-Length either absent or exactly "0".
-            // This is a routing decision based on the request head, not a body check.
-            Self::Expect(..) => announces_no_body(request),
+            // A codec content type is required for claiming, even with an empty body.
+            Self::Expect(..) => false,
         }
     }
 }
@@ -73,18 +95,21 @@ impl ClaimContentType {
 ///
 /// Claims a request whose method and path match an operation and whose `Content-Type` matches the
 /// one that operation's input derives: the protocol's media type when members are bound to the
-/// body, the payload's for an `@httpPayload`, none for an input without members. An input binding
-/// `Content-Type` with `@httpHeader`, or one whose content type the header cannot distinguish (a
-/// streaming or untyped blob payload, members bound only to the URI and headers), is claimed on
-/// method and path alone; so is a request with neither `Content-Type` nor a body.
+/// body or absent body, or the payload's for an `@httpPayload`. An input binding
+/// `Content-Type` with `@httpHeader` permits a custom value, but still requires the header.
+/// Event-stream inputs use their event-stream media type. Configured XML aliases are
+/// an explicit compatibility extension to the published derived-content-type rules.
+/// Synthetic Unit inputs also retain their legacy requirement to omit Content-Type.
 ///
-/// A service serving both restJson1 and restXml therefore cannot tell them apart for such requests:
+/// A service serving both restJson1 and restXml cannot distinguish requests with a custom
+/// Content-Type, a shared payload media type, or a synthetic Unit input:
 /// the protocol earlier in priority order, restJson1 unless reordered, claims them, and a client of
 /// the other protocol receives a response it cannot read. Requests with a structured body carry
 /// `application/json` or `application/xml` and reach the right protocol.
 #[derive(Debug)]
 struct RestProtocolRouter {
     router: crate::protocol::rest::router::RestRouter<OperationTarget>,
+    codec_content_type: &'static str,
     /// Indexed by [`OperationTarget::index`].
     content_types: Vec<ClaimContentType>,
 }
@@ -103,6 +128,9 @@ impl MetadataProtocolRouter for RestProtocolRouter {
     fn claim(&self, request: &Request<()>) -> RouteClaim {
         match self.router.match_route(request) {
             Ok(target) if self.content_types[target.index()].admits(request) => RouteClaim::ClaimedWithRoute(target),
+            Err(error) if content_type_is(request, self.codec_content_type) => {
+                RouteClaim::DeferredRejection(error.into())
+            }
             Ok(_) | Err(_) => RouteClaim::NoClaim,
         }
     }
@@ -175,6 +203,7 @@ pub(crate) fn rest_router(
         .collect();
     Ok(RestProtocolRouter {
         router: crate::protocol::rest::router::RestRouter::from_iter(entries),
+        codec_content_type,
         content_types,
     })
 }

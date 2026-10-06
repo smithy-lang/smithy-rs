@@ -74,8 +74,8 @@ pub struct MultiProtocolRoutingService<B = hyper::body::Incoming> {
 
 /// Routers, handlers, and configuration shared by service clones and in-flight requests.
 pub(super) struct RoutingState<B> {
-    /// The served protocols in priority order. A single metadata router uses
-    /// [`MetadataProtocolRouter::route`] directly; all other configurations use the claim loop.
+    /// The served protocols in priority order. Every configuration checks claims;
+    /// a single metadata router can do so without an async routing loop.
     pub(super) protocols: Box<[ProtocolAndRouter]>,
     pub(super) handlers: Box<[BoundHandler<B>]>,
     /// Indices into `protocols` of metadata routers checked for streaming inputs before body
@@ -101,7 +101,7 @@ impl<B> fmt::Debug for MultiProtocolRoutingService<B> {
     }
 }
 
-/// The response for a request no protocol of a multi-protocol service claims.
+/// The response when no protocol claims the request or offers a deferred rejection.
 ///
 /// No protocol owns the request, so no protocol frames the response. Coral servers answer such a
 /// request with `404` and the XML body `<UnknownOperationException/>` regardless of the protocols
@@ -142,7 +142,7 @@ where
 
     fn route_request(&self, request: Request<crate::body::RequestBody<B>>) -> MultiProtocolRoutingFuture<B> {
         let state = match &self.state.protocols[..] {
-            // Only a single metadata router bypasses the claim loop.
+            // A single metadata router can check its claim synchronously.
             [ProtocolAndRouter {
                 router: SharedProtocolRouter::Metadata(router),
                 ..
@@ -155,9 +155,7 @@ where
         MultiProtocolRoutingFuture { inner: state }
     }
 
-    /// Routes with the service's only (metadata) protocol, exactly as a single-protocol service
-    /// always has. A single body-routed protocol runs the routing loop instead, with the final
-    /// fall-through answered as its own terminal rejection.
+    /// Checks the service's only metadata protocol without allocating a routing future.
     fn route(
         &self,
         router: &Arc<dyn MetadataProtocolRouter>,
@@ -167,7 +165,17 @@ where
         // and the router stays free of the transport body type.
         let (parts, body) = request.into_parts();
         let probe = Request::from_parts(parts, ());
-        match router.route(&probe) {
+        let selected = match router.claim(&probe) {
+            RouteClaim::ClaimedWithRoute(selected) => Ok(selected),
+            RouteClaim::Claimed => router.route(&probe),
+            RouteClaim::DeferredRejection(error) => Err(error),
+            RouteClaim::NoClaim => {
+                return State::Rejected {
+                    response: Some(unclaimed()),
+                }
+            }
+        };
+        match selected {
             Ok(selected) => {
                 let (parts, ()) = probe.into_parts();
                 State::Handling {
@@ -189,12 +197,17 @@ where
         let mut probe = Request::from_parts(parts, ());
         let mut collected: Option<Bytes> = None;
         let mut streaming = None;
+        let mut deferred = None;
 
         for (index, protocol) in self.state.protocols.iter().enumerate() {
             let selected = match &protocol.router {
                 SharedProtocolRouter::Metadata(router) => match router.claim(&probe) {
                     RouteClaim::ClaimedWithRoute(selected) => Ok(selected),
                     RouteClaim::Claimed => router.route(&probe),
+                    RouteClaim::DeferredRejection(error) => {
+                        deferred.get_or_insert((index, error));
+                        continue;
+                    }
                     RouteClaim::NoClaim => continue,
                 },
                 SharedProtocolRouter::Body(router) => {
@@ -202,6 +215,10 @@ where
                     match claim {
                         BodyRouteClaim::ClaimedWithRoute(selected) => Ok(selected),
                         BodyRouteClaim::NoClaim => continue,
+                        BodyRouteClaim::DeferredRejection(error) => {
+                            deferred.get_or_insert((index, error));
+                            continue;
+                        }
                         BodyRouteClaim::NeedsBodyToClaim | BodyRouteClaim::Claimed => {
                             // Skip body-dependent claims for recognized streaming inputs.
                             // An ownership claim already made from the head retains priority.
@@ -256,6 +273,10 @@ where
                                 RouteClaim::ClaimedWithRoute(selected) => Some(Ok(selected)),
                                 RouteClaim::Claimed => Some(router.route_with_body(&request)),
                                 RouteClaim::NoClaim => None,
+                                RouteClaim::DeferredRejection(error) => {
+                                    deferred.get_or_insert((index, error));
+                                    None
+                                }
                             };
                             probe = request.map(|_| ());
                             let Some(selected) = selected else { continue };
@@ -269,11 +290,9 @@ where
                 Err(error) => Ok(self.reject(index, error)),
             };
         }
-        // A single body protocol owns even requests it does not recognize.
-        Ok(if self.state.protocols.len() == 1 {
-            self.reject(0, RoutingError::unknown_operation())
-        } else {
-            unclaimed()
+        Ok(match deferred {
+            Some((index, error)) => self.reject(index, error),
+            None => unclaimed(),
         })
     }
 

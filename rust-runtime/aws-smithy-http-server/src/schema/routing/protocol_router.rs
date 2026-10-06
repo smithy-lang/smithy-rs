@@ -198,6 +198,10 @@ pub enum RouteClaim {
     /// [`BodyProtocolRouter::route_with_body`] to select the operation or return a terminal
     /// routing error. No other protocol is asked.
     Claimed,
+    /// The request signals this protocol but does not meet its claiming requirements.
+    /// Continue asking other protocols. If none claims, the first deferred rejection
+    /// in protocol precision order is serialized by the protocol that supplied it.
+    DeferredRejection(RoutingError),
     /// The protocol does not identify the request; the next protocol is asked.
     NoClaim,
 }
@@ -212,11 +216,11 @@ pub enum RouteClaim {
 /// [`serialize_routing_error`](crate::schema::ServerProtocol::serialize_routing_error), which
 /// owns the kind-to-wire mapping.
 pub trait MetadataProtocolRouter: Send + Sync + fmt::Debug {
-    /// Selects from the request URI, method and headers when this is the service's only
-    /// protocol or after [`RouteClaim::Claimed`]. All routing errors are terminal.
+    /// Selects from the request URI, method and headers after [`RouteClaim::Claimed`].
+    /// All routing errors after a claim are terminal.
     fn route(&self, request: &Request<()>) -> Result<OperationTarget, RoutingError>;
 
-    /// Decides whether the request is this protocol's when the service serves several protocols.
+    /// Decides whether the request meets this protocol's claiming requirements.
     fn claim(&self, request: &Request<()>) -> RouteClaim;
 
     /// Recognizes a potentially streaming input using only the request head. Output-only
@@ -262,6 +266,9 @@ pub enum BodyRouteClaim {
     /// The protocol needs body bytes to decide whether the request is its own. The service
     /// collects the complete body and calls [`BodyProtocolRouter::claim_with_body`].
     NeedsBodyToClaim,
+    /// Defer a rejection from the head without collecting the body. A later claim wins;
+    /// otherwise the first deferred rejection in precision order supplies the response.
+    DeferredRejection(RoutingError),
     /// The request is not this protocol's; the next protocol is asked.
     NoClaim,
 }
@@ -277,8 +284,8 @@ pub enum BodyRouteClaim {
 /// streaming input, `NeedsBodyToClaim` is skipped; head claims retain priority.
 ///
 /// Routing errors are terminal and serialized by the claiming protocol.
-/// For a single-protocol service, a final `NoClaim` becomes
-/// [`RoutingError::unknown_operation`].
+/// An unclaimed request uses the first deferred rejection, if any, or the
+/// service's protocol-neutral response, including for a single-protocol service.
 pub trait BodyProtocolRouter: Send + Sync + fmt::Debug {
     /// Checks the request head, requesting body collection if needed.
     fn claim(&self, request: &Request<()>) -> BodyRouteClaim;

@@ -64,6 +64,13 @@ pub struct RpcV2CborRouter<S> {
 const FORBIDDEN_HEADERS: &[&str] = &["x-amz-target", "x-amzn-target"];
 
 impl<S> RpcV2CborRouter<S> {
+    /// Looks up a modeled service and operation independently of transport validation.
+    /// Schema claiming uses this to distinguish a known route from a deferred rejection.
+    pub(crate) fn match_target(&self, path: &str) -> Option<&S> {
+        let identity = parse_route_identity(path)?;
+        tracing::trace!(service = %identity.service, operation = %identity.operation, "parsed service and operation from URI");
+        self.routes.get(identity.route_key)
+    }
     /// Builds routing keys owned by a runtime service schema adapter.
     pub fn from_owned(iter: impl IntoIterator<Item = (String, S)>) -> Self {
         Self {
@@ -207,11 +214,8 @@ impl<S: Clone, B> Router<B> for RpcV2CborRouter<S> {
 
         let request_path = request.uri().path();
         tracing::trace!(%request_path, "parsing service and operation from URI");
-        let identity = parse_route_identity(request_path).ok_or(Error::NotFound)?;
-        tracing::trace!(service = %identity.service, operation = %identity.operation, "parsed service and operation from URI");
-
         // The route key is a slice of the request path; no intermediate String is needed.
-        let route = self.routes.get(identity.route_key).ok_or(Error::NotFound)?;
+        let route = self.match_target(request_path).ok_or(Error::NotFound)?;
         Ok(route.clone())
     }
 }

@@ -9,11 +9,13 @@
 //! request URI, method and headers, or [`BodyProtocolRouter`], which can also inspect the
 //! complete body. Body routers receive only operations with no streaming input or output.
 //!
-//! A service serving exactly one protocol with a metadata router calls
-//! [`MetadataProtocolRouter::route`] directly, without a claim check. Every other configuration, including
-//! a single body router, asks routers to claim in protocol priority order. The first claim
+//! Every service, including a single-protocol service, checks protocol claims. Routers
+//! are asked in protocol precision order. The first claim
 //! owns the request: it either identifies the operation or proceeds to routing, whose
 //! errors are terminal and serialized by that protocol.
+//! A [`RouteClaim::DeferredRejection`] lets later protocols try to claim. If none does,
+//! the first deferred rejection supplies the response; otherwise the service returns
+//! its protocol-neutral rejection.
 //!
 //! Body routers first inspect the head with [`BodyProtocolRouter::claim`]. A
 //! [`BodyRouteClaim::ClaimedWithRoute`] dispatches without collecting the body.

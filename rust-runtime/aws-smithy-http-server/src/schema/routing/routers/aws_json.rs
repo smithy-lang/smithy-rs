@@ -52,6 +52,10 @@ impl MetadataProtocolRouter for AwsJsonProtocolRouter {
     fn claim(&self, request: &Request<()>) -> RouteClaim {
         match self.matching_target(request) {
             Some(target) => RouteClaim::ClaimedWithRoute(target),
+            None if content_type_is(request, self.content_type) => match self.route(request) {
+                Err(error) => RouteClaim::DeferredRejection(error),
+                Ok(_) => RouteClaim::NoClaim,
+            },
             None => RouteClaim::NoClaim,
         }
     }

@@ -199,7 +199,8 @@ class MultiProtocolSchemaServiceTest {
                         )
                         .await;
                         assert_eq!(status, 404);
-                        let (status, _, _) = send(#{Http}::Request::builder().method("PUT").uri("/upload"), "payload").await;
+                        let (status, _, _) = send(#{Http}::Request::builder().method("PUT").uri("/upload")
+                            .header("content-type", "application/octet-stream"), "payload").await;
                         assert_eq!(status, 200);
                         """,
                         *scope,
@@ -209,7 +210,7 @@ class MultiProtocolSchemaServiceTest {
                     rustTemplate(
                         """
                         for request in [
-                            post("/").header("content-type", "application/x-amz-json-1.0").header("x-amz-target", "Example.Unknown"),
+                            post("/").header("x-amz-target", "Example.Unknown"),
                             post("/greet").header("content-type", "text/plain"),
                             #{Http}::Request::builder().method("GET").uri("/nowhere"),
                         ] {
@@ -218,6 +219,15 @@ class MultiProtocolSchemaServiceTest {
                             assert!(headers.is_empty());
                             assert_eq!(body, "<UnknownOperationException/>\n");
                         }
+                        // A recognizable AWS JSON media type offers a deferred rejection,
+                        // even though an unknown operation cannot satisfy strict claiming.
+                        let (status, headers, body) = send(
+                            post("/").header("content-type", "application/x-amz-json-1.0")
+                                .header("x-amz-target", "Example.Unknown"), "{}",
+                        ).await;
+                        assert_eq!(status, 404);
+                        assert_eq!(headers["content-type"], "application/x-amz-json-1.0");
+                        assert!(body.is_empty());
                         """,
                         *scope,
                     )
