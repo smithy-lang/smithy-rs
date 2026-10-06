@@ -41,5 +41,7 @@ lambda_invoke:
 distclean: clean
 	$(GRADLE) --project-dir $(SRC_DIR) :codegen-client-test:clean :codegen-server-test:clean
 	rm -rf $(SERVER_SDK_DST) $(CLIENT_SDK_DST) Cargo.lock
+	$(GRADLE) --project-dir $(SRC_DIR) -P modules='pokemon-service-server-sdk,pokemon-service-client' \
+		:codegen-client-test:smithyBuild --rerun :codegen-server-test:smithyBuild --rerun
 
-.PHONY: all
+.PHONY: all codegen build run clippy test doc-open clean distclean lambda_watch lambda_invoke
