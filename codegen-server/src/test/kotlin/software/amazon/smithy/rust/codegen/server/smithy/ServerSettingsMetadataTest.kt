@@ -40,7 +40,7 @@ internal class ServerSettingsMetadataTest {
             }""",
                 ).expectObjectNode(),
             )
-        val protocols = listOf("aws.protocols#restXml", ServerRustSettings.RPC_V2_CBOR_PROTOCOL_ID).map(ShapeId::from)
+        val protocols = listOf("aws.protocols#restXml", "aws.protocols#restJson1", "aws.protocols#awsJson1_0", "aws.protocols#awsJson1_1", ServerRustSettings.RPC_V2_CBOR_PROTOCOL_ID).map(ShapeId::from)
         val writer = RustWriter.toml("Cargo.toml")
         CargoTomlGenerator(settings, protocols.first().toString(), writer, settings.manifestSettingsMetadata(protocols), emptyList(), emptyList()).render()
         return Toml().read(writer.toString()).getTable("package.metadata")
@@ -48,35 +48,26 @@ internal class ServerSettingsMetadataTest {
 
     // toml4j retains the quotation marks on quoted table names in toMap().
     private fun Toml.protocolTables(): Map<String, Any> =
-        getTable("customizationConfig.protocols").toMap().mapKeys { (key, _) -> key.removeSurrounding("\"") }
+        getTable("customizationConfig.protocols")?.toMap().orEmpty().mapKeys { (key, _) -> key.removeSurrounding("\"") }
 
     @Test
-    fun `manifest records default server flags and built-in protocol defaults`() {
+    fun `manifest omits default codegen and protocol settings`() {
         val metadata = metadata()
-        val codegen = metadata.getTable("codegen")
-        codegen.getBoolean("debugMode") shouldBe false
-        codegen.getLong("formatTimeoutSeconds") shouldBe 20L
-        codegen.getBoolean("publicConstrainedTypes") shouldBe true
-        codegen.getBoolean("schemaSerde") shouldBe false
-        codegen.getBoolean("http-1x") shouldBe false
-        codegen.getLong("requestBodyMaxBytes") shouldBe 0L
-        // Unset means automatic; it is not an explicit false override.
-        codegen.contains("addValidationExceptionToConstrainedOperations") shouldBe false
-        val protocols = metadata.protocolTables()
-        protocols["aws.protocols#restXml"] shouldBe mapOf("legacyMode" to false)
-        protocols[ServerRustSettings.RPC_V2_CBOR_PROTOCOL_ID] shouldBe mapOf("capitalizeRoutes" to false)
+        metadata.contains("codegen") shouldBe false
+        metadata.contains("customizationConfig") shouldBe false
     }
 
     @Test
-    fun `configured flags override defaults and nested customization values keep their types`() {
+    fun `configured flags are recorded and nested customization values keep their types`() {
         val metadata =
             metadata(
                 """,
-            "codegen": {"schemaSerde": true, "http-1x": true, "requestBodyMaxBytes": 4096,
+            "codegen": {"schemaSerde": true, "http-1x": true,
                         "addValidationExceptionToConstrainedOperations": false, "rpcV2CborAddCapitalizedRoute": true},
             "customizationConfig": {"protocols": {
+                "global": {"requestBodyMaxBytes": 4096},
                 "smithy.protocols#rpcv2Cbor": {"capitalizeRoutes": false},
-                "aws.protocols#restXml": {"legacyMode": true},
+                "aws.protocols#restXml": {"acceptTextXml": true},
                 "example#custom": {"nested": {"enabled": true, "limit": 3, "names": ["one", "two"]}}
             }}
         """,
@@ -84,13 +75,55 @@ internal class ServerSettingsMetadataTest {
         val codegen = metadata.getTable("codegen")
         codegen.getBoolean("schemaSerde") shouldBe true
         codegen.getBoolean("http-1x") shouldBe true
-        codegen.getLong("requestBodyMaxBytes") shouldBe 4096L
         codegen.getBoolean("addValidationExceptionToConstrainedOperations") shouldBe false
-        codegen.getBoolean("debugMode") shouldBe false
+        codegen.contains("debugMode") shouldBe false
+        codegen.toMap().size shouldBe 4
         val protocols = metadata.protocolTables()
-        protocols[ServerRustSettings.RPC_V2_CBOR_PROTOCOL_ID] shouldBe mapOf("capitalizeRoutes" to false)
-        protocols["aws.protocols#restXml"] shouldBe mapOf("legacyMode" to true)
+        protocols.containsKey(ServerRustSettings.RPC_V2_CBOR_PROTOCOL_ID) shouldBe false
+        protocols["global"] shouldBe mapOf("requestBodyMaxBytes" to 4096L)
+        protocols["aws.protocols#restXml"] shouldBe mapOf("acceptTextXml" to true)
         protocols["example#custom"] shouldBe mapOf("nested" to mapOf("enabled" to true, "limit" to 3L, "names" to listOf("one", "two")))
+    }
+
+    @Test
+    fun `explicit codegen defaults are omitted`() {
+        val metadata =
+            metadata(
+                """, "codegen": {"debugMode": false, "formatTimeoutSeconds": 20,
+                    "publicConstrainedTypes": true}""",
+            )
+        metadata.contains("codegen") shouldBe false
+    }
+
+    @Test
+    fun `false overrides of true defaults are recorded`() {
+        val metadata = metadata(""", "codegen": {"publicConstrainedTypes": false}""")
+        metadata.getTable("codegen").toMap() shouldBe mapOf("publicConstrainedTypes" to false)
+    }
+
+    @Test
+    fun `explicit protocol defaults are omitted without dropping unknown settings`() {
+        val metadata =
+            metadata(
+                """, "customizationConfig": {"protocols": {
+                "aws.protocols#restXml": {"strictCollectionElementNames": true, "validateDocument": false, "acceptTextXml": false},
+                "aws.protocols#restJson1": {"validateSkippedValues": false},
+                "aws.protocols#awsJson1_0": {"validateSkippedValues": false},
+                "aws.protocols#awsJson1_1": {"validateSkippedValues": false},
+                "smithy.protocols#rpcv2Cbor": {"capitalizeRoutes": false, "extension": false},
+                "example#custom": {"legacyMode": false}
+            }}""",
+            )
+        metadata.protocolTables() shouldBe
+            mapOf(
+                ServerRustSettings.RPC_V2_CBOR_PROTOCOL_ID to mapOf("extension" to false),
+                "example#custom" to mapOf("legacyMode" to false),
+            )
+    }
+
+    @Test
+    fun `empty codegen configuration emits no flags`() {
+        metadata(""", "codegen": {}""").getTable("codegen")?.toMap().orEmpty() shouldBe emptyMap()
     }
 
     @Test
@@ -100,7 +133,7 @@ internal class ServerSettingsMetadataTest {
     }
 
     @Test
-    fun `server plugin includes effective settings in the generated manifest`() {
+    fun `server plugin includes only non-default codegen settings in the generated manifest`() {
         val server =
             serverIntegrationTest(
                 model,
@@ -108,16 +141,19 @@ internal class ServerSettingsMetadataTest {
                     additionalSettings =
                         Node.parse(
                             """{
-                "codegen": {"requestBodyMaxBytes": 1024},
-                "customizationConfig": {"example": {"enabled": true}}
+                "codegen": {"debugMode": false, "publicConstrainedTypes": false},
+                "customizationConfig": {"example": {"enabled": true},
+                                        "protocols": {"global": {"requestBodyMaxBytes": 1024}}}
             }""",
                         ).expectObjectNode(),
                 ),
                 testCoverage = HttpTestType.Default,
             ).single()
         val metadata = Toml().read(server.path.resolve("Cargo.toml").toFile()).getTable("package.metadata")
-        metadata.getLong("codegen.requestBodyMaxBytes") shouldBe 1024L
-        metadata.getBoolean("codegen.schemaSerde") shouldBe false
+        metadata.getLong("customizationConfig.protocols.global.requestBodyMaxBytes") shouldBe 1024L
+        metadata.contains("codegen.schemaSerde") shouldBe false
+        metadata.contains("codegen.debugMode") shouldBe false
+        metadata.getBoolean("codegen.publicConstrainedTypes") shouldBe false
         metadata.getBoolean("customizationConfig.example.enabled") shouldBe true
     }
 }

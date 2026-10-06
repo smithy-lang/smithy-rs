@@ -463,6 +463,8 @@ class SchemaRoutingGeneratorTest {
                                 "smithy.protocols#rpcv2Cbor",
                                 ObjectNode.builder().withMember("capitalizeRoutes", true).build(),
                             )
+                            // The shared section; the runtime applies its body limit to every protocol.
+                            .withMember("global", ObjectNode.builder().withMember("requestBodyMaxBytes", 64).build())
                             // An unrelated protocol's section passes through without being consulted.
                             .withMember(
                                 "com.amazon.coral#rpcv1",
@@ -498,6 +500,43 @@ class SchemaRoutingGeneratorTest {
                             let response = service.clone().oneshot(request).await.unwrap();
                             assert_eq!(response.status(), 200, "{path}");
                         }
+                        """,
+                        "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
+                        "Http" to RuntimeType.http(context.runtimeConfig),
+                        "Tower" to ServerCargoDependency.Tower.toType(),
+                        *RuntimeType.preludeScope,
+                    )
+                }
+                tokioTest("global_request_body_limit_is_applied_by_the_runtime") {
+                    rustTemplate(
+                        """
+                        use #{Tower}::ServiceExt;
+                        // `{"value": "x" * 100}`: valid input, larger than the configured 64 bytes.
+                        let mut payload = vec![0xA1u8, 0x65, b'v', b'a', b'l', b'u', b'e', 0x78, 100];
+                        payload.extend(::std::iter::repeat(b'x').take(100));
+                        let request = || {
+                            #{Http}::Request::builder()
+                                .method("POST")
+                                .uri("/service/Example/operation/getFoo")
+                                .header("content-type", "application/cbor")
+                                .header("smithy-protocol", "rpc-v2-cbor")
+                                .body(#{Server}::body::Body::from_bytes(payload.clone().into()))
+                                .unwrap()
+                        };
+                        let builder = || {
+                            crate::Example::builder(crate::ExampleConfig::builder().build())
+                                .get_foo(|_input: crate::input::GetFooInput| async { crate::output::GetFooOutput {} })
+                        };
+                        let limited = builder().build().unwrap();
+                        assert_eq!(limited.oneshot(request()).await.unwrap().status(), 400);
+                        // An operation override lifts the limit, so the payload itself is acceptable.
+                        let lifted = builder()
+                            .request_body_config(#{Server}::schema::ServiceRequestBodyConfig::default().with_per_operation(
+                                [("test##getFoo".to_owned(), #{Server}::schema::RequestBodyCollectionConfig::default())].into(),
+                            ))
+                            .build()
+                            .unwrap();
+                        assert_eq!(lifted.oneshot(request()).await.unwrap().status(), 200);
                         """,
                         "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
                         "Http" to RuntimeType.http(context.runtimeConfig),

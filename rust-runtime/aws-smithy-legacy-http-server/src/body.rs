@@ -125,7 +125,7 @@ impl<E: std::error::Error + 'static> std::error::Error for CollectBodyError<E> {
 ///
 /// Passing `limit == 0` disables the check and collects the entire body (the
 /// historical behavior, *not* recommended — see the security notes on the
-/// `requestBodyMaxBytes` codegen setting).
+/// `customizationConfig.protocols.global.requestBodyMaxBytes` setting).
 #[doc(hidden)]
 pub async fn collect_body_limited<B>(body: B, limit: usize) -> Result<Bytes, CollectBodyError<B::Error>>
 where

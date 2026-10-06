@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy
 
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.Node
@@ -56,6 +57,20 @@ internal class ServerRustSettingsTest {
     fun `protocol settings are empty by default`() {
         settings("").protocolSettings() shouldBe emptyMap()
         settings("").rpcV2CborCapitalizeRoutes() shouldBe false
+    }
+
+    @Test
+    fun `requestBodyMaxBytes is read from the global protocols section`() {
+        settings("").requestBodyMaxBytes() shouldBe 0L
+        settings("", """{ "protocols": { "global": { "otherSetting": 1 } } }""").requestBodyMaxBytes() shouldBe 0L
+        settings("", """{ "protocols": { "global": { "requestBodyMaxBytes": 2048 } } }""").requestBodyMaxBytes() shouldBe 2048L
+    }
+
+    @Test
+    fun `negative requestBodyMaxBytes is rejected when settings are loaded`() {
+        shouldThrow<IllegalArgumentException> {
+            settings("", """{ "protocols": { "global": { "requestBodyMaxBytes": -1 } } }""")
+        }
     }
 
     @Test

@@ -885,8 +885,6 @@ class ServerServiceGenerator(
 
     private fun schemaServiceStruct(): Writable =
         writable {
-            val max = codegenContext.settings.codegenConfig.requestBodyMaxBytes
-            val maxExpr = if (max > 0) "::std::num::NonZeroUsize::new(${max}usize)" else "#{None}"
             // `customizationConfig.protocols` sections travel verbatim as JSON byte-strings,
             // parsed once into `Document`s when the builder is constructed. `#` in the JSON
             // (shape IDs) must be escaped for the template.
@@ -896,7 +894,7 @@ class ServerServiceGenerator(
                         val id = protocolId.replace("#", "##").dq()
                         val json = Node.printJson(section).replace("#", "##")
                         rustTemplate(
-                            "($id.to_owned(), #{SmithyHttpServer}::schema::parse_settings_json(br####\"$json\"####))",
+                            "($id.to_owned(), #{SmithyHttpServer}::schema::settings::parse_settings_json(br####\"$json\"####))",
                             *codegenScope,
                         )
                     }
@@ -936,9 +934,6 @@ class ServerServiceGenerator(
                     }
                     fn routing_options() -> #{SmithyHttpServer}::schema::routing::RoutingOptions {
                         #{SmithyHttpServer}::schema::routing::RoutingOptions::default()
-                            .with_request_body(#{SmithyHttpServer}::schema::ServiceRequestBodyConfig::default()
-                                .with_global(#{SmithyHttpServer}::schema::RequestBodyCollectionConfig::default()
-                                    .with_max_bytes($maxExpr)))
                             .with_protocol_settings(::std::collections::HashMap::from([#{ProtocolSettings}]))
                     }
                     ##[deprecated(note = "use builder with a service configuration")]
@@ -959,6 +954,9 @@ class ServerServiceGenerator(
                 }
                 impl<L, HttpPl, ModelPl> $builderName<L, HttpPl, ModelPl> {
                     /// Replaces the global and per-operation body collection configuration.
+                    ///
+                    /// A configuration that sets no global byte limit keeps the one from
+                    /// `customizationConfig.protocols.global.requestBodyMaxBytes`.
                     pub fn request_body_config(mut self, config: #{SmithyHttpServer}::schema::ServiceRequestBodyConfig) -> Self {
                         self.routing_options.request_body = config;
                         self

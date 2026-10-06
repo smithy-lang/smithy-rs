@@ -96,6 +96,28 @@ data class ServerRustSettings(
     }
 
     /**
+     * The maximum number of bytes buffered for a non-streaming request body, from
+     * `customizationConfig.protocols.global.requestBodyMaxBytes`. `0` (the default) means no
+     * limit, which allows memory exhaustion via `Transfer-Encoding: chunked` or very large
+     * `Content-Length` values; services should set a positive value.
+     *
+     * The schema routing path reads the same key from the `global` section at runtime. This
+     * accessor serves the generators that fix the limit at generation time.
+     */
+    fun requestBodyMaxBytes(): Long =
+        (
+            protocolSettings()[GLOBAL_PROTOCOL_SETTINGS_KEY]
+                ?.getNumberMemberOrDefault(REQUEST_BODY_MAX_BYTES_KEY, 0L)
+                ?.toLong()
+                ?: 0L
+        ).also {
+            require(it >= 0) {
+                "`$CUSTOMIZATION_CONFIG_KEY.$PROTOCOLS_CUSTOMIZATION_KEY.$GLOBAL_PROTOCOL_SETTINGS_KEY.$REQUEST_BODY_MAX_BYTES_KEY` " +
+                    "must be non-negative, got $it"
+            }
+        }
+
+    /**
      * The effective RPCv2 CBOR capitalized-route-alias value, honored by both the legacy router
      * codegen and, through [protocolSettings], the schema routing path.
      */
@@ -113,6 +135,12 @@ data class ServerRustSettings(
 
         const val RPC_V2_CBOR_PROTOCOL_ID = "smithy.protocols#rpcv2Cbor"
         const val CAPITALIZE_ROUTES_KEY = "capitalizeRoutes"
+
+        /** Key under `customizationConfig.protocols` for the section every protocol shares. */
+        const val GLOBAL_PROTOCOL_SETTINGS_KEY = "global"
+
+        /** Key in the shared section for the per-request body size limit. */
+        const val REQUEST_BODY_MAX_BYTES_KEY = "requestBodyMaxBytes"
 
         fun from(
             model: Model,
@@ -144,7 +172,7 @@ data class ServerRustSettings(
                 examplesUri = coreRustSettings.examplesUri,
                 minimumSupportedRustVersion = coreRustSettings.minimumSupportedRustVersion,
                 customizationConfig = coreRustSettings.customizationConfig,
-            )
+            ).also { it.requestBodyMaxBytes() }
         }
     }
 }
@@ -153,10 +181,6 @@ data class ServerRustSettings(
  * [publicConstrainedTypes]: Generate constrained wrapper newtypes for constrained shapes
  * [ignoreUnsupportedConstraints]: Generate model even though unsupported constraints are present
  * [http1x]: Enable HTTP 1.x support (hyper 1.x and http 1.x types)
- * [requestBodyMaxBytes]: Maximum number of bytes to buffer when deserializing a non-streaming
- *   request body. Set to `0` to disable the limit (the historical behavior; not recommended, as
- *   it allows memory exhaustion via `Transfer-Encoding: chunked` or very large `Content-Length`
- *   values). Default is `0` (no limit) for backwards compatibility.
  * [rpcV2CborAddCapitalizedRoute]: When false (default), the RPCv2 CBOR server router registers
  *   only the spec-compliant verbatim route derived from the Smithy operation shape name
  *   (e.g., `Example.getFoo`). When true, an additional legacy alias with the first character
@@ -189,7 +213,6 @@ data class ServerCodegenConfig(
     val addValidationExceptionToConstrainedOperations: Boolean? = null,
     val alwaysSendEventStreamInitialResponse: Boolean = DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE,
     val http1x: Boolean = DEFAULT_HTTP_1X,
-    val requestBodyMaxBytes: Long = DEFAULT_REQUEST_BODY_MAX_BYTES,
     /**
      * When true, a union JSON body whose object did not set any recognized variant
      * (e.g. `{}` or `{"unknownKey": ...}`) parses to `Ok(None)` rather than returning a
@@ -209,15 +232,6 @@ data class ServerCodegenConfig(
         private const val DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE = false
         private const val DEFAULT_ALLOW_MISSING_UNION_VARIANT = false
         const val DEFAULT_HTTP_1X = false
-
-        /**
-         * The default maximum size (in bytes) of a non-streaming request body that the generated
-         * server will buffer into memory. `0` means no limit (the historical behavior).
-         *
-         * Services should set `requestBodyMaxBytes` to a positive value to prevent
-         * memory-exhaustion denial-of-service attacks via unbounded request bodies.
-         */
-        const val DEFAULT_REQUEST_BODY_MAX_BYTES: Long = 0L
 
         /**
          * Default value for `rpcV2CborAddCapitalizedRoute`.
@@ -248,9 +262,6 @@ data class ServerCodegenConfig(
          */
         const val HTTP_1X_CONFIG_KEY = "http-1x"
 
-        /** Configuration key for the per-request body size limit. */
-        const val REQUEST_BODY_MAX_BYTES_CONFIG_KEY = "requestBodyMaxBytes"
-
         /** Configuration key for the RPCv2 CBOR opt-in flag that adds a legacy capitalized route alias. */
         const val RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY = "rpcV2CborAddCapitalizedRoute"
 
@@ -268,7 +279,6 @@ data class ServerCodegenConfig(
                 "alwaysSendEventStreamInitialResponse",
                 "allowMissingUnionVariant",
                 HTTP_1X_CONFIG_KEY,
-                REQUEST_BODY_MAX_BYTES_CONFIG_KEY,
                 RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY,
                 SCHEMA_SERDE_CONFIG_KEY,
             )
@@ -323,11 +333,6 @@ data class ServerCodegenConfig(
                         HTTP_1X_CONFIG_KEY,
                         DEFAULT_HTTP_1X,
                     ),
-                requestBodyMaxBytes =
-                    node.get().getNumberMemberOrDefault(
-                        REQUEST_BODY_MAX_BYTES_CONFIG_KEY,
-                        DEFAULT_REQUEST_BODY_MAX_BYTES,
-                    ).toLong(),
                 rpcV2CborAddCapitalizedRoute =
                     node.get().getBooleanMemberOrDefault(
                         RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY,
@@ -338,11 +343,7 @@ data class ServerCodegenConfig(
                         SCHEMA_SERDE_CONFIG_KEY,
                         DEFAULT_SCHEMA_SERDE,
                     ),
-            ).also {
-                require(it.requestBodyMaxBytes >= 0) {
-                    "`$REQUEST_BODY_MAX_BYTES_CONFIG_KEY` must be non-negative, got ${it.requestBodyMaxBytes}"
-                }
-            }
+            )
         } else {
             ServerCodegenConfig(
                 formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,

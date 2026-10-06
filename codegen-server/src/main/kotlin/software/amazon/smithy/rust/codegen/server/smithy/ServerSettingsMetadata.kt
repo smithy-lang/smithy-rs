@@ -13,50 +13,56 @@ import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.node.StringNode
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustomizations
-import software.amazon.smithy.rust.codegen.core.util.deepMergeWith
 
 /**
- * Records effective server settings using their smithy-build.json names. Unset nullable settings
- * are omitted because TOML cannot represent null; in particular, an automatic validation-exception
- * decision must not be recorded as an explicit false override.
+ * Records settings that differ from their defaults using their smithy-build.json names.
+ * Nullable settings default to automatic: an explicit false is still a non-default override.
  */
 internal fun ServerRustSettings.manifestSettingsMetadata(servedProtocols: Collection<ShapeId>): ManifestCustomizations {
-    val codegen =
-        with(codegenConfig) {
-            listOfNotNull(
-                "formatTimeoutSeconds" to formatTimeoutSeconds,
-                "debugMode" to debugMode,
-                "flattenCollectionAccessors" to flattenCollectionAccessors,
-                "publicConstrainedTypes" to publicConstrainedTypes,
-                "ignoreUnsupportedConstraints" to ignoreUnsupportedConstraints,
-                experimentalCustomValidationExceptionWithReasonPleaseDoNotUse?.let {
-                    "experimentalCustomValidationExceptionWithReasonPleaseDoNotUse" to it
-                },
-                addValidationExceptionToConstrainedOperations?.let { "addValidationExceptionToConstrainedOperations" to it },
-                "alwaysSendEventStreamInitialResponse" to alwaysSendEventStreamInitialResponse,
-                ServerCodegenConfig.HTTP_1X_CONFIG_KEY to http1x,
-                ServerCodegenConfig.REQUEST_BODY_MAX_BYTES_CONFIG_KEY to requestBodyMaxBytes,
-                "allowMissingUnionVariant" to allowMissingUnionVariant,
-                ServerCodegenConfig.RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY to rpcV2CborAddCapitalizedRoute,
-                ServerCodegenConfig.SCHEMA_SERDE_CONFIG_KEY to schemaSerde,
-            ).toMap()
-        }
-    // Runtime extensions own their defaults. Preserve their supplied settings verbatim and add
-    // the defaults known to the built-in server protocols, for protocols served by this crate.
+    val codegenDefaults = ServerCodegenConfig().metadataMap()
+    val codegen = codegenConfig.metadataMap().filter { (key, value) -> value != codegenDefaults[key] }
+    // Runtime extensions own their defaults. Only remove defaults known to built-in protocols.
     val protocolDefaults =
         servedProtocols.mapNotNull { protocol ->
             when (protocol.toString()) {
                 ServerRustSettings.RPC_V2_CBOR_PROTOCOL_ID -> protocol.toString() to mapOf(ServerRustSettings.CAPITALIZE_ROUTES_KEY to false)
-                "aws.protocols#restXml" -> protocol.toString() to mapOf("legacyMode" to false)
+                "aws.protocols#restXml" -> protocol.toString() to mapOf("strictCollectionElementNames" to true, "validateDocument" to false, "acceptTextXml" to false)
+                "aws.protocols#restJson1", "aws.protocols#awsJson1_0", "aws.protocols#awsJson1_1" -> protocol.toString() to mapOf("validateSkippedValues" to false)
                 else -> null
             }
         }.toMap()
-    val protocols = protocolDefaults.deepMergeWith(protocolSettings().mapValues { (_, section) -> section.metadataMap() })
+    val protocols =
+        protocolSettings().mapValues { (protocol, section) ->
+            section.metadataMap().filter { (key, value) -> value != protocolDefaults[protocol]?.get(key) }
+        }.filterValues { it.isNotEmpty() }
     val customization =
-        (customizationConfig?.metadataMap() ?: emptyMap())
-            .deepMergeWith(if (protocols.isEmpty()) emptyMap() else mapOf("protocols" to protocols))
-    return mapOf("package" to mapOf("metadata" to mapOf("codegen" to codegen, "customizationConfig" to customization)))
+        (customizationConfig?.metadataMap().orEmpty() - ServerRustSettings.PROTOCOLS_CUSTOMIZATION_KEY) +
+            (if (protocols.isEmpty()) emptyMap() else mapOf(ServerRustSettings.PROTOCOLS_CUSTOMIZATION_KEY to protocols))
+    val metadata =
+        buildMap {
+            if (codegen.isNotEmpty()) put("codegen", codegen)
+            if (customization.isNotEmpty()) put("customizationConfig", customization)
+        }
+    return mapOf("package" to mapOf("metadata" to metadata))
 }
+
+private fun ServerCodegenConfig.metadataMap(): Map<String, Any> =
+    listOfNotNull(
+        "formatTimeoutSeconds" to formatTimeoutSeconds,
+        "debugMode" to debugMode,
+        "flattenCollectionAccessors" to flattenCollectionAccessors,
+        "publicConstrainedTypes" to publicConstrainedTypes,
+        "ignoreUnsupportedConstraints" to ignoreUnsupportedConstraints,
+        experimentalCustomValidationExceptionWithReasonPleaseDoNotUse?.let {
+            "experimentalCustomValidationExceptionWithReasonPleaseDoNotUse" to it
+        },
+        addValidationExceptionToConstrainedOperations?.let { "addValidationExceptionToConstrainedOperations" to it },
+        "alwaysSendEventStreamInitialResponse" to alwaysSendEventStreamInitialResponse,
+        ServerCodegenConfig.HTTP_1X_CONFIG_KEY to http1x,
+        "allowMissingUnionVariant" to allowMissingUnionVariant,
+        ServerCodegenConfig.RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY to rpcV2CborAddCapitalizedRoute,
+        ServerCodegenConfig.SCHEMA_SERDE_CONFIG_KEY to schemaSerde,
+    ).toMap()
 
 /** Keep booleans, numbers, arrays and nested objects typed in TOML. Null object members are unset. */
 private fun Node.metadataValue(): Any? =
