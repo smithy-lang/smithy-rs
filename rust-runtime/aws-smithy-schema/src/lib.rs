@@ -334,7 +334,7 @@ mod response_routing {
 /// Schemas are constructed at compile time (via `const`) for generated code
 /// and prelude types. The Smithy type system is closed, so no extensibility
 /// via trait objects is needed.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Schema<'a> {
     id: ShapeId<'a>,
     shape_type: ShapeType,
@@ -449,7 +449,7 @@ pub struct Schema<'a> {
 }
 
 /// Shape-type-specific member references.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum SchemaMembers<'a> {
     /// No members (simple types).
     None,
