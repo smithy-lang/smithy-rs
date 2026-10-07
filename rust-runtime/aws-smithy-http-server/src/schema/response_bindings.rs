@@ -85,8 +85,60 @@ pub(crate) fn serialize_response_parts<C: Codec>(
     bindings: ResponseBindings,
     value_kind: ResponseValueKind,
 ) -> Result<ResponseParts, SerdeError> {
-    let plan = CompiledResponsePlan::compile(schema, bindings, value_kind);
+    let plan = CompiledResponsePlan::compile(schema, bindings, value_kind)?;
     serialize_response_parts_compiled(codec, schema, value, &plan)
+}
+
+/// Compiled plans for registered static schemas, keyed by schema address.
+///
+/// Only registered static schemas enter the map: addresses remain valid for its lifetime.
+/// Cache keys are internal schema addresses, never attacker-controlled header or body data.
+/// A schema missing from the cache compiles its plan per call, so dynamic schemas keep working.
+#[derive(Debug, Default)]
+pub(crate) struct ResponsePlanCache {
+    plans: rustc_hash::FxHashMap<usize, CompiledResponsePlan>,
+}
+
+impl ResponsePlanCache {
+    /// Compiles and stores the plan for `schema`, validating its bindings. Failing here turns
+    /// an invalid registered schema into a build error instead of a per-response failure.
+    pub(crate) fn prepare(
+        &mut self,
+        schema: &'static Schema<'static>,
+        bindings: ResponseBindings,
+        value_kind: ResponseValueKind,
+    ) -> Result<(), SerdeError> {
+        if let std::collections::hash_map::Entry::Vacant(entry) = self.plans.entry(schema as *const Schema<'_> as usize)
+        {
+            entry.insert(CompiledResponsePlan::compile(schema, bindings, value_kind)?);
+        }
+        Ok(())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn contains(&self, schema: &Schema<'_>) -> bool {
+        self.plans.contains_key(&(schema as *const Schema<'_> as usize))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
+        self.plans.len()
+    }
+
+    /// Serializes with the prepared plan, or compiles one on the spot for an unregistered schema.
+    pub(crate) fn serialize<C: Codec>(
+        &self,
+        codec: &C,
+        schema: &Schema<'_>,
+        value: &dyn SerializableStruct,
+        bindings: ResponseBindings,
+        value_kind: ResponseValueKind,
+    ) -> Result<ResponseParts, SerdeError> {
+        match self.plans.get(&(schema as *const Schema<'_> as usize)) {
+            Some(plan) => serialize_response_parts_compiled(codec, schema, value, plan),
+            None => serialize_response_parts(codec, schema, value, bindings, value_kind),
+        }
+    }
 }
 
 /// The response serialization strategy, derived from the schema for each response.
@@ -137,7 +189,11 @@ pub(crate) struct CompiledResponsePlan {
 }
 
 impl CompiledResponsePlan {
-    pub(crate) fn compile(schema: &Schema<'_>, bindings: ResponseBindings, value_kind: ResponseValueKind) -> Self {
+    pub(crate) fn compile(
+        schema: &Schema<'_>,
+        bindings: ResponseBindings,
+        value_kind: ResponseValueKind,
+    ) -> Result<Self, SerdeError> {
         let has_bindings = bindings == ResponseBindings::Rest && has_response_bound_members(schema);
         let writes_body = match value_kind {
             ResponseValueKind::ModeledError => true,
@@ -174,18 +230,18 @@ impl CompiledResponsePlan {
             let mut members = vec![ResponseMemberPlan::Body; member_count];
             for member in schema.members() {
                 if let Some(index) = member.member_index() {
-                    members[index] = compile_member_plan(member, bindings, schema.sensitive().is_some());
+                    members[index] = compile_member_plan(member, bindings, schema.sensitive().is_some())?;
                 }
             }
             members.into_boxed_slice()
         } else {
             Box::new([])
         };
-        Self {
+        Ok(Self {
             strategy,
             members,
             unset_structure_payload_is_document,
-        }
+        })
     }
 
     fn member(&self, schema: &Schema<'_>) -> &ResponseMemberPlan {
@@ -200,26 +256,26 @@ fn compile_member_plan(
     schema: &Schema<'_>,
     bindings: ResponseBindings,
     container_sensitive: bool,
-) -> ResponseMemberPlan {
+) -> Result<ResponseMemberPlan, SerdeError> {
     if bindings == ResponseBindings::BodyOnly {
-        return ResponseMemberPlan::Body;
+        return Ok(ResponseMemberPlan::Body);
     }
     if schema.http_response_code().is_some() {
-        return ResponseMemberPlan::Status;
+        return Ok(ResponseMemberPlan::Status);
     }
     if let Some(header) = schema.http_header() {
-        let name = http::HeaderName::try_from(header.value()).unwrap_or_else(|err| {
-            panic!(
-                "invalid @httpHeader name `{}` in compiled response schema: {err}",
+        let name = http::HeaderName::try_from(header.value()).map_err(|err| {
+            SerdeError::custom(format!(
+                "invalid @httpHeader name `{}` in response schema: {err}",
                 header.value()
-            )
-        });
+            ))
+        })?;
         let timestamp_format = match schema.timestamp_format().map(|value| value.format()) {
             Some(aws_smithy_schema::traits::TimestampFormat::EpochSeconds) => HeaderTimestampFormat::EpochSeconds,
             Some(aws_smithy_schema::traits::TimestampFormat::DateTime) => HeaderTimestampFormat::DateTime,
             Some(_) | None => HeaderTimestampFormat::HttpDate,
         };
-        return ResponseMemberPlan::Header {
+        return Ok(ResponseMemberPlan::Header {
             name,
             media_type: schema.media_type().is_some()
                 || schema.member().is_some_and(|element| element.media_type().is_some()),
@@ -227,10 +283,10 @@ fn compile_member_plan(
             sensitive: container_sensitive
                 || schema.sensitive().is_some()
                 || schema.member().is_some_and(|element| element.sensitive().is_some()),
-        };
+        });
     }
     if let Some(prefix) = schema.http_prefix_headers() {
-        return ResponseMemberPlan::PrefixHeaders {
+        return Ok(ResponseMemberPlan::PrefixHeaders {
             prefix: prefix.value().to_string(),
             key_sensitive: container_sensitive
                 || schema.sensitive().is_some()
@@ -238,16 +294,16 @@ fn compile_member_plan(
             value_sensitive: container_sensitive
                 || schema.sensitive().is_some()
                 || schema.member().is_some_and(|value| value.sensitive().is_some()),
-        };
+        });
     }
     if schema.http_payload().is_some() {
         let raw = matches!(
             schema.shape_type(),
             aws_smithy_schema::ShapeType::String | aws_smithy_schema::ShapeType::Blob
         );
-        return ResponseMemberPlan::Payload { raw };
+        return Ok(ResponseMemberPlan::Payload { raw });
     }
-    ResponseMemberPlan::Body
+    Ok(ResponseMemberPlan::Body)
 }
 
 pub(crate) fn serialize_response_parts_compiled<C: Codec>(
@@ -1144,7 +1200,8 @@ mod tests {
             }
         }
         let codec = aws_smithy_xml::codec::XmlCodec::default();
-        let plan = CompiledResponsePlan::compile(&SCHEMA, ResponseBindings::Rest, ResponseValueKind::ModeledError);
+        let plan =
+            CompiledResponsePlan::compile(&SCHEMA, ResponseBindings::Rest, ResponseValueKind::ModeledError).unwrap();
         for compiled in [false, true] {
             let value = XmlOutput::default();
             let split = if compiled {
@@ -1199,7 +1256,7 @@ mod tests {
     const OUTPUT: ResponseValueKind = ResponseValueKind::OperationOutput { empty_document: true };
 
     fn output_plan(schema: &Schema<'_>) -> CompiledResponsePlan {
-        CompiledResponsePlan::compile(schema, ResponseBindings::Rest, OUTPUT)
+        CompiledResponsePlan::compile(schema, ResponseBindings::Rest, OUTPUT).unwrap()
     }
 
     #[test]

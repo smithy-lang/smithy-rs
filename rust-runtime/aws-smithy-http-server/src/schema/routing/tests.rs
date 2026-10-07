@@ -2795,3 +2795,33 @@ fn rest_router_claims_the_codec_content_type_and_its_aliases() {
     assert!(claims(&[], "application/xml"));
     assert!(!claims(&[], "text/xml"));
 }
+
+#[test]
+fn an_invalid_modeled_media_type_fails_the_router_build() {
+    // Smithy does not validate `@mediaType` syntax; the claim derivation parses it, and an
+    // unparseable value must fail the build loudly instead of panicking.
+    static BAD_PAYLOAD: Schema<'static> =
+        Schema::new_member(shape_id!("test", "Bad", "data"), ShapeType::Blob, "data", 0)
+            .with_http_payload()
+            .with_media_type("not a mime type");
+    static BAD_INPUT: Schema<'static> =
+        Schema::new_struct(shape_id!("test", "Bad"), ShapeType::Structure, &[&BAD_PAYLOAD])
+            .with_original_name("Bad")
+            .with_http(HttpTrait::new("POST", "/bad", Some(200)));
+    static BAD_OP: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &BAD_INPUT, &UNIT, &[]);
+    static BAD_SERVICE: ServiceSchema<'static> =
+        ServiceSchema::new(SERVICE_ID, None, &[shape_id!("aws.protocols", "restJson1")], &[&BAD_OP]);
+    let error = MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings(
+        &BAD_SERVICE,
+        [],
+        [(
+            &BAD_OP,
+            SyncRoute::<Body>::new(tower::service_fn(|_request: Request<Body>| async move {
+                Ok::<_, Infallible>(Response::new(crate::body::boxed(crate::body::Body::empty())))
+            })),
+        )],
+    )
+    .build()
+    .unwrap_err();
+    assert!(matches!(error, RouterBuildError::Configuration(_)), "{error}");
+}

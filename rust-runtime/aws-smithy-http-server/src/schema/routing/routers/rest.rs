@@ -8,7 +8,7 @@
 use crate::routing::request_spec::{PathSegment, QuerySegment, RequestSpec};
 use crate::routing::Router;
 use crate::schema::protocol::request::{
-    expected_request_content_type, payload_member, ExpectedContentType, EVENT_STREAM_CONTENT_TYPE,
+    expected_request_content_type, payload_member, ExpectedContentType, EVENT_STREAM_MIME,
 };
 use crate::schema::routing::RoutingError;
 use aws_smithy_schema::ShapeType;
@@ -31,16 +31,14 @@ fn claim_content_type(
     input: &aws_smithy_schema::Schema<'_>,
     codec_content_type: &'static str,
     codec_aliases: &'static [&'static str],
-) -> ExpectedContentType {
+) -> Result<ExpectedContentType, RouterBuildError> {
     if payload_member(input).is_some_and(|payload| payload.shape_type() == ShapeType::Union && payload.streaming()) {
-        return ExpectedContentType::Expect(
-            EVENT_STREAM_CONTENT_TYPE
-                .parse()
-                .expect("the event stream media type is valid MIME"),
-            &[],
-        );
+        return Ok(ExpectedContentType::Expect(EVENT_STREAM_MIME.clone(), &[]));
     }
+    // An unparseable modeled `@mediaType` fails the build loudly: the operation could never
+    // be claimed or deserialized, so the service must not start.
     expected_request_content_type(input, codec_content_type, codec_aliases)
+        .map_err(|err| RouterBuildError::Configuration(format!("{}: {err}", input.shape_id())))
 }
 
 /// Whether claiming admits this request's `Content-Type` header.
@@ -168,7 +166,7 @@ pub(crate) fn rest_router(
             debug_assert_eq!(target.index(), index);
             claim_content_type(target.operation().input(), codec_content_type, codec_aliases)
         })
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(RestProtocolRouter {
         router: crate::protocol::rest::router::RestRouter::from_iter(entries),
         codec_content_type,

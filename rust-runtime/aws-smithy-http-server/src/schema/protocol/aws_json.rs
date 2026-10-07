@@ -25,6 +25,7 @@ use super::response::{
     ResponseBindings,
 };
 use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerProtocol};
+use crate::schema::response_bindings::ResponsePlanCache;
 
 /// Stateful schema-driven AWS JSON 1.0 protocol implementation.
 #[derive(Debug)]
@@ -33,6 +34,8 @@ use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerPro
 /// to skip escape validation, matching legacy smithy-rs servers.
 pub struct AwsJson1_0Protocol {
     pub(crate) inner: crate::schema::protocol::rpc::RpcProtocol<aws_smithy_json::codec::JsonCodec>,
+    /// Plans for the REST header bindings this protocol applies on top of its body responses.
+    binding_plans: ResponsePlanCache,
 }
 
 impl Default for AwsJson1_0Protocol {
@@ -51,6 +54,7 @@ impl AwsJson1_0Protocol {
                 crate::schema::protocol::rpc::RpcAccept::Always,
                 crate::schema::protocol::rpc::RpcStreaming::CodecContentType,
             ),
+            binding_plans: Default::default(),
         }
     }
 }
@@ -62,6 +66,8 @@ impl AwsJson1_0Protocol {
 /// to skip escape validation, matching legacy smithy-rs servers.
 pub struct AwsJson1_1Protocol {
     pub(crate) inner: crate::schema::protocol::rpc::RpcProtocol<aws_smithy_json::codec::JsonCodec>,
+    /// Plans for the REST header bindings this protocol applies on top of its body responses.
+    binding_plans: ResponsePlanCache,
 }
 
 impl Default for AwsJson1_1Protocol {
@@ -80,6 +86,7 @@ impl AwsJson1_1Protocol {
                 crate::schema::protocol::rpc::RpcAccept::Always,
                 crate::schema::protocol::rpc::RpcStreaming::CodecContentType,
             ),
+            binding_plans: Default::default(),
         }
     }
 }
@@ -100,22 +107,42 @@ fn schema_codec(validate_skipped_values: bool) -> aws_smithy_json::codec::JsonCo
     )
 }
 
+/// The binding plans both AWS JSON protocols apply are identical: REST bindings over the
+/// response head, with the body already serialized separately.
+const BINDING_PLAN_KIND: crate::schema::response_bindings::ResponseValueKind =
+    crate::schema::response_bindings::ResponseValueKind::StreamingOutput;
+
+/// Compiles the header-binding plans for every registered output and error schema. Failing here
+/// turns an invalid `@httpHeader` name into a build error instead of a per-response failure.
+fn prepare_binding_plans(
+    plans: &mut ResponsePlanCache,
+    service: &'static crate::schema::ServiceSchema<'static>,
+) -> Result<(), crate::schema::routing::RouterBuildError> {
+    for operation in service.operations() {
+        plans
+            .prepare(operation.output(), ResponseBindings::Rest, BINDING_PLAN_KIND)
+            .and_then(|()| {
+                operation
+                    .errors()
+                    .iter()
+                    .try_for_each(|error| plans.prepare(error, ResponseBindings::Rest, BINDING_PLAN_KIND))
+            })
+            .map_err(|err| crate::schema::routing::RouterBuildError::Configuration(err.to_string()))?;
+    }
+    Ok(())
+}
+
 // Legacy AWS JSON writes all members to the body and also applies modeled HTTP
 // response headers. These headers override the protocol defaults.
 fn apply_response_bindings(
     mut response: Response,
     codec: &JsonCodec,
+    plans: &ResponsePlanCache,
     schema: &Schema<'_>,
     value: &dyn SerializableStruct,
     success: bool,
 ) -> Result<Response, SerdeError> {
-    let parts = crate::schema::response_bindings::serialize_response_parts(
-        codec,
-        schema,
-        value,
-        ResponseBindings::Rest,
-        crate::schema::response_bindings::ResponseValueKind::StreamingOutput,
-    )?;
+    let parts = plans.serialize(codec, schema, value, ResponseBindings::Rest, BINDING_PLAN_KIND)?;
     // Remove defaults before appending the entire modeled group, preserving list multiplicity.
     // This includes Content-Length: legacy modeled values override the computed fallback
     // without length-specific validation.
@@ -135,6 +162,7 @@ fn apply_response_bindings(
 
 fn serialize_error<P>(
     codec: &JsonCodec,
+    plans: &ResponsePlanCache,
     error: &dyn HttpModeledError,
     content_type: &'static str,
     discriminator: BodyDiscriminator,
@@ -152,7 +180,7 @@ where
         ResponseBindings::BodyOnly,
         content_type,
     )
-    .and_then(|response| apply_response_bindings(response, codec, schema, error, false))
+    .and_then(|response| apply_response_bindings(response, codec, plans, schema, error, false))
     .map(|response| stamp_error_extension(response, schema.shape_id().shape_name()))
     .unwrap_or_else(serialization_failure::<P>)
 }
@@ -171,9 +199,11 @@ macro_rules! aws_json_protocol {
             fn from_build_context(
                 ctx: &crate::schema::ProtocolBuildContext<'_>,
             ) -> Result<Self, crate::schema::routing::RouterBuildError> {
-                Ok(Self::new(
+                let mut protocol = Self::new(
                     crate::schema::settings::get::<bool>(ctx.settings, "validateSkippedValues")?.unwrap_or(false),
-                ))
+                );
+                prepare_binding_plans(&mut protocol.binding_plans, ctx.service)?;
+                Ok(protocol)
             }
 
             fn build_router(
@@ -228,7 +258,16 @@ macro_rules! aws_json_protocol {
             fn serialize_response(&self, output: &Schema<'_>, value: &dyn SerializableStruct) -> Response {
                 self.inner
                     .serialize_response(output, value)
-                    .and_then(|response| apply_response_bindings(response, self.inner.codec(), output, value, true))
+                    .and_then(|response| {
+                        apply_response_bindings(
+                            response,
+                            self.inner.codec(),
+                            &self.binding_plans,
+                            output,
+                            value,
+                            true,
+                        )
+                    })
                     .unwrap_or_else(serialization_failure::<$marker>)
             }
 
@@ -240,13 +279,23 @@ macro_rules! aws_json_protocol {
             ) -> Response {
                 self.inner
                     .serialize_streaming_response(output, value, body)
-                    .and_then(|response| apply_response_bindings(response, self.inner.codec(), output, value, true))
+                    .and_then(|response| {
+                        apply_response_bindings(
+                            response,
+                            self.inner.codec(),
+                            &self.binding_plans,
+                            output,
+                            value,
+                            true,
+                        )
+                    })
                     .unwrap_or_else(serialization_failure::<$marker>)
             }
 
             fn serialize_error(&self, error: &dyn HttpModeledError) -> Response {
                 serialize_error::<$marker>(
                     self.inner.codec(),
+                    &self.binding_plans,
                     error,
                     $content_type,
                     BodyDiscriminator { value: $type_value },

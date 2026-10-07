@@ -16,9 +16,7 @@ use crate::response::{IntoResponse, Response};
 use crate::schema::{DeserializeError, HttpModeledError};
 
 use super::request::payload_member;
-use super::response::{
-    log_serialize_failure, serialize_modeled_error_response, stamp_error_extension, ResponseBindings,
-};
+use super::response::{log_serialize_failure, stamp_error_extension};
 use super::rest::RestPolicy;
 use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerProtocol};
 
@@ -124,7 +122,10 @@ impl MetadataRoutedProtocol for RestXmlProtocol {
             crate::schema::settings::get::<bool>(ctx.settings, "validateDocument")?.unwrap_or(false),
             crate::schema::settings::get::<bool>(ctx.settings, "acceptTextXml")?.unwrap_or(false),
         );
-        protocol.inner.prepare_response_plans(ctx.service);
+        protocol
+            .inner
+            .prepare_response_plans(ctx.service)
+            .map_err(|err| crate::schema::routing::RouterBuildError::Configuration(err.to_string()))?;
         Ok(protocol)
     }
 
@@ -196,16 +197,16 @@ impl ServerProtocol for RestXmlProtocol {
     fn serialize_error(&self, error: &dyn HttpModeledError) -> Response {
         // restXml carries no discriminator: the error structure is the body.
         let schema = error.schema();
-        serialize_modeled_error_response(
-            &ResponseXmlCodec::new(self.inner.codec(), schema),
-            schema,
-            error,
-            error.status_code(),
-            ResponseBindings::Rest,
-            CONTENT_TYPE,
-        )
-        .map(|response| stamp_error_extension(response, schema.shape_id().shape_name()))
-        .unwrap_or_else(serialization_failure)
+        self.inner
+            .serialize_modeled_error(
+                &ResponseXmlCodec::new(self.inner.codec(), schema),
+                schema,
+                error,
+                error.status_code(),
+                CONTENT_TYPE,
+            )
+            .map(|response| stamp_error_extension(response, schema.shape_id().shape_name()))
+            .unwrap_or_else(serialization_failure)
     }
 
     fn serialize_routing_error(&self, err: &crate::schema::routing::RoutingError) -> Response {
