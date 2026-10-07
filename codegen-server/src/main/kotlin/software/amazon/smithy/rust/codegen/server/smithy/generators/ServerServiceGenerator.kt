@@ -837,7 +837,7 @@ class ServerServiceGenerator(
                         val field = builderFieldNames.getValue(operation)
                         val name = operationStructNames.getValue(operation)
                         val handler = if (unchecked) "self.$field.unwrap_or_else(|| #{SmithyHttpServer}::routing::SyncRoute::new(#{SmithyHttpServer}::operation::SchemaMissingFailure))" else "self.$field.expect(\"handler checked above\")"
-                        rustTemplate("#{SmithyHttpServer}::schema::routing::OperationHandlerBinding::new(<crate::operation_shape::$name as #{SmithyHttpServer}::operation::SchemaOperationShape>::SCHEMA, $handler)", *codegenScope)
+                        rustTemplate("(<crate::operation_shape::$name as #{SmithyHttpServer}::operation::SchemaOperationShape>::SCHEMA, $handler)", *codegenScope)
                     }
                 }.join(",")
             // Each decorator-contributed writable renders a `&'static ProtocolRegistry`; the

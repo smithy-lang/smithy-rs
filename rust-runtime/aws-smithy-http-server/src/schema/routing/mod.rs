@@ -44,8 +44,8 @@ mod tests;
 
 pub use builder::MultiProtocolRoutingServiceBuilder;
 pub use protocol_router::{
-    BodyProtocolRouter, BodyRouteClaim, CollectedBody, MetadataProtocolRouter, OperationHandlerBinding,
-    OperationTarget, RouteClaim, RouterBuildContext, RouterBuildError, RoutingOptions, SharedProtocolRouter,
+    BodyProtocolRouter, BodyRouteClaim, CollectedBody, MetadataProtocolRouter, OperationTarget, RouteClaim,
+    RouterBuildContext, RouterBuildError, RoutingOptions, SharedProtocolRouter,
 };
 pub use route_errors::{RoutingError, RoutingErrorKind};
 pub use routers::aws_json_router;

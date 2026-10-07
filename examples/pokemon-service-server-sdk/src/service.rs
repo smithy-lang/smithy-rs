@@ -1122,13 +1122,13 @@ impl<L, HttpPl, ModelPl> PokemonServiceBuilder<L, HttpPl, ModelPl> {
         }
 
         let svc = ::aws_smithy_http_server::schema::routing::MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings_with_options(
-                        &crate::schema::service::POKEMON_SERVICE, ::std::iter::empty(), [::aws_smithy_http_server::schema::routing::OperationHandlerBinding::new(<crate::operation_shape::CapturePokemon as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.capture_pokemon.expect("handler checked above"))
-,::aws_smithy_http_server::schema::routing::OperationHandlerBinding::new(<crate::operation_shape::CheckHealth as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.check_health.expect("handler checked above"))
-,::aws_smithy_http_server::schema::routing::OperationHandlerBinding::new(<crate::operation_shape::DoNothing as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.do_nothing.expect("handler checked above"))
-,::aws_smithy_http_server::schema::routing::OperationHandlerBinding::new(<crate::operation_shape::GetPokemonSpecies as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.get_pokemon_species.expect("handler checked above"))
-,::aws_smithy_http_server::schema::routing::OperationHandlerBinding::new(<crate::operation_shape::GetServerStatistics as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.get_server_statistics.expect("handler checked above"))
-,::aws_smithy_http_server::schema::routing::OperationHandlerBinding::new(<crate::operation_shape::GetStorage as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.get_storage.expect("handler checked above"))
-,::aws_smithy_http_server::schema::routing::OperationHandlerBinding::new(<crate::operation_shape::StreamPokemonRadio as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.stream_pokemon_radio.expect("handler checked above"))], self.routing_options,
+                        &crate::schema::service::POKEMON_SERVICE, ::std::iter::empty(), [(<crate::operation_shape::CapturePokemon as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.capture_pokemon.expect("handler checked above"))
+,(<crate::operation_shape::CheckHealth as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.check_health.expect("handler checked above"))
+,(<crate::operation_shape::DoNothing as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.do_nothing.expect("handler checked above"))
+,(<crate::operation_shape::GetPokemonSpecies as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.get_pokemon_species.expect("handler checked above"))
+,(<crate::operation_shape::GetServerStatistics as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.get_server_statistics.expect("handler checked above"))
+,(<crate::operation_shape::GetStorage as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.get_storage.expect("handler checked above"))
+,(<crate::operation_shape::StreamPokemonRadio as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.stream_pokemon_radio.expect("handler checked above"))], self.routing_options,
                     ).layer(self.layer).build().map_err(BuildError::Routing)?;
         ::std::result::Result::Ok(PokemonService { svc })
     }
@@ -1150,13 +1150,13 @@ impl<L, HttpPl, ModelPl> PokemonServiceBuilder<L, HttpPl, ModelPl> {
         <L::Service as ::tower::Service<::http_1x::Request<Body>>>::Future: Send + 'static,
     {
         let svc = ::aws_smithy_http_server::schema::routing::MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings_with_options(
-                        &crate::schema::service::POKEMON_SERVICE, ::std::iter::empty(), [::aws_smithy_http_server::schema::routing::OperationHandlerBinding::new(<crate::operation_shape::CapturePokemon as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.capture_pokemon.unwrap_or_else(|| ::aws_smithy_http_server::routing::SyncRoute::new(::aws_smithy_http_server::operation::SchemaMissingFailure)))
-,::aws_smithy_http_server::schema::routing::OperationHandlerBinding::new(<crate::operation_shape::CheckHealth as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.check_health.unwrap_or_else(|| ::aws_smithy_http_server::routing::SyncRoute::new(::aws_smithy_http_server::operation::SchemaMissingFailure)))
-,::aws_smithy_http_server::schema::routing::OperationHandlerBinding::new(<crate::operation_shape::DoNothing as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.do_nothing.unwrap_or_else(|| ::aws_smithy_http_server::routing::SyncRoute::new(::aws_smithy_http_server::operation::SchemaMissingFailure)))
-,::aws_smithy_http_server::schema::routing::OperationHandlerBinding::new(<crate::operation_shape::GetPokemonSpecies as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.get_pokemon_species.unwrap_or_else(|| ::aws_smithy_http_server::routing::SyncRoute::new(::aws_smithy_http_server::operation::SchemaMissingFailure)))
-,::aws_smithy_http_server::schema::routing::OperationHandlerBinding::new(<crate::operation_shape::GetServerStatistics as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.get_server_statistics.unwrap_or_else(|| ::aws_smithy_http_server::routing::SyncRoute::new(::aws_smithy_http_server::operation::SchemaMissingFailure)))
-,::aws_smithy_http_server::schema::routing::OperationHandlerBinding::new(<crate::operation_shape::GetStorage as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.get_storage.unwrap_or_else(|| ::aws_smithy_http_server::routing::SyncRoute::new(::aws_smithy_http_server::operation::SchemaMissingFailure)))
-,::aws_smithy_http_server::schema::routing::OperationHandlerBinding::new(<crate::operation_shape::StreamPokemonRadio as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.stream_pokemon_radio.unwrap_or_else(|| ::aws_smithy_http_server::routing::SyncRoute::new(::aws_smithy_http_server::operation::SchemaMissingFailure)))], self.routing_options,
+                        &crate::schema::service::POKEMON_SERVICE, ::std::iter::empty(), [(<crate::operation_shape::CapturePokemon as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.capture_pokemon.unwrap_or_else(|| ::aws_smithy_http_server::routing::SyncRoute::new(::aws_smithy_http_server::operation::SchemaMissingFailure)))
+,(<crate::operation_shape::CheckHealth as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.check_health.unwrap_or_else(|| ::aws_smithy_http_server::routing::SyncRoute::new(::aws_smithy_http_server::operation::SchemaMissingFailure)))
+,(<crate::operation_shape::DoNothing as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.do_nothing.unwrap_or_else(|| ::aws_smithy_http_server::routing::SyncRoute::new(::aws_smithy_http_server::operation::SchemaMissingFailure)))
+,(<crate::operation_shape::GetPokemonSpecies as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.get_pokemon_species.unwrap_or_else(|| ::aws_smithy_http_server::routing::SyncRoute::new(::aws_smithy_http_server::operation::SchemaMissingFailure)))
+,(<crate::operation_shape::GetServerStatistics as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.get_server_statistics.unwrap_or_else(|| ::aws_smithy_http_server::routing::SyncRoute::new(::aws_smithy_http_server::operation::SchemaMissingFailure)))
+,(<crate::operation_shape::GetStorage as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.get_storage.unwrap_or_else(|| ::aws_smithy_http_server::routing::SyncRoute::new(::aws_smithy_http_server::operation::SchemaMissingFailure)))
+,(<crate::operation_shape::StreamPokemonRadio as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA, self.stream_pokemon_radio.unwrap_or_else(|| ::aws_smithy_http_server::routing::SyncRoute::new(::aws_smithy_http_server::operation::SchemaMissingFailure)))], self.routing_options,
                     ).layer(self.layer).build().expect("invalid schema routing configuration");
         PokemonService { svc }
     }

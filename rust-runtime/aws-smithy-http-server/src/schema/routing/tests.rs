@@ -210,8 +210,8 @@ fn registry() -> &'static ProtocolRegistry {
         ProtocolRegistry::new(&[ProtocolRegistration::body_routed::<BodyProtocol>("test#bodyRouting")]);
     &REGISTRY
 }
-fn binding(operation: &'static OperationSchema<'static>) -> OperationHandlerBinding {
-    OperationHandlerBinding::new(
+fn binding(operation: &'static OperationSchema<'static>) -> (&'static OperationSchema<'static>, SyncRoute<Body>) {
+    (
         operation,
         SyncRoute::new(tower::service_fn(move |request: Request<Body>| async move {
             let selected = request
@@ -597,7 +597,7 @@ async fn all_builtins_route_without_polling_body_and_preserve_fallback_errors() 
     ] {
         let bindings = OPERATIONS
             .iter()
-            .map(|op| OperationHandlerBinding::new(op, SyncRoute::new(crate::operation::SchemaMissingFailure)));
+            .map(|op| (*op, SyncRoute::new(crate::operation::SchemaMissingFailure)));
         let app = MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings(schema, [], bindings)
             .build()
             .unwrap();
@@ -1117,8 +1117,8 @@ async fn shared_handlers_preserve_readiness_and_clone_only_the_selected_route() 
     for schema in [&REST_JSON, &SERVICE] {
         let clones = Arc::new(AtomicUsize::new(0));
         let bindings = OPERATIONS.iter().map(|op| {
-            OperationHandlerBinding::new(
-                op,
+            (
+                *op,
                 SyncRoute::new(Handler {
                     clones: clones.clone(),
                     ready: AtomicBool::new(false),
@@ -1286,8 +1286,8 @@ mod multi_protocol {
     );
 
     /// Answers with the selected protocol, the operation and the body the handler received.
-    fn echo(operation: &'static OperationSchema<'static>) -> OperationHandlerBinding {
-        OperationHandlerBinding::new(
+    fn echo(operation: &'static OperationSchema<'static>) -> (&'static OperationSchema<'static>, SyncRoute<Body>) {
+        (
             operation,
             SyncRoute::new(tower::service_fn(move |request: Request<Body>| async move {
                 let selected = request
@@ -1870,8 +1870,8 @@ mod multi_protocol {
             &STREAM_SERVICE,
             [body_routing(BEFORE)],
             STREAM_SERVICE.operations().iter().map(|operation| {
-                OperationHandlerBinding::new(
-                    operation,
+                (
+                    *operation,
                     SyncRoute::new(tower::service_fn(move |request: Request<Body>| async move {
                         let selected = request.extensions().get::<SelectedProtocolOperation>().unwrap().clone();
                         let bytes = if operation.input().members().iter().any(|member| member.streaming()) {
@@ -2570,8 +2570,8 @@ async fn builder_supports_custom_transport_bodies_with_handler_layers() {
     type Transport = http_body_util::Full<Bytes>;
     for schema in [&REST_JSON, &SERVICE] {
         let bindings = schema.operations().iter().map(|operation| {
-            OperationHandlerBinding::<Transport>::new(
-                operation,
+            (
+                *operation,
                 SyncRoute::new(tower::service_fn(
                     |request: Request<crate::body::RequestBody<Transport>>| async move {
                         assert!(request.extensions().get::<SelectedProtocolOperation>().is_some());

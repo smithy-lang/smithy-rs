@@ -7,14 +7,14 @@
 
 use super::service::{BoundHandler, ProtocolAndRouter, RoutingState};
 use super::{
-    MultiProtocolRoutingService, OperationHandlerBinding, OperationTarget, RouterBuildContext, RouterBuildError,
-    RoutingOptions, SharedProtocolRouter,
+    MultiProtocolRoutingService, OperationTarget, RouterBuildContext, RouterBuildError, RoutingOptions,
+    SharedProtocolRouter,
 };
 use crate::{
     body::BoxBody,
     routing::SyncRoute,
     schema::{
-        ProtocolBuildContext, ProtocolOrder, ProtocolRegistration, ProtocolRegistry, ServiceSchema,
+        OperationSchema, ProtocolBuildContext, ProtocolOrder, ProtocolRegistration, ProtocolRegistry, ServiceSchema,
         SharedServerProtocol,
     },
 };
@@ -30,7 +30,10 @@ use tower::{layer::util::Identity, Service};
 pub struct MultiProtocolRoutingServiceBuilder<B = hyper::body::Incoming, L = Identity> {
     service: &'static ServiceSchema<'static>,
     registries: Vec<&'static ProtocolRegistry>,
-    bindings: Vec<OperationHandlerBinding<B>>,
+    bindings: Vec<(
+        &'static OperationSchema<'static>,
+        SyncRoute<crate::body::RequestBody<B>>,
+    )>,
     options: RoutingOptions,
     layer: L,
 }
@@ -51,7 +54,12 @@ impl<B> MultiProtocolRoutingServiceBuilder<B> {
     pub fn from_operation_handler_bindings(
         service: &'static ServiceSchema<'static>,
         registries: impl IntoIterator<Item = &'static ProtocolRegistry>,
-        bindings: impl IntoIterator<Item = OperationHandlerBinding<B>>,
+        bindings: impl IntoIterator<
+            Item = (
+                &'static OperationSchema<'static>,
+                SyncRoute<crate::body::RequestBody<B>>,
+            ),
+        >,
     ) -> Self {
         Self::new(service)
             .registries(registries)
@@ -62,7 +70,12 @@ impl<B> MultiProtocolRoutingServiceBuilder<B> {
     pub fn from_operation_handler_bindings_with_options(
         service: &'static ServiceSchema<'static>,
         registries: impl IntoIterator<Item = &'static ProtocolRegistry>,
-        bindings: impl IntoIterator<Item = OperationHandlerBinding<B>>,
+        bindings: impl IntoIterator<
+            Item = (
+                &'static OperationSchema<'static>,
+                SyncRoute<crate::body::RequestBody<B>>,
+            ),
+        >,
         options: RoutingOptions,
     ) -> Self {
         Self::from_operation_handler_bindings(service, registries, bindings).options(options)
@@ -76,10 +89,15 @@ impl<B, L> MultiProtocolRoutingServiceBuilder<B, L> {
         self
     }
 
-    /// Replaces the protocol-independent operation bindings.
+    /// Replaces the protocol-independent `(operation schema, handler route)` bindings.
     pub fn operation_handler_bindings(
         mut self,
-        bindings: impl IntoIterator<Item = OperationHandlerBinding<B>>,
+        bindings: impl IntoIterator<
+            Item = (
+                &'static OperationSchema<'static>,
+                SyncRoute<crate::body::RequestBody<B>>,
+            ),
+        >,
     ) -> Self {
         self.bindings = bindings.into_iter().collect();
         self
@@ -131,14 +149,9 @@ impl<B, L> MultiProtocolRoutingServiceBuilder<B, L> {
         )?;
         let resolved = resolve_protocols(service, registries, &options)?;
         let mut seen = HashSet::new();
-        for binding in &bindings {
-            let id = binding.operation.shape_id().as_str();
-            if !seen.insert(id)
-                || !service
-                    .operations()
-                    .iter()
-                    .any(|op| std::ptr::eq(*op, binding.operation))
-            {
+        for (operation, _) in &bindings {
+            let id = operation.shape_id().as_str();
+            if !seen.insert(id) || !service.operations().iter().any(|op| std::ptr::eq(*op, *operation)) {
                 return Err(RouterBuildError::Binding(id.to_owned()));
             }
         }
@@ -158,7 +171,7 @@ impl<B, L> MultiProtocolRoutingServiceBuilder<B, L> {
         let targets: Vec<_> = bindings
             .iter()
             .enumerate()
-            .map(|(index, binding)| OperationTarget::new(index, binding.operation))
+            .map(|(index, (operation, _))| OperationTarget::new(index, operation))
             .collect();
         // A body-routed protocol may buffer the body to select, so it never sees a streaming
         // operation. Recognized streaming inputs skip claims that require body bytes;
@@ -196,10 +209,10 @@ impl<B, L> MultiProtocolRoutingServiceBuilder<B, L> {
         });
         let bindings = bindings
             .into_iter()
-            .map(|binding| BoundHandler {
-                operation: binding.operation,
-                collection_config: options.request_body.for_operation(binding.operation.shape_id()),
-                handler_route: SyncRoute::new(layer.layer(binding.route)),
+            .map(|(operation, route)| BoundHandler {
+                operation,
+                collection_config: options.request_body.for_operation(operation.shape_id()),
+                handler_route: SyncRoute::new(layer.layer(route)),
             })
             .collect();
         Ok(MultiProtocolRoutingService {

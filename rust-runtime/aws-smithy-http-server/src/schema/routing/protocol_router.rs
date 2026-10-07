@@ -5,7 +5,6 @@
 
 //! Protocol router interfaces, route claims, and supporting construction types.
 
-use crate::routing::SyncRoute;
 use crate::schema::routing::RoutingError;
 use crate::schema::{OperationSchema, ServiceSchema};
 use crate::{error::BoxError, schema::ServiceRequestBodyConfig};
@@ -87,30 +86,6 @@ impl OperationTarget {
     pub fn has_streaming_blob(self) -> bool {
         self.metadata.input_streaming == Some(StreamingKind::Blob)
             || self.metadata.output_streaming == Some(StreamingKind::Blob)
-    }
-}
-
-/// A protocol-independent operation and its HTTP handler, generic over the transport body `B`.
-pub struct OperationHandlerBinding<B = hyper::body::Incoming> {
-    pub(super) operation: &'static OperationSchema<'static>,
-    pub(super) route: SyncRoute<crate::body::RequestBody<B>>,
-}
-impl<B> OperationHandlerBinding<B> {
-    /// Binds an operation to a handler, without assigning any protocol-specific routing rule.
-    pub fn new(operation: &'static OperationSchema<'static>, route: SyncRoute<crate::body::RequestBody<B>>) -> Self {
-        Self { operation, route }
-    }
-}
-impl<B> Clone for OperationHandlerBinding<B> {
-    fn clone(&self) -> Self {
-        Self::new(self.operation, self.route.clone())
-    }
-}
-impl<B> fmt::Debug for OperationHandlerBinding<B> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("OperationHandlerBinding")
-            .field("operation", &self.operation.shape_id())
-            .finish()
     }
 }
 
