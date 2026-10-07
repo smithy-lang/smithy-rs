@@ -20,8 +20,9 @@
 # compiler, no C toolchain, and no `aws-lc-fips-sys` build. That matters: this is the one check
 # that can assert the FIPS graph on a machine that cannot build the FIPS module.
 #
-# Run from the directory holding the generated SDK workspace (the same place
-# `check-aws-sdk-services` runs).
+# Run from the directory holding the generated SDK workspace. Both full-SDK actions invoke it:
+# `check-only-aws-sdk-services`, which is the one GitHub Actions dispatches, and
+# `check-aws-sdk-services`, which is local-only.
 
 C_RED='\033[1;31m'
 C_GREEN='\033[1;32m'
