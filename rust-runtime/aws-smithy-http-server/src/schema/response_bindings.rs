@@ -134,8 +134,6 @@ pub(crate) struct CompiledResponsePlan {
     members: Box<[ResponseMemberPlan]>,
     /// An unset structure `@httpPayload` is written as the codec's empty document.
     unset_structure_payload_is_document: bool,
-    /// Payload member XML naming takes precedence over the target schema passed by codegen.
-    payload_xml_name: Option<String>,
 }
 
 impl CompiledResponsePlan {
@@ -187,12 +185,6 @@ impl CompiledResponsePlan {
             strategy,
             members,
             unset_structure_payload_is_document,
-            payload_xml_name: schema
-                .members()
-                .iter()
-                .find(|member| member.http_payload().is_some())
-                .and_then(|member| member.xml_name())
-                .map(|name| name.value().to_owned()),
         }
     }
 
@@ -612,14 +604,7 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
             // Structure/union payload: the payload member's own framing IS
             // the body — serialize it standalone through the codec.
             let mut serializer = self.codec.create_serializer();
-            if let Some(name) = &self.plan.payload_xml_name {
-                // Alias only this document's root. All target members and traits,
-                // including namespace metadata, remain intact.
-                let root = schema.clone().with_xml_name(name);
-                serializer.write_struct(&root, value)?;
-            } else {
-                serializer.write_struct(schema, value)?;
-            }
+            serializer.write_struct(schema, value)?;
             self.capture_payload(serializer.finish());
             return Ok(());
         }

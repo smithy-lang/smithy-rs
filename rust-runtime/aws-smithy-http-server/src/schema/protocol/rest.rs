@@ -152,12 +152,22 @@ impl<C: Codec> RestProtocol<C> {
         output: &Schema<'_>,
         value: &dyn SerializableStruct,
     ) -> Result<Response, SerdeError> {
+        self.serialize_response_with_codec(&self.codec, output, value)
+    }
+
+    /// Uses a protocol-configured codec while retaining the shared HTTP binding plans and policy.
+    pub(crate) fn serialize_response_with_codec<D: Codec>(
+        &self,
+        codec: &D,
+        output: &Schema<'_>,
+        value: &dyn SerializableStruct,
+    ) -> Result<Response, SerdeError> {
         let parts = if let Some(plan) = self.response_plans.get(&(output as *const Schema<'_> as usize)) {
-            serialize_response_parts_compiled(&self.codec, output, value, plan)?
+            serialize_response_parts_compiled(codec, output, value, plan)?
         } else {
             // Default/manual protocols and unregistered schemas retain the original behavior.
             serialize_response_parts(
-                &self.codec,
+                codec,
                 output,
                 value,
                 ResponseBindings::Rest,

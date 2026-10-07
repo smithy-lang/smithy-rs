@@ -6,7 +6,7 @@
 //! XML payload roots follow legacy member/target naming precedence without losing target metadata.
 
 use aws_smithy_http_server::schema::protocol::{RestJson1Protocol, RestXmlProtocol};
-use aws_smithy_http_server::schema::ServerProtocol;
+use aws_smithy_http_server::schema::{HttpModeledError, ServerProtocol};
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::{shape_id, Schema, ShapeType};
 use http_body_util::BodyExt;
@@ -127,4 +127,48 @@ async fn shared_payload_target_can_have_distinct_roots_without_changing_json() {
         let body = json.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(body.as_ref(), br#"{"child":"value","attr":"a"}"#);
     }
+}
+
+#[tokio::test]
+async fn modeled_error_payloads_use_the_xml_protocol_root_override() {
+    static TARGET: Schema = Schema::new_struct(shape_id!("test", "Target"), ShapeType::Structure, &STRUCT_MEMBERS)
+        .with_xml_name("RenamedTarget")
+        .with_xml_namespace("urn:target", None);
+    static PAYLOAD: Schema = Schema::new_member(
+        shape_id!("test", "PayloadError", "body"),
+        ShapeType::Structure,
+        "body",
+        0,
+    )
+    .with_http_payload()
+    .with_xml_name("WireError");
+    static ERROR: Schema = Schema::new_struct(shape_id!("test", "PayloadError"), ShapeType::Structure, &[&PAYLOAD]);
+    #[derive(Debug)]
+    struct PayloadError;
+    impl SerializableStruct for PayloadError {
+        fn schema(&self) -> &Schema<'_> {
+            &ERROR
+        }
+        fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+            s.write_struct(&TARGET, &TargetValue(&TARGET))
+        }
+    }
+    impl std::fmt::Display for PayloadError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("payload error")
+        }
+    }
+    impl std::error::Error for PayloadError {}
+    impl HttpModeledError for PayloadError {
+        fn status_code(&self) -> u16 {
+            422
+        }
+    }
+    let response = RestXmlProtocol::default().serialize_error(&PayloadError);
+    assert_eq!(response.status(), 422);
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    assert_eq!(
+        body.as_ref(),
+        b"<WireError xmlns=\"urn:target\" attr=\"a\"><Child>value</Child></WireError>"
+    );
 }
