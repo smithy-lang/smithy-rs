@@ -176,7 +176,31 @@ iterable_enum!(
     LoginSameDevice,
     LoginCrossDevice,
     CredentialsProfileLogin,
-    CredentialsLogin
+    CredentialsLogin,
+    FlexibleChecksumsReqMd5,
+    FlexibleChecksumsReqSha512,
+    FlexibleChecksumsReqXxhash3,
+    FlexibleChecksumsReqXxhash64,
+    FlexibleChecksumsReqXxhash128,
+    HttpClientAuto,
+    HttpClientExplicitInstance,
+    HttpClientExplicitFactory,
+    SsoLoginVanityUrl,
+    AgenticCallerClaudeCode,
+    AgenticCallerGeminiCli,
+    AgenticCallerCodex,
+    AgenticCallerKiro,
+    AgenticCallerOpenCode,
+    AgenticCallerAntigravity,
+    AgenticCallerAmp,
+    AgenticCallerPi,
+    AgenticCallerCopilotCli,
+    AgenticCallerCursor,
+    S3CustomPartSize,
+    S3CustomThroughput,
+    S3CustomMemoryLimit,
+    S3OnEc2,
+    S3FilePath
 );
 
 pub(crate) trait ProvideBusinessMetric {
@@ -236,6 +260,13 @@ impl ProvideBusinessMetric for AwsSdkFeature {
             SsoLoginDevice => Some(BusinessMetric::SsoLoginDevice),
             SsoLoginAuth => Some(BusinessMetric::SsoLoginAuth),
             EndpointOverride => Some(BusinessMetric::EndpointOverride),
+            S3TransferUploadDirectory => Some(BusinessMetric::S3TransferUploadDirectory),
+            S3TransferDownloadDirectory => Some(BusinessMetric::S3TransferDownloadDirectory),
+            S3CustomPartSize => Some(BusinessMetric::S3CustomPartSize),
+            S3CustomThroughput => Some(BusinessMetric::S3CustomThroughput),
+            S3CustomMemoryLimit => Some(BusinessMetric::S3CustomMemoryLimit),
+            S3OnEc2 => Some(BusinessMetric::S3OnEc2),
+            S3FilePath => Some(BusinessMetric::S3FilePath),
         }
     }
 }
@@ -344,6 +375,8 @@ mod tests {
         drop_unfinished_metrics_to_fit, Base64Iterator, FEATURE_ID_TO_METRIC_VALUE,
         MAX_METRICS_ID_NUMBER,
     };
+    use crate::sdk_feature::AwsSdkFeature;
+    use crate::user_agent::metrics::ProvideBusinessMetric;
     use crate::user_agent::BusinessMetric;
     use convert_case::{Boundary, Case, Casing};
     use std::collections::HashMap;
@@ -374,6 +407,22 @@ mod tests {
                 expected.unwrap_or_else(|| panic!("Expected {feature_id} to have value `{metric_value}` but it was `{expected:?}` instead.")),
                 metric_value,
             );
+        }
+    }
+
+    #[test]
+    fn s3_transfer_manager_metrics_encoding() {
+        for (feature, id) in [
+            (AwsSdkFeature::S3TransferUploadDirectory, "9"),
+            (AwsSdkFeature::S3TransferDownloadDirectory, "+"),
+            (AwsSdkFeature::S3CustomPartSize, "AX"),
+            (AwsSdkFeature::S3CustomThroughput, "AY"),
+            (AwsSdkFeature::S3CustomMemoryLimit, "AZ"),
+            (AwsSdkFeature::S3OnEc2, "Aa"),
+            (AwsSdkFeature::S3FilePath, "Ab"),
+        ] {
+            let metric = feature.provide_business_metric().unwrap();
+            assert_eq!(id, FEATURE_ID_TO_METRIC_VALUE[&metric].as_ref());
         }
     }
 
