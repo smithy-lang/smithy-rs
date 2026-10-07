@@ -38,8 +38,10 @@ import java.util.concurrent.TimeUnit
  * | yes               | yes               | **fail** — version must be bumped          |
  * | yes               | no                | publish — the ordinary release             |
  *
- * The result is written to `build/maven-central/publishing.properties` as
- * `mavenCentralPublishingNeeded=true|false` so a pipeline can branch on it.
+ * A needed bump is written to `build/maven-central/bump-needed.md`, which CI turns into a pull
+ * request comment and the release pipeline turns into a failure. Nothing else is written: the
+ * skip-or-publish decision belongs to the Maven publisher, which asks repo1 at the moment it would
+ * upload, so it cannot go stale or disagree with what is actually being published.
  *
  * Only the "changed but already published" case is unfixable and therefore fatal: the artifacts
  * that landed cannot be replaced, so the release must move to a new version. Pass
@@ -80,7 +82,6 @@ open class CheckMavenCentralPublishingNeeded : DefaultTask() {
 
         if (codegenVersion.endsWith("-SNAPSHOT")) {
             logger.lifecycle("  codegenVersion $codegenVersion is a SNAPSHOT; Maven Central publishing is not applicable")
-            writeResult(publishingNeeded = false)
             return
         }
 
@@ -100,7 +101,6 @@ open class CheckMavenCentralPublishingNeeded : DefaultTask() {
             val changedPaths = changes?.changedPaths.orEmpty()
             if (baseTag != null && changedPaths.isNotEmpty()) {
                 reportBumpNeeded(needsBumpMessage(codegenVersion, baseTag, changes!!))
-                writeResult(publishingNeeded = true)
                 return
             }
             logger.warn(
@@ -110,7 +110,6 @@ open class CheckMavenCentralPublishingNeeded : DefaultTask() {
                     "${baseTag?.name ?: "any release at this version"}, so a bump is not required. " +
                     "The publisher checks Maven Central again before uploading.",
             )
-            writeResult(publishingNeeded = true)
             return
         }
 
@@ -125,7 +124,6 @@ open class CheckMavenCentralPublishingNeeded : DefaultTask() {
                 "==> PUBLISH: codegenVersion $codegenVersion is not on Maven Central, so the release " +
                     "should publish it.",
             )
-            writeResult(publishingNeeded = true)
             return
         }
 
@@ -133,7 +131,6 @@ open class CheckMavenCentralPublishingNeeded : DefaultTask() {
         val changedPaths = changes?.changedPaths.orEmpty()
         if (changedPaths.isNotEmpty()) {
             reportBumpNeeded(needsBumpMessage(codegenVersion, baseTag!!, changes!!))
-            writeResult(publishingNeeded = true)
             return
         }
 
@@ -153,7 +150,6 @@ open class CheckMavenCentralPublishingNeeded : DefaultTask() {
         }
 
         logger.lifecycle("==> SKIP: $nothingToDo")
-        writeResult(publishingNeeded = false)
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -501,13 +497,6 @@ open class CheckMavenCentralPublishingNeeded : DefaultTask() {
         logger.warn("==> BUMP NEEDED\n\n$message")
     }
 
-    private fun writeResult(publishingNeeded: Boolean) {
-        val outputDir = project.layout.buildDirectory.dir("maven-central").get().asFile
-        outputDir.mkdirs()
-        val outputFile = File(outputDir, "publishing.properties")
-        outputFile.writeText("mavenCentralPublishingNeeded=$publishingNeeded\n")
-        logger.lifecycle("Wrote mavenCentralPublishingNeeded=$publishingNeeded to ${outputFile.absolutePath}")
-    }
 
     companion object {
         /**
