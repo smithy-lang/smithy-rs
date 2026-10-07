@@ -11,10 +11,10 @@ use std::{
 };
 use tower::Service;
 
-type ServiceRequest = http::Request<crate::body::BoxBodySync>;
+type ServiceRequest = http::Request<crate::body::Body>;
 
 /// A [`Service`] that takes a `lambda_http::Request` and converts
-/// it to `http::Request<BoxBody>`.
+/// it to `http::Request<Body>`.
 ///
 /// **This version is only guaranteed to be compatible with
 /// [`lambda_http`](https://docs.rs/lambda_http) ^1.** Please ensure that your service crate's
@@ -87,13 +87,15 @@ fn convert_event(request: Request) -> ServiceRequest {
         request.into_parts()
     };
 
+    // Lambda delivers the payload fully in memory, so the body enters the pipeline already
+    // buffered; routing and deserialization reuse the bytes without collection.
     let body = match body {
-        lambda_http::Body::Empty => crate::body::empty_sync(),
-        lambda_http::Body::Text(s) => crate::body::to_boxed_sync(s),
-        lambda_http::Body::Binary(v) => crate::body::to_boxed_sync(v),
+        lambda_http::Body::Empty => crate::body::Body::empty(),
+        lambda_http::Body::Text(s) => crate::body::Body::from_bytes(s.into()),
+        lambda_http::Body::Binary(v) => crate::body::Body::from_bytes(v.into()),
         _ => {
             tracing::error!("Unknown `lambda_http::Body` variant encountered, falling back to empty body");
-            crate::body::empty_sync()
+            crate::body::Body::empty()
         }
     };
 
