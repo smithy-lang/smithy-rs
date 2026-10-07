@@ -90,18 +90,18 @@ Making the RustCrypto crates optional means a build that names no backend has no
 error: aws-sigv4 requires a crypto backend: enable the `rustcrypto` (default), `aws-lc-rs`, or `aws-lc-rs-fips` feature.
 ```
 
-`aws-sigv4` **1.6.0 → 2.0.0** and `aws-smithy-checksums` **0.65.0 → 0.66.0**: `--no-default-features` builds need a backend named.
+`aws-sigv4` **1.6.0 → 1.7.0** and `aws-smithy-checksums` **0.65.0 → 0.65.1**: `--no-default-features` builds need a backend named.
 
 ```toml
 # before
 aws-sigv4 = { version = "1.6", default-features = false, features = ["sign-http", "http1"] }
 # after
-aws-sigv4 = { version = "2.0", default-features = false, features = ["sign-http", "http1", "rustcrypto"] }
+aws-sigv4 = { version = "1.7", default-features = false, features = ["sign-http", "http1", "rustcrypto"] }
 ```
 
-`aws-runtime` **1.10.0 → 1.11.0**, a minor, with one behaviour change that would normally warrant more. This crate declares `aws-sigv4` with its defaults off now, which is how the choice reaches the signer, so it has a `default = ["rustcrypto"]` of its own. It previously had no `default` list at all, so `default-features = false` on it was a no-op; it now drops the crypto backend, and such a build fails with the `compile_error!` naming the fix. If you wrote that flag, add `rustcrypto`.
+`aws-runtime` **1.10.0 → 1.11.0**. This crate declares `aws-sigv4` with its defaults off now, which is how the choice reaches the signer, so it has a `default = ["rustcrypto"]` of its own. It previously had no `default` list at all, so `default-features = false` on it was a no-op; it now drops the crypto backend, and such a build fails with the `compile_error!` naming the fix. If you wrote that flag, add `rustcrypto`.
 
-This ships under a minor deliberately. `aws_runtime::invocation_id`'s `SharedInvocationIdGenerator` and `InvocationIdGenerator` are allowed public surface of every generated SDK crate, and `aws-config` re-exports four `env_config` types. Under a major, an application naming `aws-runtime = "1"` and exchanging one of those types with its SDK client would stop compiling on a version-identity mismatch — two crate versions mean two distinct types — and staying consistent would require major-bumping every `aws-sdk-*` crate. A flag that previously did nothing is the narrower thing to break.
+Every one of these ships below a major deliberately, because a major on any of them splits the released SDK's dependency graph in two. `aws_runtime::invocation_id`'s `SharedInvocationIdGenerator` and `InvocationIdGenerator` are allowed public surface of every generated SDK crate, and `aws-config` re-exports five `env_config` types. Under a major, an application naming `aws-runtime = "1"` and exchanging one of those types with its SDK client would stop compiling on a version-identity mismatch — two crate versions mean two distinct types — and staying consistent would require major-bumping every `aws-sdk-*` crate. `aws-sigv4` is held to the same line by the same argument one step removed: `aws_runtime::auth::SigningOptions` carries a `payload_override: Option<SignableBody<'static>>`, so `aws-sigv4`'s types are part of `aws-runtime`'s public API and generated clients construct them through their own `aws-sigv4` dependency. `aws-smithy-checksums` stays on 0.65.x because Cargo treats a 0.x minor as incompatible and `aws-sdk-s3` requires `aws-smithy-checksums = "0.65.0"`. A flag that previously did nothing is the narrower thing to break.
 
 Generated SDK crates and `aws-config` gain a default-on `rustcrypto` feature for the same reason. Their `default` list already existed, so a build on defaults is unaffected; a build with `default-features = false` needs `rustcrypto` added unless it is naming `aws-lc-fips` on purpose.
 

@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-checksums"
-version = "0.66.0"
+version = "0.65.1"
 authors = [
     "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
     "Zelda Hessler <zhessler@amazon.com>",
@@ -23,9 +23,15 @@ default = ["rustcrypto"]
 # cannot express "on unless AWS-LC is", so the only way to keep RustCrypto out of a FIPS build is to
 # make enabling it a choice.
 #
-# This is a breaking change, which is why this crate goes to 0.66.0. `--no-default-features` used to
-# be a no-op here -- the crate had no `[features]` section before this work -- and now loses the
+# This is a behaviour change shipping under a patch version. `--no-default-features` used to be a
+# no-op here -- the crate had no `[features]` section before this work -- and now loses the
 # backend; the recovery is to name `rustcrypto`. `crypto.rs` emits a `compile_error!` naming the fix.
+#
+# 0.66.0 was the first choice here and does not work. Cargo treats a 0.x minor as incompatible, so
+# `aws-sdk-s3`'s published `aws-smithy-checksums = "0.65.0"` requirement rejects it: when
+# `check-semver-hazards` patches this crate into the last released SDK, Cargo reports `patch
+# aws-smithy-checksums v0.66.0 was not used in the crate graph`, s3 keeps the registry copy, and
+# this crate's change goes untested there. 0.65.1 keeps that requirement satisfied.
 rustcrypto = ["dep:md-5", "dep:sha1", "dep:sha2"]
 # Use aws-lc-rs for SHA-1/SHA-256 digests, backed by the non-FIPS AWS-LC build.
 #

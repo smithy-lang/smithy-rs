@@ -1,6 +1,6 @@
 [package]
 name = "aws-sigv4"
-version = "2.0.0"
+version = "1.7.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "David Barsky <me@davidbarsky.com>"]
 description = "SigV4 signer for HTTP requests and Event Stream messages."
 edition = "2021"
@@ -27,10 +27,18 @@ sigv4a = ["dep:p256", "dep:crypto-bigint", "dep:subtle", "dep:zeroize"]
 # point of this arrangement: additive features cannot express "on unless AWS-LC is", so the only
 # way to keep RustCrypto out of a FIPS build is to make enabling it a choice.
 #
-# This is a breaking change, which is why this crate is 2.0.0. `--no-default-features --features
-# sign-http,http1` compiles on 1.6.0 and loses its backend here; the recovery is to name
+# This is a behaviour change shipping under a minor version. `--no-default-features --features
+# sign-http,http1` compiled on 1.6.x and loses its backend here; the recovery is to name
 # `rustcrypto` alongside the other features. `crypto.rs` emits a `compile_error!` naming the fix
 # rather than letting the build fail on an unresolved `hmac` import.
+#
+# A major was the first choice here and does not work. `aws_runtime::auth::SigningOptions` carries
+# a `payload_override: Option<SignableBody<'static>>`, so this crate's types are part of
+# `aws-runtime`'s public API, and generated clients construct them through their own `aws-sigv4`
+# dependency. The two crates therefore have to move on one compatibility line. `aws-runtime` is
+# staying on 1.x (see the comment in its manifest), so a 2.0.0 here would split `SignableBody` in
+# two for every already-released client that sets that field -- which `check-semver-hazards`
+# catches as a type mismatch when it patches this crate into the last released SDK.
 rustcrypto = ["dep:hmac", "dep:sha2"]
 # Use aws-lc-rs for HMAC-SHA256, SHA-256, and ECDSA-P256, backed by the non-FIPS AWS-LC build.
 #
