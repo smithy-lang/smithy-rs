@@ -46,11 +46,19 @@
 //! Enabling either feature on a target its AWS-LC build doesn't support fails while building
 //! `aws-lc-sys` or `aws-lc-fips-sys`, before this crate is reached.
 //!
-//! Selecting an AWS-LC backend changes which implementation runs; it does not remove the RustCrypto
-//! crates from the dependency tree. They are unconditional dependencies, so `md-5`, `sha1` and
-//! `sha2` are compiled either way and only the module that calls them is `cfg`-ed out. Cargo
-//! features are additive and cannot express "on unless AWS-LC is", and gating them would break
-//! builds that pass `default-features = false`.
+//! ## What ends up in the dependency tree
+//!
+//! `md-5`, `sha1` and `sha2` are optional dependencies gated on `rustcrypto`, so a build that
+//! selects an AWS-LC backend and turns the default features off does not compile them at all:
+//!
+//! ```sh
+//! cargo build --no-default-features --features aws-lc-rs-fips
+//! ```
+//!
+//! That is the point of the arrangement. Cargo features are additive and cannot express "on
+//! unless AWS-LC is", so excluding RustCrypto has to be something the build asks for. Leaving the
+//! default features on keeps the three crates compiled, because `rustcrypto` is the default — the
+//! AWS-LC backend still wins at the call site, by the precedence above.
 //!
 //! MD5 is only available on the `rustcrypto` backend, since aws-lc-rs does not expose it and it
 //! is not FIPS-approved. No public API reaches MD5 regardless: [`ChecksumAlgorithm::Md5`] is
