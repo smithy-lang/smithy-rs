@@ -18,7 +18,7 @@ use crate::schema::DeserializeError;
 pub(super) use crate::schema::request_bindings::is_body_member;
 
 /// The `Content-Type` of event stream requests and responses.
-pub(super) const EVENT_STREAM_CONTENT_TYPE: &str = "application/vnd.amazon.eventstream";
+pub(crate) const EVENT_STREAM_CONTENT_TYPE: &str = "application/vnd.amazon.eventstream";
 
 /// The response `Content-Type` of a streaming blob without `@mediaType`.
 pub(super) const OCTET_STREAM_CONTENT_TYPE: &str = "application/octet-stream";
@@ -40,7 +40,7 @@ fn parse_mime(value: &str) -> mime::Mime {
 }
 
 /// The `@httpPayload` member of `schema`, if any.
-pub(super) fn payload_member<'s>(schema: &'s Schema<'s>) -> Option<&'s Schema<'s>> {
+pub(crate) fn payload_member<'s>(schema: &'s Schema<'s>) -> Option<&'s Schema<'s>> {
     schema.members().iter().copied().find(|m| m.http_payload().is_some())
 }
 

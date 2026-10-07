@@ -1750,6 +1750,155 @@ mod multi_protocol {
         );
     }
 
+    /// Claiming derives Content-Type the same way the deserializer does, so requests the
+    /// deserializer accepts cannot be lost at routing. An input reading no body makes no
+    /// Content-Type demand at all.
+    #[tokio::test]
+    async fn rest_claims_requests_whose_input_reads_no_body_without_a_content_type() {
+        // Every member is bound to the URI; a plain GET carries no Content-Type.
+        static ID_LABEL: Schema<'static> =
+            Schema::new_member(shape_id!("test", "Widget", "id"), ShapeType::String, "id", 0).with_http_label();
+        static WIDGET: Schema<'static> =
+            Schema::new_struct(shape_id!("test", "Widget"), ShapeType::Structure, &[&ID_LABEL])
+                .with_original_name("Widget")
+                .with_http(HttpTrait::new("GET", "/widgets/{id}", Some(200)));
+        static GET_WIDGET: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &WIDGET, &UNIT, &[]);
+        static SERVICE: ServiceSchema<'static> = ServiceSchema::new(
+            SERVICE_ID,
+            None,
+            &[shape_id!("aws.protocols", "restJson1")],
+            &[&GET_WIDGET],
+        );
+        let app = app(&SERVICE, []);
+        let (status, text) = send(&app, Request::builder().method("GET").uri("/widgets/123"), "").await;
+        assert_eq!(
+            (status, text.as_str()),
+            (StatusCode::OK, "aws.protocols#restJson1 first ")
+        );
+    }
+
+    /// A blob `@httpPayload` without `@mediaType` leaves the Content-Type to the client, so
+    /// claiming cannot demand one: not `application/octet-stream`, and not presence. Streaming
+    /// blobs behave the same. The deserializer skips the header for both.
+    #[tokio::test]
+    async fn rest_claims_blob_payloads_with_any_or_no_content_type() {
+        static DATA: Schema<'static> =
+            Schema::new_member(shape_id!("test", "Upload", "data"), ShapeType::Blob, "data", 0)
+                .with_streaming()
+                .with_http_payload();
+        static UPLOAD: Schema<'static> =
+            Schema::new_struct(shape_id!("test", "Upload"), ShapeType::Structure, &[&DATA])
+                .with_original_name("Upload")
+                .with_http(HttpTrait::new("POST", "/first", Some(200)));
+        static STREAMING: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &UPLOAD, &UNIT, &[]);
+        static RAW: Schema<'static> =
+            Schema::new_member(shape_id!("test", "Put", "data"), ShapeType::Blob, "data", 0).with_http_payload();
+        static PUT: Schema<'static> = Schema::new_struct(shape_id!("test", "Put"), ShapeType::Structure, &[&RAW])
+            .with_original_name("Put")
+            .with_http(HttpTrait::new("POST", "/second", Some(200)));
+        static BUFFERED: OperationSchema<'static> = OperationSchema::new(SECOND_ID, &PUT, &UNIT, &[]);
+        static SERVICE: ServiceSchema<'static> = ServiceSchema::new(
+            SERVICE_ID,
+            None,
+            &[shape_id!("aws.protocols", "restJson1")],
+            &[&STREAMING, &BUFFERED],
+        );
+        let app = app(&SERVICE, []);
+        // A client-chosen media type on a streaming upload.
+        let (status, text) = send(&app, post("/first").header("content-type", "video/mp4"), "").await;
+        assert_eq!(
+            (status, text.as_str()),
+            (StatusCode::OK, "aws.protocols#restJson1 first ")
+        );
+        // A buffered blob without any Content-Type.
+        let (status, text) = send(&app, post("/second"), "").await;
+        assert_eq!(
+            (status, text.as_str()),
+            (StatusCode::OK, "aws.protocols#restJson1 second ")
+        );
+    }
+
+    /// An input binding Content-Type itself with `@httpHeader` makes no claim demand: the
+    /// member is optional like any other header member, so its absence cannot cost the route.
+    /// A user-modeled empty input likewise ignores the header, as the deserializer does.
+    #[tokio::test]
+    async fn rest_claims_do_not_require_modeled_or_ignored_content_type_headers() {
+        static CONTENT_TYPE: Schema<'static> = Schema::new_member(
+            shape_id!("test", "Upload", "contentType"),
+            ShapeType::String,
+            "contentType",
+            0,
+        )
+        .with_http_header("Content-Type");
+        static DATA: Schema<'static> =
+            Schema::new_member(shape_id!("test", "Upload", "data"), ShapeType::Blob, "data", 1).with_http_payload();
+        static UPLOAD: Schema<'static> = Schema::new_struct(
+            shape_id!("test", "Upload"),
+            ShapeType::Structure,
+            &[&CONTENT_TYPE, &DATA],
+        )
+        .with_original_name("Upload")
+        .with_http(HttpTrait::new("POST", "/first", Some(200)));
+        static WITH_HEADER: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &UPLOAD, &UNIT, &[]);
+        static EMPTY: Schema<'static> = Schema::new_struct(shape_id!("test", "Empty"), ShapeType::Structure, &[])
+            .with_original_name("Empty")
+            .with_http(HttpTrait::new("POST", "/second", Some(200)));
+        static MODELED_EMPTY: OperationSchema<'static> = OperationSchema::new(SECOND_ID, &EMPTY, &UNIT, &[]);
+        static SERVICE: ServiceSchema<'static> = ServiceSchema::new(
+            SERVICE_ID,
+            None,
+            &[shape_id!("aws.protocols", "restJson1")],
+            &[&WITH_HEADER, &MODELED_EMPTY],
+        );
+        let app = app(&SERVICE, []);
+        // The modeled Content-Type member is omitted.
+        let (status, text) = send(&app, post("/first"), "").await;
+        assert_eq!(
+            (status, text.as_str()),
+            (StatusCode::OK, "aws.protocols#restJson1 first ")
+        );
+        // The deserializer ignores Content-Type for a user-modeled empty input; claiming must too.
+        let (status, text) = send(&app, post("/second").header("content-type", "text/plain"), "").await;
+        assert_eq!(
+            (status, text.as_str()),
+            (StatusCode::OK, "aws.protocols#restJson1 second ")
+        );
+    }
+
+    /// Event streams are the one claim-side override over the deserializer's derivation: their
+    /// Content-Type is a genuine routing signal every client sends, and the buffered
+    /// deserializer never sees these requests.
+    #[tokio::test]
+    async fn rest_event_stream_claims_still_require_the_event_stream_content_type() {
+        static REST_STREAM: ServiceSchema<'static> = ServiceSchema::new(
+            SERVICE_ID,
+            None,
+            &[shape_id!("aws.protocols", "restJson1")],
+            &[&STREAM_OP],
+        );
+        let app = app(&REST_STREAM, []);
+        let SharedProtocolRouter::Metadata(router) = &app.state.protocols[0].router else {
+            unreachable!()
+        };
+        for builder in [
+            post("/stream"),
+            post("/stream").header("content-type", "application/json"),
+        ] {
+            let request = builder.body(()).unwrap();
+            assert!(matches!(router.claim(&request), RouteClaim::NoClaim));
+            assert!(!router.recognizes_streaming_input(&request));
+        }
+        let request = post("/stream")
+            .header("content-type", "application/vnd.amazon.eventstream")
+            .body(())
+            .unwrap();
+        assert!(matches!(router.claim(&request), RouteClaim::ClaimedWithRoute(_)));
+        assert!(router.recognizes_streaming_input(&request));
+        // The unclaimed request gets the neutral unknown-operation response.
+        let (status, _) = send(&app, post("/stream"), "").await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+    }
+
     #[test]
     fn unordered_served_protocols_fail_the_build() {
         let error = MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings(
