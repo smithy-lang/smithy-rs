@@ -1,6 +1,6 @@
 [package]
 name = "aws-runtime"
-version = "2.0.0"
+version = "1.11.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Runtime support code for the AWS SDK. This crate isn't intended to be used directly."
 edition = "2021"
@@ -14,6 +14,17 @@ rust-version = "1.94.1"
 # because Cargo gives a consumer no way to switch off a transitive crate's default features -- only
 # the crate that declares the dependency can do that. Without this `default`, every consumer of this
 # crate would get an `aws-sigv4` with no crypto backend.
+#
+# This crate had no `default` list before, so `default-features = false` on it was a no-op; it now
+# drops the crypto backend, and such a build fails with the `compile_error!` in `aws-sigv4`'s
+# `crypto` module naming the fix. That is a behaviour change shipping under a minor version, which
+# is deliberate: a major here would be far more disruptive. `aws_runtime::invocation_id`'s
+# `SharedInvocationIdGenerator` and `InvocationIdGenerator` are whitelisted in
+# `aws/sdk/sdk-external-types.toml` as public surface of every generated SDK crate, and `aws-config`
+# re-exports four `env_config` types in `profile.rs` and `profile/parser.rs`. Under a major, any
+# application naming `aws-runtime = "1"` and exchanging one of those types with its SDK client would
+# stop compiling on a version-identity mismatch, and staying consistent would mean major-bumping
+# every `aws-sdk-*` crate. Trading that for a flag that previously did nothing is the better deal.
 default = ["rustcrypto"]
 # Forwards to `aws-sigv4`'s RustCrypto backend. Named here rather than inherited, for the reason
 # above. A FIPS consumer disables the default features of their SDK crate, which drops this, and

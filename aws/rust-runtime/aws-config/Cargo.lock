@@ -135,7 +135,7 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "2.0.0"
+version = "1.11.0"
 dependencies = [
  "aws-credential-types",
  "aws-sigv4",
