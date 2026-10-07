@@ -497,7 +497,6 @@ open class CheckMavenCentralPublishingNeeded : DefaultTask() {
         logger.warn("==> BUMP NEEDED\n\n$message")
     }
 
-
     companion object {
         /**
          * Sentinel meaning "compare against the working tree". It is also a valid git revision, so
