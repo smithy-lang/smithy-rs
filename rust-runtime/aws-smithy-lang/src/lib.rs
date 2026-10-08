@@ -45,6 +45,7 @@ pub mod diagnostic;
 pub mod node;
 pub mod shape;
 pub mod traits;
+pub mod traversal;
 
 mod ast;
 mod loader;
