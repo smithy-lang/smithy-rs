@@ -28,8 +28,9 @@ use aws_smithy_runtime_api::http::{Headers, Uri};
 use aws_smithy_schema::codec::Codec;
 use aws_smithy_schema::serde::{SerdeError, ShapeDeserializer};
 use aws_smithy_schema::{Schema, ShapeType};
-use aws_smithy_types::date_time::Format;
 use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
+
+use super::timestamp::{resolve_timestamp_format, BindingLocation};
 
 /// `true` when `member` travels in the body rather than in the URI or headers. An `@httpPayload`
 /// member counts: it *is* the body.
@@ -175,36 +176,6 @@ pub(crate) fn extract_labels<'t>(template: &'t str, path: &str) -> Result<Vec<(&
         }
     }
     Ok(labels)
-}
-
-// ============================================================================
-// Timestamp format resolution
-// ============================================================================
-
-/// Where a bound value came from; determines the default timestamp format
-/// (headers: `http-date`; query strings and labels: `date-time`).
-#[derive(Copy, Clone, Debug)]
-pub(crate) enum BindingLocation {
-    Header,
-    Query,
-    Label,
-}
-
-fn resolve_timestamp_format(read_schema: &Schema<'_>, member: &Schema<'_>, location: BindingLocation) -> Format {
-    use aws_smithy_schema::traits::TimestampFormat as SchemaFormat;
-    let explicit = read_schema
-        .timestamp_format()
-        .or_else(|| member.timestamp_format())
-        .map(|t| t.format());
-    match explicit {
-        Some(SchemaFormat::EpochSeconds) => Format::EpochSeconds,
-        Some(SchemaFormat::HttpDate) => Format::HttpDate,
-        Some(SchemaFormat::DateTime) => Format::DateTime,
-        Some(_) | None => match location {
-            BindingLocation::Header => Format::HttpDate,
-            BindingLocation::Query | BindingLocation::Label => Format::DateTime,
-        },
-    }
 }
 
 /// Parses a primitive from its wire text as-is. Header values arrive already

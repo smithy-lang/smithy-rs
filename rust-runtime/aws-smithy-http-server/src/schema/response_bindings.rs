@@ -25,7 +25,10 @@ use std::cell::{Cell, RefCell};
 use aws_smithy_schema::codec::{Codec, FinishSerializer};
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::Schema;
+use aws_smithy_types::date_time::Format;
 use aws_smithy_types::{BigDecimal, BigInteger, DateTime, Document};
+
+use super::timestamp::{resolve_timestamp_format, timestamp_format_or, BindingLocation};
 
 type CapturedHeaders = RefCell<Vec<(http::HeaderName, http::HeaderValue)>>;
 
@@ -157,7 +160,7 @@ enum ResponseMemberPlan {
     Header {
         name: http::HeaderName,
         media_type: bool,
-        timestamp_format: HeaderTimestampFormat,
+        timestamp_format: Format,
         sensitive: bool,
     },
     PrefixHeaders {
@@ -171,13 +174,6 @@ enum ResponseMemberPlan {
         /// payloads are codec documents.
         raw: bool,
     },
-}
-
-#[derive(Debug, Clone, Copy)]
-enum HeaderTimestampFormat {
-    EpochSeconds,
-    DateTime,
-    HttpDate,
 }
 
 #[derive(Debug, Clone)]
@@ -270,11 +266,8 @@ fn compile_member_plan(
                 header.value()
             ))
         })?;
-        let timestamp_format = match schema.timestamp_format().map(|value| value.format()) {
-            Some(aws_smithy_schema::traits::TimestampFormat::EpochSeconds) => HeaderTimestampFormat::EpochSeconds,
-            Some(aws_smithy_schema::traits::TimestampFormat::DateTime) => HeaderTimestampFormat::DateTime,
-            Some(_) | None => HeaderTimestampFormat::HttpDate,
-        };
+        let timestamp_format =
+            resolve_timestamp_format(schema.member().unwrap_or(schema), schema, BindingLocation::Header);
         return Ok(ResponseMemberPlan::Header {
             name,
             media_type: schema.media_type().is_some()
@@ -561,15 +554,11 @@ fn capture_header(
     Ok(())
 }
 
-/// Formats a timestamp for an HTTP header: `@timestampFormat` if present on
-/// the member schema, else `http-date` (the Smithy default for header-bound
-/// timestamps).
-fn format_header_timestamp(format: HeaderTimestampFormat, value: &DateTime) -> Result<String, SerdeError> {
-    use aws_smithy_types::date_time::Format;
+/// Formats a resolved header timestamp, preserving the existing date-time output policy.
+fn format_header_timestamp(format: Format, value: &DateTime) -> Result<String, SerdeError> {
     let format = match format {
-        HeaderTimestampFormat::EpochSeconds => Format::EpochSeconds,
-        HeaderTimestampFormat::DateTime => Format::DateTimeWithOffset,
-        HeaderTimestampFormat::HttpDate => Format::HttpDate,
+        Format::DateTime => Format::DateTimeWithOffset,
+        other => other,
     };
     value
         .fmt(format)
@@ -854,7 +843,7 @@ struct HeaderListCollector<'a> {
     sink: &'a CapturedHeaders,
     name: &'a http::HeaderName,
     media_type: bool,
-    timestamp_format: HeaderTimestampFormat,
+    timestamp_format: Format,
     sensitive: bool,
 }
 
@@ -931,8 +920,8 @@ impl ShapeSerializer for HeaderListCollector<'_> {
         )
     }
 
-    fn write_timestamp(&mut self, _schema: &Schema<'_>, value: &DateTime) -> Result<(), SerdeError> {
-        let formatted = format_header_timestamp(self.timestamp_format, value)?;
+    fn write_timestamp(&mut self, schema: &Schema<'_>, value: &DateTime) -> Result<(), SerdeError> {
+        let formatted = format_header_timestamp(timestamp_format_or(schema, self.timestamp_format), value)?;
         capture_header(self.sink, self.name, &formatted, self.sensitive)
     }
 

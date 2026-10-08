@@ -12,6 +12,7 @@ pub(crate) mod response_bindings;
 pub mod routing;
 mod service;
 pub mod settings;
+mod timestamp;
 
 pub use deserialize::{DeserializableShape, DeserializeError};
 pub use event_stream::InitialResponsePolicy;
