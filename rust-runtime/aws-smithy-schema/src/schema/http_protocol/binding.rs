@@ -655,14 +655,6 @@ impl<'a> BindingState<'a> {
     }
 }
 
-/// Resolves an `@httpHeader` name into the `Cow<'static, str>` that
-/// `Headers::insert` requires.
-///
-/// `value_static()` is `Some` for every schema that can be built today — the
-/// only `@httpHeader` constructor takes `&'static str` — so this is a
-/// zero-allocation borrow in practice. The owned arm exists so that relaxing
-/// `@httpHeader` to accept arena-borrowed names stays an additive change
-/// instead of breaking this call site.
 /// Inserts a header bound to `member`, returning an error rather than panicking when the
 /// name or value is not a valid HTTP header component.
 ///
@@ -677,14 +669,72 @@ fn insert_header(
     member: &Schema<'_>,
     location: std::fmt::Arguments<'_>,
 ) -> Result<(), SerdeError> {
-    headers.try_insert(name, value).map(|_| ()).map_err(|err| {
-        SerdeError::invalid_input(format!(
-            "cannot serialize {} to {location}: {err}",
-            member.member_name().unwrap_or("member"),
-        ))
-    })
+    headers
+        .try_insert(name, value)
+        .map(|_| ())
+        .map_err(|err| header_error(member, location, err))
 }
 
+#[cold]
+fn header_error(
+    member: &Schema<'_>,
+    location: std::fmt::Arguments<'_>,
+    err: aws_smithy_runtime_api::http::HttpError,
+) -> SerdeError {
+    SerdeError::invalid_input(format!(
+        "cannot serialize {} to {location}: {err}",
+        member.member_name().unwrap_or("member"),
+    ))
+}
+
+/// The parsed [`http::HeaderName`] of a member's `@httpHeader`, cached on the member schema.
+///
+/// `Headers` converts a string name into an `http::HeaderName` on every insert. For a
+/// non-standard name, such as any `x-amz-*` header, that copies the name into a new
+/// allocation, and a name with an uppercase letter is copied once more first. Cloning a
+/// cached `HeaderName` only bumps a reference count.
+///
+/// `None` when the member has no `@httpHeader`, or its name is not a valid header name. In
+/// the second case [`insert_bound_header`] falls back to the string path, which reports the
+/// error.
+static HTTP_HEADER_NAME: crate::extension::SchemaExtensionKey<Option<http::HeaderName>> =
+    crate::extension::SchemaExtensionKey::new(|member| {
+        member
+            .http_header()
+            .and_then(|header| http::HeaderName::try_from(header.value()).ok())
+    });
+
+/// Inserts a value for a member bound with `@httpHeader`, using the member's cached
+/// [`HTTP_HEADER_NAME`].
+fn insert_bound_header(
+    headers: &mut Headers,
+    member: &Schema<'_>,
+    header: &crate::traits::HttpHeaderTrait<'_>,
+    value: String,
+) -> Result<(), SerdeError> {
+    match member.extension(&HTTP_HEADER_NAME) {
+        Some(name) => headers
+            .try_insert(name.clone(), value)
+            .map(|_| ())
+            .map_err(|err| header_error(member, format_args!("header `{}`", header.value()), err)),
+        None => insert_header(
+            headers,
+            header_name(header),
+            value,
+            member,
+            format_args!("header `{}`", header.value()),
+        ),
+    }
+}
+
+/// Resolves an `@httpHeader` name into the `Cow<'static, str>` that
+/// `Headers::insert` requires, for a member with no cached [`HTTP_HEADER_NAME`].
+///
+/// `value_static()` is `Some` for every schema that can be built today — the
+/// only `@httpHeader` constructor takes `&'static str` — so this is a
+/// zero-allocation borrow in practice. The owned arm exists so that relaxing
+/// `@httpHeader` to accept arena-borrowed names stays an additive change
+/// instead of breaking this call site.
 fn header_name(header: &crate::traits::HttpHeaderTrait<'_>) -> Cow<'static, str> {
     match header.value_static() {
         Some(name) => Cow::Borrowed(name),
@@ -807,13 +857,7 @@ impl<'s, 'b, 'a> ShapeSerializer for BindingRouter<'s, 'b, 'a> {
                 })
                 .collect::<Vec<_>>()
                 .join(", ");
-            insert_header(
-                self.state.headers,
-                header_name(header),
-                header_val,
-                schema,
-                format_args!("header `{}`", header.value()),
-            )?;
+            insert_bound_header(self.state.headers, schema, header, header_val)?;
             return Ok(());
         }
         // @httpQuery on a list: add each element as a separate query param
@@ -1016,13 +1060,7 @@ impl<'s, 'b, 'a> ShapeSerializer for BindingRouter<'s, 'b, 'a> {
             }
             let encoded = aws_smithy_types::base64::encode(value.as_ref());
             let header = schema.http_header().unwrap();
-            insert_header(
-                self.state.headers,
-                header_name(header),
-                encoded,
-                schema,
-                format_args!("header `{}`", header.value()),
-            )?;
+            insert_bound_header(self.state.headers, schema, header, encoded)?;
             return Ok(());
         }
         if schema.http_payload().is_some() {
@@ -1115,17 +1153,8 @@ impl<'a> BindingState<'a> {
         }
         match binding {
             HttpBinding::Header => {
-                // `Headers::insert` needs a `'static` name; `header_name`
-                // recovers one from the trait, which is a zero-allocation
-                // borrow for every schema constructible today.
                 if let Some(header) = schema.http_header() {
-                    insert_header(
-                        self.headers,
-                        header_name(header),
-                        value.to_string(),
-                        schema,
-                        format_args!("header `{}`", header.value()),
-                    )?;
+                    insert_bound_header(self.headers, schema, header, value.to_string())?;
                 }
             }
             HttpBinding::Query => {
@@ -2559,8 +2588,8 @@ mod tests {
     /// for a name a dynamic client would intern once at model-load time.
     ///
     /// This is what the `@httpHeader` constructor pin costs and what it still
-    /// permits: a non-`'static` schema binds headers fine, and the insert stays
-    /// allocation-free because `value_static()` is `Some`.
+    /// permits: a non-`'static` schema binds headers fine, and its cached
+    /// `HeaderName` is freed with the schema.
     #[test]
     fn http_header_on_a_runtime_built_schema() {
         // Structural strings: owned locally, dropped at end of scope. The
@@ -3217,6 +3246,101 @@ mod tests {
             let message = err.to_string();
             assert!(message.contains(expected), "{message}");
             assert!(!message.contains("secret"), "value leaked: {message}");
+        }
+    }
+
+    /// A modeled header name that `http` rejects has no cached `HeaderName`, so the insert
+    /// falls back to the string path, which reports the error. It must do so on every
+    /// request, not only the one that first computed the cache entry.
+    #[test]
+    fn invalid_modeled_header_name_is_an_error_not_a_panic() {
+        static BAD_MEMBER: Schema<'static> =
+            Schema::new_member(crate::shape_id!("test", "B"), ShapeType::String, "bad", 0)
+                .with_http_header("has space");
+        static BAD_SCHEMA: Schema<'static> = Schema::new_struct(
+            crate::shape_id!("test", "B"),
+            ShapeType::Structure,
+            &[&BAD_MEMBER],
+        );
+        struct Bad;
+        impl SerializableStruct for Bad {
+            fn schema(&self) -> &Schema<'_> {
+                &BAD_SCHEMA
+            }
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_string(&BAD_MEMBER, "value")
+            }
+        }
+        let protocol = make_protocol();
+        for _ in 0..2 {
+            let err = protocol
+                .serialize_request(&Bad, &BAD_SCHEMA, "https://example.com", &ConfigBag::base())
+                .expect_err("an invalid header name must be rejected");
+            let message = err.to_string();
+            assert!(message.contains("bad to header `has space`"), "{message}");
+        }
+    }
+
+    /// Scalar, list and blob headers all insert the member's cached `HeaderName`. A second
+    /// request reuses the cached names and must produce the same headers.
+    #[test]
+    fn cached_header_names_are_reused_by_every_header_write() {
+        static SCALAR: Schema<'static> = Schema::new_member(
+            crate::shape_id!("test", "H"),
+            ShapeType::String,
+            "scalar",
+            0,
+        )
+        .with_http_header("X-Amz-Scalar");
+        static LIST: Schema<'static> =
+            Schema::new_member(crate::shape_id!("test", "H"), ShapeType::List, "list", 1)
+                .with_http_header("x-amz-list");
+        static BLOB: Schema<'static> =
+            Schema::new_member(crate::shape_id!("test", "H"), ShapeType::Blob, "blob", 2)
+                .with_http_header("Content-MD5");
+        static SCHEMA: Schema<'static> = Schema::new_struct(
+            crate::shape_id!("test", "H"),
+            ShapeType::Structure,
+            &[&SCALAR, &LIST, &BLOB],
+        );
+        struct Headers3;
+        impl SerializableStruct for Headers3 {
+            fn schema(&self) -> &Schema<'_> {
+                &SCHEMA
+            }
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_string(&SCALAR, "one")?;
+                s.write_list(&LIST, &|e| {
+                    e.write_string(&STRING, "a")?;
+                    e.write_string(&STRING, "b")
+                })?;
+                s.write_blob(&BLOB, aws_smithy_types::Blob::new("md5"))
+            }
+        }
+        let protocol = make_protocol();
+        for _ in 0..2 {
+            let request = protocol
+                .serialize_request(
+                    &Headers3,
+                    &SCHEMA,
+                    "https://example.com",
+                    &ConfigBag::base(),
+                )
+                .unwrap();
+            let mut headers: Vec<_> = request
+                .headers()
+                .iter()
+                .filter(|(name, _)| !name.starts_with("content-type"))
+                .collect();
+            headers.sort();
+            assert_eq!(
+                headers,
+                [
+                    ("content-md5", "bWQ1"),
+                    ("x-amz-list", "a, b"),
+                    ("x-amz-scalar", "one"),
+                ]
+            );
         }
     }
 

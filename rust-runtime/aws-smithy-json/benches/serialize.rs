@@ -249,6 +249,175 @@ impl SerializableStruct for Tagged {
     }
 }
 
+// --- restJson1 requests with header bindings, shaped like S3 `PutObject` ---
+//
+// Most modeled header names are lowercase `x-amz-*` names, with a few
+// standard, mixed-case ones (`Cache-Control`, `Content-MD5`).
+
+macro_rules! header {
+    ($static_name:ident, $ty:ident, $name:literal, $index:literal, $header:literal) => {
+        static $static_name: Schema<'static> = Schema::new_member(
+            shape_id!("bench", "Put", $name),
+            ShapeType::$ty,
+            $name,
+            $index,
+        )
+        .with_http_header($header);
+    };
+}
+
+static PUT_KEY: Schema<'static> = Schema::new_member(
+    shape_id!("bench", "Put", "Key"),
+    ShapeType::String,
+    "Key",
+    0,
+)
+.with_http_label();
+header!(
+    PUT_00,
+    String,
+    "ExpectedBucketOwner",
+    1,
+    "x-amz-expected-bucket-owner"
+);
+header!(PUT_01, String, "ACL", 2, "x-amz-acl");
+header!(PUT_02, String, "CacheControl", 3, "Cache-Control");
+header!(PUT_03, String, "ContentMD5", 4, "Content-MD5");
+header!(PUT_04, String, "StorageClass", 5, "x-amz-storage-class");
+header!(
+    PUT_05,
+    String,
+    "ServerSideEncryption",
+    6,
+    "x-amz-server-side-encryption"
+);
+header!(
+    PUT_06,
+    String,
+    "ContentDisposition",
+    7,
+    "Content-Disposition"
+);
+header!(PUT_07, String, "ContentEncoding", 8, "Content-Encoding");
+header!(PUT_08, String, "ContentLanguage", 9, "Content-Language");
+header!(PUT_09, Timestamp, "Expires", 10, "Expires");
+header!(PUT_10, String, "GrantRead", 11, "x-amz-grant-read");
+header!(
+    PUT_11,
+    String,
+    "GrantFullControl",
+    12,
+    "x-amz-grant-full-control"
+);
+header!(
+    PUT_12,
+    String,
+    "SSEKMSKeyId",
+    13,
+    "x-amz-server-side-encryption-aws-kms-key-id"
+);
+header!(
+    PUT_13,
+    Boolean,
+    "BucketKeyEnabled",
+    14,
+    "x-amz-server-side-encryption-bucket-key-enabled"
+);
+header!(PUT_14, String, "RequestPayer", 15, "x-amz-request-payer");
+header!(PUT_15, String, "Tagging", 16, "x-amz-tagging");
+header!(
+    PUT_16,
+    String,
+    "ObjectLockMode",
+    17,
+    "x-amz-object-lock-mode"
+);
+header!(
+    PUT_17,
+    Timestamp,
+    "ObjectLockRetainUntilDate",
+    18,
+    "x-amz-object-lock-retain-until-date"
+);
+header!(
+    PUT_18,
+    String,
+    "ChecksumAlgorithm",
+    19,
+    "x-amz-sdk-checksum-algorithm"
+);
+header!(
+    PUT_19,
+    Long,
+    "WriteOffsetBytes",
+    20,
+    "x-amz-write-offset-bytes"
+);
+member!(PUT_DESCRIPTION, "Put", String, "Description", 21);
+
+static PUT: Schema<'static> = Schema::new_struct(
+    shape_id!("bench", "Put"),
+    ShapeType::Structure,
+    &[
+        &PUT_KEY,
+        &PUT_00,
+        &PUT_01,
+        &PUT_02,
+        &PUT_03,
+        &PUT_04,
+        &PUT_05,
+        &PUT_06,
+        &PUT_07,
+        &PUT_08,
+        &PUT_09,
+        &PUT_10,
+        &PUT_11,
+        &PUT_12,
+        &PUT_13,
+        &PUT_14,
+        &PUT_15,
+        &PUT_16,
+        &PUT_17,
+        &PUT_18,
+        &PUT_19,
+        &PUT_DESCRIPTION,
+    ],
+)
+.with_http(aws_smithy_schema::traits::HttpTrait::new(
+    "PUT", "/{Key}", None,
+));
+
+static PUT_HEADERS: [&Schema<'static>; 20] = [
+    &PUT_00, &PUT_01, &PUT_02, &PUT_03, &PUT_04, &PUT_05, &PUT_06, &PUT_07, &PUT_08, &PUT_09,
+    &PUT_10, &PUT_11, &PUT_12, &PUT_13, &PUT_14, &PUT_15, &PUT_16, &PUT_17, &PUT_18, &PUT_19,
+];
+
+/// A `Put` input that sets its first `.0` header members, one URI label and one
+/// body member. Like S3 `PutObject`, the input models more headers than a
+/// typical request sets.
+struct PutValue(usize);
+
+impl SerializableStruct for PutValue {
+    fn schema(&self) -> &Schema<'_> {
+        &PUT
+    }
+
+    fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+        s.write_string(&PUT_KEY, "photos/2026/10/07/IMG_0001.jpg")?;
+        for member in &PUT_HEADERS[..self.0] {
+            match member.shape_type() {
+                ShapeType::Timestamp => {
+                    s.write_timestamp(member, &DateTime::from_secs(1_791_331_200))?
+                }
+                ShapeType::Boolean => s.write_boolean(member, true)?,
+                ShapeType::Long => s.write_long(member, 1_048_576)?,
+                _ => s.write_string(member, "bench-value-0123456789")?,
+            }
+        }
+        s.write_string(&PUT_DESCRIPTION, "holiday photo")
+    }
+}
+
 // --- Benchmarks ---
 
 fn aws_json() -> JsonCodec {
@@ -298,5 +467,31 @@ fn serialize(c: &mut Criterion) {
     );
 }
 
-criterion_group!(benches, serialize);
+fn request(c: &mut Criterion) {
+    use aws_smithy_json::protocol::aws_rest_json_1::AwsRestJsonProtocol;
+    use aws_smithy_schema::protocol::ClientProtocolInner;
+
+    let protocol = AwsRestJsonProtocol::new();
+    let cfg = aws_smithy_types::config_bag::ConfigBag::base();
+    for headers in [1, 5, 20] {
+        let name = format!("request/restJson/headers_{headers}");
+        let value = PutValue(headers);
+        c.bench_function(&name, |b| {
+            b.iter(|| {
+                black_box(
+                    protocol
+                        .serialize_request(
+                            black_box(&value),
+                            black_box(&PUT),
+                            "https://bucket.s3.us-east-1.amazonaws.com",
+                            &cfg,
+                        )
+                        .unwrap(),
+                )
+            })
+        });
+    }
+}
+
+criterion_group!(benches, serialize, request);
 criterion_main!(benches);
