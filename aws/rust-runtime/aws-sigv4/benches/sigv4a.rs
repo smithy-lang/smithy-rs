@@ -40,18 +40,22 @@ fn calculate_signature(c: &mut Criterion) {
 fn sign_http_request(c: &mut Criterion) {
     let identity: Identity = Credentials::new(ACCESS_KEY, SECRET_KEY, None, None, "bench").into();
     // Hoisted: `sign` borrows the params, so building them is setup rather than per-request work.
-    // Every field below is required by the builder, and `sign` takes the enum, so this is the
-    // shortest form available. The instant only lands in the credential scope, so it is arbitrary.
-    let params = http_request::SigningParams::V4a(
-        v4a::SigningParams::builder()
-            .identity(&identity)
-            .region_set("*")
-            .name("lambda")
-            .time(SystemTime::UNIX_EPOCH)
-            .settings(SigningSettings::default())
-            .build()
-            .unwrap(),
-    );
+    // Every field is required by the builder, and `sign` takes the `SigningParams` enum, so this
+    // is about as short as it gets. The instant only lands in the credential scope, so the value
+    // is arbitrary.
+    //
+    // `.into()` rather than naming the `V4a` variant: no CI job compiles benches, so a variant
+    // rename would break this file silently, where the `From` impl absorbs it. The annotation is
+    // only there to pick the `Into` impl.
+    let params: http_request::SigningParams<'_> = v4a::SigningParams::builder()
+        .identity(&identity)
+        .region_set("*")
+        .name("lambda")
+        .time(SystemTime::UNIX_EPOCH)
+        .settings(SigningSettings::default())
+        .build()
+        .unwrap()
+        .into();
 
     c.bench_function("sign_http_request", |b| {
         b.iter(|| {
