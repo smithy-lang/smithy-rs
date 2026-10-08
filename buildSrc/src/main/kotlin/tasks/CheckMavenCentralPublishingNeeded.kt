@@ -461,21 +461,23 @@ open class CheckMavenCentralPublishingNeeded : DefaultTask() {
         publishState: PublishState,
     ): String =
         buildString {
-            append("codegenVersion $codegenVersion is PARTIALLY published to Maven Central.\n\n")
+            append("codegenVersion $codegenVersion reads as split on repo1.maven.org.\n\n")
             append("  present (${publishState.present.size}): ${publishState.present.joinToString(", ")}\n")
             append("  missing (${publishState.missing.size}): ${publishState.missing.joinToString(", ")}\n")
             append(
-                "\nMaven Central coordinates are immutable, so the artifacts that are present " +
-                    "cannot be replaced and this version can never be completed. Bump " +
-                    "codegenVersion in gradle.properties and release the new version.",
+                "\nUsually this is sync lag rather than a broken version. Sonatype publishes a " +
+                    "deployment atomically but repo1 mirrors per artifact and trails it by hours, so " +
+                    "a release that published completely reads as split for a while — check " +
+                    "https://central.sonatype.com/publishing/deployments first.",
             )
             append(
-                "\n\nTwo states look like this but are not broken. First, repo1.maven.org lags the " +
-                    "Sonatype publishing dashboard, so a release that finished in the last hour can " +
-                    "look partial while it is still syncing — check " +
-                    "https://central.sonatype.com/publishing/deployments. Second, an artifact added " +
-                    "to PublishedMavenArtifacts more recently than this version legitimately has no " +
-                    "release at it; that only happens when checking a historical version.",
+                "\n\nAn artifact added to PublishedMavenArtifacts more recently than this version " +
+                    "also has no release at it, which only shows up when checking a historical version.",
+            )
+            append(
+                "\n\nOnly if the split persists once repo1 has caught up is the version genuinely " +
+                    "half-published. The present artifacts are immutable, so it can never be " +
+                    "completed — bump codegenVersion in gradle.properties and release the new version.",
             )
         }
 
