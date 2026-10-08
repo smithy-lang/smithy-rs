@@ -713,6 +713,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-smithy-lang"
+version = "0.1.0"
+dependencies = [
+ "criterion 0.8.2",
+ "indexmap 2.14.2",
+ "proptest",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "aws-smithy-legacy-http"
 version = "0.63.1"
 dependencies = [
