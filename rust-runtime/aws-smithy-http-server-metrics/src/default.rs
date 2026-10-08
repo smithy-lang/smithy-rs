@@ -16,6 +16,7 @@ use std::time::Duration;
 use metrique::unit_of_work::metrics;
 use metrique::Slot;
 use metrique::SlotGuard;
+use metrique_util::MetricsPool;
 
 use crate::default::service_counter::ServiceCounter;
 
@@ -34,24 +35,56 @@ pub struct DefaultMetricsServiceState {
     pub(crate) outstanding_requests: usize,
 }
 
-/// Container for default request and response metrics.
+/// Container for default request and response metrics and the request metrics pool.
 ///
 /// This type is not intended for direct use. See [`DefaultMetricsPlugin`](crate::plugin::DefaultMetricsPlugin).
 #[metrics]
 #[derive(Default)]
-pub struct DefaultMetrics {
+pub struct SmithyMetrics {
+    #[doc(hidden)]
     #[metrics(flatten)]
-    pub(crate) default_request_metrics: Option<Slot<DefaultRequestMetrics>>,
+    pub default_request_metrics: Option<Slot<DefaultRequestMetrics>>,
+    #[doc(hidden)]
     #[metrics(flatten)]
-    pub(crate) default_response_metrics: Option<Slot<DefaultResponseMetrics>>,
+    pub default_response_metrics: Option<Slot<DefaultResponseMetrics>>,
+    /// Pool that collects heterogeneous child metrics contributed by middleware,
+    /// handlers, and libraries during the request. Flattened into this entry when
+    /// the request finishes.
+    #[doc(hidden)]
+    #[metrics(flatten)]
+    pub metrics_pool: MetricsPool,
 }
-// Slot currently doesn't impl debug: https://github.com/awslabs/metrique/issues/190
-impl Debug for DefaultMetrics {
+impl Debug for SmithyMetrics {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DefaultMetrics")
-            .field("default_request_metrics", &())
-            .field("default_response_metrics", &())
+        f.debug_struct("SmithyMetrics")
+            .field("default_request_metrics", &self.default_request_metrics)
+            .field("default_response_metrics", &self.default_response_metrics)
+            .field("metrics_pool", &self.metrics_pool)
             .finish()
+    }
+}
+
+/// A metrics entry that exposes a flattened [`SmithyMetrics`] block, letting the
+/// metrics layer reach the owned [`MetricsPool`] for a
+/// request.
+///
+/// The layer uses the pool to hand out producer handles, install a request-scoped
+/// pool via [`MetricsPool::current`], and store
+/// a clone in the request's extensions. Independently-owned middleware,
+/// interceptors, and libraries can then contribute child metrics that flatten
+/// into this entry when the request finishes. Operation handlers should instead
+/// record metrics on their own `#[smithy_metrics(operation)]` field.
+///
+/// Implemented for [`SmithyMetrics`] and generated for structs annotated with
+/// `#[smithy_metrics]`.
+pub trait HasSmithyMetrics {
+    /// Return this entry's [`SmithyMetrics`] block.
+    fn smithy_metrics(&self) -> &SmithyMetrics;
+}
+
+impl HasSmithyMetrics for SmithyMetrics {
+    fn smithy_metrics(&self) -> &SmithyMetrics {
+        self
     }
 }
 

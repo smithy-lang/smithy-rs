@@ -19,8 +19,8 @@ use crate::default::DefaultRequestMetricsExtension;
 use crate::default::DefaultResponseMetrics;
 use crate::default::DefaultResponseMetricsConfig;
 use crate::default::DefaultResponseMetricsExtension;
-use crate::layer::DefaultMetrics;
 use crate::layer::MetricsLayer;
+use crate::layer::SmithyMetrics;
 use crate::traits::InitMetrics;
 use crate::traits::ResponseMetrics;
 use crate::traits::ThreadSafeCloseEntry;
@@ -113,7 +113,7 @@ pub struct WithRqAndRs;
 #[non_exhaustive]
 pub struct MetricsLayerBuilder<
     State,
-    Entry = DefaultMetrics,
+    Entry = SmithyMetrics,
     Sink = DefaultSink,
     Init = DefaultInit<Entry, Sink>,
     Res = DefaultRs<Entry>,
@@ -209,27 +209,27 @@ where
 
 pub trait DefaultMetricsBuildExt<Sink, Init, Res>
 where
-    Sink: ThreadSafeEntrySink<DefaultMetrics>,
-    Init: InitMetrics<DefaultMetrics, Sink>,
-    Res: ResponseMetrics<DefaultMetrics>,
+    Sink: ThreadSafeEntrySink<SmithyMetrics>,
+    Init: InitMetrics<SmithyMetrics, Sink>,
+    Res: ResponseMetrics<SmithyMetrics>,
 {
     /// Build the [`MetricsLayer`] that can be added to your service.
-    fn build(self) -> MetricsLayer<DefaultMetrics, Sink, Init, Res>;
+    fn build(self) -> MetricsLayer<SmithyMetrics, Sink, Init, Res>;
 }
 
 macro_rules! impl_build_for_state {
     ($state:ty) => {
         impl<Sink, Init, Res> DefaultMetricsBuildExt<Sink, Init, Res>
-            for MetricsLayerBuilder<$state, DefaultMetrics, Sink, Init, Res>
+            for MetricsLayerBuilder<$state, SmithyMetrics, Sink, Init, Res>
         where
-            Sink: ThreadSafeEntrySink<DefaultMetrics>,
-            Init: InitMetrics<DefaultMetrics, Sink>,
-            Res: ResponseMetrics<DefaultMetrics>,
+            Sink: ThreadSafeEntrySink<SmithyMetrics>,
+            Init: InitMetrics<SmithyMetrics, Sink>,
+            Res: ResponseMetrics<SmithyMetrics>,
         {
-            fn build(self) -> MetricsLayer<DefaultMetrics, Sink, Init, Res> {
+            fn build(self) -> MetricsLayer<SmithyMetrics, Sink, Init, Res> {
                 let default_metrics_extension_fn =
                     |req: &mut HttpRequest,
-                     metrics: &mut DefaultMetrics,
+                     metrics: &mut SmithyMetrics,
                      req_config: DefaultRequestMetricsConfig,
                      res_config: DefaultResponseMetricsConfig,
                      service_state: DefaultMetricsServiceState| {
@@ -324,15 +324,15 @@ mod tests {
     assert_state!(assert_with_rq, WithRq);
     assert_state!(assert_with_rq_and_rs, WithRqAndRs);
 
-    fn dummy_init(_req: &mut HttpRequest) -> AppendAndCloseOnDrop<DefaultMetrics, DefaultSink> {
-        DefaultMetrics::default().append_on_drop(ServiceMetrics::sink())
+    fn dummy_init(_req: &mut HttpRequest) -> AppendAndCloseOnDrop<SmithyMetrics, DefaultSink> {
+        SmithyMetrics::default().append_on_drop(ServiceMetrics::sink())
     }
 
-    fn dummy_response_fn(_res: &mut HttpResponse, _metrics: &mut DefaultMetrics) {}
+    fn dummy_response_fn(_res: &mut HttpResponse, _metrics: &mut SmithyMetrics) {}
 
     #[test]
     fn test_needs_initialization_state() {
-        let builder = MetricsLayer::<DefaultMetrics, DefaultSink>::builder();
+        let builder = MetricsLayer::<SmithyMetrics, DefaultSink>::builder();
         assert_needs_initialization(&builder);
     }
 
