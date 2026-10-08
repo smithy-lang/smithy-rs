@@ -1,0 +1,26 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+set -eux
+
+# Collected by ci-action and moved to ./artifacts on the runner, where the workflow reads it to post
+# the pull request comment. Written before `cd smithy-rs` so the path is the workspace root.
+ARTIFACTS_DIR="$(pwd)/artifacts/maven-central"
+mkdir -p "${ARTIFACTS_DIR}"
+
+cd smithy-rs
+
+# The check compares against the release tag that published the current codegenVersion, so it needs
+# tags. GH actions does a shallow checkout without them.
+git fetch --tags --force origin
+
+./gradlew checkMavenCentralPublishingNeeded
+
+# Present only when codegenVersion needs bumping. The task does not fail on that -- it gates
+# Matrix Success, so failing would block the merge -- so this file is the signal instead.
+if [[ -f build/maven-central/bump-needed.md ]]; then
+  cp build/maven-central/bump-needed.md "${ARTIFACTS_DIR}/bump-needed.md"
+fi
