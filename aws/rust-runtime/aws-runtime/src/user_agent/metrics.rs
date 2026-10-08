@@ -200,7 +200,13 @@ iterable_enum!(
     S3CustomThroughput,
     S3CustomMemoryLimit,
     S3OnEc2,
-    S3FilePath
+    S3FilePath,
+    DynamodbMapperV2,
+    S3TransferClassicExplicit,
+    S3TransferCrtExplicit,
+    S3TransferClassicAuto,
+    S3TransferCrtAuto,
+    S3RegionRedirect
 );
 
 pub(crate) trait ProvideBusinessMetric {
@@ -371,12 +377,12 @@ impl fmt::Display for BusinessMetrics {
 }
 #[cfg(test)]
 mod tests {
+    use crate::sdk_feature::AwsSdkFeature;
+    use crate::user_agent::metrics::ProvideBusinessMetric;
     use crate::user_agent::metrics::{
         drop_unfinished_metrics_to_fit, Base64Iterator, FEATURE_ID_TO_METRIC_VALUE,
         MAX_METRICS_ID_NUMBER,
     };
-    use crate::sdk_feature::AwsSdkFeature;
-    use crate::user_agent::metrics::ProvideBusinessMetric;
     use crate::user_agent::BusinessMetric;
     use convert_case::{Boundary, Case, Casing};
     use std::collections::HashMap;

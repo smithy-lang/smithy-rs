@@ -1,6 +1,6 @@
 ---
 applies_to: ["aws-sdk-rust"]
-authors: ["krishpy"]
+authors: ["azkrishpy"]
 references: []
 breaking: false
 new_feature: true
