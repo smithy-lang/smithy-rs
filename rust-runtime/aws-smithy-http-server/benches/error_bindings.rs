@@ -189,7 +189,7 @@ fn expect_bound(response: &Response, headers_split: bool) {
 }
 
 fn bench_protocol<P: ServerProtocol>(criterion: &mut Criterion, name: &str, protocol: P) {
-    expect_bound(&protocol.serialize_error(&BoundError), name != "rpc_v2_cbor");
+    expect_bound(&protocol.serialize_error(&BoundError), !name.starts_with("rpc_v2_cbor"));
     let mut group = criterion.benchmark_group(name);
     group.bench_function("error_with_header_bindings", |bencher| {
         bencher.iter(|| black_box(black_box(&protocol).serialize_error(black_box(&BoundError))));
@@ -227,6 +227,13 @@ fn error_bindings(criterion: &mut Criterion) {
         "rpc_v2_cbor",
         RpcV2CborProtocol::from_build_context(&ctx).unwrap(),
     );
+    // Default-constructed protocols have no prepared plans: every schema misses the cache and
+    // compiles its plan per response. The gap to the groups above is the cost of plan
+    // compilation, i.e. what the build-time preparation saves.
+    bench_protocol(criterion, "rest_json_1_errors_uncached", RestJson1Protocol::default());
+    bench_protocol(criterion, "rest_xml_errors_uncached", RestXmlProtocol::default());
+    bench_protocol(criterion, "aws_json_1_1_uncached", AwsJson1_1Protocol::default());
+    bench_protocol(criterion, "rpc_v2_cbor_uncached", RpcV2CborProtocol::default());
 }
 
 criterion_group!(benches, error_bindings);
