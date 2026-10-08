@@ -9,7 +9,7 @@ use aws_sigv4::sign::v4a;
 use aws_smithy_runtime_api::client::identity::Identity;
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::hint::black_box;
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 const ACCESS_KEY: &str = "AKIAIOSFODNN7EXAMPLE";
 const SECRET_KEY: &str = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
@@ -40,15 +40,18 @@ fn calculate_signature(c: &mut Criterion) {
 fn sign_http_request(c: &mut Criterion) {
     let identity: Identity = Credentials::new(ACCESS_KEY, SECRET_KEY, None, None, "bench").into();
     // Hoisted: `sign` borrows the params, so building them is setup rather than per-request work.
-    let params: http_request::SigningParams<'_> = v4a::SigningParams::builder()
-        .identity(&identity)
-        .region_set("*")
-        .name("lambda")
-        .time(SystemTime::UNIX_EPOCH + Duration::from_secs(1_791_331_200))
-        .settings(SigningSettings::default())
-        .build()
-        .unwrap()
-        .into();
+    // Every field below is required by the builder, and `sign` takes the enum, so this is the
+    // shortest form available. The instant only lands in the credential scope, so it is arbitrary.
+    let params = http_request::SigningParams::V4a(
+        v4a::SigningParams::builder()
+            .identity(&identity)
+            .region_set("*")
+            .name("lambda")
+            .time(SystemTime::UNIX_EPOCH)
+            .settings(SigningSettings::default())
+            .build()
+            .unwrap(),
+    );
 
     c.bench_function("sign_http_request", |b| {
         b.iter(|| {
