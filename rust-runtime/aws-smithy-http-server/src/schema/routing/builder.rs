@@ -7,8 +7,8 @@
 
 use super::service::{BoundHandler, ProtocolAndRouter, RoutingState};
 use super::{
-    MultiProtocolRoutingService, OperationTarget, ProtocolOptions, RouterBuildContext, RouterBuildError,
-    SharedProtocolRouter,
+    MultiProtocolRoutingService, OperationTarget, ProtocolOptions, ProtocolResolutionError, RouterBuildContext,
+    RouterBuildError, SharedProtocolRouter,
 };
 use crate::{
     body::BoxBody,
@@ -243,9 +243,10 @@ fn resolve_protocols(
             .iter()
             .any(|other| other.protocol_id() == registration.protocol_id())
         {
-            return Err(RouterBuildError::DuplicateProtocol {
+            return Err(ProtocolResolutionError::DuplicateRegistration {
                 protocol: registration.protocol_id().to_string(),
-            });
+            }
+            .into());
         }
     }
 
@@ -261,7 +262,7 @@ fn resolve_protocols(
         .map(|protocol| protocol.to_string())
         .collect();
     if !missing.is_empty() {
-        return Err(RouterBuildError::MissingProtocols { protocols: missing });
+        return Err(ProtocolResolutionError::MissingRegistrations { protocols: missing }.into());
     }
 
     // Reachability over the global constraint graph, absent protocols included as transit nodes.
@@ -305,9 +306,10 @@ fn resolve_protocols(
         .map(|index| registrations[index].protocol_id().to_string())
         .collect();
     if !cyclic_protocols.is_empty() {
-        return Err(RouterBuildError::ProtocolOrderCycle {
+        return Err(ProtocolResolutionError::OrderCycle {
             protocols: cyclic_protocols,
-        });
+        }
+        .into());
     }
 
     let mut served: Vec<usize> = registrations
@@ -322,15 +324,16 @@ fn resolve_protocols(
         .map(|(index, _)| index)
         .collect();
     if served.is_empty() {
-        return Err(RouterBuildError::UnknownProtocol);
+        return Err(ProtocolResolutionError::NoProtocolsDeclared.into());
     }
     for (nth, &first) in served.iter().enumerate() {
         for &second in &served[nth + 1..] {
             if !reaches[first][second] && !reaches[second][first] {
-                return Err(RouterBuildError::AmbiguousProtocolOrder {
+                return Err(ProtocolResolutionError::AmbiguousOrder {
                     first: registrations[first].protocol_id().to_string(),
                     second: registrations[second].protocol_id().to_string(),
-                });
+                }
+                .into());
             }
         }
     }

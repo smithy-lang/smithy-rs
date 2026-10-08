@@ -141,28 +141,43 @@ pub struct RouterBuildContext<'a> {
     pub protocol_settings: Option<&'a Document>,
 }
 
-/// Invalid schema, bindings, or protocol-specific routing configuration.
+/// Failure to bind handlers, resolve protocols, or construct service routing.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum RouterBuildError {
-    #[error("no protocol registration recognizes the service schema")]
-    UnknownProtocol,
-    /// Declared service protocols without a runtime registration, in declaration order.
-    #[error("missing protocol registrations: {}", .protocols.join(", "))]
-    MissingProtocols { protocols: Vec<String> },
+    /// Invalid or missing operation handler bindings.
     #[error("invalid operation binding: {0}")]
     Binding(String),
+    /// Invalid service configuration, protocol settings, or schema bindings.
     #[error("invalid routing configuration: {0}")]
     Configuration(String),
+    /// Protocol registration or claim ordering could not be resolved.
+    #[error("{0}")]
+    ProtocolResolution(#[from] ProtocolResolutionError),
+    /// A protocol reported a failure while constructing itself or its router.
+    #[error("protocol or router construction failed: {0}")]
+    Protocol(#[source] BoxError),
+}
+
+/// Failure to resolve a service's protocol registrations or claim ordering.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum ProtocolResolutionError {
+    /// The service schema declares no protocols.
+    #[error("the service schema declares no protocols")]
+    NoProtocolsDeclared,
+    /// Declared service protocols without a runtime registration, in declaration order.
+    #[error("missing protocol registrations: {}", .protocols.join(", "))]
+    MissingRegistrations { protocols: Vec<String> },
+    /// The same protocol is registered more than once.
+    #[error("protocol {protocol} is registered more than once")]
+    DuplicateRegistration { protocol: String },
     /// Registered protocols participating in ordering cycles, in registration order.
     #[error("protocol ordering constraints form a cycle involving: {}", .protocols.join(", "))]
-    ProtocolOrderCycle { protocols: Vec<String> },
-    #[error("protocol {protocol} is registered more than once")]
-    DuplicateProtocol { protocol: String },
+    OrderCycle { protocols: Vec<String> },
+    /// Two served protocols have no ordering constraint relating them.
     #[error("no ordering constraint relates protocols {first} and {second}; add a `ProtocolOrder` between them")]
-    AmbiguousProtocolOrder { first: String, second: String },
-    #[error("protocol could not build its router: {0}")]
-    Protocol(#[source] BoxError),
+    AmbiguousOrder { first: String, second: String },
 }
 
 /// A protocol's answer to whether a request is its own.

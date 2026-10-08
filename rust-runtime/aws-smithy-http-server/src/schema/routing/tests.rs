@@ -532,7 +532,7 @@ fn binding_and_protocol_validation() {
     ));
     assert!(matches!(
         MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings(&SERVICE, [], [binding(&FIRST), binding(&SECOND)]).build(),
-        Err(RouterBuildError::MissingProtocols { protocols }) if protocols == ["test#bodyRouting"]
+        Err(RouterBuildError::ProtocolResolution(ProtocolResolutionError::MissingRegistrations { protocols })) if protocols == ["test#bodyRouting"]
     ));
     static NONE: ServiceSchema<'static> = ServiceSchema::new(SERVICE_ID, None, &[], OPERATIONS);
     static MANY: ServiceSchema<'static> = ServiceSchema::new(
@@ -551,7 +551,9 @@ fn binding_and_protocol_validation() {
             [binding(&FIRST), binding(&SECOND)]
         )
         .build(),
-        Err(RouterBuildError::UnknownProtocol)
+        Err(RouterBuildError::ProtocolResolution(
+            ProtocolResolutionError::NoProtocolsDeclared
+        ))
     ));
     let many = MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings(
         &MANY,
@@ -593,9 +595,15 @@ fn partially_registered_service_reports_every_missing_protocol_before_building()
         error.to_string(),
         "missing protocol registrations: test#unregisteredFirst, test#unregisteredSecond"
     );
+    let source = std::error::Error::source(&error).expect("protocol resolution retains its typed error source");
+    assert!(matches!(
+        source.downcast_ref::<ProtocolResolutionError>(),
+        Some(ProtocolResolutionError::MissingRegistrations { protocols })
+            if protocols == &["test#unregisteredFirst", "test#unregisteredSecond"]
+    ));
     assert!(matches!(
         error,
-        RouterBuildError::MissingProtocols { protocols }
+        RouterBuildError::ProtocolResolution(ProtocolResolutionError::MissingRegistrations { protocols })
             if protocols == ["test#unregisteredFirst", "test#unregisteredSecond"]
     ));
 }
@@ -1899,7 +1907,10 @@ mod multi_protocol {
         .build()
         .unwrap_err();
         assert!(
-            matches!(error, RouterBuildError::AmbiguousProtocolOrder { .. }),
+            matches!(
+                error,
+                RouterBuildError::ProtocolResolution(ProtocolResolutionError::AmbiguousOrder { .. })
+            ),
             "{error}"
         );
     }
@@ -1913,7 +1924,9 @@ mod multi_protocol {
         )
         .build()
         .unwrap_err();
-        assert!(matches!(error, RouterBuildError::DuplicateProtocol { protocol } if protocol == "test#bodyRouting"),);
+        assert!(
+            matches!(error, RouterBuildError::ProtocolResolution(ProtocolResolutionError::DuplicateRegistration { protocol }) if protocol == "test#bodyRouting"),
+        );
     }
 
     #[test]
@@ -2591,7 +2604,7 @@ mod multi_protocol {
         );
         assert!(matches!(
             error,
-            RouterBuildError::ProtocolOrderCycle { protocols }
+            RouterBuildError::ProtocolResolution(ProtocolResolutionError::OrderCycle { protocols })
                 if protocols == ["aws.protocols#restJson1", "test#bodyRouting"]
         ));
         // A constraint against an unserved protocol still orders the served ones transitively:
@@ -2618,7 +2631,7 @@ mod multi_protocol {
         .unwrap_err();
         assert!(matches!(
             error,
-            RouterBuildError::ProtocolOrderCycle { protocols }
+            RouterBuildError::ProtocolResolution(ProtocolResolutionError::OrderCycle { protocols })
                 if protocols == ["aws.protocols#restJson1", "aws.protocols#restXml", "test#bodyRouting"]
         ));
     }
@@ -2635,7 +2648,7 @@ mod multi_protocol {
         .unwrap_err();
         assert!(matches!(
             error,
-            RouterBuildError::ProtocolOrderCycle { protocols } if protocols == ["test#bodyRouting"]
+            RouterBuildError::ProtocolResolution(ProtocolResolutionError::OrderCycle { protocols }) if protocols == ["test#bodyRouting"]
         ));
     }
 }
