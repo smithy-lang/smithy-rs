@@ -16,6 +16,6 @@ Measured with the crate's `sigv4a` benchmark on a Xeon Platinum 8375C:
 |---|---|---|
 | `generate_signing_key` | 145 µs | 0.47 µs |
 | `calculate_signature` | 316 µs | 171 µs |
-| full `http_request::sign` | 465 µs | 178 µs |
+| full `http_request::sign` | 467 µs | 177 µs |
 
 What remains is the signature's own scalar multiplication.
