@@ -317,6 +317,12 @@ impl NodeObject {
     }
 }
 
+impl NodeObject {
+    pub(crate) fn into_entries(self) -> impl Iterator<Item = (String, Node)> {
+        self.0.into_iter()
+    }
+}
+
 impl Hash for NodeObject {
     fn hash<H: Hasher>(&self, state: &mut H) {
         // Order-independent: combine per-entry hashes commutatively.
@@ -520,6 +526,7 @@ impl Serialize for NodeObject {
 pub(crate) enum ParseAbort {
     DuplicateKey(String),
     DepthLimit(usize),
+    ShapeLimit(usize),
 }
 
 /// Shared state for one parse: limits and the first structural abort reason.
@@ -541,6 +548,7 @@ impl ParseContext {
         let message = match &abort {
             ParseAbort::DuplicateKey(key) => format!("duplicate object key `{key}`"),
             ParseAbort::DepthLimit(max) => format!("nesting exceeds the maximum depth of {max}"),
+            ParseAbort::ShapeLimit(max) => format!("document exceeds the maximum of {max} shapes"),
         };
         self.abort.borrow_mut().get_or_insert(abort);
         E::custom(message)

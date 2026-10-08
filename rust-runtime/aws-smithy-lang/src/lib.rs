@@ -13,6 +13,9 @@
     rust_2018_idioms
 )]
 
+mod ast;
 pub mod diagnostic;
+pub mod loader;
 pub mod node;
+pub mod shape;
 pub mod shape_id;

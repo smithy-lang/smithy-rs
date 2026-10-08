@@ -94,6 +94,14 @@ impl SourceLocation {
         self
     }
 
+    /// A location for `suffix` (an already-escaped pointer suffix such as `/members/a`)
+    /// relative to this location.
+    pub(crate) fn child(&self, suffix: &str) -> Self {
+        let mut child = self.clone();
+        child.pointer = Some(format!("{}{suffix}", self.pointer.as_deref().unwrap_or("")));
+        child
+    }
+
     /// The caller-supplied source label, such as a file name.
     pub fn source(&self) -> &str {
         &self.source
