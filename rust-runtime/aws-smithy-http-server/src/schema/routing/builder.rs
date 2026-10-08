@@ -7,7 +7,7 @@
 
 use super::service::{BoundHandler, ProtocolAndRouter, RoutingState};
 use super::{
-    MultiProtocolRoutingService, OperationTarget, RouterBuildContext, RouterBuildError, RoutingOptions,
+    MultiProtocolRoutingService, OperationTarget, ProtocolOptions, RouterBuildContext, RouterBuildError,
     SharedProtocolRouter,
 };
 use crate::{
@@ -34,7 +34,7 @@ pub struct MultiProtocolRoutingServiceBuilder<B = hyper::body::Incoming, L = Ide
         &'static OperationSchema<'static>,
         SyncRoute<crate::body::RequestBody<B>>,
     )>,
-    options: RoutingOptions,
+    options: ProtocolOptions,
     layer: L,
 }
 
@@ -45,7 +45,7 @@ impl<B> MultiProtocolRoutingServiceBuilder<B> {
             service,
             registries: Vec::new(),
             bindings: Vec::new(),
-            options: RoutingOptions::default(),
+            options: ProtocolOptions::default(),
             layer: Identity::new(),
         }
     }
@@ -66,7 +66,7 @@ impl<B> MultiProtocolRoutingServiceBuilder<B> {
             .operation_handler_bindings(bindings)
     }
 
-    /// Collects operation bindings, external registries, and routing options.
+    /// Collects operation bindings, external registries, and protocol options.
     pub fn from_operation_handler_bindings_with_options(
         service: &'static ServiceSchema<'static>,
         registries: impl IntoIterator<Item = &'static ProtocolRegistry>,
@@ -76,7 +76,7 @@ impl<B> MultiProtocolRoutingServiceBuilder<B> {
                 SyncRoute<crate::body::RequestBody<B>>,
             ),
         >,
-        options: RoutingOptions,
+        options: ProtocolOptions,
     ) -> Self {
         Self::from_operation_handler_bindings(service, registries, bindings).options(options)
     }
@@ -103,8 +103,8 @@ impl<B, L> MultiProtocolRoutingServiceBuilder<B, L> {
         self
     }
 
-    /// Replaces the routing options.
-    pub fn options(mut self, options: RoutingOptions) -> Self {
+    /// Replaces the protocol options.
+    pub fn options(mut self, options: ProtocolOptions) -> Self {
         self.options = options;
         self
     }
@@ -139,14 +139,9 @@ impl<B, L> MultiProtocolRoutingServiceBuilder<B, L> {
             service,
             registries,
             bindings,
-            mut options,
+            options,
             layer,
         } = self;
-        options.request_body = std::mem::take(&mut options.request_body).with_global_settings(
-            options
-                .protocol_settings
-                .get(crate::schema::settings::GLOBAL_SETTINGS_KEY),
-        )?;
         let resolved = resolve_protocols(service, registries, &options)?;
         let mut seen = HashSet::new();
         for (operation, _) in &bindings {
@@ -163,7 +158,7 @@ impl<B, L> MultiProtocolRoutingServiceBuilder<B, L> {
         if seen.len() != service.operations().len() {
             return Err(RouterBuildError::Binding("duplicate service operation schemas".into()));
         }
-        for id in options.request_body.per_operation.keys() {
+        for id in options.service_config.request_body.per_operation.keys() {
             if !seen.contains(id.as_str()) {
                 return Err(RouterBuildError::Configuration(format!("unknown operation {id}")));
             }
@@ -190,7 +185,7 @@ impl<B, L> MultiProtocolRoutingServiceBuilder<B, L> {
                 RouterBuildContext {
                     service,
                     targets: &targets,
-                    config: &options.request_body,
+                    config: &options.service_config,
                     protocol_settings: options.protocol_settings.get(protocol.protocol_id().as_str()),
                 },
                 &non_streaming,
@@ -211,7 +206,7 @@ impl<B, L> MultiProtocolRoutingServiceBuilder<B, L> {
             .into_iter()
             .map(|(operation, route)| BoundHandler {
                 operation,
-                collection_config: options.request_body.for_operation(operation.shape_id()),
+                collection_config: options.service_config.request_body.for_operation(operation.shape_id()),
                 handler_route: SyncRoute::new(layer.layer(route)),
             })
             .collect();
@@ -220,7 +215,7 @@ impl<B, L> MultiProtocolRoutingServiceBuilder<B, L> {
                 protocols: protocols.into(),
                 metadata_routers,
                 handlers: bindings,
-                body_collection_config: options.request_body.for_routing(),
+                body_collection_config: options.service_config.request_body.for_routing(),
             }),
         })
     }
@@ -236,7 +231,7 @@ impl<B, L> MultiProtocolRoutingServiceBuilder<B, L> {
 fn resolve_protocols(
     service: &'static ServiceSchema<'static>,
     registries: impl IntoIterator<Item = &'static ProtocolRegistry>,
-    options: &RoutingOptions,
+    options: &ProtocolOptions,
 ) -> Result<Vec<SharedServerProtocol>, RouterBuildError> {
     let mut registrations: Vec<ProtocolRegistration> = Vec::new();
     registrations.extend_from_slice(ProtocolRegistry::BUILTIN.registrations());
@@ -353,12 +348,8 @@ fn resolve_protocols(
         .map(|index| {
             let registration = &registrations[index];
             let context = ProtocolBuildContext::new(service)
-                .with_settings(options.protocol_settings.get(registration.protocol_id()))
-                .with_global(
-                    options
-                        .protocol_settings
-                        .get(crate::schema::settings::GLOBAL_SETTINGS_KEY),
-                );
+                .with_config(&options.service_config)
+                .with_settings(options.protocol_settings.get(registration.protocol_id()));
             registration.build(&context)
         })
         .collect()

@@ -16,7 +16,7 @@ pub struct PokemonServiceBuilder<L, HttpPl, ModelPl> {
     layer: L,
     http_plugin: HttpPl,
     model_plugin: ModelPl,
-    routing_options: ::aws_smithy_http_server::schema::routing::RoutingOptions,
+    routing_options: ::aws_smithy_http_server::schema::routing::ProtocolOptions,
 }
 
 impl<L, HttpPl, ModelPl> PokemonServiceBuilder<L, HttpPl, ModelPl> {
@@ -1244,12 +1244,16 @@ impl PokemonService<()> {
             routing_options: Self::routing_options(),
         }
     }
-    fn routing_options() -> ::aws_smithy_http_server::schema::routing::RoutingOptions {
-        ::aws_smithy_http_server::schema::routing::RoutingOptions::default()
-            .with_request_body(
-                ::aws_smithy_http_server::schema::ServiceRequestBodyConfig::default().with_global(
-                    ::aws_smithy_http_server::schema::RequestBodyCollectionConfig::default()
-                        .with_max_bytes(::std::option::Option::None),
+    fn routing_options() -> ::aws_smithy_http_server::schema::routing::ProtocolOptions {
+        ::aws_smithy_http_server::schema::routing::ProtocolOptions::default()
+            .with_service_config(
+                ::aws_smithy_http_server::schema::ServiceConfig::default().with_request_body(
+                    ::aws_smithy_http_server::schema::ServiceRequestBodyConfig::default()
+                        .with_global(
+                            ::aws_smithy_http_server::schema::RequestBodyCollectionConfig::default(
+                            )
+                            .with_max_bytes(::std::num::NonZeroUsize::new(0usize)),
+                        ),
                 ),
             )
             .with_protocol_settings(::std::collections::HashMap::from([]))
@@ -1291,11 +1295,14 @@ impl PokemonService<()> {
 }
 impl<L, HttpPl, ModelPl> PokemonServiceBuilder<L, HttpPl, ModelPl> {
     /// Replaces the global and per-operation body collection configuration.
+    ///
+    /// Replaces the default from `customizationConfig.protocols.global.requestBodyMaxBytes`.
+    /// A configuration that sets no global byte limit allows any body size.
     pub fn request_body_config(
         mut self,
         config: ::aws_smithy_http_server::schema::ServiceRequestBodyConfig,
     ) -> Self {
-        self.routing_options.request_body = config;
+        self.routing_options.service_config.request_body = config;
         self
     }
 }

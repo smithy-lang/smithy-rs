@@ -461,9 +461,6 @@ pub trait BodyRoutedProtocol: ServerProtocol + Sized {
     ) -> Result<impl crate::schema::routing::BodyProtocolRouter + 'static + use<Self>, RouterBuildError>;
 }
 
-/// The key in the shared settings section that sets the default request body byte limit.
-const REQUEST_BODY_MAX_BYTES_KEY: &str = "requestBodyMaxBytes";
-
 /// Converts a body collection failure into the protocol's rejection response, retaining
 /// legacy wire behavior: the failure surfaces as an ordinary request-deserialization error.
 pub(crate) fn body_collection_rejection(
@@ -508,30 +505,6 @@ impl ServiceRequestBodyConfig {
     pub fn with_global(mut self, global: RequestBodyCollectionConfig) -> Self {
         self.global = global;
         self
-    }
-
-    /// Applies the shared settings section, `customizationConfig.protocols.global`.
-    ///
-    /// Its `requestBodyMaxBytes` becomes the default byte limit unless this configuration
-    /// already sets one. An absent key, or `0`, means no limit.
-    pub fn with_global_settings(
-        mut self,
-        global: Option<&aws_smithy_types::Document>,
-    ) -> Result<Self, crate::schema::routing::RouterBuildError> {
-        let max_bytes = crate::schema::settings::get::<u64>(global, REQUEST_BODY_MAX_BYTES_KEY)?
-            .map(|max_bytes| {
-                usize::try_from(max_bytes).map_err(|_| {
-                    crate::schema::routing::RouterBuildError::Configuration(format!(
-                        "protocol setting `{REQUEST_BODY_MAX_BYTES_KEY}` does not fit in usize, got {max_bytes}"
-                    ))
-                })
-            })
-            .transpose()?
-            .and_then(NonZeroUsize::new);
-        if self.global.max_bytes.is_none() {
-            self.global.max_bytes = max_bytes;
-        }
-        Ok(self)
     }
 
     /// Sets operation overrides, keyed by operation shape ID.

@@ -9,6 +9,7 @@ import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
@@ -30,6 +31,7 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRpcV2CborProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Error as ErrorModule
@@ -573,7 +575,7 @@ class ServerServiceGenerator(
                     layer: L,
                     http_plugin: HttpPl,
                     model_plugin: ModelPl,
-                    ${if (schemaSerde) "routing_options: #{SmithyHttpServer}::schema::routing::RoutingOptions," else ""}
+                    ${if (schemaSerde) "routing_options: #{SmithyHttpServer}::schema::routing::ProtocolOptions," else ""}
                 }
 
                 impl<$builderGenerics> $builderName<$builderGenerics> {
@@ -885,20 +887,24 @@ class ServerServiceGenerator(
 
     private fun schemaServiceStruct(): Writable =
         writable {
-            // `customizationConfig.protocols` sections travel verbatim as JSON byte-strings,
-            // parsed once into `Document`s when the builder is constructed. `#` in the JSON
-            // (shape IDs) must be escaped for the template.
+            // Protocol sections use shape IDs and are parsed once into Documents. The global
+            // body limit is emitted directly into the typed request body configuration.
             val protocolSettings =
-                codegenContext.settings.protocolSettings().entries.map { (protocolId, section) ->
-                    writable {
-                        val id = protocolId.replace("#", "##").dq()
-                        val json = Node.printJson(section).replace("#", "##")
-                        rustTemplate(
-                            "($id.to_owned(), #{SmithyHttpServer}::schema::settings::parse_settings_json(br####\"$json\"####))",
-                            *codegenScope,
-                        )
-                    }
-                }.join(",")
+                codegenContext.settings.protocolSettings()
+                    .filterKeys { it != ServerRustSettings.GLOBAL_PROTOCOL_SETTINGS_KEY }
+                    .entries.map { (protocolId, section) ->
+                        val shapeId = ShapeId.from(protocolId)
+                        require(!shapeId.hasMember()) { "Protocol settings must be keyed by a protocol shape ID: $protocolId" }
+                        writable {
+                            val id = protocolId.replace("#", "##").dq()
+                            val json = Node.printJson(section).replace("#", "##")
+                            rustTemplate(
+                                "(#{ShapeId}::from_parts($id, ${shapeId.namespace.dq()}, ${shapeId.name.dq()}), #{SmithyHttpServer}::schema::settings::parse_settings_json(br####\"$json\"####))",
+                                "ShapeId" to RuntimeType.smithySchema(runtimeConfig).resolve("ShapeId"),
+                                *codegenScope,
+                            )
+                        }
+                    }.join(",")
             rustTemplate(
                 """
                 /// Failure to bind handlers or construct schema routing.
@@ -932,8 +938,12 @@ class ServerServiceGenerator(
                             routing_options: Self::routing_options(),
                         }
                     }
-                    fn routing_options() -> #{SmithyHttpServer}::schema::routing::RoutingOptions {
-                        #{SmithyHttpServer}::schema::routing::RoutingOptions::default()
+                    fn routing_options() -> #{SmithyHttpServer}::schema::routing::ProtocolOptions {
+                        #{SmithyHttpServer}::schema::routing::ProtocolOptions::default()
+                            .with_service_config(#{SmithyHttpServer}::schema::ServiceConfig::default()
+                                .with_request_body(#{SmithyHttpServer}::schema::ServiceRequestBodyConfig::default()
+                                    .with_global(#{SmithyHttpServer}::schema::RequestBodyCollectionConfig::default()
+                                        .with_max_bytes(::std::num::NonZeroUsize::new(${codegenContext.settings.requestBodyMaxBytes()}usize)))))
                             .with_protocol_settings(::std::collections::HashMap::from([#{ProtocolSettings}]))
                     }
                     ##[deprecated(note = "use builder with a service configuration")]
@@ -955,10 +965,10 @@ class ServerServiceGenerator(
                 impl<L, HttpPl, ModelPl> $builderName<L, HttpPl, ModelPl> {
                     /// Replaces the global and per-operation body collection configuration.
                     ///
-                    /// A configuration that sets no global byte limit keeps the one from
-                    /// `customizationConfig.protocols.global.requestBodyMaxBytes`.
+                    /// Replaces the default from `customizationConfig.protocols.global.requestBodyMaxBytes`.
+                    /// A configuration that sets no global byte limit allows any body size.
                     pub fn request_body_config(mut self, config: #{SmithyHttpServer}::schema::ServiceRequestBodyConfig) -> Self {
-                        self.routing_options.request_body = config;
+                        self.routing_options.service_config.request_body = config;
                         self
                     }
                 }

@@ -61,9 +61,9 @@ data class ServerRustSettings(
      * The per-protocol settings under `customizationConfig.protocols`, keyed by protocol shape ID,
      * with the legacy `codegen.rpcV2CborAddCapitalizedRoute` flag folded in.
      *
-     * Each section is passed through to the generated `RoutingOptions` verbatim: the protocol it
-     * names parses it when building its router, so protocol authors add settings without codegen
-     * changes. Codegen only requires each section to be a JSON object.
+     * Protocol sections are passed through to the generated `ProtocolOptions` as documents keyed
+     * by shape ID. The global request body limit is emitted as typed body configuration instead.
+     * Protocol authors parse their own documents when constructing their protocol or router.
      */
     fun protocolSettings(): Map<String, ObjectNode> {
         val sections =
@@ -101,21 +101,23 @@ data class ServerRustSettings(
      * limit, which allows memory exhaustion via `Transfer-Encoding: chunked` or very large
      * `Content-Length` values; services should set a positive value.
      *
-     * The schema routing path reads the same key from the `global` section at runtime. This
-     * accessor serves the generators that fix the limit at generation time.
+     * Both the schema routing path and legacy generators read this at generation time.
+     * Schema routing stores the result in its typed request body configuration.
      */
-    fun requestBodyMaxBytes(): Long =
-        (
+    fun requestBodyMaxBytes(): Long {
+        val key = "$CUSTOMIZATION_CONFIG_KEY.$PROTOCOLS_CUSTOMIZATION_KEY.$GLOBAL_PROTOCOL_SETTINGS_KEY.$REQUEST_BODY_MAX_BYTES_KEY"
+        val value =
             protocolSettings()[GLOBAL_PROTOCOL_SETTINGS_KEY]
-                ?.getNumberMemberOrDefault(REQUEST_BODY_MAX_BYTES_KEY, 0L)
-                ?.toLong()
-                ?: 0L
-        ).also {
-            require(it >= 0) {
-                "`$CUSTOMIZATION_CONFIG_KEY.$PROTOCOLS_CUSTOMIZATION_KEY.$GLOBAL_PROTOCOL_SETTINGS_KEY.$REQUEST_BODY_MAX_BYTES_KEY` " +
-                    "must be non-negative, got $it"
+                ?.getNumberMemberOrDefault(REQUEST_BODY_MAX_BYTES_KEY, 0L) ?: 0L
+        val maxBytes =
+            try {
+                value.toString().toBigDecimal().longValueExact()
+            } catch (error: ArithmeticException) {
+                throw IllegalArgumentException("`$key` must be an integer that fits in a Long, got $value", error)
             }
-        }
+        require(maxBytes >= 0) { "`$key` must be non-negative, got $maxBytes" }
+        return maxBytes
+    }
 
     /**
      * The effective RPCv2 CBOR capitalized-route-alias value, honored by both the legacy router

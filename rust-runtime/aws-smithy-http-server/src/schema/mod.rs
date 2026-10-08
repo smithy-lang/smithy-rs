@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+mod config;
 mod deserialize;
 pub mod event_stream;
 mod modeled_error;
@@ -14,6 +15,7 @@ mod service;
 pub mod settings;
 mod timestamp;
 
+pub use config::ServiceConfig;
 pub use deserialize::{DeserializableShape, DeserializeError};
 pub use event_stream::InitialResponsePolicy;
 pub use modeled_error::HttpModeledError;

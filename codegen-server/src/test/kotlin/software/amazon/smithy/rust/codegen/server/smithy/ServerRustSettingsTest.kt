@@ -74,6 +74,18 @@ internal class ServerRustSettingsTest {
     }
 
     @Test
+    fun `invalid request body limits are rejected during codegen`() {
+        for (value in listOf("1.5", "9223372036854775808", "true", "null", "\"8\"")) {
+            shouldThrow<Exception> {
+                settings("", """{ "protocols": { "global": { "requestBodyMaxBytes": $value } } }""")
+            }
+        }
+        shouldThrow<Exception> {
+            settings("", """{ "protocols": { "global": "not an object" } }""")
+        }
+    }
+
+    @Test
     fun `protocol settings pass through arbitrary sections keyed by protocol shape ID`() {
         val sections =
             settings(

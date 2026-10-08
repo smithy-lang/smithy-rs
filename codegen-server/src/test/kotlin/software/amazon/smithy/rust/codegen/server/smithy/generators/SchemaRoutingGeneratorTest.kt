@@ -298,7 +298,7 @@ class SchemaRoutingGeneratorTest {
                                         }
                                         ${
                                         if (bodyRouting) {
-                                            """
+                                    """
                                         impl #{Server}::schema::BodyRoutedProtocol for TestProtocol {
                                             fn from_build_context(_ctx: &ProtocolBuildContext<'_>) -> #{Result}<Self, RouterBuildError> {
                                                 #{Ok}(TestProtocol)
@@ -312,8 +312,8 @@ class SchemaRoutingGeneratorTest {
                                             ProtocolRegistration::body_routed::<TestProtocol>("test##bodyRouting"),
                                         ]);
                             """
-                                        } else {
-                                            """
+                            } else {
+                            """
                                         impl #{Server}::schema::MetadataRoutedProtocol for TestProtocol {
                                             fn from_build_context(_ctx: &ProtocolBuildContext<'_>) -> #{Result}<Self, RouterBuildError> {
                                                 #{Ok}(TestProtocol)
@@ -329,11 +329,11 @@ class SchemaRoutingGeneratorTest {
                                             ProtocolRegistration::metadata_routed::<TestProtocol>("test##bodyRouting"),
                                         ]);
                             """
-                                        }
-                                    }
-                                        &REGISTRY
-                                    }
-                                    """,
+                            }
+                            }
+                            &REGISTRY
+                            }
+                            """,
                                     "Server" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
                                     "Schema" to RuntimeType.smithySchema(codegenContext.runtimeConfig),
                                     "Http" to RuntimeType.http(codegenContext.runtimeConfig),
@@ -463,7 +463,7 @@ class SchemaRoutingGeneratorTest {
                                 "smithy.protocols#rpcv2Cbor",
                                 ObjectNode.builder().withMember("capitalizeRoutes", true).build(),
                             )
-                            // The shared section; the runtime applies its body limit to every protocol.
+                            // Codegen translates this into typed body configuration for every protocol.
                             .withMember("global", ObjectNode.builder().withMember("requestBodyMaxBytes", 64).build())
                             // An unrelated protocol's section passes through without being consulted.
                             .withMember(
@@ -529,9 +529,18 @@ class SchemaRoutingGeneratorTest {
                         };
                         let limited = builder().build().unwrap();
                         assert_eq!(limited.oneshot(request()).await.unwrap().status(), 400);
+                        // Replacing the body configuration can explicitly remove the generated limit.
+                        let unlimited = builder()
+                            .request_body_config(#{Server}::schema::ServiceRequestBodyConfig::default())
+                            .build()
+                            .unwrap();
+                        assert_eq!(unlimited.oneshot(request()).await.unwrap().status(), 200);
                         // An operation override lifts the limit, so the payload itself is acceptable.
                         let lifted = builder()
-                            .request_body_config(#{Server}::schema::ServiceRequestBodyConfig::default().with_per_operation(
+                            .request_body_config(#{Server}::schema::ServiceRequestBodyConfig::default()
+                                .with_global(#{Server}::schema::RequestBodyCollectionConfig::default()
+                                    .with_max_bytes(::std::num::NonZeroUsize::new(64)))
+                                .with_per_operation(
                                 [("test##getFoo".to_owned(), #{Server}::schema::RequestBodyCollectionConfig::default())].into(),
                             ))
                             .build()

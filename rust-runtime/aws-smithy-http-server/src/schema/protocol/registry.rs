@@ -34,7 +34,7 @@
 use aws_smithy_types::Document;
 
 use crate::schema::routing::RouterBuildError;
-use crate::schema::ServiceSchema;
+use crate::schema::{ServiceConfig, ServiceSchema};
 
 use super::{BodyRoutedProtocol, MetadataRoutedProtocol, SharedServerProtocol};
 
@@ -57,31 +57,32 @@ pub enum ProtocolOrder {
 pub struct ProtocolBuildContext<'a> {
     /// The service schema the protocol is being built for.
     pub service: &'static ServiceSchema<'static>,
+    /// Typed service-wide configuration shared by every protocol.
+    pub config: &'a ServiceConfig,
     /// This protocol's own section from `customizationConfig.protocols.<its shape ID>`.
     pub settings: Option<&'a Document>,
-    /// The shared section every protocol may read: `customizationConfig.protocols.global`.
-    pub global: Option<&'a Document>,
 }
 
 impl<'a> ProtocolBuildContext<'a> {
-    /// Creates a context with no settings, for tests and manual construction.
+    /// Creates a context with default service configuration and no protocol settings.
     pub fn new(service: &'static ServiceSchema<'static>) -> Self {
+        static DEFAULT_CONFIG: std::sync::LazyLock<ServiceConfig> = std::sync::LazyLock::new(ServiceConfig::default);
         Self {
             service,
+            config: &DEFAULT_CONFIG,
             settings: None,
-            global: None,
         }
+    }
+
+    /// Sets the service-wide configuration.
+    pub fn with_config(mut self, config: &'a ServiceConfig) -> Self {
+        self.config = config;
+        self
     }
 
     /// Sets the protocol's own settings section.
     pub fn with_settings(mut self, settings: Option<&'a Document>) -> Self {
         self.settings = settings;
-        self
-    }
-
-    /// Sets the shared settings section.
-    pub fn with_global(mut self, global: Option<&'a Document>) -> Self {
-        self.global = global;
         self
     }
 }

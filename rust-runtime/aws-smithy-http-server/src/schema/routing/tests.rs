@@ -70,6 +70,7 @@ static RPC: ServiceSchema<'static> = ServiceSchema::new(
 #[derive(Debug, Default)]
 struct BodyProtocol {
     inner: crate::schema::protocol::RestJson1Protocol,
+    factory_body_config: Option<RequestBodyCollectionConfig>,
 }
 #[derive(Debug)]
 struct BodyRouter {
@@ -154,13 +155,19 @@ impl BodyProtocolRouter for BodyRouter {
     }
 }
 impl crate::schema::BodyRoutedProtocol for BodyProtocol {
-    fn from_build_context(_ctx: &crate::schema::ProtocolBuildContext<'_>) -> Result<Self, RouterBuildError> {
-        Ok(BodyProtocol::default())
+    fn from_build_context(ctx: &crate::schema::ProtocolBuildContext<'_>) -> Result<Self, RouterBuildError> {
+        Ok(Self {
+            factory_body_config: Some(ctx.config.request_body.global),
+            ..Default::default()
+        })
     }
     fn build_router(
         &self,
         ctx: RouterBuildContext<'_>,
     ) -> Result<impl BodyProtocolRouter + 'static + use<>, RouterBuildError> {
+        if let Some(config) = self.factory_body_config {
+            assert_eq!(config, ctx.config.request_body.global);
+        }
         Ok(BodyRouter {
             targets: ctx.targets.to_vec(),
         })
@@ -224,7 +231,7 @@ fn binding(operation: &'static OperationSchema<'static>) -> (&'static OperationS
         })),
     )
 }
-fn service_builder(options: RoutingOptions) -> MultiProtocolRoutingServiceBuilder {
+fn service_builder(options: ProtocolOptions) -> MultiProtocolRoutingServiceBuilder {
     MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings_with_options(
         &SERVICE,
         [registry()],
@@ -232,7 +239,7 @@ fn service_builder(options: RoutingOptions) -> MultiProtocolRoutingServiceBuilde
         options,
     )
 }
-fn service(options: RoutingOptions) -> MultiProtocolRoutingService {
+fn service(options: ProtocolOptions) -> MultiProtocolRoutingService {
     service_builder(options).build().unwrap()
 }
 
@@ -248,11 +255,11 @@ fn request(body: impl Into<Bytes>) -> Request<Body> {
 
 #[tokio::test]
 async fn separately_built_layers_leave_existing_services_and_requests_unchanged() {
-    let mut original = service(RoutingOptions::default());
+    let mut original = service(ProtocolOptions::default());
     let cloned = original.clone();
     assert!(Arc::ptr_eq(&original.state, &cloned.state));
     let pending = original.call(request("first\npayload"));
-    let layered = service_builder(RoutingOptions::default())
+    let layered = service_builder(ProtocolOptions::default())
         .layer(tower::layer::layer_fn(|route: SyncRoute<Body>| {
             tower::util::MapResponse::new(route, |mut response: Response<BoxBody>| {
                 response
@@ -292,14 +299,14 @@ async fn body_selects_index_and_preserves_payload_and_trailers() {
         Ok(Frame::trailers(trailers.clone())),
     ];
     let body = Body::new(http_body_util::StreamBody::new(futures_util::stream::iter(frames)));
-    let response = service(RoutingOptions::default())
+    let response = service(ProtocolOptions::default())
         .oneshot(Request::new(body))
         .await
         .unwrap();
     let collected = response.into_body().collect().await.unwrap();
     assert_eq!(collected.trailers(), Some(&trailers));
     assert_eq!(collected.to_bytes(), "first\n123");
-    let response = service(RoutingOptions::default())
+    let response = service(ProtocolOptions::default())
         .oneshot(request("second\npayload"))
         .await
         .unwrap();
@@ -370,20 +377,25 @@ async fn malformed_and_unknown_operation_are_terminal_rejections() {
         (Bytes::from_static(b"\xff\n"), StatusCode::BAD_REQUEST),
         (Bytes::from_static(b"unknown\n"), StatusCode::NOT_FOUND),
     ] {
-        let response = service(RoutingOptions::default()).oneshot(request(body)).await.unwrap();
+        let response = service(ProtocolOptions::default())
+            .oneshot(request(body))
+            .await
+            .unwrap();
         assert_eq!(response.status(), status);
     }
 }
 
 #[tokio::test]
 async fn provisional_maximum_caps_collection_and_is_the_only_routing_limit() {
-    let mut options = RoutingOptions::default();
-    options.request_body.global = config(8, 1000);
+    let mut options = ProtocolOptions::default();
+    options.service_config.request_body.global = config(8, 1000);
     options
+        .service_config
         .request_body
         .per_operation
         .insert(FIRST.shape_id().to_string(), config(64, 1000));
     options
+        .service_config
         .request_body
         .per_operation
         .insert(SECOND.shape_id().to_string(), config(10, 1000));
@@ -410,15 +422,16 @@ async fn provisional_maximum_caps_collection_and_is_the_only_routing_limit() {
 
 #[tokio::test]
 async fn explicit_unlimited_operation_dominates_and_absent_override_inherits_global() {
-    let mut options = RoutingOptions::default();
-    options.request_body.global = config(8, 1000);
+    let mut options = ProtocolOptions::default();
+    options.service_config.request_body.global = config(8, 1000);
     options
+        .service_config
         .request_body
         .per_operation
         .insert(FIRST.shape_id().to_string(), RequestBodyCollectionConfig::default());
     // The provisional allowance the router was built with: an explicit unlimited override
     // dominates the global limit on both axes.
-    let provisional = options.request_body.for_routing();
+    let provisional = options.service_config.request_body.for_routing();
     assert!(provisional.max_bytes.is_none());
     assert!(provisional.read_timeout.is_none());
     let app = service(options);
@@ -446,14 +459,15 @@ fn delayed_body(delay: Duration, bytes: &'static [u8]) -> Body {
 }
 #[tokio::test(start_paused = true)]
 async fn collection_enforces_the_provisional_maximum_timeout() {
-    let mut options = RoutingOptions::default();
-    options.request_body.global = config(64, 50);
+    let mut options = ProtocolOptions::default();
+    options.service_config.request_body.global = config(64, 50);
     options
+        .service_config
         .request_body
         .per_operation
         .insert(FIRST.shape_id().to_string(), config(64, 500));
     assert_eq!(
-        options.request_body.for_routing().read_timeout,
+        options.service_config.request_body.for_routing().read_timeout,
         Some(Duration::from_millis(500))
     );
     let app = service(options);
@@ -491,7 +505,7 @@ async fn body_read_failure_is_owned_by_protocol() {
         Error::new("transport failure"),
     )])));
     assert_eq!(
-        service(RoutingOptions::default())
+        service(ProtocolOptions::default())
             .oneshot(Request::new(body))
             .await
             .unwrap()
@@ -640,9 +654,9 @@ async fn rpc_capitalized_alias_is_a_protocol_setting() {
         (r#"{"capitalizeRoutes":false}"#, StatusCode::NOT_FOUND),
         (r#"{}"#, StatusCode::NOT_FOUND),
     ] {
-        let options = RoutingOptions {
+        let options = ProtocolOptions {
             protocol_settings: HashMap::from([(
-                "smithy.protocols#rpcv2Cbor".to_owned(),
+                shape_id!("smithy.protocols", "rpcv2Cbor"),
                 crate::schema::settings::parse_settings_json(settings.as_bytes()),
             )]),
             ..Default::default()
@@ -692,9 +706,9 @@ fn invalid_protocol_settings_fail_the_build() {
         r#"{"methodNotAllowedAsNotFound":null}"#,
         r#""not an object""#,
     ] {
-        let options = RoutingOptions {
+        let options = ProtocolOptions {
             protocol_settings: HashMap::from([(
-                "smithy.protocols#rpcv2Cbor".to_owned(),
+                shape_id!("smithy.protocols", "rpcv2Cbor"),
                 crate::schema::settings::parse_settings_json(settings.as_bytes()),
             )]),
             ..Default::default()
@@ -712,68 +726,41 @@ fn invalid_protocol_settings_fail_the_build() {
     }
 }
 
-fn global_settings(json: &str) -> RoutingOptions {
-    RoutingOptions::default().with_protocol_settings(HashMap::from([(
-        "global".to_owned(),
-        crate::schema::settings::parse_settings_json(json.as_bytes()),
-    )]))
-}
-
-/// `customizationConfig.protocols.global.requestBodyMaxBytes` is the default byte limit.
 #[tokio::test]
-async fn global_settings_supply_the_default_body_limit() {
+async fn typed_request_body_limits_and_overrides_are_applied() {
     let oversized = || request(format!("first\n{}", "x".repeat(100)));
-    let response = service(global_settings(r#"{"requestBodyMaxBytes":8}"#))
-        .oneshot(oversized())
-        .await
-        .unwrap();
+    let options = || {
+        ProtocolOptions::default().with_service_config(
+            crate::schema::ServiceConfig::default().with_request_body(
+                crate::schema::ServiceRequestBodyConfig::default()
+                    .with_global(RequestBodyCollectionConfig::default().with_max_bytes(NonZeroUsize::new(8))),
+            ),
+        )
+    };
+    let response = service(options()).oneshot(oversized()).await.unwrap();
     assert!(rejection_message(response)
         .await
         .contains("exceeded the configured maximum"));
-    // Absent and zero both mean no limit.
-    for settings in ["{}", r#"{"requestBodyMaxBytes":0}"#] {
-        let response = service(global_settings(settings)).oneshot(oversized()).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK, "{settings}");
-    }
-    // A limit set in code is kept.
-    let mut options = global_settings(r#"{"requestBodyMaxBytes":8}"#);
-    options.request_body.global = config(1024, 1000);
-    let response = service(options).oneshot(oversized()).await.unwrap();
+
+    // Replacing the configuration with its default explicitly allows any body size.
+    let unlimited = options().with_request_body(crate::schema::ServiceRequestBodyConfig::default());
+    let response = service(unlimited).oneshot(oversized()).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    // So is an operation override, which replaces the whole record.
-    let mut options = global_settings(r#"{"requestBodyMaxBytes":8}"#);
-    options
+
+    let mut larger = options();
+    larger.service_config.request_body.global = config(1024, 1000);
+    let response = service(larger).oneshot(oversized()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // An operation override replaces the whole record, including the inherited limit.
+    let mut per_operation = options();
+    per_operation
+        .service_config
         .request_body
         .per_operation
         .insert(FIRST.shape_id().to_string(), RequestBodyCollectionConfig::default());
-    let response = service(options).oneshot(oversized()).await.unwrap();
+    let response = service(per_operation).oneshot(oversized()).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-}
-
-#[test]
-fn invalid_global_settings_fail_the_build() {
-    for settings in [
-        r#"{"requestBodyMaxBytes":"8"}"#,
-        r#"{"requestBodyMaxBytes":-1}"#,
-        r#"{"requestBodyMaxBytes":1.5}"#,
-        r#"{"requestBodyMaxBytes":true}"#,
-        r#""not an object""#,
-    ] {
-        // Reported even when a limit set in code would take precedence.
-        for code_limit in [false, true] {
-            let mut options = global_settings(settings);
-            if code_limit {
-                options.request_body.global = config(1024, 1000);
-            }
-            assert!(
-                matches!(
-                    service_builder(options).build(),
-                    Err(RouterBuildError::Configuration(_))
-                ),
-                "{settings}"
-            );
-        }
-    }
 }
 
 #[tokio::test]
@@ -789,7 +776,10 @@ async fn layers_see_selection_and_do_not_observe_routing_rejections() {
             inner.clone().oneshot(request)
         })
     });
-    let app = service_builder(RoutingOptions::default()).layer(layer).build().unwrap();
+    let app = service_builder(ProtocolOptions::default())
+        .layer(layer)
+        .build()
+        .unwrap();
     assert_eq!(
         app.clone().oneshot(request("first\n")).await.unwrap().status(),
         StatusCode::OK
@@ -821,8 +811,8 @@ async fn ready_body_frames_yield_and_wake_before_collection_finishes() {
                 _ => None,
             })
         });
-        let mut options = RoutingOptions::default();
-        options.request_body.global = config(limit, 1000);
+        let mut options = ProtocolOptions::default();
+        options.service_config.request_body.global = config(limit, 1000);
         let mut app = service(options);
         let mut future = Box::pin(app.call(Request::new(Body::new(http_body_util::StreamBody::new(frames)))));
         let wakes = Arc::new(WakeCount(AtomicUsize::new(0)));
@@ -841,7 +831,7 @@ async fn claim_with_complete_body_can_defer_to_routing() {
         ("unknown\npayload", StatusCode::NOT_FOUND),
         ("", StatusCode::NOT_FOUND),
     ] {
-        let response = service(RoutingOptions::default())
+        let response = service(ProtocolOptions::default())
             .oneshot(
                 Request::builder()
                     .header("x-body-claim", "deferred-route")
@@ -871,7 +861,7 @@ async fn cancelling_body_routing_drops_the_pending_stream() {
         }
     }
     let dropped = Arc::new(AtomicBool::new(false));
-    let mut service = service(RoutingOptions::default());
+    let mut service = service(ProtocolOptions::default());
     let mut future = Box::pin(service.call(Request::new(Body::new(PendingBody(dropped.clone())))));
     let waker = futures_util::task::noop_waker();
     assert!(future.as_mut().poll(&mut Context::from_waker(&waker)).is_pending());
@@ -908,7 +898,7 @@ fn operation_metadata_classifies_streaming_and_cbor_routes_without_an_indexed_ta
     static OUTPUT_EVENT: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &UNIT, &EVENT, &[]);
     static BOTH: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &EVENT, &BLOB, &[]);
 
-    let config = RoutingOptions::default();
+    let config = ProtocolOptions::default();
     for (operation, input, output, blob) in [
         (&FIRST, false, false, false),
         (&INPUT_BLOB, true, false, true),
@@ -928,7 +918,7 @@ fn operation_metadata_classifies_streaming_and_cbor_routes_without_an_indexed_ta
         let router = rpc_v2_cbor_router(&RouterBuildContext {
             service: &REST_JSON,
             targets: &[target],
-            config: &config.request_body,
+            config: &config.service_config,
             protocol_settings: None,
         })
         .unwrap();
@@ -950,12 +940,12 @@ fn operation_metadata_classifies_streaming_and_cbor_routes_without_an_indexed_ta
 
 #[test]
 fn cbor_claim_requires_the_header_post_and_a_known_service_operation() {
-    let options = RoutingOptions::default();
+    let options = ProtocolOptions::default();
     let targets = [OperationTarget::new(0, &FIRST)];
     let router = rpc_v2_cbor_router(&RouterBuildContext {
         service: &RPC,
         targets: &targets,
-        config: &options.request_body,
+        config: &options.service_config,
         protocol_settings: None,
     })
     .unwrap();
@@ -1037,7 +1027,7 @@ async fn a_single_protocol_checks_claims_and_unidentified_requests_remain_neutra
             "<UnknownOperationException/>\n"
         );
     }
-    let response = service(RoutingOptions::default())
+    let response = service(ProtocolOptions::default())
         .oneshot(
             Request::builder()
                 .header("x-body-claim", "defer-head")
@@ -1070,7 +1060,7 @@ async fn inconsistent_operation_identity_is_detected_before_handler_dispatch() {
             RouteClaim::ClaimedWithRoute(self.route(request).unwrap())
         }
     }
-    let mut app = service(RoutingOptions::default()); // Index zero belongs to SECOND.
+    let mut app = service(ProtocolOptions::default()); // Index zero belongs to SECOND.
     Arc::get_mut(&mut app.state).unwrap().protocols = Box::from([ProtocolAndRouter {
         router: SharedProtocolRouter::new(IncorrectRouter),
         protocol: app.state.protocols[0].protocol.clone(),
@@ -1191,7 +1181,7 @@ async fn body_routing_leaves_streaming_operations_unrouted() {
 #[tokio::test]
 async fn buffered_content_is_reused_and_replacements_and_wrappers_are_read() {
     let original = Bytes::from_static(b"first\npayload");
-    let mut app = service_builder(RoutingOptions::default())
+    let mut app = service_builder(ProtocolOptions::default())
         .layer(tower::layer::layer_fn(move |_inner: SyncRoute<Body>| {
             let original = original.clone();
             tower::service_fn(move |request: Request<Body>| {
@@ -1620,8 +1610,8 @@ mod multi_protocol {
                 ),
                 (r#"{"methodNotAllowedAsNotFound":true}"#, StatusCode::NOT_FOUND),
             ] {
-                let options = RoutingOptions::default().with_protocol_settings(HashMap::from([(
-                    "smithy.protocols#rpcv2Cbor".to_owned(),
+                let options = ProtocolOptions::default().with_protocol_settings(HashMap::from([(
+                    shape_id!("smithy.protocols", "rpcv2Cbor"),
                     crate::schema::settings::parse_settings_json(settings.as_bytes()),
                 )]));
                 let app = MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings_with_options(
@@ -2699,7 +2689,7 @@ fn builder_allows_configuration_to_be_replaced_before_validation() {
         .registries([registry(), registry()])
         .operation_handler_bindings([binding(&FIRST), binding(&FIRST)])
         .options(
-            RoutingOptions::default().with_request_body(crate::schema::ServiceRequestBodyConfig {
+            ProtocolOptions::default().with_request_body(crate::schema::ServiceRequestBodyConfig {
                 per_operation: [("test#unknown".to_owned(), config(1, 1))].into(),
                 ..Default::default()
             }),
@@ -2707,7 +2697,7 @@ fn builder_allows_configuration_to_be_replaced_before_validation() {
     let app = builder
         .registries([registry()])
         .operation_handler_bindings([binding(&FIRST), binding(&SECOND)])
-        .options(RoutingOptions::default())
+        .options(ProtocolOptions::default())
         .build();
     assert!(app.is_ok());
     let invalid = MultiProtocolRoutingService::<hyper::body::Incoming>::builder(&REST_JSON);
