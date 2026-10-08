@@ -16,6 +16,7 @@ class VersionTest {
                 """
                 {
                   "gitHash": "30205973b951256c4c37b998e7a6e94fee2f6ecc",
+                  "codegenVersion": "0.1.32",
                   "runtimeCrates": {
                     "aws-smithy-http-server": "0.60.1",
                     "aws-smithy-runtime-api": "1.1.1",
@@ -48,6 +49,7 @@ class VersionTest {
                 """,
             )
         version.gitHash shouldBe "30205973b951256c4c37b998e7a6e94fee2f6ecc"
+        version.codegenVersion shouldBe "0.1.32"
         version.crates["aws-smithy-http-server"] shouldBe "0.60.1"
         version.crates["aws-config"] shouldBe "1.1.1"
     }

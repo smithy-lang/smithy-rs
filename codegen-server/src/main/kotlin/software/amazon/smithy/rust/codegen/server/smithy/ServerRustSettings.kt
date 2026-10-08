@@ -6,7 +6,12 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.node.BooleanNode
+import software.amazon.smithy.model.node.Node
+import software.amazon.smithy.model.node.NullNode
+import software.amazon.smithy.model.node.NumberNode
 import software.amazon.smithy.model.node.ObjectNode
+import software.amazon.smithy.model.node.StringNode
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.smithy.CODEGEN_SETTINGS
 import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenConfig
@@ -270,20 +275,46 @@ data class ServerCodegenConfig(
         /** Configuration key for generating schema descriptors for the service, its operations and its shapes. */
         const val SCHEMA_SERDE_CONFIG_KEY = "schemaSerde"
 
-        private val KNOWN_CONFIG_KEYS =
-            setOf(
-                "formatTimeoutSeconds",
-                "debugMode",
-                "publicConstrainedTypes",
-                "ignoreUnsupportedConstraints",
-                "experimentalCustomValidationExceptionWithReasonPleaseDoNotUse",
-                "addValidationExceptionToConstrainedOperations",
-                "alwaysSendEventStreamInitialResponse",
-                "allowMissingUnionVariant",
-                HTTP_1X_CONFIG_KEY,
-                RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY,
-                SCHEMA_SERDE_CONFIG_KEY,
+        private data class ConfigDefault<T>(val value: T) {
+            fun matches(node: Node): Boolean =
+                when (val default = value) {
+                    null -> node is NullNode
+                    is Boolean -> node is BooleanNode && node.value == default
+                    is String -> node is StringNode && node.value == default
+                    is Number ->
+                        node is NumberNode &&
+                            node.value.toString().toBigDecimal().compareTo(default.toString().toBigDecimal()) == 0
+                    else -> throw IllegalArgumentException("Unsupported codegen default type: ${default.javaClass.name}")
+                }
+        }
+
+        // One inventory for configuration validation and supplied settings metadata.
+        private val KNOWN_CONFIG_KEYS: Map<String, ConfigDefault<*>> =
+            mapOf(
+                "formatTimeoutSeconds" to ConfigDefault(DEFAULT_FORMAT_TIMEOUT_SECONDS),
+                "debugMode" to ConfigDefault(DEFAULT_DEBUG_MODE),
+                "publicConstrainedTypes" to ConfigDefault(DEFAULT_PUBLIC_CONSTRAINED_TYPES),
+                "ignoreUnsupportedConstraints" to ConfigDefault(DEFAULT_IGNORE_UNSUPPORTED_CONSTRAINTS),
+                "experimentalCustomValidationExceptionWithReasonPleaseDoNotUse" to ConfigDefault<String?>(defaultExperimentalCustomValidationExceptionWithReasonPleaseDoNotUse),
+                "addValidationExceptionToConstrainedOperations" to ConfigDefault<Boolean?>(null),
+                "alwaysSendEventStreamInitialResponse" to ConfigDefault(DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE),
+                "allowMissingUnionVariant" to ConfigDefault(DEFAULT_ALLOW_MISSING_UNION_VARIANT),
+                HTTP_1X_CONFIG_KEY to ConfigDefault(DEFAULT_HTTP_1X),
+                RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY to ConfigDefault(DEFAULT_RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE),
+                SCHEMA_SERDE_CONFIG_KEY to ConfigDefault(DEFAULT_SCHEMA_SERDE),
             )
+
+        /** Known supplied settings that differ from their defaults, retaining their original node types. */
+        internal fun nonDefaultSettings(config: ObjectNode): ObjectNode {
+            val builder = ObjectNode.builder()
+            config.members.forEach { (key, value) ->
+                val default = KNOWN_CONFIG_KEYS[key.value] ?: return@forEach
+                if (!default.matches(value)) {
+                    builder.withMember(key.value, value)
+                }
+            }
+            return builder.build()
+        }
 
         fun fromCodegenConfigAndNode(
             coreCodegenConfig: CoreCodegenConfig,
@@ -295,7 +326,7 @@ data class ServerCodegenConfig(
             if (unknownKeys.isNotEmpty()) {
                 Logger.getLogger("ServerCodegenConfig").warning(
                     "Unknown codegen configuration key(s): ${unknownKeys.joinToString(", ")}. " +
-                        "Known keys are: ${KNOWN_CONFIG_KEYS.joinToString(", ")}. ",
+                        "Known keys are: ${KNOWN_CONFIG_KEYS.keys.joinToString(", ")}. ",
                 )
             }
 

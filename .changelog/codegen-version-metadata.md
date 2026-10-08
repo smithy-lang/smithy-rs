@@ -1,12 +1,18 @@
 ---
-applies_to: ["client", "server"]
+applies_to: ["server"]
 authors: ["drganjoo"]
 references: []
 breaking: true
-new_feature: false
-bug_fix: true
+new_feature: true
+bug_fix: false
 ---
 
-Generated Cargo manifests now record the code generator's JAR version in
-`package.metadata.smithy.codegen-version`. The Git commit previously stored there
-is recorded separately in `package.metadata.smithy.codegen-version-commit`.
+Server-generated Cargo manifests record richer build metadata:
+- `package.metadata.smithy.protocol` is now an array (e.g. `protocol = ["aws.protocols#restJson1"]`)
+  instead of a single string, so it can list every protocol a service serves.
+- A new `package.metadata.smithy.codegen-release` key records the code generator's artifact version.
+  The existing `codegen-version` key (the smithy-rs source commit) is unchanged.
+- Codegen settings that differ from their defaults are recorded under `package.metadata.codegen`,
+  and customization settings under `package.metadata.customizationConfig`.
+
+Client-generated manifests are unchanged.

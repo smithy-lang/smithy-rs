@@ -9,6 +9,7 @@ import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
+import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.CollectionShape
@@ -35,6 +36,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.CODEGEN_SETTINGS
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
@@ -108,7 +110,7 @@ import java.util.logging.Logger
  * generate all the needed types by calling the accept() function on the available shapes.
  */
 open class ServerCodegenVisitor(
-    context: PluginContext,
+    private val context: PluginContext,
     private val codegenDecorator: ServerCodegenDecorator,
 ) : ShapeVisitor.Default<Unit>() {
     protected val logger = Logger.getLogger(javaClass.name)
@@ -297,7 +299,12 @@ open class ServerCodegenVisitor(
             settings,
             model,
             codegenDecorator.crateManifestCustomizations(codegenContext)
-                .deepMergeWith(settings.manifestSettingsMetadata(codegenContext.servedProtocols))
+                .deepMergeWith(
+                    settings.manifestSettingsMetadata(
+                        codegenContext.servedProtocols,
+                        context.settings.getObjectMember(CODEGEN_SETTINGS).orElse(ObjectNode.objectNode()),
+                    ),
+                )
                 .deepMergeWith(serverCodegenVersionMetadata()),
             codegenDecorator.libRsCustomizations(codegenContext, listOf()),
             // TODO(https://github.com/smithy-lang/smithy-rs/issues/1287): Remove once the server codegen is far enough along.
