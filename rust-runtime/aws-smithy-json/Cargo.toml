@@ -21,6 +21,14 @@ proptest = "1"
 serde_json = "=1.0.146"
 
 [[bench]]
+name = "deserialize"
+harness = false
+
+[[bench]]
+name = "response"
+harness = false
+
+[[bench]]
 name = "serialize"
 harness = false
 

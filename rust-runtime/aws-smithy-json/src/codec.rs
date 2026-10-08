@@ -7,6 +7,7 @@
 
 use aws_smithy_schema::codec::Codec;
 use aws_smithy_schema::extension::SchemaExtensionKey;
+use aws_smithy_schema::member_lookup::{MemberCursor, WireName};
 use aws_smithy_schema::{shape_id, Schema, ShapeId};
 use aws_smithy_types::date_time::{DateTime, Format as TimestampFormat};
 use aws_smithy_types::{DocumentError, DocumentSettings, Number};
@@ -62,8 +63,7 @@ static JSON_MEMBER_KEYS: SchemaExtensionKey<JsonMemberKeys> =
 ///
 /// The mapper itself is a fieldless `Copy` enum. Encoded keys for serialization are
 /// cached on the member schemas (see [`JsonFieldMapper::member_key`]); reverse
-/// lookups are a linear scan over the struct's members (see
-/// [`JsonFieldMapper::field_to_member`]).
+/// lookups go through a [`MemberCursor`].
 #[derive(Debug, Clone, Copy)]
 enum JsonFieldMapper {
     /// Uses member names directly, ignoring `@jsonName`.
@@ -87,43 +87,12 @@ impl JsonFieldMapper {
         })
     }
 
-    /// Resolves a JSON wire field name to a member schema within a struct schema.
-    ///
-    /// This is `O(M)` in the number of struct members and is called once per field
-    /// present on the wire, so deserializing a struct is `O(M²)` in the worst case.
-    /// An unknown field costs a full scan before returning `None`.
-    ///
-    /// **Both** arms scan: `UseJsonName` loops below, and `UseMemberName` delegates
-    /// to `Schema::member_schema`, which is itself a `find` over the members.
-    ///
-    /// Real member counts across AWS models are p50=2, p90=6, p99=20, so this is
-    /// not measurable for the large majority of structs. If it ever needs fixing,
-    /// the fix is a codegen-emitted name→index table, not a runtime cache:
-    /// `Schema::member_schema_by_index` is already `O(1)` and generated code
-    /// already matches on `member_index()` downstream, so only the name→index hop
-    /// is linear.
-    fn field_to_member<'s>(
-        &self,
-        schema: &'s Schema<'s>,
-        field_name: &str,
-    ) -> Option<&'s Schema<'s>> {
+    /// The wire name a member is matched by.
+    #[inline]
+    fn wire_name(&self) -> WireName {
         match self {
-            JsonFieldMapper::UseMemberName => schema.member_schema(field_name),
-            JsonFieldMapper::UseJsonName => {
-                // Check @jsonName on each member. A HashMap cache behind a Mutex
-                // would be slower than this scan at realistic member counts; see
-                // the doc comment for the approach that would actually help.
-                for member in schema.members() {
-                    if let Some(jn) = member.json_name() {
-                        if jn.value() == field_name {
-                            return Some(member);
-                        }
-                    } else if member.member_name() == Some(field_name) {
-                        return Some(member);
-                    }
-                }
-                None
-            }
+            JsonFieldMapper::UseMemberName => WireName::MemberName,
+            JsonFieldMapper::UseJsonName => WireName::JsonName,
         }
     }
 }
@@ -271,13 +240,11 @@ impl JsonCodecSettings {
         self.field_mapper.member_key(member)
     }
 
-    /// Resolves a JSON wire field name to a member schema.
-    pub(crate) fn field_to_member<'s>(
-        &self,
-        schema: &'s Schema<'s>,
-        field_name: &str,
-    ) -> Option<&'s Schema<'s>> {
-        self.field_mapper.field_to_member(schema, field_name)
+    /// Returns a cursor that resolves the JSON wire field names of `schema`'s
+    /// members.
+    #[inline]
+    pub(crate) fn member_cursor<'s>(&self, schema: &'s Schema<'s>) -> MemberCursor<'s> {
+        MemberCursor::new(schema, self.field_mapper.wire_name())
     }
 }
 

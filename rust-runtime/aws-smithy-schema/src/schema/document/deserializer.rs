@@ -43,6 +43,7 @@ use aws_smithy_types::{
     BigDecimal, BigInteger, Blob, DateTime, Document, DocumentSettings, Number,
 };
 
+use crate::member_lookup::{MemberCursor, WireName};
 use crate::serde::{capped_container_size, SerdeError, ShapeDeserializer};
 use crate::Schema;
 
@@ -176,22 +177,6 @@ fn kind_name(d: &Document) -> &'static str {
         Document::Array(_) => "list",
         Document::Object(_) => "map",
     }
-}
-
-/// Resolves a wire-level map key to a member of `schema`, matching
-/// against [`Schema::member_name`] directly.
-///
-/// Wire-name resolution for `@jsonName` / `@xmlName`-style renames is
-/// the responsibility of the protocol's deserializer (which has access
-/// to the codec settings); this generic Document walker matches Smithy
-/// member names only. Documents produced by [`DocumentShapeSerializer`](super::DocumentShapeSerializer)
-/// always use Smithy member names, so the round-trip is exact.
-fn resolve_member<'s>(schema: &'s Schema<'s>, wire_name: &str) -> Option<&'s Schema<'s>> {
-    let idx = schema
-        .members()
-        .iter()
-        .position(|m| m.member_name() == Some(wire_name))?;
-    schema.member_schema_by_index(idx)
 }
 
 // -- Numeric coercion ------------------------------------------------
@@ -555,8 +540,15 @@ impl<'a> ShapeDeserializer for DocumentShapeDeserializer<'a> {
             .cursor
             .as_object()
             .ok_or_else(|| type_mismatch("struct (map)", self.cursor))?;
+        // Map keys are matched against Smithy member names only. Wire-name
+        // resolution for `@jsonName` / `@xmlName`-style renames is the
+        // responsibility of the protocol's deserializer (which has access to the
+        // codec settings). Documents produced by
+        // [`DocumentShapeSerializer`](super::DocumentShapeSerializer) always use
+        // Smithy member names, so the round-trip is exact.
+        let mut members = MemberCursor::new(schema, WireName::MemberName);
         for (key, value) in map {
-            let Some(member_schema) = resolve_member(schema, key) else {
+            let Some(member_schema) = members.resolve(key) else {
                 // Unknown member — silently ignore. Matches the
                 // tolerant "ignore unknown fields" behavior of the
                 // JSON deserializer.

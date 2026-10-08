@@ -697,7 +697,7 @@ fn header_error(
 /// `None` when the member has no `@httpHeader`, or its name is not a valid header name. In
 /// the second case [`insert_bound_header`] falls back to the string path, which reports the
 /// error.
-static HTTP_HEADER_NAME: crate::extension::SchemaExtensionKey<Option<http::HeaderName>> =
+pub(crate) static HTTP_HEADER_NAME: crate::extension::SchemaExtensionKey<Option<http::HeaderName>> =
     crate::extension::SchemaExtensionKey::new(|member| {
         member
             .http_header()

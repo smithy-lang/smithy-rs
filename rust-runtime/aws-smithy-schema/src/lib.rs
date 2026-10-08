@@ -125,6 +125,7 @@ mod schema {
     pub(crate) mod extension;
     pub(crate) mod header_omit_settings;
     pub(crate) mod http_protocol;
+    pub(crate) mod member_lookup;
     pub(crate) mod prelude;
     pub(crate) mod protocol;
     pub(crate) mod registry;
@@ -214,6 +215,11 @@ pub mod prelude {
 /// Derived data that runtime components compute once per schema and cache on it.
 pub mod extension {
     pub use crate::schema::extension::SchemaExtensionKey;
+}
+
+/// Resolving wire field names to structure members during deserialization.
+pub mod member_lookup {
+    pub use crate::schema::member_lookup::{MemberCursor, WireName, WIDE_STRUCT_MEMBERS};
 }
 
 /// Shape serialization and deserialization traits and their error type.
@@ -1184,14 +1190,12 @@ impl<'a> Schema<'a> {
     }
 
     /// Returns the member schema by name (for structures and unions).
+    ///
+    /// Structures with at least [`member_lookup::WIDE_STRUCT_MEMBERS`] members use an
+    /// index cached on the schema; smaller ones are scanned. To resolve every field of
+    /// a structure being deserialized, use a [`member_lookup::MemberCursor`].
     pub fn member_schema(&self, name: &str) -> Option<&Schema<'_>> {
-        match &self.members {
-            SchemaMembers::Struct { members } => members
-                .iter()
-                .find(|m| m.member_name == Some(name))
-                .copied(),
-            _ => None,
-        }
+        schema::member_lookup::find_member(self, member_lookup::WireName::MemberName, name)
     }
 
     /// Returns the member name and schema by position index (for structures and unions).

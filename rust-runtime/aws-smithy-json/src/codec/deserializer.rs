@@ -42,15 +42,6 @@ impl<'a> JsonDeserializer<'a> {
         }
     }
 
-    /// Resolves a JSON field name to a member schema.
-    fn resolve_member<'s>(
-        &self,
-        schema: &'s Schema<'s>,
-        field_name: &str,
-    ) -> Option<&'s Schema<'s>> {
-        self.settings.field_to_member(schema, field_name)
-    }
-
     fn remaining(&self) -> &[u8] {
         &self.input[self.position..]
     }
@@ -205,6 +196,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         }
         self.advance_by(1);
 
+        let mut members = self.settings.member_cursor(schema);
         let mut first = true;
         loop {
             // Stop at the end of the object; otherwise the next key/value pair starts here.
@@ -231,7 +223,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             let rem = self.remaining();
             if rem.starts_with(b"null") && !rem.get(4).is_some_and(|b| b.is_ascii_alphanumeric()) {
                 self.advance_by(4);
-            } else if let Some(member_schema) = self.resolve_member(schema, &key_str) {
+            } else if let Some(member_schema) = members.resolve(&key_str) {
                 consumer(member_schema, self)?;
             } else if &*key_str == "__type" {
                 // Protocol discriminator, never a member.

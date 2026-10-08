@@ -5,6 +5,7 @@
 
 //! CBOR deserializer implementation.
 
+use aws_smithy_schema::member_lookup::{MemberCursor, WireName};
 use aws_smithy_schema::serde::{capped_container_size, SerdeError, ShapeDeserializer};
 use aws_smithy_schema::{Schema, ShapeType};
 use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
@@ -113,6 +114,7 @@ impl ShapeDeserializer for CborDeserializer<'_> {
         let count = len.unwrap_or(0) as usize;
 
         let is_union = schema.shape_type() == ShapeType::Union;
+        let mut members = MemberCursor::new(schema, WireName::MemberName);
         let mut i = 0;
         loop {
             if !is_indefinite && i >= count {
@@ -129,7 +131,7 @@ impl ShapeDeserializer for CborDeserializer<'_> {
                 // excluded: a null variant value must reach the consumer to be
                 // rejected there.
                 self.read_null()?;
-            } else if let Some(member_schema) = schema.member_schema(&key) {
+            } else if let Some(member_schema) = members.resolve(&key) {
                 consumer(member_schema, self)?;
             } else if &*key == "__type" || self.is_null() {
                 // A protocol discriminator is never a member, and a `null` value is an

@@ -28,5 +28,9 @@ rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
 
 [[bench]]
+name = "deserialize"
+harness = false
+
+[[bench]]
 name = "serialize"
 harness = false
