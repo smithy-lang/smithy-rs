@@ -100,14 +100,32 @@ pub(crate) fn serialize_response_parts<C: Codec>(
     serialize_response_parts_compiled(codec, schema, value, &plan)
 }
 
-/// Compiled plans for registered static schemas, keyed by schema address.
+/// Address-based identity borrowing a schema instance for the lifetime of the key.
+#[derive(Debug, Clone, Copy)]
+struct SchemaKey<'a>(&'a Schema<'a>);
+
+impl PartialEq for SchemaKey<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.0, other.0)
+    }
+}
+
+impl Eq for SchemaKey<'_> {}
+
+impl std::hash::Hash for SchemaKey<'_> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::ptr::hash(self.0, state);
+    }
+}
+
+/// Compiled plans for registered static schemas, keyed by schema identity.
 ///
-/// Only registered static schemas enter the map: addresses remain valid for its lifetime.
+/// The key type requires static schema references, so addresses remain valid for the map's lifetime.
 /// Cache keys are internal schema addresses, never attacker-controlled header or body data.
 /// A schema missing from the cache compiles its plan per call, so dynamic schemas keep working.
 #[derive(Debug, Default)]
 pub(crate) struct ResponsePlanCache {
-    plans: rustc_hash::FxHashMap<usize, CompiledResponsePlan>,
+    plans: rustc_hash::FxHashMap<SchemaKey<'static>, CompiledResponsePlan>,
 }
 
 impl ResponsePlanCache {
@@ -119,8 +137,7 @@ impl ResponsePlanCache {
         bindings: ResponseBindings,
         value_kind: ResponseValueKind,
     ) -> Result<(), SerdeError> {
-        if let std::collections::hash_map::Entry::Vacant(entry) = self.plans.entry(schema as *const Schema<'_> as usize)
-        {
+        if let std::collections::hash_map::Entry::Vacant(entry) = self.plans.entry(SchemaKey(schema)) {
             entry.insert(CompiledResponsePlan::compile(schema, bindings, value_kind)?);
         }
         Ok(())
@@ -128,7 +145,7 @@ impl ResponsePlanCache {
 
     #[cfg(test)]
     pub(crate) fn contains(&self, schema: &Schema<'_>) -> bool {
-        self.plans.contains_key(&(schema as *const Schema<'_> as usize))
+        self.plans.contains_key(&SchemaKey(schema))
     }
 
     #[cfg(test)]
@@ -145,7 +162,7 @@ impl ResponsePlanCache {
         bindings: ResponseBindings,
         value_kind: ResponseValueKind,
     ) -> Result<ResponseParts, SerdeError> {
-        match self.plans.get(&(schema as *const Schema<'_> as usize)) {
+        match self.plans.get(&SchemaKey(schema)) {
             Some(plan) => serialize_response_parts_compiled(codec, schema, value, plan),
             None => serialize_response_parts(codec, schema, value, bindings, value_kind),
         }
