@@ -80,6 +80,11 @@ open class CheckMavenCentralPublishingNeeded : DefaultTask() {
 
         logger.lifecycle("Checking whether codegenVersion $codegenVersion needs publishing to Maven Central")
 
+        // The report's presence is the signal -- the release build fails on the file existing -- so
+        // a leftover one from an earlier invocation would fail a release this run just passed.
+        // Clear it first so the file always reflects this run and nothing older.
+        clearStaleReport()
+
         if (codegenVersion.endsWith("-SNAPSHOT")) {
             logger.lifecycle("  codegenVersion $codegenVersion is a SNAPSHOT; Maven Central publishing is not applicable")
             return
@@ -113,10 +118,15 @@ open class CheckMavenCentralPublishingNeeded : DefaultTask() {
             return
         }
 
-        // A partially published version can never be completed: the artifacts that landed are
-        // immutable, so the missing ones can never join them under the same coordinates.
+        // A split read is usually repo1 mid-mirror, not a half-published version, so it is reported
+        // and not acted on. Neither throwing nor writing bump-needed.md is safe here: this task
+        // gates Matrix Success, so throwing blocks every pull request for as long as the mirror
+        // lags, and the release build fails on bump-needed.md existing. The publisher probes repo1
+        // again at publish time, hours later and far more likely to be settled, and refuses to
+        // upload into a split itself -- so it is the authority on this, not a PR-time check.
         if (publishState.isPartial) {
-            throw GradleException(partialPublicationMessage(codegenVersion, publishState))
+            logger.warn("==> SPLIT READ (not acted on)\n\n${partialPublicationMessage(codegenVersion, publishState)}")
+            return
         }
 
         if (!publishState.isFullyPublished) {
@@ -200,12 +210,19 @@ open class CheckMavenCentralPublishingNeeded : DefaultTask() {
         return null
     }
 
-    /** Reads `codegenVersion` out of `gradle.properties` as it was at [rev]. */
+    /**
+     * Reads `codegenVersion` out of `gradle.properties` as it was at [rev], or null if that file
+     * cannot be read there. This is called for every release tag reachable from HEAD, so a single
+     * tag that predates `gradle.properties` -- or any other unreadable rev -- would otherwise take
+     * the whole check down with it. A tag we cannot read is simply not a match.
+     */
     private fun codegenVersionAt(rev: String): String? =
-        git("show", "$rev:gradle.properties")
-            .lineSequence()
-            .map { it.trim() }
-            .firstOrNull { it.startsWith("codegenVersion=") }
+        runCatching { git("show", "$rev:gradle.properties") }
+            .onFailure { logger.info("Could not read gradle.properties at $rev: ${it.message}") }
+            .getOrNull()
+            ?.lineSequence()
+            ?.map { it.trim() }
+            ?.firstOrNull { it.startsWith("codegenVersion=") }
             ?.substringAfter('=')
             ?.trim()
 
@@ -481,6 +498,18 @@ open class CheckMavenCentralPublishingNeeded : DefaultTask() {
             )
         }
 
+    /** Where the bump report lives. Its presence is the signal; its contents are for humans. */
+    private fun reportFile(): File =
+        File(project.layout.buildDirectory.dir("maven-central").get().asFile, "bump-needed.md")
+
+    /** Removes a report left by an earlier invocation, so a stale verdict cannot fail a release. */
+    private fun clearStaleReport() {
+        val existing = reportFile()
+        if (existing.exists() && existing.delete()) {
+            logger.info("Removed a bump report left by an earlier run at ${existing.path}")
+        }
+    }
+
     /**
      * Records that `codegenVersion` needs bumping, without failing the build.
      *
@@ -495,7 +524,7 @@ open class CheckMavenCentralPublishingNeeded : DefaultTask() {
     private fun reportBumpNeeded(message: String) {
         val outputDir = project.layout.buildDirectory.dir("maven-central").get().asFile
         outputDir.mkdirs()
-        File(outputDir, "bump-needed.md").writeText(message.trimEnd() + "\n")
+        reportFile().writeText(message.trimEnd() + "\n")
         logger.warn("==> BUMP NEEDED\n\n$message")
     }
 
