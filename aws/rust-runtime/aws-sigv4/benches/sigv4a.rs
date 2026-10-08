@@ -4,7 +4,7 @@
  */
 
 use aws_credential_types::Credentials;
-use aws_sigv4::http_request::{SignableBody, SignableRequest, SigningSettings};
+use aws_sigv4::http_request::{self, SignableBody, SignableRequest, SigningSettings};
 use aws_sigv4::sign::v4a;
 use aws_smithy_runtime_api::client::identity::Identity;
 use criterion::{criterion_group, criterion_main, Criterion};
@@ -14,52 +14,58 @@ use std::time::{Duration, SystemTime};
 const ACCESS_KEY: &str = "AKIAIOSFODNN7EXAMPLE";
 const SECRET_KEY: &str = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
 
-pub fn generate_signing_key(c: &mut Criterion) {
+const METHOD: &str = "POST";
+const URI: &str = "https://abc.lambda-url.us-east-1.on.aws/path?x=1";
+const BODY: &[u8] = b"{\"hello\":\"world\"}";
+
+/// Key derivation only: HMAC-SHA256 and the scalar bound check, no EC work.
+fn generate_signing_key(c: &mut Criterion) {
     c.bench_function("generate_signing_key", |b| {
-        b.iter(|| {
-            let _ = v4a::generate_signing_key(black_box(ACCESS_KEY), black_box(SECRET_KEY));
-        })
+        b.iter(|| v4a::generate_signing_key(black_box(ACCESS_KEY), black_box(SECRET_KEY)))
     });
 }
 
-/// Signing given an already-derived key, which is the half that does the ECDSA work.
-pub fn calculate_signature(c: &mut Criterion) {
+/// Signing given an already-derived key, which is the half that does the EC work.
+fn calculate_signature(c: &mut Criterion) {
     let key = v4a::generate_signing_key(ACCESS_KEY, SECRET_KEY);
     let string_to_sign =
         b"AWS4-ECDSA-P256-SHA256\n20260101T000000Z\n20260101/lambda/aws4_request\n\
                            a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90";
     c.bench_function("calculate_signature", |b| {
-        b.iter(|| {
-            let _ = v4a::calculate_signature(black_box(&key), black_box(string_to_sign));
-        })
+        b.iter(|| v4a::calculate_signature(black_box(&key), black_box(string_to_sign)))
     });
 }
 
-/// The whole public entry point, which is what a caller actually pays per request.
-pub fn sign_http_request(c: &mut Criterion) {
+/// The whole public entry point, which is what a caller pays per request.
+fn sign_http_request(c: &mut Criterion) {
     let identity: Identity = Credentials::new(ACCESS_KEY, SECRET_KEY, None, None, "bench").into();
+    // Hoisted: `sign` borrows the params, so building them is setup rather than per-request work.
+    let params: http_request::SigningParams<'_> = v4a::SigningParams::builder()
+        .identity(&identity)
+        .region_set("*")
+        .name("lambda")
+        .time(SystemTime::UNIX_EPOCH + Duration::from_secs(1_791_331_200))
+        .settings(SigningSettings::default())
+        .build()
+        .unwrap()
+        .into();
+
     c.bench_function("sign_http_request", |b| {
         b.iter(|| {
-            let params: v4a::SigningParams<'_, SigningSettings> = v4a::SigningParams::builder()
-                .identity(&identity)
-                .region_set("*")
-                .name("lambda")
-                .time(SystemTime::UNIX_EPOCH + Duration::from_secs(1_791_331_200))
-                .settings(SigningSettings::default())
-                .build()
-                .unwrap();
+            // `sign` takes the request by value, so this one does have to be rebuilt each
+            // iteration. It is a handful of borrows and a small Vec, not signing work.
             let request = SignableRequest::new(
-                "POST",
-                "https://abc.lambda-url.us-east-1.on.aws/path?x=1",
+                black_box(METHOD),
+                black_box(URI),
                 [
                     ("host", "abc.lambda-url.us-east-1.on.aws"),
                     ("content-type", "application/json"),
                 ]
                 .into_iter(),
-                SignableBody::Bytes(b"{\"hello\":\"world\"}"),
+                SignableBody::Bytes(black_box(BODY)),
             )
             .unwrap();
-            let _ = aws_sigv4::http_request::sign(black_box(request), &params.into()).unwrap();
+            http_request::sign(request, &params).unwrap()
         })
     });
 }
