@@ -261,10 +261,14 @@ fn rest_request_content_type_is_checked_only_with_a_body() {
 }
 
 #[test]
-fn rest_request_without_modeled_input_rejects_a_content_type() {
-    let req = request("/empty", &[("content-type", "application/json")], b"");
-    let err = deserialize::<EmptyInput>(&*REST_JSON, &EMPTY_IN_SCHEMA, &EMPTY_OUT_SCHEMA, &req).unwrap_err();
-    assert!(matches!(err, DeserializeError::UnsupportedMediaType(_)), "{err}");
+fn rest_request_without_modeled_input_accepts_protocol_identifying_content_types() {
+    for (protocol, content_type) in [
+        (&*REST_JSON as &dyn ServerProtocol, "application/json"),
+        (&*REST_XML as &dyn ServerProtocol, "application/xml"),
+    ] {
+        let req = request("/empty", &[("content-type", content_type)], b"");
+        deserialize::<EmptyInput>(protocol, &EMPTY_IN_SCHEMA, &EMPTY_OUT_SCHEMA, &req).unwrap();
+    }
 
     let req = request("/empty", &[], b"");
     deserialize::<EmptyInput>(&*REST_JSON, &EMPTY_IN_SCHEMA, &EMPTY_OUT_SCHEMA, &req).unwrap();

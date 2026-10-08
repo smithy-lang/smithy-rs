@@ -21,5 +21,5 @@ mod rest;
 mod rpc_v2_cbor;
 
 pub use aws_json::aws_json_router;
-pub(crate) use rest::rest_router;
+pub use rest::rest_router;
 pub(crate) use rpc_v2_cbor::rpc_v2_cbor_router;

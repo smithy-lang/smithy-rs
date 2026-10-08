@@ -40,6 +40,8 @@ pub mod route_errors;
 mod routers;
 mod service;
 #[cfg(test)]
+mod test_helpers;
+#[cfg(test)]
 mod tests;
 
 pub use builder::MultiProtocolRoutingServiceBuilder;
@@ -48,6 +50,6 @@ pub use protocol_router::{
     ProtocolResolutionError, RouteClaim, RouterBuildContext, RouterBuildError, SharedProtocolRouter,
 };
 pub use route_errors::{RoutingError, RoutingErrorKind};
-pub use routers::aws_json_router;
-pub(crate) use routers::{rest_router, rpc_v2_cbor_router};
+pub(crate) use routers::rpc_v2_cbor_router;
+pub use routers::{aws_json_router, rest_router};
 pub use service::{MultiProtocolRoutingFuture, MultiProtocolRoutingService};

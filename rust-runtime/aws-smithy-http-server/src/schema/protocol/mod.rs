@@ -163,7 +163,7 @@ trait ErasedMetadataRoutedProtocol: ServerProtocol {
     fn build_router(
         &self,
         ctx: crate::schema::routing::RouterBuildContext<'_>,
-    ) -> Result<std::sync::Arc<dyn crate::schema::routing::MetadataProtocolRouter>, RouterBuildError>;
+    ) -> Result<Box<dyn crate::schema::routing::MetadataProtocolRouter>, RouterBuildError>;
     fn event_stream_framing(&self) -> Option<EventStreamFraming<'_>>;
 }
 
@@ -171,8 +171,8 @@ impl<P: MetadataRoutedProtocol> ErasedMetadataRoutedProtocol for P {
     fn build_router(
         &self,
         ctx: crate::schema::routing::RouterBuildContext<'_>,
-    ) -> Result<std::sync::Arc<dyn crate::schema::routing::MetadataProtocolRouter>, RouterBuildError> {
-        Ok(std::sync::Arc::new(MetadataRoutedProtocol::build_router(self, ctx)?))
+    ) -> Result<Box<dyn crate::schema::routing::MetadataProtocolRouter>, RouterBuildError> {
+        Ok(Box::new(MetadataRoutedProtocol::build_router(self, ctx)?))
     }
     fn event_stream_framing(&self) -> Option<EventStreamFraming<'_>> {
         MetadataRoutedProtocol::event_stream_framing(self)
@@ -185,15 +185,15 @@ trait ErasedBodyRoutedProtocol: ServerProtocol {
     fn build_router(
         &self,
         ctx: crate::schema::routing::RouterBuildContext<'_>,
-    ) -> Result<std::sync::Arc<dyn crate::schema::routing::BodyProtocolRouter>, RouterBuildError>;
+    ) -> Result<Box<dyn crate::schema::routing::BodyProtocolRouter>, RouterBuildError>;
 }
 
 impl<P: BodyRoutedProtocol> ErasedBodyRoutedProtocol for P {
     fn build_router(
         &self,
         ctx: crate::schema::routing::RouterBuildContext<'_>,
-    ) -> Result<std::sync::Arc<dyn crate::schema::routing::BodyProtocolRouter>, RouterBuildError> {
-        Ok(std::sync::Arc::new(BodyRoutedProtocol::build_router(self, ctx)?))
+    ) -> Result<Box<dyn crate::schema::routing::BodyProtocolRouter>, RouterBuildError> {
+        Ok(Box::new(BodyRoutedProtocol::build_router(self, ctx)?))
     }
 }
 

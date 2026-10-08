@@ -13,7 +13,7 @@ use aws_smithy_types::Document;
 use bytes::Bytes;
 use http::Request;
 
-use std::{collections::HashMap, fmt, sync::Arc};
+use std::{collections::HashMap, fmt};
 
 /// The kind of streaming member in an operation's input or output.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -299,29 +299,29 @@ pub trait BodyProtocolRouter: Send + Sync + fmt::Debug {
     }
 }
 
-/// Shared operation router built by a server protocol.
+/// Operation router built by a server protocol and owned by the shared routing state.
 ///
 /// The variant is decided by the protocol's registration kind: a
 /// [`MetadataRoutedProtocol`](crate::schema::MetadataRoutedProtocol) can only build a
 /// [`Metadata`](Self::Metadata) router and a
 /// [`BodyRoutedProtocol`](crate::schema::BodyRoutedProtocol) a [`Body`](Self::Body) one,
 /// so dispatch matching on this enum speaks the claim protocol the registration promised.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum SharedProtocolRouter {
     /// Selects operations from request metadata alone.
-    Metadata(Arc<dyn MetadataProtocolRouter>),
+    Metadata(Box<dyn MetadataProtocolRouter>),
     /// May read collected body bytes to select operations.
-    Body(Arc<dyn BodyProtocolRouter>),
+    Body(Box<dyn BodyProtocolRouter>),
 }
 
 impl SharedProtocolRouter {
     /// Wraps a router that selects from request metadata alone.
     pub fn new(router: impl MetadataProtocolRouter + 'static) -> Self {
-        Self::Metadata(Arc::new(router))
+        Self::Metadata(Box::new(router))
     }
 
     /// Wraps a router that selects from the request body the routing service collects.
     pub fn new_body_routed(router: impl BodyProtocolRouter + 'static) -> Self {
-        Self::Body(Arc::new(router))
+        Self::Body(Box::new(router))
     }
 }

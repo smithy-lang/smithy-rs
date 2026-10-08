@@ -28,8 +28,6 @@ pub(super) const OCTET_STREAM_CONTENT_TYPE: &str = "application/octet-stream";
 pub(crate) enum ExpectedContentType {
     /// Do not look at the header.
     Skip,
-    /// The header must be absent.
-    Absent,
     /// The header must carry this media type, or one of the aliases the protocol also accepts for
     /// it, when the body is not empty.
     Expect(mime::Mime, &'static [&'static str]),
@@ -64,10 +62,9 @@ pub(super) fn has_streaming_payload(schema: &Schema<'_>) -> bool {
 ///
 /// A `@httpPayload` member fixes the expected type: `@mediaType` when present, `text/plain` for
 /// strings, the codec's type for structures and documents, and no check for a blob without a media
-/// type or for a streaming payload (the legacy server checks neither). An input with no members
-/// must have no `Content-Type` at all, unless the input was modeled by the user (the schema then
-/// carries an original name) in which case the header is ignored. Otherwise the codec's type is
-/// expected when any member is bound to the body.
+/// type or for a streaming payload (the legacy server checks neither). Inputs with no members
+/// ignore the header: protocol identification has already checked it, and there is no body to
+/// deserialize. Otherwise the codec's type is expected when any member is bound to the body.
 ///
 /// `codec_aliases` are further media types the protocol accepts wherever the codec's own type is
 /// expected (restXml accepts `text/xml` for `application/xml`). They do not apply to a payload
@@ -90,11 +87,7 @@ pub(crate) fn expected_request_content_type(
         });
     }
     if input.members().is_empty() {
-        return Ok(if input.original_name().is_none() {
-            ExpectedContentType::Absent
-        } else {
-            ExpectedContentType::Skip
-        });
+        return Ok(ExpectedContentType::Skip);
     }
     Ok(if input.members().iter().any(|m| is_body_member(m)) {
         ExpectedContentType::Expect(parse_mime(codec_content_type)?, codec_aliases)
@@ -140,7 +133,6 @@ pub(super) fn enforce_content_type(
 ) -> Result<(), DeserializeError> {
     match expected {
         ExpectedContentType::Skip => Ok(()),
-        ExpectedContentType::Absent => check_content_type(headers, None, &[]),
         ExpectedContentType::Expect(..) if body.is_empty() => Ok(()),
         ExpectedContentType::Expect(content_type, aliases) => {
             check_content_type(headers, Some(content_type.essence_str()), aliases)

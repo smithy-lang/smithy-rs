@@ -7,9 +7,7 @@
 
 use crate::routing::request_spec::{PathSegment, QuerySegment, RequestSpec};
 use crate::routing::Router;
-use crate::schema::protocol::request::{
-    expected_request_content_type, payload_member, ExpectedContentType, EVENT_STREAM_MIME,
-};
+use crate::schema::protocol::request::{parse_mime, payload_member, EVENT_STREAM_MIME};
 use crate::schema::routing::RoutingError;
 use aws_smithy_schema::ShapeType;
 use http::Request;
@@ -17,72 +15,74 @@ use http::Request;
 use super::content_type_is;
 use crate::schema::routing::{MetadataProtocolRouter, OperationTarget, RouteClaim, RouterBuildError};
 
-/// The `Content-Type` rules claiming applies for a request with this input.
-///
-/// The derivation is shared with the deserializer ([`expected_request_content_type`]) so the two
-/// can never disagree: an input the deserializer reads without consulting the header (members all
-/// bound to the URI or headers, a blob payload without `@mediaType`, a user-modeled empty input,
-/// an input binding `Content-Type` itself with `@httpHeader`) makes no claim demand either.
-///
-/// Event streams are the one claim-side override: their `Content-Type` is a genuine routing
-/// signal every client sends, and the buffered deserializer never sees these requests, so its
-/// derivation skips the check that routing still needs.
+/// Protocol identification always requires a present `Content-Type`, even when the input has
+/// no body-bound members and deserialization does not need to validate the header.
+#[derive(Debug)]
+enum ClaimContentType {
+    /// An input member binds `Content-Type` itself and permits a custom value.
+    CustomHeader,
+    /// The protocol default or the content type derived from the payload.
+    Expected(mime::Mime, &'static [&'static str]),
+}
+
+/// Derives the operation's content type for protocol identification, independently of body
+/// deserialization. Without a payload override, every input uses the protocol's default.
 fn claim_content_type(
     input: &aws_smithy_schema::Schema<'_>,
     codec_content_type: &'static str,
     codec_aliases: &'static [&'static str],
-) -> Result<ExpectedContentType, RouterBuildError> {
-    if payload_member(input).is_some_and(|payload| payload.shape_type() == ShapeType::Union && payload.streaming()) {
-        return Ok(ExpectedContentType::Expect(EVENT_STREAM_MIME.clone(), &[]));
+) -> Result<ClaimContentType, RouterBuildError> {
+    if input.members().iter().any(|member| {
+        member
+            .http_header()
+            .is_some_and(|header| header.value().eq_ignore_ascii_case("content-type"))
+    }) {
+        return Ok(ClaimContentType::CustomHeader);
     }
+    let (content_type, aliases) = match payload_member(input) {
+        Some(payload) if payload.shape_type() == ShapeType::Union && payload.streaming() => {
+            return Ok(ClaimContentType::Expected(EVENT_STREAM_MIME.clone(), &[]));
+        }
+        Some(payload) if payload.media_type().is_some() => (payload.media_type().unwrap().value(), &[][..]),
+        Some(payload) if payload.shape_type() == ShapeType::String => ("text/plain", &[][..]),
+        Some(payload) if payload.shape_type() == ShapeType::Blob => ("application/octet-stream", &[][..]),
+        _ => (codec_content_type, codec_aliases),
+    };
     // An unparseable modeled `@mediaType` fails the build loudly: the operation could never
     // be claimed or deserialized, so the service must not start.
-    expected_request_content_type(input, codec_content_type, codec_aliases)
+    parse_mime(content_type)
+        .map(|mime| ClaimContentType::Expected(mime, aliases))
         .map_err(|err| RouterBuildError::Configuration(format!("{}: {err}", input.shape_id())))
 }
 
 /// Whether claiming admits this request's `Content-Type` header.
-///
-/// This is the claim-specific policy over the shared derivation: `Skip` claims unconditionally,
-/// and `Expect` requires a present, matching header — the deserializer's empty-body waiver does
-/// not apply, because a protocol must be chosen before any body is read.
-fn admits(expected: &ExpectedContentType, request: &Request<()>) -> bool {
-    let present = request.headers().contains_key(http::header::CONTENT_TYPE);
+fn admits(expected: &ClaimContentType, request: &Request<()>) -> bool {
     match expected {
-        ExpectedContentType::Skip => true,
-        // Synthetic Unit inputs retain the legacy contract that the header is absent.
-        ExpectedContentType::Absent => !present,
-        ExpectedContentType::Expect(mime, aliases) if present => {
+        ClaimContentType::CustomHeader => request.headers().contains_key(http::header::CONTENT_TYPE),
+        ClaimContentType::Expected(mime, aliases) => {
             // An explicit header must match the modeled media type or an accepted
             // alias. Compare type/subtype, ignoring parameters such as charset.
             content_type_is(request, mime.essence_str()) || aliases.iter().any(|alias| content_type_is(request, alias))
         }
-        ExpectedContentType::Expect(..) => false,
     }
 }
 
 /// Routes restJson1 and restXml on each operation's `@http` method and URI.
 ///
-/// Claims a request whose method and path match an operation and whose `Content-Type` satisfies
-/// the same derivation the deserializer applies ([`expected_request_content_type`]): the
-/// protocol's media type when members are bound to the body, the payload's `@mediaType` or
-/// derived type for an `@httpPayload`, and no demand at all when the deserializer would never
-/// consult the header. Event-stream inputs require their event-stream media type. Configured XML
-/// aliases are an explicit compatibility extension to the published derived-content-type rules.
-/// Synthetic Unit inputs retain their legacy requirement to omit Content-Type.
+/// Claims a request whose method and path match an operation and whose present `Content-Type`
+/// matches the protocol default, the payload's derived type, or a modeled custom header.
+/// Inputs without body-bound members still use the protocol default for identification.
+/// Event-stream inputs require their event-stream media type. Configured XML aliases apply
+/// wherever the protocol default is used.
 ///
-/// A service serving both restJson1 and restXml cannot distinguish requests whose input makes no
-/// Content-Type demand — URI-bound inputs, bare blob payloads, custom `@httpHeader("Content-Type")`
-/// bindings, shared payload media types, or synthetic Unit inputs: the protocol earlier in
-/// priority order, restJson1 unless reordered, claims them, and a client of the other protocol
-/// receives a response it cannot read. Requests with a structured body carry `application/json`
-/// or `application/xml` and reach the right protocol.
+/// Shared payload media types and modeled custom Content-Type headers can identify both REST
+/// protocols; protocol priority resolves those overlaps.
 #[derive(Debug)]
 struct RestProtocolRouter {
     router: crate::protocol::rest::router::RestRouter<OperationTarget>,
     codec_content_type: &'static str,
     /// Indexed by [`OperationTarget::index`].
-    content_types: Vec<ExpectedContentType>,
+    content_types: Vec<ClaimContentType>,
 }
 
 impl MetadataProtocolRouter for RestProtocolRouter {
@@ -107,7 +107,13 @@ impl MetadataProtocolRouter for RestProtocolRouter {
     }
 }
 
-pub(crate) fn rest_router(
+/// Builds a REST router from the operations' HTTP method and URI bindings.
+///
+/// Protocol implementations outside this crate can reuse this router with their own default
+/// content type and accepted aliases. Claims use each input's derived content type, including
+/// payload overrides and modeled custom Content-Type headers.
+#[doc(hidden)]
+pub fn rest_router(
     targets: &[OperationTarget],
     codec_content_type: &'static str,
     codec_aliases: &'static [&'static str],

@@ -701,6 +701,7 @@ mod tests {
                     Request::builder()
                         .method("POST")
                         .uri("/first")
+                        .header("content-type", "application/json")
                         .body(Transport::new(Bytes::from_static(b"first\npayload")))
                         .unwrap(),
                 )
