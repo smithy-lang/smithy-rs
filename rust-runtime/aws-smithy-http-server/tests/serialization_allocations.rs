@@ -206,6 +206,37 @@ fn serialization_allocation_counts() {
             }),
         ),
     ];
+    // Default-constructed protocols have no prepared plans: the same calls compile their plan
+    // per response. The gap to the cases above is the allocation cost of plan compilation.
+    let rest_json_uncached = RestJson1Protocol::default();
+    let aws_json_uncached = AwsJson1_1Protocol::default();
+    let uncached: [(&str, (u64, u64)); 4] = [
+        (
+            "rest_json_1 serialize_error (uncached plan)",
+            measure(calls, || {
+                std::hint::black_box(rest_json_uncached.serialize_error(&BoundError));
+            }),
+        ),
+        (
+            "aws_json_1_1 serialize_error (uncached plan)",
+            measure(calls, || {
+                std::hint::black_box(aws_json_uncached.serialize_error(&BoundError));
+            }),
+        ),
+        (
+            "rest_json_1 serialize_response (uncached plan)",
+            measure(calls, || {
+                std::hint::black_box(rest_json_uncached.serialize_response(&BOUND_OUTPUT, &BoundOutput));
+            }),
+        ),
+        (
+            "aws_json_1_1 serialize_response (uncached plan)",
+            measure(calls, || {
+                std::hint::black_box(aws_json_uncached.serialize_response(&BOUND_OUTPUT, &BoundOutput));
+            }),
+        ),
+    ];
+    let cases: Vec<(&str, (u64, u64))> = cases.into_iter().chain(uncached).collect();
     for (name, (allocations, bytes)) in &cases {
         eprintln!("{name}: {allocations} allocations, {bytes} bytes per call");
     }
