@@ -48,6 +48,19 @@ impl<'a> CborDeserializer<'a> {
         Ok(())
     }
 
+    /// How many elements to pre-allocate for a container that declares `declared` of them,
+    /// with `remaining` input bytes left after its header. Each element takes at least
+    /// `min_bytes_per_element` bytes, so a truncated input that declares a huge count reserves
+    /// only as much as it could actually hold.
+    fn prealloc(declared: u64, remaining: usize, min_bytes_per_element: usize) -> usize {
+        let declared = usize::try_from(declared).unwrap_or(usize::MAX);
+        capped_container_size(declared.min(remaining / min_bytes_per_element))
+    }
+
+    fn remaining(&self) -> usize {
+        self.input_len.saturating_sub(self.decoder.position())
+    }
+
     fn check_depth(&mut self) -> Result<(), SerdeError> {
         self.depth += 1;
         if self.depth > self.max_depth {
@@ -76,7 +89,7 @@ impl<'a> CborDeserializer<'a> {
         let len = self.decoder.list().map_err(deser_err)?;
         let is_indefinite = len.is_none();
         let count = len.unwrap_or(0) as usize;
-        let mut out = Vec::with_capacity(capped_container_size(count));
+        let mut out = Vec::with_capacity(Self::prealloc(len.unwrap_or(0), self.remaining(), 1));
         let mut i = 0;
         loop {
             if !is_indefinite && i >= count {
@@ -124,10 +137,6 @@ impl ShapeDeserializer for CborDeserializer<'_> {
             }
             let key = self.decoder.str().map_err(deser_err)?;
             if self.enforce_strictness && !is_union && self.is_null() {
-                // A null structure member means the member is absent; the consumer
-                // never sees it, so builder defaults stay untouched. Unions are
-                // excluded: a null variant value must reach the consumer to be
-                // rejected there.
                 self.read_null()?;
             } else if let Some(member_schema) = schema.member_schema(&key) {
                 consumer(member_schema, self)?;
@@ -279,15 +288,13 @@ impl ShapeDeserializer for CborDeserializer<'_> {
 
     fn container_size(&self) -> Option<usize> {
         let mut peek = self.decoder.clone();
-        match peek.datatype().ok()? {
-            Type::Array | Type::ArrayIndef => {
-                peek.list().ok()?.map(|n| capped_container_size(n as usize))
-            }
-            Type::Map | Type::MapIndef => {
-                peek.map().ok()?.map(|n| capped_container_size(n as usize))
-            }
-            _ => None,
-        }
+        let (declared, min_bytes_per_element) = match peek.datatype().ok()? {
+            Type::Array | Type::ArrayIndef => (peek.list().ok()??, 1),
+            Type::Map | Type::MapIndef => (peek.map().ok()??, 2),
+            _ => return None,
+        };
+        let remaining = self.input_len.saturating_sub(peek.position());
+        Some(Self::prealloc(declared, remaining, min_bytes_per_element))
     }
 
     fn read_string_list(&mut self, _schema: &Schema<'_>) -> Result<Vec<String>, SerdeError> {
@@ -314,7 +321,11 @@ impl ShapeDeserializer for CborDeserializer<'_> {
         let len = self.decoder.map().map_err(deser_err)?;
         let is_indefinite = len.is_none();
         let count = len.unwrap_or(0) as usize;
-        let mut out = std::collections::HashMap::with_capacity(capped_container_size(count));
+        let mut out = std::collections::HashMap::with_capacity(Self::prealloc(
+            len.unwrap_or(0),
+            self.remaining(),
+            2,
+        ));
         let mut i = 0;
         loop {
             if !is_indefinite && i >= count {
@@ -354,7 +365,7 @@ mod tests {
     use aws_smithy_schema::serde::{SerializableStruct, ShapeSerializer};
     use aws_smithy_schema::{shape_id, ShapeType};
 
-    use crate::codec::{CborCodec, CborCodecSettings};
+    use crate::codec::CborCodec;
 
     /// Helper: serialize with CborSerializer, then deserialize with CborDeserializer.
     fn make_deser(f: impl FnOnce(&mut crate::codec::CborSerializer)) -> Vec<u8> {
@@ -365,46 +376,40 @@ mod tests {
         ser.finish()
     }
 
+    /// Regression (worklist item 9): a declared container length is untrusted. A truncated
+    /// container that declares 2^64 - 1 elements must not reserve space for them.
     #[test]
-    fn strict_null_struct_members_are_skipped_as_absent() {
-        static X: Schema =
-            Schema::new_member(shape_id!("test", "S", "x"), ShapeType::Integer, "x", 0);
-        static S: Schema = Schema::new_struct(shape_id!("test", "S"), ShapeType::Structure, &[&X]);
-        for strict in [false, true] {
-            let codec = CborCodec::new(CborCodecSettings::default().enforce_strictness(strict));
-            // Strict: the codec consumes the null itself, the consumer never runs
-            // and defaults stay untouched. Lenient: the consumer sees the null and
-            // fails here by requiring an integer.
-            let mut visited = false;
-            let result = codec.create_deserializer(b"\xa1\x61x\xf6").read_struct(
-                &S,
-                &mut |member, deser| {
-                    visited = true;
-                    deser.read_integer(member).map(|_| ())
-                },
+    fn container_preallocation_is_bounded_by_remaining_input() {
+        // Array / map with an 8-byte length of u64::MAX and no elements.
+        for (header, element_bytes) in [(0x9bu8, 1usize), (0xbb, 2)] {
+            let mut bytes = vec![header];
+            bytes.extend_from_slice(&u64::MAX.to_be_bytes());
+            let de = CborDeserializer::new(&bytes, 128);
+            assert_eq!(de.container_size(), Some(0), "header {header:#x}");
+            // With 10 bytes after the header, at most 10 / element_bytes elements fit.
+            bytes.extend_from_slice(&[0u8; 10]);
+            let de = CborDeserializer::new(&bytes, 128);
+            assert_eq!(
+                de.container_size(),
+                Some(10 / element_bytes),
+                "header {header:#x}"
             );
-            assert_eq!(result.is_ok(), strict);
-            assert_eq!(visited, !strict);
         }
-    }
-
-    #[test]
-    fn strict_top_level_containers() {
-        for input in [
-            vec![0xa0],
-            vec![0xbf, 0xff],
-            vec![0xa1, 0x61, b'x', 0x81, 0xa0],
-            vec![0xbf, 0x61, b'x', 0x9f, 0xbf, 0xff, 0xff, 0xff],
-        ] {
-            for strict in [false, true] {
-                let mut de = CborDeserializer::new(&input, 128).with_strictness(strict);
-                de.read_struct(&STRING, &mut |_, _| Ok(())).unwrap();
-                let mut trailing = input.clone();
-                trailing.push(0);
-                let mut de = CborDeserializer::new(&trailing, 128).with_strictness(strict);
-                assert_eq!(de.read_struct(&STRING, &mut |_, _| Ok(())).is_err(), strict);
-            }
+        // A well-formed container still reports its declared size.
+        let mut enc = crate::Encoder::new(Vec::new());
+        enc.array(3);
+        for i in 0..3 {
+            enc.integer(i);
         }
+        let bytes = enc.into_writer();
+        let de = CborDeserializer::new(&bytes, 128);
+        assert_eq!(de.container_size(), Some(3));
+        // The fast list path still decodes and rejects the truncated input.
+        let mut truncated = vec![0x9b];
+        truncated.extend_from_slice(&u64::MAX.to_be_bytes());
+        let mut de = CborDeserializer::new(&truncated, 128);
+        assert!(de.read_integer_list(&INTEGER).is_err());
+        assert_eq!(CborDeserializer::prealloc(u64::MAX, usize::MAX, 1), 10_000);
     }
 
     #[test]
@@ -509,6 +514,43 @@ mod tests {
         let bytes = make_deser(|s| s.write_null(&STRING).unwrap());
         let mut de = CborDeserializer::new(&bytes, 128);
         de.read_null().unwrap();
+    }
+
+    #[test]
+    fn server_null_struct_members_leave_defaults_untouched() {
+        static X: Schema =
+            Schema::new_member(shape_id!("test", "S", "x"), ShapeType::Integer, "x", 0);
+        static S: Schema = Schema::new_struct(shape_id!("test", "S"), ShapeType::Structure, &[&X]);
+        for strict in [false, true] {
+            let mut value = 42;
+            let result = CborDeserializer::new(b"\xa1\x61x\xf6", 128)
+                .with_strictness(strict)
+                .read_struct(&S, &mut |m, d| {
+                    value = d.read_integer(m)?;
+                    Ok(())
+                });
+            assert_eq!(result.is_ok(), strict);
+            assert_eq!(value, 42);
+        }
+    }
+
+    #[test]
+    fn strict_top_level_containers() {
+        for input in [
+            vec![0xa0],
+            vec![0xbf, 0xff],
+            vec![0xa1, 0x61, b'x', 0x81, 0xa0],
+            vec![0xbf, 0x61, b'x', 0x9f, 0xbf, 0xff, 0xff, 0xff],
+        ] {
+            for strict in [false, true] {
+                let mut de = CborDeserializer::new(&input, 128).with_strictness(strict);
+                de.read_struct(&STRING, &mut |_, _| Ok(())).unwrap();
+                let mut trailing = input.clone();
+                trailing.push(0);
+                let mut de = CborDeserializer::new(&trailing, 128).with_strictness(strict);
+                assert_eq!(de.read_struct(&STRING, &mut |_, _| Ok(())).is_err(), strict);
+            }
+        }
     }
 
     #[test]
@@ -670,6 +712,9 @@ mod tests {
     fn test_container_size_definite() {
         let mut enc = crate::Encoder::new(Vec::new());
         enc.array(5);
+        for i in 0..5 {
+            enc.integer(i);
+        }
         let bytes = enc.into_writer();
         let de = CborDeserializer::new(&bytes, 128);
         assert_eq!(de.container_size(), Some(5));

@@ -10,10 +10,6 @@ use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::Schema;
 use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
 
-/// CBOR serializer that implements the ShapeSerializer trait.
-///
-/// Wraps the existing optimized `Encoder` which uses `minicbor` with
-/// infallible writes to `Vec<u8>`.
 /// Tracks the kind of CBOR container currently being written.
 ///
 /// In RPC v2 CBOR a structure is a map keyed by member name, but list elements
@@ -29,9 +25,22 @@ enum Container {
     Map,
 }
 
+/// Callback for writing members into the currently open structure map.
+///
+/// Runs after the map and its container state are opened, before modeled members.
+/// The schema is the value's structure or union schema, obtained through
+/// [`SerializableStruct::schema`]. Any error is returned immediately without
+/// writing modeled members.
+pub type StructPrefix = fn(&Schema<'_>, &mut dyn ShapeSerializer) -> Result<(), SerdeError>;
+
+/// CBOR serializer that implements the [`ShapeSerializer`] trait.
+///
+/// Wraps the existing optimized `Encoder` which uses `minicbor` with
+/// infallible writes to `Vec<u8>`.
 pub struct CborSerializer {
     encoder: crate::Encoder,
     container_stack: Vec<Container>,
+    struct_prefix: Option<StructPrefix>,
 }
 
 impl CborSerializer {
@@ -39,7 +48,17 @@ impl CborSerializer {
         Self {
             encoder: crate::Encoder::new(Vec::new()),
             container_stack: Vec::new(),
+            struct_prefix: None,
         }
+    }
+
+    /// Installs a callback that writes members into each currently open structure
+    /// map before its modeled members. The callback receives the value's schema,
+    /// preserving the supplied member schema for field naming. Errors stop
+    /// serialization immediately. By default, no callback is installed.
+    pub fn with_struct_prefix(mut self, prefix: StructPrefix) -> Self {
+        self.struct_prefix = Some(prefix);
+        self
     }
 
     /// Writes the member name as a CBOR text string key, but only for structure
@@ -70,6 +89,9 @@ impl ShapeSerializer for CborSerializer {
         self.write_member_key(schema);
         self.encoder.begin_map();
         self.container_stack.push(Container::Struct);
+        if let Some(prefix) = self.struct_prefix {
+            prefix(value.schema(), self)?;
+        }
         value.serialize_members(self)?;
         self.container_stack.pop();
         self.encoder.end();
@@ -356,6 +378,105 @@ mod tests {
         assert_eq!(dec.str().unwrap().as_ref(), "Alice");
         assert_eq!(dec.str().unwrap().as_ref(), "age");
         assert_eq!(dec.integer().unwrap(), 30);
+    }
+
+    mod struct_prefix {
+        use super::*;
+
+        static NAME: Schema = Schema::new_member(
+            shape_id!("test", "Value", "name"),
+            ShapeType::String,
+            "name",
+            0,
+        );
+        static VALUE: Schema =
+            Schema::new_struct(shape_id!("test", "Value"), ShapeType::Structure, &[&NAME]);
+        static MEMBER: Schema = Schema::new_member(
+            shape_id!("test", "Container", "value"),
+            ShapeType::Structure,
+            "value",
+            0,
+        );
+        static PREFIX: Schema = Schema::new_member(
+            shape_id!("test", "Value", "prefix"),
+            ShapeType::String,
+            "prefix",
+            1,
+        );
+
+        struct Value;
+        impl SerializableStruct for Value {
+            fn schema(&self) -> &Schema<'_> {
+                &VALUE
+            }
+
+            fn serialize_members(
+                &self,
+                serializer: &mut dyn ShapeSerializer,
+            ) -> Result<(), SerdeError> {
+                serializer.write_string(&NAME, "Alice")
+            }
+        }
+
+        #[test]
+        fn absent_by_default() {
+            let mut serializer = CborCodec::default().create_serializer();
+            serializer.write_struct(&VALUE, &Value).unwrap();
+            let mut expected = crate::Encoder::new(Vec::new());
+            expected.begin_map().str("name").str("Alice").end();
+            assert_eq!(serializer.finish(), expected.into_writer());
+        }
+
+        #[test]
+        fn prefix_precedes_members_and_receives_value_schema() {
+            let mut serializer = CborCodec::default().create_serializer().with_struct_prefix(
+                |schema, serializer| {
+                    let expected = &VALUE;
+                    assert_eq!(schema.shape_id(), expected.shape_id());
+                    assert_eq!(schema.member_name(), expected.member_name());
+                    serializer.write_string(&PREFIX, schema.shape_id().as_str())
+                },
+            );
+            serializer
+                .write_list(
+                    &Schema::new(shape_id!("test", "Values"), ShapeType::List),
+                    &|serializer| serializer.write_struct(&MEMBER, &Value),
+                )
+                .unwrap();
+            let mut expected = crate::Encoder::new(Vec::new());
+            expected
+                .begin_array()
+                .begin_map()
+                .str("prefix")
+                .str(VALUE.shape_id().as_str())
+                .str("name")
+                .str("Alice")
+                .end()
+                .end();
+            assert_eq!(serializer.finish(), expected.into_writer());
+        }
+
+        #[test]
+        fn prefix_failure_prevents_modeled_members() {
+            struct UnreachableMembers;
+            impl SerializableStruct for UnreachableMembers {
+                fn schema(&self) -> &Schema<'_> {
+                    &VALUE
+                }
+
+                fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                    panic!("modeled members must not be serialized after prefix failure")
+                }
+            }
+            let mut serializer = CborCodec::default()
+                .create_serializer()
+                .with_struct_prefix(|_, _| Err(SerdeError::custom("prefix failed")));
+            let error = serializer
+                .write_struct(&VALUE, &UnreachableMembers)
+                .unwrap_err();
+            assert!(error.to_string().contains("prefix failed"));
+            assert_eq!(serializer.finish(), vec![0xbf]);
+        }
     }
 
     #[test]
