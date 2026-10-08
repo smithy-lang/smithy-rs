@@ -8,7 +8,7 @@
 
 use aws_smithy_runtime_api::http::Headers;
 use aws_smithy_schema::codec::Codec;
-use aws_smithy_schema::serde::ShapeDeserializer;
+use aws_smithy_schema::serde::{SerdeError, ShapeDeserializer};
 use aws_smithy_schema::{Schema, ShapeType};
 
 use crate::rejection::MissingContentTypeReason;
@@ -18,7 +18,7 @@ use crate::schema::DeserializeError;
 pub(super) use crate::schema::request_bindings::is_body_member;
 
 /// The `Content-Type` of event stream requests and responses.
-pub(super) const EVENT_STREAM_CONTENT_TYPE: &str = "application/vnd.amazon.eventstream";
+pub(crate) const EVENT_STREAM_CONTENT_TYPE: &str = "application/vnd.amazon.eventstream";
 
 /// The response `Content-Type` of a streaming blob without `@mediaType`.
 pub(super) const OCTET_STREAM_CONTENT_TYPE: &str = "application/octet-stream";
@@ -28,19 +28,28 @@ pub(super) const OCTET_STREAM_CONTENT_TYPE: &str = "application/octet-stream";
 pub(crate) enum ExpectedContentType {
     /// Do not look at the header.
     Skip,
-    /// The header must be absent.
-    Absent,
     /// The header must carry this media type, or one of the aliases the protocol also accepts for
     /// it, when the body is not empty.
     Expect(mime::Mime, &'static [&'static str]),
 }
 
-fn parse_mime(value: &str) -> mime::Mime {
-    value.parse().expect("modeled media types are valid MIME types")
+/// The parsed event stream media type, shared so per-request paths never re-parse it.
+pub(crate) static EVENT_STREAM_MIME: std::sync::LazyLock<mime::Mime> =
+    std::sync::LazyLock::new(|| EVENT_STREAM_CONTENT_TYPE.parse().expect("static media type is valid"));
+
+/// Smithy does not validate `@mediaType` syntax, so a modeled value may fail to parse. Registered
+/// schemas are validated at build time; a dynamic schema reaching this per request degrades to
+/// the protocol's internal-failure response instead of panicking.
+pub(crate) fn parse_mime(value: &str) -> Result<mime::Mime, DeserializeError> {
+    value.parse().map_err(|err| {
+        DeserializeError::InternalFailure(crate::Error::new(SerdeError::custom(format!(
+            "invalid modeled media type `{value}`: {err}"
+        ))))
+    })
 }
 
 /// The `@httpPayload` member of `schema`, if any.
-pub(super) fn payload_member<'s>(schema: &'s Schema<'s>) -> Option<&'s Schema<'s>> {
+pub(crate) fn payload_member<'s>(schema: &'s Schema<'s>) -> Option<&'s Schema<'s>> {
     schema.members().iter().copied().find(|m| m.http_payload().is_some())
 }
 
@@ -53,10 +62,9 @@ pub(super) fn has_streaming_payload(schema: &Schema<'_>) -> bool {
 ///
 /// A `@httpPayload` member fixes the expected type: `@mediaType` when present, `text/plain` for
 /// strings, the codec's type for structures and documents, and no check for a blob without a media
-/// type or for a streaming payload (the legacy server checks neither). An input with no members
-/// must have no `Content-Type` at all, unless the input was modeled by the user (the schema then
-/// carries an original name) in which case the header is ignored. Otherwise the codec's type is
-/// expected when any member is bound to the body.
+/// type or for a streaming payload (the legacy server checks neither). Inputs with no members
+/// ignore the header: protocol identification has already checked it, and there is no body to
+/// deserialize. Otherwise the codec's type is expected when any member is bound to the body.
 ///
 /// `codec_aliases` are further media types the protocol accepts wherever the codec's own type is
 /// expected (restXml accepts `text/xml` for `application/xml`). They do not apply to a payload
@@ -65,31 +73,27 @@ pub(crate) fn expected_request_content_type(
     input: &Schema<'_>,
     codec_content_type: &'static str,
     codec_aliases: &'static [&'static str],
-) -> ExpectedContentType {
+) -> Result<ExpectedContentType, DeserializeError> {
     if let Some(payload) = payload_member(input) {
         if payload.streaming() {
-            return ExpectedContentType::Skip;
+            return Ok(ExpectedContentType::Skip);
         }
         let media_type = payload.media_type().map(|m| m.value());
-        return match (payload.shape_type(), media_type) {
+        return Ok(match (payload.shape_type(), media_type) {
             (ShapeType::Blob, None) => ExpectedContentType::Skip,
-            (ShapeType::Blob, Some(media)) => ExpectedContentType::Expect(parse_mime(media), &[]),
-            (ShapeType::String, media) => ExpectedContentType::Expect(parse_mime(media.unwrap_or("text/plain")), &[]),
-            _ => ExpectedContentType::Expect(parse_mime(codec_content_type), codec_aliases),
-        };
+            (ShapeType::Blob, Some(media)) => ExpectedContentType::Expect(parse_mime(media)?, &[]),
+            (ShapeType::String, media) => ExpectedContentType::Expect(parse_mime(media.unwrap_or("text/plain"))?, &[]),
+            _ => ExpectedContentType::Expect(parse_mime(codec_content_type)?, codec_aliases),
+        });
     }
     if input.members().is_empty() {
-        return if input.original_name().is_none() {
-            ExpectedContentType::Absent
-        } else {
-            ExpectedContentType::Skip
-        };
+        return Ok(ExpectedContentType::Skip);
     }
-    if input.members().iter().any(|m| is_body_member(m)) {
-        ExpectedContentType::Expect(parse_mime(codec_content_type), codec_aliases)
+    Ok(if input.members().iter().any(|m| is_body_member(m)) {
+        ExpectedContentType::Expect(parse_mime(codec_content_type)?, codec_aliases)
     } else {
         ExpectedContentType::Skip
-    }
+    })
 }
 
 /// Checks the `Content-Type` header against `expected`, or against one of `aliases` for it.
@@ -129,7 +133,6 @@ pub(super) fn enforce_content_type(
 ) -> Result<(), DeserializeError> {
     match expected {
         ExpectedContentType::Skip => Ok(()),
-        ExpectedContentType::Absent => check_content_type(headers, None, &[]),
         ExpectedContentType::Expect(..) if body.is_empty() => Ok(()),
         ExpectedContentType::Expect(content_type, aliases) => {
             check_content_type(headers, Some(content_type.essence_str()), aliases)
@@ -177,7 +180,7 @@ pub(super) fn check_accept(headers: &Headers, expected: &mime::Mime) -> Result<(
 /// Rejects the request when `expected` is a media type its `Accept` header cannot accept.
 pub(super) fn enforce_expected_accept(headers: &Headers, expected: Option<&str>) -> Result<(), DeserializeError> {
     match expected {
-        Some(expected) => check_accept(headers, &parse_mime(expected)),
+        Some(expected) => check_accept(headers, &parse_mime(expected)?),
         None => Ok(()),
     }
 }

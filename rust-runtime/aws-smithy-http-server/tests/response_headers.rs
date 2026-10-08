@@ -168,6 +168,213 @@ fn all_header_values_survive_outputs_errors_and_streaming_heads() {
     }
 }
 
+static EPOCH_TIMESTAMP: Schema = Schema::new(shape_id!("test", "EpochTimestamp"), ShapeType::Timestamp)
+    .with_timestamp_format(aws_smithy_schema::traits::TimestampFormat::EpochSeconds);
+static DATE_TIME_TIMESTAMP: Schema = Schema::new(shape_id!("test", "DateTimeTimestamp"), ShapeType::Timestamp)
+    .with_timestamp_format(aws_smithy_schema::traits::TimestampFormat::DateTime);
+static DEFAULT_TIMES: Schema = Schema::new_member(
+    shape_id!("test", "TimestampHeaders", "defaults"),
+    ShapeType::List,
+    "defaults",
+    0,
+)
+.with_list_member(&prelude::TIMESTAMP)
+.with_http_header("x-default-times");
+static EPOCH_TIMES: Schema = Schema::new_member(
+    shape_id!("test", "TimestampHeaders", "epochs"),
+    ShapeType::List,
+    "epochs",
+    1,
+)
+.with_list_member(&EPOCH_TIMESTAMP)
+.with_http_header("x-epoch-times");
+static DATE_TIMES: Schema = Schema::new_member(
+    shape_id!("test", "TimestampHeaders", "dates"),
+    ShapeType::List,
+    "dates",
+    2,
+)
+.with_list_member(&DATE_TIME_TIMESTAMP)
+.with_http_header("x-date-times");
+static MEMBER_FORMAT_TIMES: Schema = Schema::new_member(
+    shape_id!("test", "TimestampHeaders", "member"),
+    ShapeType::List,
+    "member",
+    3,
+)
+.with_list_member(&prelude::TIMESTAMP)
+.with_timestamp_format(aws_smithy_schema::traits::TimestampFormat::EpochSeconds)
+.with_http_header("x-member-times");
+static ELEMENT_FORMAT_TIMES: Schema = Schema::new_member(
+    shape_id!("test", "TimestampHeaders", "element"),
+    ShapeType::List,
+    "element",
+    4,
+)
+.with_list_member(&EPOCH_TIMESTAMP)
+.with_timestamp_format(aws_smithy_schema::traits::TimestampFormat::DateTime)
+.with_http_header("x-element-times");
+static DEFAULT_TIME: Schema = Schema::new_member(
+    shape_id!("test", "TimestampHeaders", "default"),
+    ShapeType::Timestamp,
+    "default",
+    5,
+)
+.with_http_header("x-default-time");
+static EPOCH_TIME: Schema = Schema::new_member(
+    shape_id!("test", "TimestampHeaders", "epoch"),
+    ShapeType::Timestamp,
+    "epoch",
+    6,
+)
+.with_timestamp_format(aws_smithy_schema::traits::TimestampFormat::EpochSeconds)
+.with_http_header("x-epoch-time");
+static DATE_TIME: Schema = Schema::new_member(
+    shape_id!("test", "TimestampHeaders", "date"),
+    ShapeType::Timestamp,
+    "date",
+    7,
+)
+.with_timestamp_format(aws_smithy_schema::traits::TimestampFormat::DateTime)
+.with_http_header("x-date-time");
+static TIME_ATTRIBUTE: Schema = Schema::new_member(
+    shape_id!("test", "TimestampHeaders", "attr"),
+    ShapeType::String,
+    "attr",
+    8,
+)
+.with_xml_attribute();
+static TIMESTAMP_HEADERS: Schema = Schema::new_struct(
+    shape_id!("test", "TimestampHeaders"),
+    ShapeType::Structure,
+    &[
+        &DEFAULT_TIMES,
+        &EPOCH_TIMES,
+        &DATE_TIMES,
+        &MEMBER_FORMAT_TIMES,
+        &ELEMENT_FORMAT_TIMES,
+        &DEFAULT_TIME,
+        &EPOCH_TIME,
+        &DATE_TIME,
+        &TIME_ATTRIBUTE,
+    ],
+)
+.with_original_name("TimestampHeaders");
+
+#[derive(Debug)]
+struct TimestampHeaders {
+    element_schema: Option<&'static Schema<'static>>,
+}
+
+impl SerializableStruct for TimestampHeaders {
+    fn schema(&self) -> &Schema<'_> {
+        &TIMESTAMP_HEADERS
+    }
+
+    fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+        for member in [
+            &DEFAULT_TIMES,
+            &EPOCH_TIMES,
+            &DATE_TIMES,
+            &MEMBER_FORMAT_TIMES,
+            &ELEMENT_FORMAT_TIMES,
+        ] {
+            s.write_list(member, &|s| {
+                let element = self.element_schema.unwrap_or_else(|| member.member().unwrap());
+                for seconds in [0, 7] {
+                    s.write_timestamp(element, &aws_smithy_types::DateTime::from_secs(seconds))?;
+                }
+                Ok(())
+            })?;
+        }
+        for member in [&DEFAULT_TIME, &EPOCH_TIME, &DATE_TIME] {
+            s.write_timestamp(member, &aws_smithy_types::DateTime::from_secs(0))?;
+        }
+        // Exercise the XML attribute pass as well as ordinary JSON serialization.
+        s.write_string(&TIME_ATTRIBUTE, "attr")
+    }
+}
+
+impl std::fmt::Display for TimestampHeaders {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("modeled timestamp error")
+    }
+}
+
+impl std::error::Error for TimestampHeaders {}
+
+impl HttpModeledError for TimestampHeaders {
+    fn status_code(&self) -> u16 {
+        422
+    }
+}
+
+#[test]
+fn timestamp_headers_use_member_and_element_formats() {
+    for protocol in protocols() {
+        let value = TimestampHeaders { element_schema: None };
+        for (response, status) in [
+            (protocol.serialize_response(&TIMESTAMP_HEADERS, &value), 200),
+            (protocol.serialize_error(&value), 422),
+            (
+                protocol.serialize_streaming_response(&TIMESTAMP_HEADERS, &value, empty()),
+                200,
+            ),
+        ] {
+            assert_eq!(response.status(), status);
+            assert_eq!(
+                values(response.headers(), "x-default-times"),
+                ["Thu, 01 Jan 1970 00:00:00 GMT", "Thu, 01 Jan 1970 00:00:07 GMT"]
+            );
+            for name in ["x-epoch-times", "x-member-times", "x-element-times"] {
+                assert_eq!(values(response.headers(), name), ["0", "7"], "{name}");
+            }
+            assert_eq!(
+                values(response.headers(), "x-date-times"),
+                ["1970-01-01T00:00:00Z", "1970-01-01T00:00:07Z"]
+            );
+            assert_eq!(
+                values(response.headers(), "x-default-time"),
+                ["Thu, 01 Jan 1970 00:00:00 GMT"]
+            );
+            assert_eq!(values(response.headers(), "x-epoch-time"), ["0"]);
+            assert_eq!(values(response.headers(), "x-date-time"), ["1970-01-01T00:00:00Z"]);
+        }
+    }
+}
+
+#[test]
+fn timestamp_header_lists_keep_compiled_format_when_writing_an_unformatted_target() {
+    for protocol in protocols() {
+        let value = TimestampHeaders {
+            element_schema: Some(&prelude::TIMESTAMP),
+        };
+        let response = protocol.serialize_response(&TIMESTAMP_HEADERS, &value);
+        assert_eq!(response.status(), 200);
+        for name in ["x-epoch-times", "x-member-times", "x-element-times"] {
+            assert_eq!(values(response.headers(), name), ["0", "7"], "{name}");
+        }
+        assert_eq!(
+            values(response.headers(), "x-date-times"),
+            ["1970-01-01T00:00:00Z", "1970-01-01T00:00:07Z"]
+        );
+    }
+}
+
+#[test]
+fn timestamp_header_lists_honor_the_schema_passed_to_the_element_writer() {
+    for protocol in protocols() {
+        let value = TimestampHeaders {
+            element_schema: Some(&EPOCH_TIMESTAMP),
+        };
+        let response = protocol.serialize_response(&TIMESTAMP_HEADERS, &value);
+        assert_eq!(response.status(), 200);
+        for name in ["x-default-times", "x-date-times"] {
+            assert_eq!(values(response.headers(), name), ["0", "7"], "{name}");
+        }
+    }
+}
+
 #[tokio::test]
 async fn buffered_lengths_match_actual_output_and_error_bodies() {
     let mut protocols = protocols();

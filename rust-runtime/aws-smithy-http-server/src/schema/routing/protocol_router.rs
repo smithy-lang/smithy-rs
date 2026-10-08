@@ -6,13 +6,14 @@
 //! Protocol router interfaces, route claims, and supporting construction types.
 
 use crate::schema::routing::RoutingError;
-use crate::schema::{OperationSchema, ServiceSchema};
+use crate::schema::{OperationSchema, ServiceConfig, ServiceSchema};
 use crate::{error::BoxError, schema::ServiceRequestBodyConfig};
+use aws_smithy_schema::ShapeId;
 use aws_smithy_types::Document;
 use bytes::Bytes;
 use http::Request;
 
-use std::{collections::HashMap, fmt, sync::Arc};
+use std::{collections::HashMap, fmt};
 
 /// The kind of streaming member in an operation's input or output.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -89,36 +90,41 @@ impl OperationTarget {
     }
 }
 
-/// Construction options, independent of any generated router implementation.
+/// Shared service configuration and protocol settings, independent of generated implementations.
 #[derive(Clone, Debug, Default)]
 #[non_exhaustive]
-pub struct RoutingOptions {
-    /// Global and per-operation body-read allowances. Operation entries replace the whole record.
-    pub request_body: ServiceRequestBodyConfig,
+pub struct ProtocolOptions {
+    /// Typed service-wide configuration shared by every protocol.
+    pub service_config: ServiceConfig,
     /// Per-protocol settings, keyed by protocol shape ID such as
-    /// `smithy.protocols#rpcv2Cbor`. Each section is opaque here: the protocol
-    /// it names parses it in its `build_router` (see
-    /// [`MetadataRoutedProtocol::build_router`](crate::schema::MetadataRoutedProtocol::build_router))
-    /// and rejects invalid values with [`RouterBuildError::Configuration`].
-    pub protocol_settings: HashMap<String, Document>,
+    /// `smithy.protocols#rpcv2Cbor`. Each protocol parses its own section when
+    /// constructing itself or its router, rejecting invalid values with
+    /// [`RouterBuildError::Configuration`].
+    pub protocol_settings: HashMap<ShapeId<'static>, Document>,
 }
 
-impl RoutingOptions {
-    /// Sets the service body-read allowances.
+impl ProtocolOptions {
+    /// Sets the service-wide configuration.
+    pub fn with_service_config(mut self, service_config: ServiceConfig) -> Self {
+        self.service_config = service_config;
+        self
+    }
+
+    /// Sets the request body collection configuration.
     pub fn with_request_body(mut self, request_body: ServiceRequestBodyConfig) -> Self {
-        self.request_body = request_body;
+        self.service_config.request_body = request_body;
         self
     }
 
     /// Sets the per-protocol settings.
-    pub fn with_protocol_settings(mut self, protocol_settings: HashMap<String, Document>) -> Self {
+    pub fn with_protocol_settings(mut self, protocol_settings: HashMap<ShapeId<'static>, Document>) -> Self {
         self.protocol_settings = protocol_settings;
         self
     }
 }
 
 /// Everything a protocol sees when building its router: the service, the
-/// assigned targets, the server-global configuration, and the protocol's own
+/// assigned targets, the shared service configuration, and the protocol's own
 /// settings section. Constructed by the routing service builder, so a protocol never
 /// sees another protocol's settings.
 #[derive(Debug)]
@@ -128,37 +134,50 @@ pub struct RouterBuildContext<'a> {
     pub service: &'static ServiceSchema<'static>,
     /// The operations to route, with targets assigned by the routing service.
     pub targets: &'a [OperationTarget],
-    /// Server-global body-read allowances. Body-first routing collects under
-    /// [`ServiceRequestBodyConfig::for_routing`], enforced by the routing
-    /// service itself, not the protocol.
-    pub config: &'a ServiceRequestBodyConfig,
-    /// This protocol's section of [`RoutingOptions::protocol_settings`], when
+    /// Typed service-wide configuration shared by every protocol.
+    pub config: &'a ServiceConfig,
+    /// This protocol's section of [`ProtocolOptions::protocol_settings`], when
     /// one was configured.
     pub protocol_settings: Option<&'a Document>,
 }
 
-/// Invalid schema, bindings, or protocol-specific routing configuration.
+/// Failure to bind handlers, resolve protocols, or construct service routing.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum RouterBuildError {
-    #[error("no protocol registration recognizes the service schema")]
-    UnknownProtocol,
-    /// Declared service protocols without a runtime registration, in declaration order.
-    #[error("missing protocol registrations: {}", .protocols.join(", "))]
-    MissingProtocols { protocols: Vec<String> },
+    /// Invalid or missing operation handler bindings.
     #[error("invalid operation binding: {0}")]
     Binding(String),
+    /// Invalid service configuration, protocol settings, or schema bindings.
     #[error("invalid routing configuration: {0}")]
     Configuration(String),
+    /// Protocol registration or claim ordering could not be resolved.
+    #[error("{0}")]
+    ProtocolResolution(#[from] ProtocolResolutionError),
+    /// A protocol reported a failure while constructing itself or its router.
+    #[error("protocol or router construction failed: {0}")]
+    Protocol(#[source] BoxError),
+}
+
+/// Failure to resolve a service's protocol registrations or claim ordering.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum ProtocolResolutionError {
+    /// The service schema declares no protocols.
+    #[error("the service schema declares no protocols")]
+    NoProtocolsDeclared,
+    /// Declared service protocols without a runtime registration, in declaration order.
+    #[error("missing protocol registrations: {}", .protocols.join(", "))]
+    MissingRegistrations { protocols: Vec<String> },
+    /// The same protocol is registered more than once.
+    #[error("protocol {protocol} is registered more than once")]
+    DuplicateRegistration { protocol: String },
     /// Registered protocols participating in ordering cycles, in registration order.
     #[error("protocol ordering constraints form a cycle involving: {}", .protocols.join(", "))]
-    ProtocolOrderCycle { protocols: Vec<String> },
-    #[error("protocol {protocol} is registered more than once")]
-    DuplicateProtocol { protocol: String },
+    OrderCycle { protocols: Vec<String> },
+    /// Two served protocols have no ordering constraint relating them.
     #[error("no ordering constraint relates protocols {first} and {second}; add a `ProtocolOrder` between them")]
-    AmbiguousProtocolOrder { first: String, second: String },
-    #[error("protocol could not build its router: {0}")]
-    Protocol(#[source] BoxError),
+    AmbiguousOrder { first: String, second: String },
 }
 
 /// A protocol's answer to whether a request is its own.
@@ -280,29 +299,29 @@ pub trait BodyProtocolRouter: Send + Sync + fmt::Debug {
     }
 }
 
-/// Shared operation router built by a server protocol.
+/// Operation router built by a server protocol and owned by the shared routing state.
 ///
 /// The variant is decided by the protocol's registration kind: a
 /// [`MetadataRoutedProtocol`](crate::schema::MetadataRoutedProtocol) can only build a
 /// [`Metadata`](Self::Metadata) router and a
 /// [`BodyRoutedProtocol`](crate::schema::BodyRoutedProtocol) a [`Body`](Self::Body) one,
 /// so dispatch matching on this enum speaks the claim protocol the registration promised.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum SharedProtocolRouter {
     /// Selects operations from request metadata alone.
-    Metadata(Arc<dyn MetadataProtocolRouter>),
+    Metadata(Box<dyn MetadataProtocolRouter>),
     /// May read collected body bytes to select operations.
-    Body(Arc<dyn BodyProtocolRouter>),
+    Body(Box<dyn BodyProtocolRouter>),
 }
 
 impl SharedProtocolRouter {
     /// Wraps a router that selects from request metadata alone.
     pub fn new(router: impl MetadataProtocolRouter + 'static) -> Self {
-        Self::Metadata(Arc::new(router))
+        Self::Metadata(Box::new(router))
     }
 
     /// Wraps a router that selects from the request body the routing service collects.
     pub fn new_body_routed(router: impl BodyProtocolRouter + 'static) -> Self {
-        Self::Body(Arc::new(router))
+        Self::Body(Box::new(router))
     }
 }

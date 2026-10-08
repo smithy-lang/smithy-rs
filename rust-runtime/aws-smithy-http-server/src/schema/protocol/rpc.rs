@@ -93,10 +93,8 @@ impl<C> RpcProtocol<C> {
             return Ok(());
         }
         if has_streaming_payload(output) && matches!(self.streaming, RpcStreaming::EventStreamContentType) {
-            let event_stream = EVENT_STREAM_CONTENT_TYPE
-                .parse()
-                .expect("event stream content type is a valid MIME type");
-            return if accept_permits(headers, &event_stream) || accept_permits(headers, &self.content_type_mime) {
+            let event_stream = &*super::request::EVENT_STREAM_MIME;
+            return if accept_permits(headers, event_stream) || accept_permits(headers, &self.content_type_mime) {
                 Ok(())
             } else {
                 Err(DeserializeError::NotAcceptable)

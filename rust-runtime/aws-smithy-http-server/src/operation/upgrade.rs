@@ -325,6 +325,7 @@ where
             let body = request.body_mut().take().expect("request body is present");
             let input_streams = operation.input().members().iter().any(|member| member.streaming());
             let (bytes, body) = if input_streams {
+                let body = crate::body::wrap_streaming_body(body);
                 (bytes::Bytes::new(), SdkBody::from_body_1_x(body))
             } else if directive == BodyDirective::Collect {
                 match collect_request_body(body, &selected.request_body_config()).await {

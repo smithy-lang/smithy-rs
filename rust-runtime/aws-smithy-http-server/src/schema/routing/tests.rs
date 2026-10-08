@@ -2,18 +2,16 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+use super::test_helpers::*;
 use super::*;
 use crate::body::{Body, BoxBody};
 use crate::error::Error;
 use crate::protocol::rpc_v2_cbor::SMITHY_PROTOCOL_HEADER;
 use crate::response::Response;
 use crate::routing::SyncRoute;
-use crate::schema::{DeserializeError, HttpModeledError, RequestBodyCollectionConfig, ServerProtocol};
-use crate::schema::{
-    OperationSchema, ProtocolOrder, ProtocolRegistration, ProtocolRegistry, SelectedProtocolOperation, ServiceSchema,
-};
-use aws_smithy_schema::serde::{SerializableStruct, ShapeDeserializer};
-use aws_smithy_schema::{shape_id, traits::HttpTrait, Schema, ShapeId, ShapeType};
+use crate::schema::{DeserializeError, HttpModeledError, RequestBodyCollectionConfig};
+use crate::schema::{OperationSchema, ProtocolOrder, SelectedProtocolOperation, ServiceSchema};
+use aws_smithy_schema::{shape_id, traits::HttpTrait, Schema, ShapeType};
 use bytes::Bytes;
 use http::Request;
 use http::{HeaderMap, HeaderValue, StatusCode};
@@ -29,230 +27,13 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 use tower::{Service, ServiceExt};
 
-static UNIT: Schema<'static> = Schema::new(shape_id!("test", "Unit"), ShapeType::Structure);
-// Codegen records an operation's `@http` binding on its input schema.
-static FIRST_INPUT: Schema<'static> = Schema::new(shape_id!("test", "firstInput"), ShapeType::Structure)
-    .with_http(HttpTrait::new("POST", "/first", Some(200)));
-static SECOND_INPUT: Schema<'static> = Schema::new(shape_id!("test", "secondInput"), ShapeType::Structure)
-    .with_http(HttpTrait::new("POST", "/second", Some(200)));
-const FIRST_ID: ShapeId<'static> = shape_id!("test", "first");
-const SECOND_ID: ShapeId<'static> = shape_id!("test", "second");
-const SERVICE_ID: ShapeId<'static> = shape_id!("test", "Service");
-static FIRST: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &FIRST_INPUT, &UNIT, &[]);
-static SECOND: OperationSchema<'static> = OperationSchema::new(SECOND_ID, &SECOND_INPUT, &UNIT, &[]);
-static OPERATIONS: &[&OperationSchema<'static>] = &[&FIRST, &SECOND];
-static PROTOCOLS: &[ShapeId<'static>] = &[shape_id!("test", "bodyRouting")];
-static SERVICE: ServiceSchema<'static> = ServiceSchema::new(SERVICE_ID, None, PROTOCOLS, OPERATIONS);
-static REST_JSON: ServiceSchema<'static> =
-    ServiceSchema::new(SERVICE_ID, None, &[shape_id!("aws.protocols", "restJson1")], OPERATIONS);
-static REST_XML: ServiceSchema<'static> =
-    ServiceSchema::new(SERVICE_ID, None, &[shape_id!("aws.protocols", "restXml")], OPERATIONS);
-static AWS_JSON_10: ServiceSchema<'static> = ServiceSchema::new(
-    SERVICE_ID,
-    None,
-    &[shape_id!("aws.protocols", "awsJson1_0")],
-    OPERATIONS,
-);
-static AWS_JSON_11: ServiceSchema<'static> = ServiceSchema::new(
-    SERVICE_ID,
-    None,
-    &[shape_id!("aws.protocols", "awsJson1_1")],
-    OPERATIONS,
-);
-static RPC: ServiceSchema<'static> = ServiceSchema::new(
-    SERVICE_ID,
-    None,
-    &[shape_id!("smithy.protocols", "rpcv2Cbor")],
-    OPERATIONS,
-);
-
-/// The first line of this test protocol's request body names the operation.
-#[derive(Debug, Default)]
-struct BodyProtocol {
-    inner: crate::schema::protocol::RestJson1Protocol,
-}
-#[derive(Debug)]
-struct BodyRouter {
-    targets: Vec<OperationTarget>,
-}
-fn rejection(status: StatusCode, message: impl Into<Bytes>) -> Response<BoxBody> {
-    Response::builder()
-        .status(status)
-        .body(crate::body::from_bytes(message.into()))
-        .unwrap()
-}
-/// Asserts a body-collection rejection and returns its message for failure-kind checks.
-async fn rejection_message(response: Response<BoxBody>) -> String {
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-    let bytes = response.into_body().collect().await.unwrap().to_bytes();
-    String::from_utf8(bytes.to_vec()).unwrap()
-}
-/// The stub's malformed-request diagnostic; the wire form comes from the protocol's
-/// `serialize_routing_error`, which maps `MalformedRequest` to a `400`.
-#[derive(Debug)]
-struct InvalidName;
-impl std::fmt::Display for InvalidName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "invalid operation name")
-    }
-}
-impl std::error::Error for InvalidName {}
-impl BodyRouter {
-    /// Names the operation the collected body's first line selects, if any.
-    fn select(&self, request: &Request<CollectedBody>) -> Result<Option<OperationTarget>, RoutingError> {
-        let first_line = request
-            .body()
-            .bytes()
-            .split(|byte| *byte == b'\n')
-            .next()
-            .unwrap_or_default();
-        let name = std::str::from_utf8(first_line).map_err(|_| RoutingError::malformed(InvalidName))?;
-        Ok(self
-            .targets
-            .iter()
-            .find(|target| target.operation().shape_id().shape_name() == name)
-            .copied())
-    }
-}
-/// The `x-body-claim` header drives the router's claiming style per request, so one protocol
-/// covers every escalation shape. Absent, the router claims on the complete body's first line.
-fn claim_mode(headers: &HeaderMap) -> Option<&str> {
-    headers.get("x-body-claim").and_then(|value| value.to_str().ok())
-}
-impl BodyProtocolRouter for BodyRouter {
-    fn claim(&self, request: &Request<()>) -> BodyRouteClaim {
-        match claim_mode(request.headers()) {
-            Some("known-route") => BodyRouteClaim::ClaimedWithRoute(self.targets[0]),
-            Some("envelope") => BodyRouteClaim::Claimed,
-            Some("defer-head") => BodyRouteClaim::DeferredRejection(RoutingError::malformed(InvalidName)),
-            _ => BodyRouteClaim::NeedsBodyToClaim,
-        }
-    }
-    fn claim_with_body(&self, request: &Request<CollectedBody>) -> RouteClaim {
-        if claim_mode(request.headers()) == Some("defer-body") {
-            return RouteClaim::DeferredRejection(RoutingError::malformed(InvalidName));
-        }
-        if claim_mode(request.headers()) == Some("deferred-route") {
-            return RouteClaim::Claimed;
-        }
-        if claim_mode(request.headers()) == Some("magic") {
-            return if request.body().bytes().starts_with(b"BSF!") {
-                RouteClaim::ClaimedWithRoute(self.targets[0])
-            } else {
-                RouteClaim::NoClaim
-            };
-        }
-        match self.select(request) {
-            Ok(Some(selected)) => RouteClaim::ClaimedWithRoute(selected),
-            Ok(None) => RouteClaim::NoClaim,
-            Err(_) => RouteClaim::Claimed,
-        }
-    }
-    fn route_with_body(&self, request: &Request<CollectedBody>) -> Result<OperationTarget, RoutingError> {
-        assert_ne!(claim_mode(request.headers()), Some("known-route"));
-        self.select(request)?.ok_or_else(RoutingError::unknown_operation)
-    }
-}
-impl crate::schema::BodyRoutedProtocol for BodyProtocol {
-    fn from_build_context(_ctx: &crate::schema::ProtocolBuildContext<'_>) -> Result<Self, RouterBuildError> {
-        Ok(BodyProtocol::default())
-    }
-    fn build_router(
-        &self,
-        ctx: RouterBuildContext<'_>,
-    ) -> Result<impl BodyProtocolRouter + 'static + use<>, RouterBuildError> {
-        Ok(BodyRouter {
-            targets: ctx.targets.to_vec(),
-        })
-    }
-}
-impl ServerProtocol for BodyProtocol {
-    fn protocol_id(&self) -> &'static ShapeId<'static> {
-        &PROTOCOLS[0]
-    }
-    fn deserialize_request<'a>(
-        &'a self,
-        input: &Schema<'_>,
-        request: &'a aws_smithy_runtime_api::http::Request<bytes::Bytes>,
-    ) -> Result<Box<dyn ShapeDeserializer + 'a>, DeserializeError> {
-        self.inner.deserialize_request(input, request)
-    }
-    fn serialize_response(&self, output: &Schema<'_>, value: &dyn SerializableStruct) -> Response<BoxBody> {
-        self.inner.serialize_response(output, value)
-    }
-    fn serialize_streaming_response(
-        &self,
-        output: &Schema<'_>,
-        value: &dyn SerializableStruct,
-        body: BoxBody,
-    ) -> Response<BoxBody> {
-        self.inner.serialize_streaming_response(output, value, body)
-    }
-    fn serialize_error(&self, error: &dyn HttpModeledError) -> Response<BoxBody> {
-        self.inner.serialize_error(error)
-    }
-    fn serialize_rejection(&self, error: DeserializeError) -> Response<BoxBody> {
-        rejection(StatusCode::BAD_REQUEST, error.to_string())
-    }
-    fn serialize_routing_error(&self, err: &RoutingError) -> Response<BoxBody> {
-        match err.kind() {
-            RoutingErrorKind::MalformedRequest => rejection(StatusCode::BAD_REQUEST, err.to_string()),
-            _ => self.inner.serialize_error(err),
-        }
-    }
-}
-/// Leaks a one-registration registry; tests parameterize constraints at runtime.
-fn registry_of(registration: ProtocolRegistration) -> &'static ProtocolRegistry {
-    Box::leak(Box::new(ProtocolRegistry::new(Box::leak(Box::new([registration])))))
-}
-fn registry() -> &'static ProtocolRegistry {
-    static REGISTRY: ProtocolRegistry =
-        ProtocolRegistry::new(&[ProtocolRegistration::body_routed::<BodyProtocol>("test#bodyRouting")]);
-    &REGISTRY
-}
-fn binding(operation: &'static OperationSchema<'static>) -> (&'static OperationSchema<'static>, SyncRoute<Body>) {
-    (
-        operation,
-        SyncRoute::new(tower::service_fn(move |request: Request<Body>| async move {
-            let selected = request
-                .extensions()
-                .get::<SelectedProtocolOperation>()
-                .expect("selection before handler");
-            assert!(std::ptr::eq(selected.operation(), operation));
-            // Echo the frames, which also checks that trailers survive the routing helper.
-            Ok::<_, Infallible>(Response::new(crate::body::boxed(request.into_body())))
-        })),
-    )
-}
-fn service_builder(options: RoutingOptions) -> MultiProtocolRoutingServiceBuilder {
-    MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings_with_options(
-        &SERVICE,
-        [registry()],
-        [binding(&SECOND), binding(&FIRST)],
-        options,
-    )
-}
-fn service(options: RoutingOptions) -> MultiProtocolRoutingService {
-    service_builder(options).build().unwrap()
-}
-
-fn config(bytes: usize, timeout_ms: u64) -> RequestBodyCollectionConfig {
-    RequestBodyCollectionConfig {
-        max_bytes: NonZeroUsize::new(bytes),
-        read_timeout: Some(Duration::from_millis(timeout_ms)),
-    }
-}
-fn request(body: impl Into<Bytes>) -> Request<Body> {
-    Request::new(Body::from_bytes(body.into()))
-}
-
 #[tokio::test]
 async fn separately_built_layers_leave_existing_services_and_requests_unchanged() {
-    let mut original = service(RoutingOptions::default());
+    let mut original = service(ProtocolOptions::default());
     let cloned = original.clone();
     assert!(Arc::ptr_eq(&original.state, &cloned.state));
     let pending = original.call(request("first\npayload"));
-    let layered = service_builder(RoutingOptions::default())
+    let layered = service_builder(ProtocolOptions::default())
         .layer(tower::layer::layer_fn(|route: SyncRoute<Body>| {
             tower::util::MapResponse::new(route, |mut response: Response<BoxBody>| {
                 response
@@ -292,14 +73,14 @@ async fn body_selects_index_and_preserves_payload_and_trailers() {
         Ok(Frame::trailers(trailers.clone())),
     ];
     let body = Body::new(http_body_util::StreamBody::new(futures_util::stream::iter(frames)));
-    let response = service(RoutingOptions::default())
+    let response = service(ProtocolOptions::default())
         .oneshot(Request::new(body))
         .await
         .unwrap();
     let collected = response.into_body().collect().await.unwrap();
     assert_eq!(collected.trailers(), Some(&trailers));
     assert_eq!(collected.to_bytes(), "first\n123");
-    let response = service(RoutingOptions::default())
+    let response = service(ProtocolOptions::default())
         .oneshot(request("second\npayload"))
         .await
         .unwrap();
@@ -370,20 +151,25 @@ async fn malformed_and_unknown_operation_are_terminal_rejections() {
         (Bytes::from_static(b"\xff\n"), StatusCode::BAD_REQUEST),
         (Bytes::from_static(b"unknown\n"), StatusCode::NOT_FOUND),
     ] {
-        let response = service(RoutingOptions::default()).oneshot(request(body)).await.unwrap();
+        let response = service(ProtocolOptions::default())
+            .oneshot(request(body))
+            .await
+            .unwrap();
         assert_eq!(response.status(), status);
     }
 }
 
 #[tokio::test]
 async fn provisional_maximum_caps_collection_and_is_the_only_routing_limit() {
-    let mut options = RoutingOptions::default();
-    options.request_body.global = config(8, 1000);
+    let mut options = ProtocolOptions::default();
+    options.service_config.request_body.global = config(8, 1000);
     options
+        .service_config
         .request_body
         .per_operation
         .insert(FIRST.shape_id().to_string(), config(64, 1000));
     options
+        .service_config
         .request_body
         .per_operation
         .insert(SECOND.shape_id().to_string(), config(10, 1000));
@@ -410,15 +196,16 @@ async fn provisional_maximum_caps_collection_and_is_the_only_routing_limit() {
 
 #[tokio::test]
 async fn explicit_unlimited_operation_dominates_and_absent_override_inherits_global() {
-    let mut options = RoutingOptions::default();
-    options.request_body.global = config(8, 1000);
+    let mut options = ProtocolOptions::default();
+    options.service_config.request_body.global = config(8, 1000);
     options
+        .service_config
         .request_body
         .per_operation
         .insert(FIRST.shape_id().to_string(), RequestBodyCollectionConfig::default());
     // The provisional allowance the router was built with: an explicit unlimited override
     // dominates the global limit on both axes.
-    let provisional = options.request_body.for_routing();
+    let provisional = options.service_config.request_body.for_routing();
     assert!(provisional.max_bytes.is_none());
     assert!(provisional.read_timeout.is_none());
     let app = service(options);
@@ -446,14 +233,15 @@ fn delayed_body(delay: Duration, bytes: &'static [u8]) -> Body {
 }
 #[tokio::test(start_paused = true)]
 async fn collection_enforces_the_provisional_maximum_timeout() {
-    let mut options = RoutingOptions::default();
-    options.request_body.global = config(64, 50);
+    let mut options = ProtocolOptions::default();
+    options.service_config.request_body.global = config(64, 50);
     options
+        .service_config
         .request_body
         .per_operation
         .insert(FIRST.shape_id().to_string(), config(64, 500));
     assert_eq!(
-        options.request_body.for_routing().read_timeout,
+        options.service_config.request_body.for_routing().read_timeout,
         Some(Duration::from_millis(500))
     );
     let app = service(options);
@@ -491,99 +279,13 @@ async fn body_read_failure_is_owned_by_protocol() {
         Error::new("transport failure"),
     )])));
     assert_eq!(
-        service(RoutingOptions::default())
+        service(ProtocolOptions::default())
             .oneshot(Request::new(body))
             .await
             .unwrap()
             .status(),
         StatusCode::BAD_REQUEST
     );
-}
-
-#[test]
-fn binding_and_protocol_validation() {
-    assert!(matches!(
-        MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings(&SERVICE, [registry()], [binding(&FIRST)])
-            .build(),
-        Err(RouterBuildError::Binding(_))
-    ));
-    assert!(matches!(
-        MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings(
-            &SERVICE,
-            [registry()],
-            [binding(&FIRST), binding(&FIRST)]
-        )
-        .build(),
-        Err(RouterBuildError::Binding(_))
-    ));
-    assert!(matches!(
-        MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings(&SERVICE, [], [binding(&FIRST), binding(&SECOND)]).build(),
-        Err(RouterBuildError::MissingProtocols { protocols }) if protocols == ["test#bodyRouting"]
-    ));
-    static NONE: ServiceSchema<'static> = ServiceSchema::new(SERVICE_ID, None, &[], OPERATIONS);
-    static MANY: ServiceSchema<'static> = ServiceSchema::new(
-        SERVICE_ID,
-        None,
-        &[
-            shape_id!("aws.protocols", "restJson1"),
-            shape_id!("aws.protocols", "restXml"),
-        ],
-        OPERATIONS,
-    );
-    assert!(matches!(
-        MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings(
-            &NONE,
-            [],
-            [binding(&FIRST), binding(&SECOND)]
-        )
-        .build(),
-        Err(RouterBuildError::UnknownProtocol)
-    ));
-    let many = MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings(
-        &MANY,
-        [],
-        [binding(&FIRST), binding(&SECOND)],
-    )
-    .build()
-    .expect("every declared protocol is served");
-    assert_eq!(many.state.protocols.len(), 2);
-    static COPY: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &FIRST_INPUT, &UNIT, &[]);
-    assert!(matches!(
-        MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings(
-            &SERVICE,
-            [registry()],
-            [binding(&COPY), binding(&SECOND)]
-        )
-        .build(),
-        Err(RouterBuildError::Binding(_))
-    ));
-}
-
-#[test]
-fn partially_registered_service_reports_every_missing_protocol_before_building() {
-    static PARTIAL: ServiceSchema<'static> = ServiceSchema::new(
-        SERVICE_ID,
-        None,
-        &[
-            shape_id!("aws.protocols", "restJson1"),
-            shape_id!("test", "unregisteredFirst"),
-            shape_id!("test", "unregisteredSecond"),
-        ],
-        OPERATIONS,
-    );
-    // Missing registrations fail even before the missing operation bindings are checked.
-    let error = MultiProtocolRoutingServiceBuilder::<Body>::from_operation_handler_bindings(&PARTIAL, [], [])
-        .build()
-        .unwrap_err();
-    assert_eq!(
-        error.to_string(),
-        "missing protocol registrations: test#unregisteredFirst, test#unregisteredSecond"
-    );
-    assert!(matches!(
-        error,
-        RouterBuildError::MissingProtocols { protocols }
-            if protocols == ["test#unregisteredFirst", "test#unregisteredSecond"]
-    ));
 }
 
 #[tokio::test]
@@ -619,6 +321,10 @@ async fn all_builtins_route_without_polling_body_and_preserve_fallback_errors() 
                     "application/x-amz-json-1.1"
                 },
             );
+        } else if std::ptr::eq(schema, &REST_JSON) {
+            req = req.header("content-type", "application/json");
+        } else if std::ptr::eq(schema, &REST_XML) {
+            req = req.header("content-type", "application/xml");
         }
         let body = Body::new(http_body_util::StreamBody::new(futures_util::stream::poll_fn(
             |_| -> Poll<Option<Result<Frame<Bytes>, Error>>> { panic!("metadata routing or fallback polled the body") },
@@ -640,9 +346,9 @@ async fn rpc_capitalized_alias_is_a_protocol_setting() {
         (r#"{"capitalizeRoutes":false}"#, StatusCode::NOT_FOUND),
         (r#"{}"#, StatusCode::NOT_FOUND),
     ] {
-        let options = RoutingOptions {
+        let options = ProtocolOptions {
             protocol_settings: HashMap::from([(
-                "smithy.protocols#rpcv2Cbor".to_owned(),
+                shape_id!("smithy.protocols", "rpcv2Cbor"),
                 crate::schema::settings::parse_settings_json(settings.as_bytes()),
             )]),
             ..Default::default()
@@ -684,96 +390,41 @@ async fn rpc_capitalized_alias_is_a_protocol_setting() {
     }
 }
 
-#[test]
-fn invalid_protocol_settings_fail_the_build() {
-    for settings in [
-        r#"{"capitalizeRoutes":"yes"}"#,
-        r#"{"methodNotAllowedAsNotFound":"yes"}"#,
-        r#"{"methodNotAllowedAsNotFound":null}"#,
-        r#""not an object""#,
-    ] {
-        let options = RoutingOptions {
-            protocol_settings: HashMap::from([(
-                "smithy.protocols#rpcv2Cbor".to_owned(),
-                crate::schema::settings::parse_settings_json(settings.as_bytes()),
-            )]),
-            ..Default::default()
-        };
-        assert!(matches!(
-            MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings_with_options(
-                &RPC,
-                [],
-                [binding(&SECOND), binding(&FIRST)],
-                options,
-            )
-            .build(),
-            Err(RouterBuildError::Configuration(_))
-        ));
-    }
-}
-
-fn global_settings(json: &str) -> RoutingOptions {
-    RoutingOptions::default().with_protocol_settings(HashMap::from([(
-        "global".to_owned(),
-        crate::schema::settings::parse_settings_json(json.as_bytes()),
-    )]))
-}
-
-/// `customizationConfig.protocols.global.requestBodyMaxBytes` is the default byte limit.
 #[tokio::test]
-async fn global_settings_supply_the_default_body_limit() {
+async fn typed_request_body_limits_and_overrides_are_applied() {
     let oversized = || request(format!("first\n{}", "x".repeat(100)));
-    let response = service(global_settings(r#"{"requestBodyMaxBytes":8}"#))
-        .oneshot(oversized())
-        .await
-        .unwrap();
+    let options = || {
+        ProtocolOptions::default().with_service_config(
+            crate::schema::ServiceConfig::default().with_request_body(
+                crate::schema::ServiceRequestBodyConfig::default()
+                    .with_global(RequestBodyCollectionConfig::default().with_max_bytes(NonZeroUsize::new(8))),
+            ),
+        )
+    };
+    let response = service(options()).oneshot(oversized()).await.unwrap();
     assert!(rejection_message(response)
         .await
         .contains("exceeded the configured maximum"));
-    // Absent and zero both mean no limit.
-    for settings in ["{}", r#"{"requestBodyMaxBytes":0}"#] {
-        let response = service(global_settings(settings)).oneshot(oversized()).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK, "{settings}");
-    }
-    // A limit set in code is kept.
-    let mut options = global_settings(r#"{"requestBodyMaxBytes":8}"#);
-    options.request_body.global = config(1024, 1000);
-    let response = service(options).oneshot(oversized()).await.unwrap();
+
+    // Replacing the configuration with its default explicitly allows any body size.
+    let unlimited = options().with_request_body(crate::schema::ServiceRequestBodyConfig::default());
+    let response = service(unlimited).oneshot(oversized()).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    // So is an operation override, which replaces the whole record.
-    let mut options = global_settings(r#"{"requestBodyMaxBytes":8}"#);
-    options
+
+    let mut larger = options();
+    larger.service_config.request_body.global = config(1024, 1000);
+    let response = service(larger).oneshot(oversized()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // An operation override replaces the whole record, including the inherited limit.
+    let mut per_operation = options();
+    per_operation
+        .service_config
         .request_body
         .per_operation
         .insert(FIRST.shape_id().to_string(), RequestBodyCollectionConfig::default());
-    let response = service(options).oneshot(oversized()).await.unwrap();
+    let response = service(per_operation).oneshot(oversized()).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-}
-
-#[test]
-fn invalid_global_settings_fail_the_build() {
-    for settings in [
-        r#"{"requestBodyMaxBytes":"8"}"#,
-        r#"{"requestBodyMaxBytes":-1}"#,
-        r#"{"requestBodyMaxBytes":1.5}"#,
-        r#"{"requestBodyMaxBytes":true}"#,
-        r#""not an object""#,
-    ] {
-        // Reported even when a limit set in code would take precedence.
-        for code_limit in [false, true] {
-            let mut options = global_settings(settings);
-            if code_limit {
-                options.request_body.global = config(1024, 1000);
-            }
-            assert!(
-                matches!(
-                    service_builder(options).build(),
-                    Err(RouterBuildError::Configuration(_))
-                ),
-                "{settings}"
-            );
-        }
-    }
 }
 
 #[tokio::test]
@@ -789,7 +440,10 @@ async fn layers_see_selection_and_do_not_observe_routing_rejections() {
             inner.clone().oneshot(request)
         })
     });
-    let app = service_builder(RoutingOptions::default()).layer(layer).build().unwrap();
+    let app = service_builder(ProtocolOptions::default())
+        .layer(layer)
+        .build()
+        .unwrap();
     assert_eq!(
         app.clone().oneshot(request("first\n")).await.unwrap().status(),
         StatusCode::OK
@@ -821,8 +475,8 @@ async fn ready_body_frames_yield_and_wake_before_collection_finishes() {
                 _ => None,
             })
         });
-        let mut options = RoutingOptions::default();
-        options.request_body.global = config(limit, 1000);
+        let mut options = ProtocolOptions::default();
+        options.service_config.request_body.global = config(limit, 1000);
         let mut app = service(options);
         let mut future = Box::pin(app.call(Request::new(Body::new(http_body_util::StreamBody::new(frames)))));
         let wakes = Arc::new(WakeCount(AtomicUsize::new(0)));
@@ -841,7 +495,7 @@ async fn claim_with_complete_body_can_defer_to_routing() {
         ("unknown\npayload", StatusCode::NOT_FOUND),
         ("", StatusCode::NOT_FOUND),
     ] {
-        let response = service(RoutingOptions::default())
+        let response = service(ProtocolOptions::default())
             .oneshot(
                 Request::builder()
                     .header("x-body-claim", "deferred-route")
@@ -871,7 +525,7 @@ async fn cancelling_body_routing_drops_the_pending_stream() {
         }
     }
     let dropped = Arc::new(AtomicBool::new(false));
-    let mut service = service(RoutingOptions::default());
+    let mut service = service(ProtocolOptions::default());
     let mut future = Box::pin(service.call(Request::new(Body::new(PendingBody(dropped.clone())))));
     let waker = futures_util::task::noop_waker();
     assert!(future.as_mut().poll(&mut Context::from_waker(&waker)).is_pending());
@@ -908,7 +562,7 @@ fn operation_metadata_classifies_streaming_and_cbor_routes_without_an_indexed_ta
     static OUTPUT_EVENT: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &UNIT, &EVENT, &[]);
     static BOTH: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &EVENT, &BLOB, &[]);
 
-    let config = RoutingOptions::default();
+    let config = ProtocolOptions::default();
     for (operation, input, output, blob) in [
         (&FIRST, false, false, false),
         (&INPUT_BLOB, true, false, true),
@@ -928,7 +582,7 @@ fn operation_metadata_classifies_streaming_and_cbor_routes_without_an_indexed_ta
         let router = rpc_v2_cbor_router(&RouterBuildContext {
             service: &REST_JSON,
             targets: &[target],
-            config: &config.request_body,
+            config: &config.service_config,
             protocol_settings: None,
         })
         .unwrap();
@@ -950,12 +604,12 @@ fn operation_metadata_classifies_streaming_and_cbor_routes_without_an_indexed_ta
 
 #[test]
 fn cbor_claim_requires_the_header_post_and_a_known_service_operation() {
-    let options = RoutingOptions::default();
+    let options = ProtocolOptions::default();
     let targets = [OperationTarget::new(0, &FIRST)];
     let router = rpc_v2_cbor_router(&RouterBuildContext {
         service: &RPC,
         targets: &targets,
-        config: &options.request_body,
+        config: &options.service_config,
         protocol_settings: None,
     })
     .unwrap();
@@ -1037,7 +691,7 @@ async fn a_single_protocol_checks_claims_and_unidentified_requests_remain_neutra
             "<UnknownOperationException/>\n"
         );
     }
-    let response = service(RoutingOptions::default())
+    let response = service(ProtocolOptions::default())
         .oneshot(
             Request::builder()
                 .header("x-body-claim", "defer-head")
@@ -1070,7 +724,7 @@ async fn inconsistent_operation_identity_is_detected_before_handler_dispatch() {
             RouteClaim::ClaimedWithRoute(self.route(request).unwrap())
         }
     }
-    let mut app = service(RoutingOptions::default()); // Index zero belongs to SECOND.
+    let mut app = service(ProtocolOptions::default()); // Index zero belongs to SECOND.
     Arc::get_mut(&mut app.state).unwrap().protocols = Box::from([ProtocolAndRouter {
         router: SharedProtocolRouter::new(IncorrectRouter),
         protocol: app.state.protocols[0].protocol.clone(),
@@ -1134,6 +788,7 @@ async fn shared_handlers_preserve_readiness_and_clone_only_the_selected_route() 
             Request::builder()
                 .method("POST")
                 .uri("/first")
+                .header("content-type", "application/json")
                 .body(Body::from_bytes(Bytes::from_static(b"first\n")))
                 .unwrap()
         };
@@ -1191,7 +846,7 @@ async fn body_routing_leaves_streaming_operations_unrouted() {
 #[tokio::test]
 async fn buffered_content_is_reused_and_replacements_and_wrappers_are_read() {
     let original = Bytes::from_static(b"first\npayload");
-    let mut app = service_builder(RoutingOptions::default())
+    let mut app = service_builder(ProtocolOptions::default())
         .layer(tower::layer::layer_fn(move |_inner: SyncRoute<Body>| {
             let original = original.clone();
             tower::service_fn(move |request: Request<Body>| {
@@ -1250,89 +905,6 @@ async fn buffered_content_is_reused_and_replacements_and_wrappers_are_read() {
 mod multi_protocol {
     use super::*;
 
-    static NAME: Schema<'static> = Schema::new_member(shape_id!("test", "In", "name"), ShapeType::String, "name", 0);
-    static IN_MEMBERS: [&Schema<'static>; 1] = [&NAME];
-    // Both operations take the same input shape; each input schema carries its operation's `@http`.
-    static FIRST_IN: Schema<'static> = Schema::new_struct(shape_id!("test", "In"), ShapeType::Structure, &IN_MEMBERS)
-        .with_original_name("In")
-        .with_http(HttpTrait::new("POST", "/first", Some(200)));
-    static SECOND_IN: Schema<'static> = Schema::new_struct(shape_id!("test", "In"), ShapeType::Structure, &IN_MEMBERS)
-        .with_original_name("In")
-        .with_http(HttpTrait::new("POST", "/second", Some(200)));
-    static FIRST_OP: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &FIRST_IN, &UNIT, &[]);
-    static SECOND_OP: OperationSchema<'static> = OperationSchema::new(SECOND_ID, &SECOND_IN, &UNIT, &[]);
-    static OPS: &[&OperationSchema<'static>] = &[&FIRST_OP, &SECOND_OP];
-    /// Every built-in, declared in the reverse of their priority order.
-    static BUILTINS: ServiceSchema<'static> = ServiceSchema::new(
-        SERVICE_ID,
-        None,
-        &[
-            shape_id!("aws.protocols", "restXml"),
-            shape_id!("aws.protocols", "restJson1"),
-            shape_id!("aws.protocols", "awsJson1_1"),
-            shape_id!("aws.protocols", "awsJson1_0"),
-            shape_id!("smithy.protocols", "rpcv2Cbor"),
-        ],
-        OPS,
-    );
-    static WITH_BODY_ROUTING: ServiceSchema<'static> = ServiceSchema::new(
-        SERVICE_ID,
-        None,
-        &[
-            shape_id!("test", "bodyRouting"),
-            shape_id!("aws.protocols", "restJson1"),
-        ],
-        OPS,
-    );
-
-    /// Answers with the selected protocol, the operation and the body the handler received.
-    fn echo(operation: &'static OperationSchema<'static>) -> (&'static OperationSchema<'static>, SyncRoute<Body>) {
-        (
-            operation,
-            SyncRoute::new(tower::service_fn(move |request: Request<Body>| async move {
-                let selected = request
-                    .extensions()
-                    .get::<SelectedProtocolOperation>()
-                    .expect("selection before handler")
-                    .clone();
-                assert!(std::ptr::eq(selected.operation(), operation));
-                let body = request.into_body().collect().await.unwrap().to_bytes();
-                let text = format!(
-                    "{} {} {}",
-                    selected.protocol().protocol_id().as_str(),
-                    operation.shape_id().shape_name(),
-                    String::from_utf8_lossy(&body)
-                );
-                Ok::<_, Infallible>(Response::new(crate::body::from_bytes(text.into())))
-            })),
-        )
-    }
-
-    fn body_routing(order: &'static [ProtocolOrder]) -> &'static ProtocolRegistry {
-        registry_of(ProtocolRegistration::body_routed::<BodyProtocol>("test#bodyRouting").with_order(order))
-    }
-
-    fn app(
-        service: &'static ServiceSchema<'static>,
-        registries: impl IntoIterator<Item = &'static ProtocolRegistry>,
-    ) -> MultiProtocolRoutingService {
-        MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings(
-            service,
-            registries,
-            service.operations().iter().map(|operation| echo(operation)),
-        )
-        .build()
-        .unwrap()
-    }
-
-    fn priority(app: &MultiProtocolRoutingService) -> Vec<&'static str> {
-        app.state
-            .protocols
-            .iter()
-            .map(|route| route.protocol.protocol_id().as_str())
-            .collect()
-    }
-
     async fn send(
         app: &MultiProtocolRoutingService,
         request: http::request::Builder,
@@ -1355,20 +927,6 @@ mod multi_protocol {
 
     fn post(uri: &str) -> http::request::Builder {
         Request::builder().method("POST").uri(uri)
-    }
-
-    #[test]
-    fn builtins_follow_their_chained_constraints_whatever_the_declaration_order() {
-        assert_eq!(
-            priority(&app(&BUILTINS, [])),
-            [
-                "smithy.protocols#rpcv2Cbor",
-                "aws.protocols#awsJson1_0",
-                "aws.protocols#awsJson1_1",
-                "aws.protocols#restJson1",
-                "aws.protocols#restXml",
-            ]
-        );
     }
 
     #[tokio::test]
@@ -1620,8 +1178,8 @@ mod multi_protocol {
                 ),
                 (r#"{"methodNotAllowedAsNotFound":true}"#, StatusCode::NOT_FOUND),
             ] {
-                let options = RoutingOptions::default().with_protocol_settings(HashMap::from([(
-                    "smithy.protocols#rpcv2Cbor".to_owned(),
+                let options = ProtocolOptions::default().with_protocol_settings(HashMap::from([(
+                    shape_id!("smithy.protocols", "rpcv2Cbor"),
                     crate::schema::settings::parse_settings_json(settings.as_bytes()),
                 )]));
                 let app = MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings_with_options(
@@ -1750,44 +1308,175 @@ mod multi_protocol {
         );
     }
 
-    #[test]
-    fn unordered_served_protocols_fail_the_build() {
-        let error = MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings(
-            &WITH_BODY_ROUTING,
-            [body_routing(&[])],
-            OPS.iter().map(|operation| echo(operation)),
-        )
-        .build()
-        .unwrap_err();
-        assert!(
-            matches!(error, RouterBuildError::AmbiguousProtocolOrder { .. }),
-            "{error}"
+    /// Inputs with only URI bindings still use each protocol's default for identification.
+    #[tokio::test]
+    async fn rest_claims_uri_bound_inputs_by_the_protocol_default() {
+        static ID_LABEL: Schema<'static> =
+            Schema::new_member(shape_id!("test", "Widget", "id"), ShapeType::String, "id", 0).with_http_label();
+        static WIDGET: Schema<'static> =
+            Schema::new_struct(shape_id!("test", "Widget"), ShapeType::Structure, &[&ID_LABEL])
+                .with_original_name("Widget")
+                .with_http(HttpTrait::new("GET", "/widgets/{id}", Some(200)));
+        static GET_WIDGET: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &WIDGET, &UNIT, &[]);
+        static SERVICE: ServiceSchema<'static> = ServiceSchema::new(
+            SERVICE_ID,
+            None,
+            &[
+                shape_id!("aws.protocols", "restJson1"),
+                shape_id!("aws.protocols", "restXml"),
+            ],
+            &[&GET_WIDGET],
         );
+        let app = app(&SERVICE, []);
+        for (content_type, expected) in [
+            ("application/json", "aws.protocols#restJson1 first "),
+            ("application/xml; charset=utf-8", "aws.protocols#restXml first "),
+        ] {
+            assert_eq!(
+                send(
+                    &app,
+                    Request::builder()
+                        .method("GET")
+                        .uri("/widgets/123")
+                        .header("content-type", content_type),
+                    "",
+                )
+                .await,
+                (StatusCode::OK, expected.to_owned()),
+            );
+        }
+        for request in [
+            Request::builder().method("GET").uri("/widgets/123"),
+            Request::builder()
+                .method("GET")
+                .uri("/widgets/123")
+                .header("content-type", "text/plain"),
+        ] {
+            assert_eq!(send(&app, request, "").await.0, StatusCode::NOT_FOUND);
+        }
     }
 
-    #[test]
-    fn a_duplicate_protocol_fails_the_build() {
-        let error = MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings(
-            &WITH_BODY_ROUTING,
-            [body_routing(&[]), body_routing(&[])],
-            OPS.iter().map(|operation| echo(operation)),
-        )
-        .build()
-        .unwrap_err();
-        assert!(matches!(error, RouterBuildError::DuplicateProtocol { protocol } if protocol == "test#bodyRouting"),);
+    /// Both buffered and streaming blob payloads derive application/octet-stream.
+    #[tokio::test]
+    async fn rest_claims_blob_payloads_by_their_derived_content_type() {
+        static DATA: Schema<'static> =
+            Schema::new_member(shape_id!("test", "Upload", "data"), ShapeType::Blob, "data", 0)
+                .with_streaming()
+                .with_http_payload();
+        static UPLOAD: Schema<'static> =
+            Schema::new_struct(shape_id!("test", "Upload"), ShapeType::Structure, &[&DATA])
+                .with_original_name("Upload")
+                .with_http(HttpTrait::new("POST", "/first", Some(200)));
+        static STREAMING: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &UPLOAD, &UNIT, &[]);
+        static RAW: Schema<'static> =
+            Schema::new_member(shape_id!("test", "Put", "data"), ShapeType::Blob, "data", 0).with_http_payload();
+        static PUT: Schema<'static> = Schema::new_struct(shape_id!("test", "Put"), ShapeType::Structure, &[&RAW])
+            .with_original_name("Put")
+            .with_http(HttpTrait::new("POST", "/second", Some(200)));
+        static BUFFERED: OperationSchema<'static> = OperationSchema::new(SECOND_ID, &PUT, &UNIT, &[]);
+        static SERVICE: ServiceSchema<'static> = ServiceSchema::new(
+            SERVICE_ID,
+            None,
+            &[shape_id!("aws.protocols", "restJson1")],
+            &[&STREAMING, &BUFFERED],
+        );
+        let app = app(&SERVICE, []);
+        for (uri, operation) in [("/first", "first"), ("/second", "second")] {
+            assert_eq!(
+                send(&app, post(uri).header("content-type", "application/octet-stream"), "").await,
+                (StatusCode::OK, format!("aws.protocols#restJson1 {operation} ")),
+            );
+            for request in [
+                post(uri),
+                post(uri).header("content-type", "video/mp4"),
+                post(uri).header("content-type", "application/json"),
+            ] {
+                assert_eq!(send(&app, request, "").await.0, StatusCode::NOT_FOUND);
+            }
+        }
     }
 
-    #[test]
-    fn a_constraint_against_an_unregistered_protocol_fails_the_build() {
-        static TYPO: &[ProtocolOrder] = &[ProtocolOrder::Before("aws.protocols#restJson2")];
-        let error = MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings(
-            &WITH_BODY_ROUTING,
-            [body_routing(TYPO)],
-            OPS.iter().map(|operation| echo(operation)),
+    /// A modeled Content-Type header permits a custom value; an empty input uses the
+    /// protocol default. Both still need a present header for identification.
+    #[tokio::test]
+    async fn rest_claims_custom_headers_and_empty_inputs_independently_of_deserialization() {
+        static CONTENT_TYPE: Schema<'static> = Schema::new_member(
+            shape_id!("test", "Upload", "contentType"),
+            ShapeType::String,
+            "contentType",
+            0,
         )
-        .build()
-        .unwrap_err();
-        assert!(matches!(error, RouterBuildError::Configuration(_)), "{error}");
+        .with_http_header("Content-Type");
+        static DATA: Schema<'static> =
+            Schema::new_member(shape_id!("test", "Upload", "data"), ShapeType::Blob, "data", 1).with_http_payload();
+        static UPLOAD: Schema<'static> = Schema::new_struct(
+            shape_id!("test", "Upload"),
+            ShapeType::Structure,
+            &[&CONTENT_TYPE, &DATA],
+        )
+        .with_original_name("Upload")
+        .with_http(HttpTrait::new("POST", "/first", Some(200)));
+        static WITH_HEADER: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &UPLOAD, &UNIT, &[]);
+        static EMPTY: Schema<'static> = Schema::new_struct(shape_id!("test", "Empty"), ShapeType::Structure, &[])
+            .with_original_name("Empty")
+            .with_http(HttpTrait::new("POST", "/second", Some(200)));
+        static MODELED_EMPTY: OperationSchema<'static> = OperationSchema::new(SECOND_ID, &EMPTY, &UNIT, &[]);
+        static SERVICE: ServiceSchema<'static> = ServiceSchema::new(
+            SERVICE_ID,
+            None,
+            &[shape_id!("aws.protocols", "restJson1")],
+            &[&WITH_HEADER, &MODELED_EMPTY],
+        );
+        let app = app(&SERVICE, []);
+        let (status, text) = send(&app, post("/first").header("content-type", "video/mp4"), "").await;
+        assert_eq!(
+            (status, text.as_str()),
+            (StatusCode::OK, "aws.protocols#restJson1 first ")
+        );
+        let (status, text) = send(&app, post("/second").header("content-type", "application/json"), "").await;
+        assert_eq!(
+            (status, text.as_str()),
+            (StatusCode::OK, "aws.protocols#restJson1 second ")
+        );
+        for request in [
+            post("/first"),
+            post("/second"),
+            post("/second").header("content-type", "text/plain"),
+        ] {
+            assert_eq!(send(&app, request, "").await.0, StatusCode::NOT_FOUND);
+        }
+    }
+
+    /// Event streams retain their own derived content type for identification.
+    #[tokio::test]
+    async fn rest_event_stream_claims_still_require_the_event_stream_content_type() {
+        static REST_STREAM: ServiceSchema<'static> = ServiceSchema::new(
+            SERVICE_ID,
+            None,
+            &[shape_id!("aws.protocols", "restJson1")],
+            &[&STREAM_OP],
+        );
+        let app = app(&REST_STREAM, []);
+        let SharedProtocolRouter::Metadata(router) = &app.state.protocols[0].router else {
+            unreachable!()
+        };
+        for builder in [
+            post("/stream"),
+            post("/stream").header("content-type", "application/json"),
+        ] {
+            let request = builder.body(()).unwrap();
+            assert!(matches!(router.claim(&request), RouteClaim::NoClaim));
+            assert!(!router.recognizes_streaming_input(&request));
+        }
+        let request = post("/stream")
+            .header("content-type", "application/vnd.amazon.eventstream")
+            .body(())
+            .unwrap();
+        assert!(matches!(router.claim(&request), RouteClaim::ClaimedWithRoute(_)));
+        assert!(router.recognizes_streaming_input(&request));
+        // The unclaimed request gets the neutral unknown-operation response.
+        let (status, _) = send(&app, post("/stream"), "").await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
@@ -2122,27 +1811,16 @@ mod multi_protocol {
             self.router.route_with_body(request)
         }
     }
-    fn advisory_app(
-        reject: bool,
-        streaming: bool,
-    ) -> (
+    type AdvisoryApp = (
         MultiProtocolRoutingService,
         Arc<std::sync::atomic::AtomicUsize>,
         Arc<std::sync::atomic::AtomicUsize>,
         Arc<std::sync::Mutex<Vec<usize>>>,
-    ) {
+    );
+    fn advisory_app(reject: bool, streaming: bool) -> AdvisoryApp {
         advisory_app_with_layer(reject, streaming, tower::layer::util::Identity::new())
     }
-    fn advisory_app_with_layer<L>(
-        reject: bool,
-        streaming: bool,
-        layer: L,
-    ) -> (
-        MultiProtocolRoutingService,
-        Arc<std::sync::atomic::AtomicUsize>,
-        Arc<std::sync::atomic::AtomicUsize>,
-        Arc<std::sync::Mutex<Vec<usize>>>,
-    )
+    fn advisory_app_with_layer<L>(reject: bool, streaming: bool, layer: L) -> AdvisoryApp
     where
         L: tower::Layer<SyncRoute<Body>>,
         L::Service:
@@ -2153,16 +1831,16 @@ mod multi_protocol {
         let checks = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let claims = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let calls = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let mut routes = app.state.protocols.to_vec();
+        let state = Arc::get_mut(&mut app.state).unwrap();
+        let mut routes = std::mem::take(&mut state.protocols).into_vec();
         routes[1].router = SharedProtocolRouter::new(AdvisoryRouter {
             checks: checks.clone(),
             claims: claims.clone(),
             reject,
             streaming,
         });
-        let mut second_body = routes[0].clone();
-        for (index, route) in [(0, &mut routes[0]), (2, &mut second_body)] {
-            route.router = SharedProtocolRouter::new_body_routed(TrackedBodyRouter {
+        let tracked_router = |index| {
+            SharedProtocolRouter::new_body_routed(TrackedBodyRouter {
                 router: BodyRouter {
                     targets: if index == 0 {
                         vec![]
@@ -2172,10 +1850,15 @@ mod multi_protocol {
                 },
                 calls: calls.clone(),
                 index,
-            });
-        }
+            })
+        };
+        routes[0].router = tracked_router(0);
+        let second_body = super::service::ProtocolAndRouter {
+            router: tracked_router(2),
+            protocol: routes[0].protocol.clone(),
+        };
         routes.push(second_body);
-        Arc::get_mut(&mut app.state).unwrap().protocols = routes.into();
+        state.protocols = routes.into();
         (app, checks, claims, calls)
     }
 
@@ -2431,182 +2114,6 @@ mod multi_protocol {
             "protocol-framed, not the unclaimed fallback"
         );
     }
-
-    #[test]
-    fn contradictory_ordering_fails_the_build() {
-        static CYCLE: &[ProtocolOrder] = &[
-            ProtocolOrder::Before("aws.protocols#restJson1"),
-            ProtocolOrder::After("aws.protocols#restJson1"),
-        ];
-        static ABSENT: &[ProtocolOrder] = &[ProtocolOrder::After("aws.protocols#restXml")];
-        let error = MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings(
-            &WITH_BODY_ROUTING,
-            [body_routing(CYCLE)],
-            OPS.iter().map(|operation| echo(operation)),
-        )
-        .build()
-        .unwrap_err();
-        assert_eq!(
-            error.to_string(),
-            "protocol ordering constraints form a cycle involving: aws.protocols#restJson1, test#bodyRouting"
-        );
-        assert!(matches!(
-            error,
-            RouterBuildError::ProtocolOrderCycle { protocols }
-                if protocols == ["aws.protocols#restJson1", "test#bodyRouting"]
-        ));
-        // A constraint against an unserved protocol still orders the served ones transitively:
-        // restJson1 comes before restXml (builtin chain) and restXml before bodyRouting, so
-        // restJson1 precedes bodyRouting even though restXml is not served.
-        assert_eq!(
-            priority(&app(&WITH_BODY_ROUTING, [body_routing(ABSENT)])),
-            ["aws.protocols#restJson1", "test#bodyRouting"]
-        );
-    }
-
-    #[test]
-    fn ordering_cycle_reports_transitive_members_including_unserved_protocols() {
-        static CYCLE: &[ProtocolOrder] = &[
-            ProtocolOrder::Before("aws.protocols#restJson1"),
-            ProtocolOrder::After("aws.protocols#restXml"),
-        ];
-        let error = MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings(
-            &WITH_BODY_ROUTING,
-            [body_routing(CYCLE)],
-            OPS.iter().map(|operation| echo(operation)),
-        )
-        .build()
-        .unwrap_err();
-        assert!(matches!(
-            error,
-            RouterBuildError::ProtocolOrderCycle { protocols }
-                if protocols == ["aws.protocols#restJson1", "aws.protocols#restXml", "test#bodyRouting"]
-        ));
-    }
-
-    #[test]
-    fn self_ordering_cycle_reports_only_the_cyclic_protocol() {
-        static CYCLE: &[ProtocolOrder] = &[ProtocolOrder::Before("test#bodyRouting")];
-        let error = MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings(
-            &WITH_BODY_ROUTING,
-            [body_routing(CYCLE)],
-            OPS.iter().map(|operation| echo(operation)),
-        )
-        .build()
-        .unwrap_err();
-        assert!(matches!(
-            error,
-            RouterBuildError::ProtocolOrderCycle { protocols } if protocols == ["test#bodyRouting"]
-        ));
-    }
-}
-
-#[tokio::test]
-async fn builder_defers_layers_until_build_and_preserves_stack_order() {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    let applications = Arc::new(AtomicUsize::new(0));
-    let counter = applications.clone();
-    let layer = tower::layer::layer_fn(move |inner: SyncRoute<Body>| {
-        counter.fetch_add(1, Ordering::SeqCst);
-        tower::service_fn(move |mut request: Request<Body>| {
-            assert!(request.extensions().get::<SelectedProtocolOperation>().is_some());
-            assert_eq!(request.headers()["x-layer-order"], "outer");
-            request
-                .headers_mut()
-                .insert("x-layer-order", HeaderValue::from_static("inner"));
-            inner.clone().oneshot(request)
-        })
-    });
-    let outer = tower::util::MapRequestLayer::new(|mut request: Request<Body>| {
-        assert!(!request.headers().contains_key("x-layer-order"));
-        request
-            .headers_mut()
-            .insert("x-layer-order", HeaderValue::from_static("outer"));
-        request
-    });
-    let stack = tower::layer::util::Stack::new(layer, outer);
-    let builder = MultiProtocolRoutingService::builder(&REST_JSON)
-        .operation_handler_bindings([binding(&FIRST), binding(&SECOND)])
-        .layer(stack);
-    assert_eq!(applications.load(Ordering::SeqCst), 0);
-    let app = builder.build().unwrap();
-    assert_eq!(applications.load(Ordering::SeqCst), 2);
-    let response = app
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/first")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-}
-
-#[test]
-fn builder_allows_configuration_to_be_replaced_before_validation() {
-    let builder = MultiProtocolRoutingService::builder(&SERVICE)
-        .registries([registry(), registry()])
-        .operation_handler_bindings([binding(&FIRST), binding(&FIRST)])
-        .options(
-            RoutingOptions::default().with_request_body(crate::schema::ServiceRequestBodyConfig {
-                per_operation: [("test#unknown".to_owned(), config(1, 1))].into(),
-                ..Default::default()
-            }),
-        );
-    let app = builder
-        .registries([registry()])
-        .operation_handler_bindings([binding(&FIRST), binding(&SECOND)])
-        .options(RoutingOptions::default())
-        .build();
-    assert!(app.is_ok());
-    let invalid = MultiProtocolRoutingService::<hyper::body::Incoming>::builder(&REST_JSON);
-    assert!(matches!(invalid.build(), Err(RouterBuildError::Binding(_))));
-}
-
-#[tokio::test]
-async fn builder_supports_custom_transport_bodies_with_handler_layers() {
-    type Transport = http_body_util::Full<Bytes>;
-    for schema in [&REST_JSON, &SERVICE] {
-        let bindings = schema.operations().iter().map(|operation| {
-            (
-                *operation,
-                SyncRoute::new(tower::service_fn(
-                    |request: Request<crate::body::RequestBody<Transport>>| async move {
-                        assert!(request.extensions().get::<SelectedProtocolOperation>().is_some());
-                        Ok::<_, Infallible>(Response::new(crate::body::boxed(request.into_body())))
-                    },
-                )),
-            )
-        });
-        let app = MultiProtocolRoutingService::<Transport>::builder(schema)
-            .registries([registry()])
-            .operation_handler_bindings(bindings)
-            .layer(tower::util::MapResponseLayer::new(|mut response: Response<BoxBody>| {
-                response
-                    .headers_mut()
-                    .insert("x-layer", HeaderValue::from_static("applied"));
-                response
-            }))
-            .build()
-            .unwrap();
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri("/first")
-                    .body(Transport::new(Bytes::from_static(b"first\npayload")))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(response.headers()["x-layer"], "applied");
-        assert_eq!(
-            response.into_body().collect().await.unwrap().to_bytes(),
-            "first\npayload"
-        );
-    }
 }
 
 #[test]
@@ -2645,4 +2152,110 @@ fn rest_router_claims_the_codec_content_type_and_its_aliases() {
     // Without the alias only the codec's own media type is claimed.
     assert!(claims(&[], "application/xml"));
     assert!(!claims(&[], "text/xml"));
+}
+
+#[test]
+fn rest_payload_claims_respect_modeled_media_types_and_shape_defaults() {
+    static TEXT: Schema<'static> =
+        Schema::new_member(shape_id!("test", "Text", "value"), ShapeType::String, "value", 0).with_http_payload();
+    static MEDIA: Schema<'static> =
+        Schema::new_member(shape_id!("test", "Media", "value"), ShapeType::Blob, "value", 0)
+            .with_http_payload()
+            .with_streaming()
+            .with_media_type("video/mp4");
+    static DOCUMENT: Schema<'static> =
+        Schema::new_member(shape_id!("test", "Document", "value"), ShapeType::Structure, "value", 0)
+            .with_http_payload();
+    static TEXT_INPUT: Schema<'static> = Schema::new_struct(shape_id!("test", "Text"), ShapeType::Structure, &[&TEXT])
+        .with_http(HttpTrait::new("POST", "/text", Some(200)));
+    static MEDIA_INPUT: Schema<'static> = Schema::new_struct(
+        shape_id!("test", "Media"),
+        ShapeType::Structure,
+        &[&MEDIA],
+    )
+    .with_http(HttpTrait::new("POST", "/media", Some(200)));
+    static DOCUMENT_INPUT: Schema<'static> =
+        Schema::new_struct(shape_id!("test", "Document"), ShapeType::Structure, &[&DOCUMENT])
+            .with_http(HttpTrait::new("POST", "/document", Some(200)));
+    static TEXT_OP: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &TEXT_INPUT, &UNIT, &[]);
+    static MEDIA_OP: OperationSchema<'static> = OperationSchema::new(SECOND_ID, &MEDIA_INPUT, &UNIT, &[]);
+    static DOCUMENT_OP: OperationSchema<'static> =
+        OperationSchema::new(shape_id!("test", "document"), &DOCUMENT_INPUT, &UNIT, &[]);
+    let targets = [
+        OperationTarget::new(0, &TEXT_OP),
+        OperationTarget::new(1, &MEDIA_OP),
+        OperationTarget::new(2, &DOCUMENT_OP),
+    ];
+    for codec_content_type in ["application/json", "application/xml"] {
+        let router = rest_router(&targets, codec_content_type, &[]).unwrap();
+        for (uri, expected) in [
+            ("/text", "text/plain"),
+            ("/media", "video/mp4"),
+            ("/document", codec_content_type),
+        ] {
+            let request = Request::builder()
+                .method("POST")
+                .uri(uri)
+                .header("content-type", expected)
+                .body(())
+                .unwrap();
+            assert!(matches!(router.claim(&request), RouteClaim::ClaimedWithRoute(_)));
+            let request = Request::builder().method("POST").uri(uri).body(()).unwrap();
+            assert!(matches!(router.claim(&request), RouteClaim::NoClaim));
+            let request = Request::builder()
+                .method("POST")
+                .uri(uri)
+                .header("content-type", "application/unknown")
+                .body(())
+                .unwrap();
+            assert!(matches!(router.claim(&request), RouteClaim::NoClaim));
+        }
+    }
+}
+
+#[test]
+fn rest_claims_synthetic_empty_inputs_by_the_protocol_default() {
+    let targets = [OperationTarget::new(0, &FIRST)];
+    for codec_content_type in ["application/json", "application/xml"] {
+        let router = rest_router(&targets, codec_content_type, &[]).unwrap();
+        let request = Request::builder()
+            .method("POST")
+            .uri("/first")
+            .header("content-type", codec_content_type)
+            .body(())
+            .unwrap();
+        assert!(matches!(router.claim(&request), RouteClaim::ClaimedWithRoute(_)));
+        let request = Request::builder().method("POST").uri("/first").body(()).unwrap();
+        assert!(matches!(router.claim(&request), RouteClaim::NoClaim));
+    }
+}
+
+#[test]
+fn an_invalid_modeled_media_type_fails_the_router_build() {
+    // Smithy does not validate `@mediaType` syntax; the claim derivation parses it, and an
+    // unparseable value must fail the build loudly instead of panicking.
+    static BAD_PAYLOAD: Schema<'static> =
+        Schema::new_member(shape_id!("test", "Bad", "data"), ShapeType::Blob, "data", 0)
+            .with_http_payload()
+            .with_media_type("not a mime type");
+    static BAD_INPUT: Schema<'static> =
+        Schema::new_struct(shape_id!("test", "Bad"), ShapeType::Structure, &[&BAD_PAYLOAD])
+            .with_original_name("Bad")
+            .with_http(HttpTrait::new("POST", "/bad", Some(200)));
+    static BAD_OP: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &BAD_INPUT, &UNIT, &[]);
+    static BAD_SERVICE: ServiceSchema<'static> =
+        ServiceSchema::new(SERVICE_ID, None, &[shape_id!("aws.protocols", "restJson1")], &[&BAD_OP]);
+    let error = MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings(
+        &BAD_SERVICE,
+        [],
+        [(
+            &BAD_OP,
+            SyncRoute::<Body>::new(tower::service_fn(|_request: Request<Body>| async move {
+                Ok::<_, Infallible>(Response::new(crate::body::boxed(crate::body::Body::empty())))
+            })),
+        )],
+    )
+    .build()
+    .unwrap_err();
+    assert!(matches!(error, RouterBuildError::Configuration(_)), "{error}");
 }

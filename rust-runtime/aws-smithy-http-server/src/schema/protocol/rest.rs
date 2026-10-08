@@ -15,8 +15,7 @@ use crate::body::BoxBody;
 use crate::response::Response;
 use crate::schema::request_bindings::RestRequestDeserializer;
 use crate::schema::response_bindings::{
-    serialize_response_parts, serialize_response_parts_compiled, CompiledResponsePlan, ResponseBindings,
-    ResponseValueKind,
+    serialize_response_parts, ResponseBindings, ResponsePlanCache, ResponseValueKind,
 };
 use crate::schema::DeserializeError;
 
@@ -25,6 +24,11 @@ use super::request::{
     EVENT_STREAM_CONTENT_TYPE, OCTET_STREAM_CONTENT_TYPE,
 };
 use super::response::{assemble_response, assemble_streaming_response, resolve_status};
+
+/// Build-time schema validation reports through the factory's error path, which carries strings.
+fn mime_validation_failure(err: DeserializeError) -> SerdeError {
+    SerdeError::custom(err.to_string())
+}
 
 /// How a REST protocol labels its responses. These are the rules the legacy generated servers
 /// follow, so the schema path stays byte-identical to them.
@@ -52,7 +56,10 @@ pub(crate) struct RestProtocol<C> {
     codec: C,
     policy: RestPolicy,
     // Plans for ordinary output serialization. Streaming heads use a different strategy.
-    response_plans: rustc_hash::FxHashMap<usize, CompiledResponsePlan>,
+    response_plans: ResponsePlanCache,
+    // Plans for modeled errors: errors are serialized per response, so without these every
+    // throttling or validation error would recompile its plan.
+    error_plans: ResponsePlanCache,
 }
 
 impl<C> RestProtocol<C> {
@@ -61,26 +68,44 @@ impl<C> RestProtocol<C> {
             codec,
             policy,
             response_plans: Default::default(),
+            error_plans: Default::default(),
         }
     }
 
-    /// Only registered static output schemas enter the map: addresses remain valid for its lifetime.
-    /// Cache keys are internal schema addresses, never attacker-controlled header or body data.
-    pub(crate) fn prepare_response_plans(&mut self, service: &'static crate::schema::ServiceSchema<'static>) {
+    /// Compiles plans for every registered output and error schema and validates the metadata
+    /// those plans and the request/accept gates interpret. Failing here turns an invalid
+    /// registered schema — a bad `@httpHeader` name or `@mediaType` — into a build error
+    /// instead of a per-request failure.
+    pub(crate) fn prepare_response_plans(
+        &mut self,
+        service: &'static crate::schema::ServiceSchema<'static>,
+    ) -> Result<(), SerdeError> {
         for operation in service.operations() {
-            let schema = operation.output();
-            self.response_plans
-                .entry(schema as *const Schema<'_> as usize)
-                .or_insert_with(|| {
-                    CompiledResponsePlan::compile(
-                        schema,
-                        ResponseBindings::Rest,
-                        ResponseValueKind::OperationOutput {
-                            empty_document: self.policy.empty_document,
-                        },
-                    )
-                });
+            let output = operation.output();
+            self.response_plans.prepare(
+                output,
+                ResponseBindings::Rest,
+                ResponseValueKind::OperationOutput {
+                    empty_document: self.policy.empty_document,
+                },
+            )?;
+            for error in operation.errors() {
+                self.error_plans
+                    .prepare(error, ResponseBindings::Rest, ResponseValueKind::ModeledError)?;
+            }
+            // The request gate parses the input's derived media type and the Accept gate the
+            // output's; validate both now so neither can fail per request.
+            expected_request_content_type(
+                operation.input(),
+                self.policy.codec_content_type,
+                self.policy.request_content_type_aliases,
+            )
+            .map_err(mime_validation_failure)?;
+            if let Some(content_type) = self.response_content_type(output) {
+                super::request::parse_mime(content_type).map_err(mime_validation_failure)?;
+            }
         }
+        Ok(())
     }
 
     pub(crate) fn codec(&self) -> &C {
@@ -136,7 +161,7 @@ impl<C: Codec> RestProtocol<C> {
                 input,
                 self.policy.codec_content_type,
                 self.policy.request_content_type_aliases,
-            ),
+            )?,
             request.body(),
         )?;
         Ok(Box::new(RestRequestDeserializer::new(
@@ -152,22 +177,48 @@ impl<C: Codec> RestProtocol<C> {
         output: &Schema<'_>,
         value: &dyn SerializableStruct,
     ) -> Result<Response, SerdeError> {
-        let parts = if let Some(plan) = self.response_plans.get(&(output as *const Schema<'_> as usize)) {
-            serialize_response_parts_compiled(&self.codec, output, value, plan)?
-        } else {
-            // Default/manual protocols and unregistered schemas retain the original behavior.
-            serialize_response_parts(
-                &self.codec,
-                output,
-                value,
-                ResponseBindings::Rest,
-                ResponseValueKind::OperationOutput {
-                    empty_document: self.policy.empty_document,
-                },
-            )?
-        };
+        self.serialize_response_with_codec(&self.codec, output, value)
+    }
+
+    /// Uses a protocol-configured codec while retaining the shared HTTP binding plans and policy.
+    pub(crate) fn serialize_response_with_codec<D: Codec>(
+        &self,
+        codec: &D,
+        output: &Schema<'_>,
+        value: &dyn SerializableStruct,
+    ) -> Result<Response, SerdeError> {
+        // Default/manual protocols and unregistered schemas compile per call.
+        let parts = self.response_plans.serialize(
+            codec,
+            output,
+            value,
+            ResponseBindings::Rest,
+            ResponseValueKind::OperationOutput {
+                empty_document: self.policy.empty_document,
+            },
+        )?;
         let status = parts.status.unwrap_or_else(|| resolve_status(None, output.http()));
         assemble_response(parts, status, self.response_content_type(output))
+    }
+
+    /// Serializes a modeled error through the prepared plan for registered error schemas;
+    /// unregistered schemas compile per call.
+    pub(crate) fn serialize_modeled_error<D: Codec>(
+        &self,
+        codec: &D,
+        schema: &Schema<'_>,
+        error: &dyn SerializableStruct,
+        status: u16,
+        content_type: &'static str,
+    ) -> Result<Response, SerdeError> {
+        let parts = self.error_plans.serialize(
+            codec,
+            schema,
+            error,
+            ResponseBindings::Rest,
+            ResponseValueKind::ModeledError,
+        )?;
+        assemble_response(parts, status, Some(content_type))
     }
 
     pub(crate) fn serialize_streaming_response(
@@ -240,12 +291,12 @@ mod cache_tests {
         let xml = RestXmlProtocol::from_build_context(&ctx).unwrap();
         for plans in [&json.inner.response_plans, &xml.inner.response_plans] {
             assert_eq!(plans.len(), 2);
-            assert!(plans.contains_key(&(&OUTPUT as *const Schema<'_> as usize)));
+            assert!(plans.contains(&OUTPUT));
             let same_id = Schema::new_struct(shape_id!("test", "Cached"), ShapeType::Structure, &MEMBERS);
-            assert!(!plans.contains_key(&(&same_id as *const Schema<'_> as usize)));
+            assert!(!plans.contains(&same_id));
         }
-        assert!(RestJson1Protocol::default().inner.response_plans.is_empty());
-        assert!(RestXmlProtocol::default().inner.response_plans.is_empty());
+        assert_eq!(RestJson1Protocol::default().inner.response_plans.len(), 0);
+        assert_eq!(RestXmlProtocol::default().inner.response_plans.len(), 0);
     }
 
     async fn snapshot(response: Response) -> (http::StatusCode, http::HeaderMap, bytes::Bytes) {

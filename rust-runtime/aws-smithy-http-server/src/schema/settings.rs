@@ -97,6 +97,3 @@ pub fn parse_settings_json(json: &[u8]) -> aws_smithy_types::Document {
     assert!(tokens.next().is_none(), "codegen emits a single settings JSON document");
     document
 }
-
-/// The settings section shared by every protocol: `customizationConfig.protocols.global`.
-pub(crate) const GLOBAL_SETTINGS_KEY: &str = "global";

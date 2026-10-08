@@ -467,6 +467,80 @@ where
 }
 
 // ============================================================================
+// Streaming Request Body Budget
+// ============================================================================
+
+/// Default number of consecutive ready body polls before a streaming request yields.
+#[doc(hidden)]
+pub const DEFAULT_STREAMING_CHUNK_BUDGET: NonZeroUsize = NonZeroUsize::new(32).unwrap();
+
+pin_project_lite::pin_project! {
+    /// An HTTP body that yields after a bounded number of consecutive ready polls.
+    ///
+    /// Frames, errors, end-of-stream state, and size hints are forwarded from the inner body.
+    #[doc(hidden)]
+    #[derive(Debug)]
+    pub struct BudgetedBody<B> {
+        #[pin]
+        inner: B,
+        chunk_budget: NonZeroUsize,
+        remaining: usize,
+    }
+}
+
+/// Wraps a streaming request body with the default 32-poll budget.
+#[doc(hidden)]
+pub fn wrap_streaming_body<B: HttpBody>(body: B) -> BudgetedBody<B> {
+    wrap_streaming_body_with_chunk_budget(body, DEFAULT_STREAMING_CHUNK_BUDGET)
+}
+
+/// Wraps a streaming request body with a positive budget of consecutive ready polls.
+///
+/// Empty data frames and trailers count toward the budget. An underlying pending poll
+/// resets it. Exhausting the budget yields without polling the inner body and wakes the
+/// task to resume. This bounds work between yields, not the stream's total bytes or duration.
+#[doc(hidden)]
+pub fn wrap_streaming_body_with_chunk_budget<B: HttpBody>(body: B, chunk_budget: NonZeroUsize) -> BudgetedBody<B> {
+    BudgetedBody {
+        inner: body,
+        chunk_budget,
+        remaining: chunk_budget.get(),
+    }
+}
+
+impl<B: HttpBody> HttpBody for BudgetedBody<B> {
+    type Data = B::Data;
+    type Error = B::Error;
+
+    fn poll_frame(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
+        let this = self.project();
+        if *this.remaining == 0 {
+            *this.remaining = this.chunk_budget.get();
+            cx.waker().wake_by_ref();
+            return std::task::Poll::Pending;
+        }
+
+        *this.remaining -= 1;
+        let result = this.inner.poll_frame(cx);
+        if result.is_pending() {
+            *this.remaining = this.chunk_budget.get();
+        }
+        result
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.inner.is_end_stream()
+    }
+
+    fn size_hint(&self) -> http_body::SizeHint {
+        self.inner.size_hint()
+    }
+}
+
+// ============================================================================
 // Stream Wrapping for Event Streaming
 // ============================================================================
 

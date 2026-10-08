@@ -28,8 +28,9 @@ use aws_smithy_runtime_api::http::{Headers, Uri};
 use aws_smithy_schema::codec::Codec;
 use aws_smithy_schema::serde::{SerdeError, ShapeDeserializer};
 use aws_smithy_schema::{Schema, ShapeType};
-use aws_smithy_types::date_time::Format;
 use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
+
+use super::timestamp::{resolve_timestamp_format, BindingLocation};
 
 /// `true` when `member` travels in the body rather than in the URI or headers. An `@httpPayload`
 /// member counts: it *is* the body.
@@ -175,36 +176,6 @@ pub(crate) fn extract_labels<'t>(template: &'t str, path: &str) -> Result<Vec<(&
         }
     }
     Ok(labels)
-}
-
-// ============================================================================
-// Timestamp format resolution
-// ============================================================================
-
-/// Where a bound value came from; determines the default timestamp format
-/// (headers: `http-date`; query strings and labels: `date-time`).
-#[derive(Copy, Clone, Debug)]
-pub(crate) enum BindingLocation {
-    Header,
-    Query,
-    Label,
-}
-
-fn resolve_timestamp_format(read_schema: &Schema<'_>, member: &Schema<'_>, location: BindingLocation) -> Format {
-    use aws_smithy_schema::traits::TimestampFormat as SchemaFormat;
-    let explicit = read_schema
-        .timestamp_format()
-        .or_else(|| member.timestamp_format())
-        .map(|t| t.format());
-    match explicit {
-        Some(SchemaFormat::EpochSeconds) => Format::EpochSeconds,
-        Some(SchemaFormat::HttpDate) => Format::HttpDate,
-        Some(SchemaFormat::DateTime) => Format::DateTime,
-        Some(_) | None => match location {
-            BindingLocation::Header => Format::HttpDate,
-            BindingLocation::Query | BindingLocation::Label => Format::DateTime,
-        },
-    }
 }
 
 /// Parses a primitive from its wire text as-is. Header values arrive already
@@ -925,8 +896,7 @@ impl ShapeDeserializer for StructuredPayloadDeserializer<'_> {
         schema: &Schema<'_>,
         consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
-        let root = Schema::new_struct(schema.shape_id().clone(), schema.shape_type(), schema.members())
-            .with_xml_name(self.xml_name);
+        let root = schema.clone().with_xml_name(self.xml_name);
         self.inner.read_struct(&root, consumer)
     }
 
@@ -1293,6 +1263,119 @@ mod tests {
         member: &'a Schema<'a>,
     ) -> Result<Option<HeaderValuesDeserializer<'a>>, SerdeError> {
         HeaderValuesDeserializer::try_new_bytes(values.into_iter().map(str::as_bytes), member)
+    }
+
+    #[test]
+    fn structured_payload_preserves_target_metadata_when_aliasing_xml_root() {
+        static TRAITS: std::sync::LazyLock<aws_smithy_schema::TraitMap> = std::sync::LazyLock::new(|| {
+            let mut traits = aws_smithy_schema::TraitMap::new();
+            traits.insert(Box::new(aws_smithy_schema::StringTrait::new(
+                aws_smithy_schema::shape_id!("test", "custom"),
+                "preserved",
+            )));
+            traits
+        });
+        static CHILD: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Target", "value"),
+            ShapeType::String,
+            "value",
+            0,
+        )
+        .with_xml_name("Child");
+        static TARGET: Schema = Schema::new_struct(
+            aws_smithy_schema::shape_id!("test", "Target"),
+            ShapeType::Structure,
+            &[&CHILD],
+        )
+        .with_xml_name("TargetRoot")
+        .with_original_name("OriginalTarget")
+        .with_xml_namespace("urn:test:target", Some("t"))
+        .with_sensitive()
+        .with_xml_unwrapped_output()
+        .with_traits(&TRAITS);
+
+        struct MetadataCheckingDeserializer;
+        impl ShapeDeserializer for MetadataCheckingDeserializer {
+            fn read_struct(
+                &mut self,
+                schema: &Schema<'_>,
+                consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+            ) -> Result<(), SerdeError> {
+                assert_eq!(schema.shape_id(), TARGET.shape_id());
+                assert_eq!(schema.shape_type(), TARGET.shape_type());
+                assert_eq!(schema.xml_name().unwrap().value(), "PayloadRoot");
+                assert_eq!(schema.original_name(), Some("OriginalTarget"));
+                let namespace = schema.xml_namespace().expect("target namespace preserved");
+                assert_eq!(namespace.uri(), "urn:test:target");
+                assert_eq!(namespace.prefix(), Some("t"));
+                assert!(schema.sensitive().is_some());
+                assert!(schema.xml_unwrapped_output());
+                assert!(std::ptr::eq(schema.traits().unwrap(), TARGET.traits().unwrap()));
+                assert_eq!(schema.members().len(), 1);
+                assert!(std::ptr::eq(schema.members()[0], &CHILD));
+                consumer(schema.members()[0], self)
+            }
+
+            fn read_list(
+                &mut self,
+                _: &Schema<'_>,
+                _: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+            ) -> Result<(), SerdeError> {
+                unreachable!()
+            }
+
+            fn read_map(
+                &mut self,
+                _: &Schema<'_>,
+                _: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+            ) -> Result<(), SerdeError> {
+                unreachable!()
+            }
+
+            unsupported_reads! {
+                "metadata checking only";
+                read_boolean -> bool,
+                read_byte -> i8,
+                read_short -> i16,
+                read_integer -> i32,
+                read_long -> i64,
+                read_float -> f32,
+                read_double -> f64,
+                read_big_integer -> BigInteger,
+                read_big_decimal -> BigDecimal,
+                read_blob -> Blob,
+                read_timestamp -> DateTime,
+                read_document -> Document,
+            }
+
+            fn read_string(&mut self, schema: &Schema<'_>) -> Result<String, SerdeError> {
+                assert!(std::ptr::eq(schema, &CHILD));
+                Ok("decoded".into())
+            }
+
+            fn is_null(&self) -> bool {
+                false
+            }
+
+            fn container_size(&self) -> Option<usize> {
+                None
+            }
+        }
+
+        let mut inner = MetadataCheckingDeserializer;
+        let mut payload = StructuredPayloadDeserializer {
+            inner: &mut inner,
+            xml_name: "PayloadRoot",
+        };
+        let mut value = None;
+        payload
+            .read_struct(&TARGET, &mut |member, deser| {
+                value = Some(deser.read_string(member)?);
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(value.as_deref(), Some("decoded"));
+        assert_eq!(TARGET.xml_name().unwrap().value(), "TargetRoot");
     }
 
     #[test]

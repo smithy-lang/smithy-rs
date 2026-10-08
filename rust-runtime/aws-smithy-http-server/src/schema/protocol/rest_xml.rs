@@ -4,6 +4,7 @@
  */
 
 use aws_smithy_runtime_api::http::Headers;
+use aws_smithy_schema::codec::Codec;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
 use aws_smithy_schema::{shape_id, Schema, ShapeId};
 
@@ -14,9 +15,8 @@ use crate::protocol::rest_xml::RestXml;
 use crate::response::{IntoResponse, Response};
 use crate::schema::{DeserializeError, HttpModeledError};
 
-use super::response::{
-    log_serialize_failure, serialize_modeled_error_response, stamp_error_extension, ResponseBindings,
-};
+use super::request::payload_member;
+use super::response::{log_serialize_failure, stamp_error_extension};
 use super::rest::RestPolicy;
 use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerProtocol};
 
@@ -28,6 +28,41 @@ use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerPro
 #[derive(Debug)]
 pub struct RestXmlProtocol {
     pub(crate) inner: crate::schema::protocol::rest::RestProtocol<aws_smithy_xml::codec::XmlCodec>,
+}
+
+/// Configures the XML document root for this response's structured payload.
+/// The target schema still supplies its namespace and child metadata.
+struct ResponseXmlCodec<'a> {
+    inner: &'a aws_smithy_xml::codec::XmlCodec,
+    payload_member: Option<&'a Schema<'a>>,
+}
+
+impl<'a> ResponseXmlCodec<'a> {
+    fn new(inner: &'a aws_smithy_xml::codec::XmlCodec, output: &'a Schema<'a>) -> Self {
+        Self {
+            inner,
+            payload_member: payload_member(output),
+        }
+    }
+}
+
+impl Codec for ResponseXmlCodec<'_> {
+    type Serializer = aws_smithy_xml::codec::XmlSerializer;
+    type Deserializer<'a> = aws_smithy_xml::codec::XmlDeserializer<'a>;
+
+    fn create_serializer(&self) -> Self::Serializer {
+        let mut serializer = self.inner.create_serializer();
+        // Legacy payload naming gives the member's @xmlName precedence over the target.
+        // Without an override, the serializer resolves the target's name as usual.
+        if let Some(name) = self.payload_member.and_then(|member| member.xml_name()) {
+            serializer.set_next_root_xml_name(name.value().to_owned());
+        }
+        serializer
+    }
+
+    fn create_deserializer<'a>(&self, input: &'a [u8]) -> Self::Deserializer<'a> {
+        self.inner.create_deserializer(input)
+    }
 }
 
 impl RestXmlProtocol {
@@ -87,7 +122,10 @@ impl MetadataRoutedProtocol for RestXmlProtocol {
             crate::schema::settings::get::<bool>(ctx.settings, "validateDocument")?.unwrap_or(false),
             crate::schema::settings::get::<bool>(ctx.settings, "acceptTextXml")?.unwrap_or(false),
         );
-        protocol.inner.prepare_response_plans(ctx.service);
+        protocol
+            .inner
+            .prepare_response_plans(ctx.service)
+            .map_err(|err| crate::schema::routing::RouterBuildError::Configuration(err.to_string()))?;
         Ok(protocol)
     }
 
@@ -141,7 +179,7 @@ impl ServerProtocol for RestXmlProtocol {
 
     fn serialize_response(&self, output: &Schema<'_>, value: &dyn SerializableStruct) -> Response {
         self.inner
-            .serialize_response(output, value)
+            .serialize_response_with_codec(&ResponseXmlCodec::new(self.inner.codec(), output), output, value)
             .unwrap_or_else(serialization_failure)
     }
 
@@ -159,16 +197,16 @@ impl ServerProtocol for RestXmlProtocol {
     fn serialize_error(&self, error: &dyn HttpModeledError) -> Response {
         // restXml carries no discriminator: the error structure is the body.
         let schema = error.schema();
-        serialize_modeled_error_response(
-            self.inner.codec(),
-            schema,
-            error,
-            error.status_code(),
-            ResponseBindings::Rest,
-            CONTENT_TYPE,
-        )
-        .map(|response| stamp_error_extension(response, schema.shape_id().shape_name()))
-        .unwrap_or_else(serialization_failure)
+        self.inner
+            .serialize_modeled_error(
+                &ResponseXmlCodec::new(self.inner.codec(), schema),
+                schema,
+                error,
+                error.status_code(),
+                CONTENT_TYPE,
+            )
+            .map(|response| stamp_error_extension(response, schema.shape_id().shape_name()))
+            .unwrap_or_else(serialization_failure)
     }
 
     fn serialize_routing_error(&self, err: &crate::schema::routing::RoutingError) -> Response {

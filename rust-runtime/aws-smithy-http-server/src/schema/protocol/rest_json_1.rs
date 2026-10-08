@@ -14,10 +14,7 @@ use crate::protocol::rest_json_1::RestJson1;
 use crate::response::{IntoResponse, Response};
 use crate::schema::{DeserializeError, HttpModeledError};
 
-use super::response::{
-    log_serialize_failure, serialize_modeled_error_response, stamp_error_extension, stamp_validation_extension,
-    ResponseBindings,
-};
+use super::response::{log_serialize_failure, stamp_error_extension, stamp_validation_extension};
 use super::rest::RestPolicy;
 use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerProtocol};
 
@@ -79,7 +76,10 @@ impl MetadataRoutedProtocol for RestJson1Protocol {
     ) -> Result<Self, crate::schema::routing::RouterBuildError> {
         let mut protocol =
             Self::new(crate::schema::settings::get::<bool>(ctx.settings, "validateSkippedValues")?.unwrap_or(false));
-        protocol.inner.prepare_response_plans(ctx.service);
+        protocol
+            .inner
+            .prepare_response_plans(ctx.service)
+            .map_err(|err| crate::schema::routing::RouterBuildError::Configuration(err.to_string()))?;
         Ok(protocol)
     }
 
@@ -147,14 +147,9 @@ impl ServerProtocol for RestJson1Protocol {
     fn serialize_error(&self, error: &dyn HttpModeledError) -> Response {
         let schema = error.schema();
         let name = schema.shape_id().shape_name();
-        let result = serialize_modeled_error_response(
-            self.inner.codec(),
-            schema,
-            error,
-            error.status_code(),
-            ResponseBindings::Rest,
-            CONTENT_TYPE,
-        );
+        let result =
+            self.inner
+                .serialize_modeled_error(self.inner.codec(), schema, error, error.status_code(), CONTENT_TYPE);
         match result {
             Ok(mut response) => {
                 // The discriminator travels in the header, as the shape name only.

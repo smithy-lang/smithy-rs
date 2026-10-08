@@ -20,14 +20,25 @@
 //! The response `Content-Type` is not decided here: it is the protocol's policy, derived from
 //! the schema alone. Non-REST protocols serialize body-only through the same entry point.
 
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 
 use aws_smithy_schema::codec::{Codec, FinishSerializer};
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::Schema;
+use aws_smithy_types::date_time::Format;
 use aws_smithy_types::{BigDecimal, BigInteger, DateTime, Document};
 
-type CapturedHeaders = RefCell<Vec<(http::HeaderName, http::HeaderValue)>>;
+use super::timestamp::{resolve_timestamp_format, timestamp_format_or, BindingLocation};
+
+type CapturedHeaders = Vec<(http::HeaderName, http::HeaderValue)>;
+
+/// Mutable response state lent to the splitter for each codec callback.
+#[derive(Default)]
+struct CapturedBindings {
+    headers: CapturedHeaders,
+    status: Option<u16>,
+    payload: Option<CapturedPayload>,
+}
 
 /// The pieces of a serialized response body, before assembly.
 #[derive(Debug)]
@@ -85,8 +96,77 @@ pub(crate) fn serialize_response_parts<C: Codec>(
     bindings: ResponseBindings,
     value_kind: ResponseValueKind,
 ) -> Result<ResponseParts, SerdeError> {
-    let plan = CompiledResponsePlan::compile(schema, bindings, value_kind);
+    let plan = CompiledResponsePlan::compile(schema, bindings, value_kind)?;
     serialize_response_parts_compiled(codec, schema, value, &plan)
+}
+
+/// Address-based identity borrowing a schema instance for the lifetime of the key.
+#[derive(Debug, Clone, Copy)]
+struct SchemaKey<'a>(&'a Schema<'a>);
+
+impl PartialEq for SchemaKey<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.0, other.0)
+    }
+}
+
+impl Eq for SchemaKey<'_> {}
+
+impl std::hash::Hash for SchemaKey<'_> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::ptr::hash(self.0, state);
+    }
+}
+
+/// Compiled plans for registered static schemas, keyed by schema identity.
+///
+/// The key type requires static schema references, so addresses remain valid for the map's lifetime.
+/// Cache keys are internal schema addresses, never attacker-controlled header or body data.
+/// A schema missing from the cache compiles its plan per call, so dynamic schemas keep working.
+#[derive(Debug, Default)]
+pub(crate) struct ResponsePlanCache {
+    plans: rustc_hash::FxHashMap<SchemaKey<'static>, CompiledResponsePlan>,
+}
+
+impl ResponsePlanCache {
+    /// Compiles and stores the plan for `schema`, validating its bindings. Failing here turns
+    /// an invalid registered schema into a build error instead of a per-response failure.
+    pub(crate) fn prepare(
+        &mut self,
+        schema: &'static Schema<'static>,
+        bindings: ResponseBindings,
+        value_kind: ResponseValueKind,
+    ) -> Result<(), SerdeError> {
+        if let std::collections::hash_map::Entry::Vacant(entry) = self.plans.entry(SchemaKey(schema)) {
+            entry.insert(CompiledResponsePlan::compile(schema, bindings, value_kind)?);
+        }
+        Ok(())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn contains(&self, schema: &Schema<'_>) -> bool {
+        self.plans.contains_key(&SchemaKey(schema))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
+        self.plans.len()
+    }
+
+    /// Serializes with the prepared plan, or compiles one on the spot for an unregistered schema.
+    pub(crate) fn serialize<C: Codec>(
+        &self,
+        codec: &C,
+        schema: &Schema<'_>,
+        value: &dyn SerializableStruct,
+        bindings: ResponseBindings,
+        value_kind: ResponseValueKind,
+    ) -> Result<ResponseParts, SerdeError> {
+        match self.plans.get(&SchemaKey(schema)) {
+            Some(plan) => serialize_response_parts_compiled(codec, schema, value, plan),
+            None => serialize_response_parts(codec, schema, value, bindings, value_kind),
+        }
+    }
 }
 
 /// The response serialization strategy, derived from the schema for each response.
@@ -105,7 +185,7 @@ enum ResponseMemberPlan {
     Header {
         name: http::HeaderName,
         media_type: bool,
-        timestamp_format: HeaderTimestampFormat,
+        timestamp_format: Format,
         sensitive: bool,
     },
     PrefixHeaders {
@@ -121,13 +201,6 @@ enum ResponseMemberPlan {
     },
 }
 
-#[derive(Debug, Clone, Copy)]
-enum HeaderTimestampFormat {
-    EpochSeconds,
-    DateTime,
-    HttpDate,
-}
-
 #[derive(Debug, Clone)]
 pub(crate) struct CompiledResponsePlan {
     strategy: ResponseStrategy,
@@ -137,7 +210,11 @@ pub(crate) struct CompiledResponsePlan {
 }
 
 impl CompiledResponsePlan {
-    pub(crate) fn compile(schema: &Schema<'_>, bindings: ResponseBindings, value_kind: ResponseValueKind) -> Self {
+    pub(crate) fn compile(
+        schema: &Schema<'_>,
+        bindings: ResponseBindings,
+        value_kind: ResponseValueKind,
+    ) -> Result<Self, SerdeError> {
         let has_bindings = bindings == ResponseBindings::Rest && has_response_bound_members(schema);
         let writes_body = match value_kind {
             ResponseValueKind::ModeledError => true,
@@ -174,18 +251,18 @@ impl CompiledResponsePlan {
             let mut members = vec![ResponseMemberPlan::Body; member_count];
             for member in schema.members() {
                 if let Some(index) = member.member_index() {
-                    members[index] = compile_member_plan(member, bindings, schema.sensitive().is_some());
+                    members[index] = compile_member_plan(member, bindings, schema.sensitive().is_some())?;
                 }
             }
             members.into_boxed_slice()
         } else {
             Box::new([])
         };
-        Self {
+        Ok(Self {
             strategy,
             members,
             unset_structure_payload_is_document,
-        }
+        })
     }
 
     fn member(&self, schema: &Schema<'_>) -> &ResponseMemberPlan {
@@ -200,26 +277,23 @@ fn compile_member_plan(
     schema: &Schema<'_>,
     bindings: ResponseBindings,
     container_sensitive: bool,
-) -> ResponseMemberPlan {
+) -> Result<ResponseMemberPlan, SerdeError> {
     if bindings == ResponseBindings::BodyOnly {
-        return ResponseMemberPlan::Body;
+        return Ok(ResponseMemberPlan::Body);
     }
     if schema.http_response_code().is_some() {
-        return ResponseMemberPlan::Status;
+        return Ok(ResponseMemberPlan::Status);
     }
     if let Some(header) = schema.http_header() {
-        let name = http::HeaderName::try_from(header.value()).unwrap_or_else(|err| {
-            panic!(
-                "invalid @httpHeader name `{}` in compiled response schema: {err}",
+        let name = http::HeaderName::try_from(header.value()).map_err(|err| {
+            SerdeError::custom(format!(
+                "invalid @httpHeader name `{}` in response schema: {err}",
                 header.value()
-            )
-        });
-        let timestamp_format = match schema.timestamp_format().map(|value| value.format()) {
-            Some(aws_smithy_schema::traits::TimestampFormat::EpochSeconds) => HeaderTimestampFormat::EpochSeconds,
-            Some(aws_smithy_schema::traits::TimestampFormat::DateTime) => HeaderTimestampFormat::DateTime,
-            Some(_) | None => HeaderTimestampFormat::HttpDate,
-        };
-        return ResponseMemberPlan::Header {
+            ))
+        })?;
+        let timestamp_format =
+            resolve_timestamp_format(schema.member().unwrap_or(schema), schema, BindingLocation::Header);
+        return Ok(ResponseMemberPlan::Header {
             name,
             media_type: schema.media_type().is_some()
                 || schema.member().is_some_and(|element| element.media_type().is_some()),
@@ -227,10 +301,10 @@ fn compile_member_plan(
             sensitive: container_sensitive
                 || schema.sensitive().is_some()
                 || schema.member().is_some_and(|element| element.sensitive().is_some()),
-        };
+        });
     }
     if let Some(prefix) = schema.http_prefix_headers() {
-        return ResponseMemberPlan::PrefixHeaders {
+        return Ok(ResponseMemberPlan::PrefixHeaders {
             prefix: prefix.value().to_string(),
             key_sensitive: container_sensitive
                 || schema.sensitive().is_some()
@@ -238,16 +312,16 @@ fn compile_member_plan(
             value_sensitive: container_sensitive
                 || schema.sensitive().is_some()
                 || schema.member().is_some_and(|value| value.sensitive().is_some()),
-        };
+        });
     }
     if schema.http_payload().is_some() {
         let raw = matches!(
             schema.shape_type(),
             aws_smithy_schema::ShapeType::String | aws_smithy_schema::ShapeType::Blob
         );
-        return ResponseMemberPlan::Payload { raw };
+        return Ok(ResponseMemberPlan::Payload { raw });
     }
-    ResponseMemberPlan::Body
+    Ok(ResponseMemberPlan::Body)
 }
 
 pub(crate) fn serialize_response_parts_compiled<C: Codec>(
@@ -257,19 +331,13 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
     plan: &CompiledResponsePlan,
 ) -> Result<ResponseParts, SerdeError> {
     if matches!(plan.strategy, ResponseStrategy::Empty | ResponseStrategy::BindingsOnly) {
-        let headers = CapturedHeaders::default();
-        // `SerializableStruct::serialize_members` receives `&self`. The splitter is reached through
-        // that shared reference, so captured response bindings require interior mutability.
-        let status = Cell::new(None);
+        let mut captured = CapturedBindings::default();
         if matches!(plan.strategy, ResponseStrategy::BindingsOnly) {
-            let payload = RefCell::new(None);
             let mut sink = NoBodySerializer { discard: true };
             let mut splitter = ResponseBindingSplitter {
                 body: &mut sink,
                 codec,
-                headers: &headers,
-                status: &status,
-                payload: &payload,
+                captured: &mut captured,
                 payload_mode: false,
                 capture_bindings: true,
                 plan,
@@ -278,8 +346,8 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
         }
         return Ok(ResponseParts {
             body: bytes::Bytes::new(),
-            headers: headers.into_inner(),
-            status: status.get(),
+            headers: captured.headers,
+            status: captured.status,
         });
     }
 
@@ -294,9 +362,7 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
     }
 
     let has_payload_member = matches!(plan.strategy, ResponseStrategy::Payload);
-    let headers = CapturedHeaders::default();
-    let status = Cell::new(None);
-    let payload = RefCell::new(None);
+    let mut captured = CapturedBindings::default();
 
     let body = if has_payload_member {
         // `@httpPayload` forbids other body members: drive the members
@@ -306,9 +372,7 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
         let mut splitter = ResponseBindingSplitter {
             body: &mut sink,
             codec,
-            headers: &headers,
-            status: &status,
-            payload: &payload,
+            captured: &mut captured,
             payload_mode: true,
             capture_bindings: true,
             plan,
@@ -321,9 +385,7 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
             let wrapper = SplitBindings {
                 inner: value,
                 codec,
-                headers: &headers,
-                status: &status,
-                payload: &payload,
+                captured: Cell::new(Some(&mut captured)),
                 plan,
                 capture_bindings: Cell::new(true),
             };
@@ -335,7 +397,7 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
     // An unset payload member is an empty body, except an unset structure payload on the protocols
     // whose legacy serializers write the codec's empty document for it (`{}` on restJson1).
     let body = if has_payload_member {
-        match payload.into_inner() {
+        match captured.payload {
             Some(payload) => payload.bytes,
             None if plan.unset_structure_payload_is_document
                 && schema.members().iter().any(|m| {
@@ -354,8 +416,8 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
 
     Ok(ResponseParts {
         body,
-        headers: headers.into_inner(),
-        status: status.get(),
+        headers: captured.headers,
+        status: captured.status,
     })
 }
 
@@ -392,15 +454,25 @@ struct CapturedPayload {
 struct SplitBindings<'a, C> {
     inner: &'a dyn SerializableStruct,
     codec: &'a C,
-    headers: &'a CapturedHeaders,
-    // The codec calls `serialize_members` through `&dyn SerializableStruct`; `Cell` lets that
-    // shared wrapper capture the optional status without allocation or mutable aliasing.
-    status: &'a Cell<Option<u16>>,
-    payload: &'a RefCell<Option<CapturedPayload>>,
+    // The codec calls through a shared reference. Take the exclusive borrow for the callback,
+    // then return it, so the splitter itself can use ordinary mutable state.
+    captured: Cell<Option<&'a mut CapturedBindings>>,
     plan: &'a CompiledResponsePlan,
     // XML may walk members once for attributes and again for child elements.
     // Capture bindings on the first walk, and let every walk forward body members.
     capture_bindings: Cell<bool>,
+}
+
+/// Restores the exclusive borrow on success, serialization errors, and panic unwinding.
+struct CapturedBindingsLoan<'a, 'state> {
+    slot: &'a Cell<Option<&'state mut CapturedBindings>>,
+    captured: Option<&'state mut CapturedBindings>,
+}
+
+impl Drop for CapturedBindingsLoan<'_, '_> {
+    fn drop(&mut self) {
+        self.slot.set(self.captured.take());
+    }
 }
 
 impl<C: Codec> SerializableStruct for SplitBindings<'_, C> {
@@ -409,12 +481,18 @@ impl<C: Codec> SerializableStruct for SplitBindings<'_, C> {
     }
 
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+        let captured = self
+            .captured
+            .take()
+            .ok_or_else(|| SerdeError::custom("re-entrant response binding callback"))?;
+        let mut loan = CapturedBindingsLoan {
+            slot: &self.captured,
+            captured: Some(captured),
+        };
         let mut splitter = ResponseBindingSplitter {
             body: serializer,
             codec: self.codec,
-            headers: self.headers,
-            status: self.status,
-            payload: self.payload,
+            captured: loan.captured.as_deref_mut().expect("response binding borrow present"),
             payload_mode: false,
             capture_bindings: self.capture_bindings.replace(false),
             plan: self.plan,
@@ -490,7 +568,7 @@ fn header_value(formatted: &str, sensitive: bool) -> Result<http::HeaderValue, S
 }
 
 fn capture_header(
-    sink: &CapturedHeaders,
+    sink: &mut CapturedHeaders,
     name: &http::HeaderName,
     formatted: &str,
     sensitive: bool,
@@ -501,19 +579,15 @@ fn capture_header(
         return Ok(());
     }
     let value = header_value(formatted, sensitive)?;
-    sink.borrow_mut().push((name.clone(), value));
+    sink.push((name.clone(), value));
     Ok(())
 }
 
-/// Formats a timestamp for an HTTP header: `@timestampFormat` if present on
-/// the member schema, else `http-date` (the Smithy default for header-bound
-/// timestamps).
-fn format_header_timestamp(format: HeaderTimestampFormat, value: &DateTime) -> Result<String, SerdeError> {
-    use aws_smithy_types::date_time::Format;
+/// Formats a resolved header timestamp, preserving the existing date-time output policy.
+fn format_header_timestamp(format: Format, value: &DateTime) -> Result<String, SerdeError> {
     let format = match format {
-        HeaderTimestampFormat::EpochSeconds => Format::EpochSeconds,
-        HeaderTimestampFormat::DateTime => Format::DateTimeWithOffset,
-        HeaderTimestampFormat::HttpDate => Format::HttpDate,
+        Format::DateTime => Format::DateTimeWithOffset,
+        other => other,
     };
     value
         .fmt(format)
@@ -525,9 +599,7 @@ fn format_header_timestamp(format: HeaderTimestampFormat, value: &DateTime) -> R
 struct ResponseBindingSplitter<'a, C> {
     body: &'a mut dyn ShapeSerializer,
     codec: &'a C,
-    headers: &'a CapturedHeaders,
-    status: &'a Cell<Option<u16>>,
-    payload: &'a RefCell<Option<CapturedPayload>>,
+    captured: &'a mut CapturedBindings,
     /// True when the shape has an `@httpPayload` member. In that mode any
     /// structure/union/document write reaching the splitter IS the payload:
     /// callers pass the payload member's TARGET schema, which carries the
@@ -542,7 +614,7 @@ impl<C: Codec> ResponseBindingSplitter<'_, C> {
         !self.capture_bindings && !matches!(self.plan.member(schema), ResponseMemberPlan::Body)
     }
 
-    fn capture_status(&self, value: i64) -> Result<(), SerdeError> {
+    fn capture_status(&mut self, value: i64) -> Result<(), SerdeError> {
         let status = u16::try_from(value)
             .ok()
             .filter(|code| (100..1000).contains(code))
@@ -551,12 +623,12 @@ impl<C: Codec> ResponseBindingSplitter<'_, C> {
                     "invalid bound HTTP status code; status codes must be inside the 100-999 range: {value}"
                 ))
             })?;
-        self.status.set(Some(status));
+        self.captured.status = Some(status);
         Ok(())
     }
 
-    fn capture_payload(&self, bytes: impl Into<bytes::Bytes>) {
-        *self.payload.borrow_mut() = Some(CapturedPayload { bytes: bytes.into() });
+    fn capture_payload(&mut self, bytes: impl Into<bytes::Bytes>) {
+        self.captured.payload = Some(CapturedPayload { bytes: bytes.into() });
     }
 }
 
@@ -570,7 +642,7 @@ macro_rules! split_int {
                 ResponseMemberPlan::Status => self.capture_status(value as i64),
                 ResponseMemberPlan::Header { name, sensitive, .. } => {
                     let mut encoder = aws_smithy_types::primitive::Encoder::from(value);
-                    capture_header(self.headers, name, encoder.encode(), *sensitive)
+                    capture_header(&mut self.captured.headers, name, encoder.encode(), *sensitive)
                 }
                 _ => self.body.$fn_name(schema, value),
             }
@@ -587,7 +659,7 @@ macro_rules! split_scalar {
             match self.plan.member(schema) {
                 ResponseMemberPlan::Header { name, sensitive, .. } => {
                     let mut encoder = aws_smithy_types::primitive::Encoder::from(value);
-                    capture_header(self.headers, name, encoder.encode(), *sensitive)
+                    capture_header(&mut self.captured.headers, name, encoder.encode(), *sensitive)
                 }
                 _ => self.body.$fn_name(schema, value),
             }
@@ -631,7 +703,7 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
             // Each element becomes its own header value under the same name.
             // Formatting also uses element traits inherited from its target.
             let mut collector = HeaderListCollector {
-                sink: self.headers,
+                sink: &mut self.captured.headers,
                 name,
                 media_type: *media_type,
                 timestamp_format: *timestamp_format,
@@ -659,7 +731,7 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
         {
             let mut collector = PrefixHeaderCollector {
                 prefix,
-                sink: self.headers,
+                sink: &mut self.captured.headers,
                 pending_key: None,
                 key_sensitive: *key_sensitive,
                 value_sensitive: *value_sensitive,
@@ -684,7 +756,7 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
         }
         match self.plan.member(schema) {
             ResponseMemberPlan::Header { name, sensitive, .. } => {
-                capture_header(self.headers, name, value.as_ref(), *sensitive)
+                capture_header(&mut self.captured.headers, name, value.as_ref(), *sensitive)
             }
             _ => self.body.write_big_integer(schema, value),
         }
@@ -696,7 +768,7 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
         }
         match self.plan.member(schema) {
             ResponseMemberPlan::Header { name, sensitive, .. } => {
-                capture_header(self.headers, name, value.as_ref(), *sensitive)
+                capture_header(&mut self.captured.headers, name, value.as_ref(), *sensitive)
             }
             _ => self.body.write_big_decimal(schema, value),
         }
@@ -720,9 +792,9 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
             // `@mediaType` on a header-bound string: base64-encode.
             if *media_type {
                 let encoded = aws_smithy_types::base64::encode(value.as_bytes());
-                return capture_header(self.headers, name, &encoded, *sensitive);
+                return capture_header(&mut self.captured.headers, name, &encoded, *sensitive);
             }
-            return capture_header(self.headers, name, value, *sensitive);
+            return capture_header(&mut self.captured.headers, name, value, *sensitive);
         }
         self.body.write_string(schema, value)
     }
@@ -739,7 +811,7 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
         }
         if let ResponseMemberPlan::Header { name, sensitive, .. } = self.plan.member(schema) {
             return capture_header(
-                self.headers,
+                &mut self.captured.headers,
                 name,
                 &aws_smithy_types::base64::encode(value.as_ref()),
                 *sensitive,
@@ -760,7 +832,7 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
                 ..
             } => {
                 let formatted = format_header_timestamp(*timestamp_format, value)?;
-                capture_header(self.headers, name, &formatted, *sensitive)
+                capture_header(&mut self.captured.headers, name, &formatted, *sensitive)
             }
             _ => self.body.write_timestamp(schema, value),
         }
@@ -795,10 +867,10 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
 /// Collects the elements of an `@httpHeader`-bound list member: each element
 /// becomes its own header value under the member's header name.
 struct HeaderListCollector<'a> {
-    sink: &'a CapturedHeaders,
+    sink: &'a mut CapturedHeaders,
     name: &'a http::HeaderName,
     media_type: bool,
-    timestamp_format: HeaderTimestampFormat,
+    timestamp_format: Format,
     sensitive: bool,
 }
 
@@ -875,8 +947,8 @@ impl ShapeSerializer for HeaderListCollector<'_> {
         )
     }
 
-    fn write_timestamp(&mut self, _schema: &Schema<'_>, value: &DateTime) -> Result<(), SerdeError> {
-        let formatted = format_header_timestamp(self.timestamp_format, value)?;
+    fn write_timestamp(&mut self, schema: &Schema<'_>, value: &DateTime) -> Result<(), SerdeError> {
+        let formatted = format_header_timestamp(timestamp_format_or(schema, self.timestamp_format), value)?;
         capture_header(self.sink, self.name, &formatted, self.sensitive)
     }
 
@@ -897,7 +969,7 @@ impl ShapeSerializer for HeaderListCollector<'_> {
 /// binding rules.
 struct PrefixHeaderCollector<'a> {
     prefix: &'a str,
-    sink: &'a CapturedHeaders,
+    sink: &'a mut CapturedHeaders,
     pending_key: Option<String>,
     key_sensitive: bool,
     value_sensitive: bool,
@@ -933,7 +1005,7 @@ impl ShapeSerializer for PrefixHeaderCollector<'_> {
                     ))
                 })?;
                 let header_value = header_value(value, self.value_sensitive)?;
-                self.sink.borrow_mut().push((name, header_value));
+                self.sink.push((name, header_value));
                 Ok(())
             }
         }
@@ -1086,6 +1158,87 @@ mod tests {
     }
 
     #[test]
+    fn captured_binding_borrow_is_restored_after_errors_and_panics() {
+        struct WriteThenFail {
+            panic: bool,
+        }
+        impl SerializableStruct for WriteThenFail {
+            fn schema(&self) -> &Schema<'_> {
+                &OUT_SCHEMA
+            }
+
+            fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                serializer.write_integer(&CODE_MEMBER, 202)?;
+                serializer.write_string(&HDR_MEMBER, "before failure")?;
+                if self.panic {
+                    panic!("intentional callback panic");
+                }
+                Err(SerdeError::custom("intentional callback error"))
+            }
+        }
+
+        let codec = json_codec();
+        let plan = CompiledResponsePlan::compile(&OUT_SCHEMA, ResponseBindings::Rest, ResponseValueKind::ModeledError)
+            .unwrap();
+        for panic in [false, true] {
+            let mut captured = CapturedBindings::default();
+            let value = WriteThenFail { panic };
+            let wrapper = SplitBindings {
+                inner: &value,
+                codec: &codec,
+                captured: Cell::new(Some(&mut captured)),
+                plan: &plan,
+                capture_bindings: Cell::new(true),
+            };
+            let mut sink = NoBodySerializer { discard: true };
+            let result =
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| wrapper.serialize_members(&mut sink)));
+            if panic {
+                assert!(result.is_err());
+            } else {
+                assert_eq!(result.unwrap().unwrap_err().to_string(), "intentional callback error");
+            }
+            let restored = wrapper.captured.take().expect("callback returned the exclusive borrow");
+            assert_eq!(restored.status, Some(202));
+            assert_eq!(restored.headers.len(), 1);
+            assert_eq!(restored.headers[0].1, "before failure");
+            wrapper.captured.set(Some(restored));
+        }
+    }
+
+    #[test]
+    fn reentrant_binding_callback_is_rejected_and_restores_the_outer_borrow() {
+        struct Reentrant<'a>(Cell<Option<&'a dyn SerializableStruct>>);
+        impl SerializableStruct for Reentrant<'_> {
+            fn schema(&self) -> &Schema<'_> {
+                &OUT_SCHEMA
+            }
+
+            fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                self.0.get().unwrap().serialize_members(serializer)
+            }
+        }
+
+        let codec = json_codec();
+        let plan = CompiledResponsePlan::compile(&OUT_SCHEMA, ResponseBindings::Rest, ResponseValueKind::ModeledError)
+            .unwrap();
+        let value = Reentrant(Cell::new(None));
+        let mut captured = CapturedBindings::default();
+        let wrapper = SplitBindings {
+            inner: &value,
+            codec: &codec,
+            captured: Cell::new(Some(&mut captured)),
+            plan: &plan,
+            capture_bindings: Cell::new(true),
+        };
+        value.0.set(Some(&wrapper));
+        let result = wrapper.serialize_members(&mut NoBodySerializer { discard: true });
+        value.0.set(None);
+        assert_eq!(result.unwrap_err().to_string(), "re-entrant response binding callback");
+        assert!(wrapper.captured.take().is_some());
+    }
+
+    #[test]
     fn xml_attribute_passes_capture_each_binding_and_collection_callback_once() {
         static ITEMS: Schema<'static> = Schema::new_member(
             ShapeId::from_parts("test#XmlOutput$items", "test", "XmlOutput"),
@@ -1144,7 +1297,8 @@ mod tests {
             }
         }
         let codec = aws_smithy_xml::codec::XmlCodec::default();
-        let plan = CompiledResponsePlan::compile(&SCHEMA, ResponseBindings::Rest, ResponseValueKind::ModeledError);
+        let plan =
+            CompiledResponsePlan::compile(&SCHEMA, ResponseBindings::Rest, ResponseValueKind::ModeledError).unwrap();
         for compiled in [false, true] {
             let value = XmlOutput::default();
             let split = if compiled {
@@ -1199,7 +1353,7 @@ mod tests {
     const OUTPUT: ResponseValueKind = ResponseValueKind::OperationOutput { empty_document: true };
 
     fn output_plan(schema: &Schema<'_>) -> CompiledResponsePlan {
-        CompiledResponsePlan::compile(schema, ResponseBindings::Rest, OUTPUT)
+        CompiledResponsePlan::compile(schema, ResponseBindings::Rest, OUTPUT).unwrap()
     }
 
     #[test]

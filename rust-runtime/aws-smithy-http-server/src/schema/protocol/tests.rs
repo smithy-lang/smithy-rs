@@ -261,10 +261,14 @@ fn rest_request_content_type_is_checked_only_with_a_body() {
 }
 
 #[test]
-fn rest_request_without_modeled_input_rejects_a_content_type() {
-    let req = request("/empty", &[("content-type", "application/json")], b"");
-    let err = deserialize::<EmptyInput>(&*REST_JSON, &EMPTY_IN_SCHEMA, &EMPTY_OUT_SCHEMA, &req).unwrap_err();
-    assert!(matches!(err, DeserializeError::UnsupportedMediaType(_)), "{err}");
+fn rest_request_without_modeled_input_accepts_protocol_identifying_content_types() {
+    for (protocol, content_type) in [
+        (&*REST_JSON as &dyn ServerProtocol, "application/json"),
+        (&*REST_XML as &dyn ServerProtocol, "application/xml"),
+    ] {
+        let req = request("/empty", &[("content-type", content_type)], b"");
+        deserialize::<EmptyInput>(protocol, &EMPTY_IN_SCHEMA, &EMPTY_OUT_SCHEMA, &req).unwrap();
+    }
 
     let req = request("/empty", &[], b"");
     deserialize::<EmptyInput>(&*REST_JSON, &EMPTY_IN_SCHEMA, &EMPTY_OUT_SCHEMA, &req).unwrap();
@@ -1330,4 +1334,125 @@ fn rest_xml_document_validation_is_independent_of_root_and_collection_names() {
     }
     let wrong_root = request("/collections", &[("content-type", "application/xml")], b"<Wrong/>");
     assert!(deserialize::<Collections>(&*REST_XML, &COLLECTIONS_SCHEMA, &EMPTY_OUT_SCHEMA, &wrong_root).is_err());
+}
+
+// --- invalid modeled metadata: fail at build for registered schemas, degrade for dynamic ones ---
+
+static BAD_MIME_PAYLOAD: Schema<'static> =
+    Schema::new_member(shape_id!("test", "BadMime", "data"), ShapeType::Blob, "data", 0)
+        .with_http_payload()
+        .with_media_type("not a mime type");
+static BAD_MIME_MEMBERS: [&Schema<'static>; 1] = [&BAD_MIME_PAYLOAD];
+static BAD_MIME_SCHEMA: Schema<'static> =
+    Schema::new_struct(shape_id!("test", "BadMime"), ShapeType::Structure, &BAD_MIME_MEMBERS)
+        .with_original_name("BadMime")
+        .with_http(HttpTrait::new("POST", "/bad-mime", None));
+
+#[test]
+fn an_invalid_modeled_media_type_is_a_request_rejection_not_a_panic() {
+    // The derived request Content-Type cannot be parsed; the request must be rejected,
+    // not the worker task killed.
+    let req = request("/bad-mime", &[("content-type", "text/plain")], b"x");
+    assert!(REST_JSON.deserialize_request(&BAD_MIME_SCHEMA, &req).is_err());
+}
+
+#[test]
+fn an_invalid_output_media_type_fails_the_accept_gate_without_a_panic() {
+    // The Accept gate parses the response media type the output derives; an invalid
+    // modeled value must reject the request, not panic, Accept header or not.
+    for headers in [&[("accept", "application/json")] as &[_], &[]] {
+        let req = request("/bad-mime", headers, b"");
+        assert!(REST_JSON
+            .validate_request_headers(&head_op(&BAD_MIME_SCHEMA), req.headers())
+            .is_err());
+    }
+}
+
+static BAD_HEADER_MEMBER: Schema<'static> =
+    Schema::new_member(shape_id!("test", "BadHeader", "tag"), ShapeType::String, "tag", 0)
+        .with_http_header("x invalid header");
+static BAD_HEADER_MEMBERS: [&Schema<'static>; 1] = [&BAD_HEADER_MEMBER];
+static BAD_HEADER_ERROR: Schema<'static> = Schema::new_struct(
+    shape_id!("test", "BadHeader"),
+    ShapeType::Structure,
+    &BAD_HEADER_MEMBERS,
+)
+.with_traits(&ERROR_TRAITS);
+
+#[derive(Debug)]
+struct BadHeaderError;
+
+impl std::fmt::Display for BadHeaderError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("bad header error")
+    }
+}
+
+impl std::error::Error for BadHeaderError {}
+
+impl SerializableStruct for BadHeaderError {
+    fn schema(&self) -> &Schema<'_> {
+        &BAD_HEADER_ERROR
+    }
+
+    fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+        s.write_string(&BAD_HEADER_MEMBER, "tagged")
+    }
+}
+
+impl HttpModeledError for BadHeaderError {
+    fn status_code(&self) -> u16 {
+        422
+    }
+}
+
+#[test]
+fn an_invalid_error_header_name_degrades_to_the_serialization_failure_response() {
+    // A dynamic (unregistered) error schema cannot be validated at build; serializing it
+    // must produce the protocol's serialization-failure response, never a panic.
+    for protocol in [
+        &*REST_JSON as &dyn ServerProtocol,
+        &*REST_XML,
+        &*AWS_JSON_10,
+        &*AWS_JSON_11,
+    ] {
+        let response = protocol.serialize_error(&BadHeaderError);
+        assert!(
+            response.status().is_client_error() || response.status().is_server_error(),
+            "{}",
+            response.status()
+        );
+        assert!(!response.headers().contains_key("x invalid header"));
+    }
+}
+
+#[test]
+fn registered_schemas_with_invalid_metadata_fail_the_protocol_build() {
+    use crate::schema::{MetadataRoutedProtocol, OperationSchema, ProtocolBuildContext, ServiceSchema};
+    // An operation declaring the invalid-header error: the factory must refuse to build.
+    static BAD_ERRORS: [&Schema<'static>; 1] = [&BAD_HEADER_ERROR];
+    static BAD_ERROR_OP: OperationSchema<'static> = OperationSchema::new(
+        shape_id!("test", "BadErrorOp"),
+        &EMPTY_IN_SCHEMA,
+        &EMPTY_OUT_SCHEMA,
+        &BAD_ERRORS,
+    );
+    static BAD_ERROR_OPS: [&OperationSchema<'static>; 1] = [&BAD_ERROR_OP];
+    static BAD_ERROR_SERVICE: ServiceSchema<'static> =
+        ServiceSchema::new(shape_id!("test", "BadService"), None, &[], &BAD_ERROR_OPS);
+    // An operation whose output derives an unparseable media type: same refusal.
+    static BAD_MIME_OP: OperationSchema<'static> =
+        OperationSchema::new(shape_id!("test", "BadMimeOp"), &BAD_MIME_SCHEMA, &BAD_MIME_SCHEMA, &[]);
+    static BAD_MIME_OPS: [&OperationSchema<'static>; 1] = [&BAD_MIME_OP];
+    static BAD_MIME_SERVICE: ServiceSchema<'static> =
+        ServiceSchema::new(shape_id!("test", "BadService"), None, &[], &BAD_MIME_OPS);
+    for service in [&BAD_ERROR_SERVICE, &BAD_MIME_SERVICE] {
+        let ctx = ProtocolBuildContext::new(service);
+        assert!(RestJson1Protocol::from_build_context(&ctx).is_err());
+        assert!(RestXmlProtocol::from_build_context(&ctx).is_err());
+    }
+    // AWS JSON applies REST header bindings to its responses, so it validates them too.
+    let ctx = ProtocolBuildContext::new(&BAD_ERROR_SERVICE);
+    assert!(AwsJson1_0Protocol::from_build_context(&ctx).is_err());
+    assert!(AwsJson1_1Protocol::from_build_context(&ctx).is_err());
 }

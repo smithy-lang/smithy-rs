@@ -53,7 +53,7 @@ impl<B> fmt::Debug for BoundHandler<B> {
 }
 
 /// A served protocol and the router it built.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub(super) struct ProtocolAndRouter {
     pub(super) router: SharedProtocolRouter,
     pub(super) protocol: SharedServerProtocol,
@@ -146,7 +146,7 @@ where
             [ProtocolAndRouter {
                 router: SharedProtocolRouter::Metadata(router),
                 ..
-            }] => self.route(router, request),
+            }] => self.route(router.as_ref(), request),
             _ => State::Routing {
                 // TODO: Investigate avoiding this Arc clone when routing needs no body I/O.
                 future: Box::pin(self.clone().route_protocols(request)),
@@ -156,11 +156,7 @@ where
     }
 
     /// Checks the service's only metadata protocol without allocating a routing future.
-    fn route(
-        &self,
-        router: &Arc<dyn MetadataProtocolRouter>,
-        request: Request<crate::body::RequestBody<B>>,
-    ) -> State<B> {
+    fn route(&self, router: &dyn MetadataProtocolRouter, request: Request<crate::body::RequestBody<B>>) -> State<B> {
         // Probe with the head only: the parts move over and back, nothing is cloned,
         // and the router stays free of the transport body type.
         let (parts, body) = request.into_parts();
@@ -364,5 +360,64 @@ where
     }
     fn call(&mut self, request: Request<RB>) -> Self::Future {
         self.route_request(request.map(crate::body::RequestBody::new))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::test_helpers::{binding, FIRST, REST_JSON, SECOND};
+    use super::*;
+    use crate::body::Body;
+    use http::{HeaderValue, StatusCode};
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn builder_defers_layers_until_build_and_preserves_stack_order() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let applications = Arc::new(AtomicUsize::new(0));
+        let counter = applications.clone();
+
+        let layer = tower::layer::layer_fn(move |inner: SyncRoute<Body>| {
+            counter.fetch_add(1, Ordering::Release);
+
+            tower::service_fn(move |mut request: Request<Body>| {
+                assert!(request.extensions().get::<SelectedProtocolOperation>().is_some());
+                assert_eq!(request.headers()["x-layer-order"], "outer");
+                request
+                    .headers_mut()
+                    .insert("x-layer-order", HeaderValue::from_static("inner"));
+                inner.clone().oneshot(request)
+            })
+        });
+
+        let outer = tower::util::MapRequestLayer::new(|mut request: Request<Body>| {
+            assert!(!request.headers().contains_key("x-layer-order"));
+            request
+                .headers_mut()
+                .insert("x-layer-order", HeaderValue::from_static("outer"));
+            request
+        });
+
+        let stack = tower::layer::util::Stack::new(layer, outer);
+        let builder = MultiProtocolRoutingService::builder(&REST_JSON)
+            .operation_handler_bindings([binding(&FIRST), binding(&SECOND)])
+            .layer(stack);
+        assert_eq!(applications.load(Ordering::Acquire), 0);
+
+        let app = builder.build().unwrap();
+        assert_eq!(applications.load(Ordering::Acquire), 2);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/first")
+                    .header("content-type", "application/json")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }
