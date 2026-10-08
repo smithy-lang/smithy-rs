@@ -6,9 +6,10 @@
 use aws_smithy_runtime_api::client::identity::Identity;
 use bytes::{BufMut, BytesMut};
 use crypto_bigint::{CheckedAdd, CheckedSub, Encoding, U256};
+use ecdsa::hazmat::{DigestPrimitive, SignPrimitive};
+use ecdsa::signature::digest::Digest as _;
 use hmac::{digest::FixedOutput, Hmac, KeyInit, Mac};
-use p256::ecdsa::signature::Signer;
-use p256::ecdsa::{DerSignature, SigningKey};
+use p256::{NistP256, NonZeroScalar};
 use sha2::Sha256;
 use std::io::Write;
 use std::sync::LazyLock;
@@ -16,6 +17,17 @@ use std::time::SystemTime;
 use zeroize::Zeroizing;
 
 const ALGORITHM: &[u8] = b"AWS4-ECDSA-P256-SHA256";
+/// Size of a P-256 private scalar in bytes.
+const P256_PRIVATE_KEY_SIZE: usize = 32;
+
+/// The SHA-256 that `ecdsa` pairs with P-256.
+///
+/// This is deliberately not the [`sha2::Sha256`] used for HMAC above. `p256` depends on an older
+/// `sha2` major than this crate does, so both are in the dependency graph and their `Sha256` types
+/// are distinct and not interchangeable in `ecdsa`'s trait bounds. Naming the curve's own
+/// associated digest is what `ecdsa` does internally (`C::Digest`), which is what keeps the
+/// signature below identical to the one a `SigningKey` would produce.
+type P256Digest = <NistP256 as DigestPrimitive>::Digest;
 static BIG_N_MINUS_2: LazyLock<U256> = LazyLock::new(|| {
     // The N value from section 3.2.1.3 of https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-186.pdf
     // Used as the N value for the algorithm described in section A.2.2 of https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-5.pdf
@@ -26,10 +38,40 @@ static BIG_N_MINUS_2: LazyLock<U256> = LazyLock::new(|| {
 });
 
 /// Calculates a Sigv4a signature
+///
+/// `signing_key` is a big-endian P-256 private scalar, as produced by
+/// [`generate_signing_key`].
+///
+/// # Panics
+/// Panics if `signing_key` is not a valid P-256 private key.
 pub fn calculate_signature(signing_key: impl AsRef<[u8]>, string_to_sign: &[u8]) -> String {
-    let signing_key = SigningKey::from_slice(signing_key.as_ref()).unwrap();
-    let signature: DerSignature = signing_key.sign(string_to_sign);
-    hex::encode(signature.as_bytes())
+    let signing_key = signing_key.as_ref();
+    assert_eq!(
+        P256_PRIVATE_KEY_SIZE,
+        signing_key.len(),
+        "a P-256 private scalar is {P256_PRIVATE_KEY_SIZE} bytes"
+    );
+
+    // Sign from the private scalar rather than from a `SigningKey`. Constructing one derives the
+    // verifying key, and that costs a P-256 scalar multiplication as expensive as the signature
+    // itself while signing never reads it. `NonZeroScalar::from_repr` applies the same validation
+    // a `SigningKey` would -- it rejects zero and anything at or above the group order.
+    //
+    // This is the body of `ecdsa`'s `PrehashSigner for SigningKey` with that derivation left out,
+    // so the signature is unchanged: same RFC 6979 deterministic nonce, same empty additional
+    // data. `ecdsa`'s `bits2field` is a copy for a digest the width of the field, which SHA-256
+    // on P-256 is, so hashing straight into `z` is equivalent.
+    let mut repr = Zeroizing::new([0u8; P256_PRIVATE_KEY_SIZE]);
+    repr.copy_from_slice(signing_key);
+    let scalar = Option::<NonZeroScalar>::from(NonZeroScalar::from_repr((*repr).into()))
+        .expect("signing key is a valid P-256 private scalar");
+
+    let z = P256Digest::digest(string_to_sign);
+    let (signature, _recovery_id): (p256::ecdsa::Signature, _) = scalar
+        .try_sign_prehashed_rfc6979::<P256Digest>(&z, &[])
+        .expect("signing cannot fail for a valid scalar and a field-width digest");
+
+    hex::encode(signature.to_der().as_bytes())
 }
 
 /// Generates a signing key for Sigv4a signing.
@@ -65,8 +107,13 @@ pub fn generate_signing_key(access_key: &str, secret_access_key: &str) -> impl A
             let pk = k0
                 .checked_add(&U256::ONE)
                 .expect("k0 is always less than U256::MAX");
-            let d = Zeroizing::new(pk.to_be_bytes());
-            break SigningKey::from_slice(d.as_ref()).unwrap();
+            // Return the scalar itself rather than round-tripping it through a `SigningKey`.
+            // Building one derives the verifying key, which costs a P-256 scalar
+            // multiplication that nothing here uses: the only caller hands these bytes to
+            // `calculate_signature`, and the loop's bound on `k0` already makes `pk` a valid
+            // private scalar. Staying in `Zeroizing` also keeps the key out of a plain
+            // `FieldBytes` that would not be wiped on drop.
+            break Zeroizing::new(pk.to_be_bytes());
         }
 
         *counter = counter
@@ -74,7 +121,7 @@ pub fn generate_signing_key(access_key: &str, secret_access_key: &str) -> impl A
             .expect("counter will never get to 255");
     };
 
-    key.to_bytes()
+    key
 }
 
 /// Parameters to use when signing.
@@ -204,6 +251,70 @@ pub mod signing_params {
                     .settings
                     .ok_or_else(|| BuildError::new("settings are required"))?,
             })
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{calculate_signature, generate_signing_key};
+    use p256::ecdsa::signature::Signer;
+    use p256::ecdsa::{DerSignature, SigningKey};
+
+    const CREDENTIALS: &[(&str, &str)] = &[
+        (
+            "AKIAIOSFODNN7EXAMPLE",
+            "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        ),
+        ("AKIDEXAMPLE", "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY"),
+        (
+            "AKIAIOSFODNN7EXAMPLF",
+            "je7MtGbClwBF/2Zp9Utk/h3yCo8nvbEXAMPLEKEY",
+        ),
+    ];
+
+    const STRINGS_TO_SIGN: &[&[u8]] = &[
+        b"",
+        b"AWS4-ECDSA-P256-SHA256\n20260101T000000Z\n20260101/lambda/aws4_request\n\
+          a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+        &[0xff; 64],
+    ];
+
+    /// Signing from the private scalar has to agree with signing through a `SigningKey`, byte for
+    /// byte. That equality is the whole argument for skipping the verifying-key derivation: the
+    /// only thing dropped is a scalar multiplication whose result signing never reads.
+    #[test]
+    fn signature_matches_the_signing_key_path() {
+        for (access_key, secret_key) in CREDENTIALS {
+            let key = generate_signing_key(access_key, secret_key);
+            for string_to_sign in STRINGS_TO_SIGN {
+                let expected: DerSignature = SigningKey::from_slice(key.as_ref())
+                    .expect("derived key is a valid P-256 private key")
+                    .sign(string_to_sign);
+                assert_eq!(
+                    hex::encode(expected.as_bytes()),
+                    calculate_signature(&key, string_to_sign),
+                    "signature diverged for access key {access_key}"
+                );
+            }
+        }
+    }
+
+    /// The derived key is now returned as the raw scalar instead of being round-tripped through a
+    /// `SigningKey`. Those are the same 32 bytes: the KDF loop already bounds the scalar below the
+    /// group order, so the round trip was an identity function that cost a scalar multiplication.
+    #[test]
+    fn derived_key_matches_the_signing_key_round_trip() {
+        for (access_key, secret_key) in CREDENTIALS {
+            let key = generate_signing_key(access_key, secret_key);
+            let round_tripped = SigningKey::from_slice(key.as_ref())
+                .expect("derived key is a valid P-256 private key")
+                .to_bytes();
+            assert_eq!(
+                &round_tripped[..],
+                key.as_ref(),
+                "derived key changed for access key {access_key}"
+            );
         }
     }
 }

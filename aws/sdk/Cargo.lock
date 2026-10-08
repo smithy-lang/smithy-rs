@@ -1248,6 +1248,7 @@ dependencies = [
  "bytes",
  "criterion 0.8.2",
  "crypto-bigint",
+ "ecdsa",
  "form_urlencoded",
  "hex",
  "hex-literal",
