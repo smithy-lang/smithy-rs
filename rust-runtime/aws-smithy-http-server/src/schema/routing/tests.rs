@@ -27,6 +27,302 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 use tower::{Service, ServiceExt};
 
+fn strict_context(targets: &[OperationTarget]) -> RouterBuildContext<'_> {
+    static CONFIG: std::sync::LazyLock<crate::schema::ServiceConfig> = std::sync::LazyLock::new(Default::default);
+    RouterBuildContext {
+        service: &REST_JSON,
+        targets,
+        config: &CONFIG,
+        protocol_settings: None,
+        claim_mode: ClaimMode::Strict,
+    }
+}
+
+async fn assert_wire_response(actual: Response<BoxBody>, expected: Response<BoxBody>) {
+    assert_eq!(actual.status(), expected.status());
+    assert_eq!(actual.headers(), expected.headers());
+    assert_eq!(
+        actual.into_body().collect().await.unwrap().to_bytes(),
+        expected.into_body().collect().await.unwrap().to_bytes(),
+    );
+}
+
+#[tokio::test]
+async fn sole_aws_json_claims_preserve_native_uri_method_and_target_rejections() {
+    use crate::protocol::aws_json::router::AwsJsonRouter;
+    use crate::protocol::aws_json_10::AwsJson1_0;
+    use crate::protocol::aws_json_11::AwsJson1_1;
+    use crate::response::IntoResponse;
+    use crate::routing::Router;
+
+    let legacy = AwsJsonRouter::from_owned([("Service.first".to_owned(), ())]);
+    for schema in [&AWS_JSON_10, &AWS_JSON_11] {
+        let app = app(schema, []);
+        for (method, uri, target) in [
+            ("POST", "/?foo=bar", Some(HeaderValue::from_static("Service.first"))),
+            ("GET", "/", Some(HeaderValue::from_static("Service.first"))),
+            ("POST", "/", None),
+            ("POST", "/", Some(HeaderValue::from_bytes(b"\xff").unwrap())),
+            ("POST", "/", Some(HeaderValue::from_static("Service.unknown"))),
+        ] {
+            let mut request = Request::builder().method(method).uri(uri).body(()).unwrap();
+            if let Some(target) = target {
+                request.headers_mut().insert("x-amz-target", target);
+            }
+            let SharedProtocolRouter::Metadata(router) = &app.state.protocols[0].router else {
+                unreachable!()
+            };
+            assert!(matches!(router.claim(&request), RouteClaim::DeferredRejection(_)));
+            let error = legacy.match_route(&request).unwrap_err();
+            let expected = if std::ptr::eq(schema, &AWS_JSON_10) {
+                IntoResponse::<AwsJson1_0>::into_response(error)
+            } else {
+                IntoResponse::<AwsJson1_1>::into_response(error)
+            };
+            let (parts, ()) = request.into_parts();
+            let body = Body::new(http_body_util::StreamBody::new(futures_util::stream::poll_fn(
+                |_| -> Poll<Option<Result<Frame<Bytes>, Error>>> { panic!("routing rejection read its body") },
+            )));
+            let actual = app.clone().oneshot(Request::from_parts(parts, body)).await.unwrap();
+            assert_wire_response(actual, expected).await;
+        }
+        for content_type in [None, Some("text/plain")] {
+            let mut builder = Request::builder()
+                .method("POST")
+                .uri("/")
+                .header("x-amz-target", "Service.first");
+            if let Some(content_type) = content_type {
+                builder = builder.header("content-type", content_type);
+            }
+            assert_eq!(
+                app.clone()
+                    .oneshot(builder.body(Body::empty()).unwrap())
+                    .await
+                    .unwrap()
+                    .status(),
+                StatusCode::OK,
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn sole_cbor_claims_serialize_native_header_rejections() {
+    use crate::protocol::rpc_v2_cbor::router::RpcV2CborRouter;
+    use crate::routing::Router;
+
+    let legacy = RpcV2CborRouter::from_owned([("Service/operation/first".to_owned(), ())]);
+    let app = app(&RPC, []);
+    for (header, forbidden) in [
+        (None, None),
+        (Some(HeaderValue::from_static("malformed")), None),
+        (Some(HeaderValue::from_static("rpc-v2-json")), None),
+        (Some(HeaderValue::from_bytes(b"\xff").unwrap()), None),
+        (Some(HeaderValue::from_static("rpc-v2-cbor")), Some("x-amz-target")),
+        (Some(HeaderValue::from_static("rpc-v2-cbor")), Some("x-amzn-target")),
+    ] {
+        let mut request = Request::builder()
+            .method("POST")
+            .uri("/service/Service/operation/first")
+            .body(())
+            .unwrap();
+        if let Some(header) = header {
+            request.headers_mut().insert(SMITHY_PROTOCOL_HEADER.clone(), header);
+        }
+        if let Some(forbidden) = forbidden {
+            request
+                .headers_mut()
+                .insert(forbidden, HeaderValue::from_static("Service.first"));
+        }
+        let SharedProtocolRouter::Metadata(router) = &app.state.protocols[0].router else {
+            unreachable!()
+        };
+        let RouteClaim::DeferredRejection(error) = router.claim(&request) else {
+            panic!("sole CBOR must defer native header rejections");
+        };
+        let native: RoutingError = legacy.match_route(&request).unwrap_err().into();
+        assert_eq!(error.kind(), native.kind());
+        // The schema protocol already frames these errors using Coral-compatible responses,
+        // rather than the legacy Rust router's generic empty 404. Preserve that policy.
+        let expected = if native.kind() == RoutingErrorKind::MalformedRequest {
+            Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .header("connection", "close")
+                .body(crate::body::to_boxed("<MalformedHttpRequestException/>\n"))
+                .unwrap()
+        } else {
+            Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .header("content-type", "application/cbor")
+                .header("smithy-protocol", "rpc-v2-cbor")
+                .header("content-length", "53")
+                .body(crate::body::to_boxed(
+                    b"\xbf\x66__type\x78\x2asmithy.framework#UnknownOperationException\xff".as_slice(),
+                ))
+                .unwrap()
+        };
+        let (parts, ()) = request.into_parts();
+        let body = Body::new(http_body_util::StreamBody::new(futures_util::stream::poll_fn(
+            |_| -> Poll<Option<Result<Frame<Bytes>, Error>>> { panic!("CBOR rejection read its body") },
+        )));
+        assert_wire_response(
+            app.clone().oneshot(Request::from_parts(parts, body)).await.unwrap(),
+            expected,
+        )
+        .await;
+    }
+}
+
+#[tokio::test]
+async fn sole_rest_rejections_preserve_legacy_responses() {
+    use crate::protocol::rest::router::Error as RestError;
+    use crate::protocol::rest_json_1::RestJson1;
+    use crate::protocol::rest_xml::RestXml;
+    use crate::response::IntoResponse;
+
+    for schema in [&REST_JSON, &REST_XML] {
+        for (method, uri, error) in [
+            ("POST", "/unknown", RestError::NotFound),
+            ("GET", "/first", RestError::MethodNotAllowed),
+        ] {
+            let expected = if std::ptr::eq(schema, &REST_JSON) {
+                IntoResponse::<RestJson1>::into_response(error)
+            } else {
+                IntoResponse::<RestXml>::into_response(error)
+            };
+            let actual = app(schema, [])
+                .oneshot(Request::builder().method(method).uri(uri).body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert_wire_response(actual, expected).await;
+        }
+    }
+}
+
+#[tokio::test]
+async fn sole_custom_metadata_router_retains_control_of_claims() {
+    use crate::schema::routing::service::ProtocolAndRouter;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[derive(Debug)]
+    struct CustomRouter {
+        claims: Arc<AtomicUsize>,
+        selected: Option<OperationTarget>,
+    }
+    impl MetadataProtocolRouter for CustomRouter {
+        fn route(&self, _: &Request<()>) -> Result<OperationTarget, RoutingError> {
+            panic!("NoClaim and ClaimedWithRoute must never invoke route")
+        }
+        fn claim(&self, _: &Request<()>) -> RouteClaim {
+            self.claims.fetch_add(1, Ordering::SeqCst);
+            match self.selected {
+                Some(target) => RouteClaim::ClaimedWithRoute(target),
+                None => RouteClaim::NoClaim,
+            }
+        }
+    }
+    for selected in [None, Some(OperationTarget::new(0, &FIRST))] {
+        let mut app = app(&REST_JSON, []);
+        let claims = Arc::new(AtomicUsize::new(0));
+        let protocol = app.state.protocols[0].protocol.clone();
+        Arc::get_mut(&mut app.state).unwrap().protocols = Box::from([ProtocolAndRouter {
+            protocol,
+            router: SharedProtocolRouter::new(CustomRouter {
+                claims: claims.clone(),
+                selected,
+            }),
+        }]);
+        let response = app.oneshot(Request::new(Body::empty())).await.unwrap();
+        assert_eq!(claims.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            response.status(),
+            if selected.is_some() {
+                StatusCode::OK
+            } else {
+                StatusCode::NOT_FOUND
+            }
+        );
+        if selected.is_none() {
+            assert!(response.headers().is_empty());
+            assert_eq!(
+                response.into_body().collect().await.unwrap().to_bytes(),
+                "<UnknownOperationException/>\n"
+            );
+        }
+    }
+}
+
+#[test]
+fn streaming_recognition_agrees_with_strict_and_sole_claims() {
+    static EVENT: Schema<'static> = Schema::new_member(
+        shape_id!("test", "EventsInput", "events"),
+        ShapeType::Union,
+        "events",
+        0,
+    )
+    .with_streaming()
+    .with_http_payload();
+    static INPUT: Schema<'static> =
+        Schema::new_struct(shape_id!("test", "EventsInput"), ShapeType::Structure, &[&EVENT])
+            .with_http(HttpTrait::new("POST", "/events", Some(200)));
+    static OPERATION: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &INPUT, &UNIT, &[]);
+    let targets = [OperationTarget::new(0, &OPERATION)];
+    for mode in [ClaimMode::Strict, ClaimMode::SoleProtocol] {
+        let mut context = strict_context(&targets);
+        context.claim_mode = mode;
+        let rest = rest_router(&context, "application/json", &[]).unwrap();
+        let aws = aws_json_router(&context, "application/x-amz-json-1.1").unwrap();
+        let cbor = rpc_v2_cbor_router(&context).unwrap();
+        for content_type in [None, Some("text/plain"), Some("application/vnd.amazon.eventstream")] {
+            for (router, uri, target) in [
+                (&rest as &dyn MetadataProtocolRouter, "/events", None),
+                (&aws as &dyn MetadataProtocolRouter, "/", Some("Service.first")),
+            ] {
+                let mut builder = Request::builder().method("POST").uri(uri);
+                if let Some(target) = target {
+                    builder = builder.header("x-amz-target", target);
+                }
+                if let Some(content_type) = content_type {
+                    builder = builder.header("content-type", content_type);
+                }
+                let request = builder.body(()).unwrap();
+                let expected =
+                    mode == ClaimMode::SoleProtocol || content_type == Some("application/vnd.amazon.eventstream");
+                assert_eq!(router.recognizes_streaming_input(&request), expected);
+                assert_eq!(
+                    matches!(router.claim(&request), RouteClaim::ClaimedWithRoute(_)),
+                    expected
+                );
+            }
+        }
+        for protocol_header in [None, Some("wrong"), Some("rpc-v2-cbor")] {
+            let mut builder = Request::builder()
+                .method("POST")
+                .uri("/service/Service/operation/first");
+            if let Some(protocol_header) = protocol_header {
+                builder = builder.header(SMITHY_PROTOCOL_HEADER, protocol_header);
+            }
+            let request = builder.body(()).unwrap();
+            assert_eq!(
+                cbor.recognizes_streaming_input(&request),
+                protocol_header == Some("rpc-v2-cbor")
+            );
+            match (mode, protocol_header) {
+                (ClaimMode::Strict, Some("rpc-v2-cbor")) => {
+                    assert!(matches!(cbor.claim(&request), RouteClaim::Claimed));
+                }
+                (ClaimMode::SoleProtocol, Some("rpc-v2-cbor")) => {
+                    assert!(matches!(cbor.claim(&request), RouteClaim::ClaimedWithRoute(_)));
+                }
+                (ClaimMode::Strict, _) => assert!(matches!(cbor.claim(&request), RouteClaim::NoClaim)),
+                (ClaimMode::SoleProtocol, _) => {
+                    assert!(matches!(cbor.claim(&request), RouteClaim::DeferredRejection(_)));
+                }
+            }
+        }
+    }
+}
+
 #[tokio::test]
 async fn separately_built_layers_leave_existing_services_and_requests_unchanged() {
     let mut original = service(ProtocolOptions::default());
@@ -537,8 +833,8 @@ async fn cancelling_body_routing_drops_the_pending_stream() {
 #[tokio::test]
 async fn immediate_routing_uses_ready_future_and_rejects_unknown_routes() {
     let targets = [OperationTarget::new(0, &FIRST), OperationTarget::new(1, &SECOND)];
-    let router = rest_router(&targets, "application/json", &[]).unwrap();
-    let shared = SharedProtocolRouter::new(rest_router(&targets, "application/json", &[]).unwrap());
+    let router = rest_router(&strict_context(&targets), "application/json", &[]).unwrap();
+    let shared = SharedProtocolRouter::new(rest_router(&strict_context(&targets), "application/json", &[]).unwrap());
     assert!(matches!(shared, SharedProtocolRouter::Metadata(_)));
     let req = Request::builder().method("POST").uri("/first").body(()).unwrap();
     assert_eq!(router.route(&req).unwrap().index(), 0);
@@ -579,25 +875,32 @@ fn operation_metadata_classifies_streaming_and_cbor_routes_without_an_indexed_ta
         assert_eq!(target.has_streaming_output(), output);
         assert_eq!(target.has_streaming_blob(), blob);
 
-        let router = rpc_v2_cbor_router(&RouterBuildContext {
-            service: &REST_JSON,
-            targets: &[target],
-            config: &config.service_config,
-            protocol_settings: None,
-        })
-        .unwrap();
-        let request = Request::builder()
-            .method("POST")
-            .uri("/service/Service/operation/first")
-            .header(SMITHY_PROTOCOL_HEADER, "rpc-v2-cbor")
-            .body(())
+        for claim_mode in [ClaimMode::Strict, ClaimMode::SoleProtocol] {
+            let router = rpc_v2_cbor_router(&RouterBuildContext {
+                claim_mode,
+                service: &REST_JSON,
+                targets: &[target],
+                config: &config.service_config,
+                protocol_settings: None,
+            })
             .unwrap();
-        assert_eq!(router.recognizes_streaming_input(&request), input && !blob);
-        if blob {
-            assert_eq!(router.route(&request).unwrap_err().status_code(), 404);
-            assert!(matches!(router.claim(&request), RouteClaim::Claimed));
-        } else {
-            assert_eq!(router.route(&request).unwrap().index(), usize::MAX);
+            let request = Request::builder()
+                .method("POST")
+                .uri("/service/Service/operation/first")
+                .header(SMITHY_PROTOCOL_HEADER, "rpc-v2-cbor")
+                .body(())
+                .unwrap();
+            assert_eq!(router.recognizes_streaming_input(&request), input && !blob);
+            if blob {
+                assert_eq!(router.route(&request).unwrap_err().status_code(), 404);
+                if claim_mode == ClaimMode::Strict {
+                    assert!(matches!(router.claim(&request), RouteClaim::Claimed));
+                } else {
+                    assert!(matches!(router.claim(&request), RouteClaim::DeferredRejection(_)));
+                }
+            } else {
+                assert_eq!(router.route(&request).unwrap().index(), usize::MAX);
+            }
         }
     }
 }
@@ -607,6 +910,7 @@ fn cbor_claim_requires_the_header_post_and_a_known_service_operation() {
     let options = ProtocolOptions::default();
     let targets = [OperationTarget::new(0, &FIRST)];
     let router = rpc_v2_cbor_router(&RouterBuildContext {
+        claim_mode: ClaimMode::Strict,
         service: &RPC,
         targets: &targets,
         config: &options.service_config,
@@ -661,7 +965,7 @@ fn cbor_claim_requires_the_header_post_and_a_known_service_operation() {
 }
 
 #[tokio::test]
-async fn a_single_protocol_checks_claims_and_unidentified_requests_remain_neutral() {
+async fn sole_metadata_protocols_return_native_rejections_without_reading_the_body() {
     for schema in [&RPC, &AWS_JSON_10, &REST_JSON] {
         let app = MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings(
             schema,
@@ -670,6 +974,13 @@ async fn a_single_protocol_checks_claims_and_unidentified_requests_remain_neutra
         )
         .build()
         .unwrap();
+        let SharedProtocolRouter::Metadata(router) = &app.state.protocols[0].router else {
+            unreachable!()
+        };
+        let error = router
+            .route(&Request::builder().method("GET").uri("/unknown").body(()).unwrap())
+            .unwrap_err();
+        let expected = app.state.protocols[0].protocol.serialize_routing_error(&error);
         let response = app
             .oneshot(
                 Request::builder()
@@ -684,11 +995,11 @@ async fn a_single_protocol_checks_claims_and_unidentified_requests_remain_neutra
             )
             .await
             .unwrap();
-        assert_eq!(response.status(), StatusCode::NOT_FOUND);
-        assert!(response.headers().is_empty());
+        assert_eq!(response.status(), expected.status());
+        assert_eq!(response.headers(), expected.headers());
         assert_eq!(
             response.into_body().collect().await.unwrap().to_bytes(),
-            "<UnknownOperationException/>\n"
+            expected.into_body().collect().await.unwrap().to_bytes()
         );
     }
     let response = service(ProtocolOptions::default())
@@ -1358,7 +1669,7 @@ mod multi_protocol {
 
     /// Both buffered and streaming blob payloads derive application/octet-stream.
     #[tokio::test]
-    async fn rest_claims_blob_payloads_by_their_derived_content_type() {
+    async fn sole_rest_routes_blob_payloads_without_content_type_admission() {
         static DATA: Schema<'static> =
             Schema::new_member(shape_id!("test", "Upload", "data"), ShapeType::Blob, "data", 0)
                 .with_streaming()
@@ -1391,15 +1702,15 @@ mod multi_protocol {
                 post(uri).header("content-type", "video/mp4"),
                 post(uri).header("content-type", "application/json"),
             ] {
-                assert_eq!(send(&app, request, "").await.0, StatusCode::NOT_FOUND);
+                assert_eq!(send(&app, request, "").await.0, StatusCode::OK);
             }
         }
     }
 
     /// A modeled Content-Type header permits a custom value; an empty input uses the
-    /// protocol default. Both still need a present header for identification.
+    /// protocol default during strict arbitration. A sole protocol routes either input.
     #[tokio::test]
-    async fn rest_claims_custom_headers_and_empty_inputs_independently_of_deserialization() {
+    async fn sole_rest_routes_custom_headers_and_empty_inputs_without_content_type_admission() {
         static CONTENT_TYPE: Schema<'static> = Schema::new_member(
             shape_id!("test", "Upload", "contentType"),
             ShapeType::String,
@@ -1443,13 +1754,13 @@ mod multi_protocol {
             post("/second"),
             post("/second").header("content-type", "text/plain"),
         ] {
-            assert_eq!(send(&app, request, "").await.0, StatusCode::NOT_FOUND);
+            assert_eq!(send(&app, request, "").await.0, StatusCode::OK);
         }
     }
 
     /// Event streams retain their own derived content type for identification.
     #[tokio::test]
-    async fn rest_event_stream_claims_still_require_the_event_stream_content_type() {
+    async fn sole_rest_event_stream_claims_and_recognition_use_native_routing() {
         static REST_STREAM: ServiceSchema<'static> = ServiceSchema::new(
             SERVICE_ID,
             None,
@@ -1465,8 +1776,8 @@ mod multi_protocol {
             post("/stream").header("content-type", "application/json"),
         ] {
             let request = builder.body(()).unwrap();
-            assert!(matches!(router.claim(&request), RouteClaim::NoClaim));
-            assert!(!router.recognizes_streaming_input(&request));
+            assert!(matches!(router.claim(&request), RouteClaim::ClaimedWithRoute(_)));
+            assert!(router.recognizes_streaming_input(&request));
         }
         let request = post("/stream")
             .header("content-type", "application/vnd.amazon.eventstream")
@@ -1474,9 +1785,9 @@ mod multi_protocol {
             .unwrap();
         assert!(matches!(router.claim(&request), RouteClaim::ClaimedWithRoute(_)));
         assert!(router.recognizes_streaming_input(&request));
-        // The unclaimed request gets the neutral unknown-operation response.
+        // A sole REST protocol dispatches event streams without Content-Type admission.
         let (status, _) = send(&app, post("/stream"), "").await;
-        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(status, StatusCode::OK);
     }
 
     #[tokio::test]
@@ -2142,7 +2453,7 @@ fn rest_router_claims_the_codec_content_type_and_its_aliases() {
 
     let targets = [OperationTarget::new(0, &NOTE_OPERATION)];
     let claims = |aliases: &'static [&'static str], content_type: &str| {
-        let router = rest_router(&targets, "application/xml", aliases).unwrap();
+        let router = rest_router(&strict_context(&targets), "application/xml", aliases).unwrap();
         let request = Request::builder()
             .method("POST")
             .uri("/note")
@@ -2198,7 +2509,7 @@ fn rest_payload_claims_respect_modeled_media_types_and_shape_defaults() {
         OperationTarget::new(2, &DOCUMENT_OP),
     ];
     for codec_content_type in ["application/json", "application/xml"] {
-        let router = rest_router(&targets, codec_content_type, &[]).unwrap();
+        let router = rest_router(&strict_context(&targets), codec_content_type, &[]).unwrap();
         for (uri, expected) in [
             ("/text", "text/plain"),
             ("/media", "video/mp4"),
@@ -2228,7 +2539,7 @@ fn rest_payload_claims_respect_modeled_media_types_and_shape_defaults() {
 fn rest_claims_synthetic_empty_inputs_by_the_protocol_default() {
     let targets = [OperationTarget::new(0, &FIRST)];
     for codec_content_type in ["application/json", "application/xml"] {
-        let router = rest_router(&targets, codec_content_type, &[]).unwrap();
+        let router = rest_router(&strict_context(&targets), codec_content_type, &[]).unwrap();
         let request = Request::builder()
             .method("POST")
             .uri("/first")

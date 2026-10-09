@@ -123,13 +123,27 @@ impl ProtocolOptions {
     }
 }
 
+/// Whether the router participates in protocol arbitration.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ClaimMode {
+    /// Apply normal protocol ownership checks.
+    #[default]
+    Strict,
+    /// This is the only installed protocol. Built-in metadata routers use native
+    /// operation routing and leave Content-Type validation to deserialization.
+    SoleProtocol,
+}
+
 /// Everything a protocol sees when building its router: the service, the
 /// assigned targets, the shared service configuration, and the protocol's own
-/// settings section. Constructed by the routing service builder, so a protocol never
+/// settings section and claim mode. Constructed by the routing service builder, so a protocol never
 /// sees another protocol's settings.
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct RouterBuildContext<'a> {
+    /// Whether this router is the sole protocol or participates in arbitration.
+    /// The router remains responsible for its own claim behavior in either mode.
+    pub claim_mode: ClaimMode,
     /// The service schema.
     pub service: &'static ServiceSchema<'static>,
     /// The operations to route, with targets assigned by the routing service.

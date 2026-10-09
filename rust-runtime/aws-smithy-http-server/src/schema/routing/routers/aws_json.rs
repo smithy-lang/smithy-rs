@@ -10,11 +10,12 @@ use http::Request;
 
 use super::content_type_is;
 use crate::schema::routing::{
-    MetadataProtocolRouter, OperationTarget, RouteClaim, RouterBuildContext, RouterBuildError,
+    ClaimMode, MetadataProtocolRouter, OperationTarget, RouteClaim, RouterBuildContext, RouterBuildError,
 };
 
 #[derive(Debug)]
 struct AwsJsonProtocolRouter {
+    claim_mode: ClaimMode,
     router: crate::protocol::aws_json::router::AwsJsonRouter<OperationTarget>,
     content_type: &'static str,
 }
@@ -40,6 +41,9 @@ impl AwsJsonProtocolRouter {
 
 impl MetadataProtocolRouter for AwsJsonProtocolRouter {
     fn recognizes_streaming_input(&self, request: &Request<()>) -> bool {
+        if self.claim_mode == ClaimMode::SoleProtocol {
+            return self.route(request).is_ok_and(|target| target.has_streaming_input());
+        }
         self.matching_target(request)
             .is_some_and(|target| target.has_streaming_input())
     }
@@ -50,6 +54,12 @@ impl MetadataProtocolRouter for AwsJsonProtocolRouter {
     }
 
     fn claim(&self, request: &Request<()>) -> RouteClaim {
+        if self.claim_mode == ClaimMode::SoleProtocol {
+            return match self.route(request) {
+                Ok(target) => RouteClaim::ClaimedWithRoute(target),
+                Err(error) => RouteClaim::DeferredRejection(error),
+            };
+        }
         match self.matching_target(request) {
             Some(target) => RouteClaim::ClaimedWithRoute(target),
             None if content_type_is(request, self.content_type) => match self.route(request) {
@@ -67,6 +77,8 @@ impl MetadataProtocolRouter for AwsJsonProtocolRouter {
 /// an operation with an event-stream input. Event-stream requests carry no AWS JSON
 /// version marker, so the normal protocol priority resolves 1.0/1.1 ties. Rejections are awsJson's routing errors,
 /// framed by whichever protocol registers the router.
+/// As the sole protocol, claims use native full-URI, method, and target validation,
+/// leaving Content-Type validation to request deserialization.
 #[doc(hidden)]
 pub fn aws_json_router(
     ctx: &RouterBuildContext<'_>,
@@ -77,6 +89,7 @@ pub fn aws_json_router(
         (format!("{}.{}", ctx.service.shape_id().shape_name(), name), *target)
     });
     Ok(AwsJsonProtocolRouter {
+        claim_mode: ctx.claim_mode,
         router: crate::protocol::aws_json::router::AwsJsonRouter::from_owned(entries),
         content_type,
     })

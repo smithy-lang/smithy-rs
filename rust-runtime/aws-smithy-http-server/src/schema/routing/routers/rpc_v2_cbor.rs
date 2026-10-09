@@ -10,7 +10,7 @@ use crate::schema::routing::RoutingError;
 use http::Request;
 
 use crate::schema::routing::{
-    MetadataProtocolRouter, OperationTarget, RouteClaim, RouterBuildContext, RouterBuildError,
+    ClaimMode, MetadataProtocolRouter, OperationTarget, RouteClaim, RouterBuildContext, RouterBuildError,
 };
 
 /// Routes rpcv2Cbor on the `/service/{service}/operation/{operation}` path.
@@ -21,12 +21,18 @@ use crate::schema::routing::{
 /// Routing after a claim rejects forbidden headers and unsupported streaming blobs.
 /// Route identity retains the legacy acceptance of URI prefixes and service namespaces;
 /// configured capitalized operation aliases also participate in the known-route check.
+/// As the sole protocol, claims perform native routing and defer its errors, including
+/// missing or unsupported protocol headers, instead of declining protocol ownership.
 #[derive(Debug)]
 struct RpcV2CborProtocolRouter {
+    claim_mode: ClaimMode,
     router: crate::protocol::rpc_v2_cbor::router::RpcV2CborRouter<OperationTarget>,
 }
 impl MetadataProtocolRouter for RpcV2CborProtocolRouter {
     fn recognizes_streaming_input(&self, request: &Request<()>) -> bool {
+        if self.claim_mode == ClaimMode::SoleProtocol {
+            return self.route(request).is_ok_and(|target| target.has_streaming_input());
+        }
         use crate::routing::Router;
         request.method() == http::Method::POST
             && request
@@ -49,6 +55,12 @@ impl MetadataProtocolRouter for RpcV2CborProtocolRouter {
     }
 
     fn claim(&self, request: &Request<()>) -> RouteClaim {
+        if self.claim_mode == ClaimMode::SoleProtocol {
+            return match self.route(request) {
+                Ok(target) => RouteClaim::ClaimedWithRoute(target),
+                Err(error) => RouteClaim::DeferredRejection(error),
+            };
+        }
         let identified = request
             .headers()
             .get(&SMITHY_PROTOCOL_HEADER)
@@ -92,6 +104,7 @@ pub(crate) fn rpc_v2_cbor_router(
         })
     });
     Ok(RpcV2CborProtocolRouter {
+        claim_mode: ctx.claim_mode,
         router: crate::protocol::rpc_v2_cbor::router::RpcV2CborRouter::from_owned(entries),
     })
 }

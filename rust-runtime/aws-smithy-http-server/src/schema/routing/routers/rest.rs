@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! The built-in restJson1/restXml router: `@http` method and URI, content-type claims.
+//! The built-in restJson1/restXml router: `@http` method and URI, with Content-Type
+//! ownership checks during strict protocol arbitration.
 
 use crate::routing::request_spec::{PathSegment, QuerySegment, RequestSpec};
 use crate::routing::Router;
@@ -13,20 +14,25 @@ use aws_smithy_schema::ShapeType;
 use http::Request;
 
 use super::content_type_is;
-use crate::schema::routing::{MetadataProtocolRouter, OperationTarget, RouteClaim, RouterBuildError};
+use crate::schema::routing::{
+    ClaimMode, MetadataProtocolRouter, OperationTarget, RouteClaim, RouterBuildContext, RouterBuildError,
+};
 
 /// Builds a REST router from the operations' HTTP method and URI bindings.
 ///
 /// Protocol implementations outside this crate can reuse this router with their own default
-/// content type and accepted aliases. Claims use each input's derived content type, including
-/// payload overrides and modeled custom Content-Type headers.
+/// content type and accepted aliases. Pass the context supplied to
+/// [`crate::schema::MetadataRoutedProtocol::build_router`]. In strict mode, claims use each
+/// input's derived content type, including payload overrides and modeled custom Content-Type
+/// headers. In sole-protocol mode, claims use native method and URI routing.
 #[doc(hidden)]
 pub fn rest_router(
-    targets: &[OperationTarget],
+    ctx: &RouterBuildContext<'_>,
     codec_content_type: &'static str,
     codec_aliases: &'static [&'static str],
 ) -> Result<impl MetadataProtocolRouter + 'static, RouterBuildError> {
-    let entries = targets
+    let entries = ctx
+        .targets
         .iter()
         .map(|target| {
             let http = target.operation().http().ok_or_else(|| {
@@ -73,7 +79,8 @@ pub fn rest_router(
         })
         .collect::<Result<Vec<_>, RouterBuildError>>()?;
     // REST receives all targets in handler order, including streaming operations.
-    let content_types = targets
+    let content_types = ctx
+        .targets
         .iter()
         .enumerate()
         .map(|(index, target)| {
@@ -82,6 +89,7 @@ pub fn rest_router(
         })
         .collect::<Result<Vec<_>, _>>()?;
     Ok(RestProtocolRouter {
+        claim_mode: ctx.claim_mode,
         router: crate::protocol::rest::router::RestRouter::from_iter(entries),
         codec_content_type,
         content_types,
@@ -97,8 +105,11 @@ pub fn rest_router(
 ///
 /// Shared payload media types and modeled custom Content-Type headers can identify both REST
 /// protocols; protocol priority resolves those overlaps.
+/// As the sole protocol, claims instead use native method and URI routing, leaving
+/// Content-Type validation to request deserialization.
 #[derive(Debug)]
 struct RestProtocolRouter {
+    claim_mode: ClaimMode,
     router: crate::protocol::rest::router::RestRouter<OperationTarget>,
     codec_content_type: &'static str,
     /// Indexed by [`OperationTarget::index`].
@@ -107,6 +118,9 @@ struct RestProtocolRouter {
 
 impl MetadataProtocolRouter for RestProtocolRouter {
     fn recognizes_streaming_input(&self, request: &Request<()>) -> bool {
+        if self.claim_mode == ClaimMode::SoleProtocol {
+            return self.route(request).is_ok_and(|target| target.has_streaming_input());
+        }
         self.router
             .match_route(request)
             .is_ok_and(|target| target.has_streaming_input() && admits(&self.content_types[target.index()], request))
@@ -117,6 +131,12 @@ impl MetadataProtocolRouter for RestProtocolRouter {
     }
 
     fn claim(&self, request: &Request<()>) -> RouteClaim {
+        if self.claim_mode == ClaimMode::SoleProtocol {
+            return match self.route(request) {
+                Ok(target) => RouteClaim::ClaimedWithRoute(target),
+                Err(error) => RouteClaim::DeferredRejection(error),
+            };
+        }
         match self.router.match_route(request) {
             Ok(target) if admits(&self.content_types[target.index()], request) => RouteClaim::ClaimedWithRoute(target),
             Err(error) if content_type_is(request, self.codec_content_type) => {
@@ -127,7 +147,7 @@ impl MetadataProtocolRouter for RestProtocolRouter {
     }
 }
 
-/// Protocol identification always requires a present `Content-Type`, even when the input has
+/// Strict protocol identification requires a present `Content-Type`, even when the input has
 /// no body-bound members and deserialization does not need to validate the header.
 #[derive(Debug)]
 enum ClaimContentType {
