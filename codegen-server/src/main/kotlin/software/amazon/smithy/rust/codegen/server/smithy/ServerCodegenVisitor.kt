@@ -295,17 +295,20 @@ open class ServerCodegenVisitor(
 
         rustCrate.getInlineModuleWriter().render()
 
+        val schemaMetadata =
+            if (settings.codegenConfig.schemaSerde) {
+                settings.manifestSettingsMetadata(
+                    codegenContext.servedProtocols,
+                    context.settings.getObjectMember(CODEGEN_SETTINGS).orElse(ObjectNode.objectNode()),
+                ).deepMergeWith(serverCodegenVersionMetadata())
+            } else {
+                emptyMap()
+            }
+
         rustCrate.finalize(
             settings,
             model,
-            codegenDecorator.crateManifestCustomizations(codegenContext)
-                .deepMergeWith(
-                    settings.manifestSettingsMetadata(
-                        codegenContext.servedProtocols,
-                        context.settings.getObjectMember(CODEGEN_SETTINGS).orElse(ObjectNode.objectNode()),
-                    ),
-                )
-                .deepMergeWith(serverCodegenVersionMetadata()),
+            codegenDecorator.crateManifestCustomizations(codegenContext).deepMergeWith(schemaMetadata),
             codegenDecorator.libRsCustomizations(codegenContext, listOf()),
             // TODO(https://github.com/smithy-lang/smithy-rs/issues/1287): Remove once the server codegen is far enough along.
             requireDocs = false,

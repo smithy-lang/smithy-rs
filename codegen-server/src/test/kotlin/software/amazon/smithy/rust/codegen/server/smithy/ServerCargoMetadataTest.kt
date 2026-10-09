@@ -40,7 +40,7 @@ internal class ServerCargoMetadataTest {
     }
 
     @Test
-    fun `server manifest adds the codegen release while retaining the commit`() {
+    fun `schema manifest adds the codegen release while retaining the commit`() {
         val metadata = manifest(serverCodegenVersionMetadata())
         metadata.getString("codegen-release") shouldBe Version.fromDefaultResource().codegenVersion
         metadata.getString("codegen-version") shouldBe Version.fromDefaultResource().gitHash
@@ -190,7 +190,7 @@ internal class ServerCargoMetadataTest {
     }
 
     @Test
-    fun `server plugin includes only non-default codegen settings in the generated manifest`() {
+    fun `schema server plugin includes only non-default codegen settings in the generated manifest`() {
         val server =
             serverIntegrationTest(
                 model,
@@ -198,7 +198,8 @@ internal class ServerCargoMetadataTest {
                     additionalSettings =
                         Node.parse(
                             """{
-                            "codegen": {"debugMode": false, "publicConstrainedTypes": false, "formatTimeoutSeconds": 20.0},
+                            "codegen": {"schemaSerde": true, "http-1x": true,
+                                        "debugMode": false, "publicConstrainedTypes": false, "formatTimeoutSeconds": 20.0},
                             "customizationConfig": {"example": {"enabled": true},
                                                     "protocols": {"global": {"requestBodyMaxBytes": 1024}}}
             }""",
@@ -208,11 +209,52 @@ internal class ServerCargoMetadataTest {
             ).single()
         val metadata = Toml().read(server.path.resolve("Cargo.toml").toFile()).getTable("package.metadata")
         metadata.getLong("customizationConfig.protocols.global.requestBodyMaxBytes") shouldBe 1024L
-        metadata.contains("codegen.schemaSerde") shouldBe false
+        metadata.getBoolean("codegen.schemaSerde") shouldBe true
+        metadata.getBoolean("codegen.http-1x") shouldBe true
+        metadata.getList<String>("smithy.protocol") shouldBe listOf("aws.protocols#restJson1")
+        metadata.getString("smithy.codegen-release") shouldBe Version.fromDefaultResource().codegenVersion
+        metadata.getString("smithy.codegen-version") shouldBe Version.fromDefaultResource().gitHash
         metadata.contains("codegen.debugMode") shouldBe false
         metadata.contains("codegen.formatTimeoutSeconds") shouldBe false
         metadata.getBoolean("codegen.publicConstrainedTypes") shouldBe false
         metadata.getBoolean("customizationConfig.example.enabled") shouldBe true
+    }
+
+    @Test
+    fun `legacy server plugin retains baseline metadata for omitted and disabled schema serde`() {
+        for ((http1x, schemaSerde) in listOf(false to null, false to false, true to null, true to false)) {
+            var codegen =
+                Node.objectNode()
+                    .withMember("http-1x", http1x)
+                    .withMember("publicConstrainedTypes", false)
+            if (schemaSerde != null) {
+                codegen = codegen.withMember("schemaSerde", schemaSerde)
+            }
+            val server =
+                serverIntegrationTest(
+                    model,
+                    IntegrationTestParams(
+                        additionalSettings =
+                            Node.objectNode().withMember("codegen", codegen).withMember(
+                                "customizationConfig",
+                                Node.parse(
+                                    """{"example": {"enabled": true}, "protocols": {"global": {"requestBodyMaxBytes": 1024}}}""",
+                                ),
+                            ),
+                        cargoCommand = "cargo test --quiet --lib --tests",
+                    ),
+                    testCoverage = HttpTestType.Default,
+                ).single()
+            val metadata = Toml().read(server.path.resolve("Cargo.toml").toFile()).getTable("package.metadata")
+            metadata.toMap() shouldBe
+                mapOf(
+                    "smithy" to
+                        mapOf(
+                            "codegen-version" to Version.fromDefaultResource().gitHash,
+                            "protocol" to "aws.protocols#restJson1",
+                        ),
+                )
+        }
     }
 
     @Test

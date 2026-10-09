@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.core.Version
 import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustomizations
 
 /**
- * Records the code generator's artifact version in `package.metadata.smithy.codegen-release`.
+ * Records the schema code generator's artifact version in `package.metadata.smithy.codegen-release`.
  * The source commit remains in `codegen-version`, written by the core manifest generator.
  */
 internal fun serverCodegenVersionMetadata(): ManifestCustomizations =
@@ -34,7 +34,7 @@ internal fun serverCodegenVersionMetadata(): ManifestCustomizations =
     )
 
 /**
- * Records supplied settings that differ from their defaults using their smithy-build.json names.
+ * Records supplied schema-generation settings that differ from their defaults using their smithy-build.json names.
  * Nullable settings default to automatic: an explicit false is still a non-default override.
  */
 internal fun ServerRustSettings.manifestSettingsMetadata(
@@ -61,8 +61,8 @@ internal fun ServerRustSettings.manifestSettingsMetadata(
             (if (protocols.isEmpty()) emptyMap() else mapOf(ServerRustSettings.PROTOCOLS_CUSTOMIZATION_KEY to protocols))
     val metadata =
         buildMap {
-            // Replaces the single-protocol scalar written by the core generator: a server
-            // crate can serve several protocols, so `smithy.protocol` is always an array.
+            // Schema server crates can serve several protocols, so replace the
+            // core generator's single-protocol scalar with the served protocol array.
             put("smithy", mapOf("protocol" to servedProtocols.map(ShapeId::toString)))
             if (codegen.isNotEmpty()) put("codegen", codegen)
             if (customization.isNotEmpty()) put("customizationConfig", customization)
