@@ -11,7 +11,7 @@ use crate::response::Response;
 use crate::routing::SyncRoute;
 use crate::schema::{DeserializeError, HttpModeledError, RequestBodyCollectionConfig, ServerProtocol};
 use crate::schema::{
-    OperationSchema, ProtocolOrder, ProtocolRegistration, ProtocolRegistry, SelectedProtocolOperation, ServiceSchema,
+    OperationSchema, ProtocolOrder, ProtocolRegistration, ProtocolRegistry, SelectedOperation, ServiceSchema,
 };
 use aws_smithy_schema::serde::{SerializableStruct, ShapeDeserializer};
 use aws_smithy_schema::{shape_id, traits::HttpTrait, Schema, ShapeId, ShapeType};
@@ -218,7 +218,7 @@ pub(super) fn binding(
         SyncRoute::new(tower::service_fn(move |request: Request<Body>| async move {
             let selected = request
                 .extensions()
-                .get::<SelectedProtocolOperation>()
+                .get::<SelectedOperation>()
                 .expect("selection before handler");
             assert!(std::ptr::eq(selected.operation(), operation));
             // Echo the frames, which also checks that trailers survive the routing helper.
@@ -295,7 +295,7 @@ pub(super) fn echo(
         SyncRoute::new(tower::service_fn(move |request: Request<Body>| async move {
             let selected = request
                 .extensions()
-                .get::<SelectedProtocolOperation>()
+                .get::<SelectedOperation>()
                 .expect("selection before handler")
                 .clone();
             assert!(std::ptr::eq(selected.operation(), operation));

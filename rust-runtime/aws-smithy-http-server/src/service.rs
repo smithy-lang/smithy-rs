@@ -11,6 +11,9 @@
 //!
 //! We generate an implementation on this for every service struct (exported from the root of the generated crate).
 //!
+//! Schema-generated services also implement [`SchemaServiceShape`], connecting the typed service to its
+//! shared [`ServiceSchema`](crate::schema::ServiceSchema) descriptor.
+//!
 //! As stated in the [operation module documentation](crate::operation) we also generate marker structs for
 //! [`OperationShape`](crate::operation::OperationShape), these are coupled to the `S: ServiceShape` via the [`ContainsOperation`] trait.
 //!
@@ -63,14 +66,14 @@
 //!
 //! [Smithy service]: https://smithy.io/2.0/spec/service-types.html#service
 
-use crate::shape_id::ShapeId;
+use aws_smithy_schema::ShapeId;
 
 /// Models the [Smithy Service shape].
 ///
 /// [Smithy Service shape]: https://smithy.io/2.0/spec/service-types.html#service
 pub trait ServiceShape {
     /// The [`ShapeId`] of the service.
-    const ID: ShapeId;
+    const ID: ShapeId<'static>;
 
     /// The version of the service.
     const VERSION: Option<&'static str>;
@@ -82,6 +85,15 @@ pub trait ServiceShape {
 
     /// An enumeration of all operations contained in this service.
     type Operations;
+}
+
+/// Connects a typed service to its shared schema descriptor.
+///
+/// Schema-generated services implement this trait in addition to [`ServiceShape`].
+/// The descriptor contains the service's identity, version, protocols, and operation schemas.
+pub trait SchemaServiceShape: ServiceShape {
+    /// The shared descriptor for this service.
+    const SCHEMA: &'static crate::schema::ServiceSchema<'static>;
 }
 
 pub trait ContainsOperation<Op>: ServiceShape {

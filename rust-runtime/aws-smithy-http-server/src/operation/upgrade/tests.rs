@@ -121,7 +121,7 @@ async fn check<Op: StreamingOperationShape<Input = (), Output = ()>>(expected: h
         Poll::Ready(Some(Ok::<_, Infallible>(http_body::Frame::data(Bytes::new()))))
     }));
     let mut request = http::Request::new(body);
-    request.extensions_mut().insert(SelectedProtocolOperation::new(
+    request.extensions_mut().insert(SelectedOperation::new(
         SharedServerProtocol::serde_only(HttpOnly::default()),
         Op::SCHEMA,
         Default::default(),
@@ -153,6 +153,71 @@ async fn unsupported_event_directions_reject_before_polling_or_calling_handler()
 async fn http_and_streaming_blobs_need_no_event_capability() {
     check::<Ordinary>(http::StatusCode::OK).await;
     check::<StreamingBlob>(http::StatusCode::OK).await;
+}
+
+#[test]
+fn streaming_upgrade_budgets_body_reads_by_the_handler() {
+    use std::sync::atomic::AtomicUsize;
+
+    struct StreamingInput;
+    impl OperationShape for StreamingInput {
+        const ID: crate::shape_id::ShapeId = StreamingBlob::ID;
+        type Input = SdkBody;
+        type Output = ();
+        type Error = Infallible;
+    }
+    impl SchemaOperationShape for StreamingInput {
+        const SCHEMA: &'static OperationSchema<'static> = StreamingBlob::SCHEMA;
+    }
+    impl StreamingOperationShape for StreamingInput {
+        fn deserialize_streaming_input(
+            _: &mut dyn ShapeDeserializer,
+            body: SdkBody,
+            _: SharedServerProtocol,
+        ) -> crate::operation::StreamingInputFuture<SdkBody> {
+            Box::pin(async move { Ok(body) })
+        }
+        fn serialize_streaming_output(_: (), _: &SharedServerProtocol) -> http::Response<BoxBody> {
+            http::Response::new(crate::body::empty())
+        }
+    }
+
+    let polls = Arc::new(AtomicUsize::new(0));
+    let observed = polls.clone();
+    let body = http_body_util::StreamBody::new(futures_util::stream::poll_fn(move |_| {
+        let index = observed.fetch_add(1, Ordering::SeqCst);
+        Poll::Ready(match index {
+            0 => Some(Ok::<_, Infallible>(http_body::Frame::data(Bytes::from_static(
+                b"payload",
+            )))),
+            1..=64 => Some(Ok(http_body::Frame::data(Bytes::new()))),
+            _ => None,
+        })
+    }));
+    let mut request = http::Request::new(body);
+    request.extensions_mut().insert(SelectedOperation::new(
+        SharedServerProtocol::serde_only(HttpOnly::default()),
+        StreamingInput::SCHEMA,
+        Default::default(),
+    ));
+    let upgrade = DynStreamingUpgrade::<StreamingInput, (), _> {
+        inner: tower::service_fn(|(body, _): (SdkBody, ())| async move {
+            assert_eq!(body.collect().await.unwrap().to_bytes(), "payload");
+            Ok::<_, Infallible>(())
+        }),
+        _operation: PhantomData,
+        _extractors: PhantomData,
+    };
+    let mut response = Box::pin(upgrade.oneshot(request));
+    let mut cx = Context::from_waker(std::task::Waker::noop());
+    for expected_polls in [32, 64] {
+        assert!(response.as_mut().poll(&mut cx).is_pending());
+        assert_eq!(polls.load(Ordering::SeqCst), expected_polls);
+    }
+    let Poll::Ready(Ok(response)) = response.as_mut().poll(&mut cx) else {
+        panic!("handler should finish reading after the two budget yields");
+    };
+    assert_eq!(response.status(), http::StatusCode::OK);
 }
 
 struct EmptyShape;
@@ -207,7 +272,7 @@ async fn schema_upgrades_preserve_request_metadata() {
             .body(http_body_util::Full::new(Bytes::from_static(b"payload")))
             .unwrap();
         request.extensions_mut().insert(extension);
-        request.extensions_mut().insert(SelectedProtocolOperation::new(
+        request.extensions_mut().insert(SelectedOperation::new(
             SharedServerProtocol::serde_only(protocol),
             if streaming_input {
                 StreamingBlob::SCHEMA

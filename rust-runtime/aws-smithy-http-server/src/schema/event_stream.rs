@@ -37,12 +37,110 @@ use bytes::Bytes;
 use crate::body::{boxed, BoxBody};
 use crate::schema::{DeserializeError, EventStreamFraming, SharedServerProtocol};
 
-const NO_EVENT_STREAM_SUPPORT: &str = "protocol does not support event streams";
+// ---------------------------------------------------------------------------
+// Operation glue
+// ---------------------------------------------------------------------------
 
-fn capability_or_marshalling_error(protocol: &SharedServerProtocol) -> Result<EventStreamFraming<'_>, Error> {
-    protocol
+/// Applies the `initial-request` frame, when the protocol carries one, to the operation input
+/// being built.
+///
+/// `apply` receives a codec deserializer over the frame's payload and reads the non-stream
+/// input members into the caller's builder. When the protocol does not frame initial messages,
+/// or the stream starts with an ordinary event, nothing is consumed and `apply` is not called.
+///
+/// `recv_initial` reads the frame — pass the receiver's `try_recv_initial`, e.g.
+/// `|message_type| receiver.try_recv_initial(message_type)`. Taking a closure rather than
+/// `&mut Receiver` keeps this usable with generated receiver wrappers (such as the SigV4
+/// unwrapping receiver) that expose the same method on a different type.
+pub async fn apply_initial_request<Fut, Err>(
+    recv_initial: impl FnOnce(InitialMessageType) -> Fut,
+    protocol: &SharedServerProtocol,
+    apply: impl FnOnce(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+) -> Result<(), DeserializeError>
+where
+    Fut: std::future::Future<Output = Result<Option<Message>, Err>>,
+    Err: fmt::Display,
+{
+    let capability = protocol
         .event_stream_framing()
-        .ok_or_else(|| Error::marshalling(NO_EVENT_STREAM_SUPPORT.to_owned()))
+        .ok_or_else(|| DeserializeError::Serde(SerdeError::custom(NO_EVENT_STREAM_SUPPORT)))?;
+    if !capability.initial_messages_in_frames {
+        return Ok(());
+    }
+    match recv_initial(InitialMessageType::Request).await {
+        Ok(Some(initial)) => {
+            let mut deser = capability.payload_codec.create_deserializer(&initial.payload()[..]);
+            apply(&mut *deser)?;
+            Ok(())
+        }
+        Ok(None) => Ok(()),
+        Err(err) => Err(DeserializeError::Serde(SerdeError::custom(format!(
+            "failed to read the initial-request frame: {err}"
+        )))),
+    }
+}
+
+/// Whether to emit an initial response before output events.
+///
+/// This policy is exhaustive: callers choose whether to send or omit the initial response.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InitialResponsePolicy {
+    /// Emit an initial response only if the selected protocol supports initial-message framing.
+    Send,
+    /// Omit the initial response.
+    Omit,
+}
+
+/// Builds the response body of an event stream output: the marshalled events, preceded by an
+/// `initial-response` frame carrying the non-stream output members when the protocol frames
+/// initial messages and `initial_response` is [`InitialResponsePolicy::Send`].
+///
+/// `output_schema` and `output` describe the non-stream members; the streaming member must
+/// already have been moved out of `output` into `events`.
+pub fn event_stream_response_body<T, E>(
+    output_schema: &Schema<'_>,
+    output: &dyn SerializableStruct,
+    events: EventStreamSender<T, E>,
+    marshaller: impl MarshallMessage<Input = T> + Send + Sync + 'static,
+    error_marshaller: impl MarshallMessage<Input = E> + Send + Sync + 'static,
+    protocol: &SharedServerProtocol,
+    initial_response: InitialResponsePolicy,
+) -> Result<BoxBody, SerdeError>
+where
+    T: Send + Sync + 'static,
+    E: std::error::Error + Send + Sync + 'static,
+{
+    let capability = protocol
+        .event_stream_framing()
+        .ok_or_else(|| SerdeError::custom(NO_EVENT_STREAM_SUPPORT))?;
+    let signer = NoOpSigner {};
+    if capability.initial_messages_in_frames && initial_response == InitialResponsePolicy::Send {
+        use futures_util::StreamExt;
+        let payload = {
+            let mut ser = capability.payload_codec.create_serializer();
+            ser.write_struct(output_schema, output)?;
+            Bytes::from(ser.finish_boxed())
+        };
+        let initial_message = Message::new_from_parts(
+            vec![
+                Header::new(":message-type", HeaderValue::String("event".into())),
+                Header::new(":event-type", HeaderValue::String("initial-response".into())),
+                Header::new(
+                    ":content-type",
+                    HeaderValue::String(capability.media_type.to_string().into()),
+                ),
+            ],
+            payload,
+        );
+        let initial = futures_util::stream::iter([Ok(EventOrInitial::InitialMessage(initial_message))]);
+        let events = events.into_inner().map(|event| event.map(EventOrInitial::Event));
+        let sender = EventStreamSender::from(initial.chain(events));
+        let adapter = sender.into_body_stream(EventOrInitialMarshaller::new(marshaller), error_marshaller, signer);
+        Ok(boxed(http_body_util::StreamBody::new(adapter)))
+    } else {
+        let adapter = events.into_body_stream(marshaller, error_marshaller, signer);
+        Ok(boxed(http_body_util::StreamBody::new(adapter)))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -164,6 +262,301 @@ impl MarshallMessage for NoModeledEventErrorMarshaller {
         let headers = vec![Header::new(":message-type", HeaderValue::String("exception".into()))];
         Ok(Message::new_from_parts(headers, Bytes::new()))
     }
+}
+
+// ---------------------------------------------------------------------------
+// Unmarshalling
+// ---------------------------------------------------------------------------
+
+/// A schema-mode event stream union that can be read back from frames.
+///
+/// Implemented by generated code: both methods dispatch on the member name and hand
+/// [`EventFrame::deserializer`] to the event struct's schema-guided walker, returning
+/// `Ok(None)` for names the union does not model.
+pub trait DeserializableEventStream: Sized {
+    /// The generated error type of the stream union, or
+    /// [`MessageStreamError`](aws_smithy_http::event_stream::MessageStreamError) when the union
+    /// models no errors.
+    type Error;
+
+    /// Reads the event named by the frame's `:event-type`.
+    fn deserialize_event(event_type: &str, frame: &EventFrame<'_>) -> Result<Option<Self>, Error>;
+
+    /// Reads the error named by the frame's `:exception-type`.
+    fn deserialize_error(exception_type: &str, frame: &EventFrame<'_>) -> Result<Option<Self::Error>, Error>;
+}
+
+/// Unmarshals schema-mode event stream frames into a generated stream union.
+pub struct SchemaEventUnmarshaller<T> {
+    protocol: SharedServerProtocol,
+    _phantom: PhantomData<fn() -> T>,
+}
+
+impl<T> SchemaEventUnmarshaller<T> {
+    /// Creates an unmarshaller that reads payloads through `protocol`'s event stream capability.
+    pub fn new(protocol: SharedServerProtocol) -> Self {
+        Self {
+            protocol,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<T> fmt::Debug for SchemaEventUnmarshaller<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SchemaEventUnmarshaller")
+            .field("protocol", &self.protocol)
+            .finish()
+    }
+}
+
+impl<T: DeserializableEventStream> UnmarshallMessage for SchemaEventUnmarshaller<T> {
+    type Output = T;
+    type Error = T::Error;
+
+    fn unmarshall(&self, message: &Message) -> Result<UnmarshalledMessage<Self::Output, Self::Error>, Error> {
+        let capability = self
+            .protocol
+            .event_stream_framing()
+            .ok_or_else(|| Error::unmarshalling(NO_EVENT_STREAM_SUPPORT))?;
+        let response_headers = expect_fns::parse_response_headers(message)?;
+        let frame = EventFrame { message, capability };
+        match response_headers.message_type.as_str() {
+            "event" => {
+                let event_type = response_headers.smithy_type.as_str();
+                match T::deserialize_event(event_type, &frame)? {
+                    Some(event) => Ok(UnmarshalledMessage::Event(event)),
+                    None => Err(Error::unmarshalling(format!("unrecognized :event-type: {event_type}"))),
+                }
+            }
+            "exception" => {
+                let exception_type = response_headers.smithy_type.as_str();
+                match T::deserialize_error(exception_type, &frame)? {
+                    Some(error) => Ok(UnmarshalledMessage::Error(error)),
+                    None => Err(Error::unmarshalling(format!(
+                        "unrecognized exception: {exception_type}"
+                    ))),
+                }
+            }
+            value => Err(Error::unmarshalling(format!("unrecognized :message-type: {value}"))),
+        }
+    }
+}
+
+/// One received event stream frame together with the protocol capability that decodes it.
+pub struct EventFrame<'a> {
+    message: &'a Message,
+    capability: EventStreamFraming<'a>,
+}
+
+impl<'a> EventFrame<'a> {
+    /// Creates a frame view over `message`.
+    pub fn new(message: &'a Message, capability: EventStreamFraming<'a>) -> Self {
+        Self { message, capability }
+    }
+
+    /// Returns a [`ShapeDeserializer`] that reads an event struct from this frame, routing
+    /// `@eventHeader` members from the message headers and the payload through the codec.
+    pub fn deserializer(&self) -> EventFrameDeserializer<'a> {
+        EventFrameDeserializer {
+            message: self.message,
+            capability: self.capability,
+        }
+    }
+}
+
+/// Reads an event struct from a frame, guided by the struct's schema.
+///
+/// Only [`ShapeDeserializer::read_struct`] is meaningful at the top level; the member values it
+/// hands to the consumer come from the message headers or from a codec deserializer over the
+/// payload.
+pub struct EventFrameDeserializer<'a> {
+    message: &'a Message,
+    capability: EventStreamFraming<'a>,
+}
+
+impl EventFrameDeserializer<'_> {
+    fn content_type(&self) -> Option<&str> {
+        self.message
+            .headers()
+            .iter()
+            .find(|header| header.name().as_str() == ":content-type")
+            .and_then(|header| header.value().as_string().ok())
+            .map(|value| value.as_str())
+    }
+
+    fn check_content_type(&self, expected: &str) -> Result<(), SerdeError> {
+        let content_type = self.content_type().unwrap_or_default();
+        if content_type != expected {
+            return Err(SerdeError::custom(format!(
+                "expected :content-type to be '{expected}', but was '{content_type}'"
+            )));
+        }
+        Ok(())
+    }
+}
+
+macro_rules! frames_deserialize_structs {
+    ($($fn_name:ident() -> $result_type:ty,)+) => {
+        $(fn $fn_name(&mut self, _schema: &Schema<'_>) -> Result<$result_type, SerdeError> {
+            Err(SerdeError::unsupported(
+                "an event stream frame deserializes a structure",
+            ))
+        })+
+    };
+}
+
+impl ShapeDeserializer for EventFrameDeserializer<'_> {
+    fn read_struct(
+        &mut self,
+        schema: &Schema<'_>,
+        state: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        let members = schema.members();
+        // Don't attempt to parse the payload for an empty struct. The payload can be empty, or
+        // if the model was updated since the code was generated, it can have content that would
+        // not be understood.
+        if members.is_empty() {
+            return Ok(());
+        }
+        let payload_member = members.iter().copied().find(|m| m.event_payload());
+        let has_header_members = members.iter().any(|m| m.event_header());
+        if payload_member.is_none() && !has_header_members {
+            // No event traits at all: the whole struct is codec-encoded in the payload.
+            let mut deser = self
+                .capability
+                .payload_codec
+                .create_deserializer(&self.message.payload()[..]);
+            return deser.read_struct(schema, state);
+        }
+
+        if has_header_members {
+            for header in self.message.headers() {
+                let name = header.name().as_str();
+                let member = members
+                    .iter()
+                    .copied()
+                    .find(|m| m.event_header() && m.member_name() == Some(name));
+                match member {
+                    Some(member) => {
+                        state(member, &mut EventHeaderDeserializer { header })?;
+                    }
+                    // Event stream protocol headers start with ':'
+                    None if !name.starts_with(':') => {
+                        tracing::trace!("Unrecognized event stream message header: {}", name);
+                    }
+                    None => {}
+                }
+            }
+        }
+
+        if let Some(member) = payload_member {
+            match member.shape_type() {
+                ShapeType::Blob => {
+                    self.check_content_type("application/octet-stream")?;
+                    state(
+                        member,
+                        &mut RawPayloadDeserializer {
+                            payload: self.message.payload(),
+                        },
+                    )?;
+                }
+                ShapeType::String => {
+                    self.check_content_type("text/plain")?;
+                    state(
+                        member,
+                        &mut RawPayloadDeserializer {
+                            payload: self.message.payload(),
+                        },
+                    )?;
+                }
+                _ => {
+                    let mut deser = self
+                        .capability
+                        .payload_codec
+                        .create_deserializer(&self.message.payload()[..]);
+                    state(member, &mut *deser)?;
+                }
+            }
+        } else if members.iter().any(|m| !m.event_header() && !m.event_payload()) {
+            // Members with neither trait are collectively codec-encoded in the payload,
+            // per the Smithy spec. The codec sees a view of the schema without the
+            // header-bound members: a payload key sharing a header member's name is then
+            // unknown to the codec and skipped, so it cannot overwrite the value already
+            // decoded from the message headers.
+            let implicit_members: Vec<&Schema<'_>> = members.iter().copied().filter(|m| !m.event_header()).collect();
+            let mut payload_schema =
+                Schema::new_struct_view(schema.shape_id().clone(), schema.shape_type(), &implicit_members);
+            // The filtered view must retain the XML document's root identity.
+            if let Some(name) = schema.xml_name() {
+                payload_schema = payload_schema.with_xml_name(name.value());
+            }
+            if let Some(namespace) = schema.xml_namespace() {
+                payload_schema = payload_schema.with_xml_namespace(namespace.uri(), namespace.prefix());
+            }
+            if let Some(name) = schema.original_name() {
+                payload_schema = payload_schema.with_original_name(name);
+            }
+            let mut deser = self
+                .capability
+                .payload_codec
+                .create_deserializer(&self.message.payload()[..]);
+            deser.read_struct(&payload_schema, state)?;
+        }
+        Ok(())
+    }
+
+    fn read_list(
+        &mut self,
+        _schema: &Schema<'_>,
+        _state: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        Err(SerdeError::unsupported(
+            "an event stream frame deserializes a structure",
+        ))
+    }
+
+    fn read_map(
+        &mut self,
+        _schema: &Schema<'_>,
+        _state: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        Err(SerdeError::unsupported(
+            "an event stream frame deserializes a structure",
+        ))
+    }
+
+    frames_deserialize_structs!(
+        read_boolean() -> bool,
+        read_byte() -> i8,
+        read_short() -> i16,
+        read_integer() -> i32,
+        read_long() -> i64,
+        read_float() -> f32,
+        read_double() -> f64,
+        read_big_integer() -> BigInteger,
+        read_big_decimal() -> BigDecimal,
+        read_string() -> String,
+        read_blob() -> Blob,
+        read_timestamp() -> DateTime,
+        read_document() -> Document,
+    );
+
+    fn is_null(&self) -> bool {
+        false
+    }
+
+    fn container_size(&self) -> Option<usize> {
+        None
+    }
+}
+
+const NO_EVENT_STREAM_SUPPORT: &str = "protocol does not support event streams";
+
+fn capability_or_marshalling_error(protocol: &SharedServerProtocol) -> Result<EventStreamFraming<'_>, Error> {
+    protocol
+        .event_stream_framing()
+        .ok_or_else(|| Error::marshalling(NO_EVENT_STREAM_SUPPORT.to_owned()))
 }
 
 #[derive(Clone, Copy)]
@@ -529,293 +922,6 @@ impl ShapeSerializer for EventMemberSerializer<'_> {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Unmarshalling
-// ---------------------------------------------------------------------------
-
-/// A schema-mode event stream union that can be read back from frames.
-///
-/// Implemented by generated code: both methods dispatch on the member name and hand
-/// [`EventFrame::deserializer`] to the event struct's schema-guided walker, returning
-/// `Ok(None)` for names the union does not model.
-pub trait DeserializableEventStream: Sized {
-    /// The generated error type of the stream union, or
-    /// [`MessageStreamError`](aws_smithy_http::event_stream::MessageStreamError) when the union
-    /// models no errors.
-    type Error;
-
-    /// Reads the event named by the frame's `:event-type`.
-    fn deserialize_event(event_type: &str, frame: &EventFrame<'_>) -> Result<Option<Self>, Error>;
-
-    /// Reads the error named by the frame's `:exception-type`.
-    fn deserialize_error(exception_type: &str, frame: &EventFrame<'_>) -> Result<Option<Self::Error>, Error>;
-}
-
-/// Unmarshals schema-mode event stream frames into a generated stream union.
-pub struct SchemaEventUnmarshaller<T> {
-    protocol: SharedServerProtocol,
-    _phantom: PhantomData<fn() -> T>,
-}
-
-impl<T> SchemaEventUnmarshaller<T> {
-    /// Creates an unmarshaller that reads payloads through `protocol`'s event stream capability.
-    pub fn new(protocol: SharedServerProtocol) -> Self {
-        Self {
-            protocol,
-            _phantom: PhantomData,
-        }
-    }
-}
-
-impl<T> fmt::Debug for SchemaEventUnmarshaller<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("SchemaEventUnmarshaller")
-            .field("protocol", &self.protocol)
-            .finish()
-    }
-}
-
-impl<T: DeserializableEventStream> UnmarshallMessage for SchemaEventUnmarshaller<T> {
-    type Output = T;
-    type Error = T::Error;
-
-    fn unmarshall(&self, message: &Message) -> Result<UnmarshalledMessage<Self::Output, Self::Error>, Error> {
-        let capability = self
-            .protocol
-            .event_stream_framing()
-            .ok_or_else(|| Error::unmarshalling(NO_EVENT_STREAM_SUPPORT))?;
-        let response_headers = expect_fns::parse_response_headers(message)?;
-        let frame = EventFrame { message, capability };
-        match response_headers.message_type.as_str() {
-            "event" => {
-                let event_type = response_headers.smithy_type.as_str();
-                match T::deserialize_event(event_type, &frame)? {
-                    Some(event) => Ok(UnmarshalledMessage::Event(event)),
-                    None => Err(Error::unmarshalling(format!("unrecognized :event-type: {event_type}"))),
-                }
-            }
-            "exception" => {
-                let exception_type = response_headers.smithy_type.as_str();
-                match T::deserialize_error(exception_type, &frame)? {
-                    Some(error) => Ok(UnmarshalledMessage::Error(error)),
-                    None => Err(Error::unmarshalling(format!(
-                        "unrecognized exception: {exception_type}"
-                    ))),
-                }
-            }
-            value => Err(Error::unmarshalling(format!("unrecognized :message-type: {value}"))),
-        }
-    }
-}
-
-/// One received event stream frame together with the protocol capability that decodes it.
-pub struct EventFrame<'a> {
-    message: &'a Message,
-    capability: EventStreamFraming<'a>,
-}
-
-impl<'a> EventFrame<'a> {
-    /// Creates a frame view over `message`.
-    pub fn new(message: &'a Message, capability: EventStreamFraming<'a>) -> Self {
-        Self { message, capability }
-    }
-
-    /// Returns a [`ShapeDeserializer`] that reads an event struct from this frame, routing
-    /// `@eventHeader` members from the message headers and the payload through the codec.
-    pub fn deserializer(&self) -> EventFrameDeserializer<'a> {
-        EventFrameDeserializer {
-            message: self.message,
-            capability: self.capability,
-        }
-    }
-}
-
-/// Reads an event struct from a frame, guided by the struct's schema.
-///
-/// Only [`ShapeDeserializer::read_struct`] is meaningful at the top level; the member values it
-/// hands to the consumer come from the message headers or from a codec deserializer over the
-/// payload.
-pub struct EventFrameDeserializer<'a> {
-    message: &'a Message,
-    capability: EventStreamFraming<'a>,
-}
-
-impl EventFrameDeserializer<'_> {
-    fn content_type(&self) -> Option<&str> {
-        self.message
-            .headers()
-            .iter()
-            .find(|header| header.name().as_str() == ":content-type")
-            .and_then(|header| header.value().as_string().ok())
-            .map(|value| value.as_str())
-    }
-
-    fn check_content_type(&self, expected: &str) -> Result<(), SerdeError> {
-        let content_type = self.content_type().unwrap_or_default();
-        if content_type != expected {
-            return Err(SerdeError::custom(format!(
-                "expected :content-type to be '{expected}', but was '{content_type}'"
-            )));
-        }
-        Ok(())
-    }
-}
-
-macro_rules! frames_deserialize_structs {
-    ($($fn_name:ident() -> $result_type:ty,)+) => {
-        $(fn $fn_name(&mut self, _schema: &Schema<'_>) -> Result<$result_type, SerdeError> {
-            Err(SerdeError::unsupported(
-                "an event stream frame deserializes a structure",
-            ))
-        })+
-    };
-}
-
-impl ShapeDeserializer for EventFrameDeserializer<'_> {
-    fn read_struct(
-        &mut self,
-        schema: &Schema<'_>,
-        state: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        let members = schema.members();
-        // Don't attempt to parse the payload for an empty struct. The payload can be empty, or
-        // if the model was updated since the code was generated, it can have content that would
-        // not be understood.
-        if members.is_empty() {
-            return Ok(());
-        }
-        let payload_member = members.iter().copied().find(|m| m.event_payload());
-        let has_header_members = members.iter().any(|m| m.event_header());
-        if payload_member.is_none() && !has_header_members {
-            // No event traits at all: the whole struct is codec-encoded in the payload.
-            let mut deser = self
-                .capability
-                .payload_codec
-                .create_deserializer(&self.message.payload()[..]);
-            return deser.read_struct(schema, state);
-        }
-
-        if has_header_members {
-            for header in self.message.headers() {
-                let name = header.name().as_str();
-                let member = members
-                    .iter()
-                    .copied()
-                    .find(|m| m.event_header() && m.member_name() == Some(name));
-                match member {
-                    Some(member) => {
-                        state(member, &mut EventHeaderDeserializer { header })?;
-                    }
-                    // Event stream protocol headers start with ':'
-                    None if !name.starts_with(':') => {
-                        tracing::trace!("Unrecognized event stream message header: {}", name);
-                    }
-                    None => {}
-                }
-            }
-        }
-
-        if let Some(member) = payload_member {
-            match member.shape_type() {
-                ShapeType::Blob => {
-                    self.check_content_type("application/octet-stream")?;
-                    state(
-                        member,
-                        &mut RawPayloadDeserializer {
-                            payload: self.message.payload(),
-                        },
-                    )?;
-                }
-                ShapeType::String => {
-                    self.check_content_type("text/plain")?;
-                    state(
-                        member,
-                        &mut RawPayloadDeserializer {
-                            payload: self.message.payload(),
-                        },
-                    )?;
-                }
-                _ => {
-                    let mut deser = self
-                        .capability
-                        .payload_codec
-                        .create_deserializer(&self.message.payload()[..]);
-                    state(member, &mut *deser)?;
-                }
-            }
-        } else if members.iter().any(|m| !m.event_header() && !m.event_payload()) {
-            // Members with neither trait are collectively codec-encoded in the payload,
-            // per the Smithy spec. The codec sees a view of the schema without the
-            // header-bound members: a payload key sharing a header member's name is then
-            // unknown to the codec and skipped, so it cannot overwrite the value already
-            // decoded from the message headers.
-            let implicit_members: Vec<&Schema<'_>> = members.iter().copied().filter(|m| !m.event_header()).collect();
-            let mut payload_schema =
-                Schema::new_struct_view(schema.shape_id().clone(), schema.shape_type(), &implicit_members);
-            // The filtered view must retain the XML document's root identity.
-            if let Some(name) = schema.xml_name() {
-                payload_schema = payload_schema.with_xml_name(name.value());
-            }
-            if let Some(namespace) = schema.xml_namespace() {
-                payload_schema = payload_schema.with_xml_namespace(namespace.uri(), namespace.prefix());
-            }
-            if let Some(name) = schema.original_name() {
-                payload_schema = payload_schema.with_original_name(name);
-            }
-            let mut deser = self
-                .capability
-                .payload_codec
-                .create_deserializer(&self.message.payload()[..]);
-            deser.read_struct(&payload_schema, state)?;
-        }
-        Ok(())
-    }
-
-    fn read_list(
-        &mut self,
-        _schema: &Schema<'_>,
-        _state: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported(
-            "an event stream frame deserializes a structure",
-        ))
-    }
-
-    fn read_map(
-        &mut self,
-        _schema: &Schema<'_>,
-        _state: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported(
-            "an event stream frame deserializes a structure",
-        ))
-    }
-
-    frames_deserialize_structs!(
-        read_boolean() -> bool,
-        read_byte() -> i8,
-        read_short() -> i16,
-        read_integer() -> i32,
-        read_long() -> i64,
-        read_float() -> f32,
-        read_double() -> f64,
-        read_big_integer() -> BigInteger,
-        read_big_decimal() -> BigDecimal,
-        read_string() -> String,
-        read_blob() -> Blob,
-        read_timestamp() -> DateTime,
-        read_document() -> Document,
-    );
-
-    fn is_null(&self) -> bool {
-        false
-    }
-
-    fn container_size(&self) -> Option<usize> {
-        None
-    }
-}
-
 /// Reads one `@eventHeader` member value from a message header.
 struct EventHeaderDeserializer<'a> {
     header: &'a Header,
@@ -966,112 +1072,6 @@ impl ShapeDeserializer for RawPayloadDeserializer<'_> {
 
     fn container_size(&self) -> Option<usize> {
         None
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Operation glue
-// ---------------------------------------------------------------------------
-
-/// Applies the `initial-request` frame, when the protocol carries one, to the operation input
-/// being built.
-///
-/// `apply` receives a codec deserializer over the frame's payload and reads the non-stream
-/// input members into the caller's builder. When the protocol does not frame initial messages,
-/// or the stream starts with an ordinary event, nothing is consumed and `apply` is not called.
-///
-/// `recv_initial` reads the frame — pass the receiver's `try_recv_initial`, e.g.
-/// `|message_type| receiver.try_recv_initial(message_type)`. Taking a closure rather than
-/// `&mut Receiver` keeps this usable with generated receiver wrappers (such as the SigV4
-/// unwrapping receiver) that expose the same method on a different type.
-pub async fn apply_initial_request<Fut, Err>(
-    recv_initial: impl FnOnce(InitialMessageType) -> Fut,
-    protocol: &SharedServerProtocol,
-    apply: impl FnOnce(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-) -> Result<(), DeserializeError>
-where
-    Fut: std::future::Future<Output = Result<Option<Message>, Err>>,
-    Err: fmt::Display,
-{
-    let capability = protocol
-        .event_stream_framing()
-        .ok_or_else(|| DeserializeError::Serde(SerdeError::custom(NO_EVENT_STREAM_SUPPORT)))?;
-    if !capability.initial_messages_in_frames {
-        return Ok(());
-    }
-    match recv_initial(InitialMessageType::Request).await {
-        Ok(Some(initial)) => {
-            let mut deser = capability.payload_codec.create_deserializer(&initial.payload()[..]);
-            apply(&mut *deser)?;
-            Ok(())
-        }
-        Ok(None) => Ok(()),
-        Err(err) => Err(DeserializeError::Serde(SerdeError::custom(format!(
-            "failed to read the initial-request frame: {err}"
-        )))),
-    }
-}
-
-/// Whether to emit an initial response before output events.
-///
-/// This policy is exhaustive: callers choose whether to send or omit the initial response.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum InitialResponsePolicy {
-    /// Emit an initial response only if the selected protocol supports initial-message framing.
-    Send,
-    /// Omit the initial response.
-    Omit,
-}
-
-/// Builds the response body of an event stream output: the marshalled events, preceded by an
-/// `initial-response` frame carrying the non-stream output members when the protocol frames
-/// initial messages and `initial_response` is [`InitialResponsePolicy::Send`].
-///
-/// `output_schema` and `output` describe the non-stream members; the streaming member must
-/// already have been moved out of `output` into `events`.
-pub fn event_stream_response_body<T, E>(
-    output_schema: &Schema<'_>,
-    output: &dyn SerializableStruct,
-    events: EventStreamSender<T, E>,
-    marshaller: impl MarshallMessage<Input = T> + Send + Sync + 'static,
-    error_marshaller: impl MarshallMessage<Input = E> + Send + Sync + 'static,
-    protocol: &SharedServerProtocol,
-    initial_response: InitialResponsePolicy,
-) -> Result<BoxBody, SerdeError>
-where
-    T: Send + Sync + 'static,
-    E: std::error::Error + Send + Sync + 'static,
-{
-    let capability = protocol
-        .event_stream_framing()
-        .ok_or_else(|| SerdeError::custom(NO_EVENT_STREAM_SUPPORT))?;
-    let signer = NoOpSigner {};
-    if capability.initial_messages_in_frames && initial_response == InitialResponsePolicy::Send {
-        use futures_util::StreamExt;
-        let payload = {
-            let mut ser = capability.payload_codec.create_serializer();
-            ser.write_struct(output_schema, output)?;
-            Bytes::from(ser.finish_boxed())
-        };
-        let initial_message = Message::new_from_parts(
-            vec![
-                Header::new(":message-type", HeaderValue::String("event".into())),
-                Header::new(":event-type", HeaderValue::String("initial-response".into())),
-                Header::new(
-                    ":content-type",
-                    HeaderValue::String(capability.media_type.to_string().into()),
-                ),
-            ],
-            payload,
-        );
-        let initial = futures_util::stream::iter([Ok(EventOrInitial::InitialMessage(initial_message))]);
-        let events = events.into_inner().map(|event| event.map(EventOrInitial::Event));
-        let sender = EventStreamSender::from(initial.chain(events));
-        let adapter = sender.into_body_stream(EventOrInitialMarshaller::new(marshaller), error_marshaller, signer);
-        Ok(boxed(http_body_util::StreamBody::new(adapter)))
-    } else {
-        let adapter = events.into_body_stream(marshaller, error_marshaller, signer);
-        Ok(boxed(http_body_util::StreamBody::new(adapter)))
     }
 }
 

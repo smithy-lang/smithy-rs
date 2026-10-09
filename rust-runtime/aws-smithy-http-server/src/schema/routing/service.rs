@@ -12,7 +12,7 @@ use crate::schema::{OperationSchema, ServiceSchema};
 use crate::{
     body::BoxBody,
     error::BoxError,
-    schema::{RequestBodyCollectionConfig, SelectedProtocolOperation, SharedServerProtocol},
+    schema::{RequestBodyCollectionConfig, SelectedOperation, SharedServerProtocol},
 };
 use bytes::Bytes;
 use http::{Request, Response};
@@ -132,7 +132,7 @@ where
             std::ptr::eq(binding.operation, selected.operation()),
             "router index belongs to a different operation"
         );
-        request.extensions_mut().insert(SelectedProtocolOperation::new(
+        request.extensions_mut().insert(SelectedOperation::new(
             self.state.protocols[protocol].protocol.clone(),
             binding.operation,
             binding.collection_config,
@@ -381,7 +381,7 @@ mod tests {
             counter.fetch_add(1, Ordering::Release);
 
             tower::service_fn(move |mut request: Request<Body>| {
-                assert!(request.extensions().get::<SelectedProtocolOperation>().is_some());
+                assert!(request.extensions().get::<SelectedOperation>().is_some());
                 assert_eq!(request.headers()["x-layer-order"], "outer");
                 request
                     .headers_mut()

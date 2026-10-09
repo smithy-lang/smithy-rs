@@ -297,12 +297,12 @@ fn resolve_protocols(
     // B -> C
     // A -> C
     for via in 0..count {
-        let (before, rest) = reaches.split_at_mut(via);
-        let (via_row, after) = rest.split_first_mut().expect("via indexes a registered protocol");
-        for row in before.iter_mut().chain(after.iter_mut()) {
-            if row[via] {
-                for (reachable, &via_reachable) in row.iter_mut().zip(via_row.iter()) {
-                    *reachable |= via_reachable;
+        for from in 0..count {
+            if reaches[from][via] {
+                for to in 0..count {
+                    if reaches[via][to] {
+                        reaches[from][to] = true;
+                    }
                 }
             }
         }
@@ -382,7 +382,7 @@ mod tests {
     use super::*;
     use crate::body::Body;
     use crate::response::Response;
-    use crate::schema::SelectedProtocolOperation;
+    use crate::schema::SelectedOperation;
     use aws_smithy_schema::shape_id;
     use bytes::Bytes;
     use http::HeaderValue;
@@ -679,7 +679,7 @@ mod tests {
                     *operation,
                     SyncRoute::new(tower::service_fn(
                         |request: Request<crate::body::RequestBody<Transport>>| async move {
-                            assert!(request.extensions().get::<SelectedProtocolOperation>().is_some());
+                            assert!(request.extensions().get::<SelectedOperation>().is_some());
                             Ok::<_, Infallible>(Response::new(crate::body::boxed(request.into_body())))
                         },
                     )),

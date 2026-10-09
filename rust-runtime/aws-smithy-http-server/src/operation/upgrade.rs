@@ -23,8 +23,7 @@ use crate::{
     response::IntoResponse,
     runtime_error::InternalFailureException,
     schema::{
-        collect_request_body, BodyDirective, DeserializableShape, DeserializeError, HttpModeledError,
-        SelectedProtocolOperation,
+        collect_request_body, BodyDirective, DeserializableShape, DeserializeError, HttpModeledError, SelectedOperation,
     },
     service::ServiceShape,
 };
@@ -84,7 +83,7 @@ where
 ///
 /// The body is collected under the operation's
 /// [`RequestBodyCollectionConfig`](crate::schema::RequestBodyCollectionConfig), carried by
-/// [`SelectedProtocolOperation`], when the selected protocol asks for it, the input is read through the erased protocol handle from the request
+/// [`SelectedOperation`], when the selected protocol asks for it, the input is read through the erased protocol handle from the request
 /// extensions, and the output or error is serialized through the same handle.
 pub struct DynUpgrade<Op, Extractors, S> {
     _operation: PhantomData<Op>,
@@ -103,10 +102,8 @@ impl<Op, Extractors, S: Clone> Clone for DynUpgrade<Op, Extractors, S> {
 }
 
 /// Reads the routed operation out of the request extensions and checks it is `Op`.
-pub(crate) fn selected_operation<Op: SchemaOperationShape>(
-    extensions: &http::Extensions,
-) -> Option<SelectedProtocolOperation> {
-    let Some(selected) = extensions.get::<SelectedProtocolOperation>().cloned() else {
+pub(crate) fn selected_operation<Op: SchemaOperationShape>(extensions: &http::Extensions) -> Option<SelectedOperation> {
+    let Some(selected) = extensions.get::<SelectedOperation>().cloned() else {
         error!("selected protocol operation missing from request extensions");
         return None;
     };
@@ -585,7 +582,7 @@ impl Service<http::Request<crate::body::Body>> for SchemaMissingFailure {
         error!("the operation has not been set");
         let selected = request
             .extensions()
-            .get::<crate::schema::SelectedProtocolOperation>()
+            .get::<crate::schema::SelectedOperation>()
             .expect("schema fallback requires selected protocol context");
         let rejection = crate::schema::DeserializeError::InternalFailure(crate::Error::new(String::from(
             "the operation has not been set",

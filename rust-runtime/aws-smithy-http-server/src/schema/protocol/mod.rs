@@ -82,6 +82,14 @@ enum ProtocolKind {
 }
 
 impl SharedServerProtocol {
+    /// Borrows the protocol selected for this request from its extensions.
+    ///
+    /// Reads the protocol from [`SelectedOperation`](crate::schema::SelectedOperation).
+    /// Returns `None` if no selection is stored, including before schema routing runs.
+    pub fn get_from_request<B>(request: &http::Request<B>) -> Option<&Self> {
+        super::SelectedOperation::get_from_request(request).map(super::SelectedOperation::protocol)
+    }
+
     /// Wraps a protocol that selects operations from request metadata alone.
     pub fn metadata_routed(protocol: impl MetadataRoutedProtocol) -> Self {
         Self(ProtocolKind::Metadata(std::sync::Arc::new(protocol)))
@@ -265,7 +273,8 @@ impl<'a> EventStreamFraming<'a> {
 ///
 /// The request side takes the operation's input schema, the response side its output schema,
 /// mirroring the client's `ClientProtocolInner` with the two directions swapped. The trait is
-/// object-safe: routing stores a [`SharedServerProtocol`] in the request extensions and
+/// object-safe: routing stores the protocol in
+/// [`SelectedOperation`](crate::schema::SelectedOperation) in the request extensions and
 /// everything after routing works through that erased handle, so nothing downstream names a
 /// concrete protocol.
 ///
@@ -282,7 +291,7 @@ impl<'a> EventStreamFraming<'a> {
 /// serialize any [`SerializableStruct`] whose schema it holds:
 ///
 /// ```no_run
-/// use aws_smithy_http_server::schema::SelectedProtocolOperation;
+/// use aws_smithy_http_server::schema::SharedServerProtocol;
 /// use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 /// use aws_smithy_schema::{shape_id, Schema, ShapeType};
 ///
@@ -304,8 +313,8 @@ impl<'a> EventStreamFraming<'a> {
 /// }
 ///
 /// fn short_circuit(request: &http::Request<()>) -> Option<http::Response<aws_smithy_http_server::body::BoxBody>> {
-///     let selected = request.extensions().get::<SelectedProtocolOperation>()?;
-///     let mut response = selected.protocol().serialize_response(&TEAPOT, &Teapot);
+///     let protocol = SharedServerProtocol::get_from_request(request)?;
+///     let mut response = protocol.serialize_response(&TEAPOT, &Teapot);
 ///     *response.status_mut() = http::StatusCode::IM_A_TEAPOT;
 ///     Some(response)
 /// }

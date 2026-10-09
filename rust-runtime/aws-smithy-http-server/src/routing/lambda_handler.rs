@@ -11,10 +11,10 @@ use std::{
 };
 use tower::Service;
 
-type ServiceRequest = http::Request<crate::body::Body>;
+type ServiceRequest = http::Request<crate::body::BoxBodySync>;
 
 /// A [`Service`] that takes a `lambda_http::Request` and converts
-/// it to `http::Request<Body>`.
+/// it to `http::Request<BoxBodySync>`.
 ///
 /// **This version is only guaranteed to be compatible with
 /// [`lambda_http`](https://docs.rs/lambda_http) ^1.** Please ensure that your service crate's
@@ -87,15 +87,13 @@ fn convert_event(request: Request) -> ServiceRequest {
         request.into_parts()
     };
 
-    // Lambda delivers the payload fully in memory, so the body enters the pipeline already
-    // buffered; routing and deserialization reuse the bytes without collection.
     let body = match body {
-        lambda_http::Body::Empty => crate::body::Body::empty(),
-        lambda_http::Body::Text(s) => crate::body::Body::from_bytes(s.into()),
-        lambda_http::Body::Binary(v) => crate::body::Body::from_bytes(v.into()),
+        lambda_http::Body::Empty => crate::body::empty_sync(),
+        lambda_http::Body::Text(s) => crate::body::to_boxed_sync(s),
+        lambda_http::Body::Binary(v) => crate::body::to_boxed_sync(v),
         _ => {
             tracing::error!("Unknown `lambda_http::Body` variant encountered, falling back to empty body");
-            crate::body::Body::empty()
+            crate::body::empty_sync()
         }
     };
 
@@ -268,7 +266,7 @@ mod tests {
         use tower::ServiceExt;
 
         // Create a simple service that echoes the URI path
-        let inner_service = tower::service_fn(|req: ServiceRequest| async move {
+        let inner_service = tower::service_fn(|req: http::Request<crate::body::BoxBodySync>| async move {
             let path = req.uri().path().to_string();
             let response = http::Response::builder()
                 .status(200)

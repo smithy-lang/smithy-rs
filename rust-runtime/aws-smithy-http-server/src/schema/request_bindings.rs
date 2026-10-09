@@ -20,6 +20,13 @@
 //!
 //! The generated walker is transport-blind: it drives `read_struct` into the
 //! internal builder exactly as any nested structure's walker would.
+//!
+//! The types below adapt each HTTP source to that shared [`ShapeDeserializer`]
+//! interface. [`RestRequestDeserializer`] selects the source; the value and map
+//! deserializers implement its parsing and repetition rules. The payload types
+//! handle raw bytes or codec metadata, while [`EmptyStructDeserializer`] handles
+//! an absent RPC body. Keeping these responsibilities separate lets the same
+//! generated walker read inputs from all of these sources.
 
 use std::borrow::Cow;
 use std::collections::{hash_map::Entry, HashMap, HashSet};
@@ -32,159 +39,6 @@ use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
 
 use super::timestamp::{resolve_timestamp_format, BindingLocation};
 
-/// `true` when `member` travels in the body rather than in the URI or headers. An `@httpPayload`
-/// member counts: it *is* the body.
-pub(crate) fn is_body_member(member: &Schema<'_>) -> bool {
-    member.http_header().is_none()
-        && member.http_query().is_none()
-        && member.http_label().is_none()
-        && member.http_prefix_headers().is_none()
-        && member.http_query_params().is_none()
-}
-
-// ============================================================================
-// Percent-decoding and query parsing
-// ============================================================================
-
-/// Percent-decodes a `@httpLabel` value: malformed escape sequences pass through unchanged, `+`
-/// is NOT a space, and invalid UTF-8 after decoding rejects the request.
-pub(crate) fn percent_decode(input: &str) -> Result<String, SerdeError> {
-    percent_encoding::percent_decode_str(input)
-        .decode_utf8()
-        .map(Cow::into_owned)
-        .map_err(|_| SerdeError::invalid_input("request URI cannot be percent decoded into valid UTF-8"))
-}
-
-/// Parses a raw query string into decoded `(key, value)` pairs with form-urlencoded semantics:
-/// order of appearance is preserved, a key without `=` gets an empty value, `+` decodes to a
-/// space, and invalid UTF-8 decodes lossily rather than failing.
-/// Unchanged text borrows from the query; decoded text owns its storage.
-pub(crate) fn parse_query_pairs(query: Option<&str>) -> Vec<(Cow<'_, str>, Cow<'_, str>)> {
-    let Some(query) = query else {
-        return Vec::new();
-    };
-    form_urlencoded::parse(query.as_bytes()).collect()
-}
-
-// ============================================================================
-// URI label extraction
-// ============================================================================
-
-/// The value a `@httpLabel` member reads from its raw path segment. Like legacy
-/// (`ServerHttpBoundProtocolGenerator.generateParseStrFn`), string (and enum) and timestamp labels
-/// are percent-decoded, while number and boolean labels are parsed from the raw segment, so
-/// `%37` is not the integer 7.
-pub(crate) fn label_value(member: &Schema<'_>, raw: &str) -> Result<String, SerdeError> {
-    match member.shape_type() {
-        ShapeType::String | ShapeType::Timestamp => percent_decode(raw),
-        _ => Ok(raw.to_string()),
-    }
-}
-
-/// Extracts `@httpLabel` values from `path` by matching it against the
-/// `@http` URI `template` (path portion only — any query-literal portion of
-/// the template is ignored). Values are returned raw, as they appear in the path: the reader
-/// percent-decodes them only for members that legacy decodes (see [`label_value`]).
-///
-/// This is a re-match: the router has already accepted the request, so a
-/// mismatch here indicates a schema/routing inconsistency and is an error.
-pub(crate) fn extract_labels<'t>(template: &'t str, path: &str) -> Result<Vec<(&'t str, String)>, SerdeError> {
-    enum Seg<'t> {
-        Literal(&'t str),
-        Label(&'t str),
-        Greedy(&'t str),
-    }
-
-    let template_path = template.split('?').next().unwrap_or(template);
-    let template_segs: Vec<Seg<'t>> = template_path
-        .strip_prefix('/')
-        .unwrap_or(template_path)
-        .split('/')
-        .map(|s| {
-            if let Some(inner) = s.strip_prefix('{').and_then(|s| s.strip_suffix('}')) {
-                match inner.strip_suffix('+') {
-                    Some(name) => Seg::Greedy(name),
-                    None => Seg::Label(inner),
-                }
-            } else {
-                Seg::Literal(s)
-            }
-        })
-        .collect();
-    let path_segs: Vec<&str> = path.strip_prefix('/').unwrap_or(path).split('/').collect();
-
-    let mut labels = Vec::new();
-    let mismatch = || SerdeError::invalid_input("request URI does not match `@http` URI pattern");
-
-    let greedy_pos = template_segs.iter().position(|s| matches!(s, Seg::Greedy(_)));
-    match greedy_pos {
-        None => {
-            if path_segs.len() != template_segs.len() {
-                return Err(mismatch());
-            }
-            for (seg, value) in template_segs.iter().zip(&path_segs) {
-                match seg {
-                    Seg::Literal(lit) => {
-                        if lit != value {
-                            return Err(mismatch());
-                        }
-                    }
-                    Seg::Label(name) => labels.push((*name, value.to_string())),
-                    Seg::Greedy(_) => unreachable!(),
-                }
-            }
-        }
-        Some(pos) => {
-            let after = &template_segs[pos + 1..];
-            // Segments before the greedy label match from the front; segments
-            // after it match from the end; the middle (at least one segment)
-            // is the greedy value.
-            if path_segs.len() < pos + 1 + after.len() {
-                return Err(mismatch());
-            }
-            for (seg, value) in template_segs[..pos].iter().zip(&path_segs) {
-                match seg {
-                    Seg::Literal(lit) => {
-                        if lit != value {
-                            return Err(mismatch());
-                        }
-                    }
-                    Seg::Label(name) => labels.push((*name, value.to_string())),
-                    Seg::Greedy(_) => unreachable!(),
-                }
-            }
-            let tail_start = path_segs.len() - after.len();
-            for (seg, value) in after.iter().zip(&path_segs[tail_start..]) {
-                match seg {
-                    Seg::Literal(lit) => {
-                        if lit != value {
-                            return Err(mismatch());
-                        }
-                    }
-                    Seg::Label(name) => labels.push((*name, value.to_string())),
-                    Seg::Greedy(_) => {
-                        return Err(SerdeError::invalid_input(
-                            "`@http` URI pattern cannot contain more than one greedy label",
-                        ))
-                    }
-                }
-            }
-            let greedy_value = path_segs[pos..tail_start].join("/");
-            if let Seg::Greedy(name) = template_segs[pos] {
-                labels.push((name, greedy_value));
-            }
-        }
-    }
-    Ok(labels)
-}
-
-/// Parses a primitive from its wire text as-is. Header values arrive already
-/// trimmed by the header tokenizer; label and query values are parsed untrimmed,
-/// matching the legacy `parse_smithy_primitive(&value)` on the decoded segment.
-fn parse_primitive<T: aws_smithy_types::primitive::Parse>(value: &str, what: &str) -> Result<T, SerdeError> {
-    T::parse_smithy_primitive(value).map_err(|err| SerdeError::invalid_input(format!("invalid {what}: {err}")))
-}
-
 macro_rules! unsupported_reads {
     ($why:literal; $($method:ident -> $ret:ty),+ $(,)?) => {
         $(
@@ -195,814 +49,30 @@ macro_rules! unsupported_reads {
     };
 }
 
-// ============================================================================
-// Decoded string values (labels and query parameters)
-// ============================================================================
-
-/// Deserializer over pre-decoded string values for one `@httpQuery` or
-/// `@httpLabel` member. Scalar reads take the FIRST value (first occurrence
-/// wins); list reads yield every value in order of appearance.
-pub(crate) struct DecodedValuesDeserializer<'a> {
-    values: Vec<Cow<'a, str>>,
-    member: &'a Schema<'a>,
-    location: BindingLocation,
-    /// `Some(idx)` while iterating a list; scalar reads otherwise.
-    cursor: Option<usize>,
+/// Implements `read_struct` for bindings that cannot contain structures.
+macro_rules! unsupported_read_struct {
+    ($why:literal) => {
+        fn read_struct(
+            &mut self,
+            _schema: &Schema<'_>,
+            _consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+        ) -> Result<(), SerdeError> {
+            Err(SerdeError::unsupported($why))
+        }
+    };
 }
 
-impl<'a> DecodedValuesDeserializer<'a> {
-    pub(crate) fn new(values: Vec<Cow<'a, str>>, member: &'a Schema<'a>, location: BindingLocation) -> Self {
-        debug_assert!(!values.is_empty());
-        Self {
-            values,
-            member,
-            location,
-            cursor: None,
+/// Implements `read_map` for bindings that cannot contain maps.
+macro_rules! unsupported_read_map {
+    ($why:literal) => {
+        fn read_map(
+            &mut self,
+            _schema: &Schema<'_>,
+            _consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+        ) -> Result<(), SerdeError> {
+            Err(SerdeError::unsupported($why))
         }
-    }
-
-    fn current(&mut self) -> Result<&str, SerdeError> {
-        match self.cursor {
-            Some(idx) => {
-                let value = self
-                    .values
-                    .get(idx)
-                    .ok_or_else(|| SerdeError::invalid_input("list element read past the end"))?;
-                self.cursor = Some(idx + 1);
-                Ok(value)
-            }
-            // Scalar: first occurrence wins.
-            None => Ok(self.values.first().expect("constructed non-empty")),
-        }
-    }
-}
-
-impl ShapeDeserializer for DecodedValuesDeserializer<'_> {
-    fn read_struct(
-        &mut self,
-        _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported(
-            "structures cannot be bound to labels or query strings",
-        ))
-    }
-
-    fn read_list(
-        &mut self,
-        _schema: &Schema<'_>,
-        consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        self.cursor = Some(0);
-        for _ in 0..self.values.len() {
-            consumer(self)?;
-        }
-        self.cursor = None;
-        Ok(())
-    }
-
-    fn read_map(
-        &mut self,
-        _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported(
-            "maps cannot be bound to labels or query strings",
-        ))
-    }
-
-    fn read_boolean(&mut self, _schema: &Schema<'_>) -> Result<bool, SerdeError> {
-        let v = self.current()?;
-        parse_primitive::<bool>(v, "boolean")
-    }
-
-    fn read_byte(&mut self, _schema: &Schema<'_>) -> Result<i8, SerdeError> {
-        let v = self.current()?;
-        parse_primitive::<i8>(v, "byte")
-    }
-
-    fn read_short(&mut self, _schema: &Schema<'_>) -> Result<i16, SerdeError> {
-        let v = self.current()?;
-        parse_primitive::<i16>(v, "short")
-    }
-
-    fn read_integer(&mut self, _schema: &Schema<'_>) -> Result<i32, SerdeError> {
-        let v = self.current()?;
-        parse_primitive::<i32>(v, "integer")
-    }
-
-    fn read_long(&mut self, _schema: &Schema<'_>) -> Result<i64, SerdeError> {
-        let v = self.current()?;
-        parse_primitive::<i64>(v, "long")
-    }
-
-    fn read_float(&mut self, _schema: &Schema<'_>) -> Result<f32, SerdeError> {
-        let v = self.current()?;
-        parse_primitive::<f32>(v, "float")
-    }
-
-    fn read_double(&mut self, _schema: &Schema<'_>) -> Result<f64, SerdeError> {
-        let v = self.current()?;
-        parse_primitive::<f64>(v, "double")
-    }
-
-    fn read_big_integer(&mut self, _schema: &Schema<'_>) -> Result<BigInteger, SerdeError> {
-        use std::str::FromStr;
-        let v = self.current()?;
-        BigInteger::from_str(v).map_err(|_| SerdeError::invalid_input(format!("invalid big integer: {v}")))
-    }
-
-    fn read_big_decimal(&mut self, _schema: &Schema<'_>) -> Result<BigDecimal, SerdeError> {
-        use std::str::FromStr;
-        let v = self.current()?;
-        BigDecimal::from_str(v).map_err(|_| SerdeError::invalid_input(format!("invalid big decimal: {v}")))
-    }
-
-    fn read_string(&mut self, _schema: &Schema<'_>) -> Result<String, SerdeError> {
-        Ok(self.current()?.to_string())
-    }
-
-    fn read_blob(&mut self, _schema: &Schema<'_>) -> Result<Blob, SerdeError> {
-        Err(SerdeError::unsupported(
-            "blobs cannot be bound to labels or query strings",
-        ))
-    }
-
-    fn read_timestamp(&mut self, schema: &Schema<'_>) -> Result<DateTime, SerdeError> {
-        let format = resolve_timestamp_format(schema, self.member, self.location);
-        let v = self.current()?.to_string();
-        DateTime::from_str(&v, format).map_err(|err| SerdeError::invalid_input(format!("invalid timestamp: {err}")))
-    }
-
-    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document, SerdeError> {
-        Err(SerdeError::unsupported(
-            "documents cannot be bound to labels or query strings",
-        ))
-    }
-
-    fn is_null(&self) -> bool {
-        false
-    }
-
-    fn container_size(&self) -> Option<usize> {
-        Some(self.values.len())
-    }
-}
-
-// ============================================================================
-// Header values
-// ============================================================================
-
-/// A single-use deserializer for one Smithy `@httpHeader` binding.
-///
-/// Header splitting follows `aws_smithy_http::header`: quoted/comma-separated text,
-/// format-aware timestamps, and a single raw instance for plain scalar strings.
-/// Parsed values are retained and consumed without re-tokenizing the headers.
-pub(crate) struct HeaderValuesDeserializer<'a> {
-    values: ParsedHeaderValues<'a>,
-    member: &'a Schema<'a>,
-    list_size: Option<usize>,
-    list_started: bool,
-}
-
-enum ParsedHeaderValues<'a> {
-    Raw(Option<&'a str>),
-    Text(std::vec::IntoIter<String>),
-    Dates(std::vec::IntoIter<DateTime>),
-}
-
-impl<'a> HeaderValuesDeserializer<'a> {
-    /// Prepares a member's header values, returning `None` when the member should
-    /// remain unset: no header instances, or no tokens for a tokenized binding.
-    /// An empty plain string is present, unlike an empty tokenized header.
-    ///
-    /// Tokenization errors are returned here; type conversion and token cardinality
-    /// errors can also occur during reads. Lists cannot be replayed after consumption.
-    pub(crate) fn try_new_bytes(
-        values: impl IntoIterator<Item = &'a [u8]>,
-        member: &'a Schema<'a>,
-    ) -> Result<Option<Self>, SerdeError> {
-        let mut values = values.into_iter().peekable();
-        if values.peek().is_none() {
-            return Ok(None);
-        }
-        let date_element = match member.shape_type() {
-            ShapeType::Timestamp => Some(member),
-            ShapeType::List => member
-                .member()
-                .filter(|element| element.shape_type() == ShapeType::Timestamp),
-            _ => None,
-        };
-        let values = if let Some(element) = date_element {
-            let format = resolve_timestamp_format(element, member, BindingLocation::Header);
-            let dates = aws_smithy_http::header::many_dates_bytes(values, format)
-                .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
-            if dates.is_empty() {
-                return Ok(None);
-            }
-            ParsedHeaderValues::Dates(dates.into_iter())
-        } else {
-            let tokenized = match member.shape_type() {
-                ShapeType::List
-                | ShapeType::Boolean
-                | ShapeType::Byte
-                | ShapeType::Short
-                | ShapeType::Integer
-                | ShapeType::Long
-                | ShapeType::Float
-                | ShapeType::Double => true,
-                ShapeType::String => member.media_type().is_some(),
-                _ => false,
-            };
-            if tokenized {
-                let tokens = aws_smithy_http::header::read_many_from_str_bytes::<String>(values)
-                    .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
-                if tokens.is_empty() {
-                    return Ok(None);
-                }
-                ParsedHeaderValues::Text(tokens.into_iter())
-            } else {
-                let first = values.next();
-                if values.next().is_some() {
-                    return Err(SerdeError::invalid_input(
-                        "expected a single header value but found multiple",
-                    ));
-                }
-                ParsedHeaderValues::Raw(first.map(header_text).transpose()?)
-            }
-        };
-        Ok(Some(Self {
-            values,
-            member,
-            list_size: None,
-            list_started: false,
-        }))
-    }
-
-    fn check_read(&self) -> Result<(), SerdeError> {
-        if self.member.shape_type() == ShapeType::List && self.list_size.is_none() {
-            return Err(SerdeError::invalid_input("header list element read outside a list"));
-        }
-        Ok(())
-    }
-
-    fn next_text(&mut self) -> Result<String, SerdeError> {
-        self.check_read()?;
-        match &mut self.values {
-            ParsedHeaderValues::Text(tokens) => tokens
-                .next()
-                .ok_or_else(|| SerdeError::invalid_input("header value read past the end")),
-            _ => Err(SerdeError::invalid_input("expected text header tokens")),
-        }
-    }
-
-    fn primitive_value<T: aws_smithy_types::primitive::Parse>(&mut self) -> Result<T, SerdeError> {
-        self.check_read()?;
-        let ParsedHeaderValues::Text(tokens) = &mut self.values else {
-            return Err(SerdeError::invalid_input("expected primitive header tokens"));
-        };
-        // Convert every token before checking cardinality, matching read_many_primitive.
-        let mut first = None;
-        let count = tokens.len();
-        for token in tokens {
-            let value = T::parse_smithy_primitive(&token)
-                .map_err(|_| SerdeError::invalid_input("failed reading a list of primitives"))?;
-            if first.is_none() {
-                first = Some(value);
-            }
-        }
-        if count != 1 {
-            return Err(SerdeError::invalid_input("expected one primitive header value"));
-        }
-        first.ok_or_else(|| SerdeError::invalid_input("header value read past the end"))
-    }
-
-    fn single_value(&mut self) -> Result<&'a str, SerdeError> {
-        self.check_read()?;
-        match &mut self.values {
-            ParsedHeaderValues::Raw(value) => value
-                .take()
-                .ok_or_else(|| SerdeError::invalid_input("header value read past the end")),
-            _ => Err(SerdeError::invalid_input("expected a raw header value")),
-        }
-    }
-}
-
-fn header_text(bytes: &[u8]) -> Result<&str, SerdeError> {
-    std::str::from_utf8(bytes).map_err(|_| {
-        SerdeError::invalid_input(aws_smithy_http::header::ParseError::new("header was not valid utf-8").to_string())
-    })
-}
-
-impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
-    fn read_struct(
-        &mut self,
-        _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported("structures cannot be bound to headers"))
-    }
-
-    fn read_list(
-        &mut self,
-        schema: &Schema<'_>,
-        consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        if self.member.shape_type() != ShapeType::List || self.list_started {
-            return Err(SerdeError::invalid_input("expected an unconsumed header list"));
-        }
-        // Tokenization (including timestamp format resolution) used this exact schema.
-        // Nested/repeated list reads are rejected above without changing the outer state.
-        debug_assert!(
-            std::ptr::eq(schema, self.member),
-            "header list schema must match the schema used to prepare its values"
-        );
-        let count = match &self.values {
-            ParsedHeaderValues::Text(tokens) => tokens.len(),
-            ParsedHeaderValues::Dates(dates) => dates.len(),
-            ParsedHeaderValues::Raw(_) => return Err(SerdeError::invalid_input("expected header list tokens")),
-        };
-        self.list_started = true;
-        self.list_size = Some(count);
-        let result = (|| {
-            for _ in 0..count {
-                consumer(self)?;
-            }
-            Ok(())
-        })();
-        self.list_size = None;
-        result
-    }
-
-    fn read_map(
-        &mut self,
-        _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported(
-            "maps cannot be bound to a single header (`@httpPrefixHeaders` is a map binding)",
-        ))
-    }
-
-    fn read_boolean(&mut self, _schema: &Schema<'_>) -> Result<bool, SerdeError> {
-        match self.list_size {
-            Some(_) => parse_primitive::<bool>(&self.next_text()?, "boolean"),
-            None => self.primitive_value::<bool>(),
-        }
-    }
-
-    fn read_byte(&mut self, _schema: &Schema<'_>) -> Result<i8, SerdeError> {
-        match self.list_size {
-            Some(_) => parse_primitive::<i8>(&self.next_text()?, "byte"),
-            None => self.primitive_value::<i8>(),
-        }
-    }
-
-    fn read_short(&mut self, _schema: &Schema<'_>) -> Result<i16, SerdeError> {
-        match self.list_size {
-            Some(_) => parse_primitive::<i16>(&self.next_text()?, "short"),
-            None => self.primitive_value::<i16>(),
-        }
-    }
-
-    fn read_integer(&mut self, _schema: &Schema<'_>) -> Result<i32, SerdeError> {
-        match self.list_size {
-            Some(_) => parse_primitive::<i32>(&self.next_text()?, "integer"),
-            None => self.primitive_value::<i32>(),
-        }
-    }
-
-    fn read_long(&mut self, _schema: &Schema<'_>) -> Result<i64, SerdeError> {
-        match self.list_size {
-            Some(_) => parse_primitive::<i64>(&self.next_text()?, "long"),
-            None => self.primitive_value::<i64>(),
-        }
-    }
-
-    fn read_float(&mut self, _schema: &Schema<'_>) -> Result<f32, SerdeError> {
-        match self.list_size {
-            Some(_) => parse_primitive::<f32>(&self.next_text()?, "float"),
-            None => self.primitive_value::<f32>(),
-        }
-    }
-
-    fn read_double(&mut self, _schema: &Schema<'_>) -> Result<f64, SerdeError> {
-        match self.list_size {
-            Some(_) => parse_primitive::<f64>(&self.next_text()?, "double"),
-            None => self.primitive_value::<f64>(),
-        }
-    }
-
-    fn read_big_integer(&mut self, _schema: &Schema<'_>) -> Result<BigInteger, SerdeError> {
-        use std::str::FromStr;
-        let v = match self.list_size {
-            Some(_) => self.next_text()?,
-            None => self.single_value()?.trim().to_string(),
-        };
-        BigInteger::from_str(&v).map_err(|_| SerdeError::invalid_input(format!("invalid big integer: {v}")))
-    }
-
-    fn read_big_decimal(&mut self, _schema: &Schema<'_>) -> Result<BigDecimal, SerdeError> {
-        use std::str::FromStr;
-        let v = match self.list_size {
-            Some(_) => self.next_text()?,
-            None => self.single_value()?.trim().to_string(),
-        };
-        BigDecimal::from_str(&v).map_err(|_| SerdeError::invalid_input(format!("invalid big decimal: {v}")))
-    }
-
-    fn read_string(&mut self, schema: &Schema<'_>) -> Result<String, SerdeError> {
-        // `@mediaType` on a header-bound string travels base64-encoded.
-        let media_typed = schema.media_type().is_some() || self.member.media_type().is_some();
-        let raw = match self.list_size {
-            Some(_) => self.next_text()?,
-            // Like legacy, a scalar `@mediaType` string is tokenized as a list
-            // (`read_many_from_str`: quote-aware, so `"eyJ..."` is unquoted) and
-            // must be exactly one item.
-            None if media_typed => {
-                let ParsedHeaderValues::Text(tokens) = &self.values else {
-                    return Err(SerdeError::invalid_input("expected text header tokens"));
-                };
-                if tokens.len() != 1 {
-                    return Err(SerdeError::invalid_input(format!(
-                        "expected one item but found {}",
-                        tokens.len()
-                    )));
-                }
-                self.next_text()?
-            }
-            // Other scalar strings use the full single value (no comma splitting),
-            // trimmed — matching `one_or_none::<String>`.
-            None => self.single_value()?.trim().to_string(),
-        };
-        if media_typed {
-            let decoded = aws_smithy_types::base64::decode(&raw)
-                .map_err(|err| SerdeError::invalid_input(format!("invalid base64: {err}")))?;
-            String::from_utf8(decoded)
-                .map_err(|_| SerdeError::invalid_input("base64-decoded header was not valid UTF-8"))
-        } else {
-            Ok(raw)
-        }
-    }
-
-    fn read_blob(&mut self, _schema: &Schema<'_>) -> Result<Blob, SerdeError> {
-        Err(SerdeError::unsupported("blobs cannot be bound to headers"))
-    }
-
-    fn read_timestamp(&mut self, schema: &Schema<'_>) -> Result<DateTime, SerdeError> {
-        self.check_read()?;
-        match &mut self.values {
-            ParsedHeaderValues::Dates(dates) => {
-                if self.list_size.is_none() && dates.len() > 1 {
-                    return Err(SerdeError::invalid_input(
-                        "expected a single timestamp header value but found multiple",
-                    ));
-                }
-                dates
-                    .next()
-                    .ok_or_else(|| SerdeError::invalid_input("header value read past the end"))
-            }
-            ParsedHeaderValues::Text(_) if self.list_size.is_some() => {
-                let text = self.next_text()?;
-                let format = resolve_timestamp_format(schema, self.member, BindingLocation::Header);
-                DateTime::from_str(&text, format)
-                    .map_err(|err| SerdeError::invalid_input(format!("invalid timestamp: {err}")))
-            }
-            _ => Err(SerdeError::invalid_input("expected timestamp header tokens")),
-        }
-    }
-
-    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document, SerdeError> {
-        Err(SerdeError::unsupported("documents cannot be bound to headers"))
-    }
-
-    fn is_null(&self) -> bool {
-        false
-    }
-
-    fn container_size(&self) -> Option<usize> {
-        self.list_size
-    }
-}
-
-// ============================================================================
-// Prefix headers and query-params maps
-// ============================================================================
-
-/// Deserializer over borrowed, decoded entries for a query-params or prefix-header map.
-/// Strings are allocated only when returning owned keys and values to the consumer.
-pub(crate) struct StringMapDeserializer<'a> {
-    entries: Vec<(&'a str, Vec<&'a str>)>,
-    cursor: usize,
-    element_cursor: Option<usize>,
-}
-
-impl<'a> StringMapDeserializer<'a> {
-    /// Entries must have unique, already-decoded keys with values grouped in wire order.
-    /// Binding-specific validation belongs to the caller. The source strings must remain
-    /// alive while this deserializer is used; ownership of the grouping vectors is transferred.
-    pub(crate) fn new(entries: Vec<(&'a str, Vec<&'a str>)>) -> Self {
-        Self {
-            entries,
-            cursor: 0,
-            element_cursor: None,
-        }
-    }
-
-    fn current_values(&self) -> Result<&[&'a str], SerdeError> {
-        self.entries
-            .get(self.cursor)
-            .map(|(_, v)| v.as_slice())
-            .ok_or_else(|| SerdeError::invalid_input("map value read without a current entry"))
-    }
-}
-
-impl ShapeDeserializer for StringMapDeserializer<'_> {
-    fn read_struct(
-        &mut self,
-        _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported(
-            "structures cannot appear in header/query-bound maps",
-        ))
-    }
-
-    fn read_list(
-        &mut self,
-        _schema: &Schema<'_>,
-        consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        // Map<String, List<String>> for `@httpQueryParams`: every value for
-        // the current key, in order of appearance.
-        let count = self.current_values()?.len();
-        self.element_cursor = Some(0);
-        for _ in 0..count {
-            consumer(self)?;
-        }
-        self.element_cursor = None;
-        Ok(())
-    }
-
-    fn read_map(
-        &mut self,
-        _schema: &Schema<'_>,
-        consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        for idx in 0..self.entries.len() {
-            self.cursor = idx;
-            let key = self.entries[idx].0.to_owned();
-            consumer(key, self)?;
-        }
-        Ok(())
-    }
-
-    fn read_string(&mut self, _schema: &Schema<'_>) -> Result<String, SerdeError> {
-        match self.element_cursor {
-            Some(idx) => {
-                let value = self
-                    .current_values()?
-                    .get(idx)
-                    .map(|value| (*value).to_owned())
-                    .ok_or_else(|| SerdeError::invalid_input("list element read past the end"))?;
-                self.element_cursor = Some(idx + 1);
-                Ok(value)
-            }
-            // Scalar map value: first occurrence wins.
-            None => self
-                .current_values()?
-                .first()
-                .map(|value| (*value).to_owned())
-                .ok_or_else(|| SerdeError::invalid_input("map value read without a value")),
-        }
-    }
-
-    unsupported_reads! {
-        "header/query-bound map values are strings";
-        read_boolean -> bool,
-        read_byte -> i8,
-        read_short -> i16,
-        read_integer -> i32,
-        read_long -> i64,
-        read_float -> f32,
-        read_double -> f64,
-        read_big_integer -> BigInteger,
-        read_big_decimal -> BigDecimal,
-        read_blob -> Blob,
-        read_timestamp -> DateTime,
-        read_document -> Document,
-    }
-
-    fn is_null(&self) -> bool {
-        false
-    }
-
-    fn container_size(&self) -> Option<usize> {
-        match self.element_cursor {
-            Some(_) => self.current_values().ok().map(|v| v.len()),
-            None => Some(self.entries.len()),
-        }
-    }
-}
-
-// ============================================================================
-// Raw payload
-// ============================================================================
-
-/// Deserializer for a blob/string `@httpPayload` member: the body bytes ARE
-/// the value.
-pub(crate) struct PayloadBytesDeserializer<'a> {
-    body: &'a [u8],
-}
-
-impl<'a> PayloadBytesDeserializer<'a> {
-    pub(crate) fn new(body: &'a [u8]) -> Self {
-        Self { body }
-    }
-}
-
-impl ShapeDeserializer for PayloadBytesDeserializer<'_> {
-    fn read_struct(
-        &mut self,
-        _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported(
-            "structure payloads read through the protocol codec, not raw bytes",
-        ))
-    }
-
-    fn read_list(
-        &mut self,
-        _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported("lists cannot be a raw payload"))
-    }
-
-    fn read_map(
-        &mut self,
-        _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported("maps cannot be a raw payload"))
-    }
-
-    fn read_string(&mut self, _schema: &Schema<'_>) -> Result<String, SerdeError> {
-        std::str::from_utf8(self.body)
-            .map(|s| s.to_string())
-            .map_err(|_| SerdeError::invalid_input("string payload was not valid UTF-8"))
-    }
-
-    fn read_blob(&mut self, _schema: &Schema<'_>) -> Result<Blob, SerdeError> {
-        Ok(Blob::new(self.body.to_vec()))
-    }
-
-    unsupported_reads! {
-        "raw payloads are blobs or strings";
-        read_boolean -> bool,
-        read_byte -> i8,
-        read_short -> i16,
-        read_integer -> i32,
-        read_long -> i64,
-        read_float -> f32,
-        read_double -> f64,
-        read_big_integer -> BigInteger,
-        read_big_decimal -> BigDecimal,
-        read_timestamp -> DateTime,
-        read_document -> Document,
-    }
-
-    fn is_null(&self) -> bool {
-        false
-    }
-
-    fn container_size(&self) -> Option<usize> {
-        None
-    }
-}
-
-// Preserve a payload member's XML name when generated deserialization switches to
-// the target shape's schema. Only the document root is aliased; child schemas and
-// the underlying codec are passed directly to the consumer.
-struct StructuredPayloadDeserializer<'a> {
-    inner: &'a mut dyn ShapeDeserializer,
-    xml_name: &'a str,
-}
-
-impl ShapeDeserializer for StructuredPayloadDeserializer<'_> {
-    fn read_struct(
-        &mut self,
-        schema: &Schema<'_>,
-        consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        let root = schema.clone().with_xml_name(self.xml_name);
-        self.inner.read_struct(&root, consumer)
-    }
-
-    fn read_list(
-        &mut self,
-        schema: &Schema<'_>,
-        consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        self.inner.read_list(schema, consumer)
-    }
-
-    fn read_map(
-        &mut self,
-        schema: &Schema<'_>,
-        consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        self.inner.read_map(schema, consumer)
-    }
-
-    unsupported_reads! {
-        "expected a structured payload";
-        read_boolean -> bool,
-        read_byte -> i8,
-        read_short -> i16,
-        read_integer -> i32,
-        read_long -> i64,
-        read_float -> f32,
-        read_double -> f64,
-        read_big_integer -> BigInteger,
-        read_big_decimal -> BigDecimal,
-        read_blob -> Blob,
-        read_timestamp -> DateTime,
-        read_string -> String,
-    }
-    fn read_document(&mut self, schema: &Schema<'_>) -> Result<Document, SerdeError> {
-        self.inner.read_document(schema)
-    }
-    fn is_null(&self) -> bool {
-        self.inner.is_null()
-    }
-    fn container_size(&self) -> Option<usize> {
-        self.inner.container_size()
-    }
-}
-
-// ============================================================================
-// Empty struct (empty request bodies on the RPC protocols)
-// ============================================================================
-
-/// A deserializer for an absent request body: `read_struct` invokes the
-/// consumer for no members, leaving every builder field unset (`@required`
-/// enforcement happens in `build()`).
-pub(crate) struct EmptyStructDeserializer;
-
-impl ShapeDeserializer for EmptyStructDeserializer {
-    fn read_struct(
-        &mut self,
-        _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Ok(())
-    }
-
-    fn read_list(
-        &mut self,
-        _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Err(SerdeError::invalid_input("expected a structure"))
-    }
-
-    fn read_map(
-        &mut self,
-        _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Err(SerdeError::invalid_input("expected a structure"))
-    }
-
-    unsupported_reads! {
-        "empty request body";
-        read_boolean -> bool,
-        read_byte -> i8,
-        read_short -> i16,
-        read_integer -> i32,
-        read_long -> i64,
-        read_float -> f32,
-        read_double -> f64,
-        read_big_integer -> BigInteger,
-        read_big_decimal -> BigDecimal,
-        read_blob -> Blob,
-        read_timestamp -> DateTime,
-        read_document -> Document,
-    }
-
-    fn read_string(&mut self, _schema: &Schema<'_>) -> Result<String, SerdeError> {
-        Err(SerdeError::unsupported("empty request body"))
-    }
-
-    fn is_null(&self) -> bool {
-        true
-    }
-
-    fn container_size(&self) -> Option<usize> {
-        Some(0)
-    }
+    };
 }
 
 // ============================================================================
@@ -1015,6 +85,8 @@ impl ShapeDeserializer for EmptyStructDeserializer {
 ///
 /// Everything it needs beyond the request is read off the input schema handed to `read_struct`:
 /// the `@http` URI template for labels, and which members are bound where.
+/// This is the entry point for the whole REST input; it passes a source-specific
+/// deserializer to the generated consumer for each bound member.
 pub(crate) struct RestRequestDeserializer<'a, C> {
     codec: &'a C,
     headers: &'a Headers,
@@ -1214,13 +286,7 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
         Err(SerdeError::unsupported("operation input must be a structure"))
     }
 
-    fn read_map(
-        &mut self,
-        _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported("operation input must be a structure"))
-    }
+    unsupported_read_map!("operation input must be a structure");
 
     unsupported_reads! {
         "operation input must be a structure";
@@ -1248,6 +314,963 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
 
     fn container_size(&self) -> Option<usize> {
         None
+    }
+}
+
+/// `true` when `member` travels in the body rather than in the URI or headers. An `@httpPayload`
+/// member counts: it *is* the body.
+pub(crate) fn is_body_member(member: &Schema<'_>) -> bool {
+    member.http_header().is_none()
+        && member.http_query().is_none()
+        && member.http_label().is_none()
+        && member.http_prefix_headers().is_none()
+        && member.http_query_params().is_none()
+}
+
+// ============================================================================
+// Percent-decoding and query parsing
+// ============================================================================
+
+/// Percent-decodes a `@httpLabel` value: malformed escape sequences pass through unchanged, `+`
+/// is NOT a space, and invalid UTF-8 after decoding rejects the request.
+pub(crate) fn percent_decode(input: &str) -> Result<String, SerdeError> {
+    percent_encoding::percent_decode_str(input)
+        .decode_utf8()
+        .map(Cow::into_owned)
+        .map_err(|_| SerdeError::invalid_input("request URI cannot be percent decoded into valid UTF-8"))
+}
+
+/// Parses a raw query string into decoded `(key, value)` pairs with form-urlencoded semantics:
+/// order of appearance is preserved, a key without `=` gets an empty value, `+` decodes to a
+/// space, and invalid UTF-8 decodes lossily rather than failing.
+/// Unchanged text borrows from the query; decoded text owns its storage.
+pub(crate) fn parse_query_pairs(query: Option<&str>) -> Vec<(Cow<'_, str>, Cow<'_, str>)> {
+    let Some(query) = query else {
+        return Vec::new();
+    };
+    form_urlencoded::parse(query.as_bytes()).collect()
+}
+
+// ============================================================================
+// URI label extraction
+// ============================================================================
+
+/// The value a `@httpLabel` member reads from its raw path segment. Like legacy
+/// (`ServerHttpBoundProtocolGenerator.generateParseStrFn`), string (and enum) and timestamp labels
+/// are percent-decoded, while number and boolean labels are parsed from the raw segment, so
+/// `%37` is not the integer 7.
+pub(crate) fn label_value(member: &Schema<'_>, raw: &str) -> Result<String, SerdeError> {
+    match member.shape_type() {
+        ShapeType::String | ShapeType::Timestamp => percent_decode(raw),
+        _ => Ok(raw.to_string()),
+    }
+}
+
+/// Extracts `@httpLabel` values from `path` by matching it against the
+/// `@http` URI `template` (path portion only — any query-literal portion of
+/// the template is ignored). Values are returned raw, as they appear in the path: the reader
+/// percent-decodes them only for members that legacy decodes (see [`label_value`]).
+///
+/// This is a re-match: the router has already accepted the request, so a
+/// mismatch here indicates a schema/routing inconsistency and is an error.
+pub(crate) fn extract_labels<'t>(template: &'t str, path: &str) -> Result<Vec<(&'t str, String)>, SerdeError> {
+    /// One URI template segment, used locally to distinguish fixed text from captures.
+    enum Seg<'t> {
+        /// Fixed path text that must match exactly.
+        Literal(&'t str),
+        /// A `{name}` capture spanning one path segment.
+        Label(&'t str),
+        /// A `{name+}` capture spanning the remaining middle segments, including slashes.
+        Greedy(&'t str),
+    }
+
+    let template_path = template.split('?').next().unwrap_or(template);
+    let template_segs: Vec<Seg<'t>> = template_path
+        .strip_prefix('/')
+        .unwrap_or(template_path)
+        .split('/')
+        .map(|s| {
+            if let Some(inner) = s.strip_prefix('{').and_then(|s| s.strip_suffix('}')) {
+                match inner.strip_suffix('+') {
+                    Some(name) => Seg::Greedy(name),
+                    None => Seg::Label(inner),
+                }
+            } else {
+                Seg::Literal(s)
+            }
+        })
+        .collect();
+    let path_segs: Vec<&str> = path.strip_prefix('/').unwrap_or(path).split('/').collect();
+
+    let mut labels = Vec::new();
+    let mismatch = || SerdeError::invalid_input("request URI does not match `@http` URI pattern");
+
+    let greedy_pos = template_segs.iter().position(|s| matches!(s, Seg::Greedy(_)));
+    match greedy_pos {
+        None => {
+            if path_segs.len() != template_segs.len() {
+                return Err(mismatch());
+            }
+            for (seg, value) in template_segs.iter().zip(&path_segs) {
+                match seg {
+                    Seg::Literal(lit) => {
+                        if lit != value {
+                            return Err(mismatch());
+                        }
+                    }
+                    Seg::Label(name) => labels.push((*name, value.to_string())),
+                    Seg::Greedy(_) => unreachable!(),
+                }
+            }
+        }
+        Some(pos) => {
+            let after = &template_segs[pos + 1..];
+            // Segments before the greedy label match from the front; segments
+            // after it match from the end; the middle (at least one segment)
+            // is the greedy value.
+            if path_segs.len() < pos + 1 + after.len() {
+                return Err(mismatch());
+            }
+            for (seg, value) in template_segs[..pos].iter().zip(&path_segs) {
+                match seg {
+                    Seg::Literal(lit) => {
+                        if lit != value {
+                            return Err(mismatch());
+                        }
+                    }
+                    Seg::Label(name) => labels.push((*name, value.to_string())),
+                    Seg::Greedy(_) => unreachable!(),
+                }
+            }
+            let tail_start = path_segs.len() - after.len();
+            for (seg, value) in after.iter().zip(&path_segs[tail_start..]) {
+                match seg {
+                    Seg::Literal(lit) => {
+                        if lit != value {
+                            return Err(mismatch());
+                        }
+                    }
+                    Seg::Label(name) => labels.push((*name, value.to_string())),
+                    Seg::Greedy(_) => {
+                        return Err(SerdeError::invalid_input(
+                            "`@http` URI pattern cannot contain more than one greedy label",
+                        ))
+                    }
+                }
+            }
+            let greedy_value = path_segs[pos..tail_start].join("/");
+            if let Seg::Greedy(name) = template_segs[pos] {
+                labels.push((name, greedy_value));
+            }
+        }
+    }
+    Ok(labels)
+}
+
+/// Parses a primitive from its wire text as-is. Header values arrive already
+/// trimmed by the header tokenizer; label and query values are parsed untrimmed,
+/// matching the legacy `parse_smithy_primitive(&value)` on the decoded segment.
+fn parse_primitive<T: aws_smithy_types::primitive::Parse>(value: &str, what: &str) -> Result<T, SerdeError> {
+    T::parse_smithy_primitive(value).map_err(|err| SerdeError::invalid_input(format!("invalid {what}: {err}")))
+}
+
+// ============================================================================
+// Decoded string values (labels and query parameters)
+// ============================================================================
+
+/// Deserializer over pre-decoded string values for one `@httpQuery` or
+/// `@httpLabel` member. Scalar reads take the FIRST value (first occurrence
+/// wins); list reads yield every value in order of appearance.
+///
+/// [`RestRequestDeserializer::read_struct`] supplies the values from the request URI:
+/// for `@httpQuery`, it parses the query with [`parse_query_pairs`] and collects
+/// every value whose key matches the binding name; for `@httpLabel`, it extracts
+/// the matching path capture with [`extract_labels`] and prepares it with [`label_value`].
+///
+/// For example, with `?tag=red&tag=blue`, an `@httpQuery("tag")` member gets
+/// `values = ["red", "blue"]`. The generated consumer calls `read_string` to read
+/// `"red"` for a scalar member, or `read_list` with an element consumer that reads
+/// both strings for a list member.
+///
+/// Converts URI text to the requested Smithy scalar type without trimming it.
+/// The member schema and binding location determine timestamp formatting.
+pub(crate) struct DecodedValuesDeserializer<'a> {
+    values: Vec<Cow<'a, str>>,
+    /// The schema of the member being read; supplies metadata such as
+    /// `@timestampFormat` when resolving how to parse timestamp values.
+    member: &'a Schema<'a>,
+    location: BindingLocation,
+    /// `Some(idx)` while iterating a list; scalar reads otherwise.
+    cursor: Option<usize>,
+}
+
+impl<'a> DecodedValuesDeserializer<'a> {
+    pub(crate) fn new(values: Vec<Cow<'a, str>>, member: &'a Schema<'a>, location: BindingLocation) -> Self {
+        debug_assert!(!values.is_empty());
+        Self {
+            values,
+            member,
+            location,
+            cursor: None,
+        }
+    }
+
+    fn current(&mut self) -> Result<&str, SerdeError> {
+        match self.cursor {
+            Some(idx) => {
+                let value = self
+                    .values
+                    .get(idx)
+                    .ok_or_else(|| SerdeError::invalid_input("list element read past the end"))?;
+                self.cursor = Some(idx + 1);
+                Ok(value)
+            }
+            // Scalar: first occurrence wins.
+            None => Ok(self.values.first().expect("constructed non-empty")),
+        }
+    }
+}
+
+impl ShapeDeserializer for DecodedValuesDeserializer<'_> {
+    unsupported_read_struct!("structures cannot be bound to labels or query strings");
+    unsupported_read_map!("maps cannot be bound to labels or query strings");
+
+    fn read_list(
+        &mut self,
+        _schema: &Schema<'_>,
+        consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        self.cursor = Some(0);
+        for _ in 0..self.values.len() {
+            consumer(self)?;
+        }
+        self.cursor = None;
+        Ok(())
+    }
+
+    fn read_boolean(&mut self, _schema: &Schema<'_>) -> Result<bool, SerdeError> {
+        let v = self.current()?;
+        parse_primitive::<bool>(v, "boolean")
+    }
+
+    fn read_byte(&mut self, _schema: &Schema<'_>) -> Result<i8, SerdeError> {
+        let v = self.current()?;
+        parse_primitive::<i8>(v, "byte")
+    }
+
+    fn read_short(&mut self, _schema: &Schema<'_>) -> Result<i16, SerdeError> {
+        let v = self.current()?;
+        parse_primitive::<i16>(v, "short")
+    }
+
+    fn read_integer(&mut self, _schema: &Schema<'_>) -> Result<i32, SerdeError> {
+        let v = self.current()?;
+        parse_primitive::<i32>(v, "integer")
+    }
+
+    fn read_long(&mut self, _schema: &Schema<'_>) -> Result<i64, SerdeError> {
+        let v = self.current()?;
+        parse_primitive::<i64>(v, "long")
+    }
+
+    fn read_float(&mut self, _schema: &Schema<'_>) -> Result<f32, SerdeError> {
+        let v = self.current()?;
+        parse_primitive::<f32>(v, "float")
+    }
+
+    fn read_double(&mut self, _schema: &Schema<'_>) -> Result<f64, SerdeError> {
+        let v = self.current()?;
+        parse_primitive::<f64>(v, "double")
+    }
+
+    fn read_big_integer(&mut self, _schema: &Schema<'_>) -> Result<BigInteger, SerdeError> {
+        use std::str::FromStr;
+        let v = self.current()?;
+        BigInteger::from_str(v).map_err(|_| SerdeError::invalid_input(format!("invalid big integer: {v}")))
+    }
+
+    fn read_big_decimal(&mut self, _schema: &Schema<'_>) -> Result<BigDecimal, SerdeError> {
+        use std::str::FromStr;
+        let v = self.current()?;
+        BigDecimal::from_str(v).map_err(|_| SerdeError::invalid_input(format!("invalid big decimal: {v}")))
+    }
+
+    fn read_string(&mut self, _schema: &Schema<'_>) -> Result<String, SerdeError> {
+        Ok(self.current()?.to_string())
+    }
+
+    fn read_blob(&mut self, _schema: &Schema<'_>) -> Result<Blob, SerdeError> {
+        Err(SerdeError::unsupported(
+            "blobs cannot be bound to labels or query strings",
+        ))
+    }
+
+    fn read_timestamp(&mut self, schema: &Schema<'_>) -> Result<DateTime, SerdeError> {
+        let format = resolve_timestamp_format(schema, self.member, self.location);
+        let v = self.current()?.to_string();
+        DateTime::from_str(&v, format).map_err(|err| SerdeError::invalid_input(format!("invalid timestamp: {err}")))
+    }
+
+    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document, SerdeError> {
+        Err(SerdeError::unsupported(
+            "documents cannot be bound to labels or query strings",
+        ))
+    }
+
+    fn is_null(&self) -> bool {
+        false
+    }
+
+    fn container_size(&self) -> Option<usize> {
+        Some(self.values.len())
+    }
+}
+
+// ============================================================================
+// Header values
+// ============================================================================
+
+/// A single-use deserializer for one Smithy `@httpHeader` binding.
+///
+/// Header splitting follows `aws_smithy_http::header`: quoted/comma-separated text,
+/// format-aware timestamps, and a single raw instance for plain scalar strings.
+/// Parsed values are retained and consumed without re-tokenizing the headers.
+/// Unlike query values, scalar headers enforce a single value; `@mediaType`
+/// strings also require base64 decoding.
+pub(crate) struct HeaderValuesDeserializer<'a> {
+    values: ParsedHeaderValues<'a>,
+    member: &'a Schema<'a>,
+    list_size: Option<usize>,
+    list_started: bool,
+}
+
+/// Prepared storage for the three header parsing strategies. Optional values and
+/// consuming iterators track which values have already been read.
+enum ParsedHeaderValues<'a> {
+    /// One unsplit header value, borrowed from the request; `None` means consumed.
+    Raw(Option<&'a str>),
+    /// Owned, comma/quote-aware tokens, moved out when read rather than cloned.
+    Text(std::vec::IntoIter<String>),
+    /// Timestamps parsed with the resolved format, including HTTP-date comma handling.
+    Dates(std::vec::IntoIter<DateTime>),
+}
+
+impl<'a> HeaderValuesDeserializer<'a> {
+    /// Prepares a member's header values, returning `None` when the member should
+    /// remain unset: no header instances, or no tokens for a tokenized binding.
+    /// An empty plain string is present, unlike an empty tokenized header.
+    ///
+    /// Tokenization errors are returned here; type conversion and token cardinality
+    /// errors can also occur during reads. Lists cannot be replayed after consumption.
+    pub(crate) fn try_new_bytes(
+        values: impl IntoIterator<Item = &'a [u8]>,
+        member: &'a Schema<'a>,
+    ) -> Result<Option<Self>, SerdeError> {
+        let mut values = values.into_iter().peekable();
+        if values.peek().is_none() {
+            return Ok(None);
+        }
+        let date_element = match member.shape_type() {
+            ShapeType::Timestamp => Some(member),
+            ShapeType::List => member
+                .member()
+                .filter(|element| element.shape_type() == ShapeType::Timestamp),
+            _ => None,
+        };
+        let values = if let Some(element) = date_element {
+            let format = resolve_timestamp_format(element, member, BindingLocation::Header);
+            let dates = aws_smithy_http::header::many_dates_bytes(values, format)
+                .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
+            if dates.is_empty() {
+                return Ok(None);
+            }
+            ParsedHeaderValues::Dates(dates.into_iter())
+        } else {
+            let tokenized = match member.shape_type() {
+                ShapeType::List
+                | ShapeType::Boolean
+                | ShapeType::Byte
+                | ShapeType::Short
+                | ShapeType::Integer
+                | ShapeType::Long
+                | ShapeType::Float
+                | ShapeType::Double => true,
+                ShapeType::String => member.media_type().is_some(),
+                _ => false,
+            };
+            if tokenized {
+                let tokens = aws_smithy_http::header::read_many_from_str_bytes::<String>(values)
+                    .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
+                if tokens.is_empty() {
+                    return Ok(None);
+                }
+                ParsedHeaderValues::Text(tokens.into_iter())
+            } else {
+                let first = values.next();
+                if values.next().is_some() {
+                    return Err(SerdeError::invalid_input(
+                        "expected a single header value but found multiple",
+                    ));
+                }
+                ParsedHeaderValues::Raw(first.map(header_text).transpose()?)
+            }
+        };
+        Ok(Some(Self {
+            values,
+            member,
+            list_size: None,
+            list_started: false,
+        }))
+    }
+
+    fn check_read(&self) -> Result<(), SerdeError> {
+        if self.member.shape_type() == ShapeType::List && self.list_size.is_none() {
+            return Err(SerdeError::invalid_input("header list element read outside a list"));
+        }
+        Ok(())
+    }
+
+    fn next_text(&mut self) -> Result<String, SerdeError> {
+        self.check_read()?;
+        match &mut self.values {
+            ParsedHeaderValues::Text(tokens) => tokens
+                .next()
+                .ok_or_else(|| SerdeError::invalid_input("header value read past the end")),
+            _ => Err(SerdeError::invalid_input("expected text header tokens")),
+        }
+    }
+
+    fn primitive_value<T: aws_smithy_types::primitive::Parse>(&mut self) -> Result<T, SerdeError> {
+        self.check_read()?;
+        let ParsedHeaderValues::Text(tokens) = &mut self.values else {
+            return Err(SerdeError::invalid_input("expected primitive header tokens"));
+        };
+        // Convert every token before checking cardinality, matching read_many_primitive.
+        let mut first = None;
+        let count = tokens.len();
+        for token in tokens {
+            let value = T::parse_smithy_primitive(&token)
+                .map_err(|_| SerdeError::invalid_input("failed reading a list of primitives"))?;
+            if first.is_none() {
+                first = Some(value);
+            }
+        }
+        if count != 1 {
+            return Err(SerdeError::invalid_input("expected one primitive header value"));
+        }
+        first.ok_or_else(|| SerdeError::invalid_input("header value read past the end"))
+    }
+
+    fn single_value(&mut self) -> Result<&'a str, SerdeError> {
+        self.check_read()?;
+        match &mut self.values {
+            ParsedHeaderValues::Raw(value) => value
+                .take()
+                .ok_or_else(|| SerdeError::invalid_input("header value read past the end")),
+            _ => Err(SerdeError::invalid_input("expected a raw header value")),
+        }
+    }
+}
+
+fn header_text(bytes: &[u8]) -> Result<&str, SerdeError> {
+    std::str::from_utf8(bytes).map_err(|_| {
+        SerdeError::invalid_input(aws_smithy_http::header::ParseError::new("header was not valid utf-8").to_string())
+    })
+}
+
+impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
+    unsupported_read_struct!("structures cannot be bound to headers");
+    unsupported_read_map!("maps cannot be bound to a single header (`@httpPrefixHeaders` is a map binding)");
+
+    fn read_list(
+        &mut self,
+        schema: &Schema<'_>,
+        consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        if self.member.shape_type() != ShapeType::List || self.list_started {
+            return Err(SerdeError::invalid_input("expected an unconsumed header list"));
+        }
+        // Tokenization (including timestamp format resolution) used this exact schema.
+        // Nested/repeated list reads are rejected above without changing the outer state.
+        debug_assert!(
+            std::ptr::eq(schema, self.member),
+            "header list schema must match the schema used to prepare its values"
+        );
+        let count = match &self.values {
+            ParsedHeaderValues::Text(tokens) => tokens.len(),
+            ParsedHeaderValues::Dates(dates) => dates.len(),
+            ParsedHeaderValues::Raw(_) => return Err(SerdeError::invalid_input("expected header list tokens")),
+        };
+        self.list_started = true;
+        self.list_size = Some(count);
+        let result = (|| {
+            for _ in 0..count {
+                consumer(self)?;
+            }
+            Ok(())
+        })();
+        self.list_size = None;
+        result
+    }
+
+    fn read_boolean(&mut self, _schema: &Schema<'_>) -> Result<bool, SerdeError> {
+        match self.list_size {
+            Some(_) => parse_primitive::<bool>(&self.next_text()?, "boolean"),
+            None => self.primitive_value::<bool>(),
+        }
+    }
+
+    fn read_byte(&mut self, _schema: &Schema<'_>) -> Result<i8, SerdeError> {
+        match self.list_size {
+            Some(_) => parse_primitive::<i8>(&self.next_text()?, "byte"),
+            None => self.primitive_value::<i8>(),
+        }
+    }
+
+    fn read_short(&mut self, _schema: &Schema<'_>) -> Result<i16, SerdeError> {
+        match self.list_size {
+            Some(_) => parse_primitive::<i16>(&self.next_text()?, "short"),
+            None => self.primitive_value::<i16>(),
+        }
+    }
+
+    fn read_integer(&mut self, _schema: &Schema<'_>) -> Result<i32, SerdeError> {
+        match self.list_size {
+            Some(_) => parse_primitive::<i32>(&self.next_text()?, "integer"),
+            None => self.primitive_value::<i32>(),
+        }
+    }
+
+    fn read_long(&mut self, _schema: &Schema<'_>) -> Result<i64, SerdeError> {
+        match self.list_size {
+            Some(_) => parse_primitive::<i64>(&self.next_text()?, "long"),
+            None => self.primitive_value::<i64>(),
+        }
+    }
+
+    fn read_float(&mut self, _schema: &Schema<'_>) -> Result<f32, SerdeError> {
+        match self.list_size {
+            Some(_) => parse_primitive::<f32>(&self.next_text()?, "float"),
+            None => self.primitive_value::<f32>(),
+        }
+    }
+
+    fn read_double(&mut self, _schema: &Schema<'_>) -> Result<f64, SerdeError> {
+        match self.list_size {
+            Some(_) => parse_primitive::<f64>(&self.next_text()?, "double"),
+            None => self.primitive_value::<f64>(),
+        }
+    }
+
+    fn read_big_integer(&mut self, _schema: &Schema<'_>) -> Result<BigInteger, SerdeError> {
+        use std::str::FromStr;
+        let v = match self.list_size {
+            Some(_) => self.next_text()?,
+            None => self.single_value()?.trim().to_string(),
+        };
+        BigInteger::from_str(&v).map_err(|_| SerdeError::invalid_input(format!("invalid big integer: {v}")))
+    }
+
+    fn read_big_decimal(&mut self, _schema: &Schema<'_>) -> Result<BigDecimal, SerdeError> {
+        use std::str::FromStr;
+        let v = match self.list_size {
+            Some(_) => self.next_text()?,
+            None => self.single_value()?.trim().to_string(),
+        };
+        BigDecimal::from_str(&v).map_err(|_| SerdeError::invalid_input(format!("invalid big decimal: {v}")))
+    }
+
+    fn read_string(&mut self, schema: &Schema<'_>) -> Result<String, SerdeError> {
+        // `@mediaType` on a header-bound string travels base64-encoded.
+        let media_typed = schema.media_type().is_some() || self.member.media_type().is_some();
+        let raw = match self.list_size {
+            Some(_) => self.next_text()?,
+            // Like legacy, a scalar `@mediaType` string is tokenized as a list
+            // (`read_many_from_str`: quote-aware, so `"eyJ..."` is unquoted) and
+            // must be exactly one item.
+            None if media_typed => {
+                let ParsedHeaderValues::Text(tokens) = &self.values else {
+                    return Err(SerdeError::invalid_input("expected text header tokens"));
+                };
+                if tokens.len() != 1 {
+                    return Err(SerdeError::invalid_input(format!(
+                        "expected one item but found {}",
+                        tokens.len()
+                    )));
+                }
+                self.next_text()?
+            }
+            // Other scalar strings use the full single value (no comma splitting),
+            // trimmed — matching `one_or_none::<String>`.
+            None => self.single_value()?.trim().to_string(),
+        };
+        if media_typed {
+            let decoded = aws_smithy_types::base64::decode(&raw)
+                .map_err(|err| SerdeError::invalid_input(format!("invalid base64: {err}")))?;
+            String::from_utf8(decoded)
+                .map_err(|_| SerdeError::invalid_input("base64-decoded header was not valid UTF-8"))
+        } else {
+            Ok(raw)
+        }
+    }
+
+    fn read_blob(&mut self, _schema: &Schema<'_>) -> Result<Blob, SerdeError> {
+        Err(SerdeError::unsupported("blobs cannot be bound to headers"))
+    }
+
+    fn read_timestamp(&mut self, schema: &Schema<'_>) -> Result<DateTime, SerdeError> {
+        self.check_read()?;
+        match &mut self.values {
+            ParsedHeaderValues::Dates(dates) => {
+                if self.list_size.is_none() && dates.len() > 1 {
+                    return Err(SerdeError::invalid_input(
+                        "expected a single timestamp header value but found multiple",
+                    ));
+                }
+                dates
+                    .next()
+                    .ok_or_else(|| SerdeError::invalid_input("header value read past the end"))
+            }
+            ParsedHeaderValues::Text(_) if self.list_size.is_some() => {
+                let text = self.next_text()?;
+                let format = resolve_timestamp_format(schema, self.member, BindingLocation::Header);
+                DateTime::from_str(&text, format)
+                    .map_err(|err| SerdeError::invalid_input(format!("invalid timestamp: {err}")))
+            }
+            _ => Err(SerdeError::invalid_input("expected timestamp header tokens")),
+        }
+    }
+
+    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document, SerdeError> {
+        Err(SerdeError::unsupported("documents cannot be bound to headers"))
+    }
+
+    fn is_null(&self) -> bool {
+        false
+    }
+
+    fn container_size(&self) -> Option<usize> {
+        self.list_size
+    }
+}
+
+// ============================================================================
+// Prefix headers and query-params maps
+// ============================================================================
+
+/// Deserializer over borrowed, decoded entries for a query-params or prefix-header map.
+/// Strings are allocated only when returning owned keys and values to the consumer.
+///
+/// For `@httpQueryParams`, keys are query names; for `@httpPrefixHeaders`, keys
+/// are header names with the prefix removed. Each key supplies either its first
+/// string value or a list of all grouped values, depending on the map's value shape.
+/// The caller handles source-specific decoding and validation before construction.
+pub(crate) struct StringMapDeserializer<'a> {
+    entries: Vec<(&'a str, Vec<&'a str>)>,
+    cursor: usize,
+    element_cursor: Option<usize>,
+}
+
+impl<'a> StringMapDeserializer<'a> {
+    /// Entries must have unique, already-decoded keys with values grouped in wire order.
+    /// Binding-specific validation belongs to the caller. The source strings must remain
+    /// alive while this deserializer is used; ownership of the grouping vectors is transferred.
+    pub(crate) fn new(entries: Vec<(&'a str, Vec<&'a str>)>) -> Self {
+        Self {
+            entries,
+            cursor: 0,
+            element_cursor: None,
+        }
+    }
+
+    fn current_values(&self) -> Result<&[&'a str], SerdeError> {
+        self.entries
+            .get(self.cursor)
+            .map(|(_, v)| v.as_slice())
+            .ok_or_else(|| SerdeError::invalid_input("map value read without a current entry"))
+    }
+}
+
+impl ShapeDeserializer for StringMapDeserializer<'_> {
+    unsupported_read_struct!("structures cannot appear in header/query-bound maps");
+
+    fn read_list(
+        &mut self,
+        _schema: &Schema<'_>,
+        consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        // Map<String, List<String>> for `@httpQueryParams`: every value for
+        // the current key, in order of appearance.
+        let count = self.current_values()?.len();
+        self.element_cursor = Some(0);
+        for _ in 0..count {
+            consumer(self)?;
+        }
+        self.element_cursor = None;
+        Ok(())
+    }
+
+    fn read_map(
+        &mut self,
+        _schema: &Schema<'_>,
+        consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        for idx in 0..self.entries.len() {
+            self.cursor = idx;
+            let key = self.entries[idx].0.to_owned();
+            consumer(key, self)?;
+        }
+        Ok(())
+    }
+
+    fn read_string(&mut self, _schema: &Schema<'_>) -> Result<String, SerdeError> {
+        match self.element_cursor {
+            Some(idx) => {
+                let value = self
+                    .current_values()?
+                    .get(idx)
+                    .map(|value| (*value).to_owned())
+                    .ok_or_else(|| SerdeError::invalid_input("list element read past the end"))?;
+                self.element_cursor = Some(idx + 1);
+                Ok(value)
+            }
+            // Scalar map value: first occurrence wins.
+            None => self
+                .current_values()?
+                .first()
+                .map(|value| (*value).to_owned())
+                .ok_or_else(|| SerdeError::invalid_input("map value read without a value")),
+        }
+    }
+
+    unsupported_reads! {
+        "header/query-bound map values are strings";
+        read_boolean -> bool,
+        read_byte -> i8,
+        read_short -> i16,
+        read_integer -> i32,
+        read_long -> i64,
+        read_float -> f32,
+        read_double -> f64,
+        read_big_integer -> BigInteger,
+        read_big_decimal -> BigDecimal,
+        read_blob -> Blob,
+        read_timestamp -> DateTime,
+        read_document -> Document,
+    }
+
+    fn is_null(&self) -> bool {
+        false
+    }
+
+    fn container_size(&self) -> Option<usize> {
+        match self.element_cursor {
+            Some(_) => self.current_values().ok().map(|v| v.len()),
+            None => Some(self.entries.len()),
+        }
+    }
+}
+
+// ============================================================================
+// Raw payload
+// ============================================================================
+
+/// Deserializer for a blob/string `@httpPayload` member: the body bytes ARE
+/// the value.
+///
+/// Bypasses the protocol codec: blobs copy the bytes directly, and strings
+/// validate UTF-8. Streaming payloads are attached separately by generated code.
+pub(crate) struct PayloadBytesDeserializer<'a> {
+    body: &'a [u8],
+}
+
+impl<'a> PayloadBytesDeserializer<'a> {
+    pub(crate) fn new(body: &'a [u8]) -> Self {
+        Self { body }
+    }
+}
+
+impl ShapeDeserializer for PayloadBytesDeserializer<'_> {
+    unsupported_read_struct!("structure payloads read through the protocol codec, not raw bytes");
+    unsupported_read_map!("maps cannot be a raw payload");
+
+    fn read_list(
+        &mut self,
+        _schema: &Schema<'_>,
+        _consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        Err(SerdeError::unsupported("lists cannot be a raw payload"))
+    }
+
+    fn read_string(&mut self, _schema: &Schema<'_>) -> Result<String, SerdeError> {
+        std::str::from_utf8(self.body)
+            .map(|s| s.to_string())
+            .map_err(|_| SerdeError::invalid_input("string payload was not valid UTF-8"))
+    }
+
+    fn read_blob(&mut self, _schema: &Schema<'_>) -> Result<Blob, SerdeError> {
+        Ok(Blob::new(self.body.to_vec()))
+    }
+
+    unsupported_reads! {
+        "raw payloads are blobs or strings";
+        read_boolean -> bool,
+        read_byte -> i8,
+        read_short -> i16,
+        read_integer -> i32,
+        read_long -> i64,
+        read_float -> f32,
+        read_double -> f64,
+        read_big_integer -> BigInteger,
+        read_big_decimal -> BigDecimal,
+        read_timestamp -> DateTime,
+        read_document -> Document,
+    }
+
+    fn is_null(&self) -> bool {
+        false
+    }
+
+    fn container_size(&self) -> Option<usize> {
+        None
+    }
+}
+
+/// Wraps a codec deserializer to preserve a structured `@httpPayload` member's
+/// XML name when generated deserialization switches to the target shape's schema.
+/// Only the document root is aliased; child schemas and the underlying codec
+/// are passed directly to the consumer.
+///
+/// For example, if the payload member has `@xmlName("PayloadRoot")` and its target
+/// structure has `@xmlName("TargetRoot")`, the request body uses the member's name:
+///
+/// ```xml
+/// <PayloadRoot>
+///     <Child>hello</Child>
+/// </PayloadRoot>
+/// ```
+///
+/// This wrapper makes the codec expect `PayloadRoot` when the generated walker
+/// passes the target structure's schema. The child's XML name remains `Child`.
+struct StructuredPayloadDeserializer<'a> {
+    inner: &'a mut dyn ShapeDeserializer,
+    xml_name: &'a str,
+}
+
+impl ShapeDeserializer for StructuredPayloadDeserializer<'_> {
+    fn read_struct(
+        &mut self,
+        schema: &Schema<'_>,
+        consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        let root = schema.clone().with_xml_name(self.xml_name);
+        self.inner.read_struct(&root, consumer)
+    }
+
+    fn read_list(
+        &mut self,
+        schema: &Schema<'_>,
+        consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        self.inner.read_list(schema, consumer)
+    }
+
+    fn read_map(
+        &mut self,
+        schema: &Schema<'_>,
+        consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        self.inner.read_map(schema, consumer)
+    }
+
+    unsupported_reads! {
+        "expected a structured payload";
+        read_boolean -> bool,
+        read_byte -> i8,
+        read_short -> i16,
+        read_integer -> i32,
+        read_long -> i64,
+        read_float -> f32,
+        read_double -> f64,
+        read_big_integer -> BigInteger,
+        read_big_decimal -> BigDecimal,
+        read_blob -> Blob,
+        read_timestamp -> DateTime,
+        read_string -> String,
+    }
+    fn read_document(&mut self, schema: &Schema<'_>) -> Result<Document, SerdeError> {
+        self.inner.read_document(schema)
+    }
+    fn is_null(&self) -> bool {
+        self.inner.is_null()
+    }
+    fn container_size(&self) -> Option<usize> {
+        self.inner.container_size()
+    }
+}
+
+// ============================================================================
+// Empty struct (empty request bodies on the RPC protocols)
+// ============================================================================
+
+/// A deserializer for an absent request body: `read_struct` invokes the
+/// consumer for no members, leaving every builder field unset (`@required`
+/// enforcement happens in `build()`).
+/// RPC request handling uses this to run the normal input walker without
+/// asking the protocol codec to parse an empty document.
+pub(crate) struct EmptyStructDeserializer;
+
+impl ShapeDeserializer for EmptyStructDeserializer {
+    fn read_struct(
+        &mut self,
+        _schema: &Schema<'_>,
+        _consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        Ok(())
+    }
+
+    fn read_list(
+        &mut self,
+        _schema: &Schema<'_>,
+        _consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        Err(SerdeError::invalid_input("expected a structure"))
+    }
+
+    fn read_map(
+        &mut self,
+        _schema: &Schema<'_>,
+        _consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        Err(SerdeError::invalid_input("expected a structure"))
+    }
+
+    unsupported_reads! {
+        "empty request body";
+        read_boolean -> bool,
+        read_byte -> i8,
+        read_short -> i16,
+        read_integer -> i32,
+        read_long -> i64,
+        read_float -> f32,
+        read_double -> f64,
+        read_big_integer -> BigInteger,
+        read_big_decimal -> BigDecimal,
+        read_blob -> Blob,
+        read_timestamp -> DateTime,
+        read_document -> Document,
+    }
+
+    fn read_string(&mut self, _schema: &Schema<'_>) -> Result<String, SerdeError> {
+        Err(SerdeError::unsupported("empty request body"))
+    }
+
+    fn is_null(&self) -> bool {
+        true
+    }
+
+    fn container_size(&self) -> Option<usize> {
+        Some(0)
     }
 }
 
@@ -1294,6 +1317,8 @@ mod tests {
         .with_xml_unwrapped_output()
         .with_traits(&TRAITS);
 
+        /// Test codec stand-in that checks root aliasing preserves the target's
+        /// other metadata and passes the original child schema to the consumer.
         struct MetadataCheckingDeserializer;
         impl ShapeDeserializer for MetadataCheckingDeserializer {
             fn read_struct(
@@ -1492,6 +1517,8 @@ mod tests {
         )
     }
 
+    /// Test input assembled by the consumer, used to check bindings from each
+    /// HTTP source together with unbound body members.
     #[derive(Debug, Default, PartialEq)]
     struct Collected {
         name: Option<String>,

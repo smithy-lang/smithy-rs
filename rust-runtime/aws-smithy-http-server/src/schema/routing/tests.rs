@@ -10,7 +10,7 @@ use crate::protocol::rpc_v2_cbor::SMITHY_PROTOCOL_HEADER;
 use crate::response::Response;
 use crate::routing::SyncRoute;
 use crate::schema::{DeserializeError, HttpModeledError, RequestBodyCollectionConfig};
-use crate::schema::{OperationSchema, ProtocolOrder, SelectedProtocolOperation, ServiceSchema};
+use crate::schema::{OperationSchema, ProtocolOrder, SelectedOperation, ServiceSchema};
 use aws_smithy_schema::{shape_id, traits::HttpTrait, Schema, ShapeType};
 use bytes::Bytes;
 use http::Request;
@@ -435,7 +435,7 @@ async fn layers_see_selection_and_do_not_observe_routing_rejections() {
     let layer = tower::layer::layer_fn(move |inner: SyncRoute<Body>| {
         let counter = counter.clone();
         tower::service_fn(move |request: Request<Body>| {
-            assert!(request.extensions().get::<SelectedProtocolOperation>().is_some());
+            assert!(request.extensions().get::<SelectedOperation>().is_some());
             counter.fetch_add(1, Ordering::SeqCst);
             inner.clone().oneshot(request)
         })
@@ -1562,7 +1562,7 @@ mod multi_protocol {
                 (
                     *operation,
                     SyncRoute::new(tower::service_fn(move |request: Request<Body>| async move {
-                        let selected = request.extensions().get::<SelectedProtocolOperation>().unwrap().clone();
+                        let selected = request.extensions().get::<SelectedOperation>().unwrap().clone();
                         let bytes = if operation.input().members().iter().any(|member| member.streaming()) {
                             Bytes::new()
                         } else {
@@ -1811,16 +1811,27 @@ mod multi_protocol {
             self.router.route_with_body(request)
         }
     }
-    type AdvisoryApp = (
+    fn advisory_app(
+        reject: bool,
+        streaming: bool,
+    ) -> (
         MultiProtocolRoutingService,
         Arc<std::sync::atomic::AtomicUsize>,
         Arc<std::sync::atomic::AtomicUsize>,
         Arc<std::sync::Mutex<Vec<usize>>>,
-    );
-    fn advisory_app(reject: bool, streaming: bool) -> AdvisoryApp {
+    ) {
         advisory_app_with_layer(reject, streaming, tower::layer::util::Identity::new())
     }
-    fn advisory_app_with_layer<L>(reject: bool, streaming: bool, layer: L) -> AdvisoryApp
+    fn advisory_app_with_layer<L>(
+        reject: bool,
+        streaming: bool,
+        layer: L,
+    ) -> (
+        MultiProtocolRoutingService,
+        Arc<std::sync::atomic::AtomicUsize>,
+        Arc<std::sync::atomic::AtomicUsize>,
+        Arc<std::sync::Mutex<Vec<usize>>>,
+    )
     where
         L: tower::Layer<SyncRoute<Body>>,
         L::Service:
