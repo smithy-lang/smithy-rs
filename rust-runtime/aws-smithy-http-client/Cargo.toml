@@ -2,7 +2,7 @@
 name = "aws-smithy-http-client"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "HTTP client abstractions for generated smithy clients"
-version = "1.4.0"
+version = "1.5.1"
 license = "Apache-2.0"
 edition = "2021"
 repository = "https://github.com/smithy-lang/smithy-rs"
@@ -31,6 +31,8 @@ default-client = [
     "dep:rustls-native-certs"
 ]
 
+rt-tokio = ["aws-smithy-async/rt-tokio", "tokio/rt"]
+
 wire-mock = [
     "test-util",
     "default-client",
@@ -41,7 +43,7 @@ wire-mock = [
     "tokio/macros",
     "tokio/io-util",
     "tokio/net",
-    "tokio/rt",
+    "rt-tokio",
     "tokio/sync",
     "tokio/time",
     "dep:http-body-util",
@@ -139,6 +141,9 @@ rustls-pki-types = { version = "1.12.0", features = ["std"] }
 tokio = { version = "1.49.0", features = ["macros", "rt", "rt-multi-thread", "test-util", "full"] }
 tokio-rustls = "0.26.2"
 
+[target.'cfg(smithy_http_client_loom)'.dev-dependencies]
+loom = "0.7.2"
+
 
 [[example]]
 name = "client-ring"
@@ -167,6 +172,7 @@ stable = true
 all-features = false
 features = [
     "default-client ",
+    "rt-tokio",
     "wire-mock",
     "test-util",
     "rustls-ring",
@@ -179,4 +185,4 @@ rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(aws_sdk_unstable)'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(aws_sdk_unstable)', 'cfg(smithy_http_client_loom)'] }

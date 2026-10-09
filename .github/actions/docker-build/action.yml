@@ -37,15 +37,6 @@ runs:
       key: ${{ runner.os }}-gradle-${{ hashFiles('gradle/caches/**/*', 'gradle/wrapper/**/*') }}
       restore-keys: |
         ${{ runner.os }}-gradle-
-  # Cargo registry (index + downloaded crate sources) shared across containerized legs. ci-action
-  # seeds this from the image's baked-in registry on a miss, so a cold cache never regresses.
-  - name: Cargo registry cache
-    uses: actions/cache@v4
-    with:
-      path: cargo-registry
-      key: ${{ runner.os }}-cargo-registry-${{ hashFiles('smithy-rs/**/Cargo.lock') }}
-      restore-keys: |
-        ${{ runner.os }}-cargo-registry-
        # Pinned to the commit hash of v2.7.3
   - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84
     with:
@@ -67,7 +58,13 @@ runs:
       # it and tag it as the base image to use for this action. This will prevent acquire-build-image
       # from attempting to download an image from ECR since it will already exist,
       # which enables testing build image modifications as part of the pull request.
-      if [[ -d smithy-rs-base-image ]]; then
+      #
+      # Test the tarball, not the directory. `download-all-artifacts` only leaves this file behind
+      # once it has verified the reassembled image against the checksum recorded when it was built,
+      # so the file's presence is the signal that the image is usable. `-d` was not: a download that
+      # aborted part-way still left the directory there, which read as a hit and killed the job on
+      # `docker load`. Anything short of a verified image now falls through to a remote pull below.
+      if [[ -s smithy-rs-base-image/smithy-rs-base-image ]]; then
         echo "found base image in artifacts...loading it back into docker"
         IMAGE_TAG="ci-$(./smithy-rs/.github/scripts/docker-image-hash)"
         docker load -i smithy-rs-base-image/smithy-rs-base-image
@@ -80,7 +77,27 @@ runs:
       # or from ECR. We disable building the image from scratch so that any mistakes in the CI
       # configuration won't cause each individual action to build its own image, which would
       # drastically increase the total CI time. Fail fast!
-      ALLOW_LOCAL_BUILD=false ./smithy-rs/.github/scripts/acquire-build-image
+      #
+      # Fork runs are the exception. They can't authenticate to ECR and the GHCR mirror is private,
+      # so the artifact above is their only source -- and if it didn't arrive there is nothing left
+      # to fall back to, which is how a failed download took out every job that needs the image.
+      # Allow those runs to rebuild instead. It is slow, but only reached on a cold runner whose
+      # docker cache doesn't already hold the image, and it can't fail the way a missing source does.
+      ALLOW_LOCAL_BUILD=${{ github.event.pull_request.head.repo.fork == true }} \
+        ./smithy-rs/.github/scripts/acquire-build-image
+  # Cargo registry (index + downloaded crate sources) shared across containerized legs. ci-action
+  # seeds this from the image's baked-in registry on a miss, so a cold cache never regresses.
+  #
+  # Restored here rather than with the other caches at the top of this action: nothing before the
+  # step below reads it, and when it sat immediately ahead of `Download all artifacts` that download
+  # started aborting mid-stream while still exiting 0. Same cache and key, just claimed later.
+  - name: Cargo registry cache
+    uses: actions/cache@v4
+    with:
+      path: cargo-registry
+      key: ${{ runner.os }}-cargo-registry-${{ hashFiles('smithy-rs/**/Cargo.lock') }}
+      restore-keys: |
+        ${{ runner.os }}-cargo-registry-
      # This runs the commands from the matrix strategy
   - name: Run ${{ inputs.action }}
     shell: bash

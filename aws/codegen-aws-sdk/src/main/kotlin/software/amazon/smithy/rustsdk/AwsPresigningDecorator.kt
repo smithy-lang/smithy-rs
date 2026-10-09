@@ -79,6 +79,7 @@ internal val PRESIGNABLE_OPERATIONS by lazy {
         // TODO(https://github.com/awslabs/aws-sdk-rust/issues/488) Technically, all S3 operations support presigning
         ShapeId.from("com.amazonaws.s3#HeadObject") to PresignableOperation(PayloadSigningType.UNSIGNED_PAYLOAD),
         ShapeId.from("com.amazonaws.s3#GetObject") to PresignableOperation(PayloadSigningType.UNSIGNED_PAYLOAD),
+        ShapeId.from("com.amazonaws.s3#ListObjectVersions") to PresignableOperation(PayloadSigningType.UNSIGNED_PAYLOAD),
         ShapeId.from("com.amazonaws.s3#PutObject") to PresignableOperation(PayloadSigningType.UNSIGNED_PAYLOAD),
         ShapeId.from("com.amazonaws.s3#UploadPart") to PresignableOperation(PayloadSigningType.UNSIGNED_PAYLOAD),
         ShapeId.from("com.amazonaws.s3#DeleteObject") to PresignableOperation(PayloadSigningType.UNSIGNED_PAYLOAD),
@@ -197,6 +198,15 @@ class AwsPresigningDecorator internal constructor(
                     listOf("aws-smithy-runtime-api/http-1x"),
                 ),
             )
+            // The deprecated `PresignedRequest::{make,into}_http_02x_request` methods are opt-in so
+            // that http 0.2.x stays out of the default dependency tree.
+            rustCrate.mergeFeature(
+                Feature(
+                    "http-02x",
+                    default = false,
+                    listOf("dep:http", "aws-smithy-runtime-api/http-02x"),
+                ),
+            )
         }
     }
 
@@ -227,11 +237,11 @@ class AwsPresignedFluentBuilderMethod(
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
         )
 
-    // Presigning requires both http version features since it pub exposes into_http_02x_request
-    // and into_http_1x_request functions
+    // Presigning pub exposes into_http_1x_request, so http-1x is always required. The http 0.2.x
+    // equivalents are opt-in via the generated crate's `http-02x` feature, which turns on
+    // `aws-smithy-runtime-api/http-02x`.
     private val smithyRuntimeApi =
         CargoDependency.smithyRuntimeApiClient(codegenContext.runtimeConfig)
-            .withFeature("http-02x")
             .withFeature("http-1x")
             .toType()
 
@@ -440,7 +450,7 @@ private class PresignedSchemaCustomization(
                     rustTemplate(
                         """
                         /// The schema for this operation's presigned input shape.
-                        pub const PRESIGNED_INPUT_SCHEMA: &'static #{Schema} = &PRESIGNED_SCHEMA;
+                        pub const PRESIGNED_INPUT_SCHEMA: &'static #{Schema}<'static> = &PRESIGNED_SCHEMA;
                         """,
                         "Schema" to RuntimeType.smithySchema(codegenContext.runtimeConfig).resolve("Schema"),
                     )

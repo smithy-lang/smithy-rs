@@ -6,12 +6,14 @@
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 
@@ -224,6 +226,26 @@ class TelemetryInputCaptureDecoratorTest {
                 )
             }
         }
+    }
+
+    @Test
+    fun `required string capture compiles with server nullability`() {
+        clientIntegrationTest(
+            model,
+            params =
+                IntegrationTestParams(
+                    cargoCommand = "cargo check --features behavior-version-latest",
+                    additionalSettings =
+                        ObjectNode.builder()
+                            .withMember(
+                                "codegen",
+                                ObjectNode.builder()
+                                    .withMember("nullabilityCheckMode", "SERVER")
+                                    .build(),
+                            )
+                            .build(),
+                ),
+        )
     }
 
     @Test

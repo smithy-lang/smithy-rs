@@ -73,11 +73,7 @@ jobs:
       id: acquire
       run: ./smithy-rs/.github/scripts/acquire-build-image
     - name: Upload base image
-      uses: actions/upload-artifact@v4
-      with:
-        name: smithy-rs-base-image
-        path: smithy-rs-base-image
-        retention-days: 1
+      uses: ./smithy-rs/.github/actions/upload-base-image
 
   invoke-pr-bot:
     name: PR Bot

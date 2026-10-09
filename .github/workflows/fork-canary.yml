@@ -1,0 +1,139 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Runs the canary on an external contributor's fork PR once a maintainer has reviewed the diff and
+# added the `safe-to-run-canary` label. Fork PRs can't reach the canary secrets from a normal
+# `pull_request` run, so today a maintainer has to dispatch `manual-canary.yml` by hand; this makes
+# it a label instead.
+#
+# This workflow is only the trust gate. The canary pipeline itself stays in `manual-canary.yml` and
+# is called from here, so both entry points run identical steps -- re-implementing acquire/generate/
+# canary here would be a third copy, and the copies are how the same build-image bug ended up needing
+# the same fix in four workflows.
+#
+# SECURITY: `pull_request_target` runs from the base repo with access to secrets while the called
+# workflow checks out the PR's (untrusted) code. The label is the trust gate -- a maintainer is
+# attesting that they read the diff and are willing to run it against the canary credentials. Note
+# what that means concretely: the called workflow runs `./smithy-rs/.github/actions/docker-build`
+# from the PR's own checkout, so a PR that modifies `.github/actions/**` or `tools/ci-build/**`
+# changes what executes. Reviewing those paths is part of what the label attests to.
+#
+# The guards around it:
+#   - runs only on the `safe-to-run-canary` label, and only for PRs from a fork
+#   - the labeler must have write access, not merely the `triage` that applying a label requires
+#   - the head SHA is resolved from the API and passed through; `manual-canary.yml` fails if it no
+#     longer matches, so the run cannot silently drift onto newer commits
+#   - the label is removed on every new push (`revoke-on-push`), so new commits need re-review
+#   - no PR-controlled text (title, body, branch name) is ever interpolated into a `run:` block
+name: Fork canary
+on:
+  pull_request_target:
+    types: [labeled, synchronize]
+
+# One canary per PR; a new push supersedes an in-flight run for the same PR.
+concurrency:
+  group: fork-canary-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+# Default to no permissions; each job opts in to only what it needs.
+permissions: {}
+
+jobs:
+  # A new push invalidates the maintainer's review, so drop the label and stop. Re-adding it after
+  # re-reviewing the new commits is what re-triggers the canary. This runs with only `pull-requests:
+  # write` and never checks out fork code, so it can't be subverted by the push it's reacting to.
+  revoke-on-push:
+    # Also gated on the label actually being present. Without that this job starts on every push to
+    # every open PR in the repo, only to catch a 404 discovering there was nothing to remove.
+    if: >
+      github.event.action == 'synchronize' &&
+      contains(github.event.pull_request.labels.*.name, 'safe-to-run-canary')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pull-requests: write
+    steps:
+    - uses: actions/github-script@v7
+      with:
+        script: |
+          try {
+            await github.rest.issues.removeLabel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              name: 'safe-to-run-canary',
+            });
+            core.notice('New commits pushed; removed safe-to-run-canary. Re-add it after reviewing the new commits to run the canary again.');
+          } catch (e) {
+            // 404 just means the label wasn't set; anything else is non-fatal here.
+            core.info(`no label to remove: ${e.message}`);
+          }
+
+  # The gate. `head.repo.full_name` excludes same-repo PRs, which already run the canary through
+  # ci-pr.yml. Nothing here checks out or executes PR code.
+  gate:
+    if: >
+      github.event.action == 'labeled' &&
+      github.event.label.name == 'safe-to-run-canary' &&
+      github.event.pull_request.head.repo.full_name != 'smithy-lang/smithy-rs'
+    name: Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      commit_sha: ${{ steps.sha.outputs.result }}
+    steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
+      # Applying a label only requires `triage`, but running this spends the canary's AWS
+      # credentials -- a higher bar than grooming issues. Check the labeler explicitly so the
+      # restriction is enforced rather than assumed. Fails closed: if the permission cannot be
+      # read, the canary does not run.
+    - name: Require write access for the labeler
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const actor = context.payload.sender.login;
+          let level;
+          try {
+            const res = await github.rest.repos.getCollaboratorPermissionLevel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              username: actor,
+            });
+            level = res.data.permission;
+          } catch (e) {
+            core.setFailed(`Could not read ${actor}'s permission level, refusing to run: ${e.message}`);
+            return;
+          }
+          if (!['admin', 'maintain', 'write'].includes(level)) {
+            core.setFailed(`${actor} has '${level}' access; the canary requires write access or higher.`);
+          }
+    - name: Resolve the reviewed head SHA
+      id: sha
+      uses: actions/github-script@v7
+      with:
+        # Read the head SHA from the API rather than trusting a value derived from the event.
+        # `manual-canary.yml` re-reads it too and fails if the two disagree, which is what stops a
+        # push landing between the label and the run from being canaried unreviewed.
+        result-encoding: string
+        script: |
+          const pr = await github.rest.pulls.get({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: context.payload.pull_request.number,
+          });
+          return pr.data.head.sha;
+
+  # The canary pipeline itself, unchanged and shared with the manual dispatch path.
+  canary:
+    needs: gate
+    permissions:
+      id-token: write
+      contents: read
+    uses: ./.github/workflows/manual-canary.yml
+    with:
+      pull_request_number: ${{ github.event.pull_request.number }}
+      commit_sha: ${{ needs.gate.outputs.commit_sha }}
+    secrets: inherit

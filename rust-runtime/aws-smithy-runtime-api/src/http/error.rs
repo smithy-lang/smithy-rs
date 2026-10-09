@@ -6,8 +6,8 @@
 //! Error types for HTTP requests/responses.
 
 use crate::box_error::BoxError;
-use http_02x::header::{InvalidHeaderName, InvalidHeaderValue};
-use http_02x::uri::InvalidUri;
+use http_1x::header::{InvalidHeaderName, InvalidHeaderValue};
+use http_1x::uri::InvalidUri;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use std::str::Utf8Error;
@@ -23,6 +23,7 @@ pub struct HttpError {
 
 #[derive(Debug)]
 enum Kind {
+    #[cfg(feature = "http-02x")]
     InvalidExtensions,
     InvalidHeaderName,
     InvalidHeaderValue,
@@ -39,29 +40,16 @@ enum Kind {
 pub(super) struct NonUtf8Header {
     error: Utf8Error,
     value: Vec<u8>,
-    name: Option<String>,
 }
 
 impl NonUtf8Header {
-    #[cfg(any(feature = "http-1x", feature = "http-02x"))]
-    pub(super) fn new(name: String, value: Vec<u8>, error: Utf8Error) -> Self {
-        Self {
-            error,
-            value,
-            name: Some(name),
-        }
-    }
-
-    pub(super) fn new_missing_name(value: Vec<u8>, error: Utf8Error) -> Self {
-        Self {
-            error,
-            value,
-            name: None,
-        }
+    pub(super) fn new(value: Vec<u8>, error: Utf8Error) -> Self {
+        Self { error, value }
     }
 }
 
 impl HttpError {
+    #[cfg(feature = "http-02x")]
     pub(super) fn invalid_extensions() -> Self {
         Self {
             kind: Kind::InvalidExtensions,
@@ -104,7 +92,15 @@ impl HttpError {
         }
     }
 
-    pub(super) fn invalid_uri_parts(err: http_02x::Error) -> Self {
+    #[cfg(feature = "http-02x")]
+    pub(super) fn invalid_uri_h0(err: http_02x::uri::InvalidUri) -> Self {
+        Self {
+            kind: Kind::InvalidUri,
+            source: Some(Box::new(err)),
+        }
+    }
+
+    pub(super) fn invalid_uri_parts(err: http_1x::Error) -> Self {
         Self {
             kind: Kind::InvalidUriParts,
             source: Some(Box::new(err)),
@@ -137,6 +133,7 @@ impl Display for HttpError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         use Kind::*;
         match &self.kind {
+            #[cfg(feature = "http-02x")]
             InvalidExtensions => write!(f, "Extensions were provided during initialization. This prevents the request format from being converted."),
             InvalidHeaderName => write!(f, "invalid header name"),
             InvalidHeaderValue => write!(f, "invalid header value"),
@@ -147,11 +144,9 @@ impl Display for HttpError {
             MissingAuthority => write!(f, "endpoint must contain authority"),
             MissingScheme => write!(f, "endpoint must contain scheme"),
             NonUtf8Header(hv) => {
-                // In some cases, we won't know the key so we default to "<unknown>".
-                let key = hv.name.as_deref().unwrap_or("<unknown>");
                 let value = String::from_utf8_lossy(&hv.value);
                 let index = hv.error.valid_up_to();
-                write!(f, "header `{key}={value}` contains non-UTF8 octet at index {index}")
+                write!(f, "header value `{value}` contains non-UTF8 octet at index {index}")
             },
         }
     }

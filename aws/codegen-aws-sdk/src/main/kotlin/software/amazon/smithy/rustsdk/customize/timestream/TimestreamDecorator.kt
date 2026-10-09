@@ -55,6 +55,7 @@ class TimestreamDecorator : ClientCodegenDecorator {
                 "endpoint_discovery",
                 Visibility.PUBLIC,
                 CargoDependency.Tokio.copy(scope = DependencyScope.Compile, features = setOf("sync")),
+                CargoDependency.Tokio.toDevDependency(),
                 CargoDependency.smithyAsync(codegenContext.runtimeConfig).toDevDependency().withFeature("test-util"),
             )
         rustCrate.withModule(ClientRustModule.client) {

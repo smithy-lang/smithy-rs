@@ -5,149 +5,21 @@
 
 //! Utilities for parsing information from headers
 
-use aws_smithy_types::date_time::Format;
-use aws_smithy_types::primitive::Parse;
-use aws_smithy_types::DateTime;
 use http_1x::header::{HeaderMap, HeaderName, HeaderValue};
-use std::borrow::Cow;
-use std::error::Error;
-use std::fmt;
-use std::str::FromStr;
 
-/// An error was encountered while parsing a header
-#[derive(Debug)]
-pub struct ParseError {
-    message: Cow<'static, str>,
-    source: Option<Box<dyn Error + Send + Sync + 'static>>,
-}
-
-impl ParseError {
-    /// Create a new parse error with the given `message`
-    pub fn new(message: impl Into<Cow<'static, str>>) -> Self {
-        Self {
-            message: message.into(),
-            source: None,
-        }
-    }
-
-    /// Attach a source to this error.
-    pub fn with_source(self, source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
-        Self {
-            source: Some(source.into()),
-            ..self
-        }
-    }
-}
-
-impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "output failed to parse in headers: {}", self.message)
-    }
-}
-
-impl Error for ParseError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        self.source.as_ref().map(|err| err.as_ref() as _)
-    }
-}
-
-/// Read all the dates from the header map at `key` according the `format`
-///
-/// This is separate from `read_many` below because we need to invoke `DateTime::read` to take advantage
-/// of comma-aware parsing
-pub fn many_dates<'a>(
-    values: impl Iterator<Item = &'a str>,
-    format: Format,
-) -> Result<Vec<DateTime>, ParseError> {
-    let mut out = vec![];
-    for header in values {
-        let mut header = header;
-        while !header.is_empty() {
-            let (v, next) = DateTime::read(header, format, ',').map_err(|err| {
-                ParseError::new(format!("header could not be parsed as date: {err}"))
-            })?;
-            out.push(v);
-            header = next;
-        }
-    }
-    Ok(out)
-}
-
-/// Returns an iterator over pairs where the first element is the unprefixed header name that
-/// starts with the input `key` prefix, and the second element is the full header name.
-pub fn headers_for_prefix<'a>(
-    header_names: impl Iterator<Item = &'a str>,
-    key: &'a str,
-) -> impl Iterator<Item = (&'a str, &'a str)> {
-    let lower_key = key.to_ascii_lowercase();
-    header_names
-        .filter(move |k| k.starts_with(&lower_key))
-        .map(move |k| (&k[key.len()..], k))
-}
-
-/// Convert a `HeaderValue` into a `Vec<T>` where `T: FromStr`
-pub fn read_many_from_str<'a, T: FromStr>(
-    values: impl Iterator<Item = &'a str>,
-) -> Result<Vec<T>, ParseError>
-where
-    T::Err: Error + Send + Sync + 'static,
-{
-    read_many(values, |v: &str| {
-        v.parse().map_err(|err| {
-            ParseError::new("failed during `FromString` conversion").with_source(err)
-        })
-    })
-}
-
-/// Convert a `HeaderValue` into a `Vec<T>` where `T: Parse`
-pub fn read_many_primitive<'a, T: Parse>(
-    values: impl Iterator<Item = &'a str>,
-) -> Result<Vec<T>, ParseError> {
-    read_many(values, |v: &str| {
-        T::parse_smithy_primitive(v)
-            .map_err(|err| ParseError::new("failed reading a list of primitives").with_source(err))
-    })
-}
-
-/// Read many comma / header delimited values from HTTP headers for `FromStr` types
-fn read_many<'a, T>(
-    values: impl Iterator<Item = &'a str>,
-    f: impl Fn(&str) -> Result<T, ParseError>,
-) -> Result<Vec<T>, ParseError> {
-    let mut out = vec![];
-    for header in values {
-        let mut header = header.as_bytes();
-        while !header.is_empty() {
-            let (v, next) = read_one(header, &f)?;
-            out.push(v);
-            header = next;
-        }
-    }
-    Ok(out)
-}
-
-/// Read exactly one or none from a headers iterator
-///
-/// This function does not perform comma splitting like `read_many`
-pub fn one_or_none<'a, T: FromStr>(
-    mut values: impl Iterator<Item = &'a str>,
-) -> Result<Option<T>, ParseError>
-where
-    T::Err: Error + Send + Sync + 'static,
-{
-    let first = match values.next() {
-        Some(v) => v,
-        None => return Ok(None),
-    };
-    match values.next() {
-        None => T::from_str(first.trim())
-            .map_err(|err| ParseError::new("failed to parse string").with_source(err))
-            .map(Some),
-        Some(_) => Err(ParseError::new(
-            "expected a single value but found multiple",
-        )),
-    }
-}
+// The parsing primitives live in `aws-smithy-runtime-api` so that `aws-smithy-schema` can
+// share one implementation without taking on this crate's dependency tree. These are exact
+// re-exports, not wrappers: `ParseError` keeps a single type identity, so downstream
+// signatures, `?` conversions, `Error::source()` chains, and `downcast_ref::<ParseError>()`
+// are unaffected, and generated code that names `aws_smithy_http::header::*` keeps working.
+#[doc(inline)]
+pub use aws_smithy_runtime_api::http::header_parse::{
+    headers_for_prefix, many_dates, many_dates_bytes, one_or_none, one_or_none_bytes,
+    quote_header_value, read_many_from_str, read_many_from_str_bytes, read_many_primitive,
+    read_many_primitive_bytes,
+};
+#[doc(inline)]
+pub use aws_smithy_runtime_api::http::ParseError;
 
 /// Given an HTTP request, set a request header if that header was not already set.
 pub fn set_request_header_if_absent<V>(
@@ -188,117 +60,6 @@ where
         response.header(key, value)
     } else {
         response
-    }
-}
-
-/// Functions for parsing multiple comma-delimited header values out of a
-/// single header. This parsing adheres to
-/// [RFC-7230's specification of header values](https://datatracker.ietf.org/doc/html/rfc7230#section-3.2.6).
-mod parse_multi_header {
-    use super::ParseError;
-    use std::borrow::Cow;
-
-    fn trim(s: Cow<'_, str>) -> Cow<'_, str> {
-        match s {
-            Cow::Owned(s) => Cow::Owned(s.trim().into()),
-            Cow::Borrowed(s) => Cow::Borrowed(s.trim()),
-        }
-    }
-
-    fn replace<'a>(value: Cow<'a, str>, pattern: &str, replacement: &str) -> Cow<'a, str> {
-        if value.contains(pattern) {
-            Cow::Owned(value.replace(pattern, replacement))
-        } else {
-            value
-        }
-    }
-
-    /// Reads a single value out of the given input, and returns a tuple containing
-    /// the parsed value and the remainder of the slice that can be used to parse
-    /// more values.
-    pub(crate) fn read_value(input: &[u8]) -> Result<(Cow<'_, str>, &[u8]), ParseError> {
-        for (index, &byte) in input.iter().enumerate() {
-            let current_slice = &input[index..];
-            match byte {
-                b' ' | b'\t' => { /* skip whitespace */ }
-                b'"' => return read_quoted_value(&current_slice[1..]),
-                _ => {
-                    let (value, rest) = read_unquoted_value(current_slice)?;
-                    return Ok((trim(value), rest));
-                }
-            }
-        }
-
-        // We only end up here if the entire header value was whitespace or empty
-        Ok((Cow::Borrowed(""), &[]))
-    }
-
-    fn read_unquoted_value(input: &[u8]) -> Result<(Cow<'_, str>, &[u8]), ParseError> {
-        let next_delim = input.iter().position(|&b| b == b',').unwrap_or(input.len());
-        let (first, next) = input.split_at(next_delim);
-        let first = std::str::from_utf8(first)
-            .map_err(|_| ParseError::new("header was not valid utf-8"))?;
-        Ok((Cow::Borrowed(first), then_comma(next).unwrap()))
-    }
-
-    /// Reads a header value that is surrounded by quotation marks and may have escaped
-    /// quotes inside of it.
-    fn read_quoted_value(input: &[u8]) -> Result<(Cow<'_, str>, &[u8]), ParseError> {
-        for index in 0..input.len() {
-            match input[index] {
-                b'"' if index == 0 || input[index - 1] != b'\\' => {
-                    let mut inner = Cow::Borrowed(
-                        std::str::from_utf8(&input[0..index])
-                            .map_err(|_| ParseError::new("header was not valid utf-8"))?,
-                    );
-                    inner = replace(inner, "\\\"", "\"");
-                    inner = replace(inner, "\\\\", "\\");
-                    let rest = then_comma(&input[(index + 1)..])?;
-                    return Ok((inner, rest));
-                }
-                _ => {}
-            }
-        }
-        Err(ParseError::new(
-            "header value had quoted value without end quote",
-        ))
-    }
-
-    fn then_comma(s: &[u8]) -> Result<&[u8], ParseError> {
-        if s.is_empty() {
-            Ok(s)
-        } else if s.starts_with(b",") {
-            Ok(&s[1..])
-        } else {
-            Err(ParseError::new("expected delimiter `,`"))
-        }
-    }
-}
-
-/// Read one comma delimited value for `FromStr` types
-fn read_one<'a, T>(
-    s: &'a [u8],
-    f: &impl Fn(&str) -> Result<T, ParseError>,
-) -> Result<(T, &'a [u8]), ParseError> {
-    let (value, rest) = parse_multi_header::read_value(s)?;
-    Ok((f(&value)?, rest))
-}
-
-/// Conditionally quotes and escapes a header value if the header value contains a comma or quote.
-pub fn quote_header_value<'a>(value: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
-    let value = value.into();
-    if value.trim().len() != value.len()
-        || value.contains('"')
-        || value.contains(',')
-        || value.contains('(')
-        || value.contains(')')
-    {
-        Cow::Owned(format!(
-            "\"{}\"",
-            value.replace('\\', "\\\\").replace('"', "\\\"")
-        ))
-    } else {
-        value
     }
 }
 
@@ -360,8 +121,9 @@ pub fn append_merge_header_maps_http_1x(
 mod test {
     use super::quote_header_value;
     use crate::header::{
-        append_merge_header_maps, headers_for_prefix, many_dates, read_many_from_str,
-        read_many_primitive, set_request_header_if_absent, set_response_header_if_absent,
+        append_merge_header_maps, headers_for_prefix, many_dates, many_dates_bytes, one_or_none,
+        one_or_none_bytes, read_many_from_str, read_many_from_str_bytes, read_many_primitive,
+        read_many_primitive_bytes, set_request_header_if_absent, set_response_header_if_absent,
         ParseError,
     };
     use aws_smithy_runtime_api::http::Request;
@@ -495,6 +257,72 @@ mod test {
                 DateTime::from_secs_and_nanos(1234, 567_800_000),
                 DateTime::from_secs_and_nanos(9012, 345_600_000)
             ]
+        );
+    }
+
+    // A lone 0xE9 is a valid HTTP header octet (obs-text per RFC 7230) but is not valid UTF-8.
+    const NON_UTF8_VALUE: &[u8] = b"value-\xe9";
+
+    #[test]
+    fn bytes_helpers_agree_with_str_helpers_on_valid_utf8() {
+        assert_eq!(
+            one_or_none::<String>(["  foo  "].into_iter()).unwrap(),
+            one_or_none_bytes::<String>([b"  foo  ".as_slice()].into_iter()).unwrap(),
+        );
+        assert_eq!(
+            read_many_from_str::<String>(["\"foo,bar\",baz"].into_iter()).unwrap(),
+            read_many_from_str_bytes::<String>([b"\"foo,bar\",baz".as_slice()].into_iter())
+                .unwrap(),
+        );
+        assert_eq!(
+            read_many_primitive::<i16>(["1,2", "3"].into_iter()).unwrap(),
+            read_many_primitive_bytes::<i16>([b"1,2".as_slice(), b"3".as_slice()].into_iter())
+                .unwrap(),
+        );
+        assert_eq!(
+            many_dates(
+                ["Mon, 16 Dec 2019 23:48:18 GMT"].into_iter(),
+                Format::HttpDate
+            )
+            .unwrap(),
+            many_dates_bytes(
+                [b"Mon, 16 Dec 2019 23:48:18 GMT".as_slice()].into_iter(),
+                Format::HttpDate
+            )
+            .unwrap(),
+        );
+    }
+
+    #[test]
+    fn bytes_helpers_reject_non_utf8() {
+        let expected = "header was not valid utf-8";
+
+        let err = one_or_none_bytes::<String>([NON_UTF8_VALUE].into_iter()).expect_err("non-utf8");
+        assert!(err.to_string().contains(expected), "{err}");
+
+        let err =
+            read_many_from_str_bytes::<String>([NON_UTF8_VALUE].into_iter()).expect_err("non-utf8");
+        assert!(err.to_string().contains(expected), "{err}");
+
+        let err =
+            read_many_primitive_bytes::<i16>([NON_UTF8_VALUE].into_iter()).expect_err("non-utf8");
+        assert!(err.to_string().contains(expected), "{err}");
+
+        let err =
+            many_dates_bytes([NON_UTF8_VALUE].into_iter(), Format::HttpDate).expect_err("non-utf8");
+        assert!(err.to_string().contains(expected), "{err}");
+    }
+
+    #[test]
+    fn one_or_none_bytes_reports_multiple_before_non_utf8() {
+        // `one_or_none` checks for multiple values before inspecting the first one; the bytes
+        // variant must keep that precedence.
+        let err = one_or_none_bytes::<String>([NON_UTF8_VALUE, b"second".as_slice()].into_iter())
+            .expect_err("multiple values");
+        assert!(
+            err.to_string()
+                .contains("expected a single value but found multiple"),
+            "{err}"
         );
     }
 

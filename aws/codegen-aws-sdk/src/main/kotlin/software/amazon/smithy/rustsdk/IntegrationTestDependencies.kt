@@ -11,6 +11,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Approx
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.AsyncStd
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.AsyncStream
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Bytes
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.BytesUtils
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Criterion
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.FastRand
@@ -121,12 +122,18 @@ class IntegrationTestDependencies(
                         addDependency(Tracing.toDevDependency())
                         addDependency(TracingSubscriber)
                         addDependency(
+                            // `legacy-test-util` is needed by integration tests that call
+                            // `dvr::ReplayingClient::take_requests`, which returns
+                            // `http_02x::Request` and is therefore gated behind the pre-1.x test
+                            // utilities. This is a dev-dependency, so it does not put http 0.2.x
+                            // into a consumer's dependency tree.
                             smithyHttpClient(runtimeConfig).copy(
-                                features = setOf("test-util", "wire-mock"),
+                                features = setOf("test-util", "wire-mock", "legacy-test-util"),
                                 scope = DependencyScope.Dev,
                             ),
                         )
                         addDependency(Http1x.toDevDependency())
+                        addDependency(Bytes.toDevDependency())
                     }
                     if (hasBenches) {
                         addDependency(Criterion)

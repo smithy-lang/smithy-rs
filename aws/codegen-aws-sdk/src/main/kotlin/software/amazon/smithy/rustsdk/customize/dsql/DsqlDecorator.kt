@@ -36,6 +36,7 @@ class DsqlDecorator : ClientCodegenDecorator {
                         AwsCargoDependency.awsSigv4(rc),
                         CargoDependency.smithyRuntimeApiClient(rc),
                         CargoDependency.smithyAsync(rc).toDevDependency().withFeature("test-util"),
+                        CargoDependency.Tokio.toDevDependency(),
                         CargoDependency.Url,
                     ),
                 ),

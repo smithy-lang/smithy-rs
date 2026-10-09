@@ -35,7 +35,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.Servi
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.TestCase
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
-import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
@@ -112,12 +111,13 @@ class ClientProtocolTestGenerator(
         get() =
             if (SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
                 // The schema path correctly handles these cases that the legacy path couldn't:
-                // - Explicit member values over defaults (rpcv2Cbor)
+                // - Explicit member values over defaults (rpcv2Cbor and restJson)
                 // - httpPrefixHeaders collision with @httpHeader (restJson and restXml, see #4184)
                 ExpectFail.filterNot {
                     it is FailingTest.RequestTest && it.id in
                         setOf(
                             "RpcV2CborClientUsesExplicitlyProvidedMemberValuesOverDefaults",
+                            "RestJsonClientUsesExplicitlyProvidedMemberValuesOverDefaults",
                             "RestJsonHttpEmptyPrefixHeadersRequestClient",
                             "HttpEmptyPrefixHeadersRequestClient",
                         )
@@ -286,9 +286,6 @@ class ClientProtocolTestGenerator(
             RT.sdkBody(runtimeConfig = rc),
         )
         val mediaType = testCase.bodyMediaType.orNull()
-        val outputShape = operationShape.outputShape(codegenContext.model)
-        val schemaExclusive = SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)
-        val streamingBlobOutput = schemaExclusive && outputShape.hasStreamingMember(codegenContext.model)
         rustTemplate(
             """
             use #{DeserializeResponse};
@@ -325,12 +322,10 @@ class ClientProtocolTestGenerator(
             "inject_protocol" to protocolTestConfigBagSetup(),
             "call_streaming" to
                 writable {
-                    if (streamingBlobOutput) {
-                        // Schema-serde streaming blob: use _with_config so the protocol is available
-                        rust("de.deserialize_streaming_with_config(&mut http_response, &test_cfg);")
-                    } else {
-                        rust("de.deserialize_streaming(&mut http_response);")
-                    }
+                    // Generated deserializers implement `_with_config`, which is also what the
+                    // orchestrator calls; the deprecated `deserialize_streaming` would resolve to
+                    // the trait's default and always return `None`.
+                    rust("de.deserialize_streaming_with_config(&mut http_response, &test_cfg);")
                 },
         )
         if (expectedShape.hasTrait<ErrorTrait>()) {
@@ -407,9 +402,9 @@ class ClientProtocolTestGenerator(
                         protocol == software.amazon.smithy.aws.traits.protocols.RestJson1Trait.ID ->
                             smithyJson.resolve("protocol::aws_rest_json_1::AwsRestJsonProtocol") to "new()"
                         protocol == software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait.ID ->
-                            smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_0(${serviceShapeName.dq()})"
+                            smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_0().with_target_prefix(${serviceShapeName.dq()})"
                         protocol == software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait.ID ->
-                            smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_1(${serviceShapeName.dq()})"
+                            smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_1().with_target_prefix(${serviceShapeName.dq()})"
                         protocol == software.amazon.smithy.aws.traits.protocols.RestXmlTrait.ID -> {
                             val noWrap =
                                 codegenContext.serviceShape.getTrait(software.amazon.smithy.aws.traits.protocols.RestXmlTrait::class.java).map {
@@ -420,7 +415,7 @@ class ClientProtocolTestGenerator(
                         }
                         protocol == software.amazon.smithy.aws.traits.protocols.AwsQueryTrait.ID -> {
                             val smithyQuery = CargoDependency.smithyQuery(codegenContext.runtimeConfig).toType()
-                            smithyQuery.resolve("protocol::AwsQueryProtocol") to "new(${codegenContext.serviceShape.version.dq()})"
+                            smithyQuery.resolve("protocol::AwsQueryProtocol") to "new().with_service_version(${codegenContext.serviceShape.version.dq()})"
                         }
                         protocol == software.amazon.smithy.protocol.traits.Rpcv2CborTrait.ID ->
                             smithyCbor.resolve("protocol::RpcV2CborProtocol") to "new()"

@@ -95,11 +95,11 @@ class EndpointBuiltInsDecoratorTest {
                     async fn endpoint_url_built_in_works() {
                         let http_client = #{StaticReplayClient}::new(
                             vec![#{ReplayEvent}::new(
-                                http::Request::builder()
+                                http_1x::Request::builder()
                                     .uri("https://RIGHT/SomeOperation")
                                     .body(#{SdkBody}::empty())
                                     .unwrap(),
-                                http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap()
+                                http_1x::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap()
                             )],
                         );
                         let config = Config::builder()
