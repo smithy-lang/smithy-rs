@@ -14,7 +14,7 @@ use tower::Service;
 type ServiceRequest = http::Request<crate::body::BoxBodySync>;
 
 /// A [`Service`] that takes a `lambda_http::Request` and converts
-/// it to `http::Request<BoxBody>`.
+/// it to `http::Request<BoxBodySync>`.
 ///
 /// **This version is only guaranteed to be compatible with
 /// [`lambda_http`](https://docs.rs/lambda_http) ^1.** Please ensure that your service crate's
@@ -266,7 +266,7 @@ mod tests {
         use tower::ServiceExt;
 
         // Create a simple service that echoes the URI path
-        let inner_service = tower::service_fn(|req: ServiceRequest| async move {
+        let inner_service = tower::service_fn(|req: http::Request<crate::body::BoxBodySync>| async move {
             let path = req.uri().path().to_string();
             let response = http::Response::builder()
                 .status(200)

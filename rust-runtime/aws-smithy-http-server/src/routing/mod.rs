@@ -16,7 +16,7 @@ mod lambda_handler;
 #[doc(hidden)]
 pub mod request_spec;
 
-mod route;
+pub(crate) mod route;
 
 pub(crate) mod tiny_map;
 
@@ -52,7 +52,7 @@ pub use self::lambda_handler::LambdaHandler;
 pub use self::{
     into_make_service::IntoMakeService,
     into_make_service_with_connect_info::{Connected, IntoMakeServiceWithConnectInfo},
-    route::Route,
+    route::{Route, SyncRoute},
 };
 
 pub(crate) const UNKNOWN_OPERATION_EXCEPTION: &str = "UnknownOperationException";

@@ -1,0 +1,341 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//! Protocol router interfaces, route claims, and supporting construction types.
+
+use crate::schema::routing::RoutingError;
+use crate::schema::{OperationSchema, ServiceConfig, ServiceSchema};
+use crate::{error::BoxError, schema::ServiceRequestBodyConfig};
+use aws_smithy_schema::ShapeId;
+use aws_smithy_types::Document;
+use bytes::Bytes;
+use http::Request;
+
+use std::{collections::HashMap, fmt};
+
+/// The kind of streaming member in an operation's input or output.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum StreamingKind {
+    /// A streaming blob payload.
+    Blob,
+    /// A streaming union of events.
+    EventStream,
+}
+
+/// Protocol-independent facts derived once from an operation's canonical schema.
+#[derive(Clone, Copy, Debug)]
+struct OperationMetadata {
+    input_streaming: Option<StreamingKind>,
+    output_streaming: Option<StreamingKind>,
+}
+impl OperationMetadata {
+    fn new(operation: &OperationSchema<'_>) -> Self {
+        fn streaming_kind(schema: &aws_smithy_schema::Schema<'_>) -> Option<StreamingKind> {
+            schema.members().iter().find(|member| member.streaming()).map(|member| {
+                // Smithy streaming members are blobs or event-stream unions.
+                if member.shape_type() == aws_smithy_schema::ShapeType::Blob {
+                    StreamingKind::Blob
+                } else {
+                    StreamingKind::EventStream
+                }
+            })
+        }
+        Self {
+            input_streaming: streaming_kind(operation.input()),
+            output_streaming: streaming_kind(operation.output()),
+        }
+    }
+}
+
+/// A router's operation target: its canonical schema, cached metadata and handler position.
+///
+/// Targets are assigned by the routing service and passed to protocol routers at construction.
+#[derive(Clone, Copy, Debug)]
+pub struct OperationTarget {
+    index: usize,
+    operation: &'static OperationSchema<'static>,
+    metadata: OperationMetadata,
+}
+impl OperationTarget {
+    pub(super) fn new(index: usize, operation: &'static OperationSchema<'static>) -> Self {
+        Self {
+            index,
+            operation,
+            metadata: OperationMetadata::new(operation),
+        }
+    }
+
+    /// Returns the assigned handler position.
+    pub fn index(self) -> usize {
+        self.index
+    }
+    /// Returns the operation's canonical schema.
+    pub fn operation(self) -> &'static OperationSchema<'static> {
+        self.operation
+    }
+    /// Whether the operation consumes a streaming input.
+    pub fn has_streaming_input(self) -> bool {
+        self.metadata.input_streaming.is_some()
+    }
+    /// Whether the operation produces a streaming output.
+    pub fn has_streaming_output(self) -> bool {
+        self.metadata.output_streaming.is_some()
+    }
+    /// Whether either the input or output contains a streaming blob.
+    pub fn has_streaming_blob(self) -> bool {
+        self.metadata.input_streaming == Some(StreamingKind::Blob)
+            || self.metadata.output_streaming == Some(StreamingKind::Blob)
+    }
+}
+
+/// Shared service configuration and protocol settings, independent of generated implementations.
+#[derive(Clone, Debug, Default)]
+#[non_exhaustive]
+pub struct ProtocolOptions {
+    /// Typed service-wide configuration shared by every protocol.
+    pub service_config: ServiceConfig,
+    /// Per-protocol settings, keyed by protocol shape ID such as
+    /// `smithy.protocols#rpcv2Cbor`. Each protocol parses its own section when
+    /// constructing itself or its router, rejecting invalid values with
+    /// [`RouterBuildError::Configuration`].
+    pub protocol_settings: HashMap<ShapeId<'static>, Document>,
+}
+
+impl ProtocolOptions {
+    /// Sets the service-wide configuration.
+    pub fn with_service_config(mut self, service_config: ServiceConfig) -> Self {
+        self.service_config = service_config;
+        self
+    }
+
+    /// Sets the request body collection configuration.
+    pub fn with_request_body(mut self, request_body: ServiceRequestBodyConfig) -> Self {
+        self.service_config.request_body = request_body;
+        self
+    }
+
+    /// Sets the per-protocol settings.
+    pub fn with_protocol_settings(mut self, protocol_settings: HashMap<ShapeId<'static>, Document>) -> Self {
+        self.protocol_settings = protocol_settings;
+        self
+    }
+}
+
+/// Whether the router participates in protocol arbitration.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ClaimMode {
+    /// Apply normal protocol ownership checks.
+    #[default]
+    Strict,
+    /// This is the only installed protocol. Built-in metadata routers use native
+    /// operation routing and leave Content-Type validation to deserialization.
+    SoleProtocol,
+}
+
+/// Everything a protocol sees when building its router: the service, the
+/// assigned targets, the shared service configuration, and the protocol's own
+/// settings section and claim mode. Constructed by the routing service builder, so a protocol never
+/// sees another protocol's settings.
+#[derive(Debug)]
+#[non_exhaustive]
+pub struct RouterBuildContext<'a> {
+    /// Whether this router is the sole protocol or participates in arbitration.
+    /// The router remains responsible for its own claim behavior in either mode.
+    pub claim_mode: ClaimMode,
+    /// The service schema.
+    pub service: &'static ServiceSchema<'static>,
+    /// The operations to route, with targets assigned by the routing service.
+    pub targets: &'a [OperationTarget],
+    /// Typed service-wide configuration shared by every protocol.
+    pub config: &'a ServiceConfig,
+    /// This protocol's section of [`ProtocolOptions::protocol_settings`], when
+    /// one was configured.
+    pub protocol_settings: Option<&'a Document>,
+}
+
+/// Failure to bind handlers, resolve protocols, or construct service routing.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum RouterBuildError {
+    /// Invalid or missing operation handler bindings.
+    #[error("invalid operation binding: {0}")]
+    Binding(String),
+    /// Invalid service configuration, protocol settings, or schema bindings.
+    #[error("invalid routing configuration: {0}")]
+    Configuration(String),
+    /// Protocol registration or claim ordering could not be resolved.
+    #[error("{0}")]
+    ProtocolResolution(#[from] ProtocolResolutionError),
+    /// A protocol reported a failure while constructing itself or its router.
+    #[error("protocol or router construction failed: {0}")]
+    Protocol(#[source] BoxError),
+}
+
+/// Failure to resolve a service's protocol registrations or claim ordering.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum ProtocolResolutionError {
+    /// The service schema declares no protocols.
+    #[error("the service schema declares no protocols")]
+    NoProtocolsDeclared,
+    /// Declared service protocols without a runtime registration, in declaration order.
+    #[error("missing protocol registrations: {}", .protocols.join(", "))]
+    MissingRegistrations { protocols: Vec<String> },
+    /// The same protocol is registered more than once.
+    #[error("protocol {protocol} is registered more than once")]
+    DuplicateRegistration { protocol: String },
+    /// Registered protocols participating in ordering cycles, in registration order.
+    #[error("protocol ordering constraints form a cycle involving: {}", .protocols.join(", "))]
+    OrderCycle { protocols: Vec<String> },
+    /// Two served protocols have no ordering constraint relating them.
+    #[error("no ordering constraint relates protocols {first} and {second}; add a `ProtocolOrder` between them")]
+    AmbiguousOrder { first: String, second: String },
+}
+
+/// A protocol's answer to whether a request is its own.
+///
+/// A multi-protocol service asks its protocols in priority order and dispatches to the first that
+/// claims the request. Once claimed, routing errors are terminal and framed by that protocol.
+#[derive(Debug)]
+pub enum RouteClaim {
+    /// The protocol claims the request and knows the operation. Dispatch directly.
+    ClaimedWithRoute(OperationTarget),
+    /// The protocol claims the request. Call [`MetadataProtocolRouter::route`] or
+    /// [`BodyProtocolRouter::route_with_body`] to select the operation or return a terminal
+    /// routing error. No other protocol is asked.
+    Claimed,
+    /// The request signals this protocol but does not meet its claiming requirements.
+    /// Continue asking other protocols. If none claims, the first deferred rejection
+    /// in protocol precision order is serialized by the protocol that supplied it.
+    DeferredRejection(RoutingError),
+    /// The protocol does not identify the request; the next protocol is asked.
+    NoClaim,
+}
+
+/// Selects an operation from request metadata alone.
+///
+/// The request carries no body: metadata routing never reads one, and keeping the trait
+/// body-free keeps it usable behind `dyn` for every transport body type.
+///
+/// Rejections are the standard [`RoutingError`], classified but not serialized: the routing
+/// service hands it to the rejecting protocol's
+/// [`serialize_routing_error`](crate::schema::ServerProtocol::serialize_routing_error), which
+/// owns the kind-to-wire mapping.
+pub trait MetadataProtocolRouter: Send + Sync + fmt::Debug {
+    /// Selects from the request URI, method and headers after [`RouteClaim::Claimed`].
+    /// All routing errors after a claim are terminal.
+    fn route(&self, request: &Request<()>) -> Result<OperationTarget, RoutingError>;
+
+    /// Decides whether the request meets this protocol's claiming requirements.
+    fn claim(&self, request: &Request<()>) -> RouteClaim;
+
+    /// Recognizes a potentially streaming input using only the request head. Output-only
+    /// streaming does not qualify. This must perform no body I/O or request-head mutation.
+    /// A match skips routers that need body bytes to claim; it neither claims nor rejects the request.
+    /// The service consults it only when its schema declares a streaming input. Routers
+    /// recognize only streaming operations they support; the default recognizes none.
+    fn recognizes_streaming_input(&self, _request: &Request<()>) -> bool {
+        false
+    }
+}
+
+/// The complete request body collected by the routing service.
+///
+/// These are the raw wire bytes. The same bytes are replayed to the dispatched handler
+/// or the next protocol if the claim is declined.
+#[derive(Debug)]
+pub struct CollectedBody {
+    pub(super) bytes: Bytes,
+}
+
+impl CollectedBody {
+    /// The complete request body's raw wire bytes.
+    pub fn bytes(&self) -> &Bytes {
+        &self.bytes
+    }
+}
+
+/// A body-routed protocol's answer to whether a request is its own.
+///
+/// Distinct from [`RouteClaim`] so that needing the body stays unrepresentable for metadata
+/// protocols. Routing errors are returned by [`BodyProtocolRouter::route_with_body`] after
+/// the protocol claims the request.
+#[derive(Debug)]
+pub enum BodyRouteClaim {
+    /// The protocol claims the request and knows the operation. Dispatch directly without
+    /// calling [`BodyProtocolRouter::route_with_body`].
+    ClaimedWithRoute(OperationTarget),
+    /// The protocol claims the request. The service collects the complete body,
+    /// then calls [`BodyProtocolRouter::route_with_body`].
+    /// No other protocol is asked, including when routing returns an error.
+    Claimed,
+    /// The protocol needs body bytes to decide whether the request is its own. The service
+    /// collects the complete body and calls [`BodyProtocolRouter::claim_with_body`].
+    NeedsBodyToClaim,
+    /// Defer a rejection from the head without collecting the body. A later claim wins;
+    /// otherwise the first deferred rejection in precision order supplies the response.
+    DeferredRejection(RoutingError),
+    /// The request is not this protocol's; the next protocol is asked.
+    NoClaim,
+}
+
+/// Routes operations using the request head and, when needed, the complete body.
+///
+/// [`claim`](Self::claim) checks the head first. After `Claimed` or `NeedsBodyToClaim`,
+/// the service collects the body under [`ServiceRequestBodyConfig::for_routing`]
+/// and preserves it for later routers and the handler. Decline from the head when
+/// possible to avoid waiting for a body the client may never send.
+///
+/// Body routers exclude streaming operations. If any metadata router recognizes
+/// streaming input, `NeedsBodyToClaim` is skipped; head claims retain priority.
+///
+/// Routing errors are terminal and serialized by the claiming protocol.
+/// An unclaimed request uses the first deferred rejection, if any, or the
+/// service's protocol-neutral response, including for a single-protocol service.
+pub trait BodyProtocolRouter: Send + Sync + fmt::Debug {
+    /// Checks the request head, requesting body collection if needed.
+    fn claim(&self, request: &Request<()>) -> BodyRouteClaim;
+
+    /// Continues a [`BodyRouteClaim::NeedsBodyToClaim`] decision with the complete body.
+    /// Returning `Claimed` proceeds to [`Self::route_with_body`].
+    fn claim_with_body(&self, request: &Request<CollectedBody>) -> RouteClaim {
+        let _ = request;
+        RouteClaim::NoClaim
+    }
+
+    /// Selects an operation after [`BodyRouteClaim::Claimed`] or [`RouteClaim::Claimed`].
+    /// Errors are terminal and serialized by this protocol.
+    fn route_with_body(&self, request: &Request<CollectedBody>) -> Result<OperationTarget, RoutingError> {
+        let _ = request;
+        Err(RoutingError::unknown_operation())
+    }
+}
+
+/// Operation router built by a server protocol and owned by the shared routing state.
+///
+/// The variant is decided by the protocol's registration kind: a
+/// [`MetadataRoutedProtocol`](crate::schema::MetadataRoutedProtocol) can only build a
+/// [`Metadata`](Self::Metadata) router and a
+/// [`BodyRoutedProtocol`](crate::schema::BodyRoutedProtocol) a [`Body`](Self::Body) one,
+/// so dispatch matching on this enum speaks the claim protocol the registration promised.
+#[derive(Debug)]
+pub enum SharedProtocolRouter {
+    /// Selects operations from request metadata alone.
+    Metadata(Box<dyn MetadataProtocolRouter>),
+    /// May read collected body bytes to select operations.
+    Body(Box<dyn BodyProtocolRouter>),
+}
+
+impl SharedProtocolRouter {
+    /// Wraps a router that selects from request metadata alone.
+    pub fn new(router: impl MetadataProtocolRouter + 'static) -> Self {
+        Self::Metadata(Box::new(router))
+    }
+
+    /// Wraps a router that selects from the request body the routing service collects.
+    pub fn new_body_routed(router: impl BodyProtocolRouter + 'static) -> Self {
+        Self::Body(Box::new(router))
+    }
+}
