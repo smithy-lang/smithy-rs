@@ -152,8 +152,8 @@ def _assert_registry_runtime_dependencies(workspace: Path) -> None:
         if manifest == workspace / "Cargo.toml":
             continue
         for line in manifest.read_text().splitlines():
-            if re.match(
-                r'^\s*path\s*=\s*".*(?:rust-runtime|aws/rust-runtime)', line
+            if re.search(
+                r'\bpath\s*=\s*".*(?:rust-runtime|aws/rust-runtime)', line
             ):
                 local_runtime_paths.append("{}: {}".format(manifest, line.strip()))
     if local_runtime_paths:
