@@ -64,3 +64,13 @@ __pycache__
 # AI context dirs
 .kiro/
 .kiro-*/
+
+# Local notes and audit evidence
+AUDIT*.md
+/AB_FUZZING.md
+/deserializer.md
+/event-stream-timeout.md
+/eventstreams.md
+/fuzz-results.md
+/lenient.md
+/rust-runtime/aws-smithy-http-server/audit/
