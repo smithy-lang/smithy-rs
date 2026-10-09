@@ -3,13 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::crypto::{ecdsa_p256_sha256_sign_der, HmacSha256};
 use aws_smithy_runtime_api::client::identity::Identity;
 use bytes::{BufMut, BytesMut};
 use crypto_bigint::{CheckedAdd, CheckedSub, Encoding, U256};
-use hmac::{digest::FixedOutput, Hmac, KeyInit, Mac};
-use p256::ecdsa::signature::Signer;
-use p256::ecdsa::{DerSignature, SigningKey};
-use sha2::Sha256;
 use std::io::Write;
 use std::sync::LazyLock;
 use std::time::SystemTime;
@@ -27,9 +24,10 @@ static BIG_N_MINUS_2: LazyLock<U256> = LazyLock::new(|| {
 
 /// Calculates a Sigv4a signature
 pub fn calculate_signature(signing_key: impl AsRef<[u8]>, string_to_sign: &[u8]) -> String {
-    let signing_key = SigningKey::from_slice(signing_key.as_ref()).unwrap();
-    let signature: DerSignature = signing_key.sign(string_to_sign);
-    hex::encode(signature.as_bytes())
+    hex::encode(ecdsa_p256_sha256_sign_der(
+        signing_key.as_ref(),
+        string_to_sign,
+    ))
 }
 
 /// Generates a signing key for Sigv4a signing.
@@ -50,14 +48,13 @@ pub fn generate_signing_key(access_key: &str, secret_access_key: &str) -> impl A
         fis.append(&mut kdf_context);
         fis.put_i32(256);
 
-        let mut mac =
-            Hmac::<Sha256>::new_from_slice(&input_key).expect("HMAC can take key of any size");
+        let mut mac = HmacSha256::new(&input_key);
 
         let mut buf = BytesMut::new();
         buf.put_i32(1);
         buf.put_slice(&fis);
         mac.update(&buf);
-        let k0 = U256::from_be_bytes(mac.finalize_fixed().into());
+        let k0 = U256::from_be_bytes(mac.finalize());
 
         // It would be more secure for this to be a constant time comparison, but because this
         // is for client usage, that's not as big a deal.
@@ -65,8 +62,9 @@ pub fn generate_signing_key(access_key: &str, secret_access_key: &str) -> impl A
             let pk = k0
                 .checked_add(&U256::ONE)
                 .expect("k0 is always less than U256::MAX");
-            let d = Zeroizing::new(pk.to_be_bytes());
-            break SigningKey::from_slice(d.as_ref()).unwrap();
+            // The loop's bound on `k0` makes `pk` a valid P-256 private scalar, so the derived
+            // key needs no further validation before it is handed to `calculate_signature`.
+            break Zeroizing::new(pk.to_be_bytes());
         }
 
         *counter = counter
@@ -74,7 +72,7 @@ pub fn generate_signing_key(access_key: &str, secret_access_key: &str) -> impl A
             .expect("counter will never get to 255");
     };
 
-    key.to_bytes()
+    key
 }
 
 /// Parameters to use when signing.

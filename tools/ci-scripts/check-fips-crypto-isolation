@@ -1,0 +1,136 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+# Asserts that a FIPS build of a generated service crate compiles no non-validated crypto
+# implementation, and that a default build still compiles one.
+#
+# This check exists because the failure mode it guards is silent. The RustCrypto crates are
+# optional dependencies of `aws-sigv4` and `aws-smithy-checksums` now, but "optional" only keeps
+# them out if *every* crate on the path to them declares its dependency with
+# `default-features = false` and forwards the choice. That path is three declarations deep
+# (service crate -> `aws-runtime` -> `aws-sigv4`), and a build that drops the propagation anywhere
+# along it compiles cleanly, behaves correctly, and passes every other test in CI while quietly
+# compiling the implementation the FIPS build was supposed to exclude. Nothing else in the suite
+# would notice.
+#
+# It works on resolved features rather than on build output, so it needs a lockfile but no
+# compiler, no C toolchain, and no `aws-lc-fips-sys` build. That matters: this is the one check
+# that can assert the FIPS graph on a machine that cannot build the FIPS module.
+#
+# Run from the directory holding the generated SDK workspace. Both full-SDK actions invoke it:
+# `check-only-aws-sdk-services`, which is the one GitHub Actions dispatches, and
+# `check-aws-sdk-services`, which is local-only.
+
+C_RED='\033[1;31m'
+C_GREEN='\033[1;32m'
+C_YELLOW='\033[1;33m'
+C_RESET='\033[0m'
+
+set -u
+
+if [[ ! -f "Cargo.toml" ]]; then
+    echo -e "${C_RED}error: no Cargo.toml here. Run this from the generated SDK workspace root.${C_RESET}" >&2
+    exit 1
+fi
+
+# The crates whose presence in a FIPS graph is a failure. `hmac`, `sha2`, `sha1` and `md-5` are the
+# RustCrypto backends of `aws-sigv4` and `aws-smithy-checksums`; `ring` and `aws-lc-sys` are the
+# other two crypto libraries that reach an SDK binary, neither of which is the validated module.
+#
+# `crypto-bigint`, `subtle` and `p256` are deliberately absent from this list. They are RustCrypto
+# crates that a `sigv4a` FIPS build still compiles, and that is understood and documented: the
+# first two do the integer math of the SigV4a key derivation defined by the signing spec, and
+# `p256` is no longer called but cannot be dropped, because `sigv4a` has to keep declaring it and
+# Cargo features cannot express "only when `rustcrypto` is also on".
+FORBIDDEN_IN_FIPS=(hmac sha2 sha1 md-5 ring aws-lc-sys)
+
+# The two crates that own a RustCrypto backend. A forbidden crate reached through either of them is
+# a propagation failure; the same crate declared directly by a service crate is a known gap, scoped
+# out of this design and tracked separately. Distinguishing the two is the point of the reverse
+# tree below -- an allowlist of (service, crate) pairs would pass a propagation regression that
+# happened to land on an already-listed pair.
+BACKEND_OWNERS=(aws-sigv4 aws-smithy-checksums)
+
+failures=0
+checked=0
+
+fail() {
+    echo -e "${C_RED}FAIL${C_RESET}: $1" >&2
+    failures=$((failures + 1))
+}
+
+# Representative service crates. Two are needed because the checksums arm of the `aws-lc-fips`
+# feature is generated only for services that model `@httpChecksum`, so a service without one
+# exercises a different fan-out than a service with one.
+#
+# Any service crate absent from this SDK is skipped: the smoketest SDK carries a handful of
+# services and the full SDK carries all of them, and this check is useful in both.
+for crate in aws-sdk-dynamodb aws-sdk-s3; do
+    if ! cargo tree -p "${crate}" --no-default-features -e normal >/dev/null 2>&1; then
+        echo -e "${C_YELLOW}## Skipping ${crate}: not in this SDK${C_RESET}"
+        continue
+    fi
+    checked=$((checked + 1))
+    echo -e "${C_YELLOW}## Checking ${crate}${C_RESET}"
+
+    fips_args=(-p "${crate}" --no-default-features --features aws-lc-fips -e normal)
+    fips_tree="$(cargo tree "${fips_args[@]}" --prefix none 2>/dev/null | sort -u)"
+
+    # The validated module has to actually be there. Without this, a build that resolved no crypto
+    # at all would satisfy every assertion below.
+    if ! grep -q '^aws-lc-fips-sys ' <<<"${fips_tree}"; then
+        fail "${crate}: a FIPS build resolves no aws-lc-fips-sys. The validated module is absent."
+    fi
+
+    for dep in "${FORBIDDEN_IN_FIPS[@]}"; do
+        grep -q "^${dep} " <<<"${fips_tree}" || continue
+
+        # Present. Whether that is a failure depends on who reaches it, so walk back up.
+        parents="$(cargo tree "${fips_args[@]}" -i "${dep}" 2>/dev/null)"
+        via_backend=false
+        for owner in "${BACKEND_OWNERS[@]}"; do
+            if grep -q "${owner}" <<<"${parents}"; then
+                via_backend=true
+                fail "${crate}: a FIPS build reaches ${dep} through ${owner}. The backend\
+ propagation is broken -- check that every declaration on the path sets default-features = false\
+ and forwards the backend choice.
+${parents}"
+            fi
+        done
+
+        # Reached without passing through either backend crate: a known, scoped-out gap, where a
+        # generated crate declares the dependency itself. Reported so the output stays an honest
+        # account of what a FIPS build compiles rather than a bare pass.
+        if [[ "${via_backend}" == "false" ]]; then
+            echo "   note: ${dep} is in the FIPS graph but not via a backend crate (known gap,"
+            echo "         declared directly by a generated crate -- tracked separately)"
+        fi
+    done
+
+    # The other half of the propagation. Making the backend optional means a build that forwards
+    # nothing gets no crypto, so the default path has to be asserted too -- and this is cheap
+    # insurance against "fixing" a FIPS failure by breaking every ordinary consumer.
+    default_tree="$(cargo tree -p "${crate}" -e normal --prefix none 2>/dev/null | sort -u)"
+    for dep in hmac sha2; do
+        if ! grep -q "^${dep} " <<<"${default_tree}"; then
+            fail "${crate}: a default build resolves no ${dep}. The default build must keep its\
+ RustCrypto backend; it is the only one that works on every target the SDK supports."
+        fi
+    done
+done
+
+if [[ "${checked}" -eq 0 ]]; then
+    echo -e "${C_RED}error: none of the representative service crates are in this SDK.${C_RESET}" >&2
+    echo "This check needs at least one of them to assert anything." >&2
+    exit 1
+fi
+
+if [[ "${failures}" -ne 0 ]]; then
+    echo -e "${C_RED}${failures} FIPS crypto isolation check(s) failed.${C_RESET}" >&2
+    exit 1
+fi
+
+echo -e "${C_GREEN}FIPS crypto isolation checks passed (${checked} service crate(s)).${C_RESET}"

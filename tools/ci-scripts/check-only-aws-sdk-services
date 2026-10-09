@@ -6,6 +6,11 @@
 
 # this job runs `cargo check` only instead of `cargo test --all-features`
 
+C_YELLOW='\033[1;33m'
+C_RESET='\033[0m'
+
+CI_SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 set -eux
 cd aws-sdk
 
@@ -15,6 +20,19 @@ sed -i '/"examples\//d' Cargo.toml
 # Optional `i/N` shards the ~300 service crates across parallel legs. No arg checks the whole
 # workspace (local dev and any non-matrix caller).
 PARTITION="${1:-}"
+
+# Runs here because this is the full-SDK action GitHub Actions actually dispatches;
+# `check-aws-sdk-services` runs `cargo test --all-features` over every service crate and is a
+# local-only target. Asserting on resolved features is the one check no test can replace -- a
+# non-validated crypto crate re-entering a FIPS build changes nothing a test could observe -- so
+# losing it to an undispatched action meant it never ran.
+#
+# Once per workspace, not once per shard: it reads the lockfile, which every leg shares. Ahead of
+# `cargo check` because it takes seconds and should fail before the expensive work.
+if [[ -z "${PARTITION}" || "${PARTITION%/*}" == "1" ]]; then
+    echo -e "${C_YELLOW}## Checking FIPS crypto isolation...${C_RESET}"
+    "${CI_SCRIPTS_DIR}/check-fips-crypto-isolation"
+fi
 
 if [[ -n "${PARTITION}" ]]; then
     i="${PARTITION%/*}"

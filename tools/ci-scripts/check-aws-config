@@ -49,11 +49,21 @@ if [[ "${MODE}" == "all" || "${MODE}" == "base" ]]; then
 
     echo "${C_YELLOW}## Testing each feature in isolation${C_RESET}"
     # these features are missed by the powerset check because they are grouped
-    cargo hack test --each-feature --include-features rt-tokio,client-hyper,rustls,default-https-client --exclude-no-default-features
+    #
+    # `--features rustcrypto` is prepended to every combination rather than tested as one of them.
+    # `--each-feature` builds each named feature with `--no-default-features`, which now drops the
+    # crypto backend and reports "requires a crypto backend" instead of compiling. The flag that
+    # expresses this on the powerset runs below, `--at-least-one-of`, is rejected with
+    # `--each-feature`, so the backend is named directly. Each feature is still exercised in
+    # isolation; it just has crypto underneath it.
+    cargo hack test --each-feature --include-features rt-tokio,client-hyper,rustls,default-https-client --exclude-no-default-features --features rustcrypto
 
     echo "${C_YELLOW}## Checking the wasm32-unknown-unknown and wasm32-wasip2 targets${C_RESET}"
-    cargo check --target wasm32-unknown-unknown --no-default-features
-    cargo check --target wasm32-wasip2 --no-default-features
+    # `rustcrypto` has to be named explicitly alongside `--no-default-features`: the signing backend
+    # is an optional dependency of `aws-sigv4` now, so dropping the defaults drops the backend. These
+    # targets are exactly the ones that need it, since aws-lc-rs cannot build for either.
+    cargo check --target wasm32-unknown-unknown --no-default-features --features rustcrypto
+    cargo check --target wasm32-wasip2 --no-default-features --features rustcrypto
 
     # TODO(https://github.com/smithy-lang/smithy-rs/issues/2499): Uncomment the following once aws-config tests compile for WASM
     # echo "${C_YELLOW}## Testing the wasm32-unknown-unknown and wasm32-wasip1 targets${C_RESET}"
@@ -70,13 +80,18 @@ if [[ "${MODE}" == "all" || "${MODE}" == "featureset" ]]; then
     fi
 
     # the crate has `allow-compilation` which needs to be deprecated
+    #
+    # `--at-least-one-of rustcrypto,aws-lc-fips` skips the combinations that select no crypto backend
+    # at all. Those are not a supported configuration: the backends are optional dependencies of
+    # `aws-sigv4` now, so a build naming neither reports "requires a crypto backend" instead of
+    # compiling. Every other combination is still covered.
     echo "${C_YELLOW}## Checking every combination of features${C_RESET}"
-    cargo hack "${partition_arg[@]}" check --feature-powerset --exclude-all-features --exclude-features allow-compilation
+    cargo hack "${partition_arg[@]}" check --feature-powerset --exclude-all-features --exclude-features allow-compilation --at-least-one-of rustcrypto,aws-lc-fips
 
     # This check will check other individual features and no-default-features
     # grouping these features because they don't interact
     echo "${C_YELLOW}## Testing feature powerset (grouped)${C_RESET}"
-    cargo hack "${partition_arg[@]}" test --feature-powerset --exclude-all-features --exclude-features allow-compilation --group-features rt-tokio,client-hyper,rustls,default-https-client
+    cargo hack "${partition_arg[@]}" test --feature-powerset --exclude-all-features --exclude-features allow-compilation --group-features rt-tokio,client-hyper,rustls,default-https-client --at-least-one-of rustcrypto,aws-lc-fips
 fi
 
 popd &>/dev/null

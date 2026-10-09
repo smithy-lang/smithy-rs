@@ -1,0 +1,41 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+# This script contains additional CI checks to run for this specific package
+
+set -e
+
+C_RED='\033[1;31m'
+C_YELLOW='\033[1;33m'
+C_RESET='\033[0m'
+
+# Both digest backends are optional dependencies, so a build naming neither has no digests at all.
+# The `compile_error!` in `crypto.rs` exists so that such a build says what to do about it instead
+# of failing on an unresolved `sha2` import from inside a private module.
+#
+# Asserted here because nothing else can. The condition is a feature combination, so it is invisible
+# to the crate's own test suite; and deleting the `compile_error!` does not break any build, it only
+# makes the failure less legible -- a regression with no symptom other than a worse message.
+echo "### Checking that a build with no digest backend explains itself"
+
+output="$(cargo check --no-default-features 2>&1 || true)"
+
+if ! grep -q "requires a digest backend" <<<"${output}"; then
+    echo -e "${C_RED}A build with no digest backend must fail with the diagnostic from crypto.rs${C_RESET}" >&2
+    echo -e "${C_RED}naming the features that fix it. It did not. Output was:${C_RESET}" >&2
+    echo "${output}" >&2
+    exit 1
+fi
+
+# The diagnostic has to come first; see the equivalent check in `aws-sigv4`.
+first_error="$(grep -m1 '^error' <<<"${output}")"
+if ! grep -q "requires a digest backend" <<<"${first_error}"; then
+    echo -e "${C_RED}The digest backend diagnostic must be the first error reported, but the first${C_RESET}" >&2
+    echo -e "${C_RED}error was:${C_RESET} ${first_error}" >&2
+    exit 1
+fi
+
+echo -e "${C_YELLOW}  ok: ${first_error}${C_RESET}"

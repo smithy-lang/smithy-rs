@@ -9,4 +9,9 @@
 set -e
 
 echo "### Testing every combination of features (excluding --all-features)"
-cargo hack test --feature-powerset --exclude-all-features
+# `--at-least-one-of rustcrypto,aws-lc-fips` skips the combinations that select no crypto backend.
+# Those are not a supported configuration: both features forward to an optional dependency of
+# `aws-sigv4`, and this crate declares `aws-sigv4` with `default-features = false`, so a build
+# naming neither reports "requires a crypto backend" instead of compiling. Every other combination
+# is still covered.
+cargo hack test --feature-powerset --exclude-all-features --at-least-one-of rustcrypto,aws-lc-fips

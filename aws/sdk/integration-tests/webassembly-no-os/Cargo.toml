@@ -15,12 +15,16 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 publish = false
 
 [target.'cfg(target_family = "wasm")'.dependencies]
+# `rustcrypto` is named explicitly because the crypto backend is an optional dependency now and
+# these declarations drop the defaults. It is also the only possible choice here: aws-lc-rs does not
+# build for `wasm32-unknown-unknown` or the WASI targets, so these tests must stay on RustCrypto.
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config", default-features = false, features = [
     "rt-tokio",
-    "behavior-version-latest"
+    "behavior-version-latest",
+    "rustcrypto"
 ] }
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["hardcoded-credentials"] }
-aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3", default-features = false }
+aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3", default-features = false, features = ["rustcrypto"] }
 aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async", default-features = false, features = ["test-util", "rt-tokio"] }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
 aws-smithy-http-client = { path = "../../build/aws-sdk/sdk/aws-smithy-http-client", default-features = false, features = ["test-util"] }
