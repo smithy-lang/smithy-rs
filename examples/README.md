@@ -38,6 +38,16 @@ build.
 Once the example has been built successfully the first time, idiomatic `cargo`
 can be used directly.
 
+The HTTP/1.x Pokémon server SDK also imports
+[`pokemon-multi-protocol.smithy`](../codegen-server-test/custom-test-models/pokemon-multi-protocol.smithy).
+This overlay applies AWS JSON 1.0, AWS JSON 1.1, REST XML, and RPC v2 CBOR to the
+existing Pokémon service, which already declares REST JSON. The shared Pokémon
+models remain unchanged, and the REST JSON client continues to work.
+
+REST requests identify their protocol with the operation's derived `Content-Type`.
+Pokémon lookups use `application/json` for REST JSON and `application/xml` for
+REST XML, even though their input is bound entirely to the URI.
+
 ### Make targets:
 
 - `codegen`: generates the Pokémon service crates (default)

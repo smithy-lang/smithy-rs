@@ -38,17 +38,7 @@ impl AttemptCapturingPokemonEvent {
     }
     /* UnionGenerator.kt:111 */
 }
-/* ServerSchemaGenerator.kt:1083 */
-static ATTEMPTCAPTURINGPOKEMONEVENT_MEMBER_EVENT_TARGET_TRAITS: std::sync::LazyLock<
-    ::aws_smithy_schema::TraitMap,
-> = std::sync::LazyLock::new(|| {
-    let mut map = ::aws_smithy_schema::TraitMap::new();
-    map.insert(::std::boxed::Box::new(
-        ::aws_smithy_http_server::schema::TargetSchema::new(crate::model::CapturingEvent::SCHEMA),
-    ));
-    map
-});
-/* ServerSchemaGenerator.kt:1548 */
+/* ServerSchemaGenerator.kt:1534 */
 static ATTEMPTCAPTURINGPOKEMONEVENT_MEMBER_EVENT: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -59,9 +49,8 @@ static ATTEMPTCAPTURINGPOKEMONEVENT_MEMBER_EVENT: ::aws_smithy_schema::Schema<'s
         ::aws_smithy_schema::ShapeType::Structure,
         "event",
         0,
-    )
-    .with_traits(&ATTEMPTCAPTURINGPOKEMONEVENT_MEMBER_EVENT_TARGET_TRAITS);
-/* ServerSchemaGenerator.kt:1467 */
+    );
+/* ServerSchemaGenerator.kt:1453 */
 static ATTEMPTCAPTURINGPOKEMONEVENT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -73,14 +62,18 @@ static ATTEMPTCAPTURINGPOKEMONEVENT_SCHEMA: ::aws_smithy_schema::Schema<'static>
         &[&ATTEMPTCAPTURINGPOKEMONEVENT_MEMBER_EVENT],
     )
     .with_streaming();
-/* ServerSchemaGenerator.kt:137 */
+/* ServerSchemaGenerator.kt:136 */
 impl crate::model::AttemptCapturingPokemonEvent {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> =
         &ATTEMPTCAPTURINGPOKEMONEVENT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:354 */
+/* ServerSchemaGenerator.kt:358 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::model::AttemptCapturingPokemonEvent {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -134,17 +127,7 @@ impl CapturePokemonEvents {
     }
     /* UnionGenerator.kt:111 */
 }
-/* ServerSchemaGenerator.kt:1083 */
-static CAPTUREPOKEMONEVENTS_MEMBER_EVENT_TARGET_TRAITS: std::sync::LazyLock<
-    ::aws_smithy_schema::TraitMap,
-> = std::sync::LazyLock::new(|| {
-    let mut map = ::aws_smithy_schema::TraitMap::new();
-    map.insert(::std::boxed::Box::new(
-        ::aws_smithy_http_server::schema::TargetSchema::new(crate::model::CaptureEvent::SCHEMA),
-    ));
-    map
-});
-/* ServerSchemaGenerator.kt:1548 */
+/* ServerSchemaGenerator.kt:1534 */
 static CAPTUREPOKEMONEVENTS_MEMBER_EVENT: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -155,9 +138,8 @@ static CAPTUREPOKEMONEVENTS_MEMBER_EVENT: ::aws_smithy_schema::Schema<'static> =
         ::aws_smithy_schema::ShapeType::Structure,
         "event",
         0,
-    )
-    .with_traits(&CAPTUREPOKEMONEVENTS_MEMBER_EVENT_TARGET_TRAITS);
-/* ServerSchemaGenerator.kt:1467 */
+    );
+/* ServerSchemaGenerator.kt:1453 */
 static CAPTUREPOKEMONEVENTS_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -169,13 +151,17 @@ static CAPTUREPOKEMONEVENTS_SCHEMA: ::aws_smithy_schema::Schema<'static> =
         &[&CAPTUREPOKEMONEVENTS_MEMBER_EVENT],
     )
     .with_streaming();
-/* ServerSchemaGenerator.kt:137 */
+/* ServerSchemaGenerator.kt:136 */
 impl crate::model::CapturePokemonEvents {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &CAPTUREPOKEMONEVENTS_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:354 */
+/* ServerSchemaGenerator.kt:358 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::model::CapturePokemonEvents {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -214,17 +200,7 @@ impl CapturingEvent {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1083 */
-static CAPTURINGEVENT_MEMBER_PAYLOAD_TARGET_TRAITS: std::sync::LazyLock<
-    ::aws_smithy_schema::TraitMap,
-> = std::sync::LazyLock::new(|| {
-    let mut map = ::aws_smithy_schema::TraitMap::new();
-    map.insert(::std::boxed::Box::new(
-        ::aws_smithy_http_server::schema::TargetSchema::new(crate::model::CapturingPayload::SCHEMA),
-    ));
-    map
-});
-/* ServerSchemaGenerator.kt:1548 */
+/* ServerSchemaGenerator.kt:1534 */
 static CAPTURINGEVENT_MEMBER_PAYLOAD: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -236,9 +212,8 @@ static CAPTURINGEVENT_MEMBER_PAYLOAD: ::aws_smithy_schema::Schema<'static> =
         "payload",
         0,
     )
-    .with_event_payload()
-    .with_traits(&CAPTURINGEVENT_MEMBER_PAYLOAD_TARGET_TRAITS);
-/* ServerSchemaGenerator.kt:1467 */
+    .with_event_payload();
+/* ServerSchemaGenerator.kt:1453 */
 static CAPTURINGEVENT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -249,13 +224,17 @@ static CAPTURINGEVENT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
         ::aws_smithy_schema::ShapeType::Structure,
         &[&CAPTURINGEVENT_MEMBER_PAYLOAD],
     );
-/* ServerSchemaGenerator.kt:137 */
+/* ServerSchemaGenerator.kt:136 */
 impl crate::model::CapturingEvent {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &CAPTURINGEVENT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:291 */
+/* ServerSchemaGenerator.kt:290 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::model::CapturingEvent {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -301,16 +280,16 @@ impl CapturingEvent {
         Ok(builder.build())
     }
 }
-/* ServerCodegenVisitor.kt:409 */
+/* ServerCodegenVisitor.kt:419 */
 impl CapturingEvent {
-    /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`CapturingEvent`](crate::model::CapturingEvent).
-    /* ServerBuilderGenerator.kt:304 */
+    /// /* ServerBuilderGenerator.kt:295 */Creates a new builder-style object to manufacture [`CapturingEvent`](crate::model::CapturingEvent).
+    /* ServerBuilderGenerator.kt:296 */
     pub fn builder() -> crate::model::capturing_event::Builder {
-        /* ServerBuilderGenerator.kt:305 */
+        /* ServerBuilderGenerator.kt:297 */
         crate::model::capturing_event::Builder::default()
-        /* ServerBuilderGenerator.kt:304 */
+        /* ServerBuilderGenerator.kt:296 */
     }
-    /* ServerCodegenVisitor.kt:409 */
+    /* ServerCodegenVisitor.kt:419 */
 }
 /* ServerStructureConstrainedTraitImpl.kt:21 */
 impl crate::constrained::Constrained for crate::model::CapturingEvent {
@@ -374,7 +353,7 @@ impl CaptureEvent {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1548 */
+/* ServerSchemaGenerator.kt:1534 */
 static CAPTUREEVENT_MEMBER_NAME: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -387,7 +366,7 @@ static CAPTUREEVENT_MEMBER_NAME: ::aws_smithy_schema::Schema<'static> =
         0,
     )
     .with_event_header();
-/* ServerSchemaGenerator.kt:1548 */
+/* ServerSchemaGenerator.kt:1534 */
 static CAPTUREEVENT_MEMBER_CAPTURED: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -400,7 +379,7 @@ static CAPTUREEVENT_MEMBER_CAPTURED: ::aws_smithy_schema::Schema<'static> =
         1,
     )
     .with_event_header();
-/* ServerSchemaGenerator.kt:1548 */
+/* ServerSchemaGenerator.kt:1534 */
 static CAPTUREEVENT_MEMBER_SHINY: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -413,7 +392,7 @@ static CAPTUREEVENT_MEMBER_SHINY: ::aws_smithy_schema::Schema<'static> =
         2,
     )
     .with_event_header();
-/* ServerSchemaGenerator.kt:1548 */
+/* ServerSchemaGenerator.kt:1534 */
 static CAPTUREEVENT_MEMBER_POKEDEX_UPDATE: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -426,7 +405,7 @@ static CAPTUREEVENT_MEMBER_POKEDEX_UPDATE: ::aws_smithy_schema::Schema<'static> 
         3,
     )
     .with_event_payload();
-/* ServerSchemaGenerator.kt:1467 */
+/* ServerSchemaGenerator.kt:1453 */
 static CAPTUREEVENT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -442,13 +421,17 @@ static CAPTUREEVENT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
             &CAPTUREEVENT_MEMBER_POKEDEX_UPDATE,
         ],
     );
-/* ServerSchemaGenerator.kt:137 */
+/* ServerSchemaGenerator.kt:136 */
 impl crate::model::CaptureEvent {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &CAPTUREEVENT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:291 */
+/* ServerSchemaGenerator.kt:290 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::model::CaptureEvent {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -469,16 +452,16 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::model::CaptureEve
         Ok(())
     }
 }
-/* ServerCodegenVisitor.kt:409 */
+/* ServerCodegenVisitor.kt:419 */
 impl CaptureEvent {
-    /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`CaptureEvent`](crate::model::CaptureEvent).
-    /* ServerBuilderGenerator.kt:304 */
+    /// /* ServerBuilderGenerator.kt:295 */Creates a new builder-style object to manufacture [`CaptureEvent`](crate::model::CaptureEvent).
+    /* ServerBuilderGenerator.kt:296 */
     pub fn builder() -> crate::model::capture_event::Builder {
-        /* ServerBuilderGenerator.kt:305 */
+        /* ServerBuilderGenerator.kt:297 */
         crate::model::capture_event::Builder::default()
-        /* ServerBuilderGenerator.kt:304 */
+        /* ServerBuilderGenerator.kt:296 */
     }
-    /* ServerCodegenVisitor.kt:409 */
+    /* ServerCodegenVisitor.kt:419 */
 }
 
 /// /* StructureGenerator.kt:197 */Describes one specific validation failure for an input member.
@@ -513,7 +496,7 @@ impl ValidationExceptionField {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1548 */
+/* ServerSchemaGenerator.kt:1534 */
 static VALIDATIONEXCEPTIONFIELD_MEMBER_PATH: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -525,7 +508,7 @@ static VALIDATIONEXCEPTIONFIELD_MEMBER_PATH: ::aws_smithy_schema::Schema<'static
         "path",
         0,
     );
-/* ServerSchemaGenerator.kt:1548 */
+/* ServerSchemaGenerator.kt:1534 */
 static VALIDATIONEXCEPTIONFIELD_MEMBER_MESSAGE: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -537,7 +520,7 @@ static VALIDATIONEXCEPTIONFIELD_MEMBER_MESSAGE: ::aws_smithy_schema::Schema<'sta
         "message",
         1,
     );
-/* ServerSchemaGenerator.kt:1467 */
+/* ServerSchemaGenerator.kt:1453 */
 static VALIDATIONEXCEPTIONFIELD_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -551,14 +534,18 @@ static VALIDATIONEXCEPTIONFIELD_SCHEMA: ::aws_smithy_schema::Schema<'static> =
             &VALIDATIONEXCEPTIONFIELD_MEMBER_MESSAGE,
         ],
     );
-/* ServerSchemaGenerator.kt:137 */
+/* ServerSchemaGenerator.kt:136 */
 impl crate::model::ValidationExceptionField {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> =
         &VALIDATIONEXCEPTIONFIELD_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:291 */
+/* ServerSchemaGenerator.kt:290 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::model::ValidationExceptionField {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -575,16 +562,16 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::model::Validation
         Ok(())
     }
 }
-/* ServerCodegenVisitor.kt:409 */
+/* ServerCodegenVisitor.kt:419 */
 impl ValidationExceptionField {
-    /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`ValidationExceptionField`](crate::model::ValidationExceptionField).
-    /* ServerBuilderGenerator.kt:304 */
+    /// /* ServerBuilderGenerator.kt:295 */Creates a new builder-style object to manufacture [`ValidationExceptionField`](crate::model::ValidationExceptionField).
+    /* ServerBuilderGenerator.kt:296 */
     pub fn builder() -> crate::model::validation_exception_field::Builder {
-        /* ServerBuilderGenerator.kt:305 */
+        /* ServerBuilderGenerator.kt:297 */
         crate::model::validation_exception_field::Builder::default()
-        /* ServerBuilderGenerator.kt:304 */
+        /* ServerBuilderGenerator.kt:296 */
     }
-    /* ServerCodegenVisitor.kt:409 */
+    /* ServerCodegenVisitor.kt:419 */
 }
 
 /* StructureGenerator.kt:197 */
@@ -619,7 +606,7 @@ impl FlavorText {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1548 */
+/* ServerSchemaGenerator.kt:1534 */
 static FLAVORTEXT_MEMBER_FLAVOR_TEXT: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -631,7 +618,7 @@ static FLAVORTEXT_MEMBER_FLAVOR_TEXT: ::aws_smithy_schema::Schema<'static> =
         "flavorText",
         0,
     );
-/* ServerSchemaGenerator.kt:1548 */
+/* ServerSchemaGenerator.kt:1534 */
 static FLAVORTEXT_MEMBER_LANGUAGE: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -643,7 +630,7 @@ static FLAVORTEXT_MEMBER_LANGUAGE: ::aws_smithy_schema::Schema<'static> =
         "language",
         1,
     );
-/* ServerSchemaGenerator.kt:1467 */
+/* ServerSchemaGenerator.kt:1453 */
 static FLAVORTEXT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -654,13 +641,17 @@ static FLAVORTEXT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
         ::aws_smithy_schema::ShapeType::Structure,
         &[&FLAVORTEXT_MEMBER_FLAVOR_TEXT, &FLAVORTEXT_MEMBER_LANGUAGE],
     );
-/* ServerSchemaGenerator.kt:137 */
+/* ServerSchemaGenerator.kt:136 */
 impl crate::model::FlavorText {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &FLAVORTEXT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:291 */
+/* ServerSchemaGenerator.kt:290 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::model::FlavorText {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -677,16 +668,16 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::model::FlavorText
         Ok(())
     }
 }
-/* ServerCodegenVisitor.kt:409 */
+/* ServerCodegenVisitor.kt:419 */
 impl FlavorText {
-    /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`FlavorText`](crate::model::FlavorText).
-    /* ServerBuilderGenerator.kt:304 */
+    /// /* ServerBuilderGenerator.kt:295 */Creates a new builder-style object to manufacture [`FlavorText`](crate::model::FlavorText).
+    /* ServerBuilderGenerator.kt:296 */
     pub fn builder() -> crate::model::flavor_text::Builder {
-        /* ServerBuilderGenerator.kt:305 */
+        /* ServerBuilderGenerator.kt:297 */
         crate::model::flavor_text::Builder::default()
-        /* ServerBuilderGenerator.kt:304 */
+        /* ServerBuilderGenerator.kt:296 */
     }
-    /* ServerCodegenVisitor.kt:409 */
+    /* ServerCodegenVisitor.kt:419 */
 }
 
 /* StructureGenerator.kt:197 */
@@ -724,7 +715,7 @@ impl CapturingPayload {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1548 */
+/* ServerSchemaGenerator.kt:1534 */
 static CAPTURINGPAYLOAD_MEMBER_NAME: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -736,7 +727,7 @@ static CAPTURINGPAYLOAD_MEMBER_NAME: ::aws_smithy_schema::Schema<'static> =
         "name",
         0,
     );
-/* ServerSchemaGenerator.kt:1548 */
+/* ServerSchemaGenerator.kt:1534 */
 static CAPTURINGPAYLOAD_MEMBER_POKEBALL: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -748,7 +739,7 @@ static CAPTURINGPAYLOAD_MEMBER_POKEBALL: ::aws_smithy_schema::Schema<'static> =
         "pokeball",
         1,
     );
-/* ServerSchemaGenerator.kt:1467 */
+/* ServerSchemaGenerator.kt:1453 */
 static CAPTURINGPAYLOAD_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -762,13 +753,17 @@ static CAPTURINGPAYLOAD_SCHEMA: ::aws_smithy_schema::Schema<'static> =
             &CAPTURINGPAYLOAD_MEMBER_POKEBALL,
         ],
     );
-/* ServerSchemaGenerator.kt:137 */
+/* ServerSchemaGenerator.kt:136 */
 impl crate::model::CapturingPayload {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &CAPTURINGPAYLOAD_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:291 */
+/* ServerSchemaGenerator.kt:290 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::model::CapturingPayload {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -823,16 +818,16 @@ impl CapturingPayload {
         Ok(builder.build())
     }
 }
-/* ServerCodegenVisitor.kt:409 */
+/* ServerCodegenVisitor.kt:419 */
 impl CapturingPayload {
-    /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`CapturingPayload`](crate::model::CapturingPayload).
-    /* ServerBuilderGenerator.kt:304 */
+    /// /* ServerBuilderGenerator.kt:295 */Creates a new builder-style object to manufacture [`CapturingPayload`](crate::model::CapturingPayload).
+    /* ServerBuilderGenerator.kt:296 */
     pub fn builder() -> crate::model::capturing_payload::Builder {
-        /* ServerBuilderGenerator.kt:305 */
+        /* ServerBuilderGenerator.kt:297 */
         crate::model::capturing_payload::Builder::default()
-        /* ServerBuilderGenerator.kt:304 */
+        /* ServerBuilderGenerator.kt:296 */
     }
-    /* ServerCodegenVisitor.kt:409 */
+    /* ServerCodegenVisitor.kt:419 */
 }
 /* ServerStructureConstrainedTraitImpl.kt:21 */
 impl crate::constrained::Constrained for crate::model::CapturingPayload {
@@ -949,172 +944,172 @@ impl ::std::convert::From<::std::string::String>
         Self::Unconstrained(value)
     }
 }
-/// /* ServerBuilderGenerator.kt:173 */See [`CapturingEvent`](crate::model::CapturingEvent).
+/// /* ServerBuilderGenerator.kt:172 */See [`CapturingEvent`](crate::model::CapturingEvent).
 pub mod capturing_event {
 
-    /* ServerBuilderGenerator.kt:475 */
+    /* ServerBuilderGenerator.kt:467 */
     impl ::std::convert::From<Builder> for crate::model::CapturingEvent {
         fn from(builder: Builder) -> Self {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:203 */A builder for [`CapturingEvent`](crate::model::CapturingEvent).
+    /// /* ServerBuilderGenerator.kt:202 */A builder for [`CapturingEvent`](crate::model::CapturingEvent).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:213 */
+    /* ServerBuilderGenerator.kt:212 */
     pub struct Builder {
-        /* ServerBuilderGenerator.kt:317 */
+        /* ServerBuilderGenerator.kt:309 */
         pub(crate) payload: ::std::option::Option<crate::model::CapturingPayload>,
-        /* ServerBuilderGenerator.kt:213 */
+        /* ServerBuilderGenerator.kt:212 */
     }
-    /* ServerBuilderGenerator.kt:217 */
+    /* ServerBuilderGenerator.kt:216 */
     impl Builder {
-        /* ServerBuilderGenerator.kt:340 */
+        /* ServerBuilderGenerator.kt:332 */
         #[allow(missing_docs)] // documentation missing in model
-                               /* ServerBuilderGenerator.kt:352 */
+                               /* ServerBuilderGenerator.kt:344 */
         pub fn payload(
             mut self,
             input: ::std::option::Option<crate::model::CapturingPayload>,
         ) -> Self {
-            /* ServerBuilderGenerator.kt:353 */
+            /* ServerBuilderGenerator.kt:345 */
             self.payload =
-                /* ServerBuilderGenerator.kt:385 */input
-            /* ServerBuilderGenerator.kt:353 */;
+                /* ServerBuilderGenerator.kt:377 */input
+            /* ServerBuilderGenerator.kt:345 */;
             self
-            /* ServerBuilderGenerator.kt:352 */
+            /* ServerBuilderGenerator.kt:344 */
         }
-        /* ServerBuilderGenerator.kt:435 */
+        /* ServerBuilderGenerator.kt:427 */
         #[allow(missing_docs)] // documentation missing in model
         /* RustType.kt:534 */
         #[allow(dead_code)]
-        /* ServerBuilderGenerator.kt:442 */
+        /* ServerBuilderGenerator.kt:434 */
         pub(crate) fn set_payload(
             mut self,
             input: Option<impl ::std::convert::Into<crate::model::CapturingPayload>>,
         ) -> Self {
-            /* ServerBuilderGenerator.kt:443 */
+            /* ServerBuilderGenerator.kt:435 */
             self.payload = input.map(|v| v.into());
             self
-            /* ServerBuilderGenerator.kt:442 */
+            /* ServerBuilderGenerator.kt:434 */
         }
-        /// /* ServerBuilderGenerator.kt:267 */Consumes the builder and constructs a [`CapturingEvent`](crate::model::CapturingEvent).
-        /* ServerBuilderGenerator.kt:280 */
+        /// /* ServerBuilderGenerator.kt:259 */Consumes the builder and constructs a [`CapturingEvent`](crate::model::CapturingEvent).
+        /* ServerBuilderGenerator.kt:272 */
         pub fn build(self) -> crate::model::CapturingEvent {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:292 */
+        /* ServerBuilderGenerator.kt:284 */
         fn build_enforcing_all_constraints(self) -> crate::model::CapturingEvent {
-            /* ServerBuilderGenerator.kt:560 */
+            /* ServerBuilderGenerator.kt:552 */
             crate::model::CapturingEvent {
-                /* ServerBuilderGenerator.kt:564 */
+                /* ServerBuilderGenerator.kt:556 */
                 payload: self.payload,
-                /* ServerBuilderGenerator.kt:560 */
+                /* ServerBuilderGenerator.kt:552 */
             }
-            /* ServerBuilderGenerator.kt:292 */
+            /* ServerBuilderGenerator.kt:284 */
         }
-        /* ServerBuilderGenerator.kt:217 */
+        /* ServerBuilderGenerator.kt:216 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:173 */See [`CaptureEvent`](crate::model::CaptureEvent).
+/// /* ServerBuilderGenerator.kt:172 */See [`CaptureEvent`](crate::model::CaptureEvent).
 pub mod capture_event {
 
-    /* ServerBuilderGenerator.kt:475 */
+    /* ServerBuilderGenerator.kt:467 */
     impl ::std::convert::From<Builder> for crate::model::CaptureEvent {
         fn from(builder: Builder) -> Self {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:203 */A builder for [`CaptureEvent`](crate::model::CaptureEvent).
+    /// /* ServerBuilderGenerator.kt:202 */A builder for [`CaptureEvent`](crate::model::CaptureEvent).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:213 */
+    /* ServerBuilderGenerator.kt:212 */
     pub struct Builder {
-        /* ServerBuilderGenerator.kt:317 */
+        /* ServerBuilderGenerator.kt:309 */
         pub(crate) name: ::std::option::Option<::std::string::String>,
-        /* ServerBuilderGenerator.kt:317 */ pub(crate) captured: ::std::option::Option<bool>,
-        /* ServerBuilderGenerator.kt:317 */ pub(crate) shiny: ::std::option::Option<bool>,
-        /* ServerBuilderGenerator.kt:317 */
+        /* ServerBuilderGenerator.kt:309 */ pub(crate) captured: ::std::option::Option<bool>,
+        /* ServerBuilderGenerator.kt:309 */ pub(crate) shiny: ::std::option::Option<bool>,
+        /* ServerBuilderGenerator.kt:309 */
         pub(crate) pokedex_update: ::std::option::Option<::aws_smithy_types::Blob>,
-        /* ServerBuilderGenerator.kt:213 */
+        /* ServerBuilderGenerator.kt:212 */
     }
-    /* ServerBuilderGenerator.kt:217 */
+    /* ServerBuilderGenerator.kt:216 */
     impl Builder {
-        /* ServerBuilderGenerator.kt:340 */
+        /* ServerBuilderGenerator.kt:332 */
         #[allow(missing_docs)] // documentation missing in model
-                               /* ServerBuilderGenerator.kt:352 */
+                               /* ServerBuilderGenerator.kt:344 */
         pub fn name(mut self, input: ::std::option::Option<::std::string::String>) -> Self {
-            /* ServerBuilderGenerator.kt:353 */
+            /* ServerBuilderGenerator.kt:345 */
             self.name =
-                /* ServerBuilderGenerator.kt:385 */input
-            /* ServerBuilderGenerator.kt:353 */;
+                /* ServerBuilderGenerator.kt:377 */input
+            /* ServerBuilderGenerator.kt:345 */;
             self
-            /* ServerBuilderGenerator.kt:352 */
+            /* ServerBuilderGenerator.kt:344 */
         }
-        /* ServerBuilderGenerator.kt:340 */
+        /* ServerBuilderGenerator.kt:332 */
         #[allow(missing_docs)] // documentation missing in model
-                               /* ServerBuilderGenerator.kt:352 */
+                               /* ServerBuilderGenerator.kt:344 */
         pub fn captured(mut self, input: ::std::option::Option<bool>) -> Self {
-            /* ServerBuilderGenerator.kt:353 */
+            /* ServerBuilderGenerator.kt:345 */
             self.captured =
-                /* ServerBuilderGenerator.kt:385 */input
-            /* ServerBuilderGenerator.kt:353 */;
+                /* ServerBuilderGenerator.kt:377 */input
+            /* ServerBuilderGenerator.kt:345 */;
             self
-            /* ServerBuilderGenerator.kt:352 */
+            /* ServerBuilderGenerator.kt:344 */
         }
-        /* ServerBuilderGenerator.kt:340 */
+        /* ServerBuilderGenerator.kt:332 */
         #[allow(missing_docs)] // documentation missing in model
-                               /* ServerBuilderGenerator.kt:352 */
+                               /* ServerBuilderGenerator.kt:344 */
         pub fn shiny(mut self, input: ::std::option::Option<bool>) -> Self {
-            /* ServerBuilderGenerator.kt:353 */
+            /* ServerBuilderGenerator.kt:345 */
             self.shiny =
-                /* ServerBuilderGenerator.kt:385 */input
-            /* ServerBuilderGenerator.kt:353 */;
+                /* ServerBuilderGenerator.kt:377 */input
+            /* ServerBuilderGenerator.kt:345 */;
             self
-            /* ServerBuilderGenerator.kt:352 */
+            /* ServerBuilderGenerator.kt:344 */
         }
-        /* ServerBuilderGenerator.kt:340 */
+        /* ServerBuilderGenerator.kt:332 */
         #[allow(missing_docs)] // documentation missing in model
-                               /* ServerBuilderGenerator.kt:352 */
+                               /* ServerBuilderGenerator.kt:344 */
         pub fn pokedex_update(
             mut self,
             input: ::std::option::Option<::aws_smithy_types::Blob>,
         ) -> Self {
-            /* ServerBuilderGenerator.kt:353 */
+            /* ServerBuilderGenerator.kt:345 */
             self.pokedex_update =
-                /* ServerBuilderGenerator.kt:385 */input
-            /* ServerBuilderGenerator.kt:353 */;
+                /* ServerBuilderGenerator.kt:377 */input
+            /* ServerBuilderGenerator.kt:345 */;
             self
-            /* ServerBuilderGenerator.kt:352 */
+            /* ServerBuilderGenerator.kt:344 */
         }
-        /// /* ServerBuilderGenerator.kt:267 */Consumes the builder and constructs a [`CaptureEvent`](crate::model::CaptureEvent).
-        /* ServerBuilderGenerator.kt:280 */
+        /// /* ServerBuilderGenerator.kt:259 */Consumes the builder and constructs a [`CaptureEvent`](crate::model::CaptureEvent).
+        /* ServerBuilderGenerator.kt:272 */
         pub fn build(self) -> crate::model::CaptureEvent {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:292 */
+        /* ServerBuilderGenerator.kt:284 */
         fn build_enforcing_all_constraints(self) -> crate::model::CaptureEvent {
-            /* ServerBuilderGenerator.kt:560 */
+            /* ServerBuilderGenerator.kt:552 */
             crate::model::CaptureEvent {
-                /* ServerBuilderGenerator.kt:564 */
+                /* ServerBuilderGenerator.kt:556 */
                 name: self.name,
-                /* ServerBuilderGenerator.kt:564 */
+                /* ServerBuilderGenerator.kt:556 */
                 captured: self.captured,
-                /* ServerBuilderGenerator.kt:564 */
+                /* ServerBuilderGenerator.kt:556 */
                 shiny: self.shiny,
-                /* ServerBuilderGenerator.kt:564 */
+                /* ServerBuilderGenerator.kt:556 */
                 pokedex_update: self.pokedex_update,
-                /* ServerBuilderGenerator.kt:560 */
+                /* ServerBuilderGenerator.kt:552 */
             }
-            /* ServerBuilderGenerator.kt:292 */
+            /* ServerBuilderGenerator.kt:284 */
         }
-        /* ServerBuilderGenerator.kt:217 */
+        /* ServerBuilderGenerator.kt:216 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:173 */See [`ValidationExceptionField`](crate::model::ValidationExceptionField).
+/// /* ServerBuilderGenerator.kt:172 */See [`ValidationExceptionField`](crate::model::ValidationExceptionField).
 pub mod validation_exception_field {
 
     /* RustType.kt:534 */
@@ -1148,7 +1143,7 @@ pub mod validation_exception_field {
     }
     /* ServerBuilderConstraintViolations.kt:83 */
     impl ::std::error::Error for ConstraintViolation {}
-    /* ServerBuilderGenerator.kt:460 */
+    /* ServerBuilderGenerator.kt:452 */
     impl ::std::convert::TryFrom<Builder> for crate::model::ValidationExceptionField {
         type Error = ConstraintViolation;
 
@@ -1156,81 +1151,81 @@ pub mod validation_exception_field {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:203 */A builder for [`ValidationExceptionField`](crate::model::ValidationExceptionField).
+    /// /* ServerBuilderGenerator.kt:202 */A builder for [`ValidationExceptionField`](crate::model::ValidationExceptionField).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:213 */
+    /* ServerBuilderGenerator.kt:212 */
     pub struct Builder {
-        /* ServerBuilderGenerator.kt:317 */
+        /* ServerBuilderGenerator.kt:309 */
         pub(crate) path: ::std::option::Option<::std::string::String>,
-        /* ServerBuilderGenerator.kt:317 */
+        /* ServerBuilderGenerator.kt:309 */
         pub(crate) message: ::std::option::Option<::std::string::String>,
-        /* ServerBuilderGenerator.kt:213 */
+        /* ServerBuilderGenerator.kt:212 */
     }
-    /* ServerBuilderGenerator.kt:217 */
+    /* ServerBuilderGenerator.kt:216 */
     impl Builder {
-        /// /* ServerBuilderGenerator.kt:340 */A JSONPointer expression to the structure member whose value failed to satisfy the modeled constraints.
-        /* ServerBuilderGenerator.kt:352 */
+        /// /* ServerBuilderGenerator.kt:332 */A JSONPointer expression to the structure member whose value failed to satisfy the modeled constraints.
+        /* ServerBuilderGenerator.kt:344 */
         pub fn path(mut self, input: ::std::string::String) -> Self {
-            /* ServerBuilderGenerator.kt:353 */
+            /* ServerBuilderGenerator.kt:345 */
             self.path =
-                /* ServerBuilderGenerator.kt:354 */Some(
-                    /* ServerBuilderGenerator.kt:385 */input
-                /* ServerBuilderGenerator.kt:354 */)
-            /* ServerBuilderGenerator.kt:353 */;
+                /* ServerBuilderGenerator.kt:346 */Some(
+                    /* ServerBuilderGenerator.kt:377 */input
+                /* ServerBuilderGenerator.kt:346 */)
+            /* ServerBuilderGenerator.kt:345 */;
             self
-            /* ServerBuilderGenerator.kt:352 */
+            /* ServerBuilderGenerator.kt:344 */
         }
-        /// /* ServerBuilderGenerator.kt:340 */A detailed description of the validation failure.
-        /* ServerBuilderGenerator.kt:352 */
+        /// /* ServerBuilderGenerator.kt:332 */A detailed description of the validation failure.
+        /* ServerBuilderGenerator.kt:344 */
         pub fn message(mut self, input: ::std::string::String) -> Self {
-            /* ServerBuilderGenerator.kt:353 */
+            /* ServerBuilderGenerator.kt:345 */
             self.message =
-                /* ServerBuilderGenerator.kt:354 */Some(
-                    /* ServerBuilderGenerator.kt:385 */input
-                /* ServerBuilderGenerator.kt:354 */)
-            /* ServerBuilderGenerator.kt:353 */;
+                /* ServerBuilderGenerator.kt:346 */Some(
+                    /* ServerBuilderGenerator.kt:377 */input
+                /* ServerBuilderGenerator.kt:346 */)
+            /* ServerBuilderGenerator.kt:345 */;
             self
-            /* ServerBuilderGenerator.kt:352 */
+            /* ServerBuilderGenerator.kt:344 */
         }
-        /// /* ServerBuilderGenerator.kt:267 */Consumes the builder and constructs a [`ValidationExceptionField`](crate::model::ValidationExceptionField).
-        /// /* ServerBuilderGenerator.kt:269 */
+        /// /* ServerBuilderGenerator.kt:259 */Consumes the builder and constructs a [`ValidationExceptionField`](crate::model::ValidationExceptionField).
+        /// /* ServerBuilderGenerator.kt:261 */
         /// The builder fails to construct a [`ValidationExceptionField`](crate::model::ValidationExceptionField) if a [`ConstraintViolation`] occurs.
         ///
-        /// /* ServerBuilderGenerator.kt:277 */If the builder fails, it will return the _first_ encountered [`ConstraintViolation`].
-        /* ServerBuilderGenerator.kt:280 */
+        /// /* ServerBuilderGenerator.kt:269 */If the builder fails, it will return the _first_ encountered [`ConstraintViolation`].
+        /* ServerBuilderGenerator.kt:272 */
         pub fn build(self) -> Result<crate::model::ValidationExceptionField, ConstraintViolation> {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:292 */
+        /* ServerBuilderGenerator.kt:284 */
         fn build_enforcing_all_constraints(
             self,
         ) -> Result<crate::model::ValidationExceptionField, ConstraintViolation> {
-            /* ServerBuilderGenerator.kt:296 */
+            /* ServerBuilderGenerator.kt:288 */
             Ok(
-                /* ServerBuilderGenerator.kt:560 */
+                /* ServerBuilderGenerator.kt:552 */
                 crate::model::ValidationExceptionField {
-                    /* ServerBuilderGenerator.kt:564 */
+                    /* ServerBuilderGenerator.kt:556 */
                     path: self
                         .path
-                        /* ServerBuilderGenerator.kt:590 */
+                        /* ServerBuilderGenerator.kt:582 */
                         .ok_or(ConstraintViolation::MissingPath)?,
-                    /* ServerBuilderGenerator.kt:564 */
+                    /* ServerBuilderGenerator.kt:556 */
                     message: self
                         .message
-                        /* ServerBuilderGenerator.kt:590 */
+                        /* ServerBuilderGenerator.kt:582 */
                         .ok_or(ConstraintViolation::MissingMessage)?,
-                    /* ServerBuilderGenerator.kt:560 */
-                }, /* ServerBuilderGenerator.kt:296 */
+                    /* ServerBuilderGenerator.kt:552 */
+                }, /* ServerBuilderGenerator.kt:288 */
             )
-            /* ServerBuilderGenerator.kt:292 */
+            /* ServerBuilderGenerator.kt:284 */
         }
-        /* ServerBuilderGenerator.kt:217 */
+        /* ServerBuilderGenerator.kt:216 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:173 */See [`FlavorText`](crate::model::FlavorText).
+/// /* ServerBuilderGenerator.kt:172 */See [`FlavorText`](crate::model::FlavorText).
 pub mod flavor_text {
 
     /* RustType.kt:534 */
@@ -1273,7 +1268,7 @@ pub mod flavor_text {
     }
     /* ServerBuilderConstraintViolations.kt:83 */
     impl ::std::error::Error for ConstraintViolation {}
-    /* ServerBuilderGenerator.kt:460 */
+    /* ServerBuilderGenerator.kt:452 */
     impl ::std::convert::TryFrom<Builder> for crate::model::FlavorText {
         type Error = ConstraintViolation;
 
@@ -1281,170 +1276,170 @@ pub mod flavor_text {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:203 */A builder for [`FlavorText`](crate::model::FlavorText).
+    /// /* ServerBuilderGenerator.kt:202 */A builder for [`FlavorText`](crate::model::FlavorText).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:213 */
+    /* ServerBuilderGenerator.kt:212 */
     pub struct Builder {
-        /* ServerBuilderGenerator.kt:317 */
+        /* ServerBuilderGenerator.kt:309 */
         pub(crate) flavor_text: ::std::option::Option<::std::string::String>,
-        /* ServerBuilderGenerator.kt:317 */
+        /* ServerBuilderGenerator.kt:309 */
         pub(crate) language: ::std::option::Option<crate::model::Language>,
-        /* ServerBuilderGenerator.kt:213 */
+        /* ServerBuilderGenerator.kt:212 */
     }
-    /* ServerBuilderGenerator.kt:217 */
+    /* ServerBuilderGenerator.kt:216 */
     impl Builder {
-        /// /* ServerBuilderGenerator.kt:340 */The localized flavor text for an API resource in a specific language.
-        /* ServerBuilderGenerator.kt:352 */
+        /// /* ServerBuilderGenerator.kt:332 */The localized flavor text for an API resource in a specific language.
+        /* ServerBuilderGenerator.kt:344 */
         pub fn flavor_text(mut self, input: ::std::string::String) -> Self {
-            /* ServerBuilderGenerator.kt:353 */
+            /* ServerBuilderGenerator.kt:345 */
             self.flavor_text =
-                /* ServerBuilderGenerator.kt:354 */Some(
-                    /* ServerBuilderGenerator.kt:385 */input
-                /* ServerBuilderGenerator.kt:354 */)
-            /* ServerBuilderGenerator.kt:353 */;
+                /* ServerBuilderGenerator.kt:346 */Some(
+                    /* ServerBuilderGenerator.kt:377 */input
+                /* ServerBuilderGenerator.kt:346 */)
+            /* ServerBuilderGenerator.kt:345 */;
             self
-            /* ServerBuilderGenerator.kt:352 */
+            /* ServerBuilderGenerator.kt:344 */
         }
-        /// /* ServerBuilderGenerator.kt:340 */The language this name is in.
-        /* ServerBuilderGenerator.kt:352 */
+        /// /* ServerBuilderGenerator.kt:332 */The language this name is in.
+        /* ServerBuilderGenerator.kt:344 */
         pub fn language(mut self, input: crate::model::Language) -> Self {
-            /* ServerBuilderGenerator.kt:353 */
+            /* ServerBuilderGenerator.kt:345 */
             self.language =
-                /* ServerBuilderGenerator.kt:354 */Some(
-                    /* ServerBuilderGenerator.kt:385 */input
-                /* ServerBuilderGenerator.kt:354 */)
-            /* ServerBuilderGenerator.kt:353 */;
+                /* ServerBuilderGenerator.kt:346 */Some(
+                    /* ServerBuilderGenerator.kt:377 */input
+                /* ServerBuilderGenerator.kt:346 */)
+            /* ServerBuilderGenerator.kt:345 */;
             self
-            /* ServerBuilderGenerator.kt:352 */
+            /* ServerBuilderGenerator.kt:344 */
         }
-        /// /* ServerBuilderGenerator.kt:267 */Consumes the builder and constructs a [`FlavorText`](crate::model::FlavorText).
-        /// /* ServerBuilderGenerator.kt:269 */
+        /// /* ServerBuilderGenerator.kt:259 */Consumes the builder and constructs a [`FlavorText`](crate::model::FlavorText).
+        /// /* ServerBuilderGenerator.kt:261 */
         /// The builder fails to construct a [`FlavorText`](crate::model::FlavorText) if a [`ConstraintViolation`] occurs.
         ///
-        /// /* ServerBuilderGenerator.kt:277 */If the builder fails, it will return the _first_ encountered [`ConstraintViolation`].
-        /* ServerBuilderGenerator.kt:280 */
+        /// /* ServerBuilderGenerator.kt:269 */If the builder fails, it will return the _first_ encountered [`ConstraintViolation`].
+        /* ServerBuilderGenerator.kt:272 */
         pub fn build(self) -> Result<crate::model::FlavorText, ConstraintViolation> {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:292 */
+        /* ServerBuilderGenerator.kt:284 */
         fn build_enforcing_all_constraints(
             self,
         ) -> Result<crate::model::FlavorText, ConstraintViolation> {
-            /* ServerBuilderGenerator.kt:296 */
+            /* ServerBuilderGenerator.kt:288 */
             Ok(
-                /* ServerBuilderGenerator.kt:560 */
+                /* ServerBuilderGenerator.kt:552 */
                 crate::model::FlavorText {
-                    /* ServerBuilderGenerator.kt:564 */
+                    /* ServerBuilderGenerator.kt:556 */
                     flavor_text: self
                         .flavor_text
-                        /* ServerBuilderGenerator.kt:590 */
+                        /* ServerBuilderGenerator.kt:582 */
                         .ok_or(ConstraintViolation::MissingFlavorText)?,
-                    /* ServerBuilderGenerator.kt:564 */
+                    /* ServerBuilderGenerator.kt:556 */
                     language: self
                         .language
-                        /* ServerBuilderGenerator.kt:590 */
+                        /* ServerBuilderGenerator.kt:582 */
                         .ok_or(ConstraintViolation::MissingLanguage)?,
-                    /* ServerBuilderGenerator.kt:560 */
-                }, /* ServerBuilderGenerator.kt:296 */
+                    /* ServerBuilderGenerator.kt:552 */
+                }, /* ServerBuilderGenerator.kt:288 */
             )
-            /* ServerBuilderGenerator.kt:292 */
+            /* ServerBuilderGenerator.kt:284 */
         }
-        /* ServerBuilderGenerator.kt:217 */
+        /* ServerBuilderGenerator.kt:216 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:173 */See [`CapturingPayload`](crate::model::CapturingPayload).
+/// /* ServerBuilderGenerator.kt:172 */See [`CapturingPayload`](crate::model::CapturingPayload).
 pub mod capturing_payload {
 
-    /* ServerBuilderGenerator.kt:475 */
+    /* ServerBuilderGenerator.kt:467 */
     impl ::std::convert::From<Builder> for crate::model::CapturingPayload {
         fn from(builder: Builder) -> Self {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:203 */A builder for [`CapturingPayload`](crate::model::CapturingPayload).
+    /// /* ServerBuilderGenerator.kt:202 */A builder for [`CapturingPayload`](crate::model::CapturingPayload).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:213 */
+    /* ServerBuilderGenerator.kt:212 */
     pub struct Builder {
-        /* ServerBuilderGenerator.kt:317 */
+        /* ServerBuilderGenerator.kt:309 */
         pub(crate) name: ::std::option::Option<::std::string::String>,
-        /* ServerBuilderGenerator.kt:317 */
+        /* ServerBuilderGenerator.kt:309 */
         pub(crate) pokeball: ::std::option::Option<::std::string::String>,
-        /* ServerBuilderGenerator.kt:213 */
+        /* ServerBuilderGenerator.kt:212 */
     }
-    /* ServerBuilderGenerator.kt:217 */
+    /* ServerBuilderGenerator.kt:216 */
     impl Builder {
-        /* ServerBuilderGenerator.kt:340 */
+        /* ServerBuilderGenerator.kt:332 */
         #[allow(missing_docs)] // documentation missing in model
-                               /* ServerBuilderGenerator.kt:352 */
+                               /* ServerBuilderGenerator.kt:344 */
         pub fn name(mut self, input: ::std::option::Option<::std::string::String>) -> Self {
-            /* ServerBuilderGenerator.kt:353 */
+            /* ServerBuilderGenerator.kt:345 */
             self.name =
-                /* ServerBuilderGenerator.kt:385 */input
-            /* ServerBuilderGenerator.kt:353 */;
+                /* ServerBuilderGenerator.kt:377 */input
+            /* ServerBuilderGenerator.kt:345 */;
             self
-            /* ServerBuilderGenerator.kt:352 */
+            /* ServerBuilderGenerator.kt:344 */
         }
-        /* ServerBuilderGenerator.kt:435 */
+        /* ServerBuilderGenerator.kt:427 */
         #[allow(missing_docs)] // documentation missing in model
         /* RustType.kt:534 */
         #[allow(dead_code)]
-        /* ServerBuilderGenerator.kt:442 */
+        /* ServerBuilderGenerator.kt:434 */
         pub(crate) fn set_name(
             mut self,
             input: Option<impl ::std::convert::Into<::std::string::String>>,
         ) -> Self {
-            /* ServerBuilderGenerator.kt:443 */
+            /* ServerBuilderGenerator.kt:435 */
             self.name = input.map(|v| v.into());
             self
-            /* ServerBuilderGenerator.kt:442 */
+            /* ServerBuilderGenerator.kt:434 */
         }
-        /* ServerBuilderGenerator.kt:340 */
+        /* ServerBuilderGenerator.kt:332 */
         #[allow(missing_docs)] // documentation missing in model
-                               /* ServerBuilderGenerator.kt:352 */
+                               /* ServerBuilderGenerator.kt:344 */
         pub fn pokeball(mut self, input: ::std::option::Option<::std::string::String>) -> Self {
-            /* ServerBuilderGenerator.kt:353 */
+            /* ServerBuilderGenerator.kt:345 */
             self.pokeball =
-                /* ServerBuilderGenerator.kt:385 */input
-            /* ServerBuilderGenerator.kt:353 */;
+                /* ServerBuilderGenerator.kt:377 */input
+            /* ServerBuilderGenerator.kt:345 */;
             self
-            /* ServerBuilderGenerator.kt:352 */
+            /* ServerBuilderGenerator.kt:344 */
         }
-        /* ServerBuilderGenerator.kt:435 */
+        /* ServerBuilderGenerator.kt:427 */
         #[allow(missing_docs)] // documentation missing in model
         /* RustType.kt:534 */
         #[allow(dead_code)]
-        /* ServerBuilderGenerator.kt:442 */
+        /* ServerBuilderGenerator.kt:434 */
         pub(crate) fn set_pokeball(
             mut self,
             input: Option<impl ::std::convert::Into<::std::string::String>>,
         ) -> Self {
-            /* ServerBuilderGenerator.kt:443 */
+            /* ServerBuilderGenerator.kt:435 */
             self.pokeball = input.map(|v| v.into());
             self
-            /* ServerBuilderGenerator.kt:442 */
+            /* ServerBuilderGenerator.kt:434 */
         }
-        /// /* ServerBuilderGenerator.kt:267 */Consumes the builder and constructs a [`CapturingPayload`](crate::model::CapturingPayload).
-        /* ServerBuilderGenerator.kt:280 */
+        /// /* ServerBuilderGenerator.kt:259 */Consumes the builder and constructs a [`CapturingPayload`](crate::model::CapturingPayload).
+        /* ServerBuilderGenerator.kt:272 */
         pub fn build(self) -> crate::model::CapturingPayload {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:292 */
+        /* ServerBuilderGenerator.kt:284 */
         fn build_enforcing_all_constraints(self) -> crate::model::CapturingPayload {
-            /* ServerBuilderGenerator.kt:560 */
+            /* ServerBuilderGenerator.kt:552 */
             crate::model::CapturingPayload {
-                /* ServerBuilderGenerator.kt:564 */
+                /* ServerBuilderGenerator.kt:556 */
                 name: self.name,
-                /* ServerBuilderGenerator.kt:564 */
+                /* ServerBuilderGenerator.kt:556 */
                 pokeball: self.pokeball,
-                /* ServerBuilderGenerator.kt:560 */
+                /* ServerBuilderGenerator.kt:552 */
             }
-            /* ServerBuilderGenerator.kt:292 */
+            /* ServerBuilderGenerator.kt:284 */
         }
-        /* ServerBuilderGenerator.kt:217 */
+        /* ServerBuilderGenerator.kt:216 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */

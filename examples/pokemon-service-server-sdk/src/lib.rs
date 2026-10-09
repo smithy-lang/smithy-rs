@@ -237,8 +237,7 @@
 //! [operations]: https://smithy.io/2.0/spec/service-types.html#operation
 //! [Service]: https://docs.rs/tower-service/latest/tower_service/trait.Service.html
 /* ServerRootGenerator.kt:403 */
-/* ServerRootGenerator.kt:419 */
-pub use crate::server::serve::serve;
+/* ServerRootGenerator.kt:419 */ pub use crate::server::serve::serve;
 pub use crate::service::{
     BuildError, MissingOperationsError, PokemonService, PokemonServiceBuilder,
     PokemonServiceConfig, PokemonServiceConfigBuilder, ServiceProtocols,

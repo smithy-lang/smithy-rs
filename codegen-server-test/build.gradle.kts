@@ -198,6 +198,9 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
         if (it.module.endsWith("-http0x")) {
             // Legacy projections must disable schema serde, which otherwise enables HTTP 1.x.
             it.copy(extraCodegenConfig = it.extraCodegenConfig?.replace(""""schemaSerde": true""", """"schemaSerde": false"""))
+        } else if (it.module == "pokemon-service-server-sdk") {
+            // Only the schema-driven HTTP/1.x example serves multiple protocols.
+            it.copy(imports = it.imports + "custom-test-models/pokemon-multi-protocol.smithy")
         } else {
             it
         }

@@ -21,7 +21,7 @@ impl GetServerStatisticsOutput {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1548 */
+/* ServerSchemaGenerator.kt:1534 */
 static GETSERVERSTATISTICSOUTPUT_MEMBER_CALLS_COUNT: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -33,7 +33,7 @@ static GETSERVERSTATISTICSOUTPUT_MEMBER_CALLS_COUNT: ::aws_smithy_schema::Schema
         "calls_count",
         0,
     );
-/* ServerSchemaGenerator.kt:1467 */
+/* ServerSchemaGenerator.kt:1453 */
 static GETSERVERSTATISTICSOUTPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -48,14 +48,18 @@ static GETSERVERSTATISTICSOUTPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
         "GET", "/stats", None,
     ))
     .with_original_name("GetServerStatisticsOutput");
-/* ServerSchemaGenerator.kt:137 */
+/* ServerSchemaGenerator.kt:136 */
 impl crate::output::GetServerStatisticsOutput {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> =
         &GETSERVERSTATISTICSOUTPUT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:291 */
+/* ServerSchemaGenerator.kt:290 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::GetServerStatisticsOutput {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -68,16 +72,16 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::GetServer
         Ok(())
     }
 }
-/* ServerCodegenVisitor.kt:409 */
+/* ServerCodegenVisitor.kt:419 */
 impl GetServerStatisticsOutput {
-    /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`GetServerStatisticsOutput`](crate::output::GetServerStatisticsOutput).
-    /* ServerBuilderGenerator.kt:304 */
+    /// /* ServerBuilderGenerator.kt:295 */Creates a new builder-style object to manufacture [`GetServerStatisticsOutput`](crate::output::GetServerStatisticsOutput).
+    /* ServerBuilderGenerator.kt:296 */
     pub fn builder() -> crate::output::get_server_statistics_output::Builder {
-        /* ServerBuilderGenerator.kt:305 */
+        /* ServerBuilderGenerator.kt:297 */
         crate::output::get_server_statistics_output::Builder::default()
-        /* ServerBuilderGenerator.kt:304 */
+        /* ServerBuilderGenerator.kt:296 */
     }
-    /* ServerCodegenVisitor.kt:409 */
+    /* ServerCodegenVisitor.kt:419 */
 }
 
 /* StructureGenerator.kt:197 */
@@ -87,7 +91,7 @@ impl GetServerStatisticsOutput {
     ::std::clone::Clone, ::std::cmp::Eq, ::std::cmp::PartialEq, ::std::fmt::Debug, ::std::hash::Hash,
 )]
 pub /* StructureGenerator.kt:201 */ struct DoNothingOutput {/* StructureGenerator.kt:201 */}
-/* ServerSchemaGenerator.kt:1467 */
+/* ServerSchemaGenerator.kt:1453 */
 static DONOTHINGOUTPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -104,13 +108,17 @@ static DONOTHINGOUTPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
         None,
     ))
     .with_original_name("DoNothingOutput");
-/* ServerSchemaGenerator.kt:137 */
+/* ServerSchemaGenerator.kt:136 */
 impl crate::output::DoNothingOutput {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &DONOTHINGOUTPUT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:291 */
+/* ServerSchemaGenerator.kt:290 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::DoNothingOutput {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -119,16 +127,16 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::DoNothing
         Ok(())
     }
 }
-/* ServerCodegenVisitor.kt:409 */
+/* ServerCodegenVisitor.kt:419 */
 impl DoNothingOutput {
-    /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`DoNothingOutput`](crate::output::DoNothingOutput).
-    /* ServerBuilderGenerator.kt:304 */
+    /// /* ServerBuilderGenerator.kt:295 */Creates a new builder-style object to manufacture [`DoNothingOutput`](crate::output::DoNothingOutput).
+    /* ServerBuilderGenerator.kt:296 */
     pub fn builder() -> crate::output::do_nothing_output::Builder {
-        /* ServerBuilderGenerator.kt:305 */
+        /* ServerBuilderGenerator.kt:297 */
         crate::output::do_nothing_output::Builder::default()
-        /* ServerBuilderGenerator.kt:304 */
+        /* ServerBuilderGenerator.kt:296 */
     }
-    /* ServerCodegenVisitor.kt:409 */
+    /* ServerCodegenVisitor.kt:419 */
 }
 
 /* StructureGenerator.kt:197 */
@@ -161,19 +169,7 @@ impl CapturePokemonOutput {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1083 */
-static CAPTUREPOKEMONOUTPUT_MEMBER_EVENTS_TARGET_TRAITS: std::sync::LazyLock<
-    ::aws_smithy_schema::TraitMap,
-> = std::sync::LazyLock::new(|| {
-    let mut map = ::aws_smithy_schema::TraitMap::new();
-    map.insert(::std::boxed::Box::new(
-        ::aws_smithy_http_server::schema::TargetSchema::new(
-            crate::model::CapturePokemonEvents::SCHEMA,
-        ),
-    ));
-    map
-});
-/* ServerSchemaGenerator.kt:1548 */
+/* ServerSchemaGenerator.kt:1534 */
 static CAPTUREPOKEMONOUTPUT_MEMBER_EVENTS: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -186,9 +182,8 @@ static CAPTUREPOKEMONOUTPUT_MEMBER_EVENTS: ::aws_smithy_schema::Schema<'static> 
         0,
     )
     .with_http_payload()
-    .with_streaming()
-    .with_traits(&CAPTUREPOKEMONOUTPUT_MEMBER_EVENTS_TARGET_TRAITS);
-/* ServerSchemaGenerator.kt:1467 */
+    .with_streaming();
+/* ServerSchemaGenerator.kt:1453 */
 static CAPTUREPOKEMONOUTPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -205,13 +200,17 @@ static CAPTUREPOKEMONOUTPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
         None,
     ))
     .with_original_name("CapturePokemonOutput");
-/* ServerSchemaGenerator.kt:137 */
+/* ServerSchemaGenerator.kt:136 */
 impl crate::output::CapturePokemonOutput {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &CAPTUREPOKEMONOUTPUT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:291 */
+/* ServerSchemaGenerator.kt:290 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::CapturePokemonOutput {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -220,16 +219,16 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::CapturePo
         Ok(())
     }
 }
-/* ServerCodegenVisitor.kt:409 */
+/* ServerCodegenVisitor.kt:419 */
 impl CapturePokemonOutput {
-    /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`CapturePokemonOutput`](crate::output::CapturePokemonOutput).
-    /* ServerBuilderGenerator.kt:304 */
+    /// /* ServerBuilderGenerator.kt:295 */Creates a new builder-style object to manufacture [`CapturePokemonOutput`](crate::output::CapturePokemonOutput).
+    /* ServerBuilderGenerator.kt:296 */
     pub fn builder() -> crate::output::capture_pokemon_output::Builder {
-        /* ServerBuilderGenerator.kt:305 */
+        /* ServerBuilderGenerator.kt:297 */
         crate::output::capture_pokemon_output::Builder::default()
-        /* ServerBuilderGenerator.kt:304 */
+        /* ServerBuilderGenerator.kt:296 */
     }
-    /* ServerCodegenVisitor.kt:409 */
+    /* ServerCodegenVisitor.kt:419 */
 }
 
 /* StructureGenerator.kt:197 */
@@ -239,7 +238,7 @@ impl CapturePokemonOutput {
     ::std::clone::Clone, ::std::cmp::Eq, ::std::cmp::PartialEq, ::std::fmt::Debug, ::std::hash::Hash,
 )]
 pub /* StructureGenerator.kt:201 */ struct CheckHealthOutput {/* StructureGenerator.kt:201 */}
-/* ServerSchemaGenerator.kt:1467 */
+/* ServerSchemaGenerator.kt:1453 */
 static CHECKHEALTHOUTPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -253,13 +252,17 @@ static CHECKHEALTHOUTPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     .with_http(aws_smithy_schema::traits::HttpTrait::new(
         "GET", "/ping", None,
     ));
-/* ServerSchemaGenerator.kt:137 */
+/* ServerSchemaGenerator.kt:136 */
 impl crate::output::CheckHealthOutput {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &CHECKHEALTHOUTPUT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:291 */
+/* ServerSchemaGenerator.kt:290 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::CheckHealthOutput {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -268,16 +271,16 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::CheckHeal
         Ok(())
     }
 }
-/* ServerCodegenVisitor.kt:409 */
+/* ServerCodegenVisitor.kt:419 */
 impl CheckHealthOutput {
-    /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`CheckHealthOutput`](crate::output::CheckHealthOutput).
-    /* ServerBuilderGenerator.kt:304 */
+    /// /* ServerBuilderGenerator.kt:295 */Creates a new builder-style object to manufacture [`CheckHealthOutput`](crate::output::CheckHealthOutput).
+    /* ServerBuilderGenerator.kt:296 */
     pub fn builder() -> crate::output::check_health_output::Builder {
-        /* ServerBuilderGenerator.kt:305 */
+        /* ServerBuilderGenerator.kt:297 */
         crate::output::check_health_output::Builder::default()
-        /* ServerBuilderGenerator.kt:304 */
+        /* ServerBuilderGenerator.kt:296 */
     }
-    /* ServerCodegenVisitor.kt:409 */
+    /* ServerCodegenVisitor.kt:419 */
 }
 
 /* StructureGenerator.kt:197 */
@@ -302,7 +305,7 @@ impl StreamPokemonRadioOutput {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1548 */
+/* ServerSchemaGenerator.kt:1534 */
 static STREAMPOKEMONRADIOOUTPUT_MEMBER_DATA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -316,7 +319,7 @@ static STREAMPOKEMONRADIOOUTPUT_MEMBER_DATA: ::aws_smithy_schema::Schema<'static
     )
     .with_http_payload()
     .with_streaming();
-/* ServerSchemaGenerator.kt:1467 */
+/* ServerSchemaGenerator.kt:1453 */
 static STREAMPOKEMONRADIOOUTPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -331,14 +334,18 @@ static STREAMPOKEMONRADIOOUTPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
         "GET", "/radio", None,
     ))
     .with_original_name("StreamPokemonRadioOutput");
-/* ServerSchemaGenerator.kt:137 */
+/* ServerSchemaGenerator.kt:136 */
 impl crate::output::StreamPokemonRadioOutput {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> =
         &STREAMPOKEMONRADIOOUTPUT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:291 */
+/* ServerSchemaGenerator.kt:290 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::StreamPokemonRadioOutput {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -347,16 +354,16 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::StreamPok
         Ok(())
     }
 }
-/* ServerCodegenVisitor.kt:409 */
+/* ServerCodegenVisitor.kt:419 */
 impl StreamPokemonRadioOutput {
-    /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`StreamPokemonRadioOutput`](crate::output::StreamPokemonRadioOutput).
-    /* ServerBuilderGenerator.kt:304 */
+    /// /* ServerBuilderGenerator.kt:295 */Creates a new builder-style object to manufacture [`StreamPokemonRadioOutput`](crate::output::StreamPokemonRadioOutput).
+    /* ServerBuilderGenerator.kt:296 */
     pub fn builder() -> crate::output::stream_pokemon_radio_output::Builder {
-        /* ServerBuilderGenerator.kt:305 */
+        /* ServerBuilderGenerator.kt:297 */
         crate::output::stream_pokemon_radio_output::Builder::default()
-        /* ServerBuilderGenerator.kt:304 */
+        /* ServerBuilderGenerator.kt:296 */
     }
-    /* ServerCodegenVisitor.kt:409 */
+    /* ServerCodegenVisitor.kt:419 */
 }
 
 /* StructureGenerator.kt:197 */
@@ -392,7 +399,7 @@ impl GetPokemonSpeciesOutput {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1548 */
+/* ServerSchemaGenerator.kt:1534 */
 static GETPOKEMONSPECIESOUTPUT_MEMBER_NAME: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -404,16 +411,7 @@ static GETPOKEMONSPECIESOUTPUT_MEMBER_NAME: ::aws_smithy_schema::Schema<'static>
         "name",
         0,
     );
-/* ServerSchemaGenerator.kt:1083 */
-static GETPOKEMONSPECIESOUTPUT_MEMBER_FLAVOR_TEXT_ENTRIES_MEMBER_TARGET_TRAITS:
-    std::sync::LazyLock<::aws_smithy_schema::TraitMap> = std::sync::LazyLock::new(|| {
-    let mut map = ::aws_smithy_schema::TraitMap::new();
-    map.insert(::std::boxed::Box::new(
-        ::aws_smithy_http_server::schema::TargetSchema::new(crate::model::FlavorText::SCHEMA),
-    ));
-    map
-});
-/* ServerSchemaGenerator.kt:1310 */
+/* ServerSchemaGenerator.kt:1296 */
 static GETPOKEMONSPECIESOUTPUT_MEMBER_FLAVOR_TEXT_ENTRIES_MEMBER: ::aws_smithy_schema::Schema<
     'static,
 > = ::aws_smithy_schema::Schema::new_member(
@@ -425,9 +423,8 @@ static GETPOKEMONSPECIESOUTPUT_MEMBER_FLAVOR_TEXT_ENTRIES_MEMBER: ::aws_smithy_s
     ::aws_smithy_schema::ShapeType::Structure,
     "member",
     0,
-)
-.with_traits(&GETPOKEMONSPECIESOUTPUT_MEMBER_FLAVOR_TEXT_ENTRIES_MEMBER_TARGET_TRAITS);
-/* ServerSchemaGenerator.kt:1548 */
+);
+/* ServerSchemaGenerator.kt:1534 */
 static GETPOKEMONSPECIESOUTPUT_MEMBER_FLAVOR_TEXT_ENTRIES: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -440,7 +437,7 @@ static GETPOKEMONSPECIESOUTPUT_MEMBER_FLAVOR_TEXT_ENTRIES: ::aws_smithy_schema::
         1,
     )
     .with_list_member(&GETPOKEMONSPECIESOUTPUT_MEMBER_FLAVOR_TEXT_ENTRIES_MEMBER);
-/* ServerSchemaGenerator.kt:1467 */
+/* ServerSchemaGenerator.kt:1453 */
 static GETPOKEMONSPECIESOUTPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -460,14 +457,18 @@ static GETPOKEMONSPECIESOUTPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
         None,
     ))
     .with_original_name("GetPokemonSpeciesOutput");
-/* ServerSchemaGenerator.kt:137 */
+/* ServerSchemaGenerator.kt:136 */
 impl crate::output::GetPokemonSpeciesOutput {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> =
         &GETPOKEMONSPECIESOUTPUT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:291 */
+/* ServerSchemaGenerator.kt:290 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::GetPokemonSpeciesOutput {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -493,16 +494,16 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::GetPokemo
         Ok(())
     }
 }
-/* ServerCodegenVisitor.kt:409 */
+/* ServerCodegenVisitor.kt:419 */
 impl GetPokemonSpeciesOutput {
-    /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`GetPokemonSpeciesOutput`](crate::output::GetPokemonSpeciesOutput).
-    /* ServerBuilderGenerator.kt:304 */
+    /// /* ServerBuilderGenerator.kt:295 */Creates a new builder-style object to manufacture [`GetPokemonSpeciesOutput`](crate::output::GetPokemonSpeciesOutput).
+    /* ServerBuilderGenerator.kt:296 */
     pub fn builder() -> crate::output::get_pokemon_species_output::Builder {
-        /* ServerBuilderGenerator.kt:305 */
+        /* ServerBuilderGenerator.kt:297 */
         crate::output::get_pokemon_species_output::Builder::default()
-        /* ServerBuilderGenerator.kt:304 */
+        /* ServerBuilderGenerator.kt:296 */
     }
-    /* ServerCodegenVisitor.kt:409 */
+    /* ServerCodegenVisitor.kt:419 */
 }
 
 /// /* StructureGenerator.kt:197 */Contents of the Pokémon storage.
@@ -527,7 +528,7 @@ impl GetStorageOutput {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1310 */
+/* ServerSchemaGenerator.kt:1296 */
 static GETSTORAGEOUTPUT_MEMBER_COLLECTION_MEMBER: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -539,7 +540,7 @@ static GETSTORAGEOUTPUT_MEMBER_COLLECTION_MEMBER: ::aws_smithy_schema::Schema<'s
         "member",
         0,
     );
-/* ServerSchemaGenerator.kt:1548 */
+/* ServerSchemaGenerator.kt:1534 */
 static GETSTORAGEOUTPUT_MEMBER_COLLECTION: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -552,7 +553,7 @@ static GETSTORAGEOUTPUT_MEMBER_COLLECTION: ::aws_smithy_schema::Schema<'static> 
         0,
     )
     .with_list_member(&GETSTORAGEOUTPUT_MEMBER_COLLECTION_MEMBER);
-/* ServerSchemaGenerator.kt:1467 */
+/* ServerSchemaGenerator.kt:1453 */
 static GETSTORAGEOUTPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_struct(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -569,13 +570,17 @@ static GETSTORAGEOUTPUT_SCHEMA: ::aws_smithy_schema::Schema<'static> =
         None,
     ))
     .with_original_name("GetStorageOutput");
-/* ServerSchemaGenerator.kt:137 */
+/* ServerSchemaGenerator.kt:136 */
 impl crate::output::GetStorageOutput {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &GETSTORAGEOUTPUT_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:291 */
+/* ServerSchemaGenerator.kt:290 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::GetStorageOutput {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -597,18 +602,18 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::output::GetStorag
         Ok(())
     }
 }
-/* ServerCodegenVisitor.kt:409 */
+/* ServerCodegenVisitor.kt:419 */
 impl GetStorageOutput {
-    /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`GetStorageOutput`](crate::output::GetStorageOutput).
-    /* ServerBuilderGenerator.kt:304 */
+    /// /* ServerBuilderGenerator.kt:295 */Creates a new builder-style object to manufacture [`GetStorageOutput`](crate::output::GetStorageOutput).
+    /* ServerBuilderGenerator.kt:296 */
     pub fn builder() -> crate::output::get_storage_output::Builder {
-        /* ServerBuilderGenerator.kt:305 */
+        /* ServerBuilderGenerator.kt:297 */
         crate::output::get_storage_output::Builder::default()
-        /* ServerBuilderGenerator.kt:304 */
+        /* ServerBuilderGenerator.kt:296 */
     }
-    /* ServerCodegenVisitor.kt:409 */
+    /* ServerCodegenVisitor.kt:419 */
 }
-/// /* ServerBuilderGenerator.kt:173 */See [`GetServerStatisticsOutput`](crate::output::GetServerStatisticsOutput).
+/// /* ServerBuilderGenerator.kt:172 */See [`GetServerStatisticsOutput`](crate::output::GetServerStatisticsOutput).
 pub mod get_server_statistics_output {
 
     /* RustType.kt:534 */
@@ -638,7 +643,7 @@ pub mod get_server_statistics_output {
     }
     /* ServerBuilderConstraintViolations.kt:83 */
     impl ::std::error::Error for ConstraintViolation {}
-    /* ServerBuilderGenerator.kt:460 */
+    /* ServerBuilderGenerator.kt:452 */
     impl ::std::convert::TryFrom<Builder> for crate::output::GetServerStatisticsOutput {
         type Error = ConstraintViolation;
 
@@ -646,96 +651,96 @@ pub mod get_server_statistics_output {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:203 */A builder for [`GetServerStatisticsOutput`](crate::output::GetServerStatisticsOutput).
+    /// /* ServerBuilderGenerator.kt:202 */A builder for [`GetServerStatisticsOutput`](crate::output::GetServerStatisticsOutput).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:213 */
+    /* ServerBuilderGenerator.kt:212 */
     pub struct Builder {
-        /* ServerBuilderGenerator.kt:317 */
+        /* ServerBuilderGenerator.kt:309 */
         pub(crate) calls_count: ::std::option::Option<i64>,
-        /* ServerBuilderGenerator.kt:213 */
+        /* ServerBuilderGenerator.kt:212 */
     }
-    /* ServerBuilderGenerator.kt:217 */
+    /* ServerBuilderGenerator.kt:216 */
     impl Builder {
-        /// /* ServerBuilderGenerator.kt:340 */The number of calls executed by the server.
-        /* ServerBuilderGenerator.kt:352 */
+        /// /* ServerBuilderGenerator.kt:332 */The number of calls executed by the server.
+        /* ServerBuilderGenerator.kt:344 */
         pub fn calls_count(mut self, input: i64) -> Self {
-            /* ServerBuilderGenerator.kt:353 */
+            /* ServerBuilderGenerator.kt:345 */
             self.calls_count =
-                /* ServerBuilderGenerator.kt:354 */Some(
-                    /* ServerBuilderGenerator.kt:385 */input
-                /* ServerBuilderGenerator.kt:354 */)
-            /* ServerBuilderGenerator.kt:353 */;
+                /* ServerBuilderGenerator.kt:346 */Some(
+                    /* ServerBuilderGenerator.kt:377 */input
+                /* ServerBuilderGenerator.kt:346 */)
+            /* ServerBuilderGenerator.kt:345 */;
             self
-            /* ServerBuilderGenerator.kt:352 */
+            /* ServerBuilderGenerator.kt:344 */
         }
-        /// /* ServerBuilderGenerator.kt:267 */Consumes the builder and constructs a [`GetServerStatisticsOutput`](crate::output::GetServerStatisticsOutput).
-        /// /* ServerBuilderGenerator.kt:269 */
+        /// /* ServerBuilderGenerator.kt:259 */Consumes the builder and constructs a [`GetServerStatisticsOutput`](crate::output::GetServerStatisticsOutput).
+        /// /* ServerBuilderGenerator.kt:261 */
         /// The builder fails to construct a [`GetServerStatisticsOutput`](crate::output::GetServerStatisticsOutput) if a [`ConstraintViolation`] occurs.
         ///
-        /* ServerBuilderGenerator.kt:280 */
+        /* ServerBuilderGenerator.kt:272 */
         pub fn build(
             self,
         ) -> Result<crate::output::GetServerStatisticsOutput, ConstraintViolation> {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:292 */
+        /* ServerBuilderGenerator.kt:284 */
         fn build_enforcing_all_constraints(
             self,
         ) -> Result<crate::output::GetServerStatisticsOutput, ConstraintViolation> {
-            /* ServerBuilderGenerator.kt:296 */
+            /* ServerBuilderGenerator.kt:288 */
             Ok(
-                /* ServerBuilderGenerator.kt:560 */
+                /* ServerBuilderGenerator.kt:552 */
                 crate::output::GetServerStatisticsOutput {
-                    /* ServerBuilderGenerator.kt:564 */
+                    /* ServerBuilderGenerator.kt:556 */
                     calls_count: self
                         .calls_count
-                        /* ServerBuilderGenerator.kt:590 */
+                        /* ServerBuilderGenerator.kt:582 */
                         .ok_or(ConstraintViolation::MissingCallsCount)?,
-                    /* ServerBuilderGenerator.kt:560 */
-                }, /* ServerBuilderGenerator.kt:296 */
+                    /* ServerBuilderGenerator.kt:552 */
+                }, /* ServerBuilderGenerator.kt:288 */
             )
-            /* ServerBuilderGenerator.kt:292 */
+            /* ServerBuilderGenerator.kt:284 */
         }
-        /* ServerBuilderGenerator.kt:217 */
+        /* ServerBuilderGenerator.kt:216 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:173 */See [`DoNothingOutput`](crate::output::DoNothingOutput).
+/// /* ServerBuilderGenerator.kt:172 */See [`DoNothingOutput`](crate::output::DoNothingOutput).
 pub mod do_nothing_output {
 
-    /* ServerBuilderGenerator.kt:475 */
+    /* ServerBuilderGenerator.kt:467 */
     impl ::std::convert::From<Builder> for crate::output::DoNothingOutput {
         fn from(builder: Builder) -> Self {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:203 */A builder for [`DoNothingOutput`](crate::output::DoNothingOutput).
+    /// /* ServerBuilderGenerator.kt:202 */A builder for [`DoNothingOutput`](crate::output::DoNothingOutput).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:213 */
-    pub struct Builder {/* ServerBuilderGenerator.kt:213 */}
-    /* ServerBuilderGenerator.kt:217 */
+    /* ServerBuilderGenerator.kt:212 */
+    pub struct Builder {/* ServerBuilderGenerator.kt:212 */}
+    /* ServerBuilderGenerator.kt:216 */
     impl Builder {
-        /// /* ServerBuilderGenerator.kt:267 */Consumes the builder and constructs a [`DoNothingOutput`](crate::output::DoNothingOutput).
-        /* ServerBuilderGenerator.kt:280 */
+        /// /* ServerBuilderGenerator.kt:259 */Consumes the builder and constructs a [`DoNothingOutput`](crate::output::DoNothingOutput).
+        /* ServerBuilderGenerator.kt:272 */
         pub fn build(self) -> crate::output::DoNothingOutput {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:292 */
+        /* ServerBuilderGenerator.kt:284 */
         fn build_enforcing_all_constraints(self) -> crate::output::DoNothingOutput {
-            /* ServerBuilderGenerator.kt:560 */
+            /* ServerBuilderGenerator.kt:552 */
             crate::output::DoNothingOutput {
-            /* ServerBuilderGenerator.kt:560 */}
-            /* ServerBuilderGenerator.kt:292 */
+            /* ServerBuilderGenerator.kt:552 */}
+            /* ServerBuilderGenerator.kt:284 */
         }
-        /* ServerBuilderGenerator.kt:217 */
+        /* ServerBuilderGenerator.kt:216 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:173 */See [`CapturePokemonOutput`](crate::output::CapturePokemonOutput).
+/// /* ServerBuilderGenerator.kt:172 */See [`CapturePokemonOutput`](crate::output::CapturePokemonOutput).
 pub mod capture_pokemon_output {
 
     /* RustType.kt:534 */
@@ -765,7 +770,7 @@ pub mod capture_pokemon_output {
     }
     /* ServerBuilderConstraintViolations.kt:83 */
     impl ::std::error::Error for ConstraintViolation {}
-    /* ServerBuilderGenerator.kt:460 */
+    /* ServerBuilderGenerator.kt:452 */
     impl ::std::convert::TryFrom<Builder> for crate::output::CapturePokemonOutput {
         type Error = ConstraintViolation;
 
@@ -773,25 +778,25 @@ pub mod capture_pokemon_output {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:203 */A builder for [`CapturePokemonOutput`](crate::output::CapturePokemonOutput).
+    /// /* ServerBuilderGenerator.kt:202 */A builder for [`CapturePokemonOutput`](crate::output::CapturePokemonOutput).
     /* RustType.kt:534 */
     #[derive(::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:213 */
+    /* ServerBuilderGenerator.kt:212 */
     pub struct Builder {
-        /* ServerBuilderGenerator.kt:317 */
+        /* ServerBuilderGenerator.kt:309 */
         pub(crate) events: ::std::option::Option<
             ::aws_smithy_http::event_stream::EventStreamSender<
                 crate::model::CapturePokemonEvents,
                 crate::error::CapturePokemonEventsError,
             >,
         >,
-        /* ServerBuilderGenerator.kt:213 */
+        /* ServerBuilderGenerator.kt:212 */
     }
-    /* ServerBuilderGenerator.kt:217 */
+    /* ServerBuilderGenerator.kt:216 */
     impl Builder {
-        /* ServerBuilderGenerator.kt:340 */
+        /* ServerBuilderGenerator.kt:332 */
         #[allow(missing_docs)] // documentation missing in model
-                               /* ServerBuilderGenerator.kt:352 */
+                               /* ServerBuilderGenerator.kt:344 */
         pub fn events(
             mut self,
             input: ::aws_smithy_http::event_stream::EventStreamSender<
@@ -799,136 +804,136 @@ pub mod capture_pokemon_output {
                 crate::error::CapturePokemonEventsError,
             >,
         ) -> Self {
-            /* ServerBuilderGenerator.kt:353 */
+            /* ServerBuilderGenerator.kt:345 */
             self.events =
-                /* ServerBuilderGenerator.kt:354 */Some(
-                    /* ServerBuilderGenerator.kt:385 */input
-                /* ServerBuilderGenerator.kt:354 */)
-            /* ServerBuilderGenerator.kt:353 */;
+                /* ServerBuilderGenerator.kt:346 */Some(
+                    /* ServerBuilderGenerator.kt:377 */input
+                /* ServerBuilderGenerator.kt:346 */)
+            /* ServerBuilderGenerator.kt:345 */;
             self
-            /* ServerBuilderGenerator.kt:352 */
+            /* ServerBuilderGenerator.kt:344 */
         }
-        /// /* ServerBuilderGenerator.kt:267 */Consumes the builder and constructs a [`CapturePokemonOutput`](crate::output::CapturePokemonOutput).
-        /// /* ServerBuilderGenerator.kt:269 */
+        /// /* ServerBuilderGenerator.kt:259 */Consumes the builder and constructs a [`CapturePokemonOutput`](crate::output::CapturePokemonOutput).
+        /// /* ServerBuilderGenerator.kt:261 */
         /// The builder fails to construct a [`CapturePokemonOutput`](crate::output::CapturePokemonOutput) if a [`ConstraintViolation`] occurs.
         ///
-        /* ServerBuilderGenerator.kt:280 */
+        /* ServerBuilderGenerator.kt:272 */
         pub fn build(self) -> Result<crate::output::CapturePokemonOutput, ConstraintViolation> {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:292 */
+        /* ServerBuilderGenerator.kt:284 */
         fn build_enforcing_all_constraints(
             self,
         ) -> Result<crate::output::CapturePokemonOutput, ConstraintViolation> {
-            /* ServerBuilderGenerator.kt:296 */
+            /* ServerBuilderGenerator.kt:288 */
             Ok(
-                /* ServerBuilderGenerator.kt:560 */
+                /* ServerBuilderGenerator.kt:552 */
                 crate::output::CapturePokemonOutput {
-                    /* ServerBuilderGenerator.kt:564 */
+                    /* ServerBuilderGenerator.kt:556 */
                     events: self
                         .events
-                        /* ServerBuilderGenerator.kt:590 */
+                        /* ServerBuilderGenerator.kt:582 */
                         .ok_or(ConstraintViolation::MissingEvents)?,
-                    /* ServerBuilderGenerator.kt:560 */
-                }, /* ServerBuilderGenerator.kt:296 */
+                    /* ServerBuilderGenerator.kt:552 */
+                }, /* ServerBuilderGenerator.kt:288 */
             )
-            /* ServerBuilderGenerator.kt:292 */
+            /* ServerBuilderGenerator.kt:284 */
         }
-        /* ServerBuilderGenerator.kt:217 */
+        /* ServerBuilderGenerator.kt:216 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:173 */See [`CheckHealthOutput`](crate::output::CheckHealthOutput).
+/// /* ServerBuilderGenerator.kt:172 */See [`CheckHealthOutput`](crate::output::CheckHealthOutput).
 pub mod check_health_output {
 
-    /* ServerBuilderGenerator.kt:475 */
+    /* ServerBuilderGenerator.kt:467 */
     impl ::std::convert::From<Builder> for crate::output::CheckHealthOutput {
         fn from(builder: Builder) -> Self {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:203 */A builder for [`CheckHealthOutput`](crate::output::CheckHealthOutput).
+    /// /* ServerBuilderGenerator.kt:202 */A builder for [`CheckHealthOutput`](crate::output::CheckHealthOutput).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:213 */
-    pub struct Builder {/* ServerBuilderGenerator.kt:213 */}
-    /* ServerBuilderGenerator.kt:217 */
+    /* ServerBuilderGenerator.kt:212 */
+    pub struct Builder {/* ServerBuilderGenerator.kt:212 */}
+    /* ServerBuilderGenerator.kt:216 */
     impl Builder {
-        /// /* ServerBuilderGenerator.kt:267 */Consumes the builder and constructs a [`CheckHealthOutput`](crate::output::CheckHealthOutput).
-        /* ServerBuilderGenerator.kt:280 */
+        /// /* ServerBuilderGenerator.kt:259 */Consumes the builder and constructs a [`CheckHealthOutput`](crate::output::CheckHealthOutput).
+        /* ServerBuilderGenerator.kt:272 */
         pub fn build(self) -> crate::output::CheckHealthOutput {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:292 */
+        /* ServerBuilderGenerator.kt:284 */
         fn build_enforcing_all_constraints(self) -> crate::output::CheckHealthOutput {
-            /* ServerBuilderGenerator.kt:560 */
+            /* ServerBuilderGenerator.kt:552 */
             crate::output::CheckHealthOutput {
-            /* ServerBuilderGenerator.kt:560 */}
-            /* ServerBuilderGenerator.kt:292 */
+            /* ServerBuilderGenerator.kt:552 */}
+            /* ServerBuilderGenerator.kt:284 */
         }
-        /* ServerBuilderGenerator.kt:217 */
+        /* ServerBuilderGenerator.kt:216 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:173 */See [`StreamPokemonRadioOutput`](crate::output::StreamPokemonRadioOutput).
+/// /* ServerBuilderGenerator.kt:172 */See [`StreamPokemonRadioOutput`](crate::output::StreamPokemonRadioOutput).
 pub mod stream_pokemon_radio_output {
 
-    /* ServerBuilderGenerator.kt:475 */
+    /* ServerBuilderGenerator.kt:467 */
     impl ::std::convert::From<Builder> for crate::output::StreamPokemonRadioOutput {
         fn from(builder: Builder) -> Self {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:203 */A builder for [`StreamPokemonRadioOutput`](crate::output::StreamPokemonRadioOutput).
+    /// /* ServerBuilderGenerator.kt:202 */A builder for [`StreamPokemonRadioOutput`](crate::output::StreamPokemonRadioOutput).
     /* RustType.kt:534 */
     #[derive(::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:213 */
+    /* ServerBuilderGenerator.kt:212 */
     pub struct Builder {
-        /* ServerBuilderGenerator.kt:317 */
+        /* ServerBuilderGenerator.kt:309 */
         pub(crate) data: ::std::option::Option<::aws_smithy_types::byte_stream::ByteStream>,
-        /* ServerBuilderGenerator.kt:213 */
+        /* ServerBuilderGenerator.kt:212 */
     }
-    /* ServerBuilderGenerator.kt:217 */
+    /* ServerBuilderGenerator.kt:216 */
     impl Builder {
-        /* ServerBuilderGenerator.kt:340 */
+        /* ServerBuilderGenerator.kt:332 */
         #[allow(missing_docs)] // documentation missing in model
-                               /* ServerBuilderGenerator.kt:352 */
+                               /* ServerBuilderGenerator.kt:344 */
         pub fn data(mut self, input: ::aws_smithy_types::byte_stream::ByteStream) -> Self {
-            /* ServerBuilderGenerator.kt:353 */
+            /* ServerBuilderGenerator.kt:345 */
             self.data =
-                /* ServerBuilderGenerator.kt:354 */Some(
-                    /* ServerBuilderGenerator.kt:385 */input
-                /* ServerBuilderGenerator.kt:354 */)
-            /* ServerBuilderGenerator.kt:353 */;
+                /* ServerBuilderGenerator.kt:346 */Some(
+                    /* ServerBuilderGenerator.kt:377 */input
+                /* ServerBuilderGenerator.kt:346 */)
+            /* ServerBuilderGenerator.kt:345 */;
             self
-            /* ServerBuilderGenerator.kt:352 */
+            /* ServerBuilderGenerator.kt:344 */
         }
-        /// /* ServerBuilderGenerator.kt:267 */Consumes the builder and constructs a [`StreamPokemonRadioOutput`](crate::output::StreamPokemonRadioOutput).
-        /* ServerBuilderGenerator.kt:280 */
+        /// /* ServerBuilderGenerator.kt:259 */Consumes the builder and constructs a [`StreamPokemonRadioOutput`](crate::output::StreamPokemonRadioOutput).
+        /* ServerBuilderGenerator.kt:272 */
         pub fn build(self) -> crate::output::StreamPokemonRadioOutput {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:292 */
+        /* ServerBuilderGenerator.kt:284 */
         fn build_enforcing_all_constraints(self) -> crate::output::StreamPokemonRadioOutput {
-            /* ServerBuilderGenerator.kt:560 */
+            /* ServerBuilderGenerator.kt:552 */
             crate::output::StreamPokemonRadioOutput {
-                /* ServerBuilderGenerator.kt:564 */
+                /* ServerBuilderGenerator.kt:556 */
                 data: self
                     .data
                     /* ServerBuilderGeneratorCommon.kt:95 */
                     .unwrap_or_default(),
-                /* ServerBuilderGenerator.kt:560 */
+                /* ServerBuilderGenerator.kt:552 */
             }
-            /* ServerBuilderGenerator.kt:292 */
+            /* ServerBuilderGenerator.kt:284 */
         }
-        /* ServerBuilderGenerator.kt:217 */
+        /* ServerBuilderGenerator.kt:216 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:173 */See [`GetPokemonSpeciesOutput`](crate::output::GetPokemonSpeciesOutput).
+/// /* ServerBuilderGenerator.kt:172 */See [`GetPokemonSpeciesOutput`](crate::output::GetPokemonSpeciesOutput).
 pub mod get_pokemon_species_output {
 
     /* RustType.kt:534 */
@@ -962,7 +967,7 @@ pub mod get_pokemon_species_output {
     }
     /* ServerBuilderConstraintViolations.kt:83 */
     impl ::std::error::Error for ConstraintViolation {}
-    /* ServerBuilderGenerator.kt:460 */
+    /* ServerBuilderGenerator.kt:452 */
     impl ::std::convert::TryFrom<Builder> for crate::output::GetPokemonSpeciesOutput {
         type Error = ConstraintViolation;
 
@@ -970,85 +975,85 @@ pub mod get_pokemon_species_output {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:203 */A builder for [`GetPokemonSpeciesOutput`](crate::output::GetPokemonSpeciesOutput).
+    /// /* ServerBuilderGenerator.kt:202 */A builder for [`GetPokemonSpeciesOutput`](crate::output::GetPokemonSpeciesOutput).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:213 */
+    /* ServerBuilderGenerator.kt:212 */
     pub struct Builder {
-        /* ServerBuilderGenerator.kt:317 */
+        /* ServerBuilderGenerator.kt:309 */
         pub(crate) name: ::std::option::Option<::std::string::String>,
-        /* ServerBuilderGenerator.kt:317 */
+        /* ServerBuilderGenerator.kt:309 */
         pub(crate) flavor_text_entries:
             ::std::option::Option<::std::vec::Vec<crate::model::FlavorText>>,
-        /* ServerBuilderGenerator.kt:213 */
+        /* ServerBuilderGenerator.kt:212 */
     }
-    /* ServerBuilderGenerator.kt:217 */
+    /* ServerBuilderGenerator.kt:216 */
     impl Builder {
-        /// /* ServerBuilderGenerator.kt:340 */The name for this resource.
-        /* ServerBuilderGenerator.kt:352 */
+        /// /* ServerBuilderGenerator.kt:332 */The name for this resource.
+        /* ServerBuilderGenerator.kt:344 */
         pub fn name(mut self, input: ::std::string::String) -> Self {
-            /* ServerBuilderGenerator.kt:353 */
+            /* ServerBuilderGenerator.kt:345 */
             self.name =
-                /* ServerBuilderGenerator.kt:354 */Some(
-                    /* ServerBuilderGenerator.kt:385 */input
-                /* ServerBuilderGenerator.kt:354 */)
-            /* ServerBuilderGenerator.kt:353 */;
+                /* ServerBuilderGenerator.kt:346 */Some(
+                    /* ServerBuilderGenerator.kt:377 */input
+                /* ServerBuilderGenerator.kt:346 */)
+            /* ServerBuilderGenerator.kt:345 */;
             self
-            /* ServerBuilderGenerator.kt:352 */
+            /* ServerBuilderGenerator.kt:344 */
         }
-        /// /* ServerBuilderGenerator.kt:340 */A list of flavor text entries for this Pokémon species.
-        /* ServerBuilderGenerator.kt:352 */
+        /// /* ServerBuilderGenerator.kt:332 */A list of flavor text entries for this Pokémon species.
+        /* ServerBuilderGenerator.kt:344 */
         pub fn flavor_text_entries(
             mut self,
             input: ::std::vec::Vec<crate::model::FlavorText>,
         ) -> Self {
-            /* ServerBuilderGenerator.kt:353 */
+            /* ServerBuilderGenerator.kt:345 */
             self.flavor_text_entries =
-                /* ServerBuilderGenerator.kt:354 */Some(
-                    /* ServerBuilderGenerator.kt:385 */input
-                /* ServerBuilderGenerator.kt:354 */)
-            /* ServerBuilderGenerator.kt:353 */;
+                /* ServerBuilderGenerator.kt:346 */Some(
+                    /* ServerBuilderGenerator.kt:377 */input
+                /* ServerBuilderGenerator.kt:346 */)
+            /* ServerBuilderGenerator.kt:345 */;
             self
-            /* ServerBuilderGenerator.kt:352 */
+            /* ServerBuilderGenerator.kt:344 */
         }
-        /// /* ServerBuilderGenerator.kt:267 */Consumes the builder and constructs a [`GetPokemonSpeciesOutput`](crate::output::GetPokemonSpeciesOutput).
-        /// /* ServerBuilderGenerator.kt:269 */
+        /// /* ServerBuilderGenerator.kt:259 */Consumes the builder and constructs a [`GetPokemonSpeciesOutput`](crate::output::GetPokemonSpeciesOutput).
+        /// /* ServerBuilderGenerator.kt:261 */
         /// The builder fails to construct a [`GetPokemonSpeciesOutput`](crate::output::GetPokemonSpeciesOutput) if a [`ConstraintViolation`] occurs.
         ///
-        /// /* ServerBuilderGenerator.kt:277 */If the builder fails, it will return the _first_ encountered [`ConstraintViolation`].
-        /* ServerBuilderGenerator.kt:280 */
+        /// /* ServerBuilderGenerator.kt:269 */If the builder fails, it will return the _first_ encountered [`ConstraintViolation`].
+        /* ServerBuilderGenerator.kt:272 */
         pub fn build(self) -> Result<crate::output::GetPokemonSpeciesOutput, ConstraintViolation> {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:292 */
+        /* ServerBuilderGenerator.kt:284 */
         fn build_enforcing_all_constraints(
             self,
         ) -> Result<crate::output::GetPokemonSpeciesOutput, ConstraintViolation> {
-            /* ServerBuilderGenerator.kt:296 */
+            /* ServerBuilderGenerator.kt:288 */
             Ok(
-                /* ServerBuilderGenerator.kt:560 */
+                /* ServerBuilderGenerator.kt:552 */
                 crate::output::GetPokemonSpeciesOutput {
-                    /* ServerBuilderGenerator.kt:564 */
+                    /* ServerBuilderGenerator.kt:556 */
                     name: self
                         .name
-                        /* ServerBuilderGenerator.kt:590 */
+                        /* ServerBuilderGenerator.kt:582 */
                         .ok_or(ConstraintViolation::MissingName)?,
-                    /* ServerBuilderGenerator.kt:564 */
+                    /* ServerBuilderGenerator.kt:556 */
                     flavor_text_entries: self
                         .flavor_text_entries
-                        /* ServerBuilderGenerator.kt:590 */
+                        /* ServerBuilderGenerator.kt:582 */
                         .ok_or(ConstraintViolation::MissingFlavorTextEntries)?,
-                    /* ServerBuilderGenerator.kt:560 */
-                }, /* ServerBuilderGenerator.kt:296 */
+                    /* ServerBuilderGenerator.kt:552 */
+                }, /* ServerBuilderGenerator.kt:288 */
             )
-            /* ServerBuilderGenerator.kt:292 */
+            /* ServerBuilderGenerator.kt:284 */
         }
-        /* ServerBuilderGenerator.kt:217 */
+        /* ServerBuilderGenerator.kt:216 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:173 */See [`GetStorageOutput`](crate::output::GetStorageOutput).
+/// /* ServerBuilderGenerator.kt:172 */See [`GetStorageOutput`](crate::output::GetStorageOutput).
 pub mod get_storage_output {
 
     /* RustType.kt:534 */
@@ -1078,7 +1083,7 @@ pub mod get_storage_output {
     }
     /* ServerBuilderConstraintViolations.kt:83 */
     impl ::std::error::Error for ConstraintViolation {}
-    /* ServerBuilderGenerator.kt:460 */
+    /* ServerBuilderGenerator.kt:452 */
     impl ::std::convert::TryFrom<Builder> for crate::output::GetStorageOutput {
         type Error = ConstraintViolation;
 
@@ -1086,56 +1091,56 @@ pub mod get_storage_output {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:203 */A builder for [`GetStorageOutput`](crate::output::GetStorageOutput).
+    /// /* ServerBuilderGenerator.kt:202 */A builder for [`GetStorageOutput`](crate::output::GetStorageOutput).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:213 */
+    /* ServerBuilderGenerator.kt:212 */
     pub struct Builder {
-        /* ServerBuilderGenerator.kt:317 */
+        /* ServerBuilderGenerator.kt:309 */
         pub(crate) collection: ::std::option::Option<::std::vec::Vec<::std::string::String>>,
-        /* ServerBuilderGenerator.kt:213 */
+        /* ServerBuilderGenerator.kt:212 */
     }
-    /* ServerBuilderGenerator.kt:217 */
+    /* ServerBuilderGenerator.kt:216 */
     impl Builder {
-        /// /* ServerBuilderGenerator.kt:340 */A list of Pokémon species.
-        /* ServerBuilderGenerator.kt:352 */
+        /// /* ServerBuilderGenerator.kt:332 */A list of Pokémon species.
+        /* ServerBuilderGenerator.kt:344 */
         pub fn collection(mut self, input: ::std::vec::Vec<::std::string::String>) -> Self {
-            /* ServerBuilderGenerator.kt:353 */
+            /* ServerBuilderGenerator.kt:345 */
             self.collection =
-                /* ServerBuilderGenerator.kt:354 */Some(
-                    /* ServerBuilderGenerator.kt:385 */input
-                /* ServerBuilderGenerator.kt:354 */)
-            /* ServerBuilderGenerator.kt:353 */;
+                /* ServerBuilderGenerator.kt:346 */Some(
+                    /* ServerBuilderGenerator.kt:377 */input
+                /* ServerBuilderGenerator.kt:346 */)
+            /* ServerBuilderGenerator.kt:345 */;
             self
-            /* ServerBuilderGenerator.kt:352 */
+            /* ServerBuilderGenerator.kt:344 */
         }
-        /// /* ServerBuilderGenerator.kt:267 */Consumes the builder and constructs a [`GetStorageOutput`](crate::output::GetStorageOutput).
-        /// /* ServerBuilderGenerator.kt:269 */
+        /// /* ServerBuilderGenerator.kt:259 */Consumes the builder and constructs a [`GetStorageOutput`](crate::output::GetStorageOutput).
+        /// /* ServerBuilderGenerator.kt:261 */
         /// The builder fails to construct a [`GetStorageOutput`](crate::output::GetStorageOutput) if a [`ConstraintViolation`] occurs.
         ///
-        /* ServerBuilderGenerator.kt:280 */
+        /* ServerBuilderGenerator.kt:272 */
         pub fn build(self) -> Result<crate::output::GetStorageOutput, ConstraintViolation> {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:292 */
+        /* ServerBuilderGenerator.kt:284 */
         fn build_enforcing_all_constraints(
             self,
         ) -> Result<crate::output::GetStorageOutput, ConstraintViolation> {
-            /* ServerBuilderGenerator.kt:296 */
+            /* ServerBuilderGenerator.kt:288 */
             Ok(
-                /* ServerBuilderGenerator.kt:560 */
+                /* ServerBuilderGenerator.kt:552 */
                 crate::output::GetStorageOutput {
-                    /* ServerBuilderGenerator.kt:564 */
+                    /* ServerBuilderGenerator.kt:556 */
                     collection: self
                         .collection
-                        /* ServerBuilderGenerator.kt:590 */
+                        /* ServerBuilderGenerator.kt:582 */
                         .ok_or(ConstraintViolation::MissingCollection)?,
-                    /* ServerBuilderGenerator.kt:560 */
-                }, /* ServerBuilderGenerator.kt:296 */
+                    /* ServerBuilderGenerator.kt:552 */
+                }, /* ServerBuilderGenerator.kt:288 */
             )
-            /* ServerBuilderGenerator.kt:292 */
+            /* ServerBuilderGenerator.kt:284 */
         }
-        /* ServerBuilderGenerator.kt:217 */
+        /* ServerBuilderGenerator.kt:216 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */

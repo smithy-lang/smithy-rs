@@ -85,7 +85,12 @@ pub enum AuthorizeServiceError<E> {
 /// the `SerializableStruct`, `Display`, `Error`, and
 /// `HttpModeledError` implementations that protocols use to serialize the error.
 #[derive(Debug, SmithySchema)]
-#[smithy(namespace = "pokemon_service.authz", error = "client", http_error = 401)]
+#[smithy(
+    namespace = "pokemon_service.authz",
+    error = "client",
+    http_error = 401,
+    target = "server"
+)]
 pub struct AuthorizeError {
     pub message: String,
 }
@@ -111,15 +116,15 @@ impl<E: HttpModeledError> std::error::Error for AuthorizeServiceError<E> {
     }
 }
 impl<E: HttpModeledError> SerializableStruct for AuthorizeServiceError<E> {
+    fn schema(&self) -> &Schema<'_> {
+        self.error().schema()
+    }
+
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         self.error().serialize_members(serializer)
     }
 }
 impl<E: HttpModeledError> HttpModeledError for AuthorizeServiceError<E> {
-    fn schema(&self) -> &Schema<'_> {
-        self.error().schema()
-    }
-
     fn status_code(&self) -> u16 {
         self.error().status_code()
     }
@@ -232,9 +237,9 @@ impl_service!(T1, T2, T3, T4, T5, T6, T7);
 mod tests {
     use super::*;
     use http_body_util::BodyExt;
-    use pokemon_service_server_sdk::server::protocol::{
-        aws_json_10::AwsJson1_0Protocol, aws_json_11::AwsJson1_1Protocol,
-        rest_json_1::RestJson1Protocol, rest_xml::RestXmlProtocol, rpc_v2_cbor::RpcV2CborProtocol,
+    use pokemon_service_server_sdk::server::schema::protocol::{
+        AwsJson1_0Protocol, AwsJson1_1Protocol, RestJson1Protocol, RestXmlProtocol,
+        RpcV2CborProtocol,
     };
     use pokemon_service_server_sdk::server::schema::ServerProtocol;
 

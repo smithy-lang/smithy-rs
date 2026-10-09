@@ -67,7 +67,8 @@ impl ::std::fmt::Display for CapturePokemonError {
             /* ServerOperationErrorGenerator.kt:82 */
             {
                 _inner.fmt(f)
-            } /* ServerOperationErrorGenerator.kt:164 */
+            }
+            /* ServerOperationErrorGenerator.kt:164 */
         }
         /* ServerOperationErrorGenerator.kt:80 */
     }
@@ -154,7 +155,8 @@ impl CapturePokemonError {
             /* ServerOperationErrorGenerator.kt:99 */
             {
                 _inner.name()
-            } /* ServerOperationErrorGenerator.kt:164 */
+            }
+            /* ServerOperationErrorGenerator.kt:164 */
         }
         /* ServerOperationErrorGenerator.kt:97 */
     }
@@ -199,7 +201,8 @@ impl ::std::error::Error for CapturePokemonError {
             /* ServerOperationErrorGenerator.kt:107 */
             {
                 Some(_inner)
-            } /* ServerOperationErrorGenerator.kt:164 */
+            }
+            /* ServerOperationErrorGenerator.kt:164 */
         }
         /* ServerOperationErrorGenerator.kt:105 */
     }
@@ -208,6 +211,48 @@ impl ::std::error::Error for CapturePokemonError {
 /* ServerOperationErrorGenerator.kt:117 */
 impl ::aws_smithy_schema::serde::SerializableStruct for CapturePokemonError {
     /* ServerOperationErrorGenerator.kt:118 */
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        /* ServerOperationErrorGenerator.kt:164 */
+        match &self {
+            /* ServerOperationErrorGenerator.kt:167 */
+            CapturePokemonError::UnsupportedRegionError(_inner) =>
+            /* ServerOperationErrorGenerator.kt:119 */
+            {
+                ::aws_smithy_schema::serde::SerializableStruct::schema(_inner)
+            }
+            ,
+            /* ServerOperationErrorGenerator.kt:167 */
+            CapturePokemonError::ThrottlingError(_inner) =>
+            /* ServerOperationErrorGenerator.kt:119 */
+            {
+                ::aws_smithy_schema::serde::SerializableStruct::schema(_inner)
+            }
+            ,
+            /* ServerOperationErrorGenerator.kt:167 */
+            CapturePokemonError::ValidationException(_inner) =>
+            /* ServerOperationErrorGenerator.kt:119 */
+            {
+                ::aws_smithy_schema::serde::SerializableStruct::schema(_inner)
+            }
+            ,
+            /* ServerOperationErrorGenerator.kt:167 */
+            CapturePokemonError::MasterBallUnsuccessful(_inner) =>
+            /* ServerOperationErrorGenerator.kt:119 */
+            {
+                ::aws_smithy_schema::serde::SerializableStruct::schema(_inner)
+            }
+            ,
+            /* ServerOperationErrorGenerator.kt:167 */
+            CapturePokemonError::InvalidPokeballError(_inner) =>
+            /* ServerOperationErrorGenerator.kt:119 */
+            {
+                ::aws_smithy_schema::serde::SerializableStruct::schema(_inner)
+            }
+            /* ServerOperationErrorGenerator.kt:164 */
+        }
+        /* ServerOperationErrorGenerator.kt:118 */
+    }
+    /* ServerOperationErrorGenerator.kt:122 */
     fn serialize_members(
         &self,
         serializer: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer,
@@ -216,7 +261,7 @@ impl ::aws_smithy_schema::serde::SerializableStruct for CapturePokemonError {
         match &self {
             /* ServerOperationErrorGenerator.kt:167 */
             CapturePokemonError::UnsupportedRegionError(_inner) =>
-            /* ServerOperationErrorGenerator.kt:119 */
+            /* ServerOperationErrorGenerator.kt:123 */
             {
                 ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
                     _inner, serializer,
@@ -225,7 +270,7 @@ impl ::aws_smithy_schema::serde::SerializableStruct for CapturePokemonError {
             ,
             /* ServerOperationErrorGenerator.kt:167 */
             CapturePokemonError::ThrottlingError(_inner) =>
-            /* ServerOperationErrorGenerator.kt:119 */
+            /* ServerOperationErrorGenerator.kt:123 */
             {
                 ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
                     _inner, serializer,
@@ -234,7 +279,7 @@ impl ::aws_smithy_schema::serde::SerializableStruct for CapturePokemonError {
             ,
             /* ServerOperationErrorGenerator.kt:167 */
             CapturePokemonError::ValidationException(_inner) =>
-            /* ServerOperationErrorGenerator.kt:119 */
+            /* ServerOperationErrorGenerator.kt:123 */
             {
                 ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
                     _inner, serializer,
@@ -243,7 +288,7 @@ impl ::aws_smithy_schema::serde::SerializableStruct for CapturePokemonError {
             ,
             /* ServerOperationErrorGenerator.kt:167 */
             CapturePokemonError::MasterBallUnsuccessful(_inner) =>
-            /* ServerOperationErrorGenerator.kt:119 */
+            /* ServerOperationErrorGenerator.kt:123 */
             {
                 ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
                     _inner, serializer,
@@ -252,60 +297,20 @@ impl ::aws_smithy_schema::serde::SerializableStruct for CapturePokemonError {
             ,
             /* ServerOperationErrorGenerator.kt:167 */
             CapturePokemonError::InvalidPokeballError(_inner) =>
-            /* ServerOperationErrorGenerator.kt:119 */
+            /* ServerOperationErrorGenerator.kt:123 */
             {
                 ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
                     _inner, serializer,
                 )
-            } /* ServerOperationErrorGenerator.kt:164 */
+            }
+            /* ServerOperationErrorGenerator.kt:164 */
         }
-        /* ServerOperationErrorGenerator.kt:118 */
+        /* ServerOperationErrorGenerator.kt:122 */
     }
     /* ServerOperationErrorGenerator.kt:117 */
 }
-/* ServerOperationErrorGenerator.kt:122 */
+/* ServerOperationErrorGenerator.kt:126 */
 impl ::aws_smithy_http_server::schema::HttpModeledError for CapturePokemonError {
-    /* ServerOperationErrorGenerator.kt:123 */
-    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
-        /* ServerOperationErrorGenerator.kt:164 */
-        match &self {
-            /* ServerOperationErrorGenerator.kt:167 */
-            CapturePokemonError::UnsupportedRegionError(_inner) =>
-            /* ServerOperationErrorGenerator.kt:124 */
-            {
-                ::aws_smithy_http_server::schema::HttpModeledError::schema(_inner)
-            }
-            ,
-            /* ServerOperationErrorGenerator.kt:167 */
-            CapturePokemonError::ThrottlingError(_inner) =>
-            /* ServerOperationErrorGenerator.kt:124 */
-            {
-                ::aws_smithy_http_server::schema::HttpModeledError::schema(_inner)
-            }
-            ,
-            /* ServerOperationErrorGenerator.kt:167 */
-            CapturePokemonError::ValidationException(_inner) =>
-            /* ServerOperationErrorGenerator.kt:124 */
-            {
-                ::aws_smithy_http_server::schema::HttpModeledError::schema(_inner)
-            }
-            ,
-            /* ServerOperationErrorGenerator.kt:167 */
-            CapturePokemonError::MasterBallUnsuccessful(_inner) =>
-            /* ServerOperationErrorGenerator.kt:124 */
-            {
-                ::aws_smithy_http_server::schema::HttpModeledError::schema(_inner)
-            }
-            ,
-            /* ServerOperationErrorGenerator.kt:167 */
-            CapturePokemonError::InvalidPokeballError(_inner) =>
-            /* ServerOperationErrorGenerator.kt:124 */
-            {
-                ::aws_smithy_http_server::schema::HttpModeledError::schema(_inner)
-            } /* ServerOperationErrorGenerator.kt:164 */
-        }
-        /* ServerOperationErrorGenerator.kt:123 */
-    }
     /* ServerOperationErrorGenerator.kt:127 */
     fn status_code(&self) -> u16 {
         /* ServerOperationErrorGenerator.kt:164 */
@@ -343,11 +348,12 @@ impl ::aws_smithy_http_server::schema::HttpModeledError for CapturePokemonError 
             /* ServerOperationErrorGenerator.kt:128 */
             {
                 ::aws_smithy_http_server::schema::HttpModeledError::status_code(_inner)
-            } /* ServerOperationErrorGenerator.kt:164 */
+            }
+            /* ServerOperationErrorGenerator.kt:164 */
         }
         /* ServerOperationErrorGenerator.kt:127 */
     }
-    /* ServerOperationErrorGenerator.kt:122 */
+    /* ServerOperationErrorGenerator.kt:126 */
 }
 /* ServerOperationErrorGenerator.kt:135 */
 impl ::std::convert::From<crate::error::UnsupportedRegionError>
@@ -431,7 +437,7 @@ impl UnsupportedRegionError {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1548 */
+/* ServerSchemaGenerator.kt:1534 */
 static UNSUPPORTEDREGIONERROR_MEMBER_REGION: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -443,7 +449,7 @@ static UNSUPPORTEDREGIONERROR_MEMBER_REGION: ::aws_smithy_schema::Schema<'static
         "region",
         0,
     );
-/* ServerSchemaGenerator.kt:1448 */
+/* ServerSchemaGenerator.kt:1434 */
 static UNSUPPORTEDREGIONERROR_TRAITS: std::sync::LazyLock<::aws_smithy_schema::TraitMap> =
     std::sync::LazyLock::new(|| {
         let mut map = ::aws_smithy_schema::TraitMap::new();
@@ -466,14 +472,18 @@ static UNSUPPORTEDREGIONERROR_SCHEMA: ::aws_smithy_schema::Schema<'static> =
         &[&UNSUPPORTEDREGIONERROR_MEMBER_REGION],
     )
     .with_traits(&UNSUPPORTEDREGIONERROR_TRAITS);
-/* ServerSchemaGenerator.kt:137 */
+/* ServerSchemaGenerator.kt:136 */
 impl crate::error::UnsupportedRegionError {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> =
         &UNSUPPORTEDREGIONERROR_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:291 */
+/* ServerSchemaGenerator.kt:290 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::error::UnsupportedRegionError {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -510,25 +520,22 @@ impl ::std::fmt::Display for UnsupportedRegionError {
 }
 /* ErrorImplGenerator.kt:180 */
 impl ::std::error::Error for UnsupportedRegionError {}
-/* ServerCodegenVisitor.kt:376 */
+/* ServerCodegenVisitor.kt:388 */
 impl ::aws_smithy_http_server::schema::HttpModeledError for UnsupportedRegionError {
-    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
-        Self::SCHEMA
-    }
     fn status_code(&self) -> u16 {
         500
     }
 }
-/* ServerCodegenVisitor.kt:409 */
+/* ServerCodegenVisitor.kt:419 */
 impl UnsupportedRegionError {
-    /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`UnsupportedRegionError`](crate::error::UnsupportedRegionError).
-    /* ServerBuilderGenerator.kt:304 */
+    /// /* ServerBuilderGenerator.kt:295 */Creates a new builder-style object to manufacture [`UnsupportedRegionError`](crate::error::UnsupportedRegionError).
+    /* ServerBuilderGenerator.kt:296 */
     pub fn builder() -> crate::error::unsupported_region_error::Builder {
-        /* ServerBuilderGenerator.kt:305 */
+        /* ServerBuilderGenerator.kt:297 */
         crate::error::unsupported_region_error::Builder::default()
-        /* ServerBuilderGenerator.kt:304 */
+        /* ServerBuilderGenerator.kt:296 */
     }
-    /* ServerCodegenVisitor.kt:409 */
+    /* ServerCodegenVisitor.kt:419 */
 }
 
 /* StructureGenerator.kt:197 */
@@ -538,7 +545,7 @@ impl UnsupportedRegionError {
     ::std::clone::Clone, ::std::cmp::Eq, ::std::cmp::PartialEq, ::std::fmt::Debug, ::std::hash::Hash,
 )]
 pub /* StructureGenerator.kt:201 */ struct ThrottlingError {/* StructureGenerator.kt:201 */}
-/* ServerSchemaGenerator.kt:1448 */
+/* ServerSchemaGenerator.kt:1434 */
 static THROTTLINGERROR_TRAITS: std::sync::LazyLock<::aws_smithy_schema::TraitMap> =
     std::sync::LazyLock::new(|| {
         let mut map = ::aws_smithy_schema::TraitMap::new();
@@ -561,13 +568,17 @@ static THROTTLINGERROR_SCHEMA: ::aws_smithy_schema::Schema<'static> =
         &[],
     )
     .with_traits(&THROTTLINGERROR_TRAITS);
-/* ServerSchemaGenerator.kt:137 */
+/* ServerSchemaGenerator.kt:136 */
 impl crate::error::ThrottlingError {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &THROTTLINGERROR_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:291 */
+/* ServerSchemaGenerator.kt:290 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::error::ThrottlingError {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -600,25 +611,22 @@ impl ::std::fmt::Display for ThrottlingError {
 }
 /* ErrorImplGenerator.kt:180 */
 impl ::std::error::Error for ThrottlingError {}
-/* ServerCodegenVisitor.kt:376 */
+/* ServerCodegenVisitor.kt:388 */
 impl ::aws_smithy_http_server::schema::HttpModeledError for ThrottlingError {
-    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
-        Self::SCHEMA
-    }
     fn status_code(&self) -> u16 {
         400
     }
 }
-/* ServerCodegenVisitor.kt:409 */
+/* ServerCodegenVisitor.kt:419 */
 impl ThrottlingError {
-    /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`ThrottlingError`](crate::error::ThrottlingError).
-    /* ServerBuilderGenerator.kt:304 */
+    /// /* ServerBuilderGenerator.kt:295 */Creates a new builder-style object to manufacture [`ThrottlingError`](crate::error::ThrottlingError).
+    /* ServerBuilderGenerator.kt:296 */
     pub fn builder() -> crate::error::throttling_error::Builder {
-        /* ServerBuilderGenerator.kt:305 */
+        /* ServerBuilderGenerator.kt:297 */
         crate::error::throttling_error::Builder::default()
-        /* ServerBuilderGenerator.kt:304 */
+        /* ServerBuilderGenerator.kt:296 */
     }
-    /* ServerCodegenVisitor.kt:409 */
+    /* ServerCodegenVisitor.kt:419 */
 }
 
 /// /* StructureGenerator.kt:197 */A standard error for input validation failures. This should be thrown by services when a member of the input structure falls outside of the modeled or documented constraints.
@@ -644,7 +652,7 @@ impl ValidationException {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1548 */
+/* ServerSchemaGenerator.kt:1534 */
 static VALIDATIONEXCEPTION_MEMBER_MESSAGE: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -656,19 +664,7 @@ static VALIDATIONEXCEPTION_MEMBER_MESSAGE: ::aws_smithy_schema::Schema<'static> 
         "message",
         0,
     );
-/* ServerSchemaGenerator.kt:1083 */
-static VALIDATIONEXCEPTION_MEMBER_FIELD_LIST_MEMBER_TARGET_TRAITS: std::sync::LazyLock<
-    ::aws_smithy_schema::TraitMap,
-> = std::sync::LazyLock::new(|| {
-    let mut map = ::aws_smithy_schema::TraitMap::new();
-    map.insert(::std::boxed::Box::new(
-        ::aws_smithy_http_server::schema::TargetSchema::new(
-            crate::model::ValidationExceptionField::SCHEMA,
-        ),
-    ));
-    map
-});
-/* ServerSchemaGenerator.kt:1310 */
+/* ServerSchemaGenerator.kt:1296 */
 static VALIDATIONEXCEPTION_MEMBER_FIELD_LIST_MEMBER: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -679,9 +675,8 @@ static VALIDATIONEXCEPTION_MEMBER_FIELD_LIST_MEMBER: ::aws_smithy_schema::Schema
         ::aws_smithy_schema::ShapeType::Structure,
         "member",
         0,
-    )
-    .with_traits(&VALIDATIONEXCEPTION_MEMBER_FIELD_LIST_MEMBER_TARGET_TRAITS);
-/* ServerSchemaGenerator.kt:1548 */
+    );
+/* ServerSchemaGenerator.kt:1534 */
 static VALIDATIONEXCEPTION_MEMBER_FIELD_LIST: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -694,7 +689,7 @@ static VALIDATIONEXCEPTION_MEMBER_FIELD_LIST: ::aws_smithy_schema::Schema<'stati
         1,
     )
     .with_list_member(&VALIDATIONEXCEPTION_MEMBER_FIELD_LIST_MEMBER);
-/* ServerSchemaGenerator.kt:1448 */
+/* ServerSchemaGenerator.kt:1434 */
 static VALIDATIONEXCEPTION_TRAITS: std::sync::LazyLock<::aws_smithy_schema::TraitMap> =
     std::sync::LazyLock::new(|| {
         let mut map = ::aws_smithy_schema::TraitMap::new();
@@ -720,13 +715,17 @@ static VALIDATIONEXCEPTION_SCHEMA: ::aws_smithy_schema::Schema<'static> =
         ],
     )
     .with_traits(&VALIDATIONEXCEPTION_TRAITS);
-/* ServerSchemaGenerator.kt:137 */
+/* ServerSchemaGenerator.kt:136 */
 impl crate::error::ValidationException {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &VALIDATIONEXCEPTION_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:291 */
+/* ServerSchemaGenerator.kt:290 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::error::ValidationException {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -785,25 +784,22 @@ impl ::std::fmt::Display for ValidationException {
 }
 /* ErrorImplGenerator.kt:180 */
 impl ::std::error::Error for ValidationException {}
-/* ServerCodegenVisitor.kt:376 */
+/* ServerCodegenVisitor.kt:388 */
 impl ::aws_smithy_http_server::schema::HttpModeledError for ValidationException {
-    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
-        Self::SCHEMA
-    }
     fn status_code(&self) -> u16 {
         400
     }
 }
-/* ServerCodegenVisitor.kt:409 */
+/* ServerCodegenVisitor.kt:419 */
 impl ValidationException {
-    /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`ValidationException`](crate::error::ValidationException).
-    /* ServerBuilderGenerator.kt:304 */
+    /// /* ServerBuilderGenerator.kt:295 */Creates a new builder-style object to manufacture [`ValidationException`](crate::error::ValidationException).
+    /* ServerBuilderGenerator.kt:296 */
     pub fn builder() -> crate::error::validation_exception::Builder {
-        /* ServerBuilderGenerator.kt:305 */
+        /* ServerBuilderGenerator.kt:297 */
         crate::error::validation_exception::Builder::default()
-        /* ServerBuilderGenerator.kt:304 */
+        /* ServerBuilderGenerator.kt:296 */
     }
-    /* ServerCodegenVisitor.kt:409 */
+    /* ServerCodegenVisitor.kt:419 */
 }
 
 /* StructureGenerator.kt:197 */
@@ -818,7 +814,7 @@ pub /* StructureGenerator.kt:201 */ struct MasterBallUnsuccessful {
     pub message: ::std::option::Option<::std::string::String>,
     /* StructureGenerator.kt:201 */
 }
-/* ServerSchemaGenerator.kt:1548 */
+/* ServerSchemaGenerator.kt:1534 */
 static MASTERBALLUNSUCCESSFUL_MEMBER_MESSAGE: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -830,7 +826,7 @@ static MASTERBALLUNSUCCESSFUL_MEMBER_MESSAGE: ::aws_smithy_schema::Schema<'stati
         "message",
         0,
     );
-/* ServerSchemaGenerator.kt:1448 */
+/* ServerSchemaGenerator.kt:1434 */
 static MASTERBALLUNSUCCESSFUL_TRAITS: std::sync::LazyLock<::aws_smithy_schema::TraitMap> =
     std::sync::LazyLock::new(|| {
         let mut map = ::aws_smithy_schema::TraitMap::new();
@@ -853,14 +849,18 @@ static MASTERBALLUNSUCCESSFUL_SCHEMA: ::aws_smithy_schema::Schema<'static> =
         &[&MASTERBALLUNSUCCESSFUL_MEMBER_MESSAGE],
     )
     .with_traits(&MASTERBALLUNSUCCESSFUL_TRAITS);
-/* ServerSchemaGenerator.kt:137 */
+/* ServerSchemaGenerator.kt:136 */
 impl crate::error::MasterBallUnsuccessful {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> =
         &MASTERBALLUNSUCCESSFUL_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:291 */
+/* ServerSchemaGenerator.kt:290 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::error::MasterBallUnsuccessful {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -946,25 +946,22 @@ impl ::std::fmt::Display for MasterBallUnsuccessful {
 }
 /* ErrorImplGenerator.kt:180 */
 impl ::std::error::Error for MasterBallUnsuccessful {}
-/* ServerCodegenVisitor.kt:376 */
+/* ServerCodegenVisitor.kt:388 */
 impl ::aws_smithy_http_server::schema::HttpModeledError for MasterBallUnsuccessful {
-    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
-        Self::SCHEMA
-    }
     fn status_code(&self) -> u16 {
         500
     }
 }
-/* ServerCodegenVisitor.kt:409 */
+/* ServerCodegenVisitor.kt:419 */
 impl MasterBallUnsuccessful {
-    /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`MasterBallUnsuccessful`](crate::error::MasterBallUnsuccessful).
-    /* ServerBuilderGenerator.kt:304 */
+    /// /* ServerBuilderGenerator.kt:295 */Creates a new builder-style object to manufacture [`MasterBallUnsuccessful`](crate::error::MasterBallUnsuccessful).
+    /* ServerBuilderGenerator.kt:296 */
     pub fn builder() -> crate::error::master_ball_unsuccessful::Builder {
-        /* ServerBuilderGenerator.kt:305 */
+        /* ServerBuilderGenerator.kt:297 */
         crate::error::master_ball_unsuccessful::Builder::default()
-        /* ServerBuilderGenerator.kt:304 */
+        /* ServerBuilderGenerator.kt:296 */
     }
-    /* ServerCodegenVisitor.kt:409 */
+    /* ServerCodegenVisitor.kt:419 */
 }
 /* ServerStructureConstrainedTraitImpl.kt:21 */
 impl crate::constrained::Constrained for crate::error::MasterBallUnsuccessful {
@@ -996,7 +993,7 @@ impl InvalidPokeballError {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1548 */
+/* ServerSchemaGenerator.kt:1534 */
 static INVALIDPOKEBALLERROR_MEMBER_POKEBALL: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -1008,7 +1005,7 @@ static INVALIDPOKEBALLERROR_MEMBER_POKEBALL: ::aws_smithy_schema::Schema<'static
         "pokeball",
         0,
     );
-/* ServerSchemaGenerator.kt:1448 */
+/* ServerSchemaGenerator.kt:1434 */
 static INVALIDPOKEBALLERROR_TRAITS: std::sync::LazyLock<::aws_smithy_schema::TraitMap> =
     std::sync::LazyLock::new(|| {
         let mut map = ::aws_smithy_schema::TraitMap::new();
@@ -1031,13 +1028,17 @@ static INVALIDPOKEBALLERROR_SCHEMA: ::aws_smithy_schema::Schema<'static> =
         &[&INVALIDPOKEBALLERROR_MEMBER_POKEBALL],
     )
     .with_traits(&INVALIDPOKEBALLERROR_TRAITS);
-/* ServerSchemaGenerator.kt:137 */
+/* ServerSchemaGenerator.kt:136 */
 impl crate::error::InvalidPokeballError {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &INVALIDPOKEBALLERROR_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:291 */
+/* ServerSchemaGenerator.kt:290 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::error::InvalidPokeballError {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -1074,25 +1075,22 @@ impl ::std::fmt::Display for InvalidPokeballError {
 }
 /* ErrorImplGenerator.kt:180 */
 impl ::std::error::Error for InvalidPokeballError {}
-/* ServerCodegenVisitor.kt:376 */
+/* ServerCodegenVisitor.kt:388 */
 impl ::aws_smithy_http_server::schema::HttpModeledError for InvalidPokeballError {
-    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
-        Self::SCHEMA
-    }
     fn status_code(&self) -> u16 {
         400
     }
 }
-/* ServerCodegenVisitor.kt:409 */
+/* ServerCodegenVisitor.kt:419 */
 impl InvalidPokeballError {
-    /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`InvalidPokeballError`](crate::error::InvalidPokeballError).
-    /* ServerBuilderGenerator.kt:304 */
+    /// /* ServerBuilderGenerator.kt:295 */Creates a new builder-style object to manufacture [`InvalidPokeballError`](crate::error::InvalidPokeballError).
+    /* ServerBuilderGenerator.kt:296 */
     pub fn builder() -> crate::error::invalid_pokeball_error::Builder {
-        /* ServerBuilderGenerator.kt:305 */
+        /* ServerBuilderGenerator.kt:297 */
         crate::error::invalid_pokeball_error::Builder::default()
-        /* ServerBuilderGenerator.kt:304 */
+        /* ServerBuilderGenerator.kt:296 */
     }
-    /* ServerCodegenVisitor.kt:409 */
+    /* ServerCodegenVisitor.kt:419 */
 }
 
 /* ServerOperationErrorGenerator.kt:67 */
@@ -1129,7 +1127,8 @@ impl ::std::fmt::Display for GetPokemonSpeciesError {
             /* ServerOperationErrorGenerator.kt:82 */
             {
                 _inner.fmt(f)
-            } /* ServerOperationErrorGenerator.kt:164 */
+            }
+            /* ServerOperationErrorGenerator.kt:164 */
         }
         /* ServerOperationErrorGenerator.kt:80 */
     }
@@ -1171,7 +1170,8 @@ impl GetPokemonSpeciesError {
             /* ServerOperationErrorGenerator.kt:99 */
             {
                 _inner.name()
-            } /* ServerOperationErrorGenerator.kt:164 */
+            }
+            /* ServerOperationErrorGenerator.kt:164 */
         }
         /* ServerOperationErrorGenerator.kt:97 */
     }
@@ -1195,7 +1195,8 @@ impl ::std::error::Error for GetPokemonSpeciesError {
             /* ServerOperationErrorGenerator.kt:107 */
             {
                 Some(_inner)
-            } /* ServerOperationErrorGenerator.kt:164 */
+            }
+            /* ServerOperationErrorGenerator.kt:164 */
         }
         /* ServerOperationErrorGenerator.kt:105 */
     }
@@ -1204,6 +1205,27 @@ impl ::std::error::Error for GetPokemonSpeciesError {
 /* ServerOperationErrorGenerator.kt:117 */
 impl ::aws_smithy_schema::serde::SerializableStruct for GetPokemonSpeciesError {
     /* ServerOperationErrorGenerator.kt:118 */
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        /* ServerOperationErrorGenerator.kt:164 */
+        match &self {
+            /* ServerOperationErrorGenerator.kt:167 */
+            GetPokemonSpeciesError::ResourceNotFoundException(_inner) =>
+            /* ServerOperationErrorGenerator.kt:119 */
+            {
+                ::aws_smithy_schema::serde::SerializableStruct::schema(_inner)
+            }
+            ,
+            /* ServerOperationErrorGenerator.kt:167 */
+            GetPokemonSpeciesError::ValidationException(_inner) =>
+            /* ServerOperationErrorGenerator.kt:119 */
+            {
+                ::aws_smithy_schema::serde::SerializableStruct::schema(_inner)
+            }
+            /* ServerOperationErrorGenerator.kt:164 */
+        }
+        /* ServerOperationErrorGenerator.kt:118 */
+    }
+    /* ServerOperationErrorGenerator.kt:122 */
     fn serialize_members(
         &self,
         serializer: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer,
@@ -1212,7 +1234,7 @@ impl ::aws_smithy_schema::serde::SerializableStruct for GetPokemonSpeciesError {
         match &self {
             /* ServerOperationErrorGenerator.kt:167 */
             GetPokemonSpeciesError::ResourceNotFoundException(_inner) =>
-            /* ServerOperationErrorGenerator.kt:119 */
+            /* ServerOperationErrorGenerator.kt:123 */
             {
                 ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
                     _inner, serializer,
@@ -1221,39 +1243,20 @@ impl ::aws_smithy_schema::serde::SerializableStruct for GetPokemonSpeciesError {
             ,
             /* ServerOperationErrorGenerator.kt:167 */
             GetPokemonSpeciesError::ValidationException(_inner) =>
-            /* ServerOperationErrorGenerator.kt:119 */
+            /* ServerOperationErrorGenerator.kt:123 */
             {
                 ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
                     _inner, serializer,
                 )
-            } /* ServerOperationErrorGenerator.kt:164 */
+            }
+            /* ServerOperationErrorGenerator.kt:164 */
         }
-        /* ServerOperationErrorGenerator.kt:118 */
+        /* ServerOperationErrorGenerator.kt:122 */
     }
     /* ServerOperationErrorGenerator.kt:117 */
 }
-/* ServerOperationErrorGenerator.kt:122 */
+/* ServerOperationErrorGenerator.kt:126 */
 impl ::aws_smithy_http_server::schema::HttpModeledError for GetPokemonSpeciesError {
-    /* ServerOperationErrorGenerator.kt:123 */
-    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
-        /* ServerOperationErrorGenerator.kt:164 */
-        match &self {
-            /* ServerOperationErrorGenerator.kt:167 */
-            GetPokemonSpeciesError::ResourceNotFoundException(_inner) =>
-            /* ServerOperationErrorGenerator.kt:124 */
-            {
-                ::aws_smithy_http_server::schema::HttpModeledError::schema(_inner)
-            }
-            ,
-            /* ServerOperationErrorGenerator.kt:167 */
-            GetPokemonSpeciesError::ValidationException(_inner) =>
-            /* ServerOperationErrorGenerator.kt:124 */
-            {
-                ::aws_smithy_http_server::schema::HttpModeledError::schema(_inner)
-            } /* ServerOperationErrorGenerator.kt:164 */
-        }
-        /* ServerOperationErrorGenerator.kt:123 */
-    }
     /* ServerOperationErrorGenerator.kt:127 */
     fn status_code(&self) -> u16 {
         /* ServerOperationErrorGenerator.kt:164 */
@@ -1270,11 +1273,12 @@ impl ::aws_smithy_http_server::schema::HttpModeledError for GetPokemonSpeciesErr
             /* ServerOperationErrorGenerator.kt:128 */
             {
                 ::aws_smithy_http_server::schema::HttpModeledError::status_code(_inner)
-            } /* ServerOperationErrorGenerator.kt:164 */
+            }
+            /* ServerOperationErrorGenerator.kt:164 */
         }
         /* ServerOperationErrorGenerator.kt:127 */
     }
-    /* ServerOperationErrorGenerator.kt:122 */
+    /* ServerOperationErrorGenerator.kt:126 */
 }
 /* ServerOperationErrorGenerator.kt:135 */
 impl ::std::convert::From<crate::error::ResourceNotFoundException>
@@ -1347,7 +1351,8 @@ impl ::std::fmt::Display for GetStorageError {
             /* ServerOperationErrorGenerator.kt:82 */
             {
                 _inner.fmt(f)
-            } /* ServerOperationErrorGenerator.kt:164 */
+            }
+            /* ServerOperationErrorGenerator.kt:164 */
         }
         /* ServerOperationErrorGenerator.kt:80 */
     }
@@ -1404,7 +1409,8 @@ impl GetStorageError {
             /* ServerOperationErrorGenerator.kt:99 */
             {
                 _inner.name()
-            } /* ServerOperationErrorGenerator.kt:164 */
+            }
+            /* ServerOperationErrorGenerator.kt:164 */
         }
         /* ServerOperationErrorGenerator.kt:97 */
     }
@@ -1435,7 +1441,8 @@ impl ::std::error::Error for GetStorageError {
             /* ServerOperationErrorGenerator.kt:107 */
             {
                 Some(_inner)
-            } /* ServerOperationErrorGenerator.kt:164 */
+            }
+            /* ServerOperationErrorGenerator.kt:164 */
         }
         /* ServerOperationErrorGenerator.kt:105 */
     }
@@ -1444,6 +1451,34 @@ impl ::std::error::Error for GetStorageError {
 /* ServerOperationErrorGenerator.kt:117 */
 impl ::aws_smithy_schema::serde::SerializableStruct for GetStorageError {
     /* ServerOperationErrorGenerator.kt:118 */
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        /* ServerOperationErrorGenerator.kt:164 */
+        match &self {
+            /* ServerOperationErrorGenerator.kt:167 */
+            GetStorageError::ResourceNotFoundException(_inner) =>
+            /* ServerOperationErrorGenerator.kt:119 */
+            {
+                ::aws_smithy_schema::serde::SerializableStruct::schema(_inner)
+            }
+            ,
+            /* ServerOperationErrorGenerator.kt:167 */
+            GetStorageError::StorageAccessNotAuthorized(_inner) =>
+            /* ServerOperationErrorGenerator.kt:119 */
+            {
+                ::aws_smithy_schema::serde::SerializableStruct::schema(_inner)
+            }
+            ,
+            /* ServerOperationErrorGenerator.kt:167 */
+            GetStorageError::ValidationException(_inner) =>
+            /* ServerOperationErrorGenerator.kt:119 */
+            {
+                ::aws_smithy_schema::serde::SerializableStruct::schema(_inner)
+            }
+            /* ServerOperationErrorGenerator.kt:164 */
+        }
+        /* ServerOperationErrorGenerator.kt:118 */
+    }
+    /* ServerOperationErrorGenerator.kt:122 */
     fn serialize_members(
         &self,
         serializer: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer,
@@ -1452,7 +1487,7 @@ impl ::aws_smithy_schema::serde::SerializableStruct for GetStorageError {
         match &self {
             /* ServerOperationErrorGenerator.kt:167 */
             GetStorageError::ResourceNotFoundException(_inner) =>
-            /* ServerOperationErrorGenerator.kt:119 */
+            /* ServerOperationErrorGenerator.kt:123 */
             {
                 ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
                     _inner, serializer,
@@ -1461,7 +1496,7 @@ impl ::aws_smithy_schema::serde::SerializableStruct for GetStorageError {
             ,
             /* ServerOperationErrorGenerator.kt:167 */
             GetStorageError::StorageAccessNotAuthorized(_inner) =>
-            /* ServerOperationErrorGenerator.kt:119 */
+            /* ServerOperationErrorGenerator.kt:123 */
             {
                 ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
                     _inner, serializer,
@@ -1470,46 +1505,20 @@ impl ::aws_smithy_schema::serde::SerializableStruct for GetStorageError {
             ,
             /* ServerOperationErrorGenerator.kt:167 */
             GetStorageError::ValidationException(_inner) =>
-            /* ServerOperationErrorGenerator.kt:119 */
+            /* ServerOperationErrorGenerator.kt:123 */
             {
                 ::aws_smithy_schema::serde::SerializableStruct::serialize_members(
                     _inner, serializer,
                 )
-            } /* ServerOperationErrorGenerator.kt:164 */
+            }
+            /* ServerOperationErrorGenerator.kt:164 */
         }
-        /* ServerOperationErrorGenerator.kt:118 */
+        /* ServerOperationErrorGenerator.kt:122 */
     }
     /* ServerOperationErrorGenerator.kt:117 */
 }
-/* ServerOperationErrorGenerator.kt:122 */
+/* ServerOperationErrorGenerator.kt:126 */
 impl ::aws_smithy_http_server::schema::HttpModeledError for GetStorageError {
-    /* ServerOperationErrorGenerator.kt:123 */
-    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
-        /* ServerOperationErrorGenerator.kt:164 */
-        match &self {
-            /* ServerOperationErrorGenerator.kt:167 */
-            GetStorageError::ResourceNotFoundException(_inner) =>
-            /* ServerOperationErrorGenerator.kt:124 */
-            {
-                ::aws_smithy_http_server::schema::HttpModeledError::schema(_inner)
-            }
-            ,
-            /* ServerOperationErrorGenerator.kt:167 */
-            GetStorageError::StorageAccessNotAuthorized(_inner) =>
-            /* ServerOperationErrorGenerator.kt:124 */
-            {
-                ::aws_smithy_http_server::schema::HttpModeledError::schema(_inner)
-            }
-            ,
-            /* ServerOperationErrorGenerator.kt:167 */
-            GetStorageError::ValidationException(_inner) =>
-            /* ServerOperationErrorGenerator.kt:124 */
-            {
-                ::aws_smithy_http_server::schema::HttpModeledError::schema(_inner)
-            } /* ServerOperationErrorGenerator.kt:164 */
-        }
-        /* ServerOperationErrorGenerator.kt:123 */
-    }
     /* ServerOperationErrorGenerator.kt:127 */
     fn status_code(&self) -> u16 {
         /* ServerOperationErrorGenerator.kt:164 */
@@ -1533,11 +1542,12 @@ impl ::aws_smithy_http_server::schema::HttpModeledError for GetStorageError {
             /* ServerOperationErrorGenerator.kt:128 */
             {
                 ::aws_smithy_http_server::schema::HttpModeledError::status_code(_inner)
-            } /* ServerOperationErrorGenerator.kt:164 */
+            }
+            /* ServerOperationErrorGenerator.kt:164 */
         }
         /* ServerOperationErrorGenerator.kt:127 */
     }
-    /* ServerOperationErrorGenerator.kt:122 */
+    /* ServerOperationErrorGenerator.kt:126 */
 }
 /* ServerOperationErrorGenerator.kt:135 */
 impl ::std::convert::From<crate::error::ResourceNotFoundException>
@@ -1586,7 +1596,7 @@ pub /* StructureGenerator.kt:201 */ struct ResourceNotFoundException {
     pub message: ::std::string::String,
     /* StructureGenerator.kt:201 */
 }
-/* ServerSchemaGenerator.kt:1548 */
+/* ServerSchemaGenerator.kt:1534 */
 static RESOURCENOTFOUNDEXCEPTION_MEMBER_MESSAGE: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -1598,7 +1608,7 @@ static RESOURCENOTFOUNDEXCEPTION_MEMBER_MESSAGE: ::aws_smithy_schema::Schema<'st
         "message",
         0,
     );
-/* ServerSchemaGenerator.kt:1448 */
+/* ServerSchemaGenerator.kt:1434 */
 static RESOURCENOTFOUNDEXCEPTION_TRAITS: std::sync::LazyLock<::aws_smithy_schema::TraitMap> =
     std::sync::LazyLock::new(|| {
         let mut map = ::aws_smithy_schema::TraitMap::new();
@@ -1626,14 +1636,18 @@ static RESOURCENOTFOUNDEXCEPTION_SCHEMA: ::aws_smithy_schema::Schema<'static> =
         ::std::option::Option::Some(404),
     ))
     .with_traits(&RESOURCENOTFOUNDEXCEPTION_TRAITS);
-/* ServerSchemaGenerator.kt:137 */
+/* ServerSchemaGenerator.kt:136 */
 impl crate::error::ResourceNotFoundException {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> =
         &RESOURCENOTFOUNDEXCEPTION_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:291 */
+/* ServerSchemaGenerator.kt:290 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::error::ResourceNotFoundException {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -1681,25 +1695,22 @@ impl ::std::fmt::Display for ResourceNotFoundException {
 }
 /* ErrorImplGenerator.kt:180 */
 impl ::std::error::Error for ResourceNotFoundException {}
-/* ServerCodegenVisitor.kt:376 */
+/* ServerCodegenVisitor.kt:388 */
 impl ::aws_smithy_http_server::schema::HttpModeledError for ResourceNotFoundException {
-    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
-        Self::SCHEMA
-    }
     fn status_code(&self) -> u16 {
         404
     }
 }
-/* ServerCodegenVisitor.kt:409 */
+/* ServerCodegenVisitor.kt:419 */
 impl ResourceNotFoundException {
-    /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`ResourceNotFoundException`](crate::error::ResourceNotFoundException).
-    /* ServerBuilderGenerator.kt:304 */
+    /// /* ServerBuilderGenerator.kt:295 */Creates a new builder-style object to manufacture [`ResourceNotFoundException`](crate::error::ResourceNotFoundException).
+    /* ServerBuilderGenerator.kt:296 */
     pub fn builder() -> crate::error::resource_not_found_exception::Builder {
-        /* ServerBuilderGenerator.kt:305 */
+        /* ServerBuilderGenerator.kt:297 */
         crate::error::resource_not_found_exception::Builder::default()
-        /* ServerBuilderGenerator.kt:304 */
+        /* ServerBuilderGenerator.kt:296 */
     }
-    /* ServerCodegenVisitor.kt:409 */
+    /* ServerCodegenVisitor.kt:419 */
 }
 
 /// /* StructureGenerator.kt:197 */Not authorized to access Pokémon storage.
@@ -1708,7 +1719,7 @@ impl ResourceNotFoundException {
     ::std::clone::Clone, ::std::cmp::Eq, ::std::cmp::PartialEq, ::std::fmt::Debug, ::std::hash::Hash,
 )]
 pub /* StructureGenerator.kt:201 */ struct StorageAccessNotAuthorized {/* StructureGenerator.kt:201 */}
-/* ServerSchemaGenerator.kt:1448 */
+/* ServerSchemaGenerator.kt:1434 */
 static STORAGEACCESSNOTAUTHORIZED_TRAITS: std::sync::LazyLock<::aws_smithy_schema::TraitMap> =
     std::sync::LazyLock::new(|| {
         let mut map = ::aws_smithy_schema::TraitMap::new();
@@ -1736,14 +1747,18 @@ static STORAGEACCESSNOTAUTHORIZED_SCHEMA: ::aws_smithy_schema::Schema<'static> =
         ::std::option::Option::Some(401),
     ))
     .with_traits(&STORAGEACCESSNOTAUTHORIZED_TRAITS);
-/* ServerSchemaGenerator.kt:137 */
+/* ServerSchemaGenerator.kt:136 */
 impl crate::error::StorageAccessNotAuthorized {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> =
         &STORAGEACCESSNOTAUTHORIZED_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:291 */
+/* ServerSchemaGenerator.kt:290 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::error::StorageAccessNotAuthorized {
+    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+        Self::SCHEMA
+    }
+
     #[allow(unused_variables, clippy::diverging_sub_expression)]
     fn serialize_members(
         &self,
@@ -1776,25 +1791,22 @@ impl ::std::fmt::Display for StorageAccessNotAuthorized {
 }
 /* ErrorImplGenerator.kt:180 */
 impl ::std::error::Error for StorageAccessNotAuthorized {}
-/* ServerCodegenVisitor.kt:376 */
+/* ServerCodegenVisitor.kt:388 */
 impl ::aws_smithy_http_server::schema::HttpModeledError for StorageAccessNotAuthorized {
-    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
-        Self::SCHEMA
-    }
     fn status_code(&self) -> u16 {
         401
     }
 }
-/* ServerCodegenVisitor.kt:409 */
+/* ServerCodegenVisitor.kt:419 */
 impl StorageAccessNotAuthorized {
-    /// /* ServerBuilderGenerator.kt:303 */Creates a new builder-style object to manufacture [`StorageAccessNotAuthorized`](crate::error::StorageAccessNotAuthorized).
-    /* ServerBuilderGenerator.kt:304 */
+    /// /* ServerBuilderGenerator.kt:295 */Creates a new builder-style object to manufacture [`StorageAccessNotAuthorized`](crate::error::StorageAccessNotAuthorized).
+    /* ServerBuilderGenerator.kt:296 */
     pub fn builder() -> crate::error::storage_access_not_authorized::Builder {
-        /* ServerBuilderGenerator.kt:305 */
+        /* ServerBuilderGenerator.kt:297 */
         crate::error::storage_access_not_authorized::Builder::default()
-        /* ServerBuilderGenerator.kt:304 */
+        /* ServerBuilderGenerator.kt:296 */
     }
-    /* ServerCodegenVisitor.kt:409 */
+    /* ServerCodegenVisitor.kt:419 */
 }
 
 /* ServerOperationErrorGenerator.kt:67 */
@@ -1821,7 +1833,8 @@ impl ::std::fmt::Display for AttemptCapturingPokemonEventError {
             /* ServerOperationErrorGenerator.kt:82 */
             {
                 _inner.fmt(f)
-            } /* ServerOperationErrorGenerator.kt:164 */
+            }
+            /* ServerOperationErrorGenerator.kt:164 */
         }
         /* ServerOperationErrorGenerator.kt:80 */
     }
@@ -1851,7 +1864,8 @@ impl AttemptCapturingPokemonEventError {
             /* ServerOperationErrorGenerator.kt:99 */
             {
                 _inner.name()
-            } /* ServerOperationErrorGenerator.kt:164 */
+            }
+            /* ServerOperationErrorGenerator.kt:164 */
         }
         /* ServerOperationErrorGenerator.kt:97 */
     }
@@ -1868,7 +1882,8 @@ impl ::std::error::Error for AttemptCapturingPokemonEventError {
             /* ServerOperationErrorGenerator.kt:107 */
             {
                 Some(_inner)
-            } /* ServerOperationErrorGenerator.kt:164 */
+            }
+            /* ServerOperationErrorGenerator.kt:164 */
         }
         /* ServerOperationErrorGenerator.kt:105 */
     }
@@ -1924,7 +1939,8 @@ impl ::std::fmt::Display for CapturePokemonEventsError {
             /* ServerOperationErrorGenerator.kt:82 */
             {
                 _inner.fmt(f)
-            } /* ServerOperationErrorGenerator.kt:164 */
+            }
+            /* ServerOperationErrorGenerator.kt:164 */
         }
         /* ServerOperationErrorGenerator.kt:80 */
     }
@@ -1966,7 +1982,8 @@ impl CapturePokemonEventsError {
             /* ServerOperationErrorGenerator.kt:99 */
             {
                 _inner.name()
-            } /* ServerOperationErrorGenerator.kt:164 */
+            }
+            /* ServerOperationErrorGenerator.kt:164 */
         }
         /* ServerOperationErrorGenerator.kt:97 */
     }
@@ -1990,7 +2007,8 @@ impl ::std::error::Error for CapturePokemonEventsError {
             /* ServerOperationErrorGenerator.kt:107 */
             {
                 Some(_inner)
-            } /* ServerOperationErrorGenerator.kt:164 */
+            }
+            /* ServerOperationErrorGenerator.kt:164 */
         }
         /* ServerOperationErrorGenerator.kt:105 */
     }
@@ -2022,7 +2040,7 @@ impl ::std::convert::From<crate::error::ThrottlingError>
     }
     /* ServerOperationErrorGenerator.kt:135 */
 }
-/// /* ServerBuilderGenerator.kt:173 */See [`UnsupportedRegionError`](crate::error::UnsupportedRegionError).
+/// /* ServerBuilderGenerator.kt:172 */See [`UnsupportedRegionError`](crate::error::UnsupportedRegionError).
 pub mod unsupported_region_error {
 
     /* RustType.kt:534 */
@@ -2052,7 +2070,7 @@ pub mod unsupported_region_error {
     }
     /* ServerBuilderConstraintViolations.kt:83 */
     impl ::std::error::Error for ConstraintViolation {}
-    /* ServerBuilderGenerator.kt:460 */
+    /* ServerBuilderGenerator.kt:452 */
     impl ::std::convert::TryFrom<Builder> for crate::error::UnsupportedRegionError {
         type Error = ConstraintViolation;
 
@@ -2060,95 +2078,95 @@ pub mod unsupported_region_error {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:203 */A builder for [`UnsupportedRegionError`](crate::error::UnsupportedRegionError).
+    /// /* ServerBuilderGenerator.kt:202 */A builder for [`UnsupportedRegionError`](crate::error::UnsupportedRegionError).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:213 */
+    /* ServerBuilderGenerator.kt:212 */
     pub struct Builder {
-        /* ServerBuilderGenerator.kt:317 */
+        /* ServerBuilderGenerator.kt:309 */
         pub(crate) region: ::std::option::Option<::std::string::String>,
-        /* ServerBuilderGenerator.kt:213 */
+        /* ServerBuilderGenerator.kt:212 */
     }
-    /* ServerBuilderGenerator.kt:217 */
+    /* ServerBuilderGenerator.kt:216 */
     impl Builder {
-        /* ServerBuilderGenerator.kt:340 */
+        /* ServerBuilderGenerator.kt:332 */
         #[allow(missing_docs)] // documentation missing in model
-                               /* ServerBuilderGenerator.kt:352 */
+                               /* ServerBuilderGenerator.kt:344 */
         pub fn region(mut self, input: ::std::string::String) -> Self {
-            /* ServerBuilderGenerator.kt:353 */
+            /* ServerBuilderGenerator.kt:345 */
             self.region =
-                /* ServerBuilderGenerator.kt:354 */Some(
-                    /* ServerBuilderGenerator.kt:385 */input
-                /* ServerBuilderGenerator.kt:354 */)
-            /* ServerBuilderGenerator.kt:353 */;
+                /* ServerBuilderGenerator.kt:346 */Some(
+                    /* ServerBuilderGenerator.kt:377 */input
+                /* ServerBuilderGenerator.kt:346 */)
+            /* ServerBuilderGenerator.kt:345 */;
             self
-            /* ServerBuilderGenerator.kt:352 */
+            /* ServerBuilderGenerator.kt:344 */
         }
-        /// /* ServerBuilderGenerator.kt:267 */Consumes the builder and constructs a [`UnsupportedRegionError`](crate::error::UnsupportedRegionError).
-        /// /* ServerBuilderGenerator.kt:269 */
+        /// /* ServerBuilderGenerator.kt:259 */Consumes the builder and constructs a [`UnsupportedRegionError`](crate::error::UnsupportedRegionError).
+        /// /* ServerBuilderGenerator.kt:261 */
         /// The builder fails to construct a [`UnsupportedRegionError`](crate::error::UnsupportedRegionError) if a [`ConstraintViolation`] occurs.
         ///
-        /* ServerBuilderGenerator.kt:280 */
+        /* ServerBuilderGenerator.kt:272 */
         pub fn build(self) -> Result<crate::error::UnsupportedRegionError, ConstraintViolation> {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:292 */
+        /* ServerBuilderGenerator.kt:284 */
         fn build_enforcing_all_constraints(
             self,
         ) -> Result<crate::error::UnsupportedRegionError, ConstraintViolation> {
-            /* ServerBuilderGenerator.kt:296 */
+            /* ServerBuilderGenerator.kt:288 */
             Ok(
-                /* ServerBuilderGenerator.kt:560 */
+                /* ServerBuilderGenerator.kt:552 */
                 crate::error::UnsupportedRegionError {
-                    /* ServerBuilderGenerator.kt:564 */
+                    /* ServerBuilderGenerator.kt:556 */
                     region: self
                         .region
-                        /* ServerBuilderGenerator.kt:590 */
+                        /* ServerBuilderGenerator.kt:582 */
                         .ok_or(ConstraintViolation::MissingRegion)?,
-                    /* ServerBuilderGenerator.kt:560 */
-                }, /* ServerBuilderGenerator.kt:296 */
+                    /* ServerBuilderGenerator.kt:552 */
+                }, /* ServerBuilderGenerator.kt:288 */
             )
-            /* ServerBuilderGenerator.kt:292 */
+            /* ServerBuilderGenerator.kt:284 */
         }
-        /* ServerBuilderGenerator.kt:217 */
+        /* ServerBuilderGenerator.kt:216 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:173 */See [`ThrottlingError`](crate::error::ThrottlingError).
+/// /* ServerBuilderGenerator.kt:172 */See [`ThrottlingError`](crate::error::ThrottlingError).
 pub mod throttling_error {
 
-    /* ServerBuilderGenerator.kt:475 */
+    /* ServerBuilderGenerator.kt:467 */
     impl ::std::convert::From<Builder> for crate::error::ThrottlingError {
         fn from(builder: Builder) -> Self {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:203 */A builder for [`ThrottlingError`](crate::error::ThrottlingError).
+    /// /* ServerBuilderGenerator.kt:202 */A builder for [`ThrottlingError`](crate::error::ThrottlingError).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:213 */
-    pub struct Builder {/* ServerBuilderGenerator.kt:213 */}
-    /* ServerBuilderGenerator.kt:217 */
+    /* ServerBuilderGenerator.kt:212 */
+    pub struct Builder {/* ServerBuilderGenerator.kt:212 */}
+    /* ServerBuilderGenerator.kt:216 */
     impl Builder {
-        /// /* ServerBuilderGenerator.kt:267 */Consumes the builder and constructs a [`ThrottlingError`](crate::error::ThrottlingError).
-        /* ServerBuilderGenerator.kt:280 */
+        /// /* ServerBuilderGenerator.kt:259 */Consumes the builder and constructs a [`ThrottlingError`](crate::error::ThrottlingError).
+        /* ServerBuilderGenerator.kt:272 */
         pub fn build(self) -> crate::error::ThrottlingError {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:292 */
+        /* ServerBuilderGenerator.kt:284 */
         fn build_enforcing_all_constraints(self) -> crate::error::ThrottlingError {
-            /* ServerBuilderGenerator.kt:560 */
+            /* ServerBuilderGenerator.kt:552 */
             crate::error::ThrottlingError {
-            /* ServerBuilderGenerator.kt:560 */}
-            /* ServerBuilderGenerator.kt:292 */
+            /* ServerBuilderGenerator.kt:552 */}
+            /* ServerBuilderGenerator.kt:284 */
         }
-        /* ServerBuilderGenerator.kt:217 */
+        /* ServerBuilderGenerator.kt:216 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:173 */See [`ValidationException`](crate::error::ValidationException).
+/// /* ServerBuilderGenerator.kt:172 */See [`ValidationException`](crate::error::ValidationException).
 pub mod validation_exception {
 
     /* RustType.kt:534 */
@@ -2178,7 +2196,7 @@ pub mod validation_exception {
     }
     /* ServerBuilderConstraintViolations.kt:83 */
     impl ::std::error::Error for ConstraintViolation {}
-    /* ServerBuilderGenerator.kt:460 */
+    /* ServerBuilderGenerator.kt:452 */
     impl ::std::convert::TryFrom<Builder> for crate::error::ValidationException {
         type Error = ConstraintViolation;
 
@@ -2186,144 +2204,144 @@ pub mod validation_exception {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:203 */A builder for [`ValidationException`](crate::error::ValidationException).
+    /// /* ServerBuilderGenerator.kt:202 */A builder for [`ValidationException`](crate::error::ValidationException).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:213 */
+    /* ServerBuilderGenerator.kt:212 */
     pub struct Builder {
-        /* ServerBuilderGenerator.kt:317 */
+        /* ServerBuilderGenerator.kt:309 */
         pub(crate) message: ::std::option::Option<::std::string::String>,
-        /* ServerBuilderGenerator.kt:317 */
+        /* ServerBuilderGenerator.kt:309 */
         pub(crate) field_list:
             ::std::option::Option<::std::vec::Vec<crate::model::ValidationExceptionField>>,
-        /* ServerBuilderGenerator.kt:213 */
+        /* ServerBuilderGenerator.kt:212 */
     }
-    /* ServerBuilderGenerator.kt:217 */
+    /* ServerBuilderGenerator.kt:216 */
     impl Builder {
-        /// /* ServerBuilderGenerator.kt:340 */A summary of the validation failure.
-        /* ServerBuilderGenerator.kt:352 */
+        /// /* ServerBuilderGenerator.kt:332 */A summary of the validation failure.
+        /* ServerBuilderGenerator.kt:344 */
         pub fn message(mut self, input: ::std::string::String) -> Self {
-            /* ServerBuilderGenerator.kt:353 */
+            /* ServerBuilderGenerator.kt:345 */
             self.message =
-                /* ServerBuilderGenerator.kt:354 */Some(
-                    /* ServerBuilderGenerator.kt:385 */input
-                /* ServerBuilderGenerator.kt:354 */)
-            /* ServerBuilderGenerator.kt:353 */;
+                /* ServerBuilderGenerator.kt:346 */Some(
+                    /* ServerBuilderGenerator.kt:377 */input
+                /* ServerBuilderGenerator.kt:346 */)
+            /* ServerBuilderGenerator.kt:345 */;
             self
-            /* ServerBuilderGenerator.kt:352 */
+            /* ServerBuilderGenerator.kt:344 */
         }
-        /// /* ServerBuilderGenerator.kt:340 */A list of specific failures encountered while validating the input. A member can appear in this list more than once if it failed to satisfy multiple constraints.
-        /* ServerBuilderGenerator.kt:352 */
+        /// /* ServerBuilderGenerator.kt:332 */A list of specific failures encountered while validating the input. A member can appear in this list more than once if it failed to satisfy multiple constraints.
+        /* ServerBuilderGenerator.kt:344 */
         pub fn field_list(
             mut self,
             input: ::std::option::Option<::std::vec::Vec<crate::model::ValidationExceptionField>>,
         ) -> Self {
-            /* ServerBuilderGenerator.kt:353 */
+            /* ServerBuilderGenerator.kt:345 */
             self.field_list =
-                /* ServerBuilderGenerator.kt:385 */input
-            /* ServerBuilderGenerator.kt:353 */;
+                /* ServerBuilderGenerator.kt:377 */input
+            /* ServerBuilderGenerator.kt:345 */;
             self
-            /* ServerBuilderGenerator.kt:352 */
+            /* ServerBuilderGenerator.kt:344 */
         }
-        /// /* ServerBuilderGenerator.kt:267 */Consumes the builder and constructs a [`ValidationException`](crate::error::ValidationException).
-        /// /* ServerBuilderGenerator.kt:269 */
+        /// /* ServerBuilderGenerator.kt:259 */Consumes the builder and constructs a [`ValidationException`](crate::error::ValidationException).
+        /// /* ServerBuilderGenerator.kt:261 */
         /// The builder fails to construct a [`ValidationException`](crate::error::ValidationException) if a [`ConstraintViolation`] occurs.
         ///
-        /* ServerBuilderGenerator.kt:280 */
+        /* ServerBuilderGenerator.kt:272 */
         pub fn build(self) -> Result<crate::error::ValidationException, ConstraintViolation> {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:292 */
+        /* ServerBuilderGenerator.kt:284 */
         fn build_enforcing_all_constraints(
             self,
         ) -> Result<crate::error::ValidationException, ConstraintViolation> {
-            /* ServerBuilderGenerator.kt:296 */
+            /* ServerBuilderGenerator.kt:288 */
             Ok(
-                /* ServerBuilderGenerator.kt:560 */
+                /* ServerBuilderGenerator.kt:552 */
                 crate::error::ValidationException {
-                    /* ServerBuilderGenerator.kt:564 */
+                    /* ServerBuilderGenerator.kt:556 */
                     message: self
                         .message
-                        /* ServerBuilderGenerator.kt:590 */
+                        /* ServerBuilderGenerator.kt:582 */
                         .ok_or(ConstraintViolation::MissingMessage)?,
-                    /* ServerBuilderGenerator.kt:564 */
+                    /* ServerBuilderGenerator.kt:556 */
                     field_list: self.field_list,
-                    /* ServerBuilderGenerator.kt:560 */
-                }, /* ServerBuilderGenerator.kt:296 */
+                    /* ServerBuilderGenerator.kt:552 */
+                }, /* ServerBuilderGenerator.kt:288 */
             )
-            /* ServerBuilderGenerator.kt:292 */
+            /* ServerBuilderGenerator.kt:284 */
         }
-        /* ServerBuilderGenerator.kt:217 */
+        /* ServerBuilderGenerator.kt:216 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:173 */See [`MasterBallUnsuccessful`](crate::error::MasterBallUnsuccessful).
+/// /* ServerBuilderGenerator.kt:172 */See [`MasterBallUnsuccessful`](crate::error::MasterBallUnsuccessful).
 pub mod master_ball_unsuccessful {
 
-    /* ServerBuilderGenerator.kt:475 */
+    /* ServerBuilderGenerator.kt:467 */
     impl ::std::convert::From<Builder> for crate::error::MasterBallUnsuccessful {
         fn from(builder: Builder) -> Self {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:203 */A builder for [`MasterBallUnsuccessful`](crate::error::MasterBallUnsuccessful).
+    /// /* ServerBuilderGenerator.kt:202 */A builder for [`MasterBallUnsuccessful`](crate::error::MasterBallUnsuccessful).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:213 */
+    /* ServerBuilderGenerator.kt:212 */
     pub struct Builder {
-        /* ServerBuilderGenerator.kt:317 */
+        /* ServerBuilderGenerator.kt:309 */
         pub(crate) message: ::std::option::Option<::std::string::String>,
-        /* ServerBuilderGenerator.kt:213 */
+        /* ServerBuilderGenerator.kt:212 */
     }
-    /* ServerBuilderGenerator.kt:217 */
+    /* ServerBuilderGenerator.kt:216 */
     impl Builder {
-        /* ServerBuilderGenerator.kt:340 */
+        /* ServerBuilderGenerator.kt:332 */
         #[allow(missing_docs)] // documentation missing in model
-                               /* ServerBuilderGenerator.kt:352 */
+                               /* ServerBuilderGenerator.kt:344 */
         pub fn message(mut self, input: ::std::option::Option<::std::string::String>) -> Self {
-            /* ServerBuilderGenerator.kt:353 */
+            /* ServerBuilderGenerator.kt:345 */
             self.message =
-                /* ServerBuilderGenerator.kt:385 */input
-            /* ServerBuilderGenerator.kt:353 */;
+                /* ServerBuilderGenerator.kt:377 */input
+            /* ServerBuilderGenerator.kt:345 */;
             self
-            /* ServerBuilderGenerator.kt:352 */
+            /* ServerBuilderGenerator.kt:344 */
         }
-        /* ServerBuilderGenerator.kt:435 */
+        /* ServerBuilderGenerator.kt:427 */
         #[allow(missing_docs)] // documentation missing in model
         /* RustType.kt:534 */
         #[allow(dead_code)]
-        /* ServerBuilderGenerator.kt:442 */
+        /* ServerBuilderGenerator.kt:434 */
         pub(crate) fn set_message(
             mut self,
             input: Option<impl ::std::convert::Into<::std::string::String>>,
         ) -> Self {
-            /* ServerBuilderGenerator.kt:443 */
+            /* ServerBuilderGenerator.kt:435 */
             self.message = input.map(|v| v.into());
             self
-            /* ServerBuilderGenerator.kt:442 */
+            /* ServerBuilderGenerator.kt:434 */
         }
-        /// /* ServerBuilderGenerator.kt:267 */Consumes the builder and constructs a [`MasterBallUnsuccessful`](crate::error::MasterBallUnsuccessful).
-        /* ServerBuilderGenerator.kt:280 */
+        /// /* ServerBuilderGenerator.kt:259 */Consumes the builder and constructs a [`MasterBallUnsuccessful`](crate::error::MasterBallUnsuccessful).
+        /* ServerBuilderGenerator.kt:272 */
         pub fn build(self) -> crate::error::MasterBallUnsuccessful {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:292 */
+        /* ServerBuilderGenerator.kt:284 */
         fn build_enforcing_all_constraints(self) -> crate::error::MasterBallUnsuccessful {
-            /* ServerBuilderGenerator.kt:560 */
+            /* ServerBuilderGenerator.kt:552 */
             crate::error::MasterBallUnsuccessful {
-                /* ServerBuilderGenerator.kt:564 */
+                /* ServerBuilderGenerator.kt:556 */
                 message: self.message,
-                /* ServerBuilderGenerator.kt:560 */
+                /* ServerBuilderGenerator.kt:552 */
             }
-            /* ServerBuilderGenerator.kt:292 */
+            /* ServerBuilderGenerator.kt:284 */
         }
-        /* ServerBuilderGenerator.kt:217 */
+        /* ServerBuilderGenerator.kt:216 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:173 */See [`InvalidPokeballError`](crate::error::InvalidPokeballError).
+/// /* ServerBuilderGenerator.kt:172 */See [`InvalidPokeballError`](crate::error::InvalidPokeballError).
 pub mod invalid_pokeball_error {
 
     /* RustType.kt:534 */
@@ -2353,7 +2371,7 @@ pub mod invalid_pokeball_error {
     }
     /* ServerBuilderConstraintViolations.kt:83 */
     impl ::std::error::Error for ConstraintViolation {}
-    /* ServerBuilderGenerator.kt:460 */
+    /* ServerBuilderGenerator.kt:452 */
     impl ::std::convert::TryFrom<Builder> for crate::error::InvalidPokeballError {
         type Error = ConstraintViolation;
 
@@ -2361,62 +2379,62 @@ pub mod invalid_pokeball_error {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:203 */A builder for [`InvalidPokeballError`](crate::error::InvalidPokeballError).
+    /// /* ServerBuilderGenerator.kt:202 */A builder for [`InvalidPokeballError`](crate::error::InvalidPokeballError).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:213 */
+    /* ServerBuilderGenerator.kt:212 */
     pub struct Builder {
-        /* ServerBuilderGenerator.kt:317 */
+        /* ServerBuilderGenerator.kt:309 */
         pub(crate) pokeball: ::std::option::Option<::std::string::String>,
-        /* ServerBuilderGenerator.kt:213 */
+        /* ServerBuilderGenerator.kt:212 */
     }
-    /* ServerBuilderGenerator.kt:217 */
+    /* ServerBuilderGenerator.kt:216 */
     impl Builder {
-        /* ServerBuilderGenerator.kt:340 */
+        /* ServerBuilderGenerator.kt:332 */
         #[allow(missing_docs)] // documentation missing in model
-                               /* ServerBuilderGenerator.kt:352 */
+                               /* ServerBuilderGenerator.kt:344 */
         pub fn pokeball(mut self, input: ::std::string::String) -> Self {
-            /* ServerBuilderGenerator.kt:353 */
+            /* ServerBuilderGenerator.kt:345 */
             self.pokeball =
-                /* ServerBuilderGenerator.kt:354 */Some(
-                    /* ServerBuilderGenerator.kt:385 */input
-                /* ServerBuilderGenerator.kt:354 */)
-            /* ServerBuilderGenerator.kt:353 */;
+                /* ServerBuilderGenerator.kt:346 */Some(
+                    /* ServerBuilderGenerator.kt:377 */input
+                /* ServerBuilderGenerator.kt:346 */)
+            /* ServerBuilderGenerator.kt:345 */;
             self
-            /* ServerBuilderGenerator.kt:352 */
+            /* ServerBuilderGenerator.kt:344 */
         }
-        /// /* ServerBuilderGenerator.kt:267 */Consumes the builder and constructs a [`InvalidPokeballError`](crate::error::InvalidPokeballError).
-        /// /* ServerBuilderGenerator.kt:269 */
+        /// /* ServerBuilderGenerator.kt:259 */Consumes the builder and constructs a [`InvalidPokeballError`](crate::error::InvalidPokeballError).
+        /// /* ServerBuilderGenerator.kt:261 */
         /// The builder fails to construct a [`InvalidPokeballError`](crate::error::InvalidPokeballError) if a [`ConstraintViolation`] occurs.
         ///
-        /* ServerBuilderGenerator.kt:280 */
+        /* ServerBuilderGenerator.kt:272 */
         pub fn build(self) -> Result<crate::error::InvalidPokeballError, ConstraintViolation> {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:292 */
+        /* ServerBuilderGenerator.kt:284 */
         fn build_enforcing_all_constraints(
             self,
         ) -> Result<crate::error::InvalidPokeballError, ConstraintViolation> {
-            /* ServerBuilderGenerator.kt:296 */
+            /* ServerBuilderGenerator.kt:288 */
             Ok(
-                /* ServerBuilderGenerator.kt:560 */
+                /* ServerBuilderGenerator.kt:552 */
                 crate::error::InvalidPokeballError {
-                    /* ServerBuilderGenerator.kt:564 */
+                    /* ServerBuilderGenerator.kt:556 */
                     pokeball: self
                         .pokeball
-                        /* ServerBuilderGenerator.kt:590 */
+                        /* ServerBuilderGenerator.kt:582 */
                         .ok_or(ConstraintViolation::MissingPokeball)?,
-                    /* ServerBuilderGenerator.kt:560 */
-                }, /* ServerBuilderGenerator.kt:296 */
+                    /* ServerBuilderGenerator.kt:552 */
+                }, /* ServerBuilderGenerator.kt:288 */
             )
-            /* ServerBuilderGenerator.kt:292 */
+            /* ServerBuilderGenerator.kt:284 */
         }
-        /* ServerBuilderGenerator.kt:217 */
+        /* ServerBuilderGenerator.kt:216 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:173 */See [`ResourceNotFoundException`](crate::error::ResourceNotFoundException).
+/// /* ServerBuilderGenerator.kt:172 */See [`ResourceNotFoundException`](crate::error::ResourceNotFoundException).
 pub mod resource_not_found_exception {
 
     /* RustType.kt:534 */
@@ -2446,7 +2464,7 @@ pub mod resource_not_found_exception {
     }
     /* ServerBuilderConstraintViolations.kt:83 */
     impl ::std::error::Error for ConstraintViolation {}
-    /* ServerBuilderGenerator.kt:460 */
+    /* ServerBuilderGenerator.kt:452 */
     impl ::std::convert::TryFrom<Builder> for crate::error::ResourceNotFoundException {
         type Error = ConstraintViolation;
 
@@ -2454,90 +2472,90 @@ pub mod resource_not_found_exception {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:203 */A builder for [`ResourceNotFoundException`](crate::error::ResourceNotFoundException).
+    /// /* ServerBuilderGenerator.kt:202 */A builder for [`ResourceNotFoundException`](crate::error::ResourceNotFoundException).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:213 */
+    /* ServerBuilderGenerator.kt:212 */
     pub struct Builder {
-        /* ServerBuilderGenerator.kt:317 */
+        /* ServerBuilderGenerator.kt:309 */
         pub(crate) message: ::std::option::Option<::std::string::String>,
-        /* ServerBuilderGenerator.kt:213 */
+        /* ServerBuilderGenerator.kt:212 */
     }
-    /* ServerBuilderGenerator.kt:217 */
+    /* ServerBuilderGenerator.kt:216 */
     impl Builder {
-        /* ServerBuilderGenerator.kt:340 */
+        /* ServerBuilderGenerator.kt:332 */
         #[allow(missing_docs)] // documentation missing in model
-                               /* ServerBuilderGenerator.kt:352 */
+                               /* ServerBuilderGenerator.kt:344 */
         pub fn message(mut self, input: ::std::string::String) -> Self {
-            /* ServerBuilderGenerator.kt:353 */
+            /* ServerBuilderGenerator.kt:345 */
             self.message =
-                /* ServerBuilderGenerator.kt:354 */Some(
-                    /* ServerBuilderGenerator.kt:385 */input
-                /* ServerBuilderGenerator.kt:354 */)
-            /* ServerBuilderGenerator.kt:353 */;
+                /* ServerBuilderGenerator.kt:346 */Some(
+                    /* ServerBuilderGenerator.kt:377 */input
+                /* ServerBuilderGenerator.kt:346 */)
+            /* ServerBuilderGenerator.kt:345 */;
             self
-            /* ServerBuilderGenerator.kt:352 */
+            /* ServerBuilderGenerator.kt:344 */
         }
-        /// /* ServerBuilderGenerator.kt:267 */Consumes the builder and constructs a [`ResourceNotFoundException`](crate::error::ResourceNotFoundException).
-        /// /* ServerBuilderGenerator.kt:269 */
+        /// /* ServerBuilderGenerator.kt:259 */Consumes the builder and constructs a [`ResourceNotFoundException`](crate::error::ResourceNotFoundException).
+        /// /* ServerBuilderGenerator.kt:261 */
         /// The builder fails to construct a [`ResourceNotFoundException`](crate::error::ResourceNotFoundException) if a [`ConstraintViolation`] occurs.
         ///
-        /* ServerBuilderGenerator.kt:280 */
+        /* ServerBuilderGenerator.kt:272 */
         pub fn build(self) -> Result<crate::error::ResourceNotFoundException, ConstraintViolation> {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:292 */
+        /* ServerBuilderGenerator.kt:284 */
         fn build_enforcing_all_constraints(
             self,
         ) -> Result<crate::error::ResourceNotFoundException, ConstraintViolation> {
-            /* ServerBuilderGenerator.kt:296 */
+            /* ServerBuilderGenerator.kt:288 */
             Ok(
-                /* ServerBuilderGenerator.kt:560 */
+                /* ServerBuilderGenerator.kt:552 */
                 crate::error::ResourceNotFoundException {
-                    /* ServerBuilderGenerator.kt:564 */
+                    /* ServerBuilderGenerator.kt:556 */
                     message: self
                         .message
-                        /* ServerBuilderGenerator.kt:590 */
+                        /* ServerBuilderGenerator.kt:582 */
                         .ok_or(ConstraintViolation::MissingMessage)?,
-                    /* ServerBuilderGenerator.kt:560 */
-                }, /* ServerBuilderGenerator.kt:296 */
+                    /* ServerBuilderGenerator.kt:552 */
+                }, /* ServerBuilderGenerator.kt:288 */
             )
-            /* ServerBuilderGenerator.kt:292 */
+            /* ServerBuilderGenerator.kt:284 */
         }
-        /* ServerBuilderGenerator.kt:217 */
+        /* ServerBuilderGenerator.kt:216 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:173 */See [`StorageAccessNotAuthorized`](crate::error::StorageAccessNotAuthorized).
+/// /* ServerBuilderGenerator.kt:172 */See [`StorageAccessNotAuthorized`](crate::error::StorageAccessNotAuthorized).
 pub mod storage_access_not_authorized {
 
-    /* ServerBuilderGenerator.kt:475 */
+    /* ServerBuilderGenerator.kt:467 */
     impl ::std::convert::From<Builder> for crate::error::StorageAccessNotAuthorized {
         fn from(builder: Builder) -> Self {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:203 */A builder for [`StorageAccessNotAuthorized`](crate::error::StorageAccessNotAuthorized).
+    /// /* ServerBuilderGenerator.kt:202 */A builder for [`StorageAccessNotAuthorized`](crate::error::StorageAccessNotAuthorized).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:213 */
-    pub struct Builder {/* ServerBuilderGenerator.kt:213 */}
-    /* ServerBuilderGenerator.kt:217 */
+    /* ServerBuilderGenerator.kt:212 */
+    pub struct Builder {/* ServerBuilderGenerator.kt:212 */}
+    /* ServerBuilderGenerator.kt:216 */
     impl Builder {
-        /// /* ServerBuilderGenerator.kt:267 */Consumes the builder and constructs a [`StorageAccessNotAuthorized`](crate::error::StorageAccessNotAuthorized).
-        /* ServerBuilderGenerator.kt:280 */
+        /// /* ServerBuilderGenerator.kt:259 */Consumes the builder and constructs a [`StorageAccessNotAuthorized`](crate::error::StorageAccessNotAuthorized).
+        /* ServerBuilderGenerator.kt:272 */
         pub fn build(self) -> crate::error::StorageAccessNotAuthorized {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:292 */
+        /* ServerBuilderGenerator.kt:284 */
         fn build_enforcing_all_constraints(self) -> crate::error::StorageAccessNotAuthorized {
-            /* ServerBuilderGenerator.kt:560 */
+            /* ServerBuilderGenerator.kt:552 */
             crate::error::StorageAccessNotAuthorized {
-            /* ServerBuilderGenerator.kt:560 */}
-            /* ServerBuilderGenerator.kt:292 */
+            /* ServerBuilderGenerator.kt:552 */}
+            /* ServerBuilderGenerator.kt:284 */
         }
-        /* ServerBuilderGenerator.kt:217 */
+        /* ServerBuilderGenerator.kt:216 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
