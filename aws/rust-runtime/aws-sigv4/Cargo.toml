@@ -18,7 +18,7 @@ http1 = ["dep:http"]
 # `apply_to_request_http0x`, which is gated on `http0-compat` below.
 sign-http = ["dep:percent-encoding", "dep:form_urlencoded"]
 sign-eventstream = ["dep:aws-smithy-eventstream"]
-sigv4a = ["dep:p256", "dep:crypto-bigint", "dep:subtle", "dep:zeroize"]
+sigv4a = ["dep:p256", "dep:ecdsa", "dep:crypto-bigint", "dep:subtle", "dep:zeroize"]
 
 [dependencies]
 aws-credential-types = { path = "../aws-credential-types" }
@@ -33,6 +33,11 @@ hmac = "0.13"
 http0 = { package = "http" , version = "0.2.12", optional = true }
 http = { version = "1.3.1", optional = true }
 p256 = { version = "0.13.2", features = ["ecdsa"], optional = true }
+# Only for `ecdsa::hazmat::SignPrimitive`, which `p256` imports privately rather than re-exporting.
+# `p256`'s `ecdsa` feature already turns on `ecdsa-core/signing`, so this resolves to the same
+# `ecdsa` 0.16 that `p256` uses rather than adding a second copy. See `sign::v4a::calculate_signature`
+# for why the trait is needed; a version skew that broke the unification would fail to compile there.
+ecdsa = { version = "0.16.9", features = ["hazmat", "rfc6979"], optional = true }
 percent-encoding = { version = "2.3.1", optional = true }
 sha2 = "0.11"
 crypto-bigint = { version = "0.5.4", optional = true }
