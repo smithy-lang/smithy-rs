@@ -194,7 +194,14 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
             imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy"),
             extraCodegenConfig = """"schemaSerde": true""",
         ),
-    ).flatMap { it.bothHttpVersions() } +
+    ).flatMap { it.bothHttpVersions() }.map {
+        if (it.module.endsWith("-http0x")) {
+            // Legacy projections must disable schema serde, which otherwise enables HTTP 1.x.
+            it.copy(extraCodegenConfig = it.extraCodegenConfig?.replace(""""schemaSerde": true""", """"schemaSerde": false"""))
+        } else {
+            it
+        }
+    } +
         listOf(
             CodegenTest(
                 "smithy.rust.server.protocoltests#RestXmlServerTests",

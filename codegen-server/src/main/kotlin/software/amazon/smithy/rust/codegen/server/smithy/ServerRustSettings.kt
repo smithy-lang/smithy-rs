@@ -197,7 +197,8 @@ data class ServerRustSettings(
  *   (which was the only route the server registered before the fix for
  *   https://github.com/smithy-lang/smithy-rs/issues/4731).
  * [schemaSerde]: When true, every generated structure and union exposes its schema through a `SCHEMA`
- *   constant, and the crate gains `schema::operations` and `schema::service` descriptors. Off by default.
+ *   constant, and the crate gains `schema::operations` and `schema::service` descriptors. Enables HTTP 1.x
+ *   when `http-1x` is omitted; explicitly disabling HTTP 1.x is invalid. Off by default.
  */
 data class ServerCodegenConfig(
     override val formatTimeoutSeconds: Int = DEFAULT_FORMAT_TIMEOUT_SECONDS,
@@ -330,6 +331,14 @@ data class ServerCodegenConfig(
                 )
             }
 
+            val schemaSerde = configNode.getBooleanMemberOrDefault(SCHEMA_SERDE_CONFIG_KEY, DEFAULT_SCHEMA_SERDE)
+            val configuredHttp1x = configNode.getBooleanMember(HTTP_1X_CONFIG_KEY).orNull()?.value
+            require(!schemaSerde || configuredHttp1x != false) {
+                "`codegen.$SCHEMA_SERDE_CONFIG_KEY` requires HTTP 1.x; " +
+                    "`codegen.$HTTP_1X_CONFIG_KEY` cannot be false when `codegen.$SCHEMA_SERDE_CONFIG_KEY` is true. " +
+                    "Set `codegen.$HTTP_1X_CONFIG_KEY` to true or omit it."
+            }
+
             ServerCodegenConfig(
                 formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
                 debugMode = coreCodegenConfig.debugMode,
@@ -361,21 +370,13 @@ data class ServerCodegenConfig(
                         "allowMissingUnionVariant",
                         DEFAULT_ALLOW_MISSING_UNION_VARIANT,
                     ),
-                http1x =
-                    node.get().getBooleanMemberOrDefault(
-                        HTTP_1X_CONFIG_KEY,
-                        DEFAULT_HTTP_1X,
-                    ),
+                http1x = configuredHttp1x ?: (schemaSerde || DEFAULT_HTTP_1X),
                 rpcV2CborAddCapitalizedRoute =
                     node.get().getBooleanMemberOrDefault(
                         RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY,
                         DEFAULT_RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE,
                     ),
-                schemaSerde =
-                    node.get().getBooleanMemberOrDefault(
-                        SCHEMA_SERDE_CONFIG_KEY,
-                        DEFAULT_SCHEMA_SERDE,
-                    ),
+                schemaSerde = schemaSerde,
             )
         } else {
             ServerCodegenConfig(

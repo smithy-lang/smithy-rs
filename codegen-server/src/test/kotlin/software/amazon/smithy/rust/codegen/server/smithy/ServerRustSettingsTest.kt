@@ -9,6 +9,7 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.Node
+import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 
 internal class ServerRustSettingsTest {
@@ -51,6 +52,46 @@ internal class ServerRustSettingsTest {
     @Test
     fun `schemaSerde can be turned on from the codegen config`() {
         settings(""""${ServerCodegenConfig.SCHEMA_SERDE_CONFIG_KEY}": true""").codegenConfig.schemaSerde shouldBe true
+    }
+
+    @Test
+    fun `schemaSerde enables HTTP 1x when the HTTP setting is omitted`() {
+        val settings = settings(""""schemaSerde": true""")
+        settings.codegenConfig.http1x shouldBe true
+        settings.runtimeConfig.httpVersion shouldBe HttpVersion.Http1x
+    }
+
+    @Test
+    fun `schemaSerde accepts explicitly enabled HTTP 1x`() {
+        val settings = settings(""""schemaSerde": true, "http-1x": true""")
+        settings.codegenConfig.http1x shouldBe true
+        settings.runtimeConfig.httpVersion shouldBe HttpVersion.Http1x
+    }
+
+    @Test
+    fun `schemaSerde rejects explicitly disabled HTTP 1x`() {
+        val error =
+            shouldThrow<IllegalArgumentException> {
+                settings(""""schemaSerde": true, "http-1x": false""")
+            }
+        error.message shouldBe
+            "`codegen.schemaSerde` requires HTTP 1.x; `codegen.http-1x` cannot be false when `codegen.schemaSerde` is true. " +
+            "Set `codegen.http-1x` to true or omit it."
+    }
+
+    @Test
+    fun `HTTP defaults and explicit choices are preserved without schemaSerde`() {
+        for (schemaSerde in listOf("", """"schemaSerde": false""")) {
+            val defaults = settings(schemaSerde)
+            defaults.codegenConfig.http1x shouldBe false
+            defaults.runtimeConfig.httpVersion shouldBe HttpVersion.Http0x
+            for (http1x in listOf(false, true)) {
+                val settings =
+                    settings(listOf(schemaSerde, """"http-1x": $http1x""").filter { it.isNotEmpty() }.joinToString(", "))
+                settings.codegenConfig.http1x shouldBe http1x
+                settings.runtimeConfig.httpVersion shouldBe if (http1x) HttpVersion.Http1x else HttpVersion.Http0x
+            }
+        }
     }
 
     @Test

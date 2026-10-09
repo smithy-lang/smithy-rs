@@ -6,17 +6,112 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.io.File
 import kotlin.io.path.readText
 
 internal class ServerServiceGeneratorTest {
+    @Test
+    fun `schema service protocol type exposes every declared protocol`() {
+        val model =
+            """
+            namespace test
+            use aws.protocols#awsJson1_0
+            use aws.protocols#restJson1
+            @awsJson1_0
+            @restJson1
+            service Example { version: "1" operations: [Ping, BuildInner] }
+            @http(method: "POST", uri: "/ping")
+            operation Ping { input := {} output := {} }
+            @http(method: "POST", uri: "/build-inner")
+            operation BuildInner { input := {} output := {} }
+            """.asSmithyModel(smithyVersion = "2")
+
+        serverIntegrationTest(
+            model,
+            IntegrationTestParams(
+                additionalSettings = ObjectNode.parse("""{"codegen":{"schemaSerde":true}}""").expectObjectNode(),
+                cargoCommand = "cargo test --quiet --lib --tests",
+            ),
+            testCoverage = HttpTestType.Default,
+        ) { context, rustCrate ->
+            rustCrate.testModule {
+                rustTemplate(
+                    """
+                    ##[test]
+                    fn service_protocols_reuse_the_schema_protocol_list() {
+                        type Protocols = <crate::Example as #{Server}::service::ServiceShape>::Protocol;
+                        let _: Protocols = crate::ServiceProtocols;
+                        const SCHEMA: &'static #{Server}::schema::ServiceSchema<'static> =
+                            <crate::Example as #{Server}::service::SchemaServiceShape>::SCHEMA;
+                        let protocols = Protocols::protocols();
+                        assert!(::std::ptr::eq(SCHEMA, &crate::schema::service::EXAMPLE));
+                        assert!(::std::ptr::eq(protocols, SCHEMA.protocols()));
+                        let id = <crate::Example as #{Server}::service::ServiceShape>::ID;
+                        assert_eq!(id.absolute(), SCHEMA.shape_id().as_str());
+                        assert_eq!(id.namespace(), SCHEMA.shape_id().namespace());
+                        assert_eq!(id.name(), SCHEMA.shape_id().shape_name());
+                        assert_eq!(<crate::Example as #{Server}::service::ServiceShape>::VERSION, SCHEMA.version());
+                        assert_eq!(SCHEMA.version(), #{Some}("1"));
+                        let mut ids = protocols.iter().map(|id| id.as_str()).collect::<#{Vec}<_>>();
+                        ids.sort_unstable();
+                        assert_eq!(ids, ["aws.protocols##awsJson1_0", "aws.protocols##restJson1"]);
+                    }
+                    """,
+                    "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
+                    *RuntimeType.preludeScope,
+                )
+            }
+            rustCrate.withFile("tests/service_schema.rs") {
+                rustTemplate(
+                    """
+                    use ${context.moduleUseName()} as sdk;
+
+                    ##[test]
+                    fn service_schema_is_public() {
+                        let schema = <sdk::Example as #{Server}::service::SchemaServiceShape>::SCHEMA;
+                        assert!(::std::ptr::eq(schema, &sdk::schema::service::EXAMPLE));
+                        assert!(::std::ptr::eq(
+                            <sdk::Example<()> as #{Server}::service::SchemaServiceShape>::SCHEMA,
+                            schema,
+                        ));
+                        assert_eq!(schema.shape_id().as_str(), "test##Example");
+                        assert_eq!(schema.operations().len(), 2);
+                        assert!(::std::ptr::eq(sdk::ServiceProtocols::protocols(), schema.protocols()));
+                        let service_id: #{ShapeId}<'static> = <sdk::Example as #{Server}::service::ServiceShape>::ID;
+                        assert_eq!(&service_id, schema.shape_id());
+                        type Operations = <sdk::Example as #{Server}::service::ServiceShape>::Operations;
+                        let operation_id: #{ShapeId}<'static> = Operations::Ping.shape_id();
+                        let typed_operation_id: #{ShapeId}<'static> =
+                            <sdk::operation_shape::Ping as #{Server}::operation::OperationShape>::ID;
+                        assert_eq!(operation_id, typed_operation_id);
+                        assert_eq!(
+                            &operation_id,
+                            <sdk::operation_shape::Ping as #{Server}::operation::SchemaOperationShape>::SCHEMA.shape_id(),
+                        );
+                    }
+                    """,
+                    "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
+                    "ShapeId" to RuntimeType.smithySchema(context.runtimeConfig).resolve("ShapeId"),
+                )
+            }
+        }.forEach { generatedServer ->
+            generatedServer.path.resolve("src").toFile().walkTopDown()
+                .filter { it.extension == "rs" }
+                .forEach { file ->
+                    assert(!file.readText().contains("aws_smithy_http_server::shape_id::")) { file.path }
+                }
+        }
+    }
+
     /**
      * See <https://github.com/smithy-lang/smithy-rs/issues/3177>.
      */
@@ -25,10 +120,10 @@ internal class ServerServiceGeneratorTest {
         val model = File("../codegen-core/common-test-models/simple.smithy").readText().asSmithyModel()
 
         val testDirs =
-            serverIntegrationTest(model) { _, rustCrate ->
+            serverIntegrationTest(model) { context, rustCrate ->
                 rustCrate.testModule {
                     // No actual tests: we just want to check that this compiles.
-                    rust(
+                    rustTemplate(
                         """
                     fn _build_service() -> crate::SimpleService {
                         let config = crate::SimpleServiceConfig::builder().build();
@@ -36,7 +131,14 @@ internal class ServerServiceGeneratorTest {
 
                         service.boxed()
                     }
+
+                    fn _protocol_is_rest_json(
+                        protocol: <crate::SimpleService as #{Server}::service::ServiceShape>::Protocol,
+                    ) -> #{Server}::protocol::rest_json_1::RestJson1 {
+                        protocol
+                    }
                     """,
+                        "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
                     )
                 }
             }
@@ -46,6 +148,8 @@ internal class ServerServiceGeneratorTest {
             val cargoToml = generatedServer.path.resolve("Cargo.toml").readText()
             assert(cargoToml.contains("codegen-version =")) { cargoToml }
             assert(cargoToml.contains("protocol = \"aws.protocols#restJson1\"")) { cargoToml }
+            val service = generatedServer.path.resolve("src/service.rs").readText()
+            assert(!service.contains("SchemaServiceShape")) { service }
         }
     }
 

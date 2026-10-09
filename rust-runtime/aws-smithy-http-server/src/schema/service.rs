@@ -50,7 +50,7 @@ impl<'a> OperationSchema<'a> {
     }
 
     /// Returns the operation shape ID.
-    pub fn shape_id(&self) -> &ShapeId<'a> {
+    pub const fn shape_id(&self) -> &ShapeId<'a> {
         &self.shape_id
     }
 
@@ -108,12 +108,12 @@ impl<'a> ServiceSchema<'a> {
     }
 
     /// Returns the service shape ID.
-    pub fn shape_id(&self) -> &ShapeId<'a> {
+    pub const fn shape_id(&self) -> &ShapeId<'a> {
         &self.shape_id
     }
 
     /// Returns the modeled service version, if any.
-    pub fn version(&self) -> Option<&'a str> {
+    pub const fn version(&self) -> Option<&'a str> {
         self.version
     }
 

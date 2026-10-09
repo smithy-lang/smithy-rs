@@ -21,44 +21,19 @@
 
 pub use crate::request::extension::{Extension, MissingExtension};
 
-/// Represents a [Smithy Shape ID](https://smithy.io/2.0/spec/model.html#shape-id).
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ShapeId {
-    absolute: &'static str,
+/// Compatibility alias for a shared schema shape ID with static string components.
+pub type ShapeId = aws_smithy_schema::ShapeId<'static>;
 
-    namespace: &'static str,
-    name: &'static str,
-}
+#[cfg(test)]
+mod tests {
+    use super::ShapeId;
 
-impl ShapeId {
-    /// Constructs a new [`ShapeId`]. This is used by the code-generator which preserves the invariants of the Shape ID format.
-    #[doc(hidden)]
-    pub const fn new(absolute: &'static str, namespace: &'static str, name: &'static str) -> Self {
-        Self {
-            absolute,
-            namespace,
-            name,
-        }
-    }
-
-    /// Returns the namespace.
-    ///
-    /// See [Shape ID](https://smithy.io/2.0/spec/model.html#shape-id) for a breakdown of the syntax.
-    pub fn namespace(&self) -> &'static str {
-        self.namespace
-    }
-
-    /// Returns the member name.
-    ///
-    /// See [Shape ID](https://smithy.io/2.0/spec/model.html#shape-id) for a breakdown of the syntax.
-    pub fn name(&self) -> &'static str {
-        self.name
-    }
-
-    /// Returns the absolute shape ID.
-    ///
-    /// See [Shape ID](https://smithy.io/2.0/spec/model.html#shape-id) for a breakdown of the syntax.
-    pub fn absolute(&self) -> &'static str {
-        self.absolute
+    #[test]
+    fn legacy_shape_id_api_uses_the_shared_schema_type() {
+        const ID: ShapeId = ShapeId::new("example#Operation", "example", "Operation");
+        let shared: aws_smithy_schema::ShapeId<'static> = ID;
+        assert_eq!(shared.absolute(), shared.as_str());
+        assert_eq!(shared.name(), shared.shape_name());
+        assert_eq!(shared.namespace(), "example");
     }
 }

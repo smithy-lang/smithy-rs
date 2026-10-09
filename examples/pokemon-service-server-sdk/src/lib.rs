@@ -241,7 +241,7 @@
 pub use crate::server::serve::serve;
 pub use crate::service::{
     BuildError, MissingOperationsError, PokemonService, PokemonServiceBuilder,
-    PokemonServiceConfig, PokemonServiceConfigBuilder,
+    PokemonServiceConfig, PokemonServiceConfigBuilder, ServiceProtocols,
 };
 
 /// /* ServerRustModule.kt:55 */Contains the types that are re-exported from the `aws-smithy-http-server` crate.
@@ -294,4 +294,5 @@ mod constrained;
 /* RustModule.kt:172 */
 mod event_stream_serde;
 
-pub(crate) mod schema;
+/// /* CodegenDelegator.kt:52 */Schema descriptors for this service and its operations.
+pub mod schema;

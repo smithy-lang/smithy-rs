@@ -53,6 +53,7 @@ class ServerServiceGenerator(
             "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
             "HttpBody" to RuntimeType.httpBody(runtimeConfig),
             "SmithyHttpServer" to smithyHttpServer,
+            "SchemaShapeId" to RuntimeType.smithySchema(runtimeConfig).resolve("ShapeId"),
             "Tower" to ServerCargoDependency.Tower.toType(),
             *RuntimeType.preludeScope,
         )
@@ -65,6 +66,7 @@ class ServerServiceGenerator(
     private val serviceName = serviceId.name.toPascalCase()
     private val builderName = "${serviceName}Builder"
     private val schemaSerde = codegenContext.usesSchemaHttpSerde
+    private val shapeIdType = if (schemaSerde) "#{SchemaShapeId}<'static>" else "#{SmithyHttpServer}::shape_id::ShapeId"
 
     /**
      * The erased per-operation handler type. The schema router shares one handler set across
@@ -821,6 +823,7 @@ class ServerServiceGenerator(
     /** Schema builders supply only operation bindings; routing rules belong to the runtime. */
     private fun schemaBuildMethod(unchecked: Boolean): Writable =
         writable {
+            val buildInnerName = generateSequence("build_inner") { "${it}_" }.first { it !in builderFieldNames.values }
             val checks =
                 writable {
                     if (!unchecked) {
@@ -833,13 +836,39 @@ class ServerServiceGenerator(
                         rustTemplate("if !missing_operation_names.is_empty() { return #{Err}(BuildError::MissingOperations(MissingOperationsError { operation_names2setter_methods: missing_operation_names })); }", *codegenScope)
                     }
                 }
-            val bindings =
+            val name = if (unchecked) "build_unchecked" else "build"
+            val result = if (unchecked) serviceName else "#{Result}<$serviceName, BuildError>"
+            rustTemplate(
+                """
+                /// Builds the service. ${if (unchecked) "Missing handlers return the protocol's internal failure response when called." else "Every operation must have a handler."}
+                /// Configured layers run after routing, with the selected operation in request extensions.
+                /// ${if (unchecked) "Panics on invalid routing configuration, such as contradictory protocol ordering." else "Returns an error for missing handlers or invalid routing configuration."}
+                pub fn $name(self) -> $result
+                where
+                    L: #{Tower}::Layer<#{SmithyHttpServer}::routing::SyncRoute<Body>>,
+                    L::Service: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + Sync + 'static,
+                    <L::Service as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
+                {
+                    #{Checks}
+                    self.$buildInnerName()${if (unchecked) ".expect(\"invalid schema routing configuration\")" else ""}
+                }
+                """,
+                *codegenScope, "Checks" to checks,
+            )
+            if (unchecked) {
+                schemaBuildInner(buildInnerName)(this)
+            }
+        }
+
+    private fun schemaBuildInner(name: String): Writable =
+        writable {
+            // ServerServiceSchemaGenerator uses the same shape-ID order for the service's operations.
+            val handlers =
                 operations.map { operation ->
                     writable {
                         val field = builderFieldNames.getValue(operation)
-                        val name = operationStructNames.getValue(operation)
-                        val handler = if (unchecked) "self.$field.unwrap_or_else(|| #{SmithyHttpServer}::routing::SyncRoute::new(#{SmithyHttpServer}::operation::SchemaMissingFailure))" else "self.$field.expect(\"handler checked above\")"
-                        rustTemplate("(<crate::operation_shape::$name as #{SmithyHttpServer}::operation::SchemaOperationShape>::SCHEMA, $handler)", *codegenScope)
+                        val handler = "self.$field.unwrap_or_else(|| #{SmithyHttpServer}::routing::SyncRoute::new(#{SmithyHttpServer}::operation::SchemaMissingFailure))"
+                        rustTemplate(handler, *codegenScope)
                     }
                 }.join(",")
             // Each decorator-contributed writable renders a `&'static ProtocolRegistry`; the
@@ -857,31 +886,24 @@ class ServerServiceGenerator(
                         rust("]")
                     }
                 }
-            val schema = "crate::schema::service::${ServerServiceSchemaGenerator.serviceSchemaConstName(service)}"
-            val name = if (unchecked) "build_unchecked" else "build"
-            val result = if (unchecked) serviceName else "#{Result}<$serviceName, BuildError>"
-            val unwrap = if (unchecked) ".expect(\"invalid schema routing configuration\")" else ".map_err(BuildError::Routing)?"
             rustTemplate(
                 """
-                /// Builds the service. ${if (unchecked) "Missing handlers return the protocol's internal failure response when called." else "Every operation must have a handler."}
-                /// Configured layers run after routing, with the selected operation in request extensions.
-                /// ${if (unchecked) "Panics on invalid routing configuration, such as contradictory protocol ordering." else "Returns an error for missing handlers or invalid routing configuration."}
-                pub fn $name(self) -> $result
+                fn $name(self) -> #{Result}<$serviceName, BuildError>
                 where
                     L: #{Tower}::Layer<#{SmithyHttpServer}::routing::SyncRoute<Body>>,
                     L::Service: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + Sync + 'static,
                     <L::Service as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
                 {
-                    #{Checks}
                     #{Patterns}
+                    let schema = <$serviceName as #{SmithyHttpServer}::service::SchemaServiceShape>::SCHEMA;
                     let svc = #{SmithyHttpServer}::schema::routing::MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings_with_options(
-                        &$schema, #{Registries}, [#{Bindings}], self.routing_options,
-                    ).layer(self.layer).build()$unwrap;
-                    ${if (unchecked) "$serviceName { svc }" else "#{Ok}($serviceName { svc })"}
+                        schema, #{Registries}, schema.operations().iter().copied().zip([#{Handlers}]), self.routing_options,
+                    ).layer(self.layer).build().map_err(BuildError::Routing)?;
+                    #{Ok}($serviceName { svc })
                 }
                 """,
-                *codegenScope, "Checks" to checks, "Patterns" to patternInitializations(),
-                "Bindings" to bindings, "Registries" to registries,
+                *codegenScope, "Patterns" to patternInitializations(),
+                "Handlers" to handlers, "Registries" to registries,
             )
         }
 
@@ -1005,7 +1027,7 @@ class ServerServiceGenerator(
                 /// specified.
                 ##[derive(Debug)]
                 pub struct MissingOperationsError {
-                    operation_names2setter_methods: std::collections::HashMap<#{SmithyHttpServer}::shape_id::ShapeId, &'static str>,
+                    operation_names2setter_methods: std::collections::HashMap<$shapeIdType, &'static str>,
                 }
 
                 impl std::fmt::Display for MissingOperationsError {
@@ -1016,7 +1038,7 @@ class ServerServiceGenerator(
                             We are missing handlers for the following operations:\n",
                         )?;
                         for operation_name in self.operation_names2setter_methods.keys() {
-                            writeln!(f, "- {}", operation_name.absolute())?;
+                            writeln!(f, "- {}", operation_name.${if (schemaSerde) "as_str" else "absolute"}())?;
                         }
 
                         writeln!(f, "\nUse the dedicated methods on `$builderName` to register the missing handlers:")?;
@@ -1039,18 +1061,74 @@ class ServerServiceGenerator(
             val name = serviceId.name
             val absolute = serviceId.toString().replace("#", "##")
             val version = codegenContext.serviceShape.version?.let { "Some(\"$it\")" } ?: "None"
+            if (schemaSerde) {
+                val schema = "crate::schema::service::${ServerServiceSchemaGenerator.serviceSchemaConstName(service)}"
+                rustTemplate(
+                    """
+                    /// Represents the protocols described by this service's schema.
+                    pub struct ServiceProtocols;
+
+                    impl ServiceProtocols {
+                        /// Returns the protocol shape IDs from the service schema.
+                        pub fn protocols() -> &'static [#{SchemaShapeId}<'static>] {
+                            <$serviceName as #{SmithyHttpServer}::service::SchemaServiceShape>::SCHEMA.protocols()
+                        }
+                    }
+
+                    impl<S> #{SmithyHttpServer}::service::SchemaServiceShape for $serviceName<S> {
+                        const SCHEMA: &'static #{SmithyHttpServer}::schema::ServiceSchema<'static> = &$schema;
+                    }
+                    """,
+                    "SchemaShapeId" to RuntimeType.smithySchema(runtimeConfig).resolve("ShapeId"),
+                    *codegenScope,
+                )
+            }
+            val id =
+                if (schemaSerde) {
+                    writable {
+                        rustTemplate(
+                            """
+                            {
+                                let id = <Self as #{SmithyHttpServer}::service::SchemaServiceShape>::SCHEMA.shape_id();
+                                #{SchemaShapeId}::from_parts(id.as_str(), id.namespace(), id.shape_name())
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    }
+                } else {
+                    writable {
+                        rustTemplate(
+                            """#{SmithyHttpServer}::shape_id::ShapeId::new("$absolute", "$namespace", "$name")""",
+                            *codegenScope,
+                        )
+                    }
+                }
+            val versionValue =
+                if (schemaSerde) {
+                    writable {
+                        rustTemplate(
+                            "<Self as #{SmithyHttpServer}::service::SchemaServiceShape>::SCHEMA.version()",
+                            *codegenScope,
+                        )
+                    }
+                } else {
+                    writable { rust(version) }
+                }
             rustTemplate(
                 """
                 impl<S> #{SmithyHttpServer}::service::ServiceShape for $serviceName<S> {
-                    const ID: #{SmithyHttpServer}::shape_id::ShapeId = #{SmithyHttpServer}::shape_id::ShapeId::new("$absolute", "$namespace", "$name");
+                    const ID: $shapeIdType = #{ServiceId};
 
-                    const VERSION: Option<&'static str> = $version;
+                    const VERSION: Option<&'static str> = #{ServiceVersion};
 
-                    type Protocol = #{Protocol};
+                    type Protocol = ${if (schemaSerde) "ServiceProtocols" else "#{Protocol}"};
 
                     type Operations = Operation;
                 }
                 """,
+                "ServiceId" to id,
+                "ServiceVersion" to versionValue,
                 "Protocol" to protocol.markerStruct(),
                 *codegenScope,
             )
@@ -1063,13 +1141,21 @@ class ServerServiceGenerator(
                 operationStructNames.map {
                         (shape, name) ->
                     writable {
-                        val absolute = shape.id.toString().replace("#", "##")
-                        rustTemplate(
-                            """
-                            Operation::$name => #{SmithyHttpServer}::shape_id::ShapeId::new("$absolute", "${shape.id.namespace}", "${shape.id.name}")
-                            """,
-                            *codegenScope,
-                        )
+                        if (schemaSerde) {
+                            val schemaConst = symbolProvider.toSymbol(shape).name.toSnakeCase().uppercase()
+                            rustTemplate(
+                                "Operation::$name => crate::schema::operations::$schemaConst.shape_id().clone()",
+                                *codegenScope,
+                            )
+                        } else {
+                            val absolute = shape.id.toString().replace("#", "##")
+                            rustTemplate(
+                                """
+                                Operation::$name => #{SmithyHttpServer}::shape_id::ShapeId::new("$absolute", "${shape.id.namespace}", "${shape.id.name}")
+                                """,
+                                *codegenScope,
+                            )
+                        }
                     }
                 }.join(",")
             rustTemplate(
@@ -1082,8 +1168,8 @@ class ServerServiceGenerator(
                 }
 
                 impl Operation {
-                    /// Returns the [operations](https://smithy.io/2.0/spec/service-types.html##operation) [`ShapeId`](#{SmithyHttpServer}::shape_id::ShapeId).
-                    pub fn shape_id(&self) -> #{SmithyHttpServer}::shape_id::ShapeId {
+                    /// Returns the [operations](https://smithy.io/2.0/spec/service-types.html##operation) [`ShapeId`](${if (schemaSerde) "#{SchemaShapeId}" else "#{SmithyHttpServer}::shape_id::ShapeId"}).
+                    pub fn shape_id(&self) -> $shapeIdType {
                         match self {
                             #{Arms}
                         }

@@ -128,7 +128,7 @@ class SchemaRoutingGeneratorTest {
                             #{Ok}::<_, ::std::convert::Infallible>(#{Http}::Response::builder().status(202).body(#{Server}::body::empty()).unwrap())
                         });
                         let service = crate::Example::builder(crate::ExampleConfig::builder().build()).ping_custom(custom).build_unchecked();
-                        let request = #{Http}::Request::builder().method("POST").uri("/ping").body(#{Server}::body::Body::empty()).unwrap();
+                        let request = #{Http}::Request::builder().method("POST").uri("/ping").header("content-type", "application/json").body(#{Server}::body::Body::empty()).unwrap();
                         assert_eq!(service.oneshot(request).await.unwrap().status(), 202);
                         """,
                         *scope,
@@ -210,7 +210,7 @@ class SchemaRoutingGeneratorTest {
                             let service = if checked {
                                 builder.other(|_input| async { crate::output::OtherOutput {} }).build().unwrap()
                             } else { builder.build_unchecked() };
-                            let request = |path| #{Http}::Request::builder().method("POST").uri(path).body(#{Server}::body::Body::empty()).unwrap();
+                            let request = |path| #{Http}::Request::builder().method("POST").uri(path).header("content-type", "application/json").body(#{Server}::body::Body::empty()).unwrap();
                             assert_eq!(service.clone().oneshot(request("/ping")).await.unwrap().status(), 200);
                             assert_eq!(service.clone().oneshot(request("/other")).await.unwrap().status(), if checked { 200 } else { 500 });
                             assert_eq!(service.oneshot(request("/unknown")).await.unwrap().status(), 404);
@@ -298,7 +298,7 @@ class SchemaRoutingGeneratorTest {
                                         }
                                         ${
                                         if (bodyRouting) {
-                                    """
+                                            """
                                         impl #{Server}::schema::BodyRoutedProtocol for TestProtocol {
                                             fn from_build_context(_ctx: &ProtocolBuildContext<'_>) -> #{Result}<Self, RouterBuildError> {
                                                 #{Ok}(TestProtocol)
@@ -312,8 +312,8 @@ class SchemaRoutingGeneratorTest {
                                             ProtocolRegistration::body_routed::<TestProtocol>("test##bodyRouting"),
                                         ]);
                             """
-                            } else {
-                            """
+                                        } else {
+                                            """
                                         impl #{Server}::schema::MetadataRoutedProtocol for TestProtocol {
                                             fn from_build_context(_ctx: &ProtocolBuildContext<'_>) -> #{Result}<Self, RouterBuildError> {
                                                 #{Ok}(TestProtocol)
@@ -329,8 +329,8 @@ class SchemaRoutingGeneratorTest {
                                             ProtocolRegistration::metadata_routed::<TestProtocol>("test##bodyRouting"),
                                         ]);
                             """
-                            }
-                            }
+                                        }
+                                    }
                             &REGISTRY
                             }
                             """,

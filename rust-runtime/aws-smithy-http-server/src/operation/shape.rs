@@ -11,8 +11,8 @@ use super::{Handler, IntoService, Normalize, OperationService};
 use crate::response::Response;
 use crate::schema::OperationSchema;
 use crate::schema::{DeserializeError, SharedServerProtocol};
-use crate::shape_id::ShapeId;
 use aws_smithy_schema::serde::ShapeDeserializer;
+use aws_smithy_schema::ShapeId;
 use aws_smithy_types::body::SdkBody;
 
 /// Models the [Smithy Operation shape].
@@ -20,7 +20,7 @@ use aws_smithy_types::body::SdkBody;
 /// [Smithy Operation shape]: https://smithy.io/2.0/spec/service-types.html#operation
 pub trait OperationShape {
     /// The ID of the operation.
-    const ID: ShapeId;
+    const ID: ShapeId<'static>;
 
     /// The operation input.
     type Input;

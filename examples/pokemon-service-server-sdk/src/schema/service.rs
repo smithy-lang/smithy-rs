@@ -20,10 +20,7 @@ static POKEMON_SERVICE_OPERATIONS: &[&::aws_smithy_http_server::schema::Operatio
 ];
 
 /// Descriptor for the `com.aws.example#PokemonService` service and the operations bound to it.
-// Nothing in the crate reads the descriptors until the schema-driven request path lands, so keep
-// the dead-code lint quiet for this root and everything reachable from it.
-#[allow(dead_code)]
-pub(crate) static POKEMON_SERVICE: ::aws_smithy_http_server::schema::ServiceSchema<'static> =
+pub static POKEMON_SERVICE: ::aws_smithy_http_server::schema::ServiceSchema<'static> =
     ::aws_smithy_http_server::schema::ServiceSchema::new(
         ::aws_smithy_schema::ShapeId::from_parts(
             "com.aws.example#PokemonService",

@@ -112,10 +112,7 @@ class ServerServiceSchemaGenerator(
             static ${serviceConstName}_OPERATIONS: &[&#{OperationSchema}<'static>] = &[$operationRefs];
 
             /// Descriptor for the `${escape(service.id)}` service and the operations bound to it.
-            // Nothing in the crate reads the descriptors until the schema-driven request path lands, so keep
-            // the dead-code lint quiet for this root and everything reachable from it.
-            ##[allow(dead_code)]
-            pub(crate) static $serviceConstName: #{ServiceSchema}<'static> = #{ServiceSchema}::new(
+            pub static $serviceConstName: #{ServiceSchema}<'static> = #{ServiceSchema}::new(
                 ${shapeIdExpr(service.id)},
                 $version,
                 ${serviceConstName}_PROTOCOLS,
@@ -138,13 +135,15 @@ class ServerServiceSchemaGenerator(
     private fun escape(id: ShapeId): String = id.toString().replace("#", "##")
 
     companion object {
-        private val SchemaModule = RustModule.pubCrate("schema")
+        private val SchemaModule =
+            RustModule.public("schema", documentationOverride = "Schema descriptors for this service and its operations.")
 
         /** `crate::schema::operations`: one `OperationSchema` per operation bound to the service. */
         val OperationsModule = RustModule.pubCrate("operations", parent = SchemaModule)
 
         /** `crate::schema::service`: the `ServiceSchema` for the generated service. */
-        val ServiceModule = RustModule.pubCrate("service", parent = SchemaModule)
+        val ServiceModule =
+            RustModule.public("service", parent = SchemaModule, documentationOverride = "The schema descriptor for this service.")
 
         /** The name of the `ServiceSchema` static in `crate::schema::service`. */
         fun serviceSchemaConstName(service: ServiceShape): String = service.id.name.toSnakeCase().uppercase()
