@@ -106,6 +106,8 @@ val RustKeywords =
         "virtual",
         "yield",
         "try",
+        // Reserved since the 2024 edition
+        "gen",
     )
 
 fun toRustCrateName(input: String): String {
