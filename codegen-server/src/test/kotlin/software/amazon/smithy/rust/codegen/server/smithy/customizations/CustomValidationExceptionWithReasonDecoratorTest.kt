@@ -115,7 +115,10 @@ internal class CustomValidationExceptionWithReasonDecoratorTest {
                     ),
                     testCoverage = HttpTestType.Default,
                 )
-            servers.forEach { it.path.resolve("src/protocol_serde").toFile().exists() shouldBe !schemaSerde }
+            servers.forEach {
+                it.path.resolve("src/protocol_serde").toFile().exists() shouldBe !schemaSerde
+                assertValidationExceptionConversion(it.path, schemaSerde)
+            }
         }
     }
 }

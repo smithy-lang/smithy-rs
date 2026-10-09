@@ -313,6 +313,7 @@ internal class UserProvidedValidationExceptionDecoratorTest {
     @Test
     fun `code compiles with custom validation exception`() {
         serverIntegrationTest(completeTestModel, testCoverage = HttpTestType.Default)
+            .forEach { assertValidationExceptionConversion(it.path, false) }
     }
 
     @Test
@@ -325,7 +326,10 @@ internal class UserProvidedValidationExceptionDecoratorTest {
                 ),
                 testCoverage = HttpTestType.Default,
             )
-        servers.forEach { check(!it.path.resolve("src/protocol_serde").toFile().exists()) }
+        servers.forEach {
+            check(!it.path.resolve("src/protocol_serde").toFile().exists())
+            assertValidationExceptionConversion(it.path, true)
+        }
     }
 
     private val completeTestModelWithOptionals =
@@ -399,6 +403,7 @@ internal class UserProvidedValidationExceptionDecoratorTest {
     @Test
     fun `code compiles with custom validation exception using optionals`() {
         serverIntegrationTest(completeTestModelWithOptionals, testCoverage = HttpTestType.Default)
+            .forEach { assertValidationExceptionConversion(it.path, false) }
     }
 
     private val completeTestModelWithImplicitNamesWithoutFieldMessage =

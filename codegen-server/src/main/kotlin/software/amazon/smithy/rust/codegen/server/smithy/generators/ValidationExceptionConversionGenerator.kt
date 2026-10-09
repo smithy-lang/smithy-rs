@@ -29,8 +29,8 @@ interface ValidationExceptionConversionGenerator {
 
     /**
      * Convert from a top-level operation input's constraint violation into the validation exception structure
-     * (`impl From<ConstraintViolation> for <ValidationException>`). This is the single place where the exception's
-     * message and field list are built; every transport-specific conversion goes through it.
+     * (`impl From<ConstraintViolation> for <ValidationException>`) for schema-driven HTTP serde.
+     * Legacy HTTP serde constructs the exception inside the request rejection conversion instead.
      */
     fun renderImplFromConstraintViolationForValidationException(): Writable
 

@@ -98,7 +98,11 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
                 """
                 impl #{From}<ConstraintViolation> for #{RequestRejection} {
                     fn from(constraint_violation: ConstraintViolation) -> Self {
-                        let validation_exception = #{ValidationException}::from(constraint_violation);
+                        let first_validation_exception_field = constraint_violation.as_validation_exception_field("".to_owned());
+                        let validation_exception = #{ValidationException} {
+                            message: format!("1 validation error detected. {}", &first_validation_exception_field.message),
+                            field_list: Some(vec![first_validation_exception_field]),
+                        };
                         Self::ConstraintViolation(
                             #{Serializer}(&validation_exception)
                                 .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
@@ -106,9 +110,9 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
                     }
                 }
                 """,
-                "Serializer" to protocol.structuredDataSerializer().serverErrorSerializer(shapeId),
-                "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
                 "ValidationException" to validationExceptionSymbol(),
+                "Serializer" to RuntimeType("crate::protocol_serde::shape_validation_exception::ser_validation_exception_error"),
+                "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
                 "From" to RuntimeType.From,
             )
         }
