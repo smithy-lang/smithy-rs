@@ -1,5 +1,5 @@
 ---
-applies_to: ["client", "aws-sdk-rust"]
+applies_to: ["aws-sdk-rust"]
 authors: ["yychen23"]
 references: ["smithy-rs#4892"]
 breaking: false
