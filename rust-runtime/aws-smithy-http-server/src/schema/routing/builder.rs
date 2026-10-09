@@ -144,6 +144,11 @@ impl<B, L> MultiProtocolRoutingServiceBuilder<B, L> {
             layer,
         } = self;
         let resolved = resolve_protocols(service, registries, &options)?;
+        let claim_mode = if resolved.len() == 1 {
+            super::ClaimMode::SoleProtocol
+        } else {
+            super::ClaimMode::Strict
+        };
 
         // The operaiton must be listed in the Service shape.
         let mut seen = HashSet::new();
@@ -186,6 +191,7 @@ impl<B, L> MultiProtocolRoutingServiceBuilder<B, L> {
         for protocol in resolved {
             let router = protocol.build_router(
                 RouterBuildContext {
+                    claim_mode,
                     service,
                     targets: &targets,
                     config: &options.service_config,

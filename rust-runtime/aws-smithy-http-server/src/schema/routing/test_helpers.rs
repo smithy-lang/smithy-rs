@@ -158,6 +158,17 @@ impl crate::schema::BodyRoutedProtocol for BodyProtocol {
         &self,
         ctx: RouterBuildContext<'_>,
     ) -> Result<impl BodyProtocolRouter + 'static + use<>, RouterBuildError> {
+        // Registries can contain many available protocols; only the service's resolved
+        // protocols determine whether arbitration is needed. These fixtures resolve all
+        // declared protocols, including the body-only and mixed service cases.
+        assert_eq!(
+            ctx.claim_mode,
+            if ctx.service.protocols().len() == 1 {
+                ClaimMode::SoleProtocol
+            } else {
+                ClaimMode::Strict
+            }
+        );
         if let Some(config) = self.factory_body_config {
             assert_eq!(config, ctx.config.request_body.global);
         }

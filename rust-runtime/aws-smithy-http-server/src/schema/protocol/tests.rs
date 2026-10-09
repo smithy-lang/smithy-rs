@@ -261,17 +261,24 @@ fn rest_request_content_type_is_checked_only_with_a_body() {
 }
 
 #[test]
-fn rest_request_without_modeled_input_accepts_protocol_identifying_content_types() {
-    for (protocol, content_type) in [
-        (&*REST_JSON as &dyn ServerProtocol, "application/json"),
-        (&*REST_XML as &dyn ServerProtocol, "application/xml"),
-    ] {
-        let req = request("/empty", &[("content-type", content_type)], b"");
+fn rest_request_without_modeled_input_requires_an_absent_content_type_even_on_empty_bodies() {
+    let modeled_empty = EMPTY_IN_SCHEMA.clone().with_original_name("ModeledEmptyInput");
+    for protocol in [&*REST_JSON as &dyn ServerProtocol, &*REST_XML as &dyn ServerProtocol] {
+        for content_type in ["application/json", "application/xml", "text/plain", "invalid mime"] {
+            let req = request("/empty", &[("content-type", content_type)], b"");
+            let error = deserialize::<EmptyInput>(protocol, &EMPTY_IN_SCHEMA, &EMPTY_OUT_SCHEMA, &req).unwrap_err();
+            assert!(matches!(error, DeserializeError::UnsupportedMediaType(_)), "{error}");
+            assert_eq!(
+                protocol.serialize_rejection(error).status(),
+                http::StatusCode::UNSUPPORTED_MEDIA_TYPE
+            );
+            // An explicit `input := {}` is a modeled input and retains its empty-body exemption.
+            deserialize::<EmptyInput>(protocol, &modeled_empty, &EMPTY_OUT_SCHEMA, &req).unwrap();
+        }
+        let req = request("/empty", &[], b"");
         deserialize::<EmptyInput>(protocol, &EMPTY_IN_SCHEMA, &EMPTY_OUT_SCHEMA, &req).unwrap();
+        deserialize::<EmptyInput>(protocol, &modeled_empty, &EMPTY_OUT_SCHEMA, &req).unwrap();
     }
-
-    let req = request("/empty", &[], b"");
-    deserialize::<EmptyInput>(&*REST_JSON, &EMPTY_IN_SCHEMA, &EMPTY_OUT_SCHEMA, &req).unwrap();
 }
 
 #[test]

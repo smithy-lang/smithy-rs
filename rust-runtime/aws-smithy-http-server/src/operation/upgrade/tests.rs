@@ -251,6 +251,130 @@ impl SchemaOperationShape for NonStreaming {
 }
 
 #[tokio::test]
+async fn sole_rest_health_checks_distinguish_absent_and_modeled_empty_inputs() {
+    use crate::schema::routing::MultiProtocolRoutingServiceBuilder;
+    use crate::schema::ServiceSchema;
+    use aws_smithy_schema::traits::HttpTrait;
+
+    static NO_INPUT: Schema<'static> = Schema::new_struct(shape_id!("test", "NoInput"), ShapeType::Structure, &[])
+        .with_http(HttpTrait::new("GET", "/ping", Some(200)));
+    static MODELED_INPUT: Schema<'static> =
+        Schema::new_struct(shape_id!("test", "ModeledInput"), ShapeType::Structure, &[])
+            .with_original_name("ModeledInput")
+            .with_http(HttpTrait::new("GET", "/ping", Some(200)));
+    operation!(Health, NO_INPUT, EMPTY);
+    operation!(ModeledHealth, MODELED_INPUT, EMPTY);
+
+    fn app<Op>(
+        schema: &'static ServiceSchema<'static>,
+        called: Arc<AtomicBool>,
+    ) -> crate::schema::routing::MultiProtocolRoutingService
+    where
+        Op: SchemaOperationShape<Input = EmptyShape, Output = EmptyShape, Error = Infallible> + Send + Sync + 'static,
+    {
+        let upgrade = DynUpgrade::<Op, (), _> {
+            _operation: PhantomData,
+            _extractors: PhantomData,
+            inner: tower::service_fn(move |_: (EmptyShape, ())| {
+                called.store(true, Ordering::SeqCst);
+                async { Ok::<_, Infallible>(EmptyShape) }
+            }),
+        };
+        MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings(
+            schema,
+            [],
+            [(Op::SCHEMA, crate::routing::SyncRoute::new(upgrade))],
+        )
+        .build()
+        .unwrap()
+    }
+
+    // The fixtures use EmptyShape as their serde representation while retaining the
+    // operation's modeled-input metadata on the descriptor passed to the protocol.
+    struct HealthSerde;
+    impl OperationShape for HealthSerde {
+        const ID: crate::shape_id::ShapeId = Health::ID;
+        type Input = EmptyShape;
+        type Output = EmptyShape;
+        type Error = Infallible;
+    }
+    impl SchemaOperationShape for HealthSerde {
+        const SCHEMA: &'static OperationSchema<'static> = Health::SCHEMA;
+    }
+    struct ModeledHealthSerde;
+    impl OperationShape for ModeledHealthSerde {
+        const ID: crate::shape_id::ShapeId = ModeledHealth::ID;
+        type Input = EmptyShape;
+        type Output = EmptyShape;
+        type Error = Infallible;
+    }
+    impl SchemaOperationShape for ModeledHealthSerde {
+        const SCHEMA: &'static OperationSchema<'static> = ModeledHealth::SCHEMA;
+    }
+    static JSON: ServiceSchema<'static> = ServiceSchema::new(
+        shape_id!("test", "HealthService"),
+        None,
+        &[shape_id!("aws.protocols", "restJson1")],
+        &[Health::SCHEMA],
+    );
+    static XML: ServiceSchema<'static> = ServiceSchema::new(
+        shape_id!("test", "HealthService"),
+        None,
+        &[shape_id!("aws.protocols", "restXml")],
+        &[Health::SCHEMA],
+    );
+    static MODELED_JSON: ServiceSchema<'static> = ServiceSchema::new(
+        shape_id!("test", "HealthService"),
+        None,
+        &[shape_id!("aws.protocols", "restJson1")],
+        &[ModeledHealth::SCHEMA],
+    );
+    static MODELED_XML: ServiceSchema<'static> = ServiceSchema::new(
+        shape_id!("test", "HealthService"),
+        None,
+        &[shape_id!("aws.protocols", "restXml")],
+        &[ModeledHealth::SCHEMA],
+    );
+    for (schema, modeled) in [
+        (&JSON, false),
+        (&XML, false),
+        (&MODELED_JSON, true),
+        (&MODELED_XML, true),
+    ] {
+        for content_type in [
+            None,
+            Some("application/json"),
+            Some("application/xml"),
+            Some("text/plain"),
+        ] {
+            let called = Arc::new(AtomicBool::new(false));
+            let service = if modeled {
+                app::<ModeledHealthSerde>(schema, called.clone())
+            } else {
+                app::<HealthSerde>(schema, called.clone())
+            };
+            let mut request = http::Request::builder().method("GET").uri("/ping");
+            if let Some(content_type) = content_type {
+                request = request.header("content-type", content_type);
+            }
+            let body = crate::body::Body::new(http_body_util::StreamBody::new(futures_util::stream::poll_fn(
+                |_| -> Poll<Option<Result<http_body::Frame<Bytes>, std::io::Error>>> {
+                    panic!("a health check must not poll its body")
+                },
+            )));
+            let response = service.oneshot(request.body(body).unwrap()).await.unwrap();
+            let expected = if modeled || content_type.is_none() {
+                http::StatusCode::OK
+            } else {
+                http::StatusCode::UNSUPPORTED_MEDIA_TYPE
+            };
+            assert_eq!(response.status(), expected);
+            assert_eq!(called.load(Ordering::SeqCst), expected == http::StatusCode::OK);
+        }
+    }
+}
+
+#[tokio::test]
 async fn schema_upgrades_preserve_request_metadata() {
     for (streaming_upgrade, streaming_input, collect) in [
         (false, false, false),

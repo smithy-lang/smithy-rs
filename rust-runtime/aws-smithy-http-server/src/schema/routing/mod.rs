@@ -46,8 +46,8 @@ mod tests;
 
 pub use builder::MultiProtocolRoutingServiceBuilder;
 pub use protocol_router::{
-    BodyProtocolRouter, BodyRouteClaim, CollectedBody, MetadataProtocolRouter, OperationTarget, ProtocolOptions,
-    ProtocolResolutionError, RouteClaim, RouterBuildContext, RouterBuildError, SharedProtocolRouter,
+    BodyProtocolRouter, BodyRouteClaim, ClaimMode, CollectedBody, MetadataProtocolRouter, OperationTarget,
+    ProtocolOptions, ProtocolResolutionError, RouteClaim, RouterBuildContext, RouterBuildError, SharedProtocolRouter,
 };
 pub use route_errors::{RoutingError, RoutingErrorKind};
 pub(crate) use routers::rpc_v2_cbor_router;

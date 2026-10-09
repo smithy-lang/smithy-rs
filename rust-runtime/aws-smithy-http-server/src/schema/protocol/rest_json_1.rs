@@ -90,7 +90,7 @@ impl MetadataRoutedProtocol for RestJson1Protocol {
         impl crate::schema::routing::MetadataProtocolRouter + 'static + use<>,
         crate::schema::routing::RouterBuildError,
     > {
-        crate::schema::routing::rest_router(ctx.targets, CONTENT_TYPE, &[])
+        crate::schema::routing::rest_router(&ctx, CONTENT_TYPE, &[])
     }
 
     fn event_stream_framing(&self) -> Option<EventStreamFraming<'_>> {

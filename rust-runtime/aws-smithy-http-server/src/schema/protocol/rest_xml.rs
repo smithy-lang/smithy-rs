@@ -101,11 +101,7 @@ impl MetadataRoutedProtocol for RestXmlProtocol {
         impl crate::schema::routing::MetadataProtocolRouter + 'static + use<>,
         crate::schema::routing::RouterBuildError,
     > {
-        crate::schema::routing::rest_router(
-            ctx.targets,
-            CONTENT_TYPE,
-            self.inner.policy().request_content_type_aliases,
-        )
+        crate::schema::routing::rest_router(&ctx, CONTENT_TYPE, self.inner.policy().request_content_type_aliases)
     }
 
     fn event_stream_framing(&self) -> Option<EventStreamFraming<'_>> {
