@@ -39,13 +39,20 @@ pub use service::{OperationSchema, ServiceSchema};
 /// learn which operation was selected — for logging, auth, or metrics — without naming an `Op`
 /// type. See the middleware example on [`ServerProtocol`].
 #[derive(Clone)]
-pub struct SelectedProtocolOperation {
+pub struct SelectedOperation {
     protocol: SharedServerProtocol,
     operation: &'static OperationSchema<'static>,
     request_body: RequestBodyCollectionConfig,
 }
 
-impl SelectedProtocolOperation {
+impl SelectedOperation {
+    /// Borrows the protocol and operation selected for this request from its extensions.
+    ///
+    /// Returns `None` if no selection is stored, including before schema routing runs.
+    pub fn get_from_request<B>(request: &http::Request<B>) -> Option<&Self> {
+        request.extensions().get::<Self>()
+    }
+
     /// Only the router creates this extension. Keeping construction crate-private means middleware
     /// cannot replace the operation's request-body limits (for example with the unlimited
     /// `RequestBodyCollectionConfig::default()`); to route through another protocol, use
@@ -90,9 +97,9 @@ impl SelectedProtocolOperation {
     }
 }
 
-impl std::fmt::Debug for SelectedProtocolOperation {
+impl std::fmt::Debug for SelectedOperation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SelectedProtocolOperation")
+        f.debug_struct("SelectedOperation")
             .field("protocol", &self.protocol.protocol_id())
             .field("operation", &self.operation.shape_id())
             .field("request_body", &self.request_body)

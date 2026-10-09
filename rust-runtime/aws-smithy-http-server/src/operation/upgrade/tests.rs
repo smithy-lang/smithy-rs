@@ -121,7 +121,7 @@ async fn check<Op: StreamingOperationShape<Input = (), Output = ()>>(expected: h
         Poll::Ready(Some(Ok::<_, Infallible>(http_body::Frame::data(Bytes::new()))))
     }));
     let mut request = http::Request::new(body);
-    request.extensions_mut().insert(SelectedProtocolOperation::new(
+    request.extensions_mut().insert(SelectedOperation::new(
         SharedServerProtocol::serde_only(HttpOnly::default()),
         Op::SCHEMA,
         Default::default(),
@@ -207,7 +207,7 @@ async fn schema_upgrades_preserve_request_metadata() {
             .body(http_body_util::Full::new(Bytes::from_static(b"payload")))
             .unwrap();
         request.extensions_mut().insert(extension);
-        request.extensions_mut().insert(SelectedProtocolOperation::new(
+        request.extensions_mut().insert(SelectedOperation::new(
             SharedServerProtocol::serde_only(protocol),
             if streaming_input {
                 StreamingBlob::SCHEMA

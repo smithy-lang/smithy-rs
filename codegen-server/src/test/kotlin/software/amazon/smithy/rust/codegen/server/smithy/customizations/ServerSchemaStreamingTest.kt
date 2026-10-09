@@ -472,7 +472,7 @@ internal class ServerSchemaStreamingTest {
             #{SmithyHttpServer}::schema::protocol::AwsJson1_1Protocol::default());
         let selected = protocol.clone();
         let layer = #{Tower}::util::MapRequestLayer::new(move |mut request: #{Http}::Request<#{SmithyHttpServer}::body::Body>| {
-            let swapped = request.extensions().get::<#{SmithyHttpServer}::schema::SelectedProtocolOperation>().unwrap().with_protocol(selected.clone());
+            let swapped = request.extensions().get::<#{SmithyHttpServer}::schema::SelectedOperation>().unwrap().with_protocol(selected.clone());
             request.extensions_mut().insert(swapped);
             request
         });

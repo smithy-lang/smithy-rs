@@ -382,7 +382,7 @@ mod tests {
     use super::*;
     use crate::body::Body;
     use crate::response::Response;
-    use crate::schema::SelectedProtocolOperation;
+    use crate::schema::SelectedOperation;
     use aws_smithy_schema::shape_id;
     use bytes::Bytes;
     use http::HeaderValue;
@@ -679,7 +679,7 @@ mod tests {
                     *operation,
                     SyncRoute::new(tower::service_fn(
                         |request: Request<crate::body::RequestBody<Transport>>| async move {
-                            assert!(request.extensions().get::<SelectedProtocolOperation>().is_some());
+                            assert!(request.extensions().get::<SelectedOperation>().is_some());
                             Ok::<_, Infallible>(Response::new(crate::body::boxed(request.into_body())))
                         },
                     )),
