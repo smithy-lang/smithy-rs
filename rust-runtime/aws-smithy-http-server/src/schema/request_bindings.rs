@@ -20,6 +20,13 @@
 //!
 //! The generated walker is transport-blind: it drives `read_struct` into the
 //! internal builder exactly as any nested structure's walker would.
+//!
+//! The types below adapt each HTTP source to that shared [`ShapeDeserializer`]
+//! interface. [`RestRequestDeserializer`] selects the source; the value and map
+//! deserializers implement its parsing and repetition rules. The payload types
+//! handle raw bytes or codec metadata, while [`EmptyStructDeserializer`] handles
+//! an absent RPC body. Keeping these responsibilities separate lets the same
+//! generated walker read inputs from all of these sources.
 
 use std::borrow::Cow;
 use std::collections::{hash_map::Entry, HashMap, HashSet};
@@ -42,6 +49,32 @@ macro_rules! unsupported_reads {
     };
 }
 
+/// Implements `read_struct` for bindings that cannot contain structures.
+macro_rules! unsupported_read_struct {
+    ($why:literal) => {
+        fn read_struct(
+            &mut self,
+            _schema: &Schema<'_>,
+            _consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+        ) -> Result<(), SerdeError> {
+            Err(SerdeError::unsupported($why))
+        }
+    };
+}
+
+/// Implements `read_map` for bindings that cannot contain maps.
+macro_rules! unsupported_read_map {
+    ($why:literal) => {
+        fn read_map(
+            &mut self,
+            _schema: &Schema<'_>,
+            _consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+        ) -> Result<(), SerdeError> {
+            Err(SerdeError::unsupported($why))
+        }
+    };
+}
+
 // ============================================================================
 // The composite
 // ============================================================================
@@ -52,6 +85,8 @@ macro_rules! unsupported_reads {
 ///
 /// Everything it needs beyond the request is read off the input schema handed to `read_struct`:
 /// the `@http` URI template for labels, and which members are bound where.
+/// This is the entry point for the whole REST input; it passes a source-specific
+/// deserializer to the generated consumer for each bound member.
 pub(crate) struct RestRequestDeserializer<'a, C> {
     codec: &'a C,
     headers: &'a Headers,
@@ -251,13 +286,7 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
         Err(SerdeError::unsupported("operation input must be a structure"))
     }
 
-    fn read_map(
-        &mut self,
-        _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported("operation input must be a structure"))
-    }
+    unsupported_read_map!("operation input must be a structure");
 
     unsupported_reads! {
         "operation input must be a structure";
@@ -345,9 +374,13 @@ pub(crate) fn label_value(member: &Schema<'_>, raw: &str) -> Result<String, Serd
 /// This is a re-match: the router has already accepted the request, so a
 /// mismatch here indicates a schema/routing inconsistency and is an error.
 pub(crate) fn extract_labels<'t>(template: &'t str, path: &str) -> Result<Vec<(&'t str, String)>, SerdeError> {
+    /// One URI template segment, used locally to distinguish fixed text from captures.
     enum Seg<'t> {
+        /// Fixed path text that must match exactly.
         Literal(&'t str),
+        /// A `{name}` capture spanning one path segment.
         Label(&'t str),
+        /// A `{name+}` capture spanning the remaining middle segments, including slashes.
         Greedy(&'t str),
     }
 
@@ -448,8 +481,23 @@ fn parse_primitive<T: aws_smithy_types::primitive::Parse>(value: &str, what: &st
 /// Deserializer over pre-decoded string values for one `@httpQuery` or
 /// `@httpLabel` member. Scalar reads take the FIRST value (first occurrence
 /// wins); list reads yield every value in order of appearance.
+///
+/// [`RestRequestDeserializer::read_struct`] supplies the values from the request URI:
+/// for `@httpQuery`, it parses the query with [`parse_query_pairs`] and collects
+/// every value whose key matches the binding name; for `@httpLabel`, it extracts
+/// the matching path capture with [`extract_labels`] and prepares it with [`label_value`].
+///
+/// For example, with `?tag=red&tag=blue`, an `@httpQuery("tag")` member gets
+/// `values = ["red", "blue"]`. The generated consumer calls `read_string` to read
+/// `"red"` for a scalar member, or `read_list` with an element consumer that reads
+/// both strings for a list member.
+///
+/// Converts URI text to the requested Smithy scalar type without trimming it.
+/// The member schema and binding location determine timestamp formatting.
 pub(crate) struct DecodedValuesDeserializer<'a> {
     values: Vec<Cow<'a, str>>,
+    /// The schema of the member being read; supplies metadata such as
+    /// `@timestampFormat` when resolving how to parse timestamp values.
     member: &'a Schema<'a>,
     location: BindingLocation,
     /// `Some(idx)` while iterating a list; scalar reads otherwise.
@@ -484,15 +532,8 @@ impl<'a> DecodedValuesDeserializer<'a> {
 }
 
 impl ShapeDeserializer for DecodedValuesDeserializer<'_> {
-    fn read_struct(
-        &mut self,
-        _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported(
-            "structures cannot be bound to labels or query strings",
-        ))
-    }
+    unsupported_read_struct!("structures cannot be bound to labels or query strings");
+    unsupported_read_map!("maps cannot be bound to labels or query strings");
 
     fn read_list(
         &mut self,
@@ -505,16 +546,6 @@ impl ShapeDeserializer for DecodedValuesDeserializer<'_> {
         }
         self.cursor = None;
         Ok(())
-    }
-
-    fn read_map(
-        &mut self,
-        _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported(
-            "maps cannot be bound to labels or query strings",
-        ))
     }
 
     fn read_boolean(&mut self, _schema: &Schema<'_>) -> Result<bool, SerdeError> {
@@ -604,6 +635,8 @@ impl ShapeDeserializer for DecodedValuesDeserializer<'_> {
 /// Header splitting follows `aws_smithy_http::header`: quoted/comma-separated text,
 /// format-aware timestamps, and a single raw instance for plain scalar strings.
 /// Parsed values are retained and consumed without re-tokenizing the headers.
+/// Unlike query values, scalar headers enforce a single value; `@mediaType`
+/// strings also require base64 decoding.
 pub(crate) struct HeaderValuesDeserializer<'a> {
     values: ParsedHeaderValues<'a>,
     member: &'a Schema<'a>,
@@ -611,9 +644,14 @@ pub(crate) struct HeaderValuesDeserializer<'a> {
     list_started: bool,
 }
 
+/// Prepared storage for the three header parsing strategies. Optional values and
+/// consuming iterators track which values have already been read.
 enum ParsedHeaderValues<'a> {
+    /// One unsplit header value, borrowed from the request; `None` means consumed.
     Raw(Option<&'a str>),
+    /// Owned, comma/quote-aware tokens, moved out when read rather than cloned.
     Text(std::vec::IntoIter<String>),
+    /// Timestamps parsed with the resolved format, including HTTP-date comma handling.
     Dates(std::vec::IntoIter<DateTime>),
 }
 
@@ -741,13 +779,8 @@ fn header_text(bytes: &[u8]) -> Result<&str, SerdeError> {
 }
 
 impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
-    fn read_struct(
-        &mut self,
-        _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported("structures cannot be bound to headers"))
-    }
+    unsupported_read_struct!("structures cannot be bound to headers");
+    unsupported_read_map!("maps cannot be bound to a single header (`@httpPrefixHeaders` is a map binding)");
 
     fn read_list(
         &mut self,
@@ -778,16 +811,6 @@ impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
         })();
         self.list_size = None;
         result
-    }
-
-    fn read_map(
-        &mut self,
-        _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported(
-            "maps cannot be bound to a single header (`@httpPrefixHeaders` is a map binding)",
-        ))
     }
 
     fn read_boolean(&mut self, _schema: &Schema<'_>) -> Result<bool, SerdeError> {
@@ -937,6 +960,11 @@ impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
 
 /// Deserializer over borrowed, decoded entries for a query-params or prefix-header map.
 /// Strings are allocated only when returning owned keys and values to the consumer.
+///
+/// For `@httpQueryParams`, keys are query names; for `@httpPrefixHeaders`, keys
+/// are header names with the prefix removed. Each key supplies either its first
+/// string value or a list of all grouped values, depending on the map's value shape.
+/// The caller handles source-specific decoding and validation before construction.
 pub(crate) struct StringMapDeserializer<'a> {
     entries: Vec<(&'a str, Vec<&'a str>)>,
     cursor: usize,
@@ -964,15 +992,7 @@ impl<'a> StringMapDeserializer<'a> {
 }
 
 impl ShapeDeserializer for StringMapDeserializer<'_> {
-    fn read_struct(
-        &mut self,
-        _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported(
-            "structures cannot appear in header/query-bound maps",
-        ))
-    }
+    unsupported_read_struct!("structures cannot appear in header/query-bound maps");
 
     fn read_list(
         &mut self,
@@ -1057,6 +1077,9 @@ impl ShapeDeserializer for StringMapDeserializer<'_> {
 
 /// Deserializer for a blob/string `@httpPayload` member: the body bytes ARE
 /// the value.
+///
+/// Bypasses the protocol codec: blobs copy the bytes directly, and strings
+/// validate UTF-8. Streaming payloads are attached separately by generated code.
 pub(crate) struct PayloadBytesDeserializer<'a> {
     body: &'a [u8],
 }
@@ -1068,15 +1091,8 @@ impl<'a> PayloadBytesDeserializer<'a> {
 }
 
 impl ShapeDeserializer for PayloadBytesDeserializer<'_> {
-    fn read_struct(
-        &mut self,
-        _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported(
-            "structure payloads read through the protocol codec, not raw bytes",
-        ))
-    }
+    unsupported_read_struct!("structure payloads read through the protocol codec, not raw bytes");
+    unsupported_read_map!("maps cannot be a raw payload");
 
     fn read_list(
         &mut self,
@@ -1084,14 +1100,6 @@ impl ShapeDeserializer for PayloadBytesDeserializer<'_> {
         _consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         Err(SerdeError::unsupported("lists cannot be a raw payload"))
-    }
-
-    fn read_map(
-        &mut self,
-        _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported("maps cannot be a raw payload"))
     }
 
     fn read_string(&mut self, _schema: &Schema<'_>) -> Result<String, SerdeError> {
@@ -1128,9 +1136,22 @@ impl ShapeDeserializer for PayloadBytesDeserializer<'_> {
     }
 }
 
-// Preserve a payload member's XML name when generated deserialization switches to
-// the target shape's schema. Only the document root is aliased; child schemas and
-// the underlying codec are passed directly to the consumer.
+/// Wraps a codec deserializer to preserve a structured `@httpPayload` member's
+/// XML name when generated deserialization switches to the target shape's schema.
+/// Only the document root is aliased; child schemas and the underlying codec
+/// are passed directly to the consumer.
+///
+/// For example, if the payload member has `@xmlName("PayloadRoot")` and its target
+/// structure has `@xmlName("TargetRoot")`, the request body uses the member's name:
+///
+/// ```xml
+/// <PayloadRoot>
+///     <Child>hello</Child>
+/// </PayloadRoot>
+/// ```
+///
+/// This wrapper makes the codec expect `PayloadRoot` when the generated walker
+/// passes the target structure's schema. The child's XML name remains `Child`.
 struct StructuredPayloadDeserializer<'a> {
     inner: &'a mut dyn ShapeDeserializer,
     xml_name: &'a str,
@@ -1195,6 +1216,8 @@ impl ShapeDeserializer for StructuredPayloadDeserializer<'_> {
 /// A deserializer for an absent request body: `read_struct` invokes the
 /// consumer for no members, leaving every builder field unset (`@required`
 /// enforcement happens in `build()`).
+/// RPC request handling uses this to run the normal input walker without
+/// asking the protocol codec to parse an empty document.
 pub(crate) struct EmptyStructDeserializer;
 
 impl ShapeDeserializer for EmptyStructDeserializer {
@@ -1294,6 +1317,8 @@ mod tests {
         .with_xml_unwrapped_output()
         .with_traits(&TRAITS);
 
+        /// Test codec stand-in that checks root aliasing preserves the target's
+        /// other metadata and passes the original child schema to the consumer.
         struct MetadataCheckingDeserializer;
         impl ShapeDeserializer for MetadataCheckingDeserializer {
             fn read_struct(
@@ -1492,6 +1517,8 @@ mod tests {
         )
     }
 
+    /// Test input assembled by the consumer, used to check bindings from each
+    /// HTTP source together with unbound body members.
     #[derive(Debug, Default, PartialEq)]
     struct Collected {
         name: Option<String>,
