@@ -106,6 +106,7 @@ data class ServerRustSettings(
      * limit, which allows memory exhaustion via `Transfer-Encoding: chunked` or very large
      * `Content-Length` values; services should set a positive value.
      *
+     * The legacy `codegen.requestBodyMaxBytes` value is copied here when this setting is absent.
      * Both the schema routing path and legacy generators read this at generation time.
      * Schema routing stores the result in its typed request body configuration.
      */
@@ -149,6 +150,22 @@ data class ServerRustSettings(
         /** Key in the shared section for the per-request body size limit. */
         const val REQUEST_BODY_MAX_BYTES_KEY = "requestBodyMaxBytes"
 
+        private fun foldLegacyRequestBodyMaxBytes(
+            customizationConfig: ObjectNode?,
+            codegenConfig: ObjectNode?,
+        ): ObjectNode? {
+            val legacyValue = codegenConfig?.getMember(REQUEST_BODY_MAX_BYTES_KEY)?.orNull() ?: return customizationConfig
+            val protocols = customizationConfig?.getObjectMember(PROTOCOLS_CUSTOMIZATION_KEY)?.orNull() ?: ObjectNode.objectNode()
+            val global = protocols.getObjectMember(GLOBAL_PROTOCOL_SETTINGS_KEY).orNull() ?: ObjectNode.objectNode()
+            if (global.containsMember(REQUEST_BODY_MAX_BYTES_KEY)) {
+                return customizationConfig
+            }
+            return (customizationConfig ?: ObjectNode.objectNode()).withMember(
+                PROTOCOLS_CUSTOMIZATION_KEY,
+                protocols.withMember(GLOBAL_PROTOCOL_SETTINGS_KEY, global.withMember(REQUEST_BODY_MAX_BYTES_KEY, legacyValue)),
+            )
+        }
+
         fun from(
             model: Model,
             config: ObjectNode,
@@ -178,7 +195,7 @@ data class ServerRustSettings(
                 license = coreRustSettings.license,
                 examplesUri = coreRustSettings.examplesUri,
                 minimumSupportedRustVersion = coreRustSettings.minimumSupportedRustVersion,
-                customizationConfig = coreRustSettings.customizationConfig,
+                customizationConfig = foldLegacyRequestBodyMaxBytes(coreRustSettings.customizationConfig, codegenSettingsNode.orNull()),
             ).also { it.requestBodyMaxBytes() }
         }
     }
@@ -323,7 +340,10 @@ data class ServerCodegenConfig(
         ) = if (node.isPresent) {
             // Validate that all config keys are known
             val configNode = node.get()
-            val unknownKeys = configNode.members.keys.map { it.toString() }.filter { it !in KNOWN_CONFIG_KEYS }
+            // The legacy body limit is folded into customizationConfig when server settings are loaded.
+            val unknownKeys =
+                configNode.members.keys.map { it.value }
+                    .filter { it !in KNOWN_CONFIG_KEYS && it != ServerRustSettings.REQUEST_BODY_MAX_BYTES_KEY }
             if (unknownKeys.isNotEmpty()) {
                 Logger.getLogger("ServerCodegenConfig").warning(
                     "Unknown codegen configuration key(s): ${unknownKeys.joinToString(", ")}. " +

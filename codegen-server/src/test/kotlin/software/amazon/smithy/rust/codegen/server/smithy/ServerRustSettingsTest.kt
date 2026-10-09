@@ -108,6 +108,59 @@ internal class ServerRustSettingsTest {
     }
 
     @Test
+    fun `legacy request body limit is copied into customization config`() {
+        for (customization in listOf(null, "{}", """{ "protocols": {} }""")) {
+            val settings = settings(""""requestBodyMaxBytes": 1024""", customization)
+            settings.requestBodyMaxBytes() shouldBe 1024L
+            settings.customizationConfig shouldBe
+                Node.parse("""{ "protocols": { "global": { "requestBodyMaxBytes": 1024 } } }""").expectObjectNode()
+        }
+    }
+
+    @Test
+    fun `copying the legacy limit preserves other customization settings`() {
+        val settings =
+            settings(
+                """"requestBodyMaxBytes": 1024""",
+                """{ "example": true, "protocols": { "global": { "otherSetting": 1 }, "example#protocol": { "enabled": true } } }""",
+            )
+        settings.requestBodyMaxBytes() shouldBe 1024L
+        settings.customizationConfig shouldBe
+            Node.parse(
+                """{ "example": true, "protocols": { "global": { "otherSetting": 1, "requestBodyMaxBytes": 1024 }, "example#protocol": { "enabled": true } } }""",
+            ).expectObjectNode()
+    }
+
+    @Test
+    fun `explicit global body limit takes precedence over the legacy setting including zero`() {
+        for (limit in listOf(0, 2048)) {
+            val customization = """{ "protocols": { "global": { "requestBodyMaxBytes": $limit } } }"""
+            val settings = settings(""""requestBodyMaxBytes": 1024""", customization)
+            settings.requestBodyMaxBytes() shouldBe limit.toLong()
+            settings.customizationConfig shouldBe Node.parse(customization).expectObjectNode()
+        }
+    }
+
+    @Test
+    fun `invalid legacy body limits are rejected when copied`() {
+        for (value in listOf("-1", "1.5", "9223372036854775808", "true", "null", "\"8\"")) {
+            shouldThrow<Exception> {
+                settings(""""requestBodyMaxBytes": $value""")
+            }
+        }
+    }
+
+    @Test
+    fun `invalid explicit global limit is not replaced by the legacy setting`() {
+        shouldThrow<Exception> {
+            settings(
+                """"requestBodyMaxBytes": 1024""",
+                """{ "protocols": { "global": { "requestBodyMaxBytes": null } } }""",
+            )
+        }
+    }
+
+    @Test
     fun `negative requestBodyMaxBytes is rejected when settings are loaded`() {
         shouldThrow<IllegalArgumentException> {
             settings("", """{ "protocols": { "global": { "requestBodyMaxBytes": -1 } } }""")
