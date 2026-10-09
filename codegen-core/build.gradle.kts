@@ -101,7 +101,7 @@ val generateSmithyRuntimeCrateVersion by tasks.registering {
     val unstableCrateVersion = project.properties["smithy.rs.runtime.crate.unstable.version"].toString()
     val codegenVersion = project.version.toString()
     inputs.property("stableCrateVersion", stableCrateVersion)
-    inputs.property("unstableCrateVersion", stableCrateVersion)
+    inputs.property("unstableCrateVersion", unstableCrateVersion)
     inputs.property("codegenVersion", codegenVersion)
 
     val cargoTomls = mutableListOf<File>()
