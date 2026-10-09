@@ -117,7 +117,7 @@ fn unclaimed() -> Response<BoxBody> {
 
 impl<B> MultiProtocolRoutingService<B>
 where
-    B: http_body::Body<Data = Bytes> + Send + Sync + Unpin + 'static,
+    B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
     B::Error: Into<BoxError>,
 {
     /// Hands the routed request to its handler, recording the selection for downstream consumers.
@@ -323,7 +323,7 @@ pin_project_lite::pin_project! {
 }
 impl<B> Future for MultiProtocolRoutingFuture<B>
 where
-    B: http_body::Body<Data = Bytes> + Send + Sync + Unpin + 'static,
+    B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
     B::Error: Into<BoxError>,
 {
     type Output = Result<Response<BoxBody>, Infallible>;
@@ -347,7 +347,7 @@ impl<B> MultiProtocolRoutingService<B> {
 /// upgrade layers — is erased into a boxed state (see [`RequestBody::new`](crate::body::RequestBody::new)).
 impl<B, RB> Service<Request<RB>> for MultiProtocolRoutingService<B>
 where
-    B: http_body::Body<Data = Bytes> + Send + Sync + Unpin + 'static,
+    B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
     B::Error: Into<BoxError>,
     RB: http_body::Body<Data = Bytes> + Send + Sync + 'static,
     RB::Error: Into<BoxError>,
@@ -370,6 +370,67 @@ mod tests {
     use crate::body::Body;
     use http::{HeaderValue, StatusCode};
     use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn send_only_transport_bodies_preserve_shared_routing() {
+        use crate::body::{BoxBody, RequestBody};
+        use aws_smithy_schema::shape_id;
+        use http_body_util::BodyExt;
+
+        static MULTI: ServiceSchema<'static> = ServiceSchema::new(
+            shape_id!("test", "Service"),
+            None,
+            &[
+                shape_id!("aws.protocols", "restJson1"),
+                shape_id!("aws.protocols", "restXml"),
+            ],
+            &[&FIRST, &SECOND],
+        );
+
+        fn route() -> SyncRoute<RequestBody<BoxBody>> {
+            SyncRoute::new(tower::service_fn(|request: Request<RequestBody<BoxBody>>| async {
+                assert!(request.extensions().get::<SelectedOperation>().is_some());
+                let bytes = request.into_body().collect().await.unwrap().to_bytes();
+                Ok::<_, Infallible>(Response::new(crate::body::to_boxed(bytes)))
+            }))
+        }
+
+        // Sharing handler services does not require their request bodies to be Sync.
+        crate::test_helpers::assert_send::<MultiProtocolRoutingService<BoxBody>>();
+        crate::test_helpers::assert_sync::<MultiProtocolRoutingService<BoxBody>>();
+        crate::test_helpers::assert_sync::<SyncRoute<RequestBody<BoxBody>>>();
+
+        for schema in [&REST_JSON, &MULTI] {
+            let service = MultiProtocolRoutingServiceBuilder::<BoxBody>::new(schema)
+                .operation_handler_bindings([(&FIRST, route()), (&SECOND, route())])
+                .build()
+                .unwrap();
+            let cloned = service.clone();
+            assert!(Arc::ptr_eq(&service.state, &cloned.state));
+
+            let request = Request::builder()
+                .method("POST")
+                .uri("/first")
+                .header("content-type", "application/json")
+                .body(http_body_util::Full::new(Bytes::from_static(b"payload")))
+                .unwrap();
+            let normalized = Request::builder()
+                .method("POST")
+                .uri("/second")
+                .header("content-type", "application/json")
+                .body(RequestBody::<BoxBody>::from_bytes(Bytes::from_static(b"normalized")))
+                .unwrap();
+
+            // Exercise public ingress and the Send-only normalized body concurrently,
+            // through both the single-protocol shortcut and the async claim walk.
+            let ingress = tokio::spawn(cloned.oneshot(request));
+            let routing = tokio::spawn(service.route_request(normalized));
+            let response = ingress.await.unwrap().unwrap();
+            assert_eq!(response.into_body().collect().await.unwrap().to_bytes(), "payload");
+            let response = routing.await.unwrap().unwrap();
+            assert_eq!(response.into_body().collect().await.unwrap().to_bytes(), "normalized");
+        }
+    }
 
     #[tokio::test]
     async fn builder_defers_layers_until_build_and_preserves_stack_order() {
