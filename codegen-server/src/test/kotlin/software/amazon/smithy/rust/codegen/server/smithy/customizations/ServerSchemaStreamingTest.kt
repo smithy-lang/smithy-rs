@@ -170,7 +170,7 @@ internal class ServerSchemaStreamingTest {
             "SmithyHttp" to RuntimeType.smithyHttp(codegenContext.runtimeConfig),
             "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
             "SmithyTypes" to RuntimeType.smithyTypes(codegenContext.runtimeConfig),
-            "Tower" to ServerCargoDependency.Tower.toType(),
+            "Tower" to ServerCargoDependency.tower(codegenContext).toType(),
         )
 
     /** The service under test: every incoming event is echoed, then `Bye` closes the stream. */

@@ -111,7 +111,7 @@ class RpcV2CborCamelCaseOperationNameTest {
                     "Ciborium" to CargoDependency.Ciborium.toDevDependency().toType(),
                     "Hyper" to RuntimeType.hyper(codegenContext.runtimeConfig),
                     "Http" to RuntimeType.http(codegenContext.runtimeConfig),
-                    "Tower" to ServerCargoDependency.Tower.toType(),
+                    "Tower" to ServerCargoDependency.tower(codegenContext).toType(),
                     "HashMap" to RuntimeType.HashMap,
                     *RuntimeType.preludeScope,
                 )
@@ -347,7 +347,7 @@ class RpcV2CborCamelCaseOperationNameTest {
                     "Ciborium" to CargoDependency.Ciborium.toDevDependency().toType(),
                     "Hyper" to RuntimeType.hyper(codegenContext.runtimeConfig),
                     "Http" to RuntimeType.http(codegenContext.runtimeConfig),
-                    "Tower" to ServerCargoDependency.Tower.toType(),
+                    "Tower" to ServerCargoDependency.tower(codegenContext).toType(),
                     "HashMap" to RuntimeType.HashMap,
                     *RuntimeType.preludeScope,
                 )
@@ -534,7 +534,7 @@ class RpcV2CborCamelCaseOperationNameTest {
                     "SerdeJson" to CargoDependency.SerdeJson.toDevDependency().toType(),
                     "Ciborium" to CargoDependency.Ciborium.toDevDependency().toType(),
                     "Http" to RuntimeType.http(codegenContext.runtimeConfig),
-                    "Tower" to ServerCargoDependency.Tower.toType(),
+                    "Tower" to ServerCargoDependency.tower(codegenContext).toType(),
                     "HashMap" to RuntimeType.HashMap,
                     *RuntimeType.preludeScope,
                 )

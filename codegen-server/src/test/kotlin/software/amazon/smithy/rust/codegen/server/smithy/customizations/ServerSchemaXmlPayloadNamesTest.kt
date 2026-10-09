@@ -119,7 +119,7 @@ internal class ServerSchemaXmlPayloadNamesTest {
                             *preludeScope,
                             "Http" to RuntimeType.http(context.runtimeConfig),
                             "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
-                            "Tower" to ServerCargoDependency.Tower.toType(),
+                            "Tower" to ServerCargoDependency.tower(context).toType(),
                         )
                     }
                 }

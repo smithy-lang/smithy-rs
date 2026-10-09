@@ -232,7 +232,7 @@ internal class ServerSchemaRequestStrictnessTest {
                             "RuntimeApi" to RuntimeType.smithyRuntimeApi(context.runtimeConfig),
                             "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
                             "Http" to RuntimeType.http(context.runtimeConfig),
-                            "Tower" to ServerCargoDependency.Tower.toType(),
+                            "Tower" to ServerCargoDependency.tower(context).toType(),
                         )
                     }
                 }

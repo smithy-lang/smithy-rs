@@ -54,7 +54,7 @@ class ServerServiceGenerator(
             "HttpBody" to RuntimeType.httpBody(runtimeConfig),
             "SmithyHttpServer" to smithyHttpServer,
             "SchemaShapeId" to RuntimeType.smithySchema(runtimeConfig).resolve("ShapeId"),
-            "Tower" to ServerCargoDependency.Tower.toType(),
+            "Tower" to ServerCargoDependency.tower(codegenContext).toType(),
             *RuntimeType.preludeScope,
         )
     private val model = codegenContext.model

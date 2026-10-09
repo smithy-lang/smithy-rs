@@ -322,7 +322,7 @@ class ServerProtocolTestGenerator(
             "Hyper" to RuntimeType.hyper(codegenContext.runtimeConfig),
             "MediaType" to protocolTestRuntimeType.resolve("MediaType"),
             "Tokio" to ServerCargoDependency.TokioDev.toType(),
-            "Tower" to ServerCargoDependency.Tower.toType(),
+            "Tower" to ServerCargoDependency.tower(codegenContext).toType(),
             "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
             "decode_body_data" to protocolTestRuntimeType.resolve("decode_body_data"),
         )

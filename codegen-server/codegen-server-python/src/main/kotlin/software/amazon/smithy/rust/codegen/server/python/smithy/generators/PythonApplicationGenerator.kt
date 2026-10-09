@@ -90,7 +90,7 @@ class PythonApplicationGenerator(
             "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.toType(),
             "tokio" to PythonServerCargoDependency.Tokio.toType(),
             "tracing" to PythonServerCargoDependency.Tracing.toType(),
-            "tower" to PythonServerCargoDependency.Tower.toType(),
+            "tower" to ServerCargoDependency.tower(codegenContext).toType(),
             "tower_http" to PythonServerCargoDependency.TowerHttp.toType(),
             "num_cpus" to PythonServerCargoDependency.NumCpus.toType(),
             "hyper" to PythonServerCargoDependency.Hyper.toType(),

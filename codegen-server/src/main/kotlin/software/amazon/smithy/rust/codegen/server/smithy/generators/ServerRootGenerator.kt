@@ -348,7 +348,7 @@ open class ServerRootGenerator(
             "FullExample" to fullExample(crateName, serviceName, unwrapConfigBuilder, builderFieldNames),
             "Hyper" to ServerCargoDependency.hyperDev(codegenContext.runtimeConfig).toType(),
             "Tokio" to ServerCargoDependency.TokioDev.toType(),
-            "Tower" to ServerCargoDependency.Tower.toType(),
+            "Tower" to ServerCargoDependency.tower(codegenContext).toType(),
             "Body" to
                 when (codegenContext.runtimeConfig.httpVersion) {
                     HttpVersion.Http0x ->

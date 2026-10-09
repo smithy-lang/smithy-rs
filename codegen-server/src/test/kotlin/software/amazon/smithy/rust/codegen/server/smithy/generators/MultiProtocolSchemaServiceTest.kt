@@ -131,7 +131,7 @@ class MultiProtocolSchemaServiceTest {
                 arrayOf(
                     "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
                     "Http" to RuntimeType.http(context.runtimeConfig),
-                    "Tower" to ServerCargoDependency.Tower.toType(),
+                    "Tower" to ServerCargoDependency.tower(context).toType(),
                     "BodyUtil" to CargoDependency.HttpBodyUtil01x.toType(),
                     "Bytes" to RuntimeType.Bytes,
                     *RuntimeType.preludeScope,
@@ -337,7 +337,7 @@ class MultiProtocolSchemaServiceTest {
                 arrayOf(
                     "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
                     "Http" to RuntimeType.http(context.runtimeConfig),
-                    "Tower" to ServerCargoDependency.Tower.toType(),
+                    "Tower" to ServerCargoDependency.tower(context).toType(),
                     "BodyUtil" to CargoDependency.HttpBodyUtil01x.toType(),
                     "Bytes" to RuntimeType.Bytes,
                     *RuntimeType.preludeScope,

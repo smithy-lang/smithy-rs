@@ -49,7 +49,7 @@ class CborServiceShapePreservesCasing {
                     "Ciborium" to CargoDependency.Ciborium.toDevDependency().toType(),
                     "Hyper" to RuntimeType.hyper(codegenContext.runtimeConfig),
                     "Http" to RuntimeType.http(codegenContext.runtimeConfig),
-                    "Tower" to ServerCargoDependency.Tower.toType(),
+                    "Tower" to ServerCargoDependency.tower(codegenContext).toType(),
                     "HashMap" to RuntimeType.HashMap,
                     *RuntimeType.preludeScope,
                 )

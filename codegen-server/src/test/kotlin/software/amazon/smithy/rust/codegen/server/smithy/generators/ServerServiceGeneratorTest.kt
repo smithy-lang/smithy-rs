@@ -161,7 +161,12 @@ internal class ServerServiceGeneratorTest {
     fun `legacy handlers and http plugins need not be Sync`() {
         val model = File("../codegen-core/common-test-models/simple.smithy").readText().asSmithyModel()
 
-        serverIntegrationTest(model) { codegenContext, rustCrate ->
+        serverIntegrationTest(
+            model,
+            IntegrationTestParams(
+                additionalSettings = ObjectNode.parse("""{"codegen":{"schemaSerde":false}}""").expectObjectNode(),
+            ),
+        ) { codegenContext, rustCrate ->
             rustCrate.testModule {
                 // No actual tests: we just want to check that this compiles.
                 rustTemplate(
@@ -216,7 +221,7 @@ internal class ServerServiceGeneratorTest {
                     }
                     """,
                     "Server" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
-                    "Tower" to ServerCargoDependency.Tower.toType(),
+                    "Tower" to ServerCargoDependency.tower(codegenContext).toType(),
                     *RuntimeType.preludeScope,
                 )
             }

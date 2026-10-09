@@ -199,7 +199,7 @@ internal class ServerSchemaLegacyReplayTest {
                             *preludeScope,
                             "Http" to RuntimeType.http(context.runtimeConfig),
                             "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
-                            "Tower" to ServerCargoDependency.Tower.toType(),
+                            "Tower" to ServerCargoDependency.tower(context).toType(),
                             "BodyUtil" to CargoDependency.HttpBodyUtil01x.toType(),
                             "Futures" to CargoDependency.FuturesUtil.toType(),
                             "Json" to CargoDependency.SerdeJson.toType(),
