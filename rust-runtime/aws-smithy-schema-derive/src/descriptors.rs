@@ -164,6 +164,10 @@ pub(crate) fn error(input: DeriveInput) -> syn::Result<TokenStream> {
     }
     let serialization_impl = serialize.then(|| quote! {
         impl ::aws_smithy_schema::serde::SerializableStruct for #name {
+            fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+                match self { #(Self::#variants(inner) => ::aws_smithy_schema::serde::SerializableStruct::schema(inner),)* }
+            }
+
             fn serialize_members(&self, ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer)
                 -> ::std::result::Result<(), ::aws_smithy_schema::serde::SerdeError> {
                 match self { #(Self::#variants(inner) => ::aws_smithy_schema::serde::SerializableStruct::serialize_members(inner, ser),)* }

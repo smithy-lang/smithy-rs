@@ -1215,6 +1215,10 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
     let serialization_impl = generate_serialization.then(|| {
         quote! {
                 impl ::aws_smithy_schema::serde::SerializableStruct for #name {
+                    fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
+                        Self::SCHEMA
+                    }
+
                     #[allow(unused_variables)]
                     fn serialize_members(
                         &self,
