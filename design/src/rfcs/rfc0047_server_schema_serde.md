@@ -43,7 +43,7 @@ typed output → generated member writer → binding splitter/codec → HTTP res
 
 Request-part extractors use `FromParts<DynProtocol>`. Typed handler signatures
 remain the same. Protocol selection and routing-body replay are defined in
-[Server protocol claims and multiprotocol dispatch](rfc_server_protocol_claims.md).
+[Server protocol claims and multiprotocol dispatch](rfc0048_server_protocol_claims.md).
 
 Deserialization
 ---------------

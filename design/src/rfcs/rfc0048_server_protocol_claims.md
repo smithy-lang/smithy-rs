@@ -127,7 +127,7 @@ registry, so generated code supplies only additional registries.
 `ProtocolOptions` carries generated configuration defaults into construction.
 The generated `request_body_config` setter can replace body policy; general
 Rust overrides for protocol settings are described in the
-[schema RFC](rfc_server_schema_serde.md).
+[schema RFC](rfc0047_server_schema_serde.md).
 
 ### Protocol precedence
 
@@ -313,7 +313,7 @@ Dispatch inserts `SelectedOperation` with the canonical operation schema,
 selected protocol, and operation collection policy. Upgrade consumes that
 selection to invoke the shared typed handler through the selected protocol.
 Upgrade and streaming conversion are defined in
-[Schema-driven server serde](rfc_server_schema_serde.md).
+[Schema-driven server serde](rfc0047_server_schema_serde.md).
 
 Generated schema services use this routing and upgrade path even when they
 declare only one protocol. Services without `schemaSerde` retain legacy routing
