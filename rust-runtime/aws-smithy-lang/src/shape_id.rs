@@ -147,6 +147,7 @@ impl ShapeId {
         is_valid_namespace(value)
     }
 
+    #[cfg(test)]
     pub(crate) fn arc(&self) -> &Arc<str> {
         &self.absolute
     }

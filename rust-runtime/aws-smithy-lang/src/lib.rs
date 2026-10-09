@@ -53,6 +53,7 @@ mod model;
 mod prelude;
 mod shape_id;
 mod validate;
+mod writer;
 
 pub use diagnostic::{LoadError, WriteError};
 pub use loader::ModelLoader;
@@ -60,3 +61,4 @@ pub use model::Model;
 pub use node::{Node, NodeObject, Number};
 pub use shape::{ShapeRef, ShapeType};
 pub use shape_id::{InvalidShapeIdError, ShapeId};
+pub use writer::ModelWriter;
