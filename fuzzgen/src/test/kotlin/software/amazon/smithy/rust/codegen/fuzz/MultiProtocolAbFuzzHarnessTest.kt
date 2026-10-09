@@ -275,11 +275,19 @@ class MultiProtocolAbFuzzHarnessTest {
                     }
                     // restJson1 claims every REST request that carries neither a body nor a `Content-Type`, so
                     // restXml is compared against a server serving every protocol but restJson1.
+                    // `MP_FUZZ_VARIANTS` overrides the served protocol sets, e.g.
+                    // `bunch-json=aws-json-10+rest-json1+rpcv2-cbor;bunch-xml=aws-json-11+rest-xml+rpcv2-cbor`;
+                    // each variant then gets an `ab-harness-<name>` per served protocol.
+                    val customVariants = System.getenv("MP_FUZZ_VARIANTS")
                     val variants =
-                        mapOf(
-                            "multi" to protocols,
-                            "multi-xml" to protocols.filterNot { it.dir == "rest-json1" },
-                        )
+                        customVariants?.split(";")?.associate { entry ->
+                            val (name, dirs) = entry.split("=", limit = 2)
+                            name to dirs.split("+").map { dir -> protocols.single { it.dir == dir } }
+                        }
+                            ?: mapOf(
+                                "multi" to protocols,
+                                "multi-xml" to protocols.filterNot { it.dir == "rest-json1" },
+                            )
                     for ((name, served) in variants) {
                         val model = multiModel(suite, served)
                         val server = generateServer(model, service, suiteDir.resolve("$name-server"))
@@ -289,8 +297,9 @@ class MultiProtocolAbFuzzHarnessTest {
                         if (singleRuntime == null) continue
                         for (protocol in selected.filter { it in served }) {
                             val abHarness =
-                                when (name) {
-                                    "multi" -> "ab-harness"
+                                when {
+                                    customVariants != null -> "ab-harness-$name"
+                                    name == "multi" -> "ab-harness"
                                     else -> if (protocol.dir == "rest-xml") "ab-harness-xml" else continue
                                 }
                             generateAbHarness(

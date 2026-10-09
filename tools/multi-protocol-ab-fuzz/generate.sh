@@ -24,7 +24,9 @@ mkdir -p "$GEN/test-src/$(dirname "$TEST")"
 cp "$CURRENT_REPO/fuzzgen/src/test/kotlin/$TEST" "$GEN/test-src/$TEST"
 
 export MP_FUZZ_GENERATE=true
-export MP_FUZZ_ISOLATE_PROTOCOLS=true
+# `true`: each case compares two single-protocol servers. `false`: the after side is one
+# multi-protocol server (plus the no-restJson1 `multi-xml` variant for the rest-xml comparison).
+export MP_FUZZ_ISOLATE_PROTOCOLS="${MP_FUZZ_ISOLATE_PROTOCOLS:-true}"
 export MP_FUZZ_OUTPUT="$GEN"
 export MP_FUZZ_MODELS="$CURRENT_REPO/codegen-core/common-test-models"
 export MP_FUZZ_SUITES="${SUITES// /,}"

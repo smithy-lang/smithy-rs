@@ -57,6 +57,28 @@ enum Commands {
     /// This exists to facilitate invoking a cdylib that may panic without crashing the main
     /// process
     InvokeTestCase(InvokeArgs),
+
+    /// Serve a fuzz target shared library over live HTTP
+    ///
+    /// Loads the cdylib and forwards each HTTP/1.1 request to its generated service, returning
+    /// the service's response on the wire. `GET /__ab/build` returns the build-info JSON supplied
+    /// at launch, before any protocol routing, so a launcher can verify which build is listening.
+    Serve(ServeArgs),
+}
+
+#[derive(Parser)]
+struct ServeArgs {
+    /// Path to the compiled fuzz target shared library
+    #[arg(short, long)]
+    shared_library_path: PathBuf,
+
+    /// Address to bind, e.g. 127.0.0.1:18020
+    #[arg(short, long)]
+    address: String,
+
+    /// Path to the build-info JSON served at GET /__ab/build
+    #[arg(short, long)]
+    build_info: PathBuf,
 }
 
 #[derive(Parser)]
@@ -216,6 +238,155 @@ fn main() {
             test_case,
             shared_library_path,
         }) => invoke_testcase(test_case, shared_library_path),
+        Commands::Serve(args) => serve(args),
+    }
+}
+
+fn serve(args: ServeArgs) {
+    use std::io::{Read, Write};
+
+    let build_info = fs::read_to_string(&args.build_info).expect("could not read build-info file");
+    let _: Value = serde_json::from_str(&build_info).expect("build-info is not valid JSON");
+    let target = FuzzTarget::from_path(&args.shared_library_path);
+    let listener =
+        std::net::TcpListener::bind(&args.address).expect("could not bind the requested address");
+    println!("listening on {}", args.address);
+
+    fn write_response(
+        stream: &mut std::net::TcpStream,
+        status: u16,
+        headers: &[(String, String)],
+        body: &[u8],
+    ) {
+        let mut out = format!("HTTP/1.1 {status} \r\n");
+        for (name, value) in headers {
+            // The in-process response model stores single-line header values; a stray CR/LF
+            // would corrupt the wire framing, so surface it instead of splitting the header.
+            if value.contains(['\r', '\n']) || name.contains(['\r', '\n']) {
+                let msg = "response header contains line breaks";
+                let error = format!(
+                    "HTTP/1.1 502 \r\nx-ab-serve-error: {msg}\r\ncontent-length: 0\r\nconnection: close\r\n\r\n"
+                );
+                let _ = stream.write_all(error.as_bytes());
+                return;
+            }
+            out.push_str(&format!("{name}: {value}\r\n"));
+        }
+        out.push_str(&format!(
+            "content-length: {}\r\nconnection: close\r\n\r\n",
+            body.len()
+        ));
+        let _ = stream.write_all(out.as_bytes());
+        let _ = stream.write_all(body);
+    }
+
+    // One request per connection, handled sequentially: the fuzz target serializes requests
+    // internally and the comparison driver needs deterministic ordering, not throughput.
+    for stream in listener.incoming() {
+        let mut stream = match stream {
+            Ok(stream) => stream,
+            Err(_) => continue,
+        };
+        let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(30)));
+
+        // Read until the end of the header block.
+        let mut buffer = Vec::new();
+        let mut chunk = [0u8; 8192];
+        let header_end = loop {
+            if let Some(pos) = buffer.windows(4).position(|w| w == b"\r\n\r\n") {
+                break pos + 4;
+            }
+            match stream.read(&mut chunk) {
+                Ok(0) => break usize::MAX,
+                Ok(n) => buffer.extend_from_slice(&chunk[..n]),
+                Err(_) => break usize::MAX,
+            }
+        };
+        if header_end == usize::MAX {
+            continue;
+        }
+        let head = String::from_utf8_lossy(&buffer[..header_end]).into_owned();
+        let mut lines = head.split("\r\n");
+        let request_line = lines.next().unwrap_or("");
+        let mut parts = request_line.split_whitespace();
+        let (method, uri) = match (parts.next(), parts.next()) {
+            (Some(method), Some(uri)) => (method.to_owned(), uri.to_owned()),
+            _ => {
+                write_response(&mut stream, 400, &[], b"malformed request line");
+                continue;
+            }
+        };
+        let mut headers: HashMap<String, Vec<String>> = HashMap::new();
+        for line in lines {
+            if let Some((name, value)) = line.split_once(':') {
+                headers
+                    .entry(name.trim().to_ascii_lowercase())
+                    .or_default()
+                    .push(value.trim().to_owned());
+            }
+        }
+
+        let header_value = |name: &str| headers.get(name).and_then(|v| v.first()).cloned();
+        if header_value("transfer-encoding").is_some() {
+            write_response(&mut stream, 501, &[], b"chunked bodies are not supported");
+            continue;
+        }
+        if header_value("expect").as_deref() == Some("100-continue") {
+            let _ = stream.write_all(b"HTTP/1.1 100 Continue\r\n\r\n");
+        }
+        let content_length: usize = header_value("content-length")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+        let mut body = buffer[header_end..].to_vec();
+        while body.len() < content_length {
+            match stream.read(&mut chunk) {
+                Ok(0) => break,
+                Ok(n) => body.extend_from_slice(&chunk[..n]),
+                Err(_) => break,
+            }
+        }
+        if body.len() < content_length {
+            write_response(&mut stream, 400, &[], b"body shorter than content-length");
+            continue;
+        }
+        body.truncate(content_length);
+
+        if method == "GET" && uri == "/__ab/build" {
+            write_response(
+                &mut stream,
+                200,
+                &[("content-type".to_owned(), "application/json".to_owned())],
+                build_info.as_bytes(),
+            );
+            continue;
+        }
+
+        let request = HttpRequest {
+            uri,
+            method,
+            headers,
+            trailers: HashMap::new(),
+            body,
+        };
+        let result = target.invoke(&request);
+        let headers: Vec<(String, String)> = result
+            .response
+            .headers
+            .iter()
+            .filter(|(name, _)| {
+                !matches!(
+                    name.to_ascii_lowercase().as_str(),
+                    "content-length" | "connection"
+                )
+            })
+            .map(|(name, value)| (name.clone(), value.clone()))
+            .collect();
+        write_response(
+            &mut stream,
+            result.response.status,
+            &headers,
+            &result.response.body,
+        );
     }
 }
 
