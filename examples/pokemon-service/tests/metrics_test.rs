@@ -44,6 +44,7 @@ async fn test_metrics_content_via_tcp() {
     insta::with_settings!({filters => vec![
         (r#""Timestamp":\d+"#, r#""Timestamp":"[timestamp]"#),
         (r#""operation_time":[\d.]+"#, r#""operation_time":"[operation_time]"#),
+        (r#""authorization_time":[\d.]+"#, r#""authorization_time":"[authorization_time]"#),
         (r#""request_id":"[0-9a-f-]+""#, r#""request_id":"[request_id]"#),
     ]}, {
         insta::assert_snapshot!(metrics_output);

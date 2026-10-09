@@ -23,7 +23,8 @@ struct OperationField {
 /// This macro:
 /// 1. Processes fields marked with `#[smithy_metrics(operation)]`
 /// 2. Wraps their types in `metrique::Slot<T>` if not already wrapped
-/// 3. Adds default request/repsonse metrics fields
+/// 3. Adds a single flattened `__smithy_metrics` field of type
+///    `aws_smithy_http_server_metrics::default::SmithyMetrics`
 /// 4. Generates a builder trait and implementations for the metrics layer for the annotated metrics struct
 pub(crate) fn smithy_metrics_impl(
     _attrs: SmithyMetricsStructAttrs,
@@ -74,20 +75,30 @@ pub(crate) fn smithy_metrics_impl(
     }
 
     fields.named.push(syn::parse_quote! {
+        /// Smithy-provided metrics: default request/response metrics plus the
+        /// pool that collects heterogeneous child metrics contributed by
+        /// middleware, handlers, and libraries during the request. Flattened
+        /// into this entry when the request finishes.
         #[metrics(flatten)]
-        default_request_metrics: Option<metrique::Slot<aws_smithy_http_server_metrics::default::DefaultRequestMetrics>>
+        #[doc(hidden)]
+        __smithy_metrics: aws_smithy_http_server_metrics::default::SmithyMetrics
     });
 
-    fields.named.push(syn::parse_quote! {
-        #[metrics(flatten)]
-        default_response_metrics: Option<metrique::Slot<aws_smithy_http_server_metrics::default::DefaultResponseMetrics>>
-    });
+    let struct_ident = &metrics_struct.ident;
+    let has_smithy_metrics_impl = quote! {
+        impl aws_smithy_http_server_metrics::default::HasSmithyMetrics for #struct_ident {
+            fn smithy_metrics(&self) -> &aws_smithy_http_server_metrics::default::SmithyMetrics {
+                &self.__smithy_metrics
+            }
+        }
+    };
 
     let ext_trait = generate_ext_trait(&metrics_struct.ident);
     let ext_trait_impls = generate_ext_trait_impl(&metrics_struct.ident, &extension_fields);
 
     quote! {
         #metrics_struct
+        #has_smithy_metrics_impl
         #ext_trait
         #ext_trait_impls
     }
@@ -147,12 +158,13 @@ fn generate_ext_trait_impl(
                             req_config: aws_smithy_http_server_metrics::default::DefaultRequestMetricsConfig,
                             res_config: aws_smithy_http_server_metrics::default::DefaultResponseMetricsConfig,
                             service_state: aws_smithy_http_server_metrics::default::DefaultMetricsServiceState| {
-                                metrics.default_request_metrics =
+                                metrics.__smithy_metrics.default_request_metrics =
                                     Some(metrique::Slot::new(aws_smithy_http_server_metrics::default::DefaultRequestMetrics::default()));
-                                metrics.default_response_metrics =
+                                metrics.__smithy_metrics.default_response_metrics =
                                     Some(metrique::Slot::new(aws_smithy_http_server_metrics::default::DefaultResponseMetrics::default()));
 
                                 let default_req_metrics_slotguard = metrics
+                                    .__smithy_metrics
                                     .default_request_metrics
                                     .as_mut()
                                     .and_then(|slot| slot.open(metrique::OnParentDrop::Discard))
@@ -160,6 +172,7 @@ fn generate_ext_trait_impl(
                                         "unreachable: the option is set to a created slot in this scope",
                                     );
                                 let default_res_metrics_slotguard = metrics
+                                    .__smithy_metrics
                                     .default_response_metrics
                                     .as_mut()
                                     .and_then(|slot| slot.open(metrique::OnParentDrop::Discard))
@@ -294,7 +307,7 @@ mod tests {
             .named
             .iter()
             .find(|f| f.ident.as_ref().unwrap() == field_name)
-            .expect(&format!("should have field {}", field_name))
+            .unwrap_or_else(|| panic!("should have field {}", field_name))
     }
 
     /// Helper to assert that a field has the expected type
@@ -321,6 +334,7 @@ mod tests {
         let attrs = SmithyMetricsStructAttrs {};
 
         let output = smithy_metrics_impl(attrs, input);
+        let output_str = output.to_string();
         let generated_struct = get_generated_struct(output);
 
         // Verify my_field is wrapped in double Slot
@@ -330,9 +344,17 @@ mod tests {
             syn::parse_quote!(metrique::Slot<metrique::Slot<MyType>>),
         );
 
-        // Verify default fields exist
-        find_field(&generated_struct, "default_request_metrics");
-        find_field(&generated_struct, "default_response_metrics");
+        // Verify the single injected smithy metrics field exists and is typed
+        // as the runtime crate's SmithyMetrics entry, flattened into the user's
+        // struct.
+        assert_field_type(
+            &generated_struct,
+            "__smithy_metrics",
+            syn::parse_quote!(aws_smithy_http_server_metrics::default::SmithyMetrics),
+        );
+
+        // Verify the HasSmithyMetrics impl is generated
+        assert!(output_str.contains("HasSmithyMetrics"));
     }
 
     #[test]
