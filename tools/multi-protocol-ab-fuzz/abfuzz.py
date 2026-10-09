@@ -37,8 +37,15 @@ import xml.etree.ElementTree as ET
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FUZZ_ROOT = os.environ.get("FUZZ_ROOT", os.path.join(HERE, "artifacts"))
-SEMANTIC = bool(os.environ.get("SMITHY_FUZZ_SEMANTIC_COMPARE", "1"))
-IGNORE_UNROUTED = bool(os.environ.get("SMITHY_FUZZ_IGNORE_UNROUTED", ""))
+
+
+def env_flag(name):
+    """Match env.sh flag parsing; direct Python invocation defaults to disabled."""
+    return os.environ.get(name, "").strip().lower() not in ("", "0", "false", "no", "off")
+
+
+SEMANTIC = env_flag("SMITHY_FUZZ_SEMANTIC_COMPARE")
+IGNORE_UNROUTED = env_flag("SMITHY_FUZZ_IGNORE_UNROUTED")
 SINGLE, MULTI = "single", "multi"
 
 # ---------------------------------------------------------------------------------------------
@@ -208,6 +215,7 @@ class Case:
             raise ValueError("campaign protocol is missing or mismatched; rerun init.sh")
         out = {}
         for side, library in self.libraries.items():
+            res = None
             try:
                 res = subprocess.run(
                     ["aws-smithy-fuzz", "invoke-test-case", "--shared-library-path", library, "--test-case", path],
@@ -223,7 +231,10 @@ class Case:
                 }
             except subprocess.TimeoutExpired:
                 out[side] = {"failure": "hang (>30s)"}
-            except Exception:
+            except Exception as error:
+                if res is None:
+                    out[side] = {"failure": f"invocation failed: {error}"}
+                    continue
                 stderr = res.stderr.decode("utf-8", "replace")
                 panic = [l for l in stderr.splitlines() if "panicked" in l]
                 out[side] = {"failure": "panic: " + (panic[0] if panic else stderr[-300:])}
@@ -344,7 +355,7 @@ def event_frames(data):
 def pin_protocol(request, protocol):
     """Mirror the native driver's effective protocol identity for replay classification."""
     uri, method, headers, body = request
-    cbor_stream = protocol == "rpcv2-cbor" and any(
+    event_stream = protocol in ("rpcv2-cbor", "rest-json1", "rest-xml") and any(
         k.lower() == "content-type" and any(
             (v.decode("utf-8", "replace") if isinstance(v, bytes) else v).split(";")[0].strip()
             == "application/vnd.amazon.eventstream" for v in vs) for k, vs in headers.items())
@@ -353,7 +364,7 @@ def pin_protocol(request, protocol):
                and (protocol.startswith("aws-json") or k.lower() != "x-amz-target")}
     media = {"aws-json-10": "application/x-amz-json-1.0", "aws-json-11": "application/x-amz-json-1.1",
              "rest-json1": "application/json", "rest-xml": "application/xml", "rpcv2-cbor": "application/cbor"}
-    headers["content-type"] = ["application/vnd.amazon.eventstream" if cbor_stream else media[protocol]]
+    headers["content-type"] = ["application/vnd.amazon.eventstream" if event_stream else media[protocol]]
     if protocol == "rpcv2-cbor":
         headers["smithy-protocol"] = ["rpc-v2-cbor"]
     return uri, method, headers, body
@@ -517,7 +528,7 @@ def cmd_corpus_diff(suite, case):
     statuses = collections.Counter()
     for label, uri, method, headers, body in requests:
         s, m = c.invoke(uri, method, headers, body)
-        request = pin_protocol((uri, method, headers, body), c.name)
+        request = pin_protocol((uri, method, headers, body), protocol_of(c.name))
         known = known_divergence(request, s, m)
         what = describe(s, m, request)
         if known:
@@ -553,7 +564,7 @@ def cmd_replay(suite, case):
             for r in (s, m):
                 if "body" in r:
                     r["body"] = list(r["body"])
-            request = pin_protocol(decode_request(open(path, "rb").read()), c.name)
+            request = pin_protocol(decode_request(open(path, "rb").read()), protocol_of(c.name))
             known = known_divergence(request, {**s, "body": bytes(s.get("body", []))},
                                      {**m, "body": bytes(m.get("body", []))})
             out.write(json.dumps({"path": os.path.relpath(path, c.dir), "single": s, "multi": m,
@@ -573,7 +584,7 @@ def cmd_cluster(suite, case, samples):
             if "body" in r:
                 r["body"] = bytes(r["body"])
         request = decode_request(open(os.path.join(c.dir, o["path"]), "rb").read())
-        effective_request = pin_protocol(request, c.name)
+        effective_request = pin_protocol(request, protocol_of(c.name))
         known = known_divergence(effective_request, s, m)
         if known:
             groups[f"KNOWN {known}"].append((o["path"], request, s, m))
@@ -601,7 +612,7 @@ def cmd_probe(suite, case, cases_file):
     exec(open(cases_file).read(), ns)
     for name, uri, method, headers, body in ns["CASES"]:
         s, m = c.invoke(uri, method, headers, body)
-        request = pin_protocol((uri, method, headers, body), c.name)
+        request = pin_protocol((uri, method, headers, body), protocol_of(c.name))
         known = known_divergence(request, s, m)
         print(f"{name}\n    single: {_short(s)}\n    multi:  {_short(m)}\n    -> {'KNOWN: ' + known if known else describe(s, m, request) or 'SAME'}")
 

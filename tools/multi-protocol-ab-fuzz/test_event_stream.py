@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from abfuzz import _bodies_agree, event_frames
 from seeds import event_frame, event_stream_seeds
@@ -15,6 +16,7 @@ class EventStreams(unittest.TestCase):
                     else:
                         event_frames(body)
 
+    @patch("abfuzz.SEMANTIC", True)
     def test_comparison_preserves_order_headers_and_binary_payloads(self):
         def frame(name, payload, content_type='application/json'):
             return event_frame({':message-type': 'event', ':event-type': name, ':content-type': content_type}, payload)

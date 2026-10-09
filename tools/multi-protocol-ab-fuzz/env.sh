@@ -3,7 +3,9 @@
 
 AB_FUZZ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${CURRENT_REPO:=$(cd "$AB_FUZZ_DIR/../.." && pwd)}"      # multi-protocol schema server
-: "${BASELINE_REPO:=$HOME/smithy-rs-latest}"                # one legacy server per protocol
+# realpath: the generated server crates embed the canonical runtime path, and a second
+# spelling of the same path (e.g. /home vs /local/home) is a cargo lockfile package collision.
+: "${BASELINE_REPO:=$(realpath "$HOME/smithy-rs-latest")}"  # one legacy server per protocol
 : "${FUZZ_ROOT:=$AB_FUZZ_DIR/artifacts}"                    # generated code, driver, AFL state, replays
 : "${SUITES:=multiprotocol pokemon}"
 # Each after server serves exactly one protocol, with schema serde enabled.
@@ -19,18 +21,26 @@ export RUSTUP_TOOLCHAIN="$(sed -n 's/channel = "\(.*\)"/\1/p' "$CURRENT_REPO/rus
 
 # Compare the deserialized input and the response, ignoring differences a client cannot observe
 # (`content-length`, JSON member order, CBOR encoding choices, XML member order). Set to the empty
-# string for a byte-for-byte comparison of responses only.
+# string, 0, false, no, or off for a byte-for-byte comparison of responses only.
 : "${SMITHY_FUZZ_SEMANTIC_COMPARE=1}"
 # Accept the differences that follow from serving several protocols: any answer to a request the
 # single-protocol server does not route to an operation (the multi-protocol server may route it
 # through another protocol), and the multi-protocol server's protocol-neutral 404 for a request no
 # protocol claims when the single-protocol server rejects that request too, with any 4xx, before a
 # handler runs. A request whose handler the single-protocol server invokes must still reach the
-# same handler. Set to the empty string to compare all of those as well.
+# same handler. Set to the empty string, 0, false, no, or off to compare all of those as well.
 : "${SMITHY_FUZZ_IGNORE_UNROUTED=}"
 for v in SMITHY_FUZZ_SEMANTIC_COMPARE SMITHY_FUZZ_IGNORE_UNROUTED; do
-  if [ -n "${!v}" ]; then export "$v"; else unset "$v"; fi
+  ab_fuzz_flag_value="${!v}"
+  ab_fuzz_flag_value="${ab_fuzz_flag_value#"${ab_fuzz_flag_value%%[![:space:]]*}"}"
+  ab_fuzz_flag_value="${ab_fuzz_flag_value%"${ab_fuzz_flag_value##*[![:space:]]}"}"
+  ab_fuzz_flag_value="$(printf '%s' "$ab_fuzz_flag_value" | tr '[:upper:]' '[:lower:]')"
+  case "$ab_fuzz_flag_value" in
+    ""|0|false|no|off) unset "$v" ;;
+    *) export "$v=1" ;;
+  esac
 done
+unset ab_fuzz_flag_value
 
 # AFL settings for a shared workstation.
 export AFL_SKIP_CPUFREQ=1

@@ -15,16 +15,18 @@ pub fn pin_protocol(request: &mut HttpRequest, protocol: &str) {
         "rpcv2-cbor" => "application/cbor",
         _ => panic!("unknown isolated fuzz protocol: {protocol}"),
     };
-    // CBOR has an unambiguous protocol header even for event-stream requests.
+    // CBOR has an unambiguous protocol header even for event-stream requests, and the REST
+    // protocols identify event-stream inputs by this content type, so those requests keep it.
     // AWS JSON uses its versioned content type to disambiguate event streams.
-    let cbor_stream = protocol == "rpcv2-cbor"
-        && request.headers.iter().any(|(name, values)| {
-            name.eq_ignore_ascii_case("content-type")
-                && values.iter().any(|value| {
-                    value.split(';').next().unwrap_or("").trim()
-                        == "application/vnd.amazon.eventstream"
-                })
-        });
+    let event_stream = matches!(
+        protocol,
+        "rpcv2-cbor" | "rest-json1" | "rest-xml" | "rest-xml-nojson"
+    ) && request.headers.iter().any(|(name, values)| {
+        name.eq_ignore_ascii_case("content-type")
+            && values.iter().any(|value| {
+                value.split(';').next().unwrap_or("").trim() == "application/vnd.amazon.eventstream"
+            })
+    });
     for headers in [&mut request.headers, &mut request.trailers] {
         headers.retain(|name, _| {
             !name.eq_ignore_ascii_case("content-type")
@@ -35,7 +37,7 @@ pub fn pin_protocol(request: &mut HttpRequest, protocol: &str) {
     }
     request.headers.insert(
         "content-type".into(),
-        vec![if cbor_stream {
+        vec![if event_stream {
             "application/vnd.amazon.eventstream"
         } else {
             content_type
@@ -109,8 +111,15 @@ mod tests {
     }
 
     #[test]
-    fn aws_streams_keep_the_campaign_version() {
-        for protocol in ["aws-json-10", "aws-json-11", "rpcv2-cbor"] {
+    fn event_stream_content_type_survives_everywhere_but_aws_json() {
+        for protocol in [
+            "aws-json-10",
+            "aws-json-11",
+            "rest-json1",
+            "rest-xml",
+            "rest-xml-nojson",
+            "rpcv2-cbor",
+        ] {
             let mut request = HttpRequest::default();
             request.headers.insert(
                 "content-type".into(),

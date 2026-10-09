@@ -53,6 +53,11 @@ server `200`.
 
 `env.sh` enables semantic comparison. Routing exclusions are disabled by default;
 set SMITHY_FUZZ_IGNORE_UNROUTED=1 only for explicit historical investigations.
+For both flags, an empty value, `0`, `false`, `no`, or `off` disables the option,
+ignoring case and surrounding whitespace. Any other value enables it. `env.sh`
+exports enabled flags as `1` and unsets disabled flags so the Rust driver and Python
+agree. When running Python directly without `env.sh`, unset flags are disabled;
+source `env.sh` to get its semantic-comparison default.
 
 - `SMITHY_FUZZ_SEMANTIC_COMPARE`: compare the deserialized input, the status, the headers except
   `content-length`, and the body as a value (JSON member order, CBOR encoding choices and the order of
