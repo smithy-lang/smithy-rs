@@ -282,6 +282,7 @@ mod tests {
     };
     use p256::ecdsa::signature::Signer;
     use p256::ecdsa::{DerSignature, SigningKey};
+    use p256::elliptic_curve::sec1::ToEncodedPoint;
 
     /// `elliptic_curve::SecretKey::MIN_SIZE` is a private associated constant, so the 24 in
     /// [`P256_PRIVATE_KEY_MIN_SIZE`] is a copy this crate cannot reference. Pin both ends of the
@@ -351,8 +352,14 @@ mod tests {
     ];
 
     /// Signing from the private scalar has to agree with signing through a `SigningKey`, byte for
-    /// byte. That equality is the whole argument for skipping the verifying-key derivation: the
-    /// only thing dropped is a scalar multiplication whose result signing never reads.
+    /// byte, across every credential and string to sign below. That equality is the whole
+    /// argument for skipping the verifying-key derivation: the only thing dropped is a scalar
+    /// multiplication whose result signing never reads.
+    ///
+    /// It says nothing about the derivation itself, since both sides start from the same
+    /// `generate_signing_key` output and a change there moves both;
+    /// `derived_key_matches_the_published_test_vector` is what pins that. Nor does it cover short
+    /// keys, which `short_keys_match_the_signing_key_path` does.
     #[test]
     fn signature_matches_the_signing_key_path() {
         for (access_key, secret_key) in CREDENTIALS {
@@ -370,21 +377,43 @@ mod tests {
         }
     }
 
-    /// The derived key is now returned as the raw scalar instead of being round-tripped through a
-    /// `SigningKey`. Those are the same 32 bytes: the KDF loop already bounds the scalar below the
-    /// group order, so the round trip was an identity function that cost a scalar multiplication.
+    /// Pins the key derivation to the suite's published key.
+    ///
+    /// Every `aws-signing-test-suite/v4a/*/public-key.json` in this crate holds the same public
+    /// key, and the scalar the KDF derives for `AKIDEXAMPLE` is its private half. The X and Y
+    /// asserted below are the values in those files; the private scalar is not published
+    /// anywhere, so it is asserted as the value that derives them.
+    ///
+    /// Nothing else in the crate pins this. The suite tests in `http_request::test` verify each
+    /// signature with a key derived from this same output, so a change to the derivation moves
+    /// both sides and they still pass; that file carries a standing `TODO(sigv4a)` about using
+    /// `public-key.json` as the verifying key instead. A round trip through
+    /// `SigningKey::from_slice` and `to_bytes` cannot pin it either: that pair returns what it is
+    /// given, so it compares the key against itself.
     #[test]
-    fn derived_key_matches_the_signing_key_round_trip() {
-        for (access_key, secret_key) in CREDENTIALS {
-            let key = generate_signing_key(access_key, secret_key);
-            let round_tripped = SigningKey::from_slice(key.as_ref())
-                .expect("derived key is a valid P-256 private key")
-                .to_bytes();
-            assert_eq!(
-                &round_tripped[..],
-                key.as_ref(),
-                "derived key changed for access key {access_key}"
-            );
-        }
+    fn derived_key_matches_the_published_test_vector() {
+        let key = generate_signing_key("AKIDEXAMPLE", "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY");
+
+        assert_eq!(
+            "7efc8c0e65a324242818c5a50c891c6060b6a00717b7ba3cbe3c5d765be9259c",
+            hex::encode(key.as_ref()),
+            "the derived signing key changed"
+        );
+
+        let point = SigningKey::from_slice(key.as_ref())
+            .expect("derived key is a valid P-256 private key")
+            .verifying_key()
+            .as_affine()
+            .to_encoded_point(false);
+        assert_eq!(
+            "b6618f6a65740a99e650b33b6b4b5bd0d43b176d721a3edfea7e7d2d56d936b1",
+            hex::encode(point.x().expect("uncompressed point has an x coordinate")),
+            "public key no longer matches the test suite's public-key.json"
+        );
+        assert_eq!(
+            "865ed22a7eadc9c5cb9d2cbaca1b3699139fedc5043dc6661864218330c8e518",
+            hex::encode(point.y().expect("uncompressed point has a y coordinate")),
+            "public key no longer matches the test suite's public-key.json"
+        );
     }
 }
