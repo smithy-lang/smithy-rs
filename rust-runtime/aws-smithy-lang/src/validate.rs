@@ -472,15 +472,18 @@ impl<'a> Validator<'a> {
             return;
         };
         for (property, id) in [("input", &operation.input), ("output", &operation.output)] {
-            if let Some(id) = id {
-                let location = shape.source.child(&format!("/{property}/target"));
-                self.expect(
-                    id,
-                    location,
-                    &[ShapeType::Structure],
-                    &format!("operation `{property}`"),
-                );
-            }
+            // An omitted input/output is normalized to `smithy.api#Unit`, so it must resolve
+            // too (it does not when the prelude is disabled and the document lacks it).
+            let (id, location) = match id {
+                Some(id) => (id, shape.source.child(&format!("/{property}/target"))),
+                None => (unit_id(), shape.source.clone()),
+            };
+            self.expect(
+                id,
+                location,
+                &[ShapeType::Structure],
+                &format!("operation `{property}`"),
+            );
         }
         for (index, id) in operation.errors.iter().enumerate() {
             let location = shape.source.child(&format!("/errors/{index}/target"));
@@ -904,6 +907,23 @@ mod tests {
                 (InvalidTarget, "/shapes/a#Op/errors/0/target".to_owned()),
             ]
         );
+    }
+
+    #[test]
+    fn omitted_operation_io_requires_unit() {
+        let without_prelude = ModelLoader::new().disable_prelude();
+        assert_eq!(
+            check_with(without_prelude.clone(), r#""a#Op":{"type":"operation"}"#),
+            [
+                (UnresolvedReference, "/shapes/a#Op".to_owned()),
+                (UnresolvedReference, "/shapes/a#Op".to_owned()),
+            ]
+        );
+        // Defining Unit locally makes the normalized reference resolve.
+        let unit = r#""smithy.api#Unit":{"type":"structure","traits":{"smithy.api#unitType":{}}},
+                      "a#Op":{"type":"operation"}"#;
+        assert_eq!(check_with(without_prelude, unit), []);
+        assert_eq!(check(r#""a#Op":{"type":"operation"}"#), []);
     }
 
     #[test]

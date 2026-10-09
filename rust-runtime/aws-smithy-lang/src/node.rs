@@ -478,42 +478,38 @@ impl fmt::Display for Number {
     }
 }
 
-impl Serialize for Number {
+/// Serializes a [`Node`] in insertion order.
+///
+/// This is a crate-private wrapper rather than a public `Serialize` impl, so that `serde` stays
+/// out of the public API. The writer sorts object keys itself and only uses this for scalars.
+pub(crate) struct NodeSer<'a>(pub(crate) &'a Node);
+
+impl Serialize for NodeSer<'_> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self.0 {
-            NumberRepr::PosInt(v) => serializer.serialize_u64(v),
-            NumberRepr::NegInt(v) => serializer.serialize_i64(v),
-            NumberRepr::Float(v) => serializer.serialize_f64(v),
-        }
-    }
-}
-
-impl Serialize for Node {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        match self {
             Node::Null => serializer.serialize_unit(),
             Node::Bool(b) => serializer.serialize_bool(*b),
-            Node::Number(n) => n.serialize(serializer),
+            Node::Number(n) => match n.0 {
+                NumberRepr::PosInt(v) => serializer.serialize_u64(v),
+                NumberRepr::NegInt(v) => serializer.serialize_i64(v),
+                NumberRepr::Float(v) => serializer.serialize_f64(v),
+            },
             Node::String(s) => serializer.serialize_str(s),
             Node::Array(array) => {
                 let mut seq = serializer.serialize_seq(Some(array.len()))?;
                 for element in array {
-                    seq.serialize_element(element)?;
+                    seq.serialize_element(&NodeSer(element))?;
                 }
                 seq.end()
             }
-            Node::Object(object) => object.serialize(serializer),
+            Node::Object(object) => {
+                let mut map = serializer.serialize_map(Some(object.len()))?;
+                for (k, v) in &object.0 {
+                    map.serialize_entry(k, &NodeSer(v))?;
+                }
+                map.end()
+            }
         }
-    }
-}
-
-impl Serialize for NodeObject {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut map = serializer.serialize_map(Some(self.len()))?;
-        for (k, v) in &self.0 {
-            map.serialize_entry(k, v)?;
-        }
-        map.end()
     }
 }
 
@@ -691,7 +687,7 @@ mod tests {
 
     impl Node {
         fn to_string_json(&self) -> String {
-            serde_json::to_string(self).unwrap()
+            serde_json::to_string(&NodeSer(self)).unwrap()
         }
     }
 
@@ -773,7 +769,7 @@ mod tests {
     proptest! {
         #[test]
         fn json_round_trip(node in arb_node()) {
-            let json = serde_json::to_string(&node).unwrap();
+            let json = serde_json::to_string(&NodeSer(&node)).unwrap();
             let back = parse_node(&json).unwrap();
             prop_assert_eq!(&back, &node);
             prop_assert_eq!(hash_of(&back), hash_of(&node));

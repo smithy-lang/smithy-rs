@@ -26,7 +26,7 @@
 use crate::ast::{DeclKind, MemberDecl, ShapeDecl, TraitMap};
 use crate::diagnostic::WriteError;
 use crate::model::{unit_id, Model};
-use crate::node::Node;
+use crate::node::{Node, NodeSer};
 use crate::shape_id::ShapeId;
 use crate::traits;
 use indexmap::IndexMap;
@@ -197,7 +197,7 @@ impl Serialize for Sorted<'_> {
                 seq.end()
             }
             Node::Object(object) => SortedObject(object.iter().collect()).serialize(serializer),
-            scalar => scalar.serialize(serializer),
+            scalar => NodeSer(scalar).serialize(serializer),
         }
     }
 }
