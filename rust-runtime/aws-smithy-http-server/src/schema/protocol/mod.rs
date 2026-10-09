@@ -33,7 +33,6 @@ mod rest_xml;
 #[doc(hidden)]
 pub mod rpc;
 mod rpc_v2_cbor;
-pub(crate) mod rpc_v2_cbor_serde;
 #[cfg(test)]
 mod tests;
 
