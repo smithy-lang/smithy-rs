@@ -30,41 +30,6 @@ pub struct RestXmlProtocol {
     pub(crate) inner: crate::schema::protocol::rest::RestProtocol<aws_smithy_xml::codec::XmlCodec>,
 }
 
-/// Configures the XML document root for this response's structured payload.
-/// The target schema still supplies its namespace and child metadata.
-struct ResponseXmlCodec<'a> {
-    inner: &'a aws_smithy_xml::codec::XmlCodec,
-    payload_member: Option<&'a Schema<'a>>,
-}
-
-impl<'a> ResponseXmlCodec<'a> {
-    fn new(inner: &'a aws_smithy_xml::codec::XmlCodec, output: &'a Schema<'a>) -> Self {
-        Self {
-            inner,
-            payload_member: payload_member(output),
-        }
-    }
-}
-
-impl Codec for ResponseXmlCodec<'_> {
-    type Serializer = aws_smithy_xml::codec::XmlSerializer;
-    type Deserializer<'a> = aws_smithy_xml::codec::XmlDeserializer<'a>;
-
-    fn create_serializer(&self) -> Self::Serializer {
-        let mut serializer = self.inner.create_serializer();
-        // Legacy payload naming gives the member's @xmlName precedence over the target.
-        // Without an override, the serializer resolves the target's name as usual.
-        if let Some(name) = self.payload_member.and_then(|member| member.xml_name()) {
-            serializer.set_next_root_xml_name(name.value().to_owned());
-        }
-        serializer
-    }
-
-    fn create_deserializer<'a>(&self, input: &'a [u8]) -> Self::Deserializer<'a> {
-        self.inner.create_deserializer(input)
-    }
-}
-
 impl RestXmlProtocol {
     fn new(strict_collection_element_names: bool, validate_document: bool, accept_text_xml: bool) -> Self {
         Self {
@@ -243,6 +208,41 @@ impl ServerProtocol for RestXmlProtocol {
                 IntoResponse::<RestXml>::into_response(RuntimeError::InternalFailure(err))
             }
         }
+    }
+}
+
+/// Configures the XML document root for this response's structured payload.
+/// The target schema still supplies its namespace and child metadata.
+struct ResponseXmlCodec<'a> {
+    inner: &'a aws_smithy_xml::codec::XmlCodec,
+    payload_member: Option<&'a Schema<'a>>,
+}
+
+impl<'a> ResponseXmlCodec<'a> {
+    fn new(inner: &'a aws_smithy_xml::codec::XmlCodec, output: &'a Schema<'a>) -> Self {
+        Self {
+            inner,
+            payload_member: payload_member(output),
+        }
+    }
+}
+
+impl Codec for ResponseXmlCodec<'_> {
+    type Serializer = aws_smithy_xml::codec::XmlSerializer;
+    type Deserializer<'a> = aws_smithy_xml::codec::XmlDeserializer<'a>;
+
+    fn create_serializer(&self) -> Self::Serializer {
+        let mut serializer = self.inner.create_serializer();
+        // Legacy payload naming gives the member's @xmlName precedence over the target.
+        // Without an override, the serializer resolves the target's name as usual.
+        if let Some(name) = self.payload_member.and_then(|member| member.xml_name()) {
+            serializer.set_next_root_xml_name(name.value().to_owned());
+        }
+        serializer
+    }
+
+    fn create_deserializer<'a>(&self, input: &'a [u8]) -> Self::Deserializer<'a> {
+        self.inner.create_deserializer(input)
     }
 }
 

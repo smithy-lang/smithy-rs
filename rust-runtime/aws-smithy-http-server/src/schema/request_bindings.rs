@@ -32,6 +32,262 @@ use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
 
 use super::timestamp::{resolve_timestamp_format, BindingLocation};
 
+macro_rules! unsupported_reads {
+    ($why:literal; $($method:ident -> $ret:ty),+ $(,)?) => {
+        $(
+            fn $method(&mut self, _schema: &Schema<'_>) -> Result<$ret, SerdeError> {
+                Err(SerdeError::unsupported($why))
+            }
+        )+
+    };
+}
+
+// ============================================================================
+// The composite
+// ============================================================================
+
+/// The composite request deserializer for REST protocols: routes each member
+/// of the operation input schema to its transport location, delegating
+/// unbound members to the codec body deserializer.
+///
+/// Everything it needs beyond the request is read off the input schema handed to `read_struct`:
+/// the `@http` URI template for labels, and which members are bound where.
+pub(crate) struct RestRequestDeserializer<'a, C> {
+    codec: &'a C,
+    headers: &'a Headers,
+    uri: &'a Uri,
+    body: &'a [u8],
+}
+
+impl<'a, C: Codec> RestRequestDeserializer<'a, C> {
+    pub(crate) fn new(codec: &'a C, uri: &'a Uri, headers: &'a Headers, body: &'a [u8]) -> Self {
+        Self {
+            codec,
+            headers,
+            uri,
+            body,
+        }
+    }
+}
+
+impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
+    fn read_struct(
+        &mut self,
+        schema: &Schema<'_>,
+        consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        // Labels and query pairs are parsed once, up front.
+        let labels: Vec<(Cow<'_, str>, String)> = if schema.members().iter().any(|m| m.http_label().is_some()) {
+            let template = schema.http().map(|http| http.uri()).ok_or_else(|| {
+                SerdeError::invalid_input("input has @httpLabel members but the operation has no @http trait")
+            })?;
+            extract_labels(template, self.uri.path())?
+                .into_iter()
+                .map(|(name, value)| (Cow::Borrowed(name), value))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let needs_query = schema
+            .members()
+            .iter()
+            .any(|m| m.http_query().is_some() || m.http_query_params().is_some());
+        let query_pairs = if needs_query {
+            parse_query_pairs(self.uri.query())
+        } else {
+            Vec::new()
+        };
+
+        for member in schema.members() {
+            let member_name = member.member_name().unwrap_or_default();
+            if member.http_label().is_some() {
+                let value = labels
+                    .iter()
+                    .find(|(name, _)| name.as_ref() == member_name)
+                    .map(|(_, raw)| label_value(member, raw))
+                    .ok_or_else(|| {
+                        SerdeError::invalid_input(format!("no `{{{member_name}}}` label in the `@http` URI pattern"))
+                    })??;
+                let mut deser = DecodedValuesDeserializer::new(vec![Cow::Owned(value)], member, BindingLocation::Label);
+                consumer(member, &mut deser)?;
+            } else if let Some(query) = member.http_query() {
+                let values: Vec<Cow<'_, str>> = query_pairs
+                    .iter()
+                    .filter(|(k, _)| k == query.value())
+                    .map(|(_, v)| Cow::Borrowed(v.as_ref()))
+                    .collect();
+                if !values.is_empty() {
+                    let mut deser = DecodedValuesDeserializer::new(values, member, BindingLocation::Query);
+                    consumer(member, &mut deser)?;
+                }
+            } else if member.http_query_params().is_some() {
+                // Servers put ALL query parameters in the map, including ones
+                // also bound to explicit `@httpQuery` members.
+                // Grouped in order of first appearance. The index keeps this linear: a search of
+                // `entries` per pair made many distinct keys quadratic.
+                let mut entries: Vec<(&str, Vec<&str>)> = Vec::new();
+                let mut index: HashMap<&str, usize> = HashMap::new();
+                for (k, v) in &query_pairs {
+                    match index.entry(k.as_ref()) {
+                        Entry::Occupied(slot) => entries[*slot.get()].1.push(v.as_ref()),
+                        Entry::Vacant(slot) => {
+                            slot.insert(entries.len());
+                            entries.push((k.as_ref(), vec![v.as_ref()]));
+                        }
+                    }
+                }
+                let mut deser = StringMapDeserializer::new(entries);
+                consumer(member, &mut deser)?;
+            } else if let Some(header) = member.http_header() {
+                if let Some(mut deser) =
+                    HeaderValuesDeserializer::try_new_bytes(self.headers.get_all_bytes(header.value()), member)?
+                {
+                    consumer(member, &mut deser)?;
+                }
+            } else if let Some(prefix) = member.http_prefix_headers() {
+                let prefix = prefix.value();
+                // Each header name once, in order of first appearance (`Headers::iter_bytes` yields
+                // one entry per value).
+                let mut seen: HashSet<&str> = HashSet::new();
+                let names = self
+                    .headers
+                    .iter_bytes()
+                    .map(|(name, _)| name)
+                    .filter(|name| seen.insert(*name));
+                let mut entries: Vec<(&str, Vec<&str>)> = Vec::new();
+                for (suffix, full_name) in aws_smithy_http::header::headers_for_prefix(names, prefix) {
+                    let values: Vec<&str> = self
+                        .headers
+                        .get_all_bytes(full_name)
+                        .map(header_text)
+                        .collect::<Result<_, _>>()?;
+                    if values.len() > 1 && !member.member().is_some_and(|v| v.shape_type() == ShapeType::List) {
+                        return Err(SerdeError::invalid_input(
+                            "expected a single prefix header value but found multiple",
+                        ));
+                    }
+                    if !values.is_empty() {
+                        entries.push((suffix, values));
+                    }
+                }
+                // Always set, even with no matching header: legacy servers yield `Some({})`.
+                let mut deser = StringMapDeserializer::new(entries);
+                consumer(member, &mut deser)?;
+            } else if member.http_payload().is_some() {
+                // A streaming payload is never collected: the generated streaming glue attaches
+                // the live body after the walker has run.
+                if member.streaming() {
+                    continue;
+                }
+                match member.shape_type() {
+                    ShapeType::Blob | ShapeType::String => {
+                        // Matching `HttpBindingGenerator.kt`: an empty
+                        // body leaves a raw blob/string payload member UNSET.
+                        if !self.body.is_empty() {
+                            let mut deser = PayloadBytesDeserializer::new(self.body);
+                            consumer(member, &mut deser)?;
+                        }
+                    }
+                    _ => {
+                        // Structure / union / document payload: the body IS
+                        // that member's codec document. An empty body leaves
+                        // the member unset.
+                        if !self.body.is_empty() {
+                            let mut deser = self.codec.create_deserializer(self.body);
+                            // The generated member consumer reads `null` as unset, which is right
+                            // for a body member but not for a whole structure/union payload:
+                            // legacy rejects it. A `null` document payload stays a value.
+                            if matches!(member.shape_type(), ShapeType::Structure | ShapeType::Union) && deser.is_null()
+                            {
+                                return Err(SerdeError::invalid_input("expected payload member value"));
+                            }
+                            if let Some(name) = member.xml_name() {
+                                let mut payload = StructuredPayloadDeserializer {
+                                    inner: &mut deser,
+                                    xml_name: name.value(),
+                                };
+                                consumer(member, &mut payload)?;
+                            } else {
+                                consumer(member, &mut deser)?;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Unbound members come from the codec body document, in wire order.
+        let has_unbound_members = schema
+            .members()
+            .iter()
+            .any(|m| m.http_payload().is_none() && is_body_member(m));
+        if has_unbound_members && !self.body.is_empty() {
+            let mut body_deser = self.codec.create_deserializer(self.body);
+            // Resolve only document members. Passing the full input schema lets a body key
+            // overwrite a trusted header/label/query binding, or fail parsing its ignored type.
+            let members: Vec<_> = schema
+                .members()
+                .iter()
+                .copied()
+                .filter(|m| m.http_payload().is_none() && is_body_member(m))
+                .collect();
+            let mut body_schema = Schema::new_struct_view(schema.shape_id().clone(), schema.shape_type(), &members);
+            if let Some(name) = schema.original_name() {
+                body_schema = body_schema.with_original_name(name);
+            }
+            if let Some(name) = schema.xml_name() {
+                body_schema = body_schema.with_xml_name(name.value());
+            }
+            body_deser.read_struct(&body_schema, consumer)?;
+        }
+        Ok(())
+    }
+
+    fn read_list(
+        &mut self,
+        _schema: &Schema<'_>,
+        _consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        Err(SerdeError::unsupported("operation input must be a structure"))
+    }
+
+    fn read_map(
+        &mut self,
+        _schema: &Schema<'_>,
+        _consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        Err(SerdeError::unsupported("operation input must be a structure"))
+    }
+
+    unsupported_reads! {
+        "operation input must be a structure";
+        read_boolean -> bool,
+        read_byte -> i8,
+        read_short -> i16,
+        read_integer -> i32,
+        read_long -> i64,
+        read_float -> f32,
+        read_double -> f64,
+        read_big_integer -> BigInteger,
+        read_big_decimal -> BigDecimal,
+        read_blob -> Blob,
+        read_timestamp -> DateTime,
+        read_document -> Document,
+    }
+
+    fn read_string(&mut self, _schema: &Schema<'_>) -> Result<String, SerdeError> {
+        Err(SerdeError::unsupported("operation input must be a structure"))
+    }
+
+    fn is_null(&self) -> bool {
+        false
+    }
+
+    fn container_size(&self) -> Option<usize> {
+        None
+    }
+}
+
 /// `true` when `member` travels in the body rather than in the URI or headers. An `@httpPayload`
 /// member counts: it *is* the body.
 pub(crate) fn is_body_member(member: &Schema<'_>) -> bool {
@@ -183,16 +439,6 @@ pub(crate) fn extract_labels<'t>(template: &'t str, path: &str) -> Result<Vec<(&
 /// matching the legacy `parse_smithy_primitive(&value)` on the decoded segment.
 fn parse_primitive<T: aws_smithy_types::primitive::Parse>(value: &str, what: &str) -> Result<T, SerdeError> {
     T::parse_smithy_primitive(value).map_err(|err| SerdeError::invalid_input(format!("invalid {what}: {err}")))
-}
-
-macro_rules! unsupported_reads {
-    ($why:literal; $($method:ident -> $ret:ty),+ $(,)?) => {
-        $(
-            fn $method(&mut self, _schema: &Schema<'_>) -> Result<$ret, SerdeError> {
-                Err(SerdeError::unsupported($why))
-            }
-        )+
-    };
 }
 
 // ============================================================================
@@ -1002,252 +1248,6 @@ impl ShapeDeserializer for EmptyStructDeserializer {
 
     fn container_size(&self) -> Option<usize> {
         Some(0)
-    }
-}
-
-// ============================================================================
-// The composite
-// ============================================================================
-
-/// The composite request deserializer for REST protocols: routes each member
-/// of the operation input schema to its transport location, delegating
-/// unbound members to the codec body deserializer.
-///
-/// Everything it needs beyond the request is read off the input schema handed to `read_struct`:
-/// the `@http` URI template for labels, and which members are bound where.
-pub(crate) struct RestRequestDeserializer<'a, C> {
-    codec: &'a C,
-    headers: &'a Headers,
-    uri: &'a Uri,
-    body: &'a [u8],
-}
-
-impl<'a, C: Codec> RestRequestDeserializer<'a, C> {
-    pub(crate) fn new(codec: &'a C, uri: &'a Uri, headers: &'a Headers, body: &'a [u8]) -> Self {
-        Self {
-            codec,
-            headers,
-            uri,
-            body,
-        }
-    }
-}
-
-impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
-    fn read_struct(
-        &mut self,
-        schema: &Schema<'_>,
-        consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        // Labels and query pairs are parsed once, up front.
-        let labels: Vec<(Cow<'_, str>, String)> = if schema.members().iter().any(|m| m.http_label().is_some()) {
-            let template = schema.http().map(|http| http.uri()).ok_or_else(|| {
-                SerdeError::invalid_input("input has @httpLabel members but the operation has no @http trait")
-            })?;
-            extract_labels(template, self.uri.path())?
-                .into_iter()
-                .map(|(name, value)| (Cow::Borrowed(name), value))
-                .collect()
-        } else {
-            Vec::new()
-        };
-        let needs_query = schema
-            .members()
-            .iter()
-            .any(|m| m.http_query().is_some() || m.http_query_params().is_some());
-        let query_pairs = if needs_query {
-            parse_query_pairs(self.uri.query())
-        } else {
-            Vec::new()
-        };
-
-        for member in schema.members() {
-            let member_name = member.member_name().unwrap_or_default();
-            if member.http_label().is_some() {
-                let value = labels
-                    .iter()
-                    .find(|(name, _)| name.as_ref() == member_name)
-                    .map(|(_, raw)| label_value(member, raw))
-                    .ok_or_else(|| {
-                        SerdeError::invalid_input(format!("no `{{{member_name}}}` label in the `@http` URI pattern"))
-                    })??;
-                let mut deser = DecodedValuesDeserializer::new(vec![Cow::Owned(value)], member, BindingLocation::Label);
-                consumer(member, &mut deser)?;
-            } else if let Some(query) = member.http_query() {
-                let values: Vec<Cow<'_, str>> = query_pairs
-                    .iter()
-                    .filter(|(k, _)| k == query.value())
-                    .map(|(_, v)| Cow::Borrowed(v.as_ref()))
-                    .collect();
-                if !values.is_empty() {
-                    let mut deser = DecodedValuesDeserializer::new(values, member, BindingLocation::Query);
-                    consumer(member, &mut deser)?;
-                }
-            } else if member.http_query_params().is_some() {
-                // Servers put ALL query parameters in the map, including ones
-                // also bound to explicit `@httpQuery` members.
-                // Grouped in order of first appearance. The index keeps this linear: a search of
-                // `entries` per pair made many distinct keys quadratic.
-                let mut entries: Vec<(&str, Vec<&str>)> = Vec::new();
-                let mut index: HashMap<&str, usize> = HashMap::new();
-                for (k, v) in &query_pairs {
-                    match index.entry(k.as_ref()) {
-                        Entry::Occupied(slot) => entries[*slot.get()].1.push(v.as_ref()),
-                        Entry::Vacant(slot) => {
-                            slot.insert(entries.len());
-                            entries.push((k.as_ref(), vec![v.as_ref()]));
-                        }
-                    }
-                }
-                let mut deser = StringMapDeserializer::new(entries);
-                consumer(member, &mut deser)?;
-            } else if let Some(header) = member.http_header() {
-                if let Some(mut deser) =
-                    HeaderValuesDeserializer::try_new_bytes(self.headers.get_all_bytes(header.value()), member)?
-                {
-                    consumer(member, &mut deser)?;
-                }
-            } else if let Some(prefix) = member.http_prefix_headers() {
-                let prefix = prefix.value();
-                // Each header name once, in order of first appearance (`Headers::iter_bytes` yields
-                // one entry per value).
-                let mut seen: HashSet<&str> = HashSet::new();
-                let names = self
-                    .headers
-                    .iter_bytes()
-                    .map(|(name, _)| name)
-                    .filter(|name| seen.insert(*name));
-                let mut entries: Vec<(&str, Vec<&str>)> = Vec::new();
-                for (suffix, full_name) in aws_smithy_http::header::headers_for_prefix(names, prefix) {
-                    let values: Vec<&str> = self
-                        .headers
-                        .get_all_bytes(full_name)
-                        .map(header_text)
-                        .collect::<Result<_, _>>()?;
-                    if values.len() > 1 && !member.member().is_some_and(|v| v.shape_type() == ShapeType::List) {
-                        return Err(SerdeError::invalid_input(
-                            "expected a single prefix header value but found multiple",
-                        ));
-                    }
-                    if !values.is_empty() {
-                        entries.push((suffix, values));
-                    }
-                }
-                // Always set, even with no matching header: legacy servers yield `Some({})`.
-                let mut deser = StringMapDeserializer::new(entries);
-                consumer(member, &mut deser)?;
-            } else if member.http_payload().is_some() {
-                // A streaming payload is never collected: the generated streaming glue attaches
-                // the live body after the walker has run.
-                if member.streaming() {
-                    continue;
-                }
-                match member.shape_type() {
-                    ShapeType::Blob | ShapeType::String => {
-                        // Matching `HttpBindingGenerator.kt`: an empty
-                        // body leaves a raw blob/string payload member UNSET.
-                        if !self.body.is_empty() {
-                            let mut deser = PayloadBytesDeserializer::new(self.body);
-                            consumer(member, &mut deser)?;
-                        }
-                    }
-                    _ => {
-                        // Structure / union / document payload: the body IS
-                        // that member's codec document. An empty body leaves
-                        // the member unset.
-                        if !self.body.is_empty() {
-                            let mut deser = self.codec.create_deserializer(self.body);
-                            // The generated member consumer reads `null` as unset, which is right
-                            // for a body member but not for a whole structure/union payload:
-                            // legacy rejects it. A `null` document payload stays a value.
-                            if matches!(member.shape_type(), ShapeType::Structure | ShapeType::Union) && deser.is_null()
-                            {
-                                return Err(SerdeError::invalid_input("expected payload member value"));
-                            }
-                            if let Some(name) = member.xml_name() {
-                                let mut payload = StructuredPayloadDeserializer {
-                                    inner: &mut deser,
-                                    xml_name: name.value(),
-                                };
-                                consumer(member, &mut payload)?;
-                            } else {
-                                consumer(member, &mut deser)?;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Unbound members come from the codec body document, in wire order.
-        let has_unbound_members = schema
-            .members()
-            .iter()
-            .any(|m| m.http_payload().is_none() && is_body_member(m));
-        if has_unbound_members && !self.body.is_empty() {
-            let mut body_deser = self.codec.create_deserializer(self.body);
-            // Resolve only document members. Passing the full input schema lets a body key
-            // overwrite a trusted header/label/query binding, or fail parsing its ignored type.
-            let members: Vec<_> = schema
-                .members()
-                .iter()
-                .copied()
-                .filter(|m| m.http_payload().is_none() && is_body_member(m))
-                .collect();
-            let mut body_schema = Schema::new_struct_view(schema.shape_id().clone(), schema.shape_type(), &members);
-            if let Some(name) = schema.original_name() {
-                body_schema = body_schema.with_original_name(name);
-            }
-            if let Some(name) = schema.xml_name() {
-                body_schema = body_schema.with_xml_name(name.value());
-            }
-            body_deser.read_struct(&body_schema, consumer)?;
-        }
-        Ok(())
-    }
-
-    fn read_list(
-        &mut self,
-        _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported("operation input must be a structure"))
-    }
-
-    fn read_map(
-        &mut self,
-        _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported("operation input must be a structure"))
-    }
-
-    unsupported_reads! {
-        "operation input must be a structure";
-        read_boolean -> bool,
-        read_byte -> i8,
-        read_short -> i16,
-        read_integer -> i32,
-        read_long -> i64,
-        read_float -> f32,
-        read_double -> f64,
-        read_big_integer -> BigInteger,
-        read_big_decimal -> BigDecimal,
-        read_blob -> Blob,
-        read_timestamp -> DateTime,
-        read_document -> Document,
-    }
-
-    fn read_string(&mut self, _schema: &Schema<'_>) -> Result<String, SerdeError> {
-        Err(SerdeError::unsupported("operation input must be a structure"))
-    }
-
-    fn is_null(&self) -> bool {
-        false
-    }
-
-    fn container_size(&self) -> Option<usize> {
-        None
     }
 }
 
