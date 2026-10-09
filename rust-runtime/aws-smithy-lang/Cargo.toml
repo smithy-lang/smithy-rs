@@ -14,6 +14,10 @@ serde = "1.0.229"
 serde_json = { version = "1.0.146", features = ["float_roundtrip"] }
 
 [dev-dependencies]
+# Only used to check that errors compose with `SdkError::construction_failure` and
+# `DisplayErrorContext`; the library itself has no Smithy runtime dependency.
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client"] }
+aws-smithy-types = { path = "../aws-smithy-types" }
 criterion = "0.8.2"
 proptest = "1.11.0"
 

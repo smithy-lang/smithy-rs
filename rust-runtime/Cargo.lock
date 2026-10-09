@@ -716,6 +716,8 @@ dependencies = [
 name = "aws-smithy-lang"
 version = "0.1.0"
 dependencies = [
+ "aws-smithy-runtime-api 1.19.1",
+ "aws-smithy-types 1.9.0",
  "criterion 0.8.2",
  "indexmap 2.14.2",
  "proptest",

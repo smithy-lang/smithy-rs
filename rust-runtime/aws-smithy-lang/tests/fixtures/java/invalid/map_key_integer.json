@@ -1,0 +1,14 @@
+{
+  "smithy": "2.0",
+  "shapes": {
+    "ex#M": {
+      "type": "map",
+      "key": {
+        "target": "smithy.api#Integer"
+      },
+      "value": {
+        "target": "smithy.api#String"
+      }
+    }
+  }
+}

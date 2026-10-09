@@ -1,0 +1,13 @@
+{
+  "smithy": "2.0",
+  "shapes": {
+    "ex#E": {
+      "type": "enum",
+      "members": {
+        "A": {
+          "target": "smithy.api#String"
+        }
+      }
+    }
+  }
+}

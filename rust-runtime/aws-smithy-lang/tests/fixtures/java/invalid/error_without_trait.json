@@ -1,0 +1,16 @@
+{
+  "smithy": "2.0",
+  "shapes": {
+    "ex#Op": {
+      "type": "operation",
+      "errors": [
+        {
+          "target": "ex#E"
+        }
+      ]
+    },
+    "ex#E": {
+      "type": "structure"
+    }
+  }
+}

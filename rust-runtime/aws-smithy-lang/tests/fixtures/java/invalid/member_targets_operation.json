@@ -1,0 +1,14 @@
+{
+  "smithy": "2.0",
+  "shapes": {
+    "ex#Op": {
+      "type": "operation"
+    },
+    "ex#L": {
+      "type": "list",
+      "member": {
+        "target": "ex#Op"
+      }
+    }
+  }
+}
