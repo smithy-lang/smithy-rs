@@ -218,14 +218,18 @@ class ServerProtocolTestGenerator(
                 "SDKAppliedContentEncoding_ec2Query",
                 "SDKAppliedContentEncoding_restJson1",
                 "SDKAppliedContentEncoding_restXml",
-                // RestXml server response serialization does not yet match the protocol tests.
-                "HttpEmptyPrefixHeadersResponseServer",
-                "NullAndEmptyHeaders",
                 // RestXml S3 tests that fail to compile
                 "S3EscapeObjectKeyInUriLabel",
                 "S3EscapePathObjectKeyInUriLabel",
                 "S3PreservesLeadingDotSegmentInUriLabel",
                 "S3PreservesEmbeddedDotSegmentInUriLabel",
+            )
+
+        private val SchemaDisabledTests =
+            setOf(
+                // Schema RestXml response serialization does not yet match these protocol tests.
+                "HttpEmptyPrefixHeadersResponseServer",
+                "NullAndEmptyHeaders",
             )
 
         private fun fixRestJsonMalformedPatternReDOSString(
@@ -263,7 +267,7 @@ class ServerProtocolTestGenerator(
     override val generateOnly: Set<String>
         get() = emptySet()
     override val disabledTests: Set<String>
-        get() = DisabledTests
+        get() = if (schemaSerde) DisabledTests + SchemaDisabledTests else DisabledTests
 
     override val logger: Logger = Logger.getLogger(javaClass.name)
 

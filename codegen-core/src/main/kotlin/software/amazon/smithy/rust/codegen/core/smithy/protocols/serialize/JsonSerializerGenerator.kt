@@ -95,6 +95,7 @@ class JsonSerializerGenerator(
     /** Function that maps a MemberShape into a JSON field name */
     private val jsonName: (MemberShape) -> String,
     private val customizations: List<JsonSerializerCustomization> = listOf(),
+    override val documentSerializerIsFallible: Boolean = true,
 ) : StructuredDataSerializerGenerator {
     data class Context<out T : Shape>(
         /** Expression that retrieves a JsonValueWriter from either a JsonObjectWriter or JsonArrayWriter */
@@ -303,12 +304,14 @@ class JsonSerializerGenerator(
 
     override fun documentSerializer(): RuntimeType {
         return ProtocolFunctions.crossOperationFn("serialize_document") { fnName ->
+            val returnType = if (documentSerializerIsFallible) "std::result::Result<#{ByteSlab}, #{Error}>" else "#{ByteSlab}"
+            val result = if (documentSerializerIsFallible) "Ok(out.into_bytes())" else "out.into_bytes()"
             rustTemplate(
                 """
-                pub fn $fnName(input: &#{Document}) -> std::result::Result<#{ByteSlab}, #{Error}> {
+                pub fn $fnName(input: &#{Document}) -> $returnType {
                     let mut out = String::new();
                     #{JsonValueWriter}::new(&mut out).document(input);
-                    Ok(out.into_bytes())
+                    $result
                 }
                 """,
                 "Document" to RuntimeType.document(runtimeConfig), *codegenScope,

@@ -71,5 +71,6 @@ class ServerRestJsonSerializerGenerator(
                     BeforeIteratingOverMapOrCollectionJsonCustomization(codegenContext),
                     BeforeSerializingMemberJsonCustomization(codegenContext),
                 ),
+            documentSerializerIsFallible = codegenContext.usesSchemaHttpSerde,
         ),
 ) : StructuredDataSerializerGenerator by jsonSerializerGenerator
