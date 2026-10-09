@@ -13,6 +13,36 @@ import subprocess
 from prepare import HERE, PROTOCOLS
 
 
+MEMORY_METRICS = (
+    'allocations_per_request', 'allocated_bytes_per_request',
+    'baseline_live_heap_bytes', 'peak_live_heap_bytes', 'final_live_heap_bytes',
+    'net_heap_delta_bytes', 'peak_heap_growth_bytes',
+)
+
+
+def summarize(rows, protocols, sizes):
+    summaries = []
+    for protocol in protocols:
+        for size in sizes:
+            record = {'protocol': protocol, 'value_bytes': size}
+            for side in ['baseline', 'current']:
+                group = [r for r in rows if r['protocol'] == protocol and r['value_bytes'] == size and r['side'] == side]
+                timing = [r for r in group if r['kind'] == 'cpu']
+                cpu_medians = [statistics.median(r['cpu_ns_per_request']) for r in timing]
+                record[f'{side}_cpu_ns'] = statistics.median(cpu_medians)
+                record[f'{side}_cpu_min_run_ns'] = min(cpu_medians)
+                record[f'{side}_cpu_max_run_ns'] = max(cpu_medians)
+                record[f'{side}_wall_ns'] = statistics.median([statistics.median(r['wall_ns_per_request']) for r in timing])
+                record[f'{side}_peak_rss_kib'] = statistics.median(r['peak_rss_kib'] for r in timing)
+                memory = next(r for r in group if r['kind'] == 'memory')
+                for key in MEMORY_METRICS:
+                    record[f'{side}_{key}'] = memory[key]
+            record['cpu_current_over_baseline'] = record['current_cpu_ns'] / record['baseline_cpu_ns']
+            record['allocated_bytes_current_over_baseline'] = record['current_allocated_bytes_per_request'] / record['baseline_allocated_bytes_per_request']
+            summaries.append(record)
+    return summaries
+
+
 def fingerprint(repo):
     files = sorted((repo / 'rust-runtime').rglob('*.rs'))
     files += sorted((repo / 'rust-runtime').glob('*/Cargo.toml'))
@@ -83,25 +113,7 @@ def main():
                         rows.append(row)
                         with raw.open('a') as f: f.write(json.dumps(row) + '\n')
                         print(f'{protocol} {size}B {side} {kind} repeat={repeat + 1}', flush=True)
-    summaries = []
-    for protocol in args.protocols:
-        for size in args.sizes:
-            record = {'protocol': protocol, 'value_bytes': size}
-            for side in ['baseline', 'current']:
-                group = [r for r in rows if r['protocol'] == protocol and r['value_bytes'] == size and r['side'] == side]
-                timing = [r for r in group if r['kind'] == 'cpu']
-                cpu_medians = [statistics.median(r['cpu_ns_per_request']) for r in timing]
-                record[f'{side}_cpu_ns'] = statistics.median(cpu_medians)
-                record[f'{side}_cpu_min_run_ns'] = min(cpu_medians)
-                record[f'{side}_cpu_max_run_ns'] = max(cpu_medians)
-                record[f'{side}_wall_ns'] = statistics.median([statistics.median(r['wall_ns_per_request']) for r in timing])
-                record[f'{side}_peak_rss_kib'] = statistics.median(r['peak_rss_kib'] for r in timing)
-                memory = next(r for r in group if r['kind'] == 'memory')
-                for key in ['allocations_per_request', 'allocated_bytes_per_request', 'peak_extra_live_heap_bytes', 'net_live_heap_bytes']:
-                    record[f'{side}_{key}'] = memory[key]
-            record['cpu_current_over_baseline'] = record['current_cpu_ns'] / record['baseline_cpu_ns']
-            record['allocated_bytes_current_over_baseline'] = record['current_allocated_bytes_per_request'] / record['baseline_allocated_bytes_per_request']
-            summaries.append(record)
+    summaries = summarize(rows, args.protocols, args.sizes)
     with (output / 'summary.csv').open('w') as f:
         writer = csv.DictWriter(f, fieldnames=summaries[0].keys())
         writer.writeheader()

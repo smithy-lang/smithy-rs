@@ -43,9 +43,24 @@ Measurement
   and wall time are recorded separately. Three process runs per case, alternating
   baseline/current order. Summary reports median of run medians and min/max run
   medians; these ranges are not confidence intervals.
-* CPU binaries use the normal system allocator. Separate memory binaries count
-  allocation/reallocation calls, requested bytes, and peak additional live heap
-  over 1000 warmed requests. They do not measure allocator metadata or stack use.
+* CPU binaries use the normal system allocator. Separate memory binaries track
+  live requested bytes continuously from startup, including warmup. Allocation/
+  reallocation calls and requested bytes are counted only over 1000 warmed
+  requests. A successful realloc counts one call and its full new requested size.
+* Memory JSON and CSV summaries report:
+  - baseline_live_heap_bytes: live requested bytes when measurement starts.
+  - peak_live_heap_bytes: maximum live requested bytes during measurement,
+    including the starting baseline.
+  - final_live_heap_bytes: live requested bytes when measurement ends.
+  - net_heap_delta_bytes: final minus baseline; it can be negative when allocations
+    retained from startup/warmup are freed during measurement.
+  - peak_heap_growth_bytes: peak minus baseline; always nonnegative.
+  Results are snapshotted before JSON formatting/output allocations. These are
+  requested bytes observed by the Rust global allocator, not allocator metadata,
+  internal realloc copying peaks, native-library allocations, or stack use.
+  The former net_live_heap_bytes and peak_extra_live_heap_bytes names are replaced
+  by explicit delta/growth names. Rebuild with build.py before collecting new data;
+  the existing harness hash check rejects binaries built from the old harness.
 * Peak RSS comes from /usr/bin/time on each uninstrumented process, including
   startup and warmup. It is whole-process resident memory, not per-request memory.
   Binary layout and shared-library pages affect small RSS differences.
@@ -70,3 +85,14 @@ Generated sources, Cargo locks, binaries, and raw results are local artifacts
 ignored by Git and persist across benchmark runs. Do not remove artifacts/ if
 you want to preserve the generated servers. The baseline checkout is not copied:
 its runtime source must remain available at the recorded path.
+
+Allocator and summary regression tests
+--------------------------------------
+Run without generating servers or building SDKs (requires Python 3 and rustc):
+
+  python3 -m unittest discover -s tools/server-routing-benchmark -p 'test_*.py' -v
+
+The tests compile the allocator module directly from harness.rs and verify known
+allocation, freeing, resizing, warmup, and repeated-measurement sequences. Rust
+tests run sequentially because the counters are process-wide. Summary tests use
+synthetic raw rows to check CSV/JSON field propagation.
