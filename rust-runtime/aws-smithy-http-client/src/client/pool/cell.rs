@@ -741,9 +741,11 @@ impl OriginCell {
             }
         }
 
-        // Ready results and any locally rejected event cross the lock boundary
-        // before their fallback can re-enter the pool.
+        // Ready results, any locally rejected event, and the cancelled waiter's
+        // waker cross the lock boundary before their destructors can re-enter
+        // the pool.
         drop(cancelled.returned_steps);
+        drop(cancelled.released_waker);
         if let Some((_, install)) = local_install {
             drop(install.returned_step);
             if let Some(waker) = install.waker {
@@ -779,8 +781,17 @@ impl OriginCell {
         waiter: WaiterId,
         cx: &mut Context<'_>,
     ) -> Poll<AcquisitionStep> {
-        let mut state = self.state.lock();
-        state.acquisitions.poll_waiter(waiter, cx)
+        // Clone the waker before taking the cell lock and drop whatever this
+        // poll displaces after releasing it. A custom raw-waker `clone` or
+        // `drop` callback runs arbitrary caller code, which must never re-enter
+        // a held pool lock.
+        let mut waker = Some(cx.waker().clone());
+        let step = {
+            let mut state = self.state.lock();
+            state.acquisitions.poll_waiter(waiter, &mut waker)
+        };
+        drop(waker);
+        step
     }
 
     /// Marks an establishment attempt as started before its first connector poll.
@@ -879,11 +890,9 @@ impl OriginCell {
 
     #[cfg(test)]
     fn take_ready_event(&self, waiter: WaiterId) -> Option<AcquisitionStep> {
+        let mut waker = Some(std::task::Waker::noop().clone());
         let mut state = self.state.lock();
-        match state
-            .acquisitions
-            .poll_waiter(waiter, &mut Context::from_waker(std::task::Waker::noop()))
-        {
+        match state.acquisitions.poll_waiter(waiter, &mut waker) {
             Poll::Ready(event) => Some(event),
             Poll::Pending => None,
         }
@@ -2156,6 +2165,116 @@ mod tests {
         assert_eq!(1, counter.0.load(Ordering::Relaxed));
     }
 
+    struct ReentrantWaker {
+        cell: Arc<OriginCell>,
+        victim: WaiterId,
+    }
+
+    impl Wake for ReentrantWaker {
+        fn wake(self: StdArc<Self>) {}
+        fn wake_by_ref(self: &StdArc<Self>) {}
+    }
+
+    impl Drop for ReentrantWaker {
+        fn drop(&mut self) {
+            OriginCell::cancel_waiter(&self.cell, self.victim);
+        }
+    }
+
+    /// A waker displaced by a later poll must drop outside the cell lock.
+    ///
+    /// Custom raw-waker `clone` and `drop` callbacks run arbitrary caller code.
+    /// If one re-enters the pool while the cell lock is held, a debug build
+    /// trips the lock-nesting assertion and a release build deadlocks, so
+    /// `poll_waiter` clones before locking and drops the displaced waker after
+    /// unlocking. This waker cancels another waiter from its destructor, which
+    /// is the cheapest faithful stand-in for that class of executor.
+    #[test]
+    fn replacing_a_stored_waker_drops_it_outside_the_cell_lock() {
+        let (_admission, cell, _held) = saturated_bounded_cell();
+        let parked = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+        let victim = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+
+        let reentrant = Waker::from(StdArc::new(ReentrantWaker {
+            cell: cell.clone(),
+            victim,
+        }));
+        let mut first = Context::from_waker(&reentrant);
+        assert!(cell.poll_waiter(parked, &mut first).is_pending());
+
+        let counter = StdArc::new(WakeCounter(AtomicUsize::new(0)));
+        let replacement = Waker::from(counter);
+        let mut second = Context::from_waker(&replacement);
+        drop(reentrant);
+        assert!(cell.poll_waiter(parked, &mut second).is_pending());
+    }
+
+    /// Parks `parked` behind a waker whose destructor cancels `victim`.
+    ///
+    /// The returned record then holds the only reference to the waker, so
+    /// whichever code path discards that record runs the destructor.
+    fn park_with_reentrant_waker(cell: &Arc<OriginCell>, parked: WaiterId, victim: WaiterId) {
+        let reentrant = Waker::from(StdArc::new(ReentrantWaker {
+            cell: cell.clone(),
+            victim,
+        }));
+        assert!(cell
+            .poll_waiter(parked, &mut Context::from_waker(&reentrant))
+            .is_pending());
+    }
+
+    /// Cancelling a parked waiter must drop its waker outside the cell lock.
+    ///
+    /// Cancellation is the path every dropped acquisition future takes, so a
+    /// waker whose destructor re-enters the pool must not run while the
+    /// cancelled record is being removed. Covers a waiting head and a waiting
+    /// record behind it.
+    #[test]
+    fn cancelling_a_parked_waiter_drops_its_waker_outside_the_cell_lock() {
+        let (_admission, cell, _held) = saturated_bounded_cell();
+        let head = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+        let behind = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+        let head_victim = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+        let behind_victim = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+        park_with_reentrant_waker(&cell, head, head_victim);
+        park_with_reentrant_waker(&cell, behind, behind_victim);
+
+        assert!(OriginCell::cancel_waiter(&cell, behind));
+        assert!(
+            !OriginCell::cancel_waiter(&cell, behind_victim),
+            "the cancelled record's waker was not dropped"
+        );
+        assert!(OriginCell::cancel_waiter(&cell, head));
+        assert!(
+            !OriginCell::cancel_waiter(&cell, head_victim),
+            "the cancelled head's waker was not dropped"
+        );
+        assert_eq!(0, cell.probe().retained);
+    }
+
+    /// Cancelling a launching waiter must drop its waker outside the cell lock.
+    #[test]
+    fn cancelling_a_launching_waiter_drops_its_waker_outside_the_cell_lock() {
+        let cell = unbounded_cell();
+        let launching = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+        let AcquisitionStep::StartEstablishment(permit) = cell
+            .take_ready_event(launching)
+            .expect("unbounded miss did not start establishment")
+        else {
+            panic!("unbounded miss completed before establishment started");
+        };
+        let victim = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+        park_with_reentrant_waker(&cell, launching, victim);
+
+        assert!(OriginCell::cancel_waiter(&cell, launching));
+        assert!(
+            !OriginCell::cancel_waiter(&cell, victim),
+            "the cancelled launching record's waker was not dropped"
+        );
+        drop(permit);
+        assert_eq!(0, cell.probe().retained);
+    }
+
     fn install_bounded_h2(
         admission: &Arc<OriginAdmission>,
         cell: &Arc<OriginCell>,
@@ -2491,6 +2610,8 @@ mod loom_tests {
     use crate::sync::{AtomicBool, AtomicUsize, Ordering};
     use http_1x::uri::Scheme;
     use std::num::NonZeroUsize;
+    use std::sync::Arc as StdArc;
+    use std::task::{Wake, Waker};
 
     fn bounded_cell() -> (Arc<OriginAdmission>, Arc<OriginCell>) {
         bounded_cell_with_limit(1)
@@ -2558,6 +2679,104 @@ mod loom_tests {
 
     fn connection_info(id: u64) -> Arc<ConnectionInfo> {
         ConnectionInfo::for_test(ConnectionId::new(id), PartitionId::from_index(1))
+    }
+
+    /// Counts wakes delivered to one modeled acquisition task.
+    ///
+    /// The count is a Loom atomic so concurrent wake and observation are
+    /// modeled, while the handle itself is a `std` `Arc` because
+    /// [`Waker::from`] requires one.
+    struct WakeCounter(AtomicUsize);
+
+    impl Wake for WakeCounter {
+        fn wake(self: StdArc<Self>) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+
+        fn wake_by_ref(self: &StdArc<Self>) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    fn wake_counter() -> StdArc<WakeCounter> {
+        StdArc::new(WakeCounter(AtomicUsize::new(0)))
+    }
+
+    fn wakes(counter: &StdArc<WakeCounter>) -> usize {
+        counter.0.load(Ordering::SeqCst)
+    }
+
+    /// Polls one waiter with a real waker so a pending poll actually parks it.
+    ///
+    /// Unlike [`OriginCell::take_ready_event`], which polls with a no-op waker
+    /// and therefore never stores anything, this reaches the waker-store tail
+    /// of `AcquisitionQueue::poll_waiter`.
+    fn poll_with_counter(
+        cell: &Arc<OriginCell>,
+        waiter: WaiterId,
+        counter: &StdArc<WakeCounter>,
+    ) -> Poll<AcquisitionStep> {
+        let waker = Waker::from(counter.clone());
+        cell.poll_waiter(waiter, &mut Context::from_waker(&waker))
+    }
+
+    /// Parks one waiter and asserts that parking delivered no wake.
+    fn park_waiter(cell: &Arc<OriginCell>, waiter: WaiterId) -> StdArc<WakeCounter> {
+        let counter = wake_counter();
+        assert!(
+            poll_with_counter(cell, waiter, &counter).is_pending(),
+            "waiter resolved before the modeled race began"
+        );
+        assert_eq!(0, wakes(&counter), "parking a waiter delivered a wake");
+        counter
+    }
+
+    /// Asserts the lost-wakeup invariant for one parked waiter.
+    ///
+    /// A waiter whose next poll is ready must have been woken exactly once. A
+    /// waiter that is still pending must not have been woken at all: a wake
+    /// without readiness would be a wake this pool never has a reason to emit,
+    /// and readiness without a wake is a customer-visible hang.
+    fn poll_parked_waiter(
+        cell: &Arc<OriginCell>,
+        waiter: WaiterId,
+        counter: &StdArc<WakeCounter>,
+        label: &str,
+    ) -> Option<AcquisitionStep> {
+        match poll_with_counter(cell, waiter, counter) {
+            Poll::Ready(step) => {
+                assert_eq!(
+                    1,
+                    wakes(counter),
+                    "{label} became ready without exactly one wake"
+                );
+                Some(step)
+            }
+            Poll::Pending => {
+                assert_eq!(
+                    0,
+                    wakes(counter),
+                    "{label} was woken but is still parked with no result"
+                );
+                None
+            }
+        }
+    }
+
+    /// Extracts the HTTP/2 activation one waiter received.
+    fn take_ready_h2(cell: &OriginCell, waiter: WaiterId) -> h2::H2Activation {
+        match cell
+            .take_ready_event(waiter)
+            .expect("HTTP/2 waiter did not receive an activation")
+        {
+            AcquisitionStep::Resolved(AcquisitionOutcome::H2(activation)) => activation,
+            AcquisitionStep::Resolved(_) => {
+                panic!("HTTP/2 waiter received a non-activation outcome")
+            }
+            AcquisitionStep::StartEstablishment(_) => {
+                panic!("HTTP/2 waiter received establishment capacity")
+            }
+        }
     }
 
     /// Races local HTTP/1 selection with close.
@@ -2634,6 +2853,130 @@ mod loom_tests {
                     .test_sender_id()
             );
         });
+    }
+
+    /// Races a reusable HTTP/1 return that serves a waiter with close of the
+    /// same connection.
+    ///
+    /// `h1_return_linearizes_against_close` races a return with no waiter, so
+    /// only `return_idle` contends. This model registers a compatible waiter, so
+    /// the return takes the serve-a-waiter branch and `begin_close` contends with
+    /// `commit_return_to_waiter` and `offer_returned_h1` instead.
+    ///
+    /// Both orders are legal. Delivering a closing connection's sender to a
+    /// waiter is intended, not prevented: `commit_return_to_waiter` leaves the
+    /// record `Selected` and `begin_close` then marks the externally owned record
+    /// `Closing`, and dispatch re-checks logical close through
+    /// `ConnectionState::try_commit_dispatch` before handing the request to
+    /// Hyper. What must hold in both orders is that the waiter always has an
+    /// outcome, that the sender is accounted for exactly once, that a closed
+    /// connection's sender never becomes reusable, and that the recorded close
+    /// reason is the requested one.
+    #[test]
+    fn h1_return_to_waiter_linearizes_against_close() {
+        // Schedule counters live outside the modeled program, so they are plain
+        // std atomics rather than the loom-instrumented ones. Both winners must
+        // actually occur; a model that only ever explores one of them would pass
+        // for the wrong reason.
+        static DELIVERED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        static REJECTED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+        loom::model(|| {
+            let cell = unbounded_cell();
+            let (connection, _physical) = ConnectionState::unbounded(connection_info(1));
+            let selection =
+                OriginCell::insert_selected_h1(&cell, connection.clone(), H1Sender::test(11));
+            let waiter = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+            let close = H1CloseHandle::new(&cell, &connection);
+
+            let returning = loom::thread::spawn(move || drop(selection));
+            let closing = loom::thread::spawn(move || close.close(CloseReason::Poisoned));
+            returning.join().unwrap();
+            assert!(
+                closing.join().unwrap(),
+                "a rejected HTTP/1 return closed the connection instead of the close signal"
+            );
+            assert_eq!(
+                Some(CloseReason::Poisoned),
+                connection.probe().close_reason,
+                "the HTTP/1 return overwrote the requested close reason"
+            );
+            assert!(
+                cell.h1_idle_sender_ids().is_empty(),
+                "a closed connection's HTTP/1 sender became reusable"
+            );
+
+            match cell
+                .take_ready_event(waiter)
+                .expect("return/close race stranded the HTTP/1 waiter")
+            {
+                // The return committed before `begin_close` marked the record,
+                // so the waiter owns the sender of a connection that closed
+                // immediately afterwards. The record must stay installed until
+                // that external owner comes back.
+                AcquisitionStep::Resolved(AcquisitionOutcome::H1(delivered)) => {
+                    DELIVERED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    assert_eq!(11, delivered.test_sender_id());
+                    assert!(delivered.is_reused());
+                    assert_eq!(ConnectionId::new(1), delivered.connection_id());
+                    assert!(
+                        ConnectionState::try_commit_dispatch(delivered.connection()).is_none(),
+                        "a closed connection accepted a dispatch from the waiter it served"
+                    );
+                    assert_eq!(
+                        (1, 0),
+                        cell.h1_counts(),
+                        "the closing record was removed while a waiter still owned its sender"
+                    );
+                    drop(delivered);
+                }
+                // Close marked the record first, so the return was rejected and
+                // the sender was destroyed with its record. The waiter keeps its
+                // establishment turn and retries on a new connection.
+                AcquisitionStep::StartEstablishment(permit) => {
+                    REJECTED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    assert_eq!(
+                        (0, 0),
+                        cell.h1_counts(),
+                        "a closed HTTP/1 record outlived its rejected return"
+                    );
+                    assert!(
+                        OriginCell::cancel_waiter(&cell, waiter),
+                        "the retrying waiter disappeared after close won"
+                    );
+                    drop(permit);
+                }
+                AcquisitionStep::Resolved(AcquisitionOutcome::Failed(error)) => {
+                    panic!("unexpected establishment failure: {error}")
+                }
+                AcquisitionStep::Resolved(AcquisitionOutcome::RetryAcquisition) => {
+                    panic!("HTTP/1 return/close race requested reacquisition")
+                }
+                AcquisitionStep::Resolved(AcquisitionOutcome::H2(_)) => {
+                    panic!("HTTP/1 return/close race produced an HTTP/2 activation")
+                }
+            }
+
+            assert_eq!(
+                (0, 0),
+                cell.h1_counts(),
+                "a closed HTTP/1 record survived its sender"
+            );
+            assert!(
+                OriginCell::select_h1(&cell).is_none(),
+                "a closed connection's HTTP/1 sender remained selectable"
+            );
+            assert_eq!(0, cell.probe().retained);
+        });
+
+        assert!(
+            DELIVERED.load(std::sync::atomic::Ordering::Relaxed) > 0,
+            "no explored schedule let the return serve the waiter before close"
+        );
+        assert!(
+            REJECTED.load(std::sync::atomic::Ordering::Relaxed) > 0,
+            "no explored schedule let close reject the return"
+        );
     }
 
     /// Races an idle return with completion of an already-started establishment.
@@ -3534,6 +3877,861 @@ mod loom_tests {
             assert_eq!(0, requesting_cell.probe().retained);
             assert_eq!(0, admission.ordered_demand_count_for_test());
             assert_eq!(1, admission.available_capacity_for_test());
+            admission.clear_modeled_cells_for_test();
+        });
+    }
+
+    /// Races idle HTTP/2 capacity reclaim against direct reuse of that generation.
+    ///
+    /// The origin's only permit is held by an idle HTTP/2 generation in the
+    /// connection cell while a peer cell queues an `H1Required` demand that no
+    /// HTTP/2 supply can serve, so admission prepares
+    /// `CapacityReclaim::FromH2`. Running that reclaim crosses three lock
+    /// domains — admission, the connection cell's HTTP/2 record, and
+    /// connection close — and moves the permit while doing so. A direct
+    /// arrival calling `select_h2` contends for the middle domain.
+    ///
+    /// Either the reclaim wins, closing the generation and handing the permit
+    /// to the HTTP/1 demand while the arrival is refused cleanly, or the
+    /// activation wins, aborting the reclaim and leaving the permit with the
+    /// live connection and the demand still ordered. In both cases the origin
+    /// has exactly one permit throughout and the HTTP/1 waiter is eventually
+    /// served rather than stranded.
+    #[test]
+    fn idle_h2_reclaim_races_direct_h2_activation() {
+        loom::model(|| {
+            let (admission, connection_cell, requesting_cell) =
+                bounded_peer_cells(EligibilityGroup::Pool, EligibilityGroup::Pool);
+            let lease = OriginAdmission::lease_for_test(&admission);
+            let (connection, _physical) = ConnectionState::bounded(connection_info(1), lease);
+            let generation =
+                OriginCell::install_h2_for_test(&connection_cell, connection.clone(), 1, None);
+            let (waiter, demand) =
+                requesting_cell.register_waiter_without_publish(ProtocolRequirement::H1Required);
+            let action = OriginAdmission::submit_action_without_running(
+                &admission,
+                requesting_cell.id().partition(),
+                demand,
+            )
+            .expect("H1-required demand did not prepare idle HTTP/2 reclaim");
+            assert!(
+                matches!(action, AdmissionAction::ReclaimCapacity(_)),
+                "H1-required demand prepared something other than capacity reclaim"
+            );
+            assert_eq!(0, admission.available_capacity_for_test());
+
+            let reclaiming = loom::thread::spawn(move || {
+                OriginAdmission::run_action_chain(Some(action));
+            });
+            let activating_cell = connection_cell.clone();
+            let activating = loom::thread::spawn(move || OriginCell::select_h2(&activating_cell));
+            reclaiming.join().unwrap();
+            let activation = activating.join().unwrap();
+
+            // Snapshot the raced outcome before any activation fallback runs.
+            let closed = connection.probe().close_reason;
+            let accepting = connection_cell.accepting_h2_generation();
+            if activation.is_some() {
+                assert_eq!(
+                    None, closed,
+                    "reclaim closed a generation that had already been activated"
+                );
+                assert_eq!(
+                    Some(generation),
+                    accepting,
+                    "aborted reclaim detached the activated generation"
+                );
+                assert_eq!(
+                    1,
+                    admission.ordered_demand_count_for_test(),
+                    "aborted reclaim dropped the H1-required demand"
+                );
+                assert!(
+                    requesting_cell.take_ready_event(waiter).is_none(),
+                    "aborted reclaim delivered capacity it never recovered"
+                );
+            } else {
+                assert_eq!(
+                    Some(CloseReason::Reclaimed),
+                    closed,
+                    "activation was refused without the generation being reclaimed"
+                );
+                assert_eq!(
+                    None, accepting,
+                    "reclaimed generation still accepted activations"
+                );
+            }
+            assert_eq!(
+                0,
+                admission.available_capacity_for_test(),
+                "the origin's single permit was duplicated across the reclaim crossing"
+            );
+
+            // Releasing the losing side must leave the H1-required waiter
+            // served exactly once by that same permit.
+            drop(activation);
+            let AcquisitionStep::StartEstablishment(permit) = requesting_cell
+                .take_ready_event(waiter)
+                .expect("H1-required waiter was stranded by idle HTTP/2 reclaim")
+            else {
+                panic!("idle HTTP/2 reclaim produced a non-capacity result");
+            };
+            assert_eq!(
+                Some(CloseReason::Reclaimed),
+                connection.probe().close_reason
+            );
+            assert_eq!(None, connection_cell.accepting_h2_generation());
+            assert_eq!(0, admission.available_capacity_for_test());
+            assert!(
+                requesting_cell.take_ready_event(waiter).is_none(),
+                "H1-required waiter received more than one capacity permit"
+            );
+            drop(permit);
+            assert_eq!(1, admission.available_capacity_for_test());
+            admission.clear_modeled_cells_for_test();
+        });
+    }
+
+    /// Races a local HTTP/1 return with bounded-capacity delivery for a *parked*
+    /// waiter.
+    ///
+    /// The waiter stores a real waker and returns `Poll::Pending` before either
+    /// actor runs, so this is the acquisition-wakeup model: whichever of the two
+    /// resolutions wins, the parked task must be woken exactly once and must
+    /// then observe the HTTP/1 sender. A lost wake is a permanent request hang.
+    ///
+    /// The wake is emitted either from `cell.rs` `receive_delivery` (delivery
+    /// reserved the waiter first, so the sender either arrives as a
+    /// `pending_result` or displaces committed capacity) or from `h1.rs`
+    /// `return_h1_sender` (the return reached the waiting record first).
+    #[test]
+    fn h1_return_and_capacity_delivery_wake_one_parked_waiter() {
+        loom::model(|| {
+            let (admission, cell) = bounded_cell_with_limit(2);
+            let installed_lease = OriginAdmission::lease_for_test(&admission);
+            let (connection, _physical) =
+                ConnectionState::bounded(connection_info(1), installed_lease);
+            let returning = OriginCell::insert_selected_h1(&cell, connection, H1Sender::test(11));
+            let (waiter, demand) =
+                cell.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
+            let counter = park_waiter(&cell, waiter);
+            let delivery =
+                OriginAdmission::submit_without_running(&admission, cell.id().partition(), demand)
+                    .expect("published demand did not reserve capacity");
+
+            let delivering = loom::thread::spawn(move || {
+                OriginAdmission::run_action_chain(Some(AdmissionAction::Deliver(delivery)));
+            });
+            let returning = loom::thread::spawn(move || drop(returning));
+            delivering.join().unwrap();
+            returning.join().unwrap();
+
+            // Both resolutions are available, so the waiter can never remain
+            // parked; the unused capacity goes back to admission.
+            assert_eq!(1, admission.available_capacity_for_test());
+            let step = poll_parked_waiter(&cell, waiter, &counter, "returned-H1 waiter")
+                .expect("return/delivery race stranded a parked waiter");
+            let AcquisitionStep::Resolved(AcquisitionOutcome::H1(selection)) = step else {
+                panic!("woken waiter did not observe the returned HTTP/1 sender");
+            };
+            assert_eq!(11, selection.test_sender_id());
+            drop(selection);
+            assert_eq!(
+                1,
+                wakes(&counter),
+                "consuming the result woke the waiter again"
+            );
+            assert_eq!((1, 1), cell.h1_counts());
+            admission.clear_modeled_cells_for_test();
+        });
+    }
+
+    /// Races bounded-capacity delivery with cancellation of its target waiter
+    /// while a younger waiter is parked behind it.
+    ///
+    /// Refusing the head must refunnel the permit to the surviving successor
+    /// and wake it. The successor is woken exactly once when it becomes ready
+    /// and never while it is still parked. The cancelled head may legally
+    /// receive one spurious wake, because cancelling a reserved waiter carries
+    /// its waker into `WaiterState::DeliveryCancelled` and the delivery commit
+    /// then wakes it; it must never be woken twice.
+    #[test]
+    fn delivery_and_head_cancellation_wake_the_surviving_waiter() {
+        // Exhaustive exploration of this model needs 196,857 iterations and
+        // about 96 seconds because refunnelling the refused permit re-enters
+        // admission and re-delivers to the successor inside the same thread.
+        // Three preemptions still cover either actor entering first plus one
+        // crossing that interrupts delivery between waiter reservation and
+        // capacity commit, which is the interleaving that carries a waker into
+        // `WaiterState::DeliveryCancelled`.
+        let mut model = loom::model::Builder::new();
+        model.preemption_bound.get_or_insert(3);
+        model.check(|| {
+            let (admission, cell) = bounded_cell();
+            let (head, demand) =
+                cell.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
+            let successor = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+            let head_counter = park_waiter(&cell, head);
+            let successor_counter = park_waiter(&cell, successor);
+            let delivery =
+                OriginAdmission::submit_without_running(&admission, cell.id().partition(), demand)
+                    .expect("published demand did not reserve capacity");
+
+            let deliver = loom::thread::spawn(move || {
+                OriginAdmission::run_action_chain(Some(AdmissionAction::Deliver(delivery)));
+            });
+            let cancel_cell = cell.clone();
+            let cancel = loom::thread::spawn(move || OriginCell::cancel_waiter(&cancel_cell, head));
+            deliver.join().unwrap();
+            cancel.join().unwrap();
+
+            assert!(
+                wakes(&head_counter) <= 1,
+                "cancelled head was woken more than once"
+            );
+            let step = poll_parked_waiter(&cell, successor, &successor_counter, "successor waiter")
+                .expect("refused delivery never reached the surviving waiter");
+            let AcquisitionStep::StartEstablishment(permit) = step else {
+                panic!("capacity-only model produced a terminal acquisition outcome");
+            };
+            assert_eq!(0, admission.available_capacity_for_test());
+            assert!(OriginCell::cancel_waiter(&cell, successor));
+            drop(permit);
+            assert_eq!(1, admission.available_capacity_for_test());
+            assert_eq!(0, admission.ordered_demand_count_for_test());
+            admission.clear_modeled_cells_for_test();
+        });
+    }
+
+    /// Races cancellation of an HTTP/2-only head against close of the cell's
+    /// only idle HTTP/1, with a parked HTTP/1-compatible successor behind it.
+    ///
+    /// Cancelling the head makes the successor the oldest compatible waiter, so
+    /// the same cell lock re-offers the idle sender to it. That is a third,
+    /// distinct wake producer: `cancel_waiter` waking a waiter that neither
+    /// actor names. If close wins the sender instead, the released capacity may
+    /// still reach the successor as establishment capacity, or arrive back in
+    /// admission before the successor's demand is published. All three endings
+    /// are legal; a ready successor that was not woken is not.
+    ///
+    /// The head's demand is deliberately not published, because a published
+    /// HTTP/2-only demand makes admission reclaim the idle HTTP/1's capacity
+    /// before the race can start (see the single-threaded
+    /// `cancelling_h2_head_refunnels_reclaimed_capacity_to_successor`).
+    #[test]
+    fn head_cancellation_wakes_a_newly_compatible_successor() {
+        let mut model = loom::model::Builder::new();
+        model.preemption_bound.get_or_insert(3);
+        model.check(|| {
+            let (admission, cell) = bounded_cell();
+            let lease = OriginAdmission::lease_for_test(&admission);
+            let (connection, _physical) = ConnectionState::bounded(connection_info(1), lease);
+            OriginCell::insert_idle_h1(&cell, connection.clone(), H1Sender::test(11));
+            let close = H1CloseHandle::new(&cell, &connection);
+            let (head, _unpublished) =
+                cell.register_waiter_without_publish(ProtocolRequirement::H2Required);
+            let successor = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+            let head_counter = park_waiter(&cell, head);
+            let successor_counter = park_waiter(&cell, successor);
+
+            let cancel_cell = cell.clone();
+            let cancelling = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || OriginCell::cancel_waiter(&cancel_cell, head))
+                .unwrap();
+            let closing = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || close.close(CloseReason::Poisoned))
+                .unwrap();
+            assert!(cancelling.join().unwrap());
+            assert!(closing.join().unwrap());
+            assert_eq!(
+                0,
+                wakes(&head_counter),
+                "cancelling a waiting head woke its own task"
+            );
+
+            match poll_parked_waiter(&cell, successor, &successor_counter, "successor waiter") {
+                Some(AcquisitionStep::Resolved(AcquisitionOutcome::H1(selection))) => {
+                    assert_eq!(11, selection.test_sender_id());
+                    drop(selection);
+                }
+                Some(AcquisitionStep::StartEstablishment(permit)) => {
+                    assert!(OriginCell::cancel_waiter(&cell, successor));
+                    drop(permit);
+                }
+                Some(other) => panic!("unexpected acquisition step: {other:?}"),
+                None => {
+                    assert!(OriginCell::cancel_waiter(&cell, successor));
+                }
+            }
+            assert_eq!((0, 0), cell.h1_counts());
+            assert_eq!(0, cell.probe().retained);
+            assert_eq!(1, admission.available_capacity_for_test());
+            admission.clear_modeled_cells_for_test();
+        });
+    }
+
+    /// Races registration of a second waiter with cancellation of the head.
+    ///
+    /// Each actor commits its waiter change under the cell lock and publishes
+    /// the resulting snapshot after unlocking, so the cancelled head's
+    /// retirement and the surviving head's active demand can reach admission in
+    /// either order. Admission's view must still agree with the cell, and the
+    /// agreement is checked against the resource: the origin's only permit has
+    /// to reach the waiter that is still queued.
+    #[test]
+    fn concurrent_demand_publications_agree_with_the_surviving_waiter() {
+        loom::model(|| {
+            let (admission, cell) = bounded_cell();
+            // Hold the origin's only permit so no delivery can run while the
+            // two publications race. Publication ordering is then the only
+            // thing that can change admission's demand schedule.
+            let lease = OriginAdmission::lease_for_test(&admission);
+            let head = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+
+            let registering_cell = cell.clone();
+            let registering = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || {
+                    OriginCell::register_waiter(
+                        &registering_cell,
+                        ProtocolRequirement::H1Compatible,
+                    )
+                })
+                .unwrap();
+            let cancelling_cell = cell.clone();
+            let cancelling = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || OriginCell::cancel_waiter(&cancelling_cell, head))
+                .unwrap();
+            let survivor = registering.join().unwrap();
+            assert!(
+                cancelling.join().unwrap(),
+                "the queued head waiter was not cancelled"
+            );
+
+            let probe = cell.probe();
+            assert_eq!(
+                1, probe.waiting,
+                "the surviving waiter left the cell's acquisition queue: {probe:?}"
+            );
+            assert!(
+                probe.demand.is_some(),
+                "the surviving head owns no cell-local demand: {probe:?}"
+            );
+            assert_eq!(
+                1,
+                admission.ordered_demand_count_for_test(),
+                "admission's ordered demand did not match the cell's surviving waiter"
+            );
+
+            // A lost demand is only observable as a hang, so prove the
+            // surviving waiter is still reachable by returned capacity. This
+            // also checks demand identity: the delivery is refused unless
+            // admission holds exactly the cell's current head demand.
+            drop(lease);
+            let served = OriginCell::take_ready_lease(&cell, survivor)
+                .expect("returned capacity never reached the surviving waiter");
+            drop(served);
+            assert_eq!(1, admission.available_capacity_for_test());
+            assert_eq!(0, admission.ordered_demand_count_for_test());
+            admission.clear_modeled_cells_for_test();
+        });
+    }
+
+    /// Races one capacity delivery with cancellation of its target head waiter.
+    ///
+    /// Cancelling the head retires demand from the cell while the delivery's
+    /// settlement retires the same generation from inside admission. Whichever
+    /// order they arrive in, the newer demand published for the waiter behind
+    /// the head must survive: otherwise that waiter parks while the permit it
+    /// needs sits available in admission.
+    #[test]
+    fn stale_delivery_retirement_does_not_strand_the_next_waiter() {
+        let mut model = loom::model::Builder::new();
+        model.preemption_bound.get_or_insert(3);
+        model.check(|| {
+            let (admission, cell) = bounded_cell();
+            let (head, snapshot) =
+                cell.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
+            let next = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+            let delivery = OriginAdmission::submit_without_running(
+                &admission,
+                cell.id().partition(),
+                snapshot,
+            )
+            .expect("published demand did not reserve the origin's only permit");
+
+            let delivering = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || {
+                    OriginAdmission::run_action_chain(Some(AdmissionAction::Deliver(delivery)));
+                })
+                .unwrap();
+            let cancelling_cell = cell.clone();
+            let cancelling = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || OriginCell::cancel_waiter(&cancelling_cell, head))
+                .unwrap();
+            delivering.join().unwrap();
+            assert!(
+                cancelling.join().unwrap(),
+                "the delivery's target waiter was not cancelled"
+            );
+
+            let probe = cell.probe();
+            assert_eq!(
+                usize::from(probe.demand.is_some()),
+                admission.ordered_demand_count_for_test(),
+                "admission's ordered demand did not agree with the cell queue: {probe:?}"
+            );
+            let served = OriginCell::take_ready_lease(&cell, next)
+                .expect("the surviving waiter never received the origin's only permit");
+            drop(served);
+            assert_eq!(1, admission.available_capacity_for_test());
+            assert_eq!(0, admission.ordered_demand_count_for_test());
+            admission.clear_modeled_cells_for_test();
+        });
+    }
+
+    /// Races one capacity delivery with cancellation of the waiter behind it.
+    ///
+    /// Reserving the head hands the delivery a successor snapshot for the next
+    /// waiter, while that waiter's cancellation retires the same demand
+    /// identity at a newer version. The successor must lose, otherwise
+    /// admission orders demand for a cell with no waiter left to serve.
+    #[test]
+    fn delivery_successor_does_not_revive_a_cancelled_demand() {
+        let mut model = loom::model::Builder::new();
+        model.preemption_bound.get_or_insert(3);
+        model.check(|| {
+            let (admission, cell) = bounded_cell();
+            let (head, snapshot) =
+                cell.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
+            let next = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+            let delivery = OriginAdmission::submit_without_running(
+                &admission,
+                cell.id().partition(),
+                snapshot,
+            )
+            .expect("published demand did not reserve the origin's only permit");
+
+            let delivering = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || {
+                    OriginAdmission::run_action_chain(Some(AdmissionAction::Deliver(delivery)));
+                })
+                .unwrap();
+            let cancelling_cell = cell.clone();
+            let cancelling = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || OriginCell::cancel_waiter(&cancelling_cell, next))
+                .unwrap();
+            delivering.join().unwrap();
+            assert!(
+                cancelling.join().unwrap(),
+                "the successor waiter was not cancelled"
+            );
+
+            let probe = cell.probe();
+            assert_eq!(
+                usize::from(probe.demand.is_some()),
+                admission.ordered_demand_count_for_test(),
+                "admission ordered demand the cell no longer has a waiter for: {probe:?}"
+            );
+            let served = OriginCell::take_ready_lease(&cell, head)
+                .expect("the delivered head waiter never owned the origin's permit");
+            drop(served);
+            assert_eq!(1, admission.available_capacity_for_test());
+            assert_eq!(0, admission.ordered_demand_count_for_test());
+            admission.clear_modeled_cells_for_test();
+        });
+    }
+
+    /// Races the peer-route cutoff computation with a younger waiter arriving.
+    ///
+    /// `route_cutoff` names `WaiterId(next_waiter_id - 1)` under the cell lock
+    /// that installs the route, so a waiter registered concurrently can land on
+    /// either side of the cutoff. Both placements are legal and differ only in
+    /// the gate's recorded cutoff; in neither may the younger waiter take the
+    /// route's single activation opportunity while the older waiter is queued.
+    #[test]
+    fn peer_route_cutoff_linearizes_against_a_younger_waiter_registration() {
+        loom::model(|| {
+            let (admission, connection_cell, requesting_cell) =
+                bounded_peer_cells(EligibilityGroup::Pool, EligibilityGroup::Pool);
+            let lease = OriginAdmission::lease_for_test(&admission);
+            let (connection, _physical) = ConnectionState::bounded(connection_info(1), lease);
+            let generation = OriginCell::install_h2_for_test(&connection_cell, connection, 1, None);
+            let (older, demand) =
+                requesting_cell.register_waiter_without_publish(ProtocolRequirement::H2Required);
+            let route = h2::H2Route::new(&connection_cell, generation);
+
+            let routing_cell = requesting_cell.clone();
+            let routing = loom::thread::spawn(move || {
+                let attached = OriginCell::attach_h2_route(
+                    &routing_cell,
+                    route,
+                    &EligibilityGroup::Pool,
+                    demand.id_for_test(),
+                );
+                OriginCell::offer_peer_h2(&routing_cell);
+                attached
+            });
+            let arriving_cell = requesting_cell.clone();
+            let arriving = loom::thread::spawn(move || {
+                OriginCell::register_waiter(&arriving_cell, ProtocolRequirement::H2Required)
+            });
+
+            assert!(
+                routing.join().unwrap(),
+                "peer route attachment lost the published demand"
+            );
+            let younger = arriving.join().unwrap();
+            assert!(
+                younger > older,
+                "concurrent registration did not allocate a younger waiter identity"
+            );
+
+            // Anti-starvation. The activation opportunity belongs to the oldest
+            // eligible waiter, whichever side of the cutoff the younger waiter
+            // landed on.
+            assert!(
+                requesting_cell.take_ready_event(younger).is_none(),
+                "younger HTTP/2 waiter overtook the older queued waiter"
+            );
+            // One opportunity per turn. A second prospective claim must not be
+            // minted while the first is outstanding.
+            assert_eq!(
+                Some((1, 0)),
+                connection_cell.h2_request_counts(generation),
+                "peer route gate minted a second activation opportunity"
+            );
+            assert_eq!(
+                2,
+                requesting_cell.probe().retained,
+                "the younger waiter was dropped instead of left queued"
+            );
+
+            let older_activation = take_ready_h2(&requesting_cell, older);
+            assert_eq!(generation, older_activation.generation());
+
+            // Releasing the older waiter's turn must hand the younger waiter the
+            // next opportunity, proving it stayed serviceable.
+            drop(older_activation);
+            let younger_activation = take_ready_h2(&requesting_cell, younger);
+            assert_eq!(generation, younger_activation.generation());
+            drop(younger_activation);
+
+            assert_eq!(0, requesting_cell.probe().retained);
+            assert_eq!(Some((0, 0)), connection_cell.h2_request_counts(generation));
+            assert_eq!(0, admission.ordered_demand_count_for_test());
+            assert_eq!(0, admission.available_capacity_for_test());
+            assert!(OriginCell::close_h2(
+                &connection_cell,
+                generation,
+                CloseReason::PoolDropped,
+            ));
+            assert_eq!(1, admission.available_capacity_for_test());
+            admission.clear_modeled_cells_for_test();
+        });
+    }
+
+    /// Races the drop of a prepared capacity delivery with cell-local churn.
+    ///
+    /// Every other model consumes its prepared action explicitly, so
+    /// `DeliveryGuard::drop` is the only path that refunnels a capacity payload
+    /// abandoned mid-crossing. Cancelling a crowding waiter takes the same cell
+    /// lock the refunnelled delivery must commit against and republishes the
+    /// cell's HTTP/1 supply through admission, so both actors contend on both
+    /// pool locks. The permit must return to the demand that reserved it, at its
+    /// original origin position, and the cell that published later must not
+    /// overtake it.
+    #[test]
+    fn dropped_capacity_delivery_refunnels_to_its_original_head() {
+        loom::model(|| {
+            let (admission, head_cell, younger_cell) =
+                bounded_peer_cells(EligibilityGroup::Pool, EligibilityGroup::Pool);
+            let (head, demand) =
+                head_cell.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
+            // A younger same-cell waiter shares the published demand generation,
+            // so cancelling it cannot retire or reorder the head's demand.
+            let crowding =
+                OriginCell::register_waiter(&head_cell, ProtocolRequirement::H1Compatible);
+            let delivery = OriginAdmission::submit_without_running(
+                &admission,
+                head_cell.id().partition(),
+                demand,
+            )
+            .expect("head demand did not reserve the only permit");
+            assert_eq!(0, admission.available_capacity_for_test());
+            let (younger, younger_demand) =
+                younger_cell.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
+            OriginAdmission::submit_demand_snapshot(
+                &admission,
+                younger_cell.id().partition(),
+                younger_demand,
+            );
+
+            let dropping = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || drop(delivery))
+                .unwrap();
+            let crowding_cell = head_cell.clone();
+            let crowding_out = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || OriginCell::cancel_waiter(&crowding_cell, crowding))
+                .unwrap();
+            dropping.join().unwrap();
+            assert!(crowding_out.join().unwrap());
+
+            let head_lease = OriginCell::take_ready_lease(&head_cell, head)
+                .expect("dropped delivery did not refunnel the permit to its own head");
+            assert!(
+                OriginCell::take_ready_lease(&younger_cell, younger).is_none(),
+                "refunnelled permit overtook the demand that reserved it"
+            );
+            drop(head_lease);
+            let younger_lease = OriginCell::take_ready_lease(&younger_cell, younger)
+                .expect("younger demand never received the released permit");
+            drop(younger_lease);
+            assert_eq!(1, admission.available_capacity_for_test());
+            assert_eq!(0, admission.ordered_demand_count_for_test());
+            assert_eq!(0, head_cell.probe().retained);
+            admission.clear_modeled_cells_for_test();
+        });
+    }
+
+    /// Races the drop of a prepared HTTP/1 reservation with request cancellation.
+    ///
+    /// `H1ReservationAction::drop` is the only path that releases a supplier
+    /// admission already removed from selection. Whichever actor wins, the
+    /// supplier keeps its sender exactly once and stays matchable by fresh peer
+    /// demand. Three preemptions cover either actor entering first plus a full
+    /// reservation round trip across the supplier cell and admission locks.
+    #[test]
+    fn dropped_h1_reservation_action_keeps_the_supplier_borrowable() {
+        let mut model = loom::model::Builder::new();
+        model.preemption_bound.get_or_insert(3);
+        model.check(|| {
+            let (admission, supplier, requester) =
+                bounded_peer_cells(EligibilityGroup::Pool, EligibilityGroup::Pool);
+            let lease = OriginAdmission::lease_for_test(&admission);
+            let (connection, _physical) = ConnectionState::bounded(connection_info(1), lease);
+            OriginCell::insert_idle_h1(&supplier, connection, H1Sender::test(11));
+            let (waiter, demand) =
+                requester.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
+            let reservation = OriginAdmission::submit_action_without_running(
+                &admission,
+                requester.id().partition(),
+                demand,
+            )
+            .expect("peer demand did not prepare a supplier reservation");
+            assert!(matches!(
+                &reservation,
+                AdmissionAction::ReserveH1Supplier(_)
+            ));
+
+            let dropping = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || drop(reservation))
+                .unwrap();
+            let cancel_cell = requester.clone();
+            let cancelling = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || OriginCell::cancel_waiter(&cancel_cell, waiter))
+                .unwrap();
+            dropping.join().unwrap();
+            assert!(cancelling.join().unwrap());
+
+            assert_eq!(
+                vec![11],
+                supplier.h1_idle_sender_ids(),
+                "dropped reservation lost or duplicated the supplier's sender"
+            );
+            assert_eq!((1, 1), supplier.h1_counts());
+            assert_eq!(0, requester.probe().retained);
+            assert_eq!(0, admission.ordered_demand_count_for_test());
+            assert_eq!(0, admission.available_capacity_for_test());
+            assert!(supplier.state.lock().h1.peer_reservation_available());
+
+            // A dropped reservation must leave admission able to match the same
+            // supplier again; a leaked match would strand this sender forever.
+            let retry = OriginCell::register_waiter(&requester, ProtocolRequirement::H1Compatible);
+            let borrowed = requester
+                .take_ready_h1(retry)
+                .expect("dropped reservation left the supplier unmatchable");
+            assert_eq!(11, borrowed.test_sender_id());
+            drop(borrowed);
+            admission.clear_modeled_cells_for_test();
+        });
+    }
+
+    /// Races the drop of a resolved HTTP/1 reclaim candidate with cancellation.
+    ///
+    /// `H1Candidate::drop` is the only path that returns a provisional sender
+    /// already detached from its owning cell when the reclaim action it belongs
+    /// to is abandoned. Either the reclaim retries and recovers the origin's
+    /// only connection slot, or cancellation wins and the sender returns to its
+    /// owning cell. Exactly one of those holds, and the slot is conserved.
+    #[test]
+    fn dropped_h1_candidate_returns_its_detached_sender() {
+        let mut model = loom::model::Builder::new();
+        model.preemption_bound.get_or_insert(3);
+        model.check(|| {
+            let (admission, supplier, requester) =
+                bounded_peer_cells(EligibilityGroup::Pool, EligibilityGroup::Pool);
+            let lease = OriginAdmission::lease_for_test(&admission);
+            let (connection, _physical) = ConnectionState::bounded(connection_info(1), lease);
+            OriginCell::insert_idle_h1(&supplier, connection, H1Sender::test(11));
+            let (waiter, demand) =
+                requester.register_waiter_without_publish(ProtocolRequirement::H2Required);
+            let reservation = OriginAdmission::submit_action_without_running(
+                &admission,
+                requester.id().partition(),
+                demand,
+            )
+            .expect("HTTP/2-only demand did not prepare a reclaim reservation");
+            let reclaim = reservation
+                .run_once_for_test()
+                .expect("supplier reservation did not resolve a reclaim candidate");
+            assert!(matches!(&reclaim, AdmissionAction::ReclaimCapacity(_)));
+
+            let dropping = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || drop(reclaim))
+                .unwrap();
+            let cancel_cell = requester.clone();
+            let cancelling = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || OriginCell::cancel_waiter(&cancel_cell, waiter))
+                .unwrap();
+            dropping.join().unwrap();
+            assert!(cancelling.join().unwrap());
+
+            let available = admission.available_capacity_for_test();
+            let (installed, idle) = supplier.h1_counts();
+            assert_eq!(
+                1,
+                available + installed,
+                "candidate drop lost or duplicated the origin's only connection slot"
+            );
+            if installed == 1 {
+                assert_eq!(1, idle, "returned sender did not become reusable again");
+                assert_eq!(
+                    vec![11],
+                    supplier.h1_idle_sender_ids(),
+                    "candidate drop lost the detached sender"
+                );
+            } else {
+                assert!(
+                    supplier.h1_idle_sender_ids().is_empty(),
+                    "reclaimed connection left a reusable sender behind"
+                );
+            }
+            assert_eq!(0, requester.probe().retained);
+            assert_eq!(0, admission.ordered_demand_count_for_test());
+            assert!(supplier.state.lock().h1.peer_reservation_available());
+            admission.clear_modeled_cells_for_test();
+        });
+    }
+
+    /// Races the drop of a prepared idle probe with request cancellation.
+    ///
+    /// `H1IdleProbeAction::drop` is the only path that returns a probed
+    /// supplier to selection when the probe never reaches its cell. Both
+    /// suppliers must keep their senders exactly once, and admission must stay
+    /// able to match either of them afterwards.
+    #[test]
+    fn dropped_h1_idle_probe_returns_the_probed_supplier() {
+        let mut model = loom::model::Builder::new();
+        model.preemption_bound.get_or_insert(3);
+        model.check(|| {
+            let admission = OriginAdmission::for_test(NonZeroUsize::new(2).unwrap());
+            let origin = OriginKey::from_parts(Scheme::HTTPS, "example.com", None).unwrap();
+            let first = OriginAdmission::register_cell(
+                &admission,
+                Arc::new(OriginCell::new(
+                    PartitionId::from_index(1),
+                    origin.clone(),
+                    EligibilityGroup::Pool,
+                    Some(admission.clone()),
+                    None,
+                )),
+            );
+            let second = OriginAdmission::register_cell(
+                &admission,
+                Arc::new(OriginCell::new(
+                    PartitionId::from_index(2),
+                    origin.clone(),
+                    EligibilityGroup::Pool,
+                    Some(admission.clone()),
+                    None,
+                )),
+            );
+            let requester = OriginAdmission::register_cell(
+                &admission,
+                Arc::new(OriginCell::new(
+                    PartitionId::from_index(3),
+                    origin,
+                    EligibilityGroup::Pool,
+                    Some(admission.clone()),
+                    None,
+                )),
+            );
+            let first_lease = OriginAdmission::lease_for_test(&admission);
+            let (first_connection, _first_physical) =
+                ConnectionState::bounded(connection_info(1), first_lease);
+            OriginCell::insert_idle_h1(&first, first_connection, H1Sender::test(11));
+            let second_lease = OriginAdmission::lease_for_test(&admission);
+            let (second_connection, _second_physical) =
+                ConnectionState::bounded(connection_info(2), second_lease);
+            OriginCell::insert_idle_h1(&second, second_connection, H1Sender::test(22));
+            let (waiter, demand) =
+                requester.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
+            let probe = OriginAdmission::submit_action_without_running(
+                &admission,
+                requester.id().partition(),
+                demand,
+            )
+            .expect("peer demand did not prepare an idle probe");
+            assert!(matches!(&probe, AdmissionAction::ProbeH1Supplier(_)));
+
+            let dropping = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || drop(probe))
+                .unwrap();
+            let cancel_cell = requester.clone();
+            let cancelling = loom::thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || OriginCell::cancel_waiter(&cancel_cell, waiter))
+                .unwrap();
+            dropping.join().unwrap();
+            assert!(cancelling.join().unwrap());
+
+            let mut sender_ids = first.h1_idle_sender_ids();
+            sender_ids.extend(second.h1_idle_sender_ids());
+            sender_ids.extend(requester.h1_idle_sender_ids());
+            sender_ids.sort_unstable();
+            assert_eq!(
+                vec![11, 22],
+                sender_ids,
+                "dropped idle probe lost or duplicated an HTTP/1 sender"
+            );
+            assert_eq!(0, requester.probe().retained);
+            assert_eq!(0, admission.ordered_demand_count_for_test());
+            assert_eq!(0, admission.available_capacity_for_test());
+            assert!(first.state.lock().h1.peer_reservation_available());
+            assert!(second.state.lock().h1.peer_reservation_available());
+
+            // A dropped probe must leave both probed suppliers selectable.
+            let retry = OriginCell::register_waiter(&requester, ProtocolRequirement::H1Compatible);
+            let borrowed = requester
+                .take_ready_h1(retry)
+                .expect("dropped idle probe left every supplier unmatchable");
+            assert!(matches!(borrowed.test_sender_id(), 11 | 22));
+            drop(borrowed);
             admission.clear_modeled_cells_for_test();
         });
     }
