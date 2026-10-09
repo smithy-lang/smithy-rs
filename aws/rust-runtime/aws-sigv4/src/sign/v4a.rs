@@ -54,17 +54,29 @@ pub fn calculate_signature(signing_key: impl AsRef<[u8]>, string_to_sign: &[u8])
 
     // Sign from the private scalar rather than from a `SigningKey`. Constructing one derives the
     // verifying key, and that costs a P-256 scalar multiplication as expensive as the signature
-    // itself while signing never reads it. `NonZeroScalar::from_repr` applies the same validation
-    // a `SigningKey` would -- it rejects zero and anything at or above the group order.
+    // itself while signing never reads it. `NonZeroScalar::from_repr` range-checks the scalar
+    // exactly as `SecretKey` does on the `SigningKey` path -- both reject zero and anything at or
+    // above the group order. They differ on accepted input length, which the assertion above
+    // settles by requiring exactly 32 bytes.
     //
     // This is the body of `ecdsa`'s `PrehashSigner for SigningKey` with that derivation left out,
     // so the signature is unchanged: same RFC 6979 deterministic nonce, same empty additional
     // data. `ecdsa`'s `bits2field` is a copy for a digest the width of the field, which SHA-256
     // on P-256 is, so hashing straight into `z` is equivalent.
+    //
+    // Both copies this function owns, `repr` and `scalar`, are wiped on the way out; the
+    // `signing_key` slice is the caller's and is left alone. The old code got the wipe for free:
+    // `SigningKey` implements `ZeroizeOnDrop` and its `Drop` zeroizes the secret scalar, whereas
+    // `NonZeroScalar` implements `Zeroize` but has no `Drop`, so dropping one leaves the scalar
+    // in memory. `Zeroizing` supplies the `Drop` that type is missing. The `FieldBytes` that
+    // `from_repr` takes by value is still an unwiped stack copy; that one is not reachable
+    // through this API.
     let mut repr = Zeroizing::new([0u8; P256_PRIVATE_KEY_SIZE]);
     repr.copy_from_slice(signing_key);
-    let scalar = Option::<NonZeroScalar>::from(NonZeroScalar::from_repr((*repr).into()))
-        .expect("signing key is a valid P-256 private scalar");
+    let scalar = Zeroizing::new(
+        Option::<NonZeroScalar>::from(NonZeroScalar::from_repr((*repr).into()))
+            .expect("signing key is a valid P-256 private scalar"),
+    );
 
     let z = P256Digest::digest(string_to_sign);
     let (signature, _recovery_id): (p256::ecdsa::Signature, _) = scalar
