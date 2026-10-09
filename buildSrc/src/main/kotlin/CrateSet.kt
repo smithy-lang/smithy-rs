@@ -100,5 +100,15 @@ object CrateSet {
 
     val ENTIRE_SMITHY_RUNTIME = (AWS_SDK_SMITHY_RUNTIME + SERVER_SMITHY_RUNTIME).toSortedSet(compareBy { it.name })
 
-    val ALL_CRATES = AWS_SDK_RUNTIME + ENTIRE_SMITHY_RUNTIME
+    // Smithy tooling crates: published from `rust-runtime`, but not used by generated SDKs or
+    // servers. Keep these out of `AWS_SDK_SMITHY_RUNTIME` and `SERVER_SMITHY_RUNTIME`.
+    val SMITHY_TOOLING =
+        listOf(
+            "aws-smithy-lang",
+        ).map { Crate(it, version(it)) }
+
+    // Every crate published from `rust-runtime`: the entire runtime plus tooling.
+    val ALL_SMITHY_CRATES = (ENTIRE_SMITHY_RUNTIME + SMITHY_TOOLING).toSortedSet(compareBy { it.name })
+
+    val ALL_CRATES = AWS_SDK_RUNTIME + ALL_SMITHY_CRATES
 }

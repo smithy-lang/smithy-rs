@@ -6,10 +6,12 @@
 import CrateSet.AWS_SDK_RUNTIME
 import CrateSet.SERVER_SMITHY_RUNTIME
 import CrateSet.SMITHY_RUNTIME_COMMON
+import CrateSet.SMITHY_TOOLING
 import CrateSet.STABLE_VERSION_PROP_NAME
 import CrateSet.UNSTABLE_VERSION_PROP_NAME
 import com.moandjiezana.toml.Toml
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Test
 import java.io.File
 import java.util.logging.Logger
@@ -74,5 +76,18 @@ class CrateSetTest {
     @Test
     fun `server smithy runtime stabilities should match those in manifest files`() {
         crateSetStabilitiesMatchManifestStabilities(SERVER_SMITHY_RUNTIME, "../rust-runtime")
+    }
+
+    @Test
+    fun `smithy tooling stabilities should match those in manifest files`() {
+        crateSetStabilitiesMatchManifestStabilities(SMITHY_TOOLING, "../rust-runtime")
+    }
+
+    @Test
+    fun `smithy tooling crates are not part of the generated runtime`() {
+        SMITHY_TOOLING.forEach { crate ->
+            assertFalse(CrateSet.ENTIRE_SMITHY_RUNTIME.any { it.name == crate.name }, "Crate: ${crate.name}")
+            assertFalse(CrateSet.StableCrates.contains(crate.name), "Crate: ${crate.name}")
+        }
     }
 }
