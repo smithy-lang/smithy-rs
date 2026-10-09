@@ -19,6 +19,8 @@ use zeroize::Zeroizing;
 const ALGORITHM: &[u8] = b"AWS4-ECDSA-P256-SHA256";
 /// Size of a P-256 private scalar in bytes.
 const P256_PRIVATE_KEY_SIZE: usize = 32;
+/// Shortest input [`calculate_signature`] accepts, mirroring `elliptic_curve::SecretKey::MIN_SIZE`.
+const P256_PRIVATE_KEY_MIN_SIZE: usize = 24;
 
 /// The SHA-256 that `ecdsa` pairs with P-256.
 ///
@@ -42,22 +44,28 @@ static BIG_N_MINUS_2: LazyLock<U256> = LazyLock::new(|| {
 /// `signing_key` is a big-endian P-256 private scalar, as produced by
 /// [`generate_signing_key`].
 ///
+/// Shorter input is accepted down to 24 bytes and left-padded with zeroes, which is what the
+/// `SecretKey` this used to go through did.
+///
 /// # Panics
 /// Panics if `signing_key` is not a valid P-256 private key.
 pub fn calculate_signature(signing_key: impl AsRef<[u8]>, string_to_sign: &[u8]) -> String {
     let signing_key = signing_key.as_ref();
-    assert_eq!(
-        P256_PRIVATE_KEY_SIZE,
-        signing_key.len(),
-        "a P-256 private scalar is {P256_PRIVATE_KEY_SIZE} bytes"
+    assert!(
+        (P256_PRIVATE_KEY_MIN_SIZE..=P256_PRIVATE_KEY_SIZE).contains(&signing_key.len()),
+        "a P-256 private scalar is {P256_PRIVATE_KEY_MIN_SIZE} to {P256_PRIVATE_KEY_SIZE} bytes, got {}",
+        signing_key.len()
     );
 
     // Sign from the private scalar rather than from a `SigningKey`. Constructing one derives the
     // verifying key, and that costs a P-256 scalar multiplication as expensive as the signature
     // itself while signing never reads it. `NonZeroScalar::from_repr` range-checks the scalar
     // exactly as `SecretKey` does on the `SigningKey` path -- both reject zero and anything at or
-    // above the group order. They differ on accepted input length, which the assertion above
-    // settles by requiring exactly 32 bytes.
+    // above the group order. `from_repr` does differ in taking a fixed 32 bytes where
+    // `SecretKey::from_slice` takes 24 to 32 and left-pads anything short, so the copy below pads
+    // the same way rather than rejecting short input, which would have changed behaviour for a
+    // caller passing its own key. The length check above is what keeps the two accepted ranges
+    // identical.
     //
     // This is the body of `ecdsa`'s `PrehashSigner for SigningKey` with that derivation left out,
     // so the signature is unchanged: same RFC 6979 deterministic nonce, same empty additional
@@ -72,7 +80,7 @@ pub fn calculate_signature(signing_key: impl AsRef<[u8]>, string_to_sign: &[u8])
     // `from_repr` takes by value is still an unwiped stack copy; that one is not reachable
     // through this API.
     let mut repr = Zeroizing::new([0u8; P256_PRIVATE_KEY_SIZE]);
-    repr.copy_from_slice(signing_key);
+    repr[P256_PRIVATE_KEY_SIZE - signing_key.len()..].copy_from_slice(signing_key);
     let scalar = Zeroizing::new(
         Option::<NonZeroScalar>::from(NonZeroScalar::from_repr((*repr).into()))
             .expect("signing key is a valid P-256 private scalar"),
@@ -269,9 +277,59 @@ pub mod signing_params {
 
 #[cfg(test)]
 mod tests {
-    use super::{calculate_signature, generate_signing_key};
+    use super::{
+        calculate_signature, generate_signing_key, P256_PRIVATE_KEY_MIN_SIZE, P256_PRIVATE_KEY_SIZE,
+    };
     use p256::ecdsa::signature::Signer;
     use p256::ecdsa::{DerSignature, SigningKey};
+
+    /// `elliptic_curve::SecretKey::MIN_SIZE` is a private associated constant, so the 24 in
+    /// [`P256_PRIVATE_KEY_MIN_SIZE`] is a copy this crate cannot reference. Pin both ends of the
+    /// range against the `SigningKey` path: if upstream moves that constant, the length check
+    /// above stops matching what `SecretKey::from_slice` accepts, and this fails rather than
+    /// silently diverging.
+    #[test]
+    fn the_accepted_length_range_matches_secret_key() {
+        let key = generate_signing_key("AKIDEXAMPLE", "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY");
+        let full = key.as_ref();
+
+        assert!(
+            SigningKey::from_slice(&full[..P256_PRIVATE_KEY_MIN_SIZE]).is_ok(),
+            "{P256_PRIVATE_KEY_MIN_SIZE} bytes should be the shortest accepted key"
+        );
+        assert!(
+            SigningKey::from_slice(&full[..P256_PRIVATE_KEY_MIN_SIZE - 1]).is_err(),
+            "one byte below {P256_PRIVATE_KEY_MIN_SIZE} should be refused"
+        );
+
+        let too_long = [full, full].concat();
+        assert!(
+            SigningKey::from_slice(&too_long[..P256_PRIVATE_KEY_SIZE + 1]).is_err(),
+            "one byte above {P256_PRIVATE_KEY_SIZE} should be refused"
+        );
+    }
+
+    /// `SecretKey::from_slice` accepts 24 to 32 bytes and left-pads anything short, so the
+    /// `SigningKey` path signed a short key rather than rejecting it. Signing from the scalar
+    /// takes a fixed 32 bytes, so this function pads instead. Every accepted length has to still
+    /// produce what the old path produced, since a caller may pass its own key.
+    #[test]
+    fn short_keys_match_the_signing_key_path() {
+        let key = generate_signing_key("AKIDEXAMPLE", "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY");
+        let string_to_sign = b"AWS4-ECDSA-P256-SHA256\n20260101T000000Z";
+
+        for len in P256_PRIVATE_KEY_MIN_SIZE..=P256_PRIVATE_KEY_SIZE {
+            let short = &key.as_ref()[..len];
+            let expected: DerSignature = SigningKey::from_slice(short)
+                .expect("a left-padded short key is a valid P-256 private key")
+                .sign(string_to_sign);
+            assert_eq!(
+                hex::encode(expected.as_bytes()),
+                calculate_signature(short, string_to_sign),
+                "signature diverged for a {len}-byte key"
+            );
+        }
+    }
 
     const CREDENTIALS: &[(&str, &str)] = &[
         (
