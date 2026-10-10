@@ -16,6 +16,7 @@ use aws_sigv4::http_request::SignableBody;
 use aws_smithy_async::time::{SharedTimeSource, StaticTimeSource};
 use aws_smithy_runtime::client::retries::strategy::NeverRetryStrategy;
 use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::header_omit_settings::SharedHeaderOmitSettings;
 use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeSerializationInterceptorContextMut, BeforeTransmitInterceptorContextMut,
 };
@@ -27,7 +28,6 @@ use aws_smithy_runtime_api::client::runtime_components::{
     RuntimeComponents, RuntimeComponentsBuilder,
 };
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
-use aws_smithy_schema::header_omit_settings::SharedHeaderOmitSettings;
 use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer};
 use std::borrow::Cow;
 
@@ -68,8 +68,7 @@ impl Intercept for SigV4PresigningInterceptor {
         // bag.
         cfg.interceptor_state()
             .store_put::<HeaderSerializationSettings>(settings.clone());
-        // The schema-serde runtime in `aws-smithy-schema` cannot reach the
-        // inlineable type, so it reads through the abstract trait wrapper
+        // Protocol implementations cannot reach the inlineable type, so it reads through the abstract trait wrapper
         // instead. Storing both lets the same omit decisions reach the
         // streaming/payload paths and the standard-body path uniformly.
         cfg.interceptor_state()

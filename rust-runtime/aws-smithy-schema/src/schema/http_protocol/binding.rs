@@ -302,7 +302,9 @@ impl<C: Codec> HttpBindingProtocol<C> {
         // `SharedHeaderOmitSettings` in the config bag) can request the
         // runtime suppress these defaults so they don't end up in the signed-
         // header set of a presigned URL.
-        let omit = cfg.load::<crate::header_omit_settings::SharedHeaderOmitSettings>();
+        let omit = cfg
+            .load::<aws_smithy_runtime_api::client::header_omit_settings::SharedHeaderOmitSettings>(
+        );
         let omit_content_type = omit
             .map(|s| s.should_omit_default_content_type())
             .unwrap_or(false);
@@ -1877,7 +1879,9 @@ mod tests {
     /// path used by ordinary structure inputs.
     #[test]
     fn presigning_omit_settings_suppress_default_content_headers() {
-        use crate::header_omit_settings::{HeaderOmitSettings, SharedHeaderOmitSettings};
+        use aws_smithy_runtime_api::client::header_omit_settings::{
+            HeaderOmitSettings, SharedHeaderOmitSettings,
+        };
         use aws_smithy_types::config_bag::Layer;
 
         #[derive(Debug)]

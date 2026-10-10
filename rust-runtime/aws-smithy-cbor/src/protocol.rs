@@ -8,10 +8,11 @@
 use crate::codec::{CborCodec, CborCodecSettings};
 use crate::Decoder;
 use aws_smithy_runtime_api::client::orchestrator::Metadata;
+use aws_smithy_runtime_api::client::protocol::ServiceShapeName;
 use aws_smithy_runtime_api::http::{Headers, Request, Response};
 use aws_smithy_schema::error_envelope::{parse_query_compatible_header, sanitize_error_code};
 use aws_smithy_schema::http_protocol::HttpRpcProtocol;
-use aws_smithy_schema::protocol::{ClientProtocolInner, ServiceShapeName};
+use aws_smithy_schema::protocol::ClientProtocolInner;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
 use aws_smithy_schema::{shape_id, Schema, ShapeId};
 use aws_smithy_types::config_bag::ConfigBag;

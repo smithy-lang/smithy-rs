@@ -26,9 +26,9 @@ use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 use aws_smithy_runtime_api::client::http::HttpClient;
 pub use aws_smithy_runtime_api::client::http::SharedHttpClient;
 use aws_smithy_runtime_api::client::identity::{ResolveCachedIdentity, SharedIdentityCache};
+pub use aws_smithy_runtime_api::client::protocol::ConfiguredProtocol;
 pub use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStreamProtectionConfig;
 use aws_smithy_runtime_api::shared::IntoShared;
-use aws_smithy_schema::protocol::SharedClientProtocol;
 pub use aws_smithy_types::checksum_config::{
     RequestChecksumCalculation, ResponseChecksumValidation,
 };
@@ -141,7 +141,7 @@ pub struct SdkConfig {
     request_min_compression_size_bytes: Option<u32>,
     request_checksum_calculation: Option<RequestChecksumCalculation>,
     response_checksum_validation: Option<ResponseChecksumValidation>,
-    protocol: Option<SharedClientProtocol>,
+    protocol: Option<ConfiguredProtocol>,
 }
 
 /// Builder for AWS Shared Configuration
@@ -177,7 +177,7 @@ pub struct Builder {
     request_min_compression_size_bytes: Option<u32>,
     request_checksum_calculation: Option<RequestChecksumCalculation>,
     response_checksum_validation: Option<ResponseChecksumValidation>,
-    protocol: Option<SharedClientProtocol>,
+    protocol: Option<ConfiguredProtocol>,
 }
 
 impl Builder {
@@ -741,34 +741,29 @@ impl Builder {
     /// This overrides the default protocol determined by the service model,
     /// enabling runtime protocol selection.
     ///
-    /// # Transport
+    /// Accepts a [`ConfiguredProtocol`] or anything that converts into one, such as an
+    /// `aws_smithy_schema::protocol::SharedClientProtocol`:
     ///
-    /// This setter is HTTP-specific. The whole pipeline — the `self.protocol`
-    /// field (typed `Option<SharedClientProtocol>`, which elides to the HTTP
-    /// specialization via [`SharedClientProtocol`]'s
-    /// default type parameters) and its `Storable` impl (keyed only to
-    /// `SharedClientProtocol<http::Request, http::Response>`) — commits to
-    /// HTTP. The `impl ClientProtocol + 'static` bound you see here is
-    /// consistent with that: it elides to
-    /// `impl ClientProtocol<http::Request, http::Response>`.
+    /// ```ignore
+    /// let config = SdkConfig::builder()
+    ///     .protocol(SharedClientProtocol::new(AwsJsonRpcProtocol::aws_json_1_1("MyService")))
+    ///     .build();
+    /// ```
     ///
-    /// `ClientProtocolInner` / `ClientProtocol<Req, Res>` /
-    /// `SharedClientProtocol<Req, Res>` are themselves transport-generic — a
-    /// user can write `impl ClientProtocol<MqttMessage, MqttMessage>` — but
-    /// such an impl cannot be passed here because it won't round-trip through
-    /// the HTTP-typed config-bag storage. A future non-HTTP transport would
-    /// ship its own dedicated setter (e.g., `mqtt_protocol(…)`) paired with
-    /// its own `Storable` newtype rather than generalizing this one.
-    pub fn protocol(
-        mut self,
-        protocol: impl aws_smithy_schema::protocol::ClientProtocol + 'static,
-    ) -> Self {
-        self.set_protocol(Some(SharedClientProtocol::new(protocol)));
+    /// # Versioning
+    ///
+    /// This setter, the field it populates and the client config-bag entry all use
+    /// [`ConfiguredProtocol`], which `aws-smithy-runtime-api` owns, rather than a type from
+    /// `aws-smithy-schema`. That keeps this API unchanged across `aws-smithy-schema` major
+    /// versions. A client that cannot use a protocol built for a different major version fails
+    /// the request with an error naming both versions, instead of ignoring the setting.
+    pub fn protocol(mut self, protocol: impl Into<ConfiguredProtocol>) -> Self {
+        self.set_protocol(Some(protocol.into()));
         self
     }
 
     /// Sets the client protocol to use for serialization and deserialization.
-    pub fn set_protocol(&mut self, protocol: Option<SharedClientProtocol>) -> &mut Self {
+    pub fn set_protocol(&mut self, protocol: Option<ConfiguredProtocol>) -> &mut Self {
         self.protocol = protocol;
         self
     }
@@ -1118,7 +1113,7 @@ impl SdkConfig {
     }
 
     /// Configured client protocol for serialization and deserialization
-    pub fn protocol(&self) -> Option<SharedClientProtocol> {
+    pub fn protocol(&self) -> Option<ConfiguredProtocol> {
         self.protocol.clone()
     }
 
@@ -1228,5 +1223,57 @@ impl SdkConfig {
             response_checksum_validation: self.response_checksum_validation,
             protocol: self.protocol,
         }
+    }
+}
+
+#[cfg(test)]
+mod protocol_tests {
+    use super::{ConfiguredProtocol, SdkConfig};
+    use aws_smithy_runtime_api::box_error::BoxError;
+    use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+    use aws_smithy_runtime_api::client::protocol::{ClientProtocolSlot, ProtocolHandle};
+    use aws_smithy_runtime_api::client::versioned_config::{ConfigPayloadFor, RepresentationId};
+    use aws_smithy_types::config_bag::ConfigBag;
+    use aws_smithy_types::endpoint::Endpoint;
+
+    /// Stands in for any protocol-defining crate's handle; `aws-types` does not depend on one.
+    #[derive(Debug)]
+    struct TestHandle;
+
+    impl ConfigPayloadFor<ClientProtocolSlot> for TestHandle {
+        const REPRESENTATION: RepresentationId = RepresentationId::new("test-protocols", "7", 1);
+    }
+
+    impl ProtocolHandle for TestHandle {
+        fn update_endpoint(
+            &self,
+            _request: &mut HttpRequest,
+            _endpoint: &Endpoint,
+            _cfg: &ConfigBag,
+        ) -> Result<(), BoxError> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn protocol_accepts_any_handle_and_round_trips() {
+        let config = SdkConfig::builder().protocol(TestHandle).build();
+        let protocol = config.protocol().expect("protocol was set");
+        assert_eq!("test-protocols", protocol.representation().package());
+        assert_eq!("7", protocol.representation().compatibility_line());
+        assert!(protocol.downcast_ref::<TestHandle>().is_some());
+    }
+
+    #[test]
+    fn protocol_survives_into_builder() {
+        let config = SdkConfig::builder()
+            .protocol(ConfiguredProtocol::new(TestHandle))
+            .build();
+        let rebuilt = config.into_builder().build();
+        assert!(rebuilt.protocol().is_some());
+
+        let mut builder = rebuilt.into_builder();
+        builder.set_protocol(None);
+        assert!(builder.build().protocol().is_none());
     }
 }

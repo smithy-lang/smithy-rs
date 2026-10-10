@@ -114,10 +114,13 @@ class GenericSmithySdkConfigSettings : ClientCodegenDecorator {
                     """,
                 )
                 if (SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
+                    // `SdkConfig` carries a version-stable `ConfiguredProtocol`; whether it was
+                    // built for this client's `aws-smithy-schema` major version is checked when a
+                    // request is serialized, not here.
                     rust(
                         """
                         if let Some(protocol) = ${section.sdkConfig}.protocol() {
-                            ${section.serviceConfigBuilder}.set_protocol(Some(protocol.clone()));
+                            ${section.serviceConfigBuilder}.set_protocol(Some(protocol));
                         }
                         """,
                     )

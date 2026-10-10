@@ -10,7 +10,7 @@ pub mod aws_rest_json_1;
 pub(crate) mod error;
 
 use crate::codec::{JsonCodec, JsonCodecSettings};
-use aws_smithy_schema::protocol::ServiceShapeNamespace;
+use aws_smithy_runtime_api::client::protocol::ServiceShapeNamespace;
 use aws_smithy_types::config_bag::ConfigBag;
 
 /// Returns a codec whose `default_namespace` is filled in from the config bag, or `None` when
@@ -188,8 +188,8 @@ mod tests {
 mod codec_rebuild_tests {
     use super::*;
     use crate::codec::{JsonCodec, JsonCodecSettings};
+    use aws_smithy_runtime_api::client::protocol::ServiceShapeNamespace;
     use aws_smithy_schema::codec::Codec;
-    use aws_smithy_schema::protocol::ServiceShapeNamespace;
     use aws_smithy_schema::serde::ShapeDeserializer;
 
     /// `codec_with_bag_namespace` rebuilds the codec's settings to inject the

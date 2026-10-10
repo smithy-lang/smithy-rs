@@ -99,7 +99,6 @@ mod schema {
     pub(crate) mod codec;
     pub(crate) mod document;
     pub(crate) mod error_envelope;
-    pub(crate) mod header_omit_settings;
     pub(crate) mod http_protocol;
     pub(crate) mod prelude;
     pub(crate) mod protocol;
@@ -205,11 +204,6 @@ pub mod codec {
 /// `Document` shape serde and the discriminated-document conversion extension.
 pub mod document {
     pub use crate::schema::document::*;
-}
-
-/// Settings controlling which HTTP headers are omitted during serialization.
-pub mod header_omit_settings {
-    pub use crate::schema::header_omit_settings::*;
 }
 
 /// Client protocol abstraction for serializing requests and deserializing responses.

@@ -10,8 +10,14 @@
 //! this out as a requirement).
 //!
 //! [`ClientProtocol`] is the object-safe view that callers use through `dyn`. It's
-//! parameterized over concrete request/response types (defaulted to HTTP) so
-//! [`SharedClientProtocol`] can be stored in a [`ConfigBag`] and swapped at runtime.
+//! parameterized over concrete request/response types (defaulted to HTTP) so a
+//! [`SharedClientProtocol`] can be configured and swapped at runtime.
+//!
+//! A configured protocol is stored in the [`ConfigBag`] as a [`ConfiguredProtocol`], a
+//! version-stable wrapper owned by `aws-smithy-runtime-api`, rather than as a type from this
+//! crate. Build one with [`SharedClientProtocol::configured`]. Generated clients recover it by
+//! downcasting the [`ConfiguredProtocol`] to a [`SchemaProtocol`] and calling
+//! [`SchemaProtocol::v1`]; see [`SchemaProtocol`] for how the protocol trait can evolve within 1.x.
 //!
 //! A blanket impl (`impl<P: ClientProtocolInner> ClientProtocol<P::Request, P::Response> for P`)
 //! means implementors only write `ClientProtocolInner`; the object-safe view comes for
@@ -72,9 +78,18 @@
 
 use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
 use crate::{Schema, ShapeId};
+use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::protocol::{ClientProtocolSlot, ProtocolHandle};
+use aws_smithy_runtime_api::client::versioned_config::{
+    ConfigPayloadFor, ConfigSlotError, RepresentationId,
+};
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::endpoint::Endpoint;
 use aws_smithy_types::error::metadata::{Builder as ErrorMetadataBuilder, ErrorMetadata};
+
+/// Re-exported from `aws-smithy-runtime-api`, which owns the type so that its identity does not
+/// depend on this crate's major version.
+pub use aws_smithy_runtime_api::client::protocol::ConfiguredProtocol;
 
 /// Statically-dispatched client protocol trait — the one implementors write.
 ///
@@ -150,9 +165,9 @@ pub trait ClientProtocolInner: Send + Sync + std::fmt::Debug {
     /// deliberately does *not* hard-code `/`; only a concrete protocol knows whether its route is
     /// constant.
     ///
-    /// [`ServiceShapeName`]: crate::protocol::ServiceShapeName
-    /// [`ServiceVersion`]: crate::protocol::ServiceVersion
-    /// [`ServiceXmlNamespace`]: crate::protocol::ServiceXmlNamespace
+    /// [`ServiceShapeName`]: aws_smithy_runtime_api::client::protocol::ServiceShapeName
+    /// [`ServiceVersion`]: aws_smithy_runtime_api::client::protocol::ServiceVersion
+    /// [`ServiceXmlNamespace`]: aws_smithy_runtime_api::client::protocol::ServiceXmlNamespace
     fn serialize_request(
         &self,
         input: &dyn SerializableStruct,
@@ -570,179 +585,15 @@ pub fn apply_http_endpoint(
     Ok(())
 }
 
-/// The name of the Smithy `service` shape a client was generated for.
+/// A shared, type-erased client protocol.
 ///
-/// Some protocols derive parts of the wire format from model names rather than
-/// from HTTP binding traits. RPC v2 CBOR is the canonical example: every request
-/// is routed to `/service/{serviceName}/operation/{operationName}`, where
-/// `serviceName` is the *service shape name* — not the `@aws.api#service`
-/// `sdkId`, and not the shape's namespace.
+/// Wraps `Arc<dyn ClientProtocol<Req, Res>>` so a protocol can be selected at runtime. To
+/// configure a client with it, convert it into a [`ConfiguredProtocol`], which is what the
+/// `protocol(..)` setters accept and what the [`ConfigBag`] stores.
 ///
-/// Because [`SharedClientProtocol`] can be swapped at runtime, a protocol cannot
-/// rely on codegen having baked its route into the generated request path: a
-/// client generated for `awsJson1_0` may have `RpcV2CborProtocol` plugged in via
-/// `Config::builder().protocol(..)`. Generated clients therefore store this entry
-/// in the config bag regardless of which protocol they were generated for, so
-/// whichever protocol ends up being used can resolve the names it needs. The
-/// companion operation name comes from
-/// [`Metadata::name`](aws_smithy_runtime_api::client::orchestrator::Metadata::name).
-///
-/// See <https://github.com/smithy-lang/smithy-rs/issues/4801>.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
-pub struct ServiceShapeName(std::borrow::Cow<'static, str>);
-
-impl ServiceShapeName {
-    /// Creates a new [`ServiceShapeName`] from the Smithy service shape name.
-    ///
-    /// Accepts a codegen-emitted `&'static str` as well as a `String`
-    /// materialized at runtime from a parsed model.
-    pub fn new(name: impl Into<std::borrow::Cow<'static, str>>) -> Self {
-        Self(name.into())
-    }
-
-    /// Returns the service shape name.
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl aws_smithy_types::config_bag::Storable for ServiceShapeName {
-    type Storer = aws_smithy_types::config_bag::StoreReplace<Self>;
-}
-
-/// The namespace of the Smithy `service` shape a client was generated for.
-///
-/// This is the `com.amazonaws.dynamodb` in `com.amazonaws.dynamodb#DynamoDB_20120810`.
-/// Together with [`ServiceShapeName`] it forms the service's full shape ID; the two are
-/// separate entries rather than one because [`ConfigBag`] is keyed by type, so each protocol
-/// loads exactly the facts it needs and new facts stay additive.
-///
-/// **Not to be confused with [`ServiceXmlNamespace`]**, despite the shared word. That one is
-/// the `@xmlNamespace` *trait* — a URI restXml applies as the default `xmlns` on root
-/// elements — and neither value is derivable from the other. CloudWatch Logs is the clearest
-/// illustration: its shape-ID namespace is `com.amazonaws.cloudwatchlogs` while its
-/// `@xmlNamespace` URI is `http://monitoring.amazonaws.com/doc/2014-03-28/`. The trait is
-/// also optional, carried by roughly half of AWS service shapes, whereas every shape ID has
-/// a namespace by construction — which is why this entry is stored unconditionally and
-/// `ServiceXmlNamespace` is not.
-///
-/// Protocols use this as the *default namespace* when resolving a document type's shape
-/// discriminator. Some services serialize a discriminator as a bare shape name rather than an
-/// absolute shape ID — a `__type` of `Widget` instead of `com.example#Widget` — and the
-/// receiving client is expected to qualify it with the service's namespace. Without it a
-/// relative discriminator cannot be resolved to a registered type at all.
-///
-/// Stored for the same reason as [`ServiceShapeName`]: it is knowable only from the model, and
-/// a customer may select a different protocol at runtime via `Config::builder().protocol(..)`
-/// on a client generated for some other protocol. Baking it into a constructor call at codegen
-/// time means a swapped-in protocol either gets no value or gets one the caller had to know to
-/// supply. Generated clients therefore store it regardless of which protocol they were
-/// generated for.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
-pub struct ServiceShapeNamespace(std::borrow::Cow<'static, str>);
-
-impl ServiceShapeNamespace {
-    /// Creates a new [`ServiceShapeNamespace`] from the Smithy service shape's namespace.
-    ///
-    /// Accepts a codegen-emitted `&'static str` as well as a `String` materialized at runtime
-    /// from a parsed model.
-    pub fn new(namespace: impl Into<std::borrow::Cow<'static, str>>) -> Self {
-        Self(namespace.into())
-    }
-
-    /// Returns the service shape's namespace.
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl aws_smithy_types::config_bag::Storable for ServiceShapeNamespace {
-    type Storer = aws_smithy_types::config_bag::StoreReplace<Self>;
-}
-
-/// The Smithy service shape's `version`, stored in a [`ConfigBag`] by generated clients.
-///
-/// awsQuery puts this on the wire as the `Version=` form parameter, so it is a request-shaping
-/// fact that only the model knows. Stored for the same reason as [`ServiceShapeName`]: a customer
-/// can select awsQuery via `Config::builder().protocol(..)` on a client generated for some other
-/// protocol, and could not otherwise supply the right value.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
-pub struct ServiceVersion(std::borrow::Cow<'static, str>);
-
-impl ServiceVersion {
-    /// Creates a new [`ServiceVersion`].
-    ///
-    /// Accepts a codegen-emitted `&'static str` as well as a `String` materialized at runtime
-    /// from a parsed model.
-    pub fn new(version: impl Into<std::borrow::Cow<'static, str>>) -> Self {
-        Self(version.into())
-    }
-
-    /// Returns the service version.
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl aws_smithy_types::config_bag::Storable for ServiceVersion {
-    type Storer = aws_smithy_types::config_bag::StoreReplace<Self>;
-}
-
-/// The service-level `@xmlNamespace` trait, stored in a [`ConfigBag`] by generated clients.
-///
-/// restXml applies this as the default `xmlns` on request and response root elements, so it is a
-/// request-shaping fact that only the model knows. Stored for the same reason as
-/// [`ServiceShapeName`].
-///
-/// `@xmlNamespace` is a prelude trait rather than a restXml-specific one, so it is resolvable from
-/// any model — unlike `@restXml(noErrorWrapping)`, which a non-restXml model simply does not carry
-/// and which therefore stays caller-supplied.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
-pub struct ServiceXmlNamespace {
-    uri: std::borrow::Cow<'static, str>,
-    prefix: Option<std::borrow::Cow<'static, str>>,
-}
-
-impl ServiceXmlNamespace {
-    /// Creates a new [`ServiceXmlNamespace`] from the trait's URI and optional prefix.
-    pub fn new(
-        uri: impl Into<std::borrow::Cow<'static, str>>,
-        prefix: Option<std::borrow::Cow<'static, str>>,
-    ) -> Self {
-        Self {
-            uri: uri.into(),
-            prefix,
-        }
-    }
-
-    /// Returns the namespace URI.
-    pub fn uri(&self) -> &str {
-        &self.uri
-    }
-
-    /// Returns the namespace prefix, if the trait declared one.
-    pub fn prefix(&self) -> Option<&str> {
-        self.prefix.as_deref()
-    }
-}
-
-impl aws_smithy_types::config_bag::Storable for ServiceXmlNamespace {
-    type Storer = aws_smithy_types::config_bag::StoreReplace<Self>;
-}
-
-/// A shared, type-erased client protocol stored in a [`ConfigBag`].
-///
-/// Wraps `Arc<dyn ClientProtocol<Req, Res>>` so a protocol can be stored and
-/// retrieved from the config bag for runtime protocol selection.
-///
-/// Defaults to HTTP transport types. Custom transports would use
-/// `SharedClientProtocol<MyReq, MyRes>` and would need their own `Storable`
-/// adaptation (not provided here — today only HTTP has a `Storable` impl,
-/// reflecting the fact that the orchestrator is HTTP-concrete).
+/// Defaults to HTTP transport types. Only the HTTP specialization converts into a
+/// [`ConfiguredProtocol`], reflecting the fact that the orchestrator is HTTP-concrete; a custom
+/// transport using `SharedClientProtocol<MyReq, MyRes>` would need its own handle type.
 #[derive(Debug)]
 pub struct SharedClientProtocol<
     Req = aws_smithy_runtime_api::http::Request,
@@ -791,24 +642,120 @@ impl<Req, Res> std::ops::Deref for SharedClientProtocol<Req, Res> {
     }
 }
 
-// Only the HTTP specialization is storable in the config bag, matching the
-// orchestrator's HTTP-concrete wiring today. This is paired with the three
-// `protocol(…)` setters — `aws_types::SdkConfig::Builder::protocol`,
-// `aws_config::ConfigLoader::protocol`, and the generated
-// `ConfigBuilder::protocol` — all of which accept `impl ClientProtocol +
-// 'static` (resolving via defaults to the HTTP specialization) and store
-// the resulting `SharedClientProtocol<http::Request, http::Response>` here.
-//
-// Non-HTTP transports would add their own Storable newtype alongside their
-// transport integration (with its own dedicated setter) rather than
-// generalizing this impl — see §10.2 of the implementation overview.
-impl aws_smithy_types::config_bag::Storable
-    for SharedClientProtocol<
-        aws_smithy_runtime_api::http::Request,
-        aws_smithy_runtime_api::http::Response,
-    >
-{
-    type Storer = aws_smithy_types::config_bag::StoreReplace<Self>;
+/// The opaque protocol handle this crate stores in a [`ConfiguredProtocol`].
+///
+/// The config bag is keyed by `TypeId`, so [`SharedClientProtocol`] is deliberately not `Storable`.
+/// The bag entry, and the `protocol(..)` setters on `SdkConfig`, `ConfigLoader` and generated
+/// configs, use the version-stable [`ConfiguredProtocol`] owned by `aws-smithy-runtime-api`, which
+/// wraps a `SchemaProtocol`. Clients downcast it with
+/// [`ConfiguredProtocol::downcast_ref`] and then ask for the trait version they were generated
+/// against, today [`v1`](Self::v1).
+///
+/// # Evolving the protocol trait within 1.x
+///
+/// Additive changes to [`ClientProtocol`] should use default method bodies. A change that a default
+/// cannot express, such as a changed signature, can ship in a minor release as a parallel trait
+/// and a private variant:
+///
+/// ```text
+/// enum SchemaProtocolKind {
+///     V1(SharedClientProtocol),
+///     V2(SharedClientProtocolV2), // ClientProtocolInnerV2 / ClientProtocolV2, added in 1.y
+/// }
+///
+/// impl SchemaProtocol {
+///     pub fn v1(&self) -> Result<SharedClientProtocol, ConfigSlotError> {
+///         match &self.kind {
+///             SchemaProtocolKind::V1(p) => Ok(p.clone()),
+///             // Or an error, if a V2 protocol cannot be expressed through the V1 trait.
+///             SchemaProtocolKind::V2(p) => Ok(SharedClientProtocol::new(V2AsV1(p.clone()))),
+///         }
+///     }
+///
+///     pub fn v2(&self) -> Result<SharedClientProtocolV2, ConfigSlotError> {
+///         match &self.kind {
+///             SchemaProtocolKind::V1(p) => Ok(SharedClientProtocolV2::new(V1AsV2(p.clone()))),
+///             SchemaProtocolKind::V2(p) => Ok(p.clone()),
+///         }
+///     }
+/// }
+/// ```
+///
+/// Clients generated before 1.y keep calling `v1`; later ones call `v2`. Cargo builds every crate in
+/// a dependency tree against the same 1.x release, so the `v1` an old client calls is the newest
+/// one, which knows how to adapt a newer protocol. That is why `v1` returns an owned value and is
+/// fallible even though neither is needed while `V1` is the only private variant: both let a later
+/// release return an adapter, or refuse, without changing the signature old clients were compiled
+/// against.
+///
+/// Only the HTTP specialization of [`SharedClientProtocol`] is held, matching the orchestrator's
+/// HTTP-concrete wiring; a non-HTTP transport would bring its own handle type.
+#[derive(Clone, Debug)]
+pub struct SchemaProtocol {
+    kind: SchemaProtocolKind,
+}
+
+#[derive(Clone, Debug)]
+enum SchemaProtocolKind {
+    V1(SharedClientProtocol),
+}
+
+impl SchemaProtocol {
+    /// Returns this protocol through version 1 of the client protocol trait, [`ClientProtocol`].
+    ///
+    /// This is what generated clients call. It returns an owned, cheaply cloned handle and is
+    /// fallible so that a later 1.x release can adapt a protocol written against a newer trait
+    /// version, or reject one it cannot adapt; see the [type-level docs](Self). The error is the
+    /// runtime API's [`ConfigSlotError`], whose kinds are private, so a rejection reason can be
+    /// added without changing this signature.
+    pub fn v1(&self) -> Result<SharedClientProtocol, ConfigSlotError> {
+        match &self.kind {
+            SchemaProtocolKind::V1(protocol) => Ok(protocol.clone()),
+        }
+    }
+}
+
+/// Identifies this crate's compatibility line and the protocol-trait API revision.
+///
+/// The compatibility line comes from this crate's Cargo version, so a schema 2.x handle reports
+/// `aws-smithy-schema@2`. The API revision stays `1` while [`SchemaProtocol`] contains a private
+/// enum over protocol-trait versions; adding a variant does not change it because its public
+/// accessors adapt between variants.
+impl ConfigPayloadFor<ClientProtocolSlot> for SchemaProtocol {
+    const REPRESENTATION: RepresentationId = aws_smithy_runtime_api::representation_id!(1);
+}
+
+impl ProtocolHandle for SchemaProtocol {
+    fn update_endpoint(
+        &self,
+        request: &mut aws_smithy_runtime_api::http::Request,
+        endpoint: &aws_smithy_types::endpoint::Endpoint,
+        cfg: &ConfigBag,
+    ) -> Result<(), BoxError> {
+        match &self.kind {
+            SchemaProtocolKind::V1(protocol) => {
+                ClientProtocol::update_endpoint(&*protocol.inner, request, endpoint, cfg)
+                    .map_err(Into::into)
+            }
+        }
+    }
+}
+
+impl From<SharedClientProtocol> for ConfiguredProtocol {
+    fn from(protocol: SharedClientProtocol) -> Self {
+        ConfiguredProtocol::new(SchemaProtocol {
+            kind: SchemaProtocolKind::V1(protocol),
+        })
+    }
+}
+
+impl SharedClientProtocol {
+    /// Wraps a protocol for the version-stable `protocol(..)` setters and config-bag entry.
+    ///
+    /// Equivalent to `ConfiguredProtocol::from(SharedClientProtocol::new(protocol))`.
+    pub fn configured(protocol: impl ClientProtocol + 'static) -> ConfiguredProtocol {
+        Self::new(protocol).into()
+    }
 }
 
 #[cfg(test)]
@@ -1020,5 +967,148 @@ mod tests {
             .clone()
             .expect("schema id was captured");
         assert_eq!(observed, crate::prelude::DOCUMENT.shape_id().as_str());
+    }
+
+    // -- ConfiguredProtocol integration --
+
+    fn bag_with(protocol: ConfiguredProtocol) -> ConfigBag {
+        let mut layer = Layer::new("test");
+        layer.store_put(protocol);
+        ConfigBag::of_layers(vec![layer])
+    }
+
+    fn schema_protocol(cfg: &ConfigBag) -> &SchemaProtocol {
+        cfg.load::<ConfiguredProtocol>()
+            .expect("configured")
+            .downcast_ref::<SchemaProtocol>()
+            .expect("this crate's representation")
+    }
+
+    #[test]
+    fn configured_protocol_round_trips_through_config_bag() {
+        let cfg = bag_with(SharedClientProtocol::configured(StubProtocol));
+        let protocol = schema_protocol(&cfg).v1().expect("v1");
+        assert_eq!("test#StubProtocol", protocol.protocol_id().as_str());
+    }
+
+    #[test]
+    fn shared_client_protocol_converts_into_a_v1_protocol() {
+        let configured = ConfiguredProtocol::from(SharedClientProtocol::new(StubProtocol));
+        assert!(configured
+            .downcast_ref::<SchemaProtocol>()
+            .expect("schema protocol")
+            .v1()
+            .is_ok());
+    }
+
+    #[test]
+    fn v1_returns_an_owned_handle_sharing_the_protocol() {
+        let cfg = bag_with(SharedClientProtocol::configured(StubProtocol));
+        let schema_protocol = schema_protocol(&cfg);
+        let (a, b) = (schema_protocol.v1().unwrap(), schema_protocol.v1().unwrap());
+        assert!(std::sync::Arc::ptr_eq(&a.inner, &b.inner));
+    }
+
+    #[test]
+    fn configured_protocol_reports_this_crate_as_representation() {
+        let representation = SharedClientProtocol::configured(StubProtocol).representation();
+        assert_eq!("aws-smithy-schema", representation.package());
+        assert_eq!(
+            env!("CARGO_PKG_VERSION_MAJOR"),
+            representation.compatibility_line()
+        );
+        assert_eq!(1, representation.api_revision());
+    }
+
+    /// Stands in for the handle type of a future major version of this crate.
+    #[derive(Debug)]
+    struct FutureMajorHandle;
+
+    impl ConfigPayloadFor<ClientProtocolSlot> for FutureMajorHandle {
+        const REPRESENTATION: RepresentationId =
+            RepresentationId::new("aws-smithy-schema", "99", 1);
+    }
+
+    impl ProtocolHandle for FutureMajorHandle {
+        fn update_endpoint(
+            &self,
+            _request: &mut Request,
+            _endpoint: &Endpoint,
+            _cfg: &ConfigBag,
+        ) -> Result<(), BoxError> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn protocol_from_another_major_version_is_not_this_crates_payload() {
+        let configured = ConfiguredProtocol::new(FutureMajorHandle);
+        assert!(configured.downcast_ref::<SchemaProtocol>().is_none());
+        let err = configured.unsupported_error(&[<SchemaProtocol as ConfigPayloadFor<
+            ClientProtocolSlot,
+        >>::REPRESENTATION]);
+        assert!(err.is_unsupported());
+        let message = err.to_string();
+        assert!(
+            message.contains("built with aws-smithy-schema@99 (api revision 1)"),
+            "{message}"
+        );
+    }
+
+    /// Claims this crate's representation without being `SchemaProtocol`, as a second linked copy
+    /// of this crate with the same compatibility line would.
+    #[derive(Debug)]
+    struct DuplicateCopyHandle;
+
+    impl ConfigPayloadFor<ClientProtocolSlot> for DuplicateCopyHandle {
+        const REPRESENTATION: RepresentationId =
+            <SchemaProtocol as ConfigPayloadFor<ClientProtocolSlot>>::REPRESENTATION;
+    }
+
+    impl ProtocolHandle for DuplicateCopyHandle {
+        fn update_endpoint(
+            &self,
+            _request: &mut Request,
+            _endpoint: &Endpoint,
+            _cfg: &ConfigBag,
+        ) -> Result<(), BoxError> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn duplicate_copy_of_this_crate_is_a_representation_mismatch() {
+        let configured = ConfiguredProtocol::new(DuplicateCopyHandle);
+        assert!(configured.downcast_ref::<SchemaProtocol>().is_none());
+        let err = configured.unsupported_error(&[<SchemaProtocol as ConfigPayloadFor<
+            ClientProtocolSlot,
+        >>::REPRESENTATION]);
+        assert!(err.is_representation_mismatch());
+        assert!(!err.is_unsupported());
+    }
+
+    /// Generated clients only accept the representations listed in codegen's
+    /// `ConfiguredProtocolRegistry`. Starting a new compatibility line of this crate (or a new
+    /// payload API revision) changes `REPRESENTATION`, and must come with a registry entry with an
+    /// aliased dependency and adapter, or an explicit decision not to support the old line.
+    #[test]
+    fn representation_matches_codegen_registry() {
+        assert_eq!(
+            <SchemaProtocol as ConfigPayloadFor<ClientProtocolSlot>>::REPRESENTATION,
+            RepresentationId::new("aws-smithy-schema", "1", 1),
+            "SchemaProtocol's representation changed: update ConfiguredProtocolRegistry in \
+             codegen-client (ConfiguredProtocolResolver.kt), then update this test",
+        );
+    }
+
+    #[test]
+    fn configured_protocol_applies_endpoints_through_the_wrapped_protocol() {
+        let configured = SharedClientProtocol::configured(StubProtocol);
+        let mut req = request_with_uri("/path");
+        let endpoint = Endpoint::builder().url("https://example.com").build();
+        configured
+            .update_endpoint(&mut req, &endpoint, &ConfigBag::base())
+            .unwrap();
+        assert_eq!(req.uri(), "https://example.com/path");
     }
 }

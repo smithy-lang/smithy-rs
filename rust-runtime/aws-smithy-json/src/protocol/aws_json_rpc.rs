@@ -21,8 +21,8 @@
 
 use crate::codec::{JsonCodec, JsonCodecSettings};
 use aws_smithy_runtime_api::client::orchestrator::Metadata;
+use aws_smithy_runtime_api::client::protocol::ServiceShapeName;
 use aws_smithy_schema::http_protocol::HttpRpcProtocol;
-use aws_smithy_schema::protocol::ServiceShapeName;
 use aws_smithy_schema::{shape_id, Schema, ShapeId};
 use aws_smithy_types::config_bag::ConfigBag;
 
@@ -115,7 +115,7 @@ impl AwsJsonRpcProtocol {
     /// emit an absolute shape ID.
     ///
     /// Setting it explicitly *overrides* the default, which is the
-    /// [`ServiceShapeNamespace`](aws_smithy_schema::protocol::ServiceShapeNamespace) config-bag
+    /// [`ServiceShapeNamespace`](aws_smithy_runtime_api::client::protocol::ServiceShapeNamespace) config-bag
     /// entry that generated clients store regardless of which protocol they were generated for.
     /// A caller selecting this protocol at runtime therefore gets relative `__type` resolution
     /// without having to know the model's namespace; previously it had to be set by hand or
@@ -310,9 +310,8 @@ mod tests {
             operation.to_string(),
             "Some Sdk Id".to_string(),
         ));
-        layer.store_put(aws_smithy_schema::protocol::ServiceShapeName::new(
-            shape_name,
-        ));
+        layer
+            .store_put(aws_smithy_runtime_api::client::protocol::ServiceShapeName::new(shape_name));
         ConfigBag::of_layers(vec![layer])
     }
 
@@ -630,8 +629,8 @@ mod tests {
     /// protocol selected at runtime, which is the point of the whole arrangement.
     #[test]
     fn the_namespace_branch_still_ignores_http_response_bindings() {
+        use aws_smithy_runtime_api::client::protocol::ServiceShapeNamespace;
         use aws_smithy_runtime_api::http::{Response, StatusCode};
-        use aws_smithy_schema::protocol::ServiceShapeNamespace;
         use aws_smithy_types::body::SdkBody;
 
         static NS_NAME: Schema<'static> =
