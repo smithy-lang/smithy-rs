@@ -31,6 +31,13 @@ internal class StaticStabilityDecoratorTest {
                     "CredentialsError" to
                         AwsRuntimeType.awsCredentialTypes(rc).resolve("provider::error::CredentialsError"),
                     "Region" to AwsRuntimeType.awsTypes(rc).resolve("region::Region"),
+                    "ReplayEvent" to
+                        RuntimeType.smithyHttpClientTestUtil(rc).resolve("test_util::ReplayEvent"),
+                    "Request" to RuntimeType.HttpRequest1x,
+                    "Response" to RuntimeType.HttpResponse1x,
+                    "SdkBody" to RuntimeType.sdkBody(rc),
+                    "StaticReplayClient" to
+                        RuntimeType.smithyHttpClientTestUtil(rc).resolve("test_util::StaticReplayClient"),
                     "BehaviorVersion" to
                         RuntimeType.smithyRuntimeApiClient(rc).resolve("client::behavior_version::BehaviorVersion"),
                     "StaticTimeSource" to RuntimeType.smithyAsync(rc).resolve("time::StaticTimeSource"),
@@ -43,8 +50,6 @@ internal class StaticStabilityDecoratorTest {
                 addDependency(CargoDependency.Tokio.toDevDependency().withFeature("test-util"))
                 rustTemplate(
                     """
-                    use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
-                    use aws_smithy_types::body::SdkBody;
                     use std::sync::{Arc, Mutex};
                     use std::time::{Duration, UNIX_EPOCH};
 
@@ -66,14 +71,14 @@ internal class StaticStabilityDecoratorTest {
 
                     // Returns whether a second call still succeeds after the refresh fails.
                     async fn second_call_succeeds(bv: #{BehaviorVersion}) -> bool {
-                        let http_client = StaticReplayClient::new(vec![
-                            ReplayEvent::new(
-                                http::Request::builder().body(SdkBody::from("")).unwrap(),
-                                http::Response::builder().status(200).body(SdkBody::from("{}")).unwrap(),
+                        let http_client = #{StaticReplayClient}::new(vec![
+                            #{ReplayEvent}::new(
+                                #{Request}::builder().body(#{SdkBody}::from("")).unwrap(),
+                                #{Response}::builder().status(200).body(#{SdkBody}::from("{}")).unwrap(),
                             ),
-                            ReplayEvent::new(
-                                http::Request::builder().body(SdkBody::from("")).unwrap(),
-                                http::Response::builder().status(200).body(SdkBody::from("{}")).unwrap(),
+                            #{ReplayEvent}::new(
+                                #{Request}::builder().body(#{SdkBody}::from("")).unwrap(),
+                                #{Response}::builder().status(200).body(#{SdkBody}::from("{}")).unwrap(),
                             ),
                         ]);
 
@@ -132,8 +137,6 @@ internal class StaticStabilityDecoratorTest {
                 addDependency(CargoDependency.Tokio.toDevDependency().withFeature("test-util"))
                 rustTemplate(
                     """
-                    use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
-                    use aws_smithy_types::body::SdkBody;
                     use std::sync::{Arc, Mutex};
                     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -163,26 +166,26 @@ internal class StaticStabilityDecoratorTest {
                     }
 
                     // A target-service `ExpiredToken` rejection invalidates the signing identity via
-                    // the per-operation interceptor, so the next call must re-resolve credentials.
+                    // the per-operation interceptor, and the retry re-resolves credentials.
                     ##[::tokio::test]
                     async fn expired_token_invalidates_and_reresolves() {
                         let now = UNIX_EPOCH + Duration::from_secs(1000);
                         let calls = Arc::new(Mutex::new(0usize));
 
-                        let http_client = StaticReplayClient::new(vec![
+                        let http_client = #{StaticReplayClient}::new(vec![
                             // First attempt is rejected with `ExpiredToken`.
-                            ReplayEvent::new(
-                                http::Request::builder().body(SdkBody::from("")).unwrap(),
-                                http::Response::builder()
+                            #{ReplayEvent}::new(
+                                #{Request}::builder().body(#{SdkBody}::from("")).unwrap(),
+                                #{Response}::builder()
                                     .status(403)
                                     .header("x-amzn-errortype", "ExpiredToken")
-                                    .body(SdkBody::from("{}"))
+                                    .body(#{SdkBody}::from("{}"))
                                     .unwrap(),
                             ),
-                            // Second attempt succeeds with the re-resolved credential.
-                            ReplayEvent::new(
-                                http::Request::builder().body(SdkBody::from("")).unwrap(),
-                                http::Response::builder().status(200).body(SdkBody::from("{}")).unwrap(),
+                            // The retry succeeds with the re-resolved credential.
+                            #{ReplayEvent}::new(
+                                #{Request}::builder().body(#{SdkBody}::from("")).unwrap(),
+                                #{Response}::builder().status(200).body(#{SdkBody}::from("{}")).unwrap(),
                             ),
                         ]);
 
@@ -196,21 +199,18 @@ internal class StaticStabilityDecoratorTest {
                             .build();
                         let client = $moduleName::Client::from_conf(config);
 
-                        // The rejected request surfaces as an error and is not retried.
-                        let first = client.some_operation().send().await;
-                        assert!(first.is_err(), "the ExpiredToken response should surface as an error");
-
-                        // Invalidation forces the next resolution to contact the provider again.
+                        // `ExpiredToken` is a retryable invalid credential error, so the rejection
+                        // is retried and the call succeeds.
                         client
                             .some_operation()
                             .send()
                             .await
-                            .expect("second call should succeed after re-resolution");
+                            .expect("the ExpiredToken rejection should be retried and succeed");
 
                         assert_eq!(
                             *calls.lock().unwrap(),
                             2,
-                            "invalidation must force credential re-resolution",
+                            "invalidation must force credential re-resolution on the retry",
                         );
                     }
                     """,
