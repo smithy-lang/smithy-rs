@@ -7,6 +7,7 @@
 
 use super::XmlCodecSettings;
 use crate::decode::{self, Document};
+use aws_smithy_schema::member_lookup::{MemberCursor, WireName};
 use aws_smithy_schema::serde::{SerdeError, ShapeDeserializer};
 use aws_smithy_schema::Schema;
 use aws_smithy_types::date_time::Format as TimestampFormat;
@@ -151,16 +152,10 @@ impl<'a> XmlDeserializer<'a> {
         r
     }
 
-    /// Resolve a child element name to a member schema by matching against
-    /// @xmlName (if present) or member_name.
-    fn resolve_member<'s>(schema: &'s Schema<'s>, element_name: &str) -> Option<&'s Schema<'s>> {
-        schema.members().iter().copied().find(|m| {
-            if let Some(xml_name) = m.xml_name() {
-                xml_name.value() == element_name
-            } else {
-                m.member_name() == Some(element_name)
-            }
-        })
+    /// Returns a cursor that resolves child element names to members of `schema`,
+    /// matching against @xmlName (if present) or member_name.
+    fn member_cursor<'s>(schema: &'s Schema<'s>) -> MemberCursor<'s> {
+        MemberCursor::new(schema, WireName::XmlName)
     }
 
     /// Find the byte slice in `input` that contains the element whose local name
@@ -381,7 +376,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                 //   - `find_element_slice`'s pointer-arithmetic invariant
                 //     requires `el_local` to be a sub-slice of `input`;
                 //     `root.start_el().local()` returns exactly that.
-                //   - The owned `String` is only used by `resolve_member`,
+                //   - The owned `String` is only used to resolve the member,
                 //     after the parser borrows are released. A previous
                 //     version of this code passed the owned `String` to
                 //     `find_element_slice`, silently producing offset=0;
@@ -397,7 +392,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                 // consumes it without firing clippy's `drop_non_drop` lint.
                 drop(root);
                 let _ = doc;
-                if let Some(member) = Self::resolve_member(schema, &local) {
+                if let Some(member) = Self::member_cursor(schema).resolve(&local) {
                     self.dispatch_subslice(sub, |this| consumer(member, this))?;
                 }
                 return Ok(());
@@ -425,9 +420,9 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                 std::collections::HashMap::new();
 
             // Dispatch child elements.
+            let mut members = Self::member_cursor(schema);
             while let Some(mut child_scope) = root.next_tag() {
-                let local = child_scope.start_el().local().to_owned();
-                let Some(member) = Self::resolve_member(schema, &local) else {
+                let Some(member) = members.resolve(child_scope.start_el().local()) else {
                     continue;
                 };
                 // For non-flattened aggregate members, the child element IS the
@@ -558,12 +553,13 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                 let mut value_text: Option<Cow<'_, str>> = None;
                 let mut value_slice: Option<&'_ [u8]> = None;
                 while let Some(mut field_scope) = entry_scope.next_tag() {
-                    let local = field_scope.start_el().local().to_owned();
-                    if local == key_name {
+                    let local = field_scope.start_el().local();
+                    let (is_key, is_value) = (local == key_name, local == value_name);
+                    if is_key {
                         let text = decode::try_data(&mut field_scope)
                             .map_err(|e| SerdeError::custom(e.to_string()))?;
                         key = Some(text.into_owned());
-                    } else if local == value_name {
+                    } else if is_value {
                         if value_is_aggregate {
                             let el_local = field_scope.start_el().local();
                             let sub = Self::find_element_slice(input, el_local);
@@ -817,12 +813,13 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                 let mut k: Option<String> = None;
                 let mut v: Option<String> = None;
                 while let Some(mut field_scope) = entry_scope.next_tag() {
-                    let local = field_scope.start_el().local().to_owned();
-                    if local == key_name {
+                    let local = field_scope.start_el().local();
+                    let (is_key, is_value) = (local == key_name, local == value_name);
+                    if is_key {
                         let text = decode::try_data(&mut field_scope)
                             .map_err(|e| SerdeError::custom(e.to_string()))?;
                         k = Some(text.into_owned());
-                    } else if local == value_name {
+                    } else if is_value {
                         let text = decode::try_data(&mut field_scope)
                             .map_err(|e| SerdeError::custom(e.to_string()))?;
                         v = Some(text.into_owned());

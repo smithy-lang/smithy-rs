@@ -20,6 +20,7 @@
 //! parses lives in [`super::bound_value`]. This module is the router between them, plus the
 //! `NonUtf8HeaderHandling` policy and the body/transport precedence rule.
 
+use super::binding::HTTP_HEADER_NAME;
 use super::bound_value::{
     HeaderValues, HttpHeaderValueDeserializer, HttpPrefixHeadersDeserializer,
     HttpRawPayloadDeserializer, HttpStatusDeserializer,
@@ -280,7 +281,13 @@ where
         name: &str,
         consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
-        let values = HeaderValues::new(self.headers, name);
+        // The name parsed once and cached on the member, shared with request
+        // serialization. A name that does not parse is looked up as given, which finds
+        // nothing.
+        let values = match member.extension(&HTTP_HEADER_NAME) {
+            Some(parsed) => HeaderValues::by_name(self.headers, parsed),
+            None => HeaderValues::new(self.headers, name),
+        };
         if !values.is_present() {
             // An absent header leaves the member absent. Invoking the consumer would make it
             // produce a value.
@@ -909,6 +916,43 @@ mod tests {
             log.borrow().read,
             "the body codec must be invoked for body members"
         );
+    }
+
+    #[test]
+    fn header_members_are_found_by_their_cached_names() {
+        // A mixed-case modeled name, a repeated header (re-read by name) and a modeled name
+        // that is not a valid header name, which has no cached name and finds nothing.
+        static MIXED_CASE: Schema<'static> =
+            Schema::new_member(ID, ShapeType::String, "md5", 0).with_http_header("Content-MD5");
+        static REPEATED: Schema<'static> = Schema::new_member(ID, ShapeType::List, "tags", 1)
+            .with_http_header("x-tags")
+            .with_list_member(&crate::prelude::STRING);
+        static INVALID: Schema<'static> =
+            Schema::new_member(ID, ShapeType::String, "bad", 2).with_http_header("bad name");
+        static NAMED: Schema<'static> = Schema::new_struct(
+            ID,
+            ShapeType::Structure,
+            &[&MIXED_CASE, &REPEATED, &INVALID],
+        );
+        assert!(MIXED_CASE.extension(&HTTP_HEADER_NAME).is_some());
+        assert!(INVALID.extension(&HTTP_HEADER_NAME).is_none());
+
+        let h = headers(&[
+            ("content-md5", b"abc=="),
+            ("x-tags", b"a"),
+            ("x-tags", b"b, c"),
+        ]);
+        let log = RefCell::new(BodyLog::default());
+        let mut out = Populated::default();
+        output(NO_BODY_MEMBERS, &log, &h, 200, Some(b""))
+            .read_struct(&NAMED, &mut consume(&mut out))
+            .unwrap();
+        assert_eq!(out.strings.get("md5"), Some(&"abc==".to_string()));
+        assert_eq!(
+            out.lists.get("tags"),
+            Some(&vec!["a".to_string(), "b".to_string(), "c".to_string()])
+        );
+        assert!(!out.strings.contains_key("bad"));
     }
 
     #[test]

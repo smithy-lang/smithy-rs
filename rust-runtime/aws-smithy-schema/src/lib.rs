@@ -45,9 +45,13 @@
 //! use aws_smithy_schema::{shape_id, Schema, ShapeId, ShapeType};
 //!
 //! const SHAPE_ID: ShapeId<'static> = shape_id!("ns", "MyShape");
-//! const MY_SHAPE_SCHEMA: Schema<'static> = Schema::new(SHAPE_ID, ShapeType::String);
+//! static MY_SHAPE_SCHEMA: Schema<'static> = Schema::new(SHAPE_ID, ShapeType::String);
 //! assert_eq!(MY_SHAPE_SCHEMA.shape_id().as_str(), "ns#MyShape");
 //! ```
+//!
+//! Declare schemas as `static`s, not `const`s. A `const` is copied at every
+//! use, so each use gets its own empty [`extension`] cache, and the
+//! work cached on it is repeated.
 //!
 //! ## `Schema<'a>` — runtime construction
 //!
@@ -78,6 +82,25 @@
 //! `Schema<'static>`); runtime-constructed schemas must arrange the lifetimes
 //! manually using standard borrow-check discipline.
 //!
+//! # Schema extensions
+//!
+//! Codecs and protocols often need data derived from a schema, such as a
+//! pre-encoded wire name or a member lookup table, that is the same on every
+//! request. [`Schema::extension`] computes such data once per schema and caches
+//! it on the schema, keyed by a [`SchemaExtensionKey`](extension::SchemaExtensionKey)
+//! that any crate can declare. Every schema carries the cache, whether it was
+//! generated, written by hand, or built from a model at runtime. See the
+//! [`extension`] module.
+//!
+//! Because of that cache, `Schema` has interior mutability and drop glue. The
+//! constructors and `with_*` setters remain `const fn`s, so schemas can still be
+//! initialized at compile time as `static`s, and a `const` can still refer to
+//! one (`const S: &Schema<'static> = &MY_STATIC;`). Two constant-evaluation
+//! patterns are not possible: a `const` item cannot call a method that reads a
+//! schema `static`, and a `const` or `static` cannot borrow a temporary
+//! `Schema` (`&Schema::new(..)`). Declare the schema as a `static` and borrow
+//! that instead.
+//!
 //! # Variance
 //!
 //! `Schema<'a>`, `ShapeId<'a>`, and the typed trait wrappers are covariant in
@@ -99,8 +122,10 @@ mod schema {
     pub(crate) mod codec;
     pub(crate) mod document;
     pub(crate) mod error_envelope;
+    pub(crate) mod extension;
     pub(crate) mod header_omit_settings;
     pub(crate) mod http_protocol;
+    pub(crate) mod member_lookup;
     pub(crate) mod prelude;
     pub(crate) mod protocol;
     pub(crate) mod registry;
@@ -185,6 +210,16 @@ pub fn intern_header_name(name: &str) -> &'static str {
 /// `smithy.api#Integer`, and so on).
 pub mod prelude {
     pub use crate::schema::prelude::*;
+}
+
+/// Derived data that runtime components compute once per schema and cache on it.
+pub mod extension {
+    pub use crate::schema::extension::SchemaExtensionKey;
+}
+
+/// Resolving wire field names to structure members during deserialization.
+pub mod member_lookup {
+    pub use crate::schema::member_lookup::{MemberCursor, WireName, WIDE_STRUCT_MEMBERS};
 }
 
 /// Shape serialization and deserialization traits and their error type.
@@ -431,6 +466,9 @@ pub struct Schema<'a> {
 
     /// Fallback for unknown/custom traits. `None` in const contexts (no allocation).
     traits: Option<&'a std::sync::LazyLock<TraitMap>>,
+
+    /// Cached derived data. See [`Schema::extension`].
+    extensions: schema::extension::ExtensionStorage,
 }
 
 /// Shape-type-specific member references.
@@ -506,8 +544,18 @@ assert_wrapper_covariant!(_assert_http_header_covariant, HttpHeaderTrait);
 assert_wrapper_covariant!(_assert_xml_namespace_covariant, XmlNamespaceTrait);
 assert_wrapper_covariant!(_assert_http_covariant, HttpTrait);
 
+// Generated schemas are `static`s shared across threads, so `Schema` must stay
+// `Send + Sync`. Extension storage preserves both because cached values are
+// required to be `Send + Sync` themselves.
+const _: () = {
+    const fn assert_send_sync<T: Send + Sync>() {}
+    assert_send_sync::<Schema<'static>>();
+};
+
 impl<'a> Schema<'a> {
-    /// Default values for all trait fields (should only be used by constructors as a spread source).
+    /// Default values for all fields. Constructors start from this value and assign the
+    /// fields they set; see the `INVARIANT` comment on the trait setters for why they
+    /// do not use it with struct-update syntax.
     ///
     /// Implemented as a `const fn` rather than a `const` so it can be
     /// parameterized over the schema lifetime — `const` items cannot
@@ -545,16 +593,16 @@ impl<'a> Schema<'a> {
             host_label: None,
             media_type: None,
             traits: None,
+            extensions: schema::extension::ExtensionStorage::new(),
         }
     }
 
     /// Creates a schema for a simple type (no members).
     pub const fn new(id: ShapeId<'a>, shape_type: ShapeType) -> Self {
-        Self {
-            id,
-            shape_type,
-            ..Self::empty_traits()
-        }
+        let mut schema = Self::empty_traits();
+        schema.id = id;
+        schema.shape_type = shape_type;
+        schema
     }
 
     /// Creates a schema for a structure or union type.
@@ -589,13 +637,12 @@ impl<'a> Schema<'a> {
         shape_type: ShapeType,
         members: &'a [&'a Schema<'a>],
     ) -> Self {
-        Self {
-            id,
-            shape_type,
-            response_routing: Self::derive_response_routing(members),
-            members: SchemaMembers::Struct { members },
-            ..Self::empty_traits()
-        }
+        let mut schema = Self::empty_traits();
+        schema.id = id;
+        schema.shape_type = shape_type;
+        schema.response_routing = Self::derive_response_routing(members);
+        schema.members = SchemaMembers::Struct { members };
+        schema
     }
 
     /// Derives the response routing word from a structure's member slice.
@@ -647,22 +694,20 @@ impl<'a> Schema<'a> {
 
     /// Creates a schema for a list type.
     pub const fn new_list(id: ShapeId<'a>, member: &'a Schema<'a>) -> Self {
-        Self {
-            id,
-            shape_type: ShapeType::List,
-            members: SchemaMembers::List { member },
-            ..Self::empty_traits()
-        }
+        let mut schema = Self::empty_traits();
+        schema.id = id;
+        schema.shape_type = ShapeType::List;
+        schema.members = SchemaMembers::List { member };
+        schema
     }
 
     /// Creates a schema for a map type.
     pub const fn new_map(id: ShapeId<'a>, key: &'a Schema<'a>, value: &'a Schema<'a>) -> Self {
-        Self {
-            id,
-            shape_type: ShapeType::Map,
-            members: SchemaMembers::Map { key, value },
-            ..Self::empty_traits()
-        }
+        let mut schema = Self::empty_traits();
+        schema.id = id;
+        schema.shape_type = ShapeType::Map;
+        schema.members = SchemaMembers::Map { key, value };
+        schema
     }
 
     /// Creates a member schema wrapping a target schema.
@@ -672,13 +717,12 @@ impl<'a> Schema<'a> {
         member_name: &'a str,
         member_index: usize,
     ) -> Self {
-        Self {
-            id,
-            shape_type,
-            member_name: Some(member_name),
-            member_index: MemberIndex::new(member_index),
-            ..Self::empty_traits()
-        }
+        let mut schema = Self::empty_traits();
+        schema.id = id;
+        schema.shape_type = shape_type;
+        schema.member_name = Some(member_name);
+        schema.member_index = MemberIndex::new(member_index);
+        schema
     }
 
     /// Returns the Shape ID of this schema.
@@ -919,11 +963,10 @@ impl<'a> Schema<'a> {
     // INVARIANT — do not introduce a trait field that needs drop.
     //
     // Every `with_*` setter is a `const fn`, and assigning to a field drops the
-    // field's previous value. `Schema::new_*` likewise drops the remainder of
-    // the base value via `..Self::empty_traits()`. A `const fn` body cannot run
-    // destructors, so a single field with drop glue makes *every* setter and
-    // *every* constructor illegal in const context (E0493). That matters
-    // because generated schemas are const-initialized statics:
+    // field's previous value. A `const fn` body cannot run destructors, so a
+    // trait field with drop glue makes *every* setter for it illegal in const
+    // context (E0493). That matters because generated schemas are
+    // const-initialized statics:
     //
     //     static FOO_SCHEMA: Schema<'static> =
     //         Schema::new_member(..).with_http_header("x-amz-...");
@@ -933,6 +976,14 @@ impl<'a> Schema<'a> {
     // with an owning arm are all ruled out, however convenient they look. A
     // borrowed-only enum is fine — `HttpHeaderTrait` uses one — because
     // references have no drop glue.
+    //
+    // `Schema` as a whole does have drop glue, from its extension storage. That
+    // is why the `new_*` constructors start from `Self::empty_traits()` and
+    // assign fields one at a time: struct-update syntax
+    // (`..Self::empty_traits()`) would drop the unused remainder of the base
+    // value, extension storage included, and fail with E0493. Setters are
+    // unaffected because they only overwrite fields that have no drop glue and
+    // then move `self` out whole.
     //
     // Keeping the fields borrow-only also preserves the niche optimization
     // that makes `Option<JsonNameTrait<'a>>` 16 bytes rather than 24, which at
@@ -1097,6 +1148,19 @@ impl<'a> Schema<'a> {
         self
     }
 
+    /// Returns the value of extension `key` for this schema, computing it on first use.
+    ///
+    /// The value is computed by the key's provider the first time this schema is asked
+    /// for it, then cached for the life of the schema. Concurrent first calls compute it
+    /// once. See the [`extension`] module.
+    #[inline]
+    pub fn extension<T: Send + Sync + 'static>(
+        &self,
+        key: &'static extension::SchemaExtensionKey<T>,
+    ) -> &T {
+        self.extensions.get_or_compute(self, key)
+    }
+
     /// Returns the member name if this is a member schema.
     ///
     /// Returns `Option<&'a str>` (the schema's data lifetime, not the
@@ -1126,14 +1190,12 @@ impl<'a> Schema<'a> {
     }
 
     /// Returns the member schema by name (for structures and unions).
+    ///
+    /// Structures with at least [`member_lookup::WIDE_STRUCT_MEMBERS`] members use an
+    /// index cached on the schema; smaller ones are scanned. To resolve every field of
+    /// a structure being deserialized, use a [`member_lookup::MemberCursor`].
     pub fn member_schema(&self, name: &str) -> Option<&Schema<'_>> {
-        match &self.members {
-            SchemaMembers::Struct { members } => members
-                .iter()
-                .find(|m| m.member_name == Some(name))
-                .copied(),
-            _ => None,
-        }
+        schema::member_lookup::find_member(self, member_lookup::WireName::MemberName, name)
     }
 
     /// Returns the member name and schema by position index (for structures and unions).
@@ -1571,6 +1633,7 @@ mod test {
     /// | baseline | 336 | — |
     /// | `member_index` encoded in one word instead of `Option<usize>` | 328 | −8 |
     /// | response routing word added | 336 | +8 |
+    /// | schema extension storage added | 352 | +16 |
     ///
     /// The routing word was deliberately funded by the `member_index` re-encoding, so
     /// response binding routing cost no net memory.
@@ -1585,7 +1648,7 @@ mod test {
     fn schema_size_stays_within_its_budget() {
         assert_eq!(
             std::mem::size_of::<Schema<'static>>(),
-            336,
+            352,
             "Schema changed size; see this test's documentation before updating the number"
         );
     }
