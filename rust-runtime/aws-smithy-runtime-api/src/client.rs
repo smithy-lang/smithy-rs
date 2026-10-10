@@ -101,6 +101,8 @@ pub mod dns;
 
 pub mod endpoint;
 
+pub mod header_omit_settings;
+
 pub mod http;
 
 /// Smithy identity used by auth and signing.
@@ -125,6 +127,8 @@ pub mod behavior_version;
 pub mod ser_de;
 
 pub mod stalled_stream_protection;
+
+pub mod versioned_config;
 
 /// Smithy support-code for code generated waiters.
 pub mod waiters;

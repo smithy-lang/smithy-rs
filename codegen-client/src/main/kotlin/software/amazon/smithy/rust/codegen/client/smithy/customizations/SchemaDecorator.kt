@@ -198,6 +198,10 @@ private class SchemaProtocolCustomization(
                     // re-emitted per operation.
                     // See https://github.com/smithy-lang/smithy-rs/issues/4801.
                     //
+                    // These entries are defined in `aws-smithy-runtime-api` (and re-exported by
+                    // `aws-smithy-schema`) so they stay the same `ConfigBag` keys across
+                    // incompatible releases of the protocol crates that read them.
+                    //
                     // `ServiceShapeNamespace` is the namespace half of the service's shape ID and
                     // is always present, so unlike `ServiceXmlNamespace` below it is unconditional.
                     // The two are unrelated values: a service's shape-ID namespace is not derivable
@@ -210,9 +214,9 @@ private class SchemaProtocolCustomization(
                         ${section.newLayerName}.store_put(#{ServiceShapeNamespace}::new(${serviceNamespace.dq()}));
                         ${section.newLayerName}.store_put(#{ServiceVersion}::new(${codegenContext.serviceShape.version.dq()}));
                         """,
-                        "ServiceShapeName" to smithySchema.resolve("protocol::ServiceShapeName"),
-                        "ServiceShapeNamespace" to smithySchema.resolve("protocol::ServiceShapeNamespace"),
-                        "ServiceVersion" to smithySchema.resolve("protocol::ServiceVersion"),
+                        "ServiceShapeName" to RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig).resolve("client::protocol::ServiceShapeName"),
+                        "ServiceShapeNamespace" to RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig).resolve("client::protocol::ServiceShapeNamespace"),
+                        "ServiceVersion" to RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig).resolve("client::protocol::ServiceVersion"),
                     )
 
                     // `@xmlNamespace` is a prelude trait, so it is resolvable from any model rather
@@ -226,7 +230,7 @@ private class SchemaProtocolCustomization(
                                 """
                                 ${section.newLayerName}.store_put(#{ServiceXmlNamespace}::new(${ns.uri.dq()}, $prefix));
                                 """,
-                                "ServiceXmlNamespace" to smithySchema.resolve("protocol::ServiceXmlNamespace"),
+                                "ServiceXmlNamespace" to RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig).resolve("client::protocol::ServiceXmlNamespace"),
                             )
                         }
 

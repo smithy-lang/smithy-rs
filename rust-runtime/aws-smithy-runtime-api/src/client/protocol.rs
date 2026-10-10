@@ -9,47 +9,51 @@
 //! major versions. A [`ConfigBag`] is keyed by [`TypeId`](std::any::TypeId), so storing a schema
 //! type directly would make the bag entry, and every public setter that produces it, change identity
 //! whenever schema takes a major version. [`ConfiguredProtocol`] is the type that is stored and
-//! passed around instead. It lives in this crate, never changes identity, and holds whichever
-//! protocol handle the configuring code provided:
+//! passed around instead.
+//!
+//! `ConfiguredProtocol` is the [`ClientProtocolSlot`] instance of the general
+//! [versioned config](crate::client::versioned_config) mechanism, plus one protocol-specific
+//! capability:
 //!
 //! - The crate that defines the protocol handle (today `aws-smithy-schema` 1.x) implements
-//!   [`ProtocolHandle`] for it, converts it into a `ConfiguredProtocol`, and recovers it with
-//!   [`ConfiguredProtocol::downcast_ref`]. `aws-smithy-schema`'s handle is itself an enum with one
-//!   variant per version of its protocol trait, so that trait can also evolve within one major
-//!   version.
-//! - A later major version of that crate implements `ProtocolHandle` for its own handle type. It can
-//!   recognize and adapt handles from earlier versions, and a client that only understands an earlier
-//!   version reports which version it found instead of silently ignoring the setting.
+//!   [`ProtocolHandle`] and [`ConfigPayloadFor<ClientProtocolSlot>`] for it. The latter records
+//!   which crate and compatibility line produced the handle as a [`RepresentationId`].
+//!   `aws-smithy-schema`'s handle is itself an enum with one variant per version of its protocol
+//!   trait, so that trait can also evolve within one compatibility line.
+//! - Clients recover a handle with [`ConfiguredProtocol::downcast_ref`], trying each
+//!   representation they support, and report anything else with
+//!   [`ConfiguredProtocol::unsupported_error`] instead of treating it as absent.
 //! - Code that only needs version-independent capabilities, such as the orchestrator applying a
-//!   resolved endpoint, calls them on `ConfiguredProtocol` without depending on the defining crate.
-//!
-//! This is an open-ended version of a `enum { V1(..), V2(..) }`: each defining crate adds its own
-//! "variant" without this crate having to depend on, or be released for, every version.
+//!   resolved endpoint, calls them through [`ProtocolHandle`] without depending on the defining
+//!   crate.
 
 use crate::box_error::BoxError;
 use crate::client::orchestrator::HttpRequest;
+use crate::client::versioned_config::{
+    config_slot, ConfigPayloadFor, ConfigSlotError, RepresentationId, VersionedConfigValue,
+};
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::endpoint::Endpoint;
-use std::any::Any;
 use std::fmt;
 use std::sync::Arc;
 
-/// A client protocol handle that can be stored in a [`ConfiguredProtocol`].
+config_slot! {
+    /// The [`ConfigSlot`](crate::client::versioned_config::ConfigSlot) for the client protocol
+    /// selected through configuration.
+    ///
+    /// Protocol-defining crates implement [`ConfigPayloadFor<ClientProtocolSlot>`] for their
+    /// [`ProtocolHandle`] type. The bag entry for this slot is [`ConfiguredProtocol`].
+    pub enum ClientProtocolSlot { name: "client protocol", storage: wrapper }
+}
+
+/// The version-independent capabilities of a protocol stored in a [`ConfiguredProtocol`].
 ///
 /// This is implemented by crates that define client protocols, not by individual protocols:
 /// `aws-smithy-schema` implements it for its `SchemaProtocol` enum, which has one variant per
-/// version of its client protocol trait. Methods added to this trait in later releases will have
-/// default implementations.
-pub trait ProtocolHandle: Any + Send + Sync + fmt::Debug {
-    /// Identifies the crate and major version that defined this handle type, for example
-    /// `aws-smithy-schema 1.x`.
-    ///
-    /// Used in error messages when a client finds a protocol it cannot use. Defaults to the
-    /// handle's type name.
-    fn origin(&self) -> &'static str {
-        std::any::type_name::<Self>()
-    }
-
+/// version of its client protocol trait. Implementors also implement
+/// [`ConfigPayloadFor<ClientProtocolSlot>`] to identify their representation. Methods added to this
+/// trait in later releases will have default implementations.
+pub trait ProtocolHandle: Send + Sync + fmt::Debug + 'static {
     /// Applies a resolved endpoint to a request this protocol serialized.
     ///
     /// The orchestrator calls this after endpoint resolution, so that it can delegate endpoint
@@ -67,28 +71,54 @@ pub trait ProtocolHandle: Any + Send + Sync + fmt::Debug {
 /// See the [module documentation](self) for why this type exists. Construct one from a
 /// protocol-defining crate's handle type, for example with
 /// `ConfiguredProtocol::from(SharedClientProtocol::new(protocol))`.
-#[derive(Clone, Debug)]
-pub struct ConfiguredProtocol(Arc<dyn ProtocolHandle>);
+#[derive(Clone)]
+pub struct ConfiguredProtocol {
+    value: VersionedConfigValue<ClientProtocolSlot>,
+    /// The same allocation as `value`'s payload, viewed through the stable capability trait.
+    handle: Arc<dyn ProtocolHandle>,
+}
 
 impl ConfiguredProtocol {
     /// Wraps a protocol handle.
-    pub fn new(handle: impl ProtocolHandle) -> Self {
-        Self(Arc::new(handle))
+    pub fn new<T>(handle: T) -> Self
+    where
+        T: ProtocolHandle + ConfigPayloadFor<ClientProtocolSlot>,
+    {
+        let handle = Arc::new(handle);
+        Self {
+            value: VersionedConfigValue::from_arc(handle.clone()),
+            handle,
+        }
+    }
+
+    /// Identifies the crate and compatibility line that produced the wrapped handle.
+    pub fn representation(&self) -> RepresentationId {
+        self.value.representation()
     }
 
     /// Returns the wrapped handle if it is a `T`.
     ///
-    /// Protocol-defining crates use this to recover their own handle type. `None` means the
-    /// protocol was configured with a handle from a different crate or major version; see
-    /// [`origin`](Self::origin).
-    pub fn downcast_ref<T: ProtocolHandle>(&self) -> Option<&T> {
-        let handle: &dyn Any = &*self.0;
-        handle.downcast_ref::<T>()
+    /// `None` means the protocol was configured with a handle from a different crate or
+    /// compatibility line; see [`representation`](Self::representation) and
+    /// [`unsupported_error`](Self::unsupported_error).
+    pub fn downcast_ref<T: ConfigPayloadFor<ClientProtocolSlot>>(&self) -> Option<&T> {
+        self.value.downcast_ref()
     }
 
-    /// Identifies the crate and major version that defined the wrapped handle.
-    pub fn origin(&self) -> &'static str {
-        self.0.origin()
+    /// Returns a shared handle to the wrapped handle if it is a `T`.
+    pub fn downcast_arc<T: ConfigPayloadFor<ClientProtocolSlot>>(&self) -> Option<Arc<T>> {
+        self.value.downcast_arc()
+    }
+
+    /// Builds the error for a handle that none of the consumer's `supported` representations could
+    /// downcast. See [`VersionedConfigValue::unsupported_error`].
+    pub fn unsupported_error(&self, supported: &'static [RepresentationId]) -> ConfigSlotError {
+        self.value.unsupported_error(supported)
+    }
+
+    /// Returns the underlying versioned value.
+    pub fn as_versioned(&self) -> &VersionedConfigValue<ClientProtocolSlot> {
+        &self.value
     }
 
     /// Applies a resolved endpoint to a request the wrapped protocol serialized.
@@ -98,7 +128,15 @@ impl ConfiguredProtocol {
         endpoint: &Endpoint,
         cfg: &ConfigBag,
     ) -> Result<(), BoxError> {
-        self.0.update_endpoint(request, endpoint, cfg)
+        self.handle.update_endpoint(request, endpoint, cfg)
+    }
+}
+
+impl fmt::Debug for ConfiguredProtocol {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("ConfiguredProtocol")
+            .field(&self.value)
+            .finish()
     }
 }
 
@@ -106,10 +144,177 @@ impl Storable for ConfiguredProtocol {
     type Storer = StoreReplace<Self>;
 }
 
-impl<T: ProtocolHandle> From<T> for ConfiguredProtocol {
+impl<T> From<T> for ConfiguredProtocol
+where
+    T: ProtocolHandle + ConfigPayloadFor<ClientProtocolSlot>,
+{
     fn from(handle: T) -> Self {
         Self::new(handle)
     }
+}
+
+/// The name of the Smithy `service` shape a client was generated for.
+///
+/// Some protocols derive parts of the wire format from model names rather than
+/// from HTTP binding traits. RPC v2 CBOR is the canonical example: every request
+/// is routed to `/service/{serviceName}/operation/{operationName}`, where
+/// `serviceName` is the *service shape name* — not the `@aws.api#service`
+/// `sdkId`, and not the shape's namespace.
+///
+/// Because the [`ConfiguredProtocol`] can be swapped at runtime, a protocol cannot
+/// rely on codegen having baked its route into the generated request path: a
+/// client generated for `awsJson1_0` may have `RpcV2CborProtocol` plugged in via
+/// `Config::builder().protocol(..)`. Generated clients therefore store this entry
+/// in the config bag regardless of which protocol they were generated for, so
+/// whichever protocol ends up being used can resolve the names it needs. The
+/// companion operation name comes from
+/// [`Metadata::name`](crate::client::orchestrator::Metadata::name).
+///
+/// See <https://github.com/smithy-lang/smithy-rs/issues/4801>.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ServiceShapeName(std::borrow::Cow<'static, str>);
+
+impl ServiceShapeName {
+    /// Creates a new [`ServiceShapeName`] from the Smithy service shape name.
+    ///
+    /// Accepts a codegen-emitted `&'static str` as well as a `String`
+    /// materialized at runtime from a parsed model.
+    pub fn new(name: impl Into<std::borrow::Cow<'static, str>>) -> Self {
+        Self(name.into())
+    }
+
+    /// Returns the service shape name.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Storable for ServiceShapeName {
+    type Storer = StoreReplace<Self>;
+}
+
+/// The namespace of the Smithy `service` shape a client was generated for.
+///
+/// This is the `com.amazonaws.dynamodb` in `com.amazonaws.dynamodb#DynamoDB_20120810`.
+/// Together with [`ServiceShapeName`] it forms the service's full shape ID; the two are
+/// separate entries rather than one because [`ConfigBag`] is keyed by type, so each protocol
+/// loads exactly the facts it needs and new facts stay additive.
+///
+/// **Not to be confused with [`ServiceXmlNamespace`]**, despite the shared word. That one is
+/// the `@xmlNamespace` *trait* — a URI restXml applies as the default `xmlns` on root
+/// elements — and neither value is derivable from the other. CloudWatch Logs is the clearest
+/// illustration: its shape-ID namespace is `com.amazonaws.cloudwatchlogs` while its
+/// `@xmlNamespace` URI is `http://monitoring.amazonaws.com/doc/2014-03-28/`. The trait is
+/// also optional, carried by roughly half of AWS service shapes, whereas every shape ID has
+/// a namespace by construction — which is why this entry is stored unconditionally and
+/// `ServiceXmlNamespace` is not.
+///
+/// Protocols use this as the *default namespace* when resolving a document type's shape
+/// discriminator. Some services serialize a discriminator as a bare shape name rather than an
+/// absolute shape ID — a `__type` of `Widget` instead of `com.example#Widget` — and the
+/// receiving client is expected to qualify it with the service's namespace. Without it a
+/// relative discriminator cannot be resolved to a registered type at all.
+///
+/// Stored for the same reason as [`ServiceShapeName`]: it is knowable only from the model, and
+/// a customer may select a different protocol at runtime via `Config::builder().protocol(..)`
+/// on a client generated for some other protocol. Baking it into a constructor call at codegen
+/// time means a swapped-in protocol either gets no value or gets one the caller had to know to
+/// supply. Generated clients therefore store it regardless of which protocol they were
+/// generated for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ServiceShapeNamespace(std::borrow::Cow<'static, str>);
+
+impl ServiceShapeNamespace {
+    /// Creates a new [`ServiceShapeNamespace`] from the Smithy service shape's namespace.
+    ///
+    /// Accepts a codegen-emitted `&'static str` as well as a `String` materialized at runtime
+    /// from a parsed model.
+    pub fn new(namespace: impl Into<std::borrow::Cow<'static, str>>) -> Self {
+        Self(namespace.into())
+    }
+
+    /// Returns the service shape's namespace.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Storable for ServiceShapeNamespace {
+    type Storer = StoreReplace<Self>;
+}
+
+/// The Smithy service shape's `version`, stored in a [`ConfigBag`] by generated clients.
+///
+/// awsQuery puts this on the wire as the `Version=` form parameter, so it is a request-shaping
+/// fact that only the model knows. Stored for the same reason as [`ServiceShapeName`]: a customer
+/// can select awsQuery via `Config::builder().protocol(..)` on a client generated for some other
+/// protocol, and could not otherwise supply the right value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ServiceVersion(std::borrow::Cow<'static, str>);
+
+impl ServiceVersion {
+    /// Creates a new [`ServiceVersion`].
+    ///
+    /// Accepts a codegen-emitted `&'static str` as well as a `String` materialized at runtime
+    /// from a parsed model.
+    pub fn new(version: impl Into<std::borrow::Cow<'static, str>>) -> Self {
+        Self(version.into())
+    }
+
+    /// Returns the service version.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Storable for ServiceVersion {
+    type Storer = StoreReplace<Self>;
+}
+
+/// The service-level `@xmlNamespace` trait, stored in a [`ConfigBag`] by generated clients.
+///
+/// restXml applies this as the default `xmlns` on request and response root elements, so it is a
+/// request-shaping fact that only the model knows. Stored for the same reason as
+/// [`ServiceShapeName`].
+///
+/// `@xmlNamespace` is a prelude trait rather than a restXml-specific one, so it is resolvable from
+/// any model — unlike `@restXml(noErrorWrapping)`, which a non-restXml model simply does not carry
+/// and which therefore stays caller-supplied.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ServiceXmlNamespace {
+    uri: std::borrow::Cow<'static, str>,
+    prefix: Option<std::borrow::Cow<'static, str>>,
+}
+
+impl ServiceXmlNamespace {
+    /// Creates a new [`ServiceXmlNamespace`] from the trait's URI and optional prefix.
+    pub fn new(
+        uri: impl Into<std::borrow::Cow<'static, str>>,
+        prefix: Option<std::borrow::Cow<'static, str>>,
+    ) -> Self {
+        Self {
+            uri: uri.into(),
+            prefix,
+        }
+    }
+
+    /// Returns the namespace URI.
+    pub fn uri(&self) -> &str {
+        &self.uri
+    }
+
+    /// Returns the namespace prefix, if the trait declared one.
+    pub fn prefix(&self) -> Option<&str> {
+        self.prefix.as_deref()
+    }
+}
+
+impl Storable for ServiceXmlNamespace {
+    type Storer = StoreReplace<Self>;
 }
 
 #[cfg(test)]
@@ -117,14 +322,17 @@ mod tests {
     use super::*;
     use aws_smithy_types::config_bag::Layer;
 
+    const V1: RepresentationId = RepresentationId::new("test-protocols", "1", 1);
+    const V2: RepresentationId = RepresentationId::new("test-protocols", "2", 1);
+
     #[derive(Debug)]
     struct HandleV1(&'static str);
 
-    impl ProtocolHandle for HandleV1 {
-        fn origin(&self) -> &'static str {
-            "test-protocols 1.x"
-        }
+    impl ConfigPayloadFor<ClientProtocolSlot> for HandleV1 {
+        const REPRESENTATION: RepresentationId = V1;
+    }
 
+    impl ProtocolHandle for HandleV1 {
         fn update_endpoint(
             &self,
             request: &mut HttpRequest,
@@ -139,6 +347,10 @@ mod tests {
 
     #[derive(Debug)]
     struct HandleV2;
+
+    impl ConfigPayloadFor<ClientProtocolSlot> for HandleV2 {
+        const REPRESENTATION: RepresentationId = V2;
+    }
 
     impl ProtocolHandle for HandleV2 {
         fn update_endpoint(
@@ -163,17 +375,45 @@ mod tests {
         let configured = cfg.load::<ConfiguredProtocol>().expect("stored");
         assert_eq!("one", configured.downcast_ref::<HandleV1>().unwrap().0);
         assert!(configured.downcast_ref::<HandleV2>().is_none());
+        assert!(configured.downcast_arc::<HandleV1>().is_some());
     }
 
     #[test]
-    fn origin_comes_from_the_handle_and_defaults_to_its_type_name() {
+    fn representation_comes_from_the_payload_contract() {
         assert_eq!(
-            "test-protocols 1.x",
-            ConfiguredProtocol::new(HandleV1("one")).origin()
+            V1,
+            ConfiguredProtocol::new(HandleV1("one")).representation()
         );
-        assert!(ConfiguredProtocol::new(HandleV2)
-            .origin()
-            .ends_with("HandleV2"));
+        assert_eq!(V2, ConfiguredProtocol::from(HandleV2).representation());
+    }
+
+    #[test]
+    fn higher_layer_replaces_a_handle_from_another_compatibility_line() {
+        let mut lower = Layer::new("lower");
+        lower.store_put(ConfiguredProtocol::new(HandleV1("old")));
+        let mut upper = Layer::new("upper");
+        upper.store_put(ConfiguredProtocol::new(HandleV2));
+        let cfg = ConfigBag::of_layers(vec![lower, upper]);
+        assert_eq!(
+            V2,
+            cfg.load::<ConfiguredProtocol>().unwrap().representation()
+        );
+
+        let mut lower = Layer::new("lower");
+        lower.store_put(ConfiguredProtocol::new(HandleV1("old")));
+        let mut upper = Layer::new("upper");
+        upper.unset::<ConfiguredProtocol>();
+        let cfg = ConfigBag::of_layers(vec![lower, upper]);
+        assert!(cfg.load::<ConfiguredProtocol>().is_none());
+    }
+
+    #[test]
+    fn unsupported_error_reports_the_found_representation() {
+        static SUPPORTED: [RepresentationId; 1] = [V1];
+        let err = ConfiguredProtocol::new(HandleV2).unsupported_error(&SUPPORTED);
+        assert!(err.is_unsupported());
+        assert_eq!(Some(V2), err.found());
+        assert_eq!("client protocol", err.slot_name());
     }
 
     #[test]
@@ -193,12 +433,25 @@ mod tests {
     }
 
     #[test]
-    fn clones_share_the_handle() {
+    fn clones_share_the_handle_and_capability_shares_the_payload() {
         let a = ConfiguredProtocol::new(HandleV1("one"));
         let b = a.clone();
-        assert!(std::ptr::eq(
-            a.downcast_ref::<HandleV1>().unwrap(),
-            b.downcast_ref::<HandleV1>().unwrap()
+        let payload = a.downcast_arc::<HandleV1>().unwrap();
+        assert!(Arc::ptr_eq(
+            &payload,
+            &b.downcast_arc::<HandleV1>().unwrap()
         ));
+        // The capability view and the downcastable payload are one allocation.
+        assert!(std::ptr::addr_eq(
+            Arc::as_ptr(&a.handle),
+            Arc::as_ptr(&payload)
+        ));
+    }
+
+    #[test]
+    fn debug_includes_the_representation() {
+        let debug = format!("{:?}", ConfiguredProtocol::new(HandleV1("dbg")));
+        assert!(debug.contains("test-protocols"), "{debug}");
+        assert!(debug.contains("client protocol"), "{debug}");
     }
 }

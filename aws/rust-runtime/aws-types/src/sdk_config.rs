@@ -1231,7 +1231,8 @@ mod protocol_tests {
     use super::{ConfiguredProtocol, SdkConfig};
     use aws_smithy_runtime_api::box_error::BoxError;
     use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
-    use aws_smithy_runtime_api::client::protocol::ProtocolHandle;
+    use aws_smithy_runtime_api::client::protocol::{ClientProtocolSlot, ProtocolHandle};
+    use aws_smithy_runtime_api::client::versioned_config::{ConfigPayloadFor, RepresentationId};
     use aws_smithy_types::config_bag::ConfigBag;
     use aws_smithy_types::endpoint::Endpoint;
 
@@ -1239,11 +1240,11 @@ mod protocol_tests {
     #[derive(Debug)]
     struct TestHandle;
 
-    impl ProtocolHandle for TestHandle {
-        fn origin(&self) -> &'static str {
-            "test-protocols 7.x"
-        }
+    impl ConfigPayloadFor<ClientProtocolSlot> for TestHandle {
+        const REPRESENTATION: RepresentationId = RepresentationId::new("test-protocols", "7", 1);
+    }
 
+    impl ProtocolHandle for TestHandle {
         fn update_endpoint(
             &self,
             _request: &mut HttpRequest,
@@ -1258,7 +1259,8 @@ mod protocol_tests {
     fn protocol_accepts_any_handle_and_round_trips() {
         let config = SdkConfig::builder().protocol(TestHandle).build();
         let protocol = config.protocol().expect("protocol was set");
-        assert_eq!("test-protocols 7.x", protocol.origin());
+        assert_eq!("test-protocols", protocol.representation().package());
+        assert_eq!("7", protocol.representation().compatibility_line());
         assert!(protocol.downcast_ref::<TestHandle>().is_some());
     }
 

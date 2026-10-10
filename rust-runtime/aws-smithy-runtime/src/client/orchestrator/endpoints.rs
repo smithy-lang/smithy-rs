@@ -191,6 +191,19 @@ mod test {
     #[derive(Debug)]
     struct HeaderOnlyProtocol;
 
+    impl
+        aws_smithy_runtime_api::client::versioned_config::ConfigPayloadFor<
+            aws_smithy_runtime_api::client::protocol::ClientProtocolSlot,
+        > for HeaderOnlyProtocol
+    {
+        const REPRESENTATION: aws_smithy_runtime_api::client::versioned_config::RepresentationId =
+            aws_smithy_runtime_api::client::versioned_config::RepresentationId::new(
+                "test-protocols",
+                "1",
+                1,
+            );
+    }
+
     impl aws_smithy_runtime_api::client::protocol::ProtocolHandle for HeaderOnlyProtocol {
         fn update_endpoint(
             &self,

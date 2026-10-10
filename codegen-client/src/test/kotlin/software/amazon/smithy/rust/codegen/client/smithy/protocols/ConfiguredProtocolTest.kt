@@ -9,7 +9,10 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
@@ -62,6 +65,15 @@ class ConfiguredProtocolTest {
                     "ProtocolHandle" to
                         RuntimeType.smithyRuntimeApiClient(context.runtimeConfig)
                             .resolve("client::protocol::ProtocolHandle"),
+                    "ClientProtocolSlot" to
+                        RuntimeType.smithyRuntimeApiClient(context.runtimeConfig)
+                            .resolve("client::protocol::ClientProtocolSlot"),
+                    "ConfigPayloadFor" to
+                        RuntimeType.smithyRuntimeApiClient(context.runtimeConfig)
+                            .resolve("client::versioned_config::ConfigPayloadFor"),
+                    "RepresentationId" to
+                        RuntimeType.smithyRuntimeApiClient(context.runtimeConfig)
+                            .resolve("client::versioned_config::RepresentationId"),
                     "AwsRestJsonProtocol" to
                         RuntimeType.smithyJson(context.runtimeConfig)
                             .resolve("protocol::aws_rest_json_1::AwsRestJsonProtocol"),
@@ -88,10 +100,9 @@ class ConfiguredProtocolTest {
                             #{AwsRestJsonProtocol}::new(),
                         )));
                         let config = builder.build();
-                        assert_eq!(
-                            config.protocol().map(|p| p.origin()),
-                            #{Some}(concat!("aws-smithy-schema ", "1.x")),
-                        );
+                        let representation = config.protocol().expect("set").representation();
+                        assert_eq!("aws-smithy-schema", representation.package());
+                        assert_eq!("1", representation.compatibility_line());
                         let client = crate::Client::from_conf(config);
 
                         let _ = client.get_stats().name("test").send().await;
@@ -111,10 +122,11 @@ class ConfiguredProtocolTest {
                         """
                         ##[derive(Debug)]
                         struct FutureSchemaProtocol;
+                        impl #{ConfigPayloadFor}<#{ClientProtocolSlot}> for FutureSchemaProtocol {
+                            const REPRESENTATION: #{RepresentationId} =
+                                #{RepresentationId}::new("aws-smithy-schema", "2", 1);
+                        }
                         impl #{ProtocolHandle} for FutureSchemaProtocol {
-                            fn origin(&self) -> &'static str {
-                                "aws-smithy-schema 2.x"
-                            }
                             fn update_endpoint(
                                 &self,
                                 _request: &mut #{HttpRequest},
@@ -141,12 +153,137 @@ class ConfiguredProtocolTest {
                             .expect_err("a protocol this client cannot use must fail the request");
                         let message = format!("{}", #{DisplayErrorContext}(&err));
                         assert!(
-                            message.contains("built for aws-smithy-schema 2.x")
-                                && message.contains("requires a protocol built for aws-smithy-schema 1.x"),
+                            message.contains("built with aws-smithy-schema@2 (api revision 1)")
+                                && message.contains("this client supports [aws-smithy-schema@1 (api revision 1)]"),
                             "{message}",
                         );
                         // Serialization failed, so nothing was sent.
                         rx.expect_no_request();
+                        """,
+                        *scope,
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * The generated resolver tries every registered representation. A second entry stands in for a
+     * future `aws-smithy-schema` compatibility line: a distinct payload type with its own
+     * representation and an adapter to this client's `SharedClientProtocol`.
+     */
+    @Test
+    fun `resolver adapts every registered representation and rejects others`() {
+        clientIntegrationTest(model) { context: ClientCodegenContext, rustCrate ->
+            val rc = context.runtimeConfig
+            val runtimeApi = RuntimeType.smithyRuntimeApiClient(rc)
+            val fakeModule = RustModule.pubCrate("fake_schema_v2").cfgTest()
+            val resolverModule = RustModule.pubCrate("multi_line_resolution").cfgTest()
+            val scope =
+                arrayOf(
+                    *RuntimeType.preludeScope,
+                    "ProtocolHandle" to runtimeApi.resolve("client::protocol::ProtocolHandle"),
+                    "ClientProtocolSlot" to runtimeApi.resolve("client::protocol::ClientProtocolSlot"),
+                    "ConfiguredProtocol" to runtimeApi.resolve("client::protocol::ConfiguredProtocol"),
+                    "ConfigPayloadFor" to runtimeApi.resolve("client::versioned_config::ConfigPayloadFor"),
+                    "RepresentationId" to runtimeApi.resolve("client::versioned_config::RepresentationId"),
+                    "ConfigSlotError" to runtimeApi.resolve("client::versioned_config::ConfigSlotError"),
+                    "HttpRequest" to runtimeApi.resolve("client::orchestrator::HttpRequest"),
+                    "Endpoint" to RuntimeType.smithyTypes(rc).resolve("endpoint::Endpoint"),
+                    "ConfigBag" to RuntimeType.configBag(rc),
+                    "Layer" to RuntimeType.smithyTypes(rc).resolve("config_bag::Layer"),
+                    "BoxError" to RuntimeType.boxError(rc),
+                    "SharedClientProtocol" to RuntimeType.smithySchema(rc).resolve("protocol::SharedClientProtocol"),
+                    "AwsRestJsonProtocol" to
+                        RuntimeType.smithyJson(rc).resolve("protocol::aws_rest_json_1::AwsRestJsonProtocol"),
+                )
+            rustCrate.withModule(fakeModule) {
+                rustTemplate(
+                    """
+                    /// Stands in for `aws_smithy_schema_v2::protocol::SchemaProtocol`.
+                    ##[derive(Debug)]
+                    pub(crate) struct FakeSchemaV2Protocol;
+                    impl #{ConfigPayloadFor}<#{ClientProtocolSlot}> for FakeSchemaV2Protocol {
+                        const REPRESENTATION: #{RepresentationId} =
+                            #{RepresentationId}::new("aws-smithy-schema", "2", 1);
+                    }
+                    /// A line nobody registered.
+                    ##[derive(Debug)]
+                    pub(crate) struct UnregisteredProtocol;
+                    impl #{ConfigPayloadFor}<#{ClientProtocolSlot}> for UnregisteredProtocol {
+                        const REPRESENTATION: #{RepresentationId} =
+                            #{RepresentationId}::new("aws-smithy-schema", "3", 1);
+                    }
+                    macro_rules! no_op_handle {
+                        (${'$'}t:ty) => {
+                            impl #{ProtocolHandle} for ${'$'}t {
+                                fn update_endpoint(
+                                    &self,
+                                    _request: &mut #{HttpRequest},
+                                    _endpoint: &#{Endpoint},
+                                    _cfg: &#{ConfigBag},
+                                ) -> #{Result}<(), #{BoxError}> {
+                                    #{Ok}(())
+                                }
+                            }
+                        };
+                    }
+                    no_op_handle!(FakeSchemaV2Protocol);
+                    no_op_handle!(UnregisteredProtocol);
+
+                    /// Adapter from the fake line to this client's protocol trait.
+                    pub(crate) fn adapt(_protocol: &FakeSchemaV2Protocol) -> #{Result}<#{SharedClientProtocol}, #{BoxError}> {
+                        #{Ok}(#{SharedClientProtocol}::new(#{AwsRestJsonProtocol}::new()))
+                    }
+                    """,
+                    *scope,
+                )
+            }
+            val representations =
+                ConfiguredProtocolRegistry.representations(rc) +
+                    ConfiguredProtocolRepresentation(
+                        payloadType = RuntimeType("crate::fake_schema_v2::FakeSchemaV2Protocol"),
+                        adapt = writable { rust("crate::fake_schema_v2::adapt(protocol)") },
+                    )
+            rustCrate.withModule(resolverModule) {
+                ConfiguredProtocolResolver(rc, representations).render(this)
+            }
+            rustCrate.testModule {
+                tokioTest("resolver_handles_each_registered_line") {
+                    rustTemplate(
+                        """
+                        use crate::multi_line_resolution::resolve_client_protocol;
+                        use crate::fake_schema_v2::{FakeSchemaV2Protocol, UnregisteredProtocol};
+                        fn bag(protocol: #{ConfiguredProtocol}) -> #{ConfigBag} {
+                            let mut layer = #{Layer}::new("test");
+                            layer.store_put(protocol);
+                            #{ConfigBag}::of_layers(vec![layer])
+                        }
+
+                        // This client's own line.
+                        let own = bag(#{SharedClientProtocol}::configured(#{AwsRestJsonProtocol}::new()));
+                        assert!(resolve_client_protocol(&own).is_ok());
+
+                        // A different, registered line is adapted.
+                        let v2 = bag(#{ConfiguredProtocol}::new(FakeSchemaV2Protocol));
+                        let adapted = resolve_client_protocol(&v2).expect("v2 is registered");
+                        assert_eq!("aws.protocols##restJson1", adapted.protocol_id().as_str());
+
+                        // An unregistered line names itself and every supported line.
+                        let v3 = bag(#{ConfiguredProtocol}::new(UnregisteredProtocol));
+                        let err = resolve_client_protocol(&v3).expect_err("v3 is not registered");
+                        let slot = err.downcast_ref::<#{ConfigSlotError}>().expect("slot error");
+                        assert!(slot.is_unsupported());
+                        let message = err.to_string();
+                        assert!(message.contains("built with aws-smithy-schema@3"), "{message}");
+                        assert!(
+                            message.contains("[aws-smithy-schema@1 (api revision 1), aws-smithy-schema@2 (api revision 1)]"),
+                            "{message}",
+                        );
+
+                        // Nothing configured.
+                        let err = resolve_client_protocol(&#{ConfigBag}::base()).expect_err("missing");
+                        assert!(err.downcast_ref::<#{ConfigSlotError}>().unwrap().is_missing());
                         """,
                         *scope,
                     )

@@ -78,15 +78,18 @@ impl Storable for HeaderSerializationSettings {
     type Storer = StoreReplace<Self>;
 }
 
-// Bridge to the schema-serde runtime guard. The schema-serde runtime in
-// `aws-smithy-schema` reads omit flags from the config bag via the abstract
-// `HeaderOmitSettings` trait so it doesn't have to depend on this concrete
-// inlineable type. The presigning interceptor stores the same settings under
+// Bridge to the schema-serde runtime guard. Protocol implementations (in
+// `aws-smithy-schema` and the protocol crates) read omit flags from the config
+// bag via the abstract `HeaderOmitSettings` trait, owned by
+// `aws-smithy-runtime-api` so it is version-stable, rather than depending on
+// this concrete inlineable type. The presigning interceptor stores the same settings under
 // both `HeaderSerializationSettings` (read by codegen-emitted streaming/
 // payload paths) and `SharedHeaderOmitSettings` (read by the runtime's
 // standard-body path); this trait impl is what lets the same concrete value
 // satisfy both lookups.
-impl aws_smithy_schema::header_omit_settings::HeaderOmitSettings for HeaderSerializationSettings {
+impl aws_smithy_runtime_api::client::header_omit_settings::HeaderOmitSettings
+    for HeaderSerializationSettings
+{
     fn should_omit_default_content_type(&self) -> bool {
         self.omit_default_content_type
     }

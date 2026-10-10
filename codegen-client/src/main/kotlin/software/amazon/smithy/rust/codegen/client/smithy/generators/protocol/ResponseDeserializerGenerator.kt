@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.ConfiguredProtocolResolver
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -59,9 +60,9 @@ class ResponseDeserializerGenerator(
             "OutputOrError" to interceptorContext.resolve("OutputOrError"),
             "OrchestratorError" to orchestrator.resolve("OrchestratorError"),
             "DeserializeResponse" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::ser_de::DeserializeResponse"),
-            // Generated clients ask for the trait version they were generated against (`v1`), so a
-            // later 1.x release of aws-smithy-schema can add a protocol trait version and adapt.
-            "SchemaProtocol" to RuntimeType.smithySchema(runtimeConfig).resolve("protocol::SchemaProtocol"),
+            // Resolves the configured protocol across every supported representation and adapts it to
+            // the protocol trait version this client calls.
+            "resolve_client_protocol" to ConfiguredProtocolResolver(runtimeConfig).resolveFn(),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
             "debug_span" to RuntimeType.Tracing.resolve("debug_span"),
@@ -175,7 +176,7 @@ class ResponseDeserializerGenerator(
                     let mut output = <#{BuilderSymbol}>::default();
                     {
                         let _response_headers = response.headers();
-                        let protocol = #{SchemaProtocol}::from_config_bag(_cfg).and_then(#{SchemaProtocol}::v1).map_err(#{E}::unhandled)?;
+                        let protocol = #{resolve_client_protocol}(_cfg).map_err(#{E}::unhandled)?;
                         let mut deser = protocol.deserialize_response(response, $operationName::OUTPUT_SCHEMA, _cfg)
                             .map_err(#{E}::unhandled)?;
                         output.deserialize_members(&mut *deser).map_err(#{E}::unhandled)?;
@@ -277,7 +278,7 @@ class ResponseDeserializerGenerator(
                     // `x-amzn-requestid` without cloning. `response.headers()` is still
                     // valid — swapping the body does not invalidate headers.
                     let _response_headers = response.headers();
-                    let protocol = #{SchemaProtocol}::from_config_bag(_cfg).and_then(#{SchemaProtocol}::v1).map_err(#{E}::unhandled)?;
+                    let protocol = #{resolve_client_protocol}(_cfg).map_err(#{E}::unhandled)?;
                     let unmarshaller = #{unmarshaller}(protocol.clone());
                     let receiver = #{EventReceiver}::new(#{Receiver}::new(unmarshaller, body));
                     let mut output = #{BuilderSymbol}::default().${streamingMember.setterName()}(#{Some}(receiver));
@@ -462,8 +463,8 @@ class ResponseDeserializerGenerator(
         rustTemplate(
             """
             } else {
-                let protocol = #{SchemaProtocol}::from_config_bag(_cfg).and_then(#{SchemaProtocol}::v1)
-                    .map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
+                let protocol = #{resolve_client_protocol}(_cfg)
+                    .map_err(#{OrchestratorError}::other)?;
                 let mut deser = protocol.deserialize_response(response, $operationName::OUTPUT_SCHEMA, _cfg)
                     .map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
                 // `headers` is already in scope from the top of the function; alias it as
@@ -535,8 +536,8 @@ class ResponseDeserializerGenerator(
         // path used are eliminated.
         rustTemplate(
             """
-            let protocol = #{SchemaProtocol}::from_config_bag(_cfg).and_then(#{SchemaProtocol}::v1)
-                .map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
+            let protocol = #{resolve_client_protocol}(_cfg)
+                .map_err(#{OrchestratorError}::other)?;
             ##[allow(unused_mut)]
             let mut generic_builder = protocol.parse_error_metadata(response, _cfg)
                 .map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;

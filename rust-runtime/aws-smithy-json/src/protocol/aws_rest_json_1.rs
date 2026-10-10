@@ -58,7 +58,7 @@ impl AwsRestJsonProtocol {
     /// qualified discriminator.
     ///
     /// Setting this explicitly *overrides* the default, which is the
-    /// [`ServiceShapeNamespace`](aws_smithy_schema::protocol::ServiceShapeNamespace) config-bag
+    /// [`ServiceShapeNamespace`](aws_smithy_runtime_api::client::protocol::ServiceShapeNamespace) config-bag
     /// entry that generated clients store regardless of which protocol they were generated for.
     /// That fallback exists because a customer selecting restJson1 through
     /// `Config::builder().protocol(..)` has no way to know the model's namespace, and without it
@@ -352,7 +352,7 @@ mod tests {
     // restJson1 can silently lose every transport-bound member.
     // ---------------------------------------------------------------------------------
 
-    use aws_smithy_schema::protocol::ServiceShapeNamespace;
+    use aws_smithy_runtime_api::client::protocol::ServiceShapeNamespace;
     use aws_smithy_schema::ShapeType;
     use aws_smithy_types::config_bag::Layer;
 
