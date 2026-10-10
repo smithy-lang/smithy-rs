@@ -10,6 +10,7 @@ mod cache;
 mod dpop;
 mod token;
 
+use crate::identity::IdentityCache;
 use crate::login::cache::{load_cached_token, save_cached_token};
 use crate::login::token::{LoginToken, LoginTokenError};
 use crate::provider_config::ProviderConfig;
@@ -24,6 +25,7 @@ use aws_sdk_signin::types::{CreateOAuth2TokenRequestBody, OAuth2ErrorCode};
 use aws_sdk_signin::Client as SignInClient;
 use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_runtime::expiring_cache::ExpiringCache;
+use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::SdkConfig;
 use std::sync::Arc;
@@ -43,7 +45,7 @@ pub(super) const PROVIDER_NAME: &str = "Login";
 #[derive(Debug)]
 pub struct LoginCredentialsProvider {
     inner: Arc<Inner>,
-    token_cache: ExpiringCache<LoginToken, LoginTokenError>,
+    token_cache: Option<ExpiringCache<LoginToken, LoginTokenError>>,
 }
 
 #[derive(Debug)]
@@ -55,6 +57,12 @@ struct Inner {
     sdk_config: SdkConfig,
     time_source: SharedTimeSource,
     last_refresh_attempt: Mutex<Option<SystemTime>>,
+    // This flag is true at v2026_08_01 and later, where the default identity cache is the
+    // StaticStabilityCache. That cache owns caching and refresh scheduling, so this provider
+    // loads the token from disk on every call and returns an error when a refresh fails. For
+    // older behavior versions the flag is false, and this provider keeps its own token cache
+    // with a 30-second refresh cooldown.
+    static_stability_via_cache: bool,
 }
 
 impl LoginCredentialsProvider {
@@ -74,7 +82,33 @@ impl LoginCredentialsProvider {
     }
 
     async fn resolve_token(&self) -> Result<LoginToken, LoginTokenError> {
-        let token_cache = self.token_cache.clone();
+        if self.inner.static_stability_via_cache {
+            return self.resolve_token_from_source().await;
+        }
+        self.legacy_resolve_token().await
+    }
+
+    async fn resolve_token_from_source(&self) -> Result<LoginToken, LoginTokenError> {
+        let inner = &self.inner;
+        let mut token = load_cached_token(&inner.env, &inner.fs, &inner.session_arn).await?;
+
+        let now = inner.time_source.now();
+        let expires_soon = token.expires_at() - REFRESH_BUFFER_TIME <= now;
+
+        if expires_soon {
+            tracing::debug!("Login token expired or expiring soon, refreshing");
+            token = Self::refresh_cached_token(inner, &token, now).await?;
+        }
+
+        Ok(token)
+    }
+
+    async fn legacy_resolve_token(&self) -> Result<LoginToken, LoginTokenError> {
+        let token_cache = self
+            .token_cache
+            .as_ref()
+            .expect("token_cache is always Some when static_stability_via_cache is false")
+            .clone();
         if let Some(token) = token_cache
             .yield_or_clear_if_expired(self.inner.time_source.now())
             .await
@@ -145,6 +179,7 @@ impl LoginCredentialsProvider {
         let client_config = SignInClientConfigBuilder::from(&inner.sdk_config)
             .auth_scheme_resolver(dpop::DPoPAuthSchemeOptionResolver)
             .push_auth_scheme(dpop_auth_scheme)
+            .identity_cache(IdentityCache::no_cache())
             .build();
 
         let client = SignInClient::from_conf(client_config);
@@ -243,6 +278,13 @@ impl Builder {
         let provider_config = self.provider_config.unwrap_or_default();
         let fs = provider_config.fs();
         let env = provider_config.env();
+        // An unset behavior version resolves to `latest()`, so a hand-built provider gets the
+        // StaticStabilityCache and lets that cache own static stability. Pin an older behavior
+        // version to keep this provider's own token cache and 30-second cooldown.
+        let static_stability_via_cache = provider_config
+            .behavior_version()
+            .unwrap_or_else(BehaviorVersion::latest)
+            .is_at_least(BehaviorVersion::v2026_08_01());
         let inner = Arc::new(Inner {
             fs,
             env,
@@ -251,11 +293,16 @@ impl Builder {
             sdk_config: provider_config.client_config(),
             time_source: provider_config.time_source(),
             last_refresh_attempt: Mutex::new(None),
+            static_stability_via_cache,
         });
 
         LoginCredentialsProvider {
             inner,
-            token_cache: ExpiringCache::new(REFRESH_BUFFER_TIME),
+            token_cache: if static_stability_via_cache {
+                None
+            } else {
+                Some(ExpiringCache::new(REFRESH_BUFFER_TIME))
+            },
         }
     }
 }
