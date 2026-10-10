@@ -642,8 +642,7 @@ impl<Req, Res> std::ops::Deref for SharedClientProtocol<Req, Res> {
     }
 }
 
-/// The protocol handle this crate stores in a [`ConfiguredProtocol`], with one variant per version
-/// of the client protocol trait.
+/// The opaque protocol handle this crate stores in a [`ConfiguredProtocol`].
 ///
 /// The config bag is keyed by `TypeId`, so [`SharedClientProtocol`] is deliberately not `Storable`.
 /// The bag entry, and the `protocol(..)` setters on `SdkConfig`, `ConfigLoader` and generated
@@ -656,27 +655,27 @@ impl<Req, Res> std::ops::Deref for SharedClientProtocol<Req, Res> {
 ///
 /// Additive changes to [`ClientProtocol`] should use default method bodies. A change that a default
 /// cannot express, such as a changed signature, can ship in a minor release as a parallel trait
-/// and a new variant:
+/// and a private variant:
 ///
 /// ```text
-/// pub enum SchemaProtocol {
+/// enum SchemaProtocolKind {
 ///     V1(SharedClientProtocol),
 ///     V2(SharedClientProtocolV2), // ClientProtocolInnerV2 / ClientProtocolV2, added in 1.y
 /// }
 ///
 /// impl SchemaProtocol {
 ///     pub fn v1(&self) -> Result<SharedClientProtocol, ConfigSlotError> {
-///         match self {
-///             Self::V1(p) => Ok(p.clone()),
+///         match &self.kind {
+///             SchemaProtocolKind::V1(p) => Ok(p.clone()),
 ///             // Or an error, if a V2 protocol cannot be expressed through the V1 trait.
-///             Self::V2(p) => Ok(SharedClientProtocol::new(V2AsV1(p.clone()))),
+///             SchemaProtocolKind::V2(p) => Ok(SharedClientProtocol::new(V2AsV1(p.clone()))),
 ///         }
 ///     }
 ///
 ///     pub fn v2(&self) -> Result<SharedClientProtocolV2, ConfigSlotError> {
-///         match self {
-///             Self::V1(p) => Ok(SharedClientProtocolV2::new(V1AsV2(p.clone()))),
-///             Self::V2(p) => Ok(p.clone()),
+///         match &self.kind {
+///             SchemaProtocolKind::V1(p) => Ok(SharedClientProtocolV2::new(V1AsV2(p.clone()))),
+///             SchemaProtocolKind::V2(p) => Ok(p.clone()),
 ///         }
 ///     }
 /// }
@@ -685,15 +684,19 @@ impl<Req, Res> std::ops::Deref for SharedClientProtocol<Req, Res> {
 /// Clients generated before 1.y keep calling `v1`; later ones call `v2`. Cargo builds every crate in
 /// a dependency tree against the same 1.x release, so the `v1` an old client calls is the newest
 /// one, which knows how to adapt a newer protocol. That is why `v1` returns an owned value and is
-/// fallible even though neither is needed while `V1` is the only variant: both let a later release
-/// return an adapter, or refuse, without changing the signature old clients were compiled against.
+/// fallible even though neither is needed while `V1` is the only private variant: both let a later
+/// release return an adapter, or refuse, without changing the signature old clients were compiled
+/// against.
 ///
 /// Only the HTTP specialization of [`SharedClientProtocol`] is held, matching the orchestrator's
 /// HTTP-concrete wiring; a non-HTTP transport would bring its own handle type.
-#[non_exhaustive]
 #[derive(Clone, Debug)]
-pub enum SchemaProtocol {
-    /// A protocol implementing version 1 of the client protocol trait, [`ClientProtocol`].
+pub struct SchemaProtocol {
+    kind: SchemaProtocolKind,
+}
+
+#[derive(Clone, Debug)]
+enum SchemaProtocolKind {
     V1(SharedClientProtocol),
 }
 
@@ -706,8 +709,8 @@ impl SchemaProtocol {
     /// runtime API's [`ConfigSlotError`], whose kinds are private, so a rejection reason can be
     /// added without changing this signature.
     pub fn v1(&self) -> Result<SharedClientProtocol, ConfigSlotError> {
-        match self {
-            Self::V1(protocol) => Ok(protocol.clone()),
+        match &self.kind {
+            SchemaProtocolKind::V1(protocol) => Ok(protocol.clone()),
         }
     }
 }
@@ -715,9 +718,9 @@ impl SchemaProtocol {
 /// Identifies this crate's compatibility line and the protocol-trait API revision.
 ///
 /// The compatibility line comes from this crate's Cargo version, so a schema 2.x handle reports
-/// `aws-smithy-schema@2`. The API revision stays `1` while [`SchemaProtocol`] remains an
-/// enum over protocol-trait versions; adding a variant does not change it because the enum is
-/// `#[non_exhaustive]` and its accessors adapt between variants.
+/// `aws-smithy-schema@2`. The API revision stays `1` while [`SchemaProtocol`] contains a private
+/// enum over protocol-trait versions; adding a variant does not change it because its public
+/// accessors adapt between variants.
 impl ConfigPayloadFor<ClientProtocolSlot> for SchemaProtocol {
     const REPRESENTATION: RepresentationId = aws_smithy_runtime_api::representation_id!(1);
 }
@@ -729,8 +732,8 @@ impl ProtocolHandle for SchemaProtocol {
         endpoint: &aws_smithy_types::endpoint::Endpoint,
         cfg: &ConfigBag,
     ) -> Result<(), BoxError> {
-        match self {
-            Self::V1(protocol) => {
+        match &self.kind {
+            SchemaProtocolKind::V1(protocol) => {
                 ClientProtocol::update_endpoint(&*protocol.inner, request, endpoint, cfg)
                     .map_err(Into::into)
             }
@@ -740,7 +743,9 @@ impl ProtocolHandle for SchemaProtocol {
 
 impl From<SharedClientProtocol> for ConfiguredProtocol {
     fn from(protocol: SharedClientProtocol) -> Self {
-        ConfiguredProtocol::new(SchemaProtocol::V1(protocol))
+        ConfiguredProtocol::new(SchemaProtocol {
+            kind: SchemaProtocolKind::V1(protocol),
+        })
     }
 }
 
@@ -987,12 +992,13 @@ mod tests {
     }
 
     #[test]
-    fn shared_client_protocol_converts_into_the_v1_variant() {
+    fn shared_client_protocol_converts_into_a_v1_protocol() {
         let configured = ConfiguredProtocol::from(SharedClientProtocol::new(StubProtocol));
-        assert!(matches!(
-            configured.downcast_ref::<SchemaProtocol>(),
-            Some(SchemaProtocol::V1(_))
-        ));
+        assert!(configured
+            .downcast_ref::<SchemaProtocol>()
+            .expect("schema protocol")
+            .v1()
+            .is_ok());
     }
 
     #[test]

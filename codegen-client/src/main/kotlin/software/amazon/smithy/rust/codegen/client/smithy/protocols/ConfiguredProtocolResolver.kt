@@ -28,7 +28,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
  * `Result<SharedClientProtocol, E>` for this client's `SharedClientProtocol`, where
  * `E: Into<BoxError>`.
  */
-data class ConfiguredProtocolRepresentation(
+internal data class ConfiguredProtocolRepresentation(
     val payloadType: RuntimeType,
     val adapt: Writable,
 )
@@ -45,7 +45,7 @@ data class ConfiguredProtocolRepresentation(
  * add an entry here with an aliased dependency and an adapter, or record an explicit decision not
  * to support it. Entries for lines that have left the support window may be removed.
  */
-object ConfiguredProtocolRegistry {
+internal object ConfiguredProtocolRegistry {
     fun representations(runtimeConfig: RuntimeConfig): List<ConfiguredProtocolRepresentation> =
         listOf(
             // The compatibility line this client is generated against. `v1()` already adapts
@@ -90,7 +90,7 @@ object ConfiguredProtocolRegistry {
  * Renders `resolve_client_protocol`, which generated serializers and deserializers call to obtain
  * the configured protocol.
  */
-class ConfiguredProtocolResolver(
+internal class ConfiguredProtocolResolver(
     private val runtimeConfig: RuntimeConfig,
     private val representations: List<ConfiguredProtocolRepresentation> =
         ConfiguredProtocolRegistry.representations(runtimeConfig),
@@ -108,7 +108,6 @@ class ConfiguredProtocolResolver(
             "ClientProtocolSlot" to runtimeApi.resolve("client::protocol::ClientProtocolSlot"),
             "ConfiguredProtocol" to runtimeApi.resolve("client::protocol::ConfiguredProtocol"),
             "ConfigPayloadFor" to runtimeApi.resolve("client::versioned_config::ConfigPayloadFor"),
-            "ConfigSlotError" to runtimeApi.resolve("client::versioned_config::ConfigSlotError"),
             "RepresentationId" to runtimeApi.resolve("client::versioned_config::RepresentationId"),
             "SharedClientProtocol" to RuntimeType.smithySchema(runtimeConfig).resolve("protocol::SharedClientProtocol"),
         )
@@ -157,7 +156,7 @@ class ConfiguredProtocolResolver(
                 static SUPPORTED: [#{RepresentationId}; ${representations.size}] = [#{supported}];
                 let configured = cfg
                     .load::<#{ConfiguredProtocol}>()
-                    .ok_or_else(#{ConfigSlotError}::missing::<#{ClientProtocolSlot}>)?;
+                    .ok_or_else(#{ConfiguredProtocol}::missing_error)?;
                 #{branches}
                 #{Err}(configured.unsupported_error(&SUPPORTED).into())
             }

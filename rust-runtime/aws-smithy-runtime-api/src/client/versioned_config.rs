@@ -8,7 +8,7 @@
 //!
 //! # The problem
 //!
-//! A `ConfigBag` is keyed by [`TypeId`]. Two source-identical types from semver-incompatible
+//! A `ConfigBag` is keyed by [`TypeId`](std::any::TypeId). Two source-identical types from semver-incompatible
 //! releases of a crate (for example `aws-smithy-schema` 1.x and 2.x, or `aws-smithy-eventstream`
 //! 0.60 and 0.61) have different `TypeId`s, so a value stored through one release is silently
 //! invisible to code compiled against the other: the lookup returns `None`, which is
@@ -16,33 +16,32 @@
 //!
 //! # The solution
 //!
-//! Each cross-version configuration concept gets a *logical slot*: a marker type, implementing
-//! [`ConfigSlot`], declared in this crate. A [`VersionedConfigValue<Slot>`] is the `ConfigBag`
-//! entry for that slot. Because the slot marker and the wrapper both belong to this stable crate,
-//! the entry's `TypeId` does not change when the crate that defines the payload takes an
-//! incompatible release.
+//! Each cross-version configuration concept gets a *logical slot*: a marker type declared in this
+//! crate. A slot-specific public wrapper is the `ConfigBag` entry. Because the slot marker and the
+//! wrapper both belong to this stable crate, the entry's `TypeId` does not change when the crate
+//! that defines the payload takes an incompatible release.
 //!
 //! The payload itself is type-erased. It is a type from the independently versioned crate,
 //! associated with the slot through [`ConfigPayloadFor`], and it records which crate and
-//! compatibility line produced it as a [`RepresentationId`]. Consumers recover it with a safe
-//! [`downcast_ref`](VersionedConfigValue::downcast_ref) to each representation they support, and
-//! report anything else with a [`ConfigSlotError`] instead of treating it as absent.
+//! compatibility line produced it as a [`RepresentationId`]. Slot-specific wrappers safely
+//! downcast to each representation a consumer supports and report anything else with a
+//! [`ConfigSlotError`] instead of treating it as absent. The generic storage implementation stays
+//! private so callers cannot bypass those wrappers.
 //!
 //! Because every representation shares one key, `ConfigBag` replacement, append, unset, clear, and
 //! layer precedence apply to the logical setting: a schema 2.x value in a higher layer replaces a
 //! schema 1.x value in a lower one, and an explicit unset suppresses both.
 //!
 //! Slots can only be declared in this crate. A slot declared in the payload crate would acquire
-//! that crate's identity and reintroduce the original problem, so [`ConfigSlot`] is sealed.
+//! that crate's identity and reintroduce the original problem, so slot declarations are sealed.
 
-use std::any::{Any, TypeId};
+use std::any::Any;
 use std::error::Error as StdError;
 use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-/// Identifies the crate and compatibility line that produced a payload stored in a
-/// [`VersionedConfigValue`].
+/// Identifies the crate and compatibility line that produced a versioned configuration payload.
 ///
 /// A *compatibility line* follows Cargo's semver compatibility rules: `1` for any 1.x release, `2`
 /// for any 2.x release, and `0.61` for any 0.61.x release. Within one compatibility line, an
@@ -155,28 +154,24 @@ macro_rules! representation_id {
 }
 
 pub(crate) mod private {
-    pub trait Sealed {}
+    pub(crate) trait Sealed {}
 }
 
-/// A logical configuration slot whose value can come from independently versioned crates.
-///
-/// Slots are marker types declared in this crate, so their identity, and the identity of the
-/// [`VersionedConfigValue`] stored for them, never depends on the payload crate's version. This
-/// trait is sealed for that reason.
-pub trait ConfigSlot: private::Sealed + Send + Sync + 'static {
+/// Internal identity and diagnostic metadata for a logical configuration slot.
+pub(crate) trait ConfigSlot: private::Sealed + Send + Sync + 'static {
     /// A human-readable name for the setting, used in diagnostics, for example `client protocol`.
     const NAME: &'static str;
 }
 
-/// Associates a payload type from an independently versioned crate with a [`ConfigSlot`].
+/// Associates a payload type from an independently versioned crate with a stable logical slot.
 ///
 /// The payload crate implements this for its own type; Rust's coherence rules allow that because
 /// the payload type is local to it. Each compatibility line of the payload crate implements it for
 /// its own payload type, with its own [`REPRESENTATION`](Self::REPRESENTATION).
 ///
-/// Do not also implement `Storable` for the payload type: the [`VersionedConfigValue`] wrapper is
-/// the only bag entry for a slot.
-pub trait ConfigPayloadFor<Slot: ConfigSlot>: Any + fmt::Debug + Send + Sync + 'static {
+/// Do not also implement `Storable` for the payload type. The stable slot-specific wrapper is the
+/// only bag entry for the logical setting.
+pub trait ConfigPayloadFor<Slot>: Any + fmt::Debug + Send + Sync + 'static {
     /// Identifies the crate, compatibility line and API revision that define this payload type.
     ///
     /// Build it with [`representation_id!`](crate::representation_id).
@@ -186,7 +181,7 @@ pub trait ConfigPayloadFor<Slot: ConfigSlot>: Any + fmt::Debug + Send + Sync + '
 trait Payload: Any + fmt::Debug + Send + Sync {}
 impl<T: Any + fmt::Debug + Send + Sync> Payload for T {}
 
-/// The [`ConfigBag`](aws_smithy_types::config_bag::ConfigBag) entry for a [`ConfigSlot`].
+/// Internal type-erased storage for a logical configuration slot.
 ///
 /// Holds a type-erased payload plus the [`RepresentationId`] of the crate that produced it. The
 /// payload is shared through an [`Arc`], so cloning the wrapper is cheap and does not require the
@@ -194,23 +189,18 @@ impl<T: Any + fmt::Debug + Send + Sync> Payload for T {}
 /// [`CloneableLayer`](aws_smithy_types::config_bag::CloneableLayer).
 ///
 /// See the [module documentation](self) for why this type exists.
-pub struct VersionedConfigValue<S: ConfigSlot> {
+pub(crate) struct VersionedConfigValue<S: ConfigSlot> {
     representation: RepresentationId,
     payload: Arc<dyn Payload>,
     _slot: PhantomData<fn() -> S>,
 }
 
 impl<S: ConfigSlot> VersionedConfigValue<S> {
-    /// Wraps a payload.
-    pub fn new<T: ConfigPayloadFor<S>>(payload: T) -> Self {
-        Self::from_arc(Arc::new(payload))
-    }
-
     /// Wraps a payload that is already shared.
     ///
     /// Useful when the same allocation must also be held through a slot-specific capability
     /// trait object.
-    pub fn from_arc<T: ConfigPayloadFor<S>>(payload: Arc<T>) -> Self {
+    pub(crate) fn from_arc<T: ConfigPayloadFor<S>>(payload: Arc<T>) -> Self {
         Self {
             representation: T::REPRESENTATION,
             payload,
@@ -219,13 +209,8 @@ impl<S: ConfigSlot> VersionedConfigValue<S> {
     }
 
     /// Identifies the crate and compatibility line that produced the payload.
-    pub fn representation(&self) -> RepresentationId {
+    pub(crate) fn representation(&self) -> RepresentationId {
         self.representation
-    }
-
-    /// Returns `true` if the payload is a `T`.
-    pub fn is<T: ConfigPayloadFor<S>>(&self) -> bool {
-        self.payload_any().type_id() == TypeId::of::<T>()
     }
 
     /// Returns the payload if it is a `T`.
@@ -234,12 +219,12 @@ impl<S: ConfigSlot> VersionedConfigValue<S> {
     /// compatibility line of the payload crate. Consumers that support several representations try
     /// each in turn and report the remaining case with
     /// [`unsupported_error`](Self::unsupported_error); they must not treat it as an absent value.
-    pub fn downcast_ref<T: ConfigPayloadFor<S>>(&self) -> Option<&T> {
+    pub(crate) fn downcast_ref<T: ConfigPayloadFor<S>>(&self) -> Option<&T> {
         self.payload_any().downcast_ref::<T>()
     }
 
     /// Returns a shared handle to the payload if it is a `T`.
-    pub fn downcast_arc<T: ConfigPayloadFor<S>>(&self) -> Option<Arc<T>> {
+    pub(crate) fn downcast_arc<T: ConfigPayloadFor<S>>(&self) -> Option<Arc<T>> {
         let payload: Arc<dyn Any + Send + Sync> = self.payload.clone();
         payload.downcast::<T>().ok()
     }
@@ -251,7 +236,10 @@ impl<S: ConfigSlot> VersionedConfigValue<S> {
     /// consumer understands but is not the type the consumer was compiled against. That usually
     /// means two copies of the payload crate with the same compatibility line are linked, and is
     /// reported separately from a representation the consumer does not support at all.
-    pub fn unsupported_error(&self, supported: &'static [RepresentationId]) -> ConfigSlotError {
+    pub(crate) fn unsupported_error(
+        &self,
+        supported: &'static [RepresentationId],
+    ) -> ConfigSlotError {
         let kind = if supported.contains(&self.representation) {
             ConfigSlotErrorKind::RepresentationMismatch {
                 found: self.representation,
@@ -338,7 +326,7 @@ macro_rules! config_slot {
 }
 pub(crate) use config_slot;
 
-/// A configured [`ConfigSlot`] value is missing or cannot be used by this consumer.
+/// A versioned configuration value is missing or cannot be used by this consumer.
 #[derive(Debug)]
 pub struct ConfigSlotError {
     slot: &'static str,
@@ -359,7 +347,7 @@ enum ConfigSlotErrorKind {
 
 impl ConfigSlotError {
     /// Creates the error for a slot with no configured value.
-    pub fn missing<S: ConfigSlot>() -> Self {
+    pub(crate) fn missing<S: ConfigSlot>() -> Self {
         Self {
             slot: S::NAME,
             kind: ConfigSlotErrorKind::Missing,
@@ -496,6 +484,14 @@ mod tests {
     type TestValue = VersionedConfigValue<TestSlot>;
     type TestListValue = VersionedConfigValue<TestListSlot>;
 
+    fn test_value<T: ConfigPayloadFor<TestSlot>>(payload: T) -> TestValue {
+        TestValue::from_arc(Arc::new(payload))
+    }
+
+    fn test_list_value<T: ConfigPayloadFor<TestListSlot>>(payload: T) -> TestListValue {
+        TestListValue::from_arc(Arc::new(payload))
+    }
+
     fn read(value: &TestValue) -> String {
         if let Some(setting) = value.downcast_ref::<v1::Setting>() {
             format!("v1:{}", setting.0)
@@ -509,23 +505,23 @@ mod tests {
     #[test]
     fn representations_from_incompatible_versions_share_one_slot() {
         let mut lower = Layer::new("lower");
-        lower.store_put(TestValue::new(v1::Setting("old")));
+        lower.store_put(test_value(v1::Setting("old")));
         let mut upper = Layer::new("upper");
-        upper.store_put(TestValue::new(v2::Setting("new")));
+        upper.store_put(test_value(v2::Setting("new")));
         let cfg = ConfigBag::of_layers(vec![lower, upper]);
 
         let value = cfg.load::<TestValue>().expect("set");
         assert_eq!("v2:new", read(value));
         assert_eq!(v2::REPRESENTATION, value.representation());
-        assert!(value.is::<v2::Setting>());
-        assert!(!value.is::<v1::Setting>());
+        assert!(value.downcast_ref::<v2::Setting>().is_some());
+        assert!(value.downcast_ref::<v1::Setting>().is_none());
         assert!(value.downcast_ref::<v1::Setting>().is_none());
     }
 
     #[test]
     fn lower_layer_representation_is_visible_when_not_overridden() {
         let mut lower = Layer::new("lower");
-        lower.store_put(TestValue::new(v1::Setting("old")));
+        lower.store_put(test_value(v1::Setting("old")));
         let cfg = ConfigBag::of_layers(vec![lower, Layer::new("upper")]);
         assert_eq!("v1:old", read(cfg.load::<TestValue>().unwrap()));
     }
@@ -533,14 +529,14 @@ mod tests {
     #[test]
     fn unset_suppresses_every_representation() {
         let mut lower = Layer::new("lower");
-        lower.store_put(TestValue::new(v1::Setting("old")));
+        lower.store_put(test_value(v1::Setting("old")));
         let mut upper = Layer::new("upper");
         upper.unset::<TestValue>();
         let cfg = ConfigBag::of_layers(vec![lower, upper]);
         assert!(cfg.load::<TestValue>().is_none());
 
         let mut lower = Layer::new("lower");
-        lower.store_put(TestValue::new(v2::Setting("new")));
+        lower.store_put(test_value(v2::Setting("new")));
         let mut upper = Layer::new("upper");
         upper.store_or_unset::<TestValue>(None);
         let cfg = ConfigBag::of_layers(vec![lower, upper]);
@@ -550,10 +546,10 @@ mod tests {
     #[test]
     fn append_slot_collects_and_clears_across_representations() {
         let mut first = Layer::new("first");
-        first.store_append(TestListValue::new(v1::Setting("a")));
+        first.store_append(test_list_value(v1::Setting("a")));
         let mut second = Layer::new("second");
-        second.store_append(TestListValue::new(v2::Setting("b")));
-        second.store_append(TestListValue::new(v1::Setting("c")));
+        second.store_append(test_list_value(v2::Setting("b")));
+        second.store_append(test_list_value(v1::Setting("c")));
         let cfg = ConfigBag::of_layers(vec![first, second]);
 
         let reps: Vec<_> = cfg
@@ -565,14 +561,14 @@ mod tests {
         let mut cleared = Layer::new("cleared");
         cleared.clear::<TestListValue>();
         let mut first = Layer::new("first");
-        first.store_append(TestListValue::new(v1::Setting("a")));
+        first.store_append(test_list_value(v1::Setting("a")));
         let cfg = ConfigBag::of_layers(vec![first, cleared]);
         assert_eq!(0, cfg.load::<TestListValue>().count());
     }
 
     #[test]
     fn clones_share_the_payload_and_work_in_cloneable_layers() {
-        let value = TestValue::new(v1::Setting("shared"));
+        let value = test_value(v1::Setting("shared"));
         let clone = value.clone();
         assert!(Arc::ptr_eq(
             &value.downcast_arc::<v1::Setting>().unwrap(),
@@ -608,7 +604,7 @@ mod tests {
     #[test]
     fn unsupported_error_lists_what_the_consumer_supports() {
         static SUPPORTED: [RepresentationId; 1] = [v1::REPRESENTATION];
-        let value = TestValue::new(v2::Setting("new"));
+        let value = test_value(v2::Setting("new"));
         let err = value.unsupported_error(&SUPPORTED);
         assert!(err.is_unsupported());
         assert_eq!(Some(v2::REPRESENTATION), err.found());
@@ -622,7 +618,7 @@ mod tests {
     #[test]
     fn supported_representation_that_fails_to_downcast_is_a_mismatch() {
         static SUPPORTED: [RepresentationId; 2] = [v1::REPRESENTATION, v2::REPRESENTATION];
-        let value = TestValue::new(DuplicateV1);
+        let value = test_value(DuplicateV1);
         assert_eq!(v1::REPRESENTATION, value.representation());
         assert!(value.downcast_ref::<v1::Setting>().is_none());
 
@@ -663,7 +659,7 @@ mod tests {
 
     #[test]
     fn debug_names_the_slot_and_representation() {
-        let debug = format!("{:?}", TestValue::new(v1::Setting("dbg")));
+        let debug = format!("{:?}", test_value(v1::Setting("dbg")));
         assert!(debug.contains("test setting"), "{debug}");
         assert!(debug.contains("test-payloads"), "{debug}");
         assert!(debug.contains("dbg"), "{debug}");

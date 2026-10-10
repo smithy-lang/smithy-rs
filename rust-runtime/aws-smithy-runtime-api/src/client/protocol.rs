@@ -38,8 +38,7 @@ use std::fmt;
 use std::sync::Arc;
 
 config_slot! {
-    /// The [`ConfigSlot`](crate::client::versioned_config::ConfigSlot) for the client protocol
-    /// selected through configuration.
+    /// The stable marker for the client protocol selected through configuration.
     ///
     /// Protocol-defining crates implement [`ConfigPayloadFor<ClientProtocolSlot>`] for their
     /// [`ProtocolHandle`] type. The bag entry for this slot is [`ConfiguredProtocol`].
@@ -110,15 +109,15 @@ impl ConfiguredProtocol {
         self.value.downcast_arc()
     }
 
-    /// Builds the error for a handle that none of the consumer's `supported` representations could
-    /// downcast. See [`VersionedConfigValue::unsupported_error`].
-    pub fn unsupported_error(&self, supported: &'static [RepresentationId]) -> ConfigSlotError {
-        self.value.unsupported_error(supported)
+    /// Returns the error for an absent configured client protocol.
+    pub fn missing_error() -> ConfigSlotError {
+        ConfigSlotError::missing::<ClientProtocolSlot>()
     }
 
-    /// Returns the underlying versioned value.
-    pub fn as_versioned(&self) -> &VersionedConfigValue<ClientProtocolSlot> {
-        &self.value
+    /// Builds the error for a handle that none of the consumer's `supported` representations could
+    /// downcast.
+    pub fn unsupported_error(&self, supported: &'static [RepresentationId]) -> ConfigSlotError {
+        self.value.unsupported_error(supported)
     }
 
     /// Applies a resolved endpoint to a request the wrapped protocol serialized.
