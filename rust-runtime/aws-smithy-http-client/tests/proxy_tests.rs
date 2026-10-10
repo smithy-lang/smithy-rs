@@ -1020,6 +1020,53 @@ async fn test_tunneled_handshake_eof_is_io_with_s2n_tls_and_partitioned_connecti
     pool_tunneled_handshake_eof_is_io(tls::Provider::S2nTls).await;
 }
 
+/// An `https://` proxy that closes the connection during the TLS handshake to the proxy fails the
+/// pool request with retryable I/O, as a handshake failure to the origin does.
+#[cfg(any(feature = "rustls-ring", feature = "s2n-tls"))]
+async fn pool_https_proxy_handshake_eof_is_io(provider: tls::Provider) {
+    let proxy = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("proxy should bind");
+    let proxy_addr = proxy.local_addr().expect("proxy has an address");
+    let closing_proxy = tokio::spawn(async move {
+        loop {
+            let (stream, _) = proxy.accept().await.expect("proxy accepts");
+            drop(stream);
+        }
+    });
+    let config = ProxyConfig::all(format!("https://{proxy_addr}")).expect("valid proxy");
+    let client = https_client(
+        &PartitionedConnectionPool,
+        proxy_backend_config(config),
+        provider,
+        tls::TlsContext::default(),
+    );
+
+    let error = test_client::send_request(
+        &client.connector,
+        HttpRequest::get("https://secure.example.com/private").expect("valid request"),
+    )
+    .await
+    .expect_err("a proxy that closes during the handshake fails the request");
+    closing_proxy.abort();
+    assert!(error.is_io(), "expected ConnectorError::io, got {error:?}");
+}
+
+#[cfg(feature = "rustls-ring")]
+#[tokio::test]
+async fn test_https_proxy_handshake_eof_is_io_with_rustls_and_partitioned_connection_pool() {
+    pool_https_proxy_handshake_eof_is_io(tls::Provider::rustls(
+        tls::rustls_provider::CryptoMode::Ring,
+    ))
+    .await;
+}
+
+#[cfg(feature = "s2n-tls")]
+#[tokio::test]
+async fn test_https_proxy_handshake_eof_is_io_with_s2n_tls_and_partitioned_connection_pool() {
+    pool_https_proxy_handshake_eof_is_io(tls::Provider::S2nTls).await;
+}
+
 #[cfg(any(feature = "rustls-ring", feature = "s2n-tls"))]
 async fn tunneled_https_request_uses_origin_form(
     backend: &dyn HttpsClientBackend,

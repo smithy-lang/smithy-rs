@@ -303,6 +303,10 @@ pub(crate) mod connect {
     }
 
     /// Adapts s2n connector errors before another connector wraps them.
+    ///
+    /// The CONNECT tunnel wraps this connector, which performs TLS to an `https://` proxy. Its
+    /// errors go through [`box_s2n_connector_error`], so a failed handshake to the proxy is
+    /// classified like one to the origin.
     #[derive(Clone)]
     struct S2nErrorSourceConnector<C>(C);
 
@@ -313,17 +317,17 @@ pub(crate) mod connect {
         C::Response: 'static,
     {
         type Response = C::Response;
-        type Error = S2nConnectorError;
+        type Error = BoxError;
         type Future =
             Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
 
         fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-            self.0.poll_ready(cx).map_err(S2nConnectorError)
+            self.0.poll_ready(cx).map_err(box_s2n_connector_error)
         }
 
         fn call(&mut self, request: Uri) -> Self::Future {
             let future = self.0.call(request);
-            Box::pin(async move { future.await.map_err(S2nConnectorError) })
+            Box::pin(async move { future.await.map_err(box_s2n_connector_error) })
         }
     }
 
