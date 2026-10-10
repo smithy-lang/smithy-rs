@@ -564,6 +564,17 @@ impl StaticStabilityCache {
             _ => None,
         }
     }
+
+    // Whether the refresh backoff of the sole partition is still active, the same gate classify()
+    // reads to return Decision::RateLimited.
+    fn rate_limited(&self, now: SystemTime) -> bool {
+        let parts = self.partitions.read().unwrap();
+        let Some(part) = parts.values().next() else {
+            return false;
+        };
+        let st = part.state.lock().unwrap();
+        matches!(st.next_refresh_allowed_at, Some(t) if now < t)
+    }
 }
 
 #[cfg(test)]
@@ -581,18 +592,19 @@ mod tests {
     // implementation diverges from the suite in two spots, handled inline: invalidation matches by
     // pointer identity rather than access key id, and the refresh backoff uses a fixed test value
     // (production jitters it). The configured advisory window is applied via a test-only builder
-    // knob. A `rateLimited` expectation coincides with `sourceContacted == false` for a credential
-    // past its refresh point, so it needs no separate assertion.
+    // knob. Every struct here denies unknown fields, so a field added to the suite fails to parse
+    // and gets asserted.
     #[derive(Deserialize)]
-    #[serde(rename_all = "camelCase")]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
     struct Scenario {
+        id: String,
         documentation: String,
         given: Given,
         steps: Vec<Step>,
     }
 
     #[derive(Deserialize)]
-    #[serde(rename_all = "camelCase")]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
     struct Given {
         cached_credentials: String,
         access_key_id: Option<String>,
@@ -601,12 +613,13 @@ mod tests {
     }
 
     #[derive(Deserialize)]
-    #[serde(tag = "type", rename_all = "camelCase")]
+    #[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
     enum Step {
         #[serde(rename_all = "camelCase")]
         GetCredentials {
             response: Option<String>,
             lifetime_seconds: Option<u64>,
+            documentation: Option<String>,
             expected: Expected,
         },
         #[serde(rename_all = "camelCase")]
@@ -619,10 +632,11 @@ mod tests {
     }
 
     #[derive(Deserialize)]
-    #[serde(rename_all = "camelCase")]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
     struct Expected {
         result: String,
         source_contacted: bool,
+        rate_limited: bool,
         advisory_window_seconds: Option<u64>,
     }
 
@@ -645,7 +659,8 @@ mod tests {
     }
 
     async fn run_scenario(s: &Scenario) {
-        let doc = s.documentation.as_str();
+        let doc = format!("{} ({})", s.id, s.documentation);
+        let doc = doc.as_str();
         let seeded = s.given.cached_credentials != "none";
         // Place the seeded credential in the requested window (seed lifetime 3600).
         let start = match s.given.cached_credentials.as_str() {
@@ -742,13 +757,29 @@ mod tests {
                         cache.invalidate(&identity(999, SEED_LIFE, true));
                     }
                 }
-                Step::GetCredentials { expected, .. } => {
+                Step::GetCredentials {
+                    expected,
+                    documentation,
+                    ..
+                } => {
+                    // A step carries its own documentation once a scenario has several of them.
+                    let doc = match documentation {
+                        Some(d) => format!("{doc} / {d}"),
+                        None => doc.to_string(),
+                    };
+                    let doc = doc.as_str();
+                    // rateLimited describes this call, so read the gate before it runs: a refresh
+                    // that fails during the call sets the backoff on the way out.
+                    let limited = cache.rate_limited(time.now());
                     let (r, contacted) =
                         source_get(&cache, &resolver, &components, &cfg, &contacts).await;
                     assert_eq!(
                         contacted, expected.source_contacted,
                         "{doc}: sourceContacted"
                     );
+                    // sourceContacted alone says no call went out. rateLimited says the backoff is
+                    // why, so this assertion tells a backed-off credential from a fresh one.
+                    assert_eq!(limited, expected.rate_limited, "{doc}: rateLimited");
                     match expected.result.as_str() {
                         "cachedCredentials" => {
                             let got = r.expect("cachedCredentials");
