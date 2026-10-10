@@ -46,11 +46,19 @@ pub const THROTTLING_ERRORS: &[&str] = &[
 /// AWS error codes that represent transient errors.
 pub const TRANSIENT_ERRORS: &[&str] = &["RequestTimeout", "RequestTimeoutException"];
 
+/// AWS error codes that mean the credentials signing the request are no longer valid.
+///
+/// When a service rejects a request with one of the codes in this list, the SDK retries it. The
+/// identity cache invalidates the rejected credentials at the end of that attempt, so the retry
+/// resolves identity again and carries refreshed credentials.
+pub const INVALID_CREDENTIAL_ERRORS: &[&str] = &["ExpiredToken", "InvalidToken"];
+
 /// A retry classifier for determining if the response sent by an AWS service requires a retry.
 #[derive(Debug)]
 pub struct AwsErrorCodeClassifier<E> {
     throttling_errors: Cow<'static, [&'static str]>,
     transient_errors: Cow<'static, [&'static str]>,
+    invalid_credential_errors: Cow<'static, [&'static str]>,
     _inner: PhantomData<E>,
 }
 
@@ -59,6 +67,7 @@ impl<E> Default for AwsErrorCodeClassifier<E> {
         Self {
             throttling_errors: THROTTLING_ERRORS.into(),
             transient_errors: TRANSIENT_ERRORS.into(),
+            invalid_credential_errors: INVALID_CREDENTIAL_ERRORS.into(),
             _inner: PhantomData,
         }
     }
@@ -69,6 +78,7 @@ impl<E> Default for AwsErrorCodeClassifier<E> {
 pub struct AwsErrorCodeClassifierBuilder<E> {
     throttling_errors: Option<Cow<'static, [&'static str]>>,
     transient_errors: Option<Cow<'static, [&'static str]>>,
+    invalid_credential_errors: Option<Cow<'static, [&'static str]>>,
     _inner: PhantomData<E>,
 }
 
@@ -82,11 +92,23 @@ impl<E> AwsErrorCodeClassifierBuilder<E> {
         self
     }
 
+    /// Set `invalid_credential_errors` for the builder
+    pub fn invalid_credential_errors(
+        mut self,
+        invalid_credential_errors: impl Into<Cow<'static, [&'static str]>>,
+    ) -> Self {
+        self.invalid_credential_errors = Some(invalid_credential_errors.into());
+        self
+    }
+
     /// Build a new [`AwsErrorCodeClassifier`]
     pub fn build(self) -> AwsErrorCodeClassifier<E> {
         AwsErrorCodeClassifier {
             throttling_errors: self.throttling_errors.unwrap_or(THROTTLING_ERRORS.into()),
             transient_errors: self.transient_errors.unwrap_or(TRANSIENT_ERRORS.into()),
+            invalid_credential_errors: self
+                .invalid_credential_errors
+                .unwrap_or(INVALID_CREDENTIAL_ERRORS.into()),
             _inner: self._inner,
         }
     }
@@ -103,6 +125,7 @@ impl<E> AwsErrorCodeClassifier<E> {
         AwsErrorCodeClassifierBuilder {
             throttling_errors: None,
             transient_errors: None,
+            invalid_credential_errors: None,
             _inner: PhantomData,
         }
     }
@@ -137,6 +160,14 @@ where
             if self.transient_errors.contains(&error_code) {
                 return RetryAction::RetryIndicated(RetryReason::RetryableError {
                     kind: ErrorKind::TransientError,
+                    retry_after,
+                });
+            }
+            // The token bucket draws `timeout_retry_cost` for a `TransientError`, and an expired
+            // or invalid token is not a timeout. `ClientError` draws the plain `retry_cost`.
+            if self.invalid_credential_errors.contains(&error_code) {
+                return RetryAction::RetryIndicated(RetryReason::RetryableError {
+                    kind: ErrorKind::ClientError,
                     retry_after,
                 });
             }
@@ -464,6 +495,69 @@ mod test {
         assert_eq!(
             policy.classify_retry_v2(&ctx_with(Some("invalid"), None), &previous),
             RetryAction::NoActionIndicated,
+        );
+    }
+
+    #[test]
+    fn classify_invalid_credential_errors() {
+        let policy = AwsErrorCodeClassifier::<ErrorMetadata>::new();
+        for code in ["ExpiredToken", "InvalidToken"] {
+            assert_eq!(
+                policy.classify_retry(&ctx_with(None, Some(code))),
+                RetryAction::retryable_error(ErrorKind::ClientError),
+                "{code} should be a retryable client error"
+            );
+            assert_eq!(
+                policy.classify_retry_v2(
+                    &ctx_with(None, Some(code)),
+                    &RetryAction::NoActionIndicated
+                ),
+                RetryAction::retryable_error(ErrorKind::ClientError),
+                "{code} should be a retryable client error (v2)"
+            );
+        }
+    }
+
+    #[test]
+    fn codes_outside_the_list_are_not_retried() {
+        let policy = AwsErrorCodeClassifier::<ErrorMetadata>::new();
+        for code in [
+            "ExpiredTokenException",
+            "AccessDenied",
+            "InvalidTokenException",
+        ] {
+            assert_eq!(
+                policy.classify_retry(&ctx_with(None, Some(code))),
+                RetryAction::NoActionIndicated,
+                "{code} should not be retried"
+            );
+        }
+    }
+
+    #[test]
+    fn invalid_credential_error_carries_retry_after() {
+        let policy = AwsErrorCodeClassifier::<ErrorMetadata>::new();
+        assert_eq!(
+            policy.classify_retry(&ctx_with(Some("2000"), Some("ExpiredToken"))),
+            RetryAction::retryable_error_with_explicit_delay(
+                ErrorKind::ClientError,
+                Duration::from_secs(2)
+            )
+        );
+    }
+
+    #[test]
+    fn invalid_credential_errors_builder_override() {
+        let policy = AwsErrorCodeClassifier::<ErrorMetadata>::builder()
+            .invalid_credential_errors(&["CustomExpired"][..])
+            .build();
+        assert_eq!(
+            policy.classify_retry(&ctx_with(None, Some("CustomExpired"))),
+            RetryAction::retryable_error(ErrorKind::ClientError)
+        );
+        assert_eq!(
+            policy.classify_retry(&ctx_with(None, Some("ExpiredToken"))),
+            RetryAction::NoActionIndicated
         );
     }
 }
