@@ -84,6 +84,9 @@ let json = serde_json::to_string(&serializable)?;
 - `out_of_range_floats_as_strings`: writes `NaN`, `Infinity`, and
   `-Infinity` as strings instead of relying on the format's non-finite float
   behavior.
+- `serialize_unset_fields`: writes absent optional structure members as
+  `None`/`null` instead of omitting them. Enable this for formats that require
+  exact structure lengths or fixed field positions.
 
 The generated module also exports `serialize_redacted` and
 `serialize_unredacted` for embedding generated types in application-owned
@@ -145,12 +148,11 @@ protocol bindings, timestamp formats, headers, payload placement, or error
 envelopes.
 
 Unset optional structure members are currently omitted during serialization.
-The generated serializer still reports the modeled member count to serde.
-Formats that rely on an exact, up-front structure length may therefore reject
-or misread structures with unset optional members. JSON is not affected;
-length-sensitive formats such as CBOR should only be used when the selected
-serializer can handle this representation or all serialized members are
-present.
+This is compatible with self-describing formats such as JSON, but formats that
+rely on an exact, up-front structure length or fixed field positions may reject
+or misread the result. Set `SerializationSettings::serialize_unset_fields` to
+`true` to serialize those members as `None`/`null` and preserve the full
+modeled structure.
 
 Non-self-describing formats also require the serializer and deserializer to
 agree on the same shape and field order. Test the exact model and format
