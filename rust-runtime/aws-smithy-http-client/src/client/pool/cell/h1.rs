@@ -1574,9 +1574,11 @@ impl OriginCell {
             trace_h1_return(cell, connection_id, H1ReturnTrace::LocalDemand);
         }
         if let Some(admission) = &cell.admission {
-            for snapshot in installation.demand_updates.into_iter().flatten() {
-                OriginAdmission::submit_demand_snapshot(admission, cell.id.partition(), snapshot);
-            }
+            OriginAdmission::submit_demand_snapshots(
+                admission,
+                cell.id.partition(),
+                installation.demand_updates,
+            );
         }
         drop(installation.returned_step);
         if let Some(waker) = installation.waker {
