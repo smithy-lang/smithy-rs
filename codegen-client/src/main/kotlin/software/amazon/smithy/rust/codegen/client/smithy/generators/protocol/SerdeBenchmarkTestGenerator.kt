@@ -412,7 +412,7 @@ class SerdeBenchmarkTestGenerator(
                     """
                     {
                         let mut layer = #{Layer}::new("bench_protocol");
-                        layer.store_put(#{SharedClientProtocol}::new(#{ProtocolType}::$constructor));
+                        layer.store_put(#{SharedClientProtocol}::configured(#{ProtocolType}::$constructor));
                         layer.store_put(#{NonUtf8HeaderHandling}::Reject);
                         $cfgVarName.push_shared_layer(layer.freeze());
                     }

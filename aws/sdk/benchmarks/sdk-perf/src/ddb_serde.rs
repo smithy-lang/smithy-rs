@@ -37,11 +37,12 @@ pub(crate) fn deserialize() {
         .expect("operation should set a deserializer");
 
     let mut cfg = ConfigBag::base();
-    cfg.interceptor_state()
-        .store_put(aws_smithy_schema::protocol::SharedClientProtocol::new(
+    cfg.interceptor_state().store_put(
+        aws_smithy_schema::protocol::SharedClientProtocol::configured(
             aws_smithy_json::protocol::aws_json_rpc::AwsJsonRpcProtocol::aws_json_1_0()
                 .with_target_prefix("DynamoDB_20120810"),
-        ));
+        ),
+    );
     let output = deserializer
         .deserialize_nonstreaming_with_config(&response, &cfg)
         .expect("success");

@@ -1,4 +1,11 @@
 allowed_external_types = [
+    # Version-stable ConfigBag contracts owned by the runtime API. Schema implements or
+    # returns them so its own releases cannot change their ConfigBag identity.
+    "aws_smithy_runtime_api::client::protocol::ClientProtocolSlot",
+    "aws_smithy_runtime_api::client::protocol::ConfiguredProtocol",
+    "aws_smithy_runtime_api::client::protocol::ProtocolHandle",
+    "aws_smithy_runtime_api::client::versioned_config::ConfigPayloadFor",
+    "aws_smithy_runtime_api::client::versioned_config::ConfigSlotError",
     "aws_smithy_runtime_api::http::headers::Headers",
     "aws_smithy_runtime_api::http::request::Request",
     "aws_smithy_runtime_api::http::response::Response",

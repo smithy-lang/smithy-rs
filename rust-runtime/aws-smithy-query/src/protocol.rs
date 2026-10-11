@@ -4,8 +4,9 @@
  */
 
 use aws_smithy_runtime_api::client::orchestrator::Metadata;
+use aws_smithy_runtime_api::client::protocol::ServiceVersion;
 use aws_smithy_runtime_api::http::{Request, Response};
-use aws_smithy_schema::protocol::{apply_http_endpoint, ClientProtocolInner, ServiceVersion};
+use aws_smithy_schema::protocol::{apply_http_endpoint, ClientProtocolInner};
 use aws_smithy_schema::serde::{
     SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer,
 };
@@ -233,7 +234,7 @@ mod tests {
     fn cfg_with_service_version(version: &'static str) -> ConfigBag {
         let mut layer = Layer::new("test");
         layer.store_put(Metadata::new("GetUser", "MyService"));
-        layer.store_put(aws_smithy_schema::protocol::ServiceVersion::new(version));
+        layer.store_put(ServiceVersion::new(version));
         ConfigBag::of_layers(vec![layer])
     }
 

@@ -91,7 +91,7 @@ impl AwsRestXmlProtocol {
     /// `http://s3.amazonaws.com/doc/2006-03-01/`).
     ///
     /// Overrides the default, which is the
-    /// [`ServiceXmlNamespace`](aws_smithy_schema::protocol::ServiceXmlNamespace) config-bag entry
+    /// [`ServiceXmlNamespace`](aws_smithy_runtime_api::client::protocol::ServiceXmlNamespace) config-bag entry
     /// that generated clients store regardless of which protocol they were generated for. That
     /// default exists because a customer selecting restXml through
     /// `Config::builder().protocol(..)` has no way to know the model's namespace.
@@ -113,7 +113,7 @@ impl AwsRestXmlProtocol {
         if let Some((uri, prefix)) = &self.service_xml_namespace {
             return Some((uri.clone(), prefix.clone()));
         }
-        cfg.load::<aws_smithy_schema::protocol::ServiceXmlNamespace>()
+        cfg.load::<aws_smithy_runtime_api::client::protocol::ServiceXmlNamespace>()
             .map(|ns| (ns.uri().to_owned(), ns.prefix().map(str::to_owned)))
     }
 }
@@ -447,10 +447,12 @@ mod tests {
     #[test]
     fn service_xml_namespace_defaults_from_config_bag() {
         let mut layer = aws_smithy_types::config_bag::Layer::new("test");
-        layer.store_put(aws_smithy_schema::protocol::ServiceXmlNamespace::new(
-            "http://example.com/from-bag/",
-            None,
-        ));
+        layer.store_put(
+            aws_smithy_runtime_api::client::protocol::ServiceXmlNamespace::new(
+                "http://example.com/from-bag/",
+                None,
+            ),
+        );
         let cfg = ConfigBag::of_layers(vec![layer]);
 
         let request = AwsRestXmlProtocol::new()
@@ -467,10 +469,12 @@ mod tests {
     #[test]
     fn service_xml_namespace_from_config_bag_honors_prefix() {
         let mut layer = aws_smithy_types::config_bag::Layer::new("test");
-        layer.store_put(aws_smithy_schema::protocol::ServiceXmlNamespace::new(
-            "http://example.com/from-bag/",
-            Some("ex".into()),
-        ));
+        layer.store_put(
+            aws_smithy_runtime_api::client::protocol::ServiceXmlNamespace::new(
+                "http://example.com/from-bag/",
+                Some("ex".into()),
+            ),
+        );
         let cfg = ConfigBag::of_layers(vec![layer]);
 
         let request = AwsRestXmlProtocol::new()
@@ -487,10 +491,12 @@ mod tests {
     #[test]
     fn with_service_xml_namespace_overrides_config_bag() {
         let mut layer = aws_smithy_types::config_bag::Layer::new("test");
-        layer.store_put(aws_smithy_schema::protocol::ServiceXmlNamespace::new(
-            "http://example.com/from-bag/",
-            None,
-        ));
+        layer.store_put(
+            aws_smithy_runtime_api::client::protocol::ServiceXmlNamespace::new(
+                "http://example.com/from-bag/",
+                None,
+            ),
+        );
         let cfg = ConfigBag::of_layers(vec![layer]);
 
         let request = AwsRestXmlProtocol::new()

@@ -159,8 +159,12 @@ class SchemaDecorator : ClientCodegenDecorator {
 }
 
 /**
- * Stores the default [SharedClientProtocol] in the service config bag
- * based on the protocol trait on the service shape.
+ * Stores the default protocol in the service config bag based on the protocol trait on the
+ * service shape.
+ *
+ * The bag entry is the version-stable `ConfiguredProtocol` from `aws-smithy-runtime-api`, not
+ * `SharedClientProtocol`, so that its `TypeId` does not change when `aws-smithy-schema` takes a
+ * major version.
  */
 private class SchemaProtocolCustomization(
     private val codegenContext: ClientCodegenContext,
@@ -194,6 +198,10 @@ private class SchemaProtocolCustomization(
                     // re-emitted per operation.
                     // See https://github.com/smithy-lang/smithy-rs/issues/4801.
                     //
+                    // These entries are defined in `aws-smithy-runtime-api` (and re-exported by
+                    // `aws-smithy-schema`) so they stay the same `ConfigBag` keys across
+                    // incompatible releases of the protocol crates that read them.
+                    //
                     // `ServiceShapeNamespace` is the namespace half of the service's shape ID and
                     // is always present, so unlike `ServiceXmlNamespace` below it is unconditional.
                     // The two are unrelated values: a service's shape-ID namespace is not derivable
@@ -206,9 +214,9 @@ private class SchemaProtocolCustomization(
                         ${section.newLayerName}.store_put(#{ServiceShapeNamespace}::new(${serviceNamespace.dq()}));
                         ${section.newLayerName}.store_put(#{ServiceVersion}::new(${codegenContext.serviceShape.version.dq()}));
                         """,
-                        "ServiceShapeName" to smithySchema.resolve("protocol::ServiceShapeName"),
-                        "ServiceShapeNamespace" to smithySchema.resolve("protocol::ServiceShapeNamespace"),
-                        "ServiceVersion" to smithySchema.resolve("protocol::ServiceVersion"),
+                        "ServiceShapeName" to RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig).resolve("client::protocol::ServiceShapeName"),
+                        "ServiceShapeNamespace" to RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig).resolve("client::protocol::ServiceShapeNamespace"),
+                        "ServiceVersion" to RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig).resolve("client::protocol::ServiceVersion"),
                     )
 
                     // `@xmlNamespace` is a prelude trait, so it is resolvable from any model rather
@@ -222,7 +230,7 @@ private class SchemaProtocolCustomization(
                                 """
                                 ${section.newLayerName}.store_put(#{ServiceXmlNamespace}::new(${ns.uri.dq()}, $prefix));
                                 """,
-                                "ServiceXmlNamespace" to smithySchema.resolve("protocol::ServiceXmlNamespace"),
+                                "ServiceXmlNamespace" to RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig).resolve("client::protocol::ServiceXmlNamespace"),
                             )
                         }
 
@@ -260,7 +268,7 @@ private class SchemaProtocolCustomization(
                         """
                         if ${section.serviceConfigName}.protocol().is_none() {
                             ${section.newLayerName}.store_put(
-                                #{SharedClientProtocol}::new(#{ProtocolType}::$constructor)
+                                #{SharedClientProtocol}::configured(#{ProtocolType}::$constructor)
                             );
                         }
                         """,
@@ -285,6 +293,12 @@ private class SchemaProtocolConfigCustomization(
         arrayOf(
             *preludeScope,
             "ClientProtocol" to smithySchema.resolve("protocol::ClientProtocol"),
+            // Resolved from `aws-smithy-runtime-api`, its owner, so that the public config API names no
+            // `aws-smithy-schema` type. `aws_smithy_schema::protocol::ConfiguredProtocol` is the same
+            // type re-exported.
+            "ConfiguredProtocol" to
+                RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig)
+                    .resolve("client::protocol::ConfiguredProtocol"),
             "SharedClientProtocol" to smithySchema.resolve("protocol::SharedClientProtocol"),
         )
 
@@ -295,8 +309,8 @@ private class SchemaProtocolConfigCustomization(
                     rustTemplate(
                         """
                         /// Returns the client protocol used for serialization and deserialization.
-                        pub fn protocol(&self) -> #{Option}<&#{SharedClientProtocol}> {
-                            self.config.load::<#{SharedClientProtocol}>()
+                        pub fn protocol(&self) -> #{Option}<&#{ConfiguredProtocol}> {
+                            self.config.load::<#{ConfiguredProtocol}>()
                         }
                         """,
                         *codegenScope,
@@ -314,20 +328,20 @@ private class SchemaProtocolConfigCustomization(
                         ///
                         /// ## Transport
                         ///
-                        /// This setter is HTTP-specific. The config bag stores
-                        /// `SharedClientProtocol` (which elides to its HTTP specialization) and
-                        /// only `SharedClientProtocol<http::Request, http::Response>` has a
-                        /// `Storable` impl. The `impl ClientProtocol + 'static` bound here elides
-                        /// to `impl ClientProtocol<http::Request, http::Response>` to match —
-                        /// a `ClientProtocol<Other, Other>` impl wouldn't round-trip through
-                        /// config-bag storage even though the trait itself is transport-generic.
+                        /// This setter is HTTP-specific: the `impl ClientProtocol + 'static` bound
+                        /// elides to `impl ClientProtocol<http::Request, http::Response>`, the only
+                        /// specialization that converts into a `ConfiguredProtocol`.
                         pub fn protocol(mut self, protocol: impl #{ClientProtocol} + 'static) -> Self {
-                            self.set_protocol(#{Some}(#{SharedClientProtocol}::new(protocol)));
+                            self.set_protocol(#{Some}(#{SharedClientProtocol}::configured(protocol)));
                             self
                         }
 
                         /// Sets the client protocol to use for serialization and deserialization.
-                        pub fn set_protocol(&mut self, protocol: #{Option}<#{SharedClientProtocol}>) -> &mut Self {
+                        ///
+                        /// Accepts the version-stable `ConfiguredProtocol` that `SdkConfig` carries.
+                        /// A protocol built against a different major version of `aws-smithy-schema`
+                        /// than this client fails each request with an error naming both versions.
+                        pub fn set_protocol(&mut self, protocol: #{Option}<#{ConfiguredProtocol}>) -> &mut Self {
                             self.config.store_or_unset(protocol);
                             self
                         }
@@ -340,7 +354,7 @@ private class SchemaProtocolConfigCustomization(
                 writable {
                     rustTemplate(
                         """
-                        if let #{Some}(protocol) = ${section.configBag}.load::<#{SharedClientProtocol}>().cloned() {
+                        if let #{Some}(protocol) = ${section.configBag}.load::<#{ConfiguredProtocol}>().cloned() {
                             ${section.builder}.set_protocol(#{Some}(protocol));
                         }
                         """,

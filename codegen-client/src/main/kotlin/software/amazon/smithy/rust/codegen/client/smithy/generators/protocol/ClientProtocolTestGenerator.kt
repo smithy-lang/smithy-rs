@@ -426,7 +426,7 @@ class ClientProtocolTestGenerator(
                     """
                     {
                         let mut layer = #{Layer}::new("test_protocol");
-                        layer.store_put(#{SharedClientProtocol}::new(#{ProtocolType}::$constructor));
+                        layer.store_put(#{SharedClientProtocol}::configured(#{ProtocolType}::$constructor));
                         test_cfg.push_shared_layer(layer.freeze());
                     }
                     """,

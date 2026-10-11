@@ -173,7 +173,7 @@ class InlineDependency(
                 "serialization_settings",
                 CargoDependency.Http1x,
                 CargoDependency.smithyHttp(runtimeConfig),
-                CargoDependency.smithySchema(runtimeConfig),
+                CargoDependency.smithyRuntimeApiClient(runtimeConfig),
                 CargoDependency.smithyTypes(runtimeConfig),
             )
 

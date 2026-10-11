@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.RequestBindingGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.ConfiguredProtocolResolver
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.renderClientEventStreamBody
 import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -62,7 +63,7 @@ class RequestSerializerGenerator(
             "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder1x,
             "Input" to interceptorContext.resolve("Input"),
             "SerializeRequest" to runtimeApi.resolve("client::ser_de::SerializeRequest"),
-            "SharedClientProtocol" to RuntimeType.smithySchema(codegenContext.runtimeConfig).resolve("protocol::SharedClientProtocol"),
+            "resolve_client_protocol" to ConfiguredProtocolResolver(codegenContext.runtimeConfig).resolveFn(),
             "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
             "HeaderSerializationSettings" to
                 RuntimeType.forInlineDependency(
@@ -174,8 +175,7 @@ class RequestSerializerGenerator(
                 fn serialize_input(&self, input: #{Input}, _cfg: &mut #{ConfigBag}) -> #{Result}<#{HttpRequest}, #{BoxError}> {
                     let input = input.downcast::<#{ConcreteInput}>().expect("correct type");
                     #{validate_required}
-                    let protocol = _cfg.load::<#{SharedClientProtocol}>()
-                        .expect("a SharedClientProtocol is required");
+                    let protocol = #{resolve_client_protocol}(_cfg)?;
                     #{schema_serialize}
                 }
             }
