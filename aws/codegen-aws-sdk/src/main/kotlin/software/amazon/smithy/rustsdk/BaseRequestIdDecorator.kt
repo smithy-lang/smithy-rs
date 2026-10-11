@@ -10,7 +10,6 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
-import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
@@ -26,10 +25,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.pre
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderSection
-import software.amazon.smithy.rust.codegen.core.smithy.generators.SchemaStructureCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureSection
-import software.amazon.smithy.rust.codegen.core.smithy.generators.SyntheticSchemaMember
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplSection
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -66,25 +63,7 @@ abstract class BaseRequestIdDecorator : ClientCodegenDecorator {
     override fun structureCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<StructureCustomization>,
-    ): List<StructureCustomization> {
-        // Replace SchemaStructureCustomization with one that includes the synthetic request ID member
-        val syntheticMember =
-            SyntheticSchemaMember(
-                fieldName = "_$fieldName",
-                schemaMemberName = fieldName,
-                shapeType = "String",
-                httpHeaderName = "x-amzn-requestid",
-            )
-        val updated =
-            baseCustomizations.map { c ->
-                if (c is SchemaStructureCustomization) {
-                    SchemaStructureCustomization(codegenContext, listOf(syntheticMember))
-                } else {
-                    c
-                }
-            }
-        return updated + listOf(RequestIdStructureCustomization(codegenContext))
-    }
+    ): List<StructureCustomization> = baseCustomizations + listOf(RequestIdStructureCustomization(codegenContext))
 
     override fun builderCustomizations(
         codegenContext: ClientCodegenContext,
@@ -224,26 +203,6 @@ abstract class BaseRequestIdDecorator : ClientCodegenDecorator {
                                 """,
                                 "AccessorTrait" to accessorTrait(codegenContext),
                             )
-                            // For services in the schema-serde allowlist, also
-                            // expose a `_set_$fieldName` setter on the Output
-                            // struct so the `MutateOutput` customization (which
-                            // calls `output._set_$fieldName(...)`) works after
-                            // `deserialize_with_response` has already built the
-                            // Output. Legacy services don't need this because
-                            // their `MutateOutput` runs while `output` is still
-                            // a Builder.
-                            if (SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
-                                rust(
-                                    """
-                                    impl ${section.structName} {
-                                        pub(crate) fn _set_$fieldName(&mut self, $fieldName: Option<String>) -> &mut Self {
-                                            self._$fieldName = $fieldName;
-                                            self
-                                        }
-                                    }
-                                    """,
-                                )
-                            }
                         }
 
                         is StructureSection.AdditionalDebugFields -> {

@@ -407,6 +407,7 @@ class SerdeDecoratorTest {
                 float: Float
                 double: Double
                 defaulted: Integer = 7
+                doc: Document
             }
             """.asSmithyModel(smithyVersion = "2")
 

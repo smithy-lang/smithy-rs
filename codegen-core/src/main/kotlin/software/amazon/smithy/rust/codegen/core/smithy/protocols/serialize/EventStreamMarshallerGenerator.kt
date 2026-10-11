@@ -88,10 +88,16 @@ open class EventStreamMarshallerGenerator(
 
     fun renderInitialRequestGenerator(contentType: String): RuntimeType {
         return RuntimeType.forInlineFun("initial_message_from_body", eventStreamSerdeModule) {
+            // On the schema path the caller builds `body` by serializing the operation
+            // input through the runtime protocol's payload codec, so `:content-type` has
+            // to come from that same protocol for the same reason it does for each event
+            // frame. The protocol is therefore threaded in as a parameter; the legacy path
+            // keeps the literal and the original one-argument signature.
+            val protocolParam = if (useSchemaSerde) ",\n                    protocol: &#{SharedClientProtocol}," else ""
             rustBlockTemplate(
                 """
                 pub(crate) fn initial_message_from_body(
-                    body: #{SdkBody}
+                    body: #{SdkBody}$protocolParam
                 ) -> #{Message}
                 """,
                 *codegenScope,
@@ -99,7 +105,22 @@ open class EventStreamMarshallerGenerator(
                 rustTemplate("let mut headers = #{Vec}::with_capacity(3);", *codegenScope)
                 addStringHeader(":message-type", "\"event\".into()")
                 addStringHeader(":event-type", "\"initial-request\".into()")
-                addStringHeader(":content-type", "${contentType.dq()}.into()")
+                if (useSchemaSerde) {
+                    rustTemplate(
+                        """
+                        headers.push(#{Header}::new(
+                            ":content-type",
+                            #{HeaderValue}::String(match protocol.event_stream_media_type() {
+                                #{Some}(media_type) => media_type.to_string().into(),
+                                #{None} => ${contentType.dq()}.into(),
+                            }),
+                        ));
+                        """,
+                        *codegenScope,
+                    )
+                } else {
+                    addStringHeader(":content-type", "${contentType.dq()}.into()")
+                }
                 rustTemplate(
                     """
                     let body = #{Bytes}::from(
@@ -328,9 +349,38 @@ open class EventStreamMarshallerGenerator(
                 { rustTemplate("#{Bytes}::new()", *codegenScope) },
             )
         } else {
-            addStringHeader(":content-type", "${payloadContentType.dq()}.into()")
-
             if (useSchemaSerde) {
+                // The payload immediately below is encoded by whichever protocol is
+                // selected at runtime, so `:content-type` has to be resolved from that
+                // same protocol. Emitting the generated protocol's literal here would
+                // produce a self-contradictory frame after a swap — a JSON payload
+                // labelled `application/cbor` — and a peer that honours the header would
+                // then decode with the wrong codec. This is the response-side analogue of
+                // the request framing headers that the runtime protocols took over.
+                //
+                // Only this branch is protocol-determined. The blob and string
+                // `@eventPayload` cases above keep their literals because
+                // `application/octet-stream` and `text/plain` are fixed by the *member's*
+                // shape, not by the protocol, and so survive a swap unchanged.
+                //
+                // The generated literal stays as the fallback for a protocol that declares
+                // no event media type. `to_string()` costs one small allocation per frame,
+                // which is immaterial beside serializing the payload itself, and is needed
+                // because the media type borrows from the protocol while `StrBytes`
+                // converts only from `String` or `&'static str`.
+                rustTemplate(
+                    """
+                    headers.push(#{Header}::new(
+                        ":content-type",
+                        #{HeaderValue}::String(match self.protocol.event_stream_media_type() {
+                            #{Some}(media_type) => media_type.to_string().into(),
+                            #{None} => ${payloadContentType.dq()}.into(),
+                        }),
+                    ));
+                    """,
+                    *codegenScope,
+                )
+
                 val targetSymbol = symbolProvider.toSymbol(target)
                 handleOptional(
                     optional,
@@ -357,6 +407,8 @@ open class EventStreamMarshallerGenerator(
                 )
                 return
             }
+
+            addStringHeader(":content-type", "${payloadContentType.dq()}.into()")
 
             handleOptional(
                 optional,

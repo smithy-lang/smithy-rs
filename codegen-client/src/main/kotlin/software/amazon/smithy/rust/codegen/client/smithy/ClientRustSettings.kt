@@ -97,6 +97,20 @@ data class ClientCodegenConfig(
     val enableUserConfigurableRuntimePlugins: Boolean = DEFAULT_ENABLE_USER_CONFIGURABLE_RUNTIME_PLUGINS,
     /** If true, adds `rustls` as a default feature on generated crates (legacy behavior) */
     val includeLegacyClient: Boolean = DEFAULT_ENABLE_LEGACY_CLIENT,
+    /**
+     * If true, opts this service out of schema-based serialization/deserialization even when its
+     * protocol is enabled in `SchemaSerdeAllowlist`, generating the legacy per-shape
+     * `protocol_serde` path instead.
+     *
+     * This is a one-way switch: it can only turn schema serde *off*. Setting it to `false` (the
+     * default) leaves the decision to the allowlist, and setting it to `true` for a service whose
+     * protocol is not allowlisted has no effect, because schema serde is already off there.
+     *
+     * The intended use is an escape hatch during the phased rollout of schema serde — a service
+     * that hits a schema-path bug can be reverted to the legacy path in its `smithy-build.json`
+     * without removing its whole protocol from the allowlist.
+     */
+    val disableSchemaSerde: Boolean = DEFAULT_DISABLE_SCHEMA_SERDE,
 ) : CoreCodegenConfig(
         formatTimeoutSeconds, debugMode, DEFAULT_FLATTEN_ACCESSORS,
     ) {
@@ -107,6 +121,7 @@ data class ClientCodegenConfig(
         private const val DEFAULT_INCLUDE_ENDPOINT_URL_CONFIG = true
         private const val DEFAULT_ENABLE_USER_CONFIGURABLE_RUNTIME_PLUGINS = true
         private const val DEFAULT_ENABLE_LEGACY_CLIENT = true
+        private const val DEFAULT_DISABLE_SCHEMA_SERDE = false
         private const val DEFAULT_NULLABILITY_CHECK_MODE = "CLIENT"
 
         // Note: only clients default to true, servers default to false
@@ -144,6 +159,9 @@ data class ClientCodegenConfig(
                 includeLegacyClient =
                     node.get()
                         .getBooleanMemberOrDefault("includeLegacyClient", DEFAULT_ENABLE_LEGACY_CLIENT),
+                disableSchemaSerde =
+                    node.get()
+                        .getBooleanMemberOrDefault("disableSchemaSerde", DEFAULT_DISABLE_SCHEMA_SERDE),
             )
         } else {
             ClientCodegenConfig(

@@ -110,8 +110,17 @@ class AwsQueryCompatible(
     override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
         targetProtocol.parseEventStreamErrorMetadata(operationShape)
 
-    override fun additionalRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> =
-        targetProtocol.additionalRequestHeaders(operationShape) +
+    override fun protocolFramingHeaders(operationShape: OperationShape): List<Pair<String, String>> =
+        targetProtocol.protocolFramingHeaders(operationShape)
+
+    /**
+     * `x-amzn-query-mode` comes from `@awsQueryCompatible` on the *service*, not from the protocol:
+     * the same service sends it under either awsJson or rpcv2Cbor, and two services on the same
+     * protocol differ in whether they send it. It is therefore a service header, which means both
+     * codegen paths emit it and it correctly survives a runtime protocol swap.
+     */
+    override fun serviceRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> =
+        targetProtocol.serviceRequestHeaders(operationShape) +
             listOf(
                 "x-amzn-query-mode" to "true",
             )

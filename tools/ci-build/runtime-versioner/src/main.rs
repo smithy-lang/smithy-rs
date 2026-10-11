@@ -66,6 +66,25 @@ pub struct PatchRuntime {
     /// local changes in the SDK.
     #[arg(long)]
     no_checkout_sdk_release: bool,
+    /// Opt in to a coordinated compatibility transition (off by default).
+    ///
+    /// Without this flag, a runtime crate that moved to a new Cargo compatibility
+    /// line (for example `0.63.x` -> `0.64.x`) cannot be patched into the old SDK
+    /// release at all: Cargo ignores a `[patch.crates-io]` entry whose version
+    /// doesn't satisfy the requirement it is replacing.
+    ///
+    /// With this flag, dependency requirements in the checked-out old SDK's
+    /// `aws-config` are rewritten to accept the versions being patched in, that local
+    /// `aws-config` is routed through the patch table, and the resulting lockfile is
+    /// verified to actually use the expected patch set. Generated SDK clients retain
+    /// their published requirements so they are not forced onto incompatible APIs.
+    ///
+    /// This tests the transitioned runtime and configuration graph alongside old
+    /// generated clients. It explicitly waives compatibility with the
+    /// already-published old `aws-config` and with partial runtime/configuration
+    /// updates, and does not restore it.
+    #[arg(long)]
+    allow_compatibility_transition: bool,
 
     /// Version number for stable crates.
     ///
@@ -102,6 +121,11 @@ pub struct PatchRuntimeWith {
     /// local changes in the SDK.
     #[arg(long)]
     no_checkout_sdk_release: bool,
+    /// Opt in to a coordinated compatibility transition (off by default).
+    ///
+    /// See `patch-runtime --help` for what this does and what it waives.
+    #[arg(long)]
+    allow_compatibility_transition: bool,
 }
 
 #[derive(clap::Parser, Clone)]

@@ -19,9 +19,12 @@ import java.util.Base64
 
 object EventStreamUnmarshallTestCases {
     fun RustWriter.writeUnmarshallTestUtil(codegenContext: CodegenContext) {
+        // The fixture shapes live in the service's namespace, so a fixture moved into another namespace
+        // (for example to reach schema-exclusive codegen) still resolves.
+        val namespace = codegenContext.serviceShape.id.namespace
         val testStreamError =
-            codegenContext.symbolProvider.symbolForEventStreamError(codegenContext.model.lookup("test#TestStream"))
-        val typesModule = codegenContext.symbolProvider.moduleForShape(codegenContext.model.lookup("test#TestStruct"))
+            codegenContext.symbolProvider.symbolForEventStreamError(codegenContext.model.lookup("$namespace#TestStream"))
+        val typesModule = codegenContext.symbolProvider.moduleForShape(codegenContext.model.lookup("$namespace#TestStruct"))
 
         rust(
             """

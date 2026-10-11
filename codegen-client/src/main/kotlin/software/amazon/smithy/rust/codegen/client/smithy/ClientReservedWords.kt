@@ -21,6 +21,8 @@ val ClientReservedWords =
                     "customize" to "customize_value",
                     // To avoid conflicts with the error metadata `meta` field
                     "meta" to "meta_value",
+                    // To avoid conflicts with the schema-serde member consumer generated on builders
+                    "deserialize_members" to "deserialize_members_value",
                 ),
         unionMemberMap =
             mapOf(

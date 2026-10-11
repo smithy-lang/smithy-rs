@@ -131,7 +131,7 @@ internal class RestJsonTest {
                 tokioTest("blob_payload_reuses_bytes") {
                     rustTemplate(
                         """
-                        let payload = ::bytes::Bytes::from_static(b"hello, world!");
+                        let payload = #{Bytes}::from_static(b"hello, world!");
                         let payload_ptr = payload.as_ptr();
                         let (http_client, rx) = #{capture_request}(#{None});
                         let config = crate::Config::builder()
@@ -153,6 +153,7 @@ internal class RestJsonTest {
                         assert_eq!(payload_ptr, body.as_ptr());
                         """,
                         *RuntimeType.preludeScope,
+                        "Bytes" to RuntimeType.Bytes,
                         "capture_request" to RuntimeType.captureRequest(context.runtimeConfig),
                     )
                 }

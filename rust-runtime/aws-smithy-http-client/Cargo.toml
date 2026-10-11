@@ -2,7 +2,7 @@
 name = "aws-smithy-http-client"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "HTTP client abstractions for generated smithy clients"
-version = "1.5.0"
+version = "1.5.1"
 license = "Apache-2.0"
 edition = "2021"
 repository = "https://github.com/smithy-lang/smithy-rs"
@@ -140,6 +140,9 @@ rustls-pemfile = "2.2.0"
 rustls-pki-types = { version = "1.12.0", features = ["std"] }
 tokio = { version = "1.49.0", features = ["macros", "rt", "rt-multi-thread", "test-util", "full"] }
 tokio-rustls = "0.26.2"
+
+[target.'cfg(unix)'.dev-dependencies]
+libc = "0.2"
 
 [target.'cfg(smithy_http_client_loom)'.dev-dependencies]
 loom = "0.7.2"
