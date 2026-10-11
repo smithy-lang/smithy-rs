@@ -150,6 +150,98 @@ internal class PythonServerTypesTest {
     }
 
     @Test
+    fun `big number types are exported and usable from Python`() {
+        val model =
+            """
+            namespace test
+
+            use aws.protocols#restJson1
+
+            @restJson1
+            service Service {
+                operations: [Echo],
+            }
+
+            @http(method: "POST", uri: "/echo")
+            operation Echo {
+                input: EchoInput,
+                output: EchoOutput,
+            }
+
+            structure EchoInput {
+                @required
+                integer: BigInteger,
+                @required
+                decimal: BigDecimal,
+            }
+
+            structure EchoOutput {
+                @required
+                integer: BigInteger,
+                @required
+                decimal: BigDecimal,
+            }
+            """.asSmithyModel()
+
+        val (pluginCtx, testDir) = generatePythonServerPluginContext(model)
+        executePythonServerCodegenVisitor(pluginCtx)
+
+        val writer = RustWriter.forModule("service")
+        writer.rust(
+            """
+            ##[test]
+            fn big_number_types_are_exported_and_usable_from_python() {
+                use pyo3::{types::PyModule, Python};
+
+                pyo3::prepare_freethreaded_python();
+
+                Python::with_gil(|py| {
+                    let module = PyModule::new(py, "generated_server").unwrap();
+                    crate::python_module_export::python_library(py, module).unwrap();
+
+                    let types = module.getattr("types").unwrap();
+                    let exported_types = types
+                        .getattr("__all__")
+                        .unwrap()
+                        .extract::<Vec<String>>()
+                        .unwrap();
+                    assert!(exported_types.contains(&"BigInteger".to_owned()));
+                    assert!(exported_types.contains(&"BigDecimal".to_owned()));
+
+                    let integer = types
+                        .getattr("BigInteger")
+                        .unwrap()
+                        .call1(("123456789012345678901234567890",))
+                        .unwrap();
+                    let decimal = types
+                        .getattr("BigDecimal")
+                        .unwrap()
+                        .call1(("12345678901234567890.123456789",))
+                        .unwrap();
+
+                    let input = module
+                        .getattr("input")
+                        .unwrap()
+                        .getattr("EchoInput")
+                        .unwrap()
+                        .call1((integer, decimal))
+                        .unwrap()
+                        .extract::<crate::input::EchoInput>()
+                        .unwrap();
+
+                    assert_eq!(input.integer.as_ref(), "123456789012345678901234567890");
+                    assert_eq!(input.decimal.as_ref(), "12345678901234567890.123456789");
+                });
+            }
+            """.trimIndent(),
+        )
+
+        testDir.resolve("src/service.rs").appendText(writer.toString())
+
+        cargoTest(testDir)
+    }
+
+    @Test
     fun `timestamp type`() {
         val model =
             """
