@@ -197,6 +197,29 @@ impl OriginAdmission {
         Self::run_action_chain(action);
     }
 
+    /// Publishes a local handoff's retirement and successor as one transition.
+    ///
+    /// Apply both complete snapshots in order before preparing detached work.
+    /// The current successor remains subject to the existing identity checks,
+    /// assignment settlement, and scheduling order.
+    pub(in crate::client::pool) fn submit_demand_snapshots(
+        admission: &Arc<Self>,
+        requester: PartitionId,
+        snapshots: [Option<DemandSnapshot>; 2],
+    ) {
+        if snapshots.iter().all(Option::is_none) {
+            return;
+        }
+        let action = {
+            let mut state = admission.state.lock();
+            for snapshot in snapshots.into_iter().flatten() {
+                state.apply_demand_snapshot(requester, snapshot);
+            }
+            Self::prepare_action(admission, &mut state)
+        };
+        Self::run_action_chain(action);
+    }
+
     /// Selects at most one action while admission is locked.
     ///
     /// Cancellation cleanup runs first, followed by available capacity,
@@ -786,6 +809,119 @@ mod tests {
     }
 
     #[test]
+    fn batched_local_successor_moves_behind_other_queued_demand() {
+        let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
+        let held = origin.state.lock().take_permit().unwrap();
+        let first = PartitionId::from_index(1);
+        let second = PartitionId::from_index(2);
+        OriginAdmission::submit_demand_snapshot(&origin, first, demand(1));
+        OriginAdmission::submit_demand_snapshot(&origin, second, demand(1));
+        OriginAdmission::submit_demand_snapshots(
+            &origin,
+            first,
+            [
+                Some(DemandSnapshot::inactive(
+                    DemandId::from_u64(1),
+                    SnapshotVersion::INITIAL.next(),
+                )),
+                Some(demand(2)),
+            ],
+        );
+        let mut state = origin.state.lock();
+        assert_eq!(Some(&demand(2)), state.demand.latest_for_test(&first));
+        assert_eq!(2, state.demand.len());
+        state.return_permit(held);
+        let other = state.prepare_capacity_delivery().unwrap();
+        assert_eq!(second, other.assignment.requester);
+        state.settle_assignment(
+            &other.assignment,
+            DemandAssignmentOutcome::Accepted { successor: None },
+        );
+        state.return_permit(other.permit);
+        let successor = state.prepare_capacity_delivery().unwrap();
+        assert_eq!(first, successor.assignment.requester);
+        state.settle_assignment(
+            &successor.assignment,
+            DemandAssignmentOutcome::Accepted { successor: None },
+        );
+        state.return_permit(successor.permit);
+        assert_eq!(1, state.available_capacity());
+        assert_eq!(0, state.demand.len());
+    }
+
+    #[test]
+    fn batched_local_successor_survives_old_assignment_settlement() {
+        let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
+        let first = PartitionId::from_index(1);
+        let pending = {
+            let mut state = origin.state.lock();
+            state.apply_demand_snapshot(first, demand(1));
+            state.prepare_capacity_delivery().unwrap()
+        };
+        OriginAdmission::submit_demand_snapshots(
+            &origin,
+            first,
+            [
+                Some(DemandSnapshot::inactive(
+                    DemandId::from_u64(1),
+                    SnapshotVersion::INITIAL.next(),
+                )),
+                Some(demand(2)),
+            ],
+        );
+        let mut state = origin.state.lock();
+        assert_eq!(Some(&demand(2)), state.demand.latest_for_test(&first));
+        assert!(
+            !state.demand.assignment_is_current(&pending.assignment),
+            "retired demand must no longer authorize the old assignment"
+        );
+        assert!(
+            state.prepare_capacity_delivery().is_none(),
+            "old detached assignment must prevent a second assignment"
+        );
+        state.settle_assignment(
+            &pending.assignment,
+            DemandAssignmentOutcome::Refused { successor: None },
+        );
+        state.return_permit(pending.permit);
+        let successor = state.prepare_capacity_delivery().unwrap();
+        assert_eq!(DemandId::from_u64(2), successor.assignment.demand);
+        state.settle_assignment(
+            &successor.assignment,
+            DemandAssignmentOutcome::Accepted { successor: None },
+        );
+        state.return_permit(successor.permit);
+        assert_eq!(1, state.available_capacity());
+        assert_eq!(0, state.demand.len());
+    }
+
+    #[test]
+    fn stale_batch_cannot_resurrect_cancelled_successor() {
+        let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
+        let held = origin.state.lock().take_permit().unwrap();
+        let first = PartitionId::from_index(1);
+        let cancelled =
+            DemandSnapshot::inactive(DemandId::from_u64(2), SnapshotVersion::INITIAL.next());
+        OriginAdmission::submit_demand_snapshot(&origin, first, cancelled.clone());
+        OriginAdmission::submit_demand_snapshots(
+            &origin,
+            first,
+            [
+                Some(DemandSnapshot::inactive(
+                    DemandId::from_u64(1),
+                    SnapshotVersion::INITIAL.next(),
+                )),
+                Some(demand(2)),
+            ],
+        );
+        let mut state = origin.state.lock();
+        assert_eq!(Some(&cancelled), state.demand.latest_for_test(&first));
+        assert_eq!(0, state.demand.len());
+        state.return_permit(held);
+        assert_eq!(1, state.available_capacity());
+    }
+
+    #[test]
     #[should_panic(expected = "cell origin did not match its admission authority")]
     fn registration_rejects_a_cell_from_another_origin() {
         let admission = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
@@ -994,6 +1130,61 @@ mod loom_tests {
             ProtocolRequirement::H1Compatible,
             EligibilityGroup::Pool,
         )
+    }
+
+    /// A completed old assignment must not erase a concurrently batched successor.
+    #[test]
+    fn batched_successor_races_old_assignment_settlement() {
+        loom::model(|| {
+            let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
+            let pending = {
+                let mut state = origin.state.lock();
+                state.apply_demand_snapshot(id(), demand());
+                state.prepare_capacity_delivery().unwrap()
+            };
+            // Retain the only permit until both transitions finish, isolating
+            // publication and settlement rather than running a new delivery.
+            let settling_origin = origin.clone();
+            let settling = loom::thread::spawn(move || {
+                settling_origin.state.lock().settle_assignment(
+                    &pending.assignment,
+                    DemandAssignmentOutcome::Refused { successor: None },
+                );
+                pending.permit
+            });
+            let publishing_origin = origin.clone();
+            let publishing = loom::thread::spawn(move || {
+                OriginAdmission::submit_demand_snapshots(
+                    &publishing_origin,
+                    id(),
+                    [
+                        Some(DemandSnapshot::inactive(
+                            DemandId::from_u64(1),
+                            SnapshotVersion::INITIAL.next(),
+                        )),
+                        Some(DemandSnapshot::active(
+                            DemandId::from_u64(2),
+                            SnapshotVersion::INITIAL,
+                            ProtocolRequirement::H1Compatible,
+                            EligibilityGroup::Pool,
+                        )),
+                    ],
+                );
+            });
+            let permit = settling.join().unwrap();
+            publishing.join().unwrap();
+            let mut state = origin.state.lock();
+            state.return_permit(permit);
+            let successor = state.prepare_capacity_delivery().unwrap();
+            assert_eq!(DemandId::from_u64(2), successor.assignment.demand);
+            state.settle_assignment(
+                &successor.assignment,
+                DemandAssignmentOutcome::Accepted { successor: None },
+            );
+            state.return_permit(successor.permit);
+            assert_eq!(1, state.available_capacity());
+            assert_eq!(0, state.demand.len());
+        });
     }
 
     /// Races return of the only capacity permit with publication of one demand.
