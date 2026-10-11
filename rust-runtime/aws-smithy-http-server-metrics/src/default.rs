@@ -68,12 +68,12 @@ impl Debug for SmithyMetrics {
 /// metrics layer reach the owned [`MetricsPool`] for a
 /// request.
 ///
-/// The layer uses the pool to hand out producer handles, install a request-scoped
-/// pool via [`MetricsPool::current`], and store
-/// a clone in the request's extensions. Independently-owned middleware,
-/// interceptors, and libraries can then contribute child metrics that flatten
-/// into this entry when the request finishes. Operation handlers should instead
-/// record metrics on their own `#[smithy_metrics(operation)]` field.
+/// The layer uses the pool to hand out a producer handle, which it wraps in a
+/// [`SmithyMetricsPool`](crate::SmithyMetricsPool) and stores in the request's
+/// extensions. Independently-owned middleware and libraries can then contribute
+/// child metrics that flatten into this entry when the request finishes.
+/// Operation handlers should instead record metrics on their own
+/// `#[smithy_metrics(operation)]` field.
 ///
 /// Implemented for [`SmithyMetrics`] and generated for structs annotated with
 /// `#[smithy_metrics]`.

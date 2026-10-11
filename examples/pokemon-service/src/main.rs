@@ -5,6 +5,7 @@
 
 mod authz;
 mod plugin;
+mod pool_metrics;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -54,6 +55,7 @@ use pokemon_service_server_sdk::PokemonServiceConfig;
 use tower::Layer;
 
 use crate::authz::AuthorizationPlugin;
+use crate::pool_metrics::PoolContributingLayer;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -141,7 +143,12 @@ pub async fn main() {
         })
         .build();
 
-    let service = metrics_layer.layer(app);
+    // `MetricsLayer` stores a `SmithyMetricsPool` in the request extensions.
+    // `PoolContributingLayer` sits inside it, reads that handle from the raw
+    // request, and contributes a child metric that flattens into the per-request
+    // entry -- demonstrating how independently-owned middleware contributes
+    // metrics without naming the service's entry type.
+    let service = metrics_layer.layer(PoolContributingLayer.layer(app));
 
     // Using `IntoMakeServiceWithConnectInfo`, rather than `into_make_service`, to adjoin the `SocketAddr`
     // connection info.

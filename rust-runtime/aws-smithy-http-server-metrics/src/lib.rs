@@ -167,7 +167,6 @@
 //! | `operation` | Name of the operation being invoked |
 //! | `request_id` | Unique identifier for the request |
 //! | `outstanding_requests` | Number of concurrent requests counting any operation being processing in that moment |
-//! | `pool` | Flattened [`MetricsPool`] into which decoupled producers contribute prefixed child metrics (see [Metrics pool field-name contract](#metrics-pool-field-name-contract)) |
 //!
 //! ### Response Metrics
 //!
@@ -179,79 +178,39 @@
 //! | `server_error` | Server error indicator (5xx status code) |
 //! | `operation_time` | Timestamp that denotes operation time from pre-deserialization to post-serialization |
 //!
-//! # Metrics pool field-name contract
+//! # Contributing metrics dynamically
 //!
-//! A field annotated with `#[metrics(flatten)]` whose type is a [`MetricsPool`]
-//! lets decoupled producers (middleware, interceptors, libraries) contribute
-//! child metrics through a [`MetricsPoolHandle`] without naming the parent entry
-//! type.
+//! Most metrics are recorded by code that can name the request's metrics entry
+//! type: the metrics layer, the default-metrics plugin, and operation handlers
+//! through their own `#[smithy_metrics(operation)]` field (see
+//! [`OperationMetrics`]). Prefer that whenever possible.
 //!
-//! The pool is for producers that *cannot* name the parent entry. Operation
-//! handlers can, so they should record metrics on their own
-//! `#[smithy_metrics(operation)]` field (see [`OperationMetrics`]) rather than
-//! pulling a [`MetricsPoolHandle`] out of the request extensions. Reach for the
-//! pool only at integration boundaries -- middleware, interceptors, and
-//! libraries that have no handle to the operation metrics struct.
+//! Independently-owned middleware and libraries *cannot* name the entry type.
+//! For them, the metrics layer stores a [`SmithyMetricsPool`] in the request
+//! extensions. Pull it out and append a prefixed child metrics struct; it
+//! flattens into the single per-request entry when the request finishes:
 //!
-//! The pool only de-duplicates field names *among children in the same pool*,
-//! where the later child wins. It cannot detect a collision between a child
-//! field and a field on the parent entry or on another flattened component. When
-//! a child reuses such a name, the flattened entry emits that name twice and
-//! fails EMF uniqueness validation, invalidating the **entire parent record**
-//! rather than just the duplicated field.
-//!
-//! Producers must therefore give each child a prefix that is distinct from the
-//! parent's fields and from every other producer, using
-//! [`MetricsPoolHandle::with_prefix`] (segments inflected to the parent's name
-//! style) or [`MetricsPoolHandle::with_exact_prefix`] (a literal prefix):
-//!
-//! ```rust
-//! use aws_smithy_http_server_metrics::MetricsPool;
+//! ```rust,ignore
+//! use aws_smithy_http_server_metrics::SmithyMetricsPool;
 //! use metrique::unit_of_work::metrics;
 //!
 //! #[metrics]
-//! struct RequestMetrics {
-//!     success: u64,
-//!     #[metrics(flatten)]
-//!     pool: MetricsPool,
-//! }
-//!
-//! #[metrics]
 //! struct MiddlewareMetrics {
-//!     // Shares the bare name `success` with the parent.
-//!     success: u64,
+//!     middleware_calls: u64,
 //! }
 //!
-//! let request = RequestMetrics { success: 1, pool: MetricsPool::new() };
-//!
-//! // Prefixing emits `middleware_success`, so it cannot collide with the
-//! // parent's `success`. Appending without a prefix would emit a second
-//! // `success` field and invalidate the whole record.
-//! request
-//!     .pool
-//!     .handle()
-//!     .with_prefix(["middleware"])
-//!     .append(MiddlewareMetrics { success: 0 });
+//! // `req` is the incoming request held by the middleware.
+//! if let Some(pool) = req.extensions().get::<SmithyMetricsPool>() {
+//!     pool.with_prefix(["middleware"])
+//!         .append(MiddlewareMetrics { middleware_calls: 1 });
+//! }
 //! ```
 //!
-//! ## Whole-child collision policy
-//!
-//! Collisions *among children in the same pool* are resolved per child, not per
-//! field. Children are compared by their fully inflected field names; when two
-//! children share any name, the later child wins and the earlier child is
-//! discarded **in full** -- including fields the later child never emitted. This
-//! prevents fields from separate contributors from being stitched into a record
-//! that never existed.
-//!
-//! For example, if an earlier child emits `retry_count` and `endpoint` and a
-//! later child emits only `retry_count`, the two collide on `retry_count`. The
-//! later child wins, so the earlier child is dropped entirely and its
-//! non-colliding `endpoint` field never reaches the entry. Giving each
-//! contributor a distinct prefix avoids the collision, so both children survive
-//! intact.
-//!
-//! Prefer statically-typed `#[metrics(flatten)]` fields when the parent can name
-//! the child type; reserve the pool for integration boundaries where it cannot.
+//! Give each contributor a prefix distinct from the parent's fields and from
+//! every other contributor (via [`with_prefix`](metrique_util::MetricsPoolHandle::with_prefix)
+//! or [`with_exact_prefix`](metrique_util::MetricsPoolHandle::with_exact_prefix)).
+//! For how the pool resolves field-name collisions among its children, see the
+//! [`MetricsPool`](metrique_util::MetricsPool) crate-level documentation.
 //!
 //! # Platform support
 //!
@@ -270,6 +229,7 @@ pub mod default;
 pub mod layer;
 pub mod operation;
 pub mod plugin;
+pub mod pool;
 pub mod service;
 pub mod traits;
 pub mod types;
@@ -278,11 +238,6 @@ pub use layer::builder::MetricsLayerBuilder;
 pub use layer::MetricsLayer;
 pub use operation::Metrics as OperationMetrics;
 pub use plugin::DefaultMetricsPlugin;
+pub use pool::SmithyMetricsPool;
 
 pub use aws_smithy_http_server_metrics_macro::smithy_metrics;
-
-// Re-exported so that code generated by `#[smithy_metrics]` can reference the
-// metrics pool types through this crate. Consumers therefore do not need a
-// direct dependency on `metrique-util`.
-pub use metrique_util::MetricsPool;
-pub use metrique_util::MetricsPoolHandle;

@@ -9,8 +9,6 @@ use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
 
-use metrique_util::with_metrics_pool;
-use metrique_util::MetricsPoolScope;
 use pin_project_lite::pin_project;
 use tower::Service;
 
@@ -20,6 +18,7 @@ use crate::default::DefaultMetricsServiceState;
 use crate::default::DefaultRequestMetricsConfig;
 use crate::default::DefaultResponseMetricsConfig;
 use crate::default::HasSmithyMetrics;
+use crate::pool::SmithyMetricsPool;
 use crate::traits::InitMetrics;
 use crate::traits::ResponseMetrics;
 use crate::traits::ThreadSafeCloseEntry;
@@ -38,11 +37,8 @@ pin_project! {
         Sink: ThreadSafeEntrySink<Entry>,
         Res: ResponseMetrics<Entry>,
     {
-        // The inner service future runs inside a `MetricsPoolScope`, which installs
-        // the request's pool for `MetricsPool::current()` on every poll of the
-        // request-handling path.
         #[pin]
-        inner: MetricsPoolScope<F>,
+        inner: F,
         metrics: metrique::AppendAndCloseOnDrop<Entry, Sink>,
         response_metrics: Option<Res>,
         default_service_state: DefaultMetricsServiceCounters,
@@ -146,13 +142,13 @@ where
     fn call(&mut self, mut req: HttpRequest) -> Self::Future {
         let mut metrics = (self.init_metrics)(&mut req);
 
-        // Obtain a producer handle for this request's metrics pool. It is
-        // delivered two ways: stored in the request extensions for middleware and
-        // interceptors that hold the request, and installed for the duration of
-        // each inner-future poll so synchronous callbacks (e.g. SDK interceptors)
-        // can discover it through `MetricsPool::current()`.
+        // Obtain a producer handle for this request's metrics pool and store it
+        // in the request extensions as a `SmithyMetricsPool`. Independently-owned
+        // middleware and libraries that hold the request can pull it out and
+        // contribute child metrics that flatten into this request's entry.
         let pool_handle = metrics.smithy_metrics().metrics_pool.handle();
-        req.extensions_mut().insert(pool_handle.clone());
+        req.extensions_mut()
+            .insert(SmithyMetricsPool::new(pool_handle));
 
         // We increment the outstanding requests and get the count at this layer
         // (typically outer middleware) so we can get this as close to the time
@@ -173,7 +169,7 @@ where
         );
 
         MetricsLayerServiceFuture {
-            inner: with_metrics_pool(pool_handle, self.inner.call(req)),
+            inner: self.inner.call(req),
             metrics,
             response_metrics: self.response_metrics.clone(),
             default_service_state: self.default_service_counters.clone(),

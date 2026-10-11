@@ -19,7 +19,7 @@
 //! The inner service's future never resolves. When the client drops the
 //! connection, the server-side request future is cancelled (dropped) before it
 //! completes. On drop it records a cancellation metric into the request's pool
-//! via the [`MetricsPoolHandle`] it pulled from the request extensions. The
+//! via the [`SmithyMetricsPool`] it pulled from the request extensions. The
 //! single per-request entry must still be emitted and must contain that metric.
 //!
 //! Coordination is deterministic: the inner future signals on a channel the
@@ -38,7 +38,7 @@ use aws_smithy_http_server::body::BoxBody;
 use aws_smithy_http_server::routing::IntoMakeService;
 use aws_smithy_http_server::serve::serve;
 use aws_smithy_http_server_metrics::MetricsLayer;
-use aws_smithy_http_server_metrics::MetricsPoolHandle;
+use aws_smithy_http_server_metrics::SmithyMetricsPool;
 use metrique::test_util::test_entry_sink;
 use metrique::unit_of_work::metrics;
 use tokio::sync::oneshot;
@@ -68,7 +68,7 @@ struct NeverCompletes {
 /// Future that stays `Pending` and, when dropped before completing, records a
 /// cancellation metric into the request's pool via the extension handle.
 struct CancelRecordingFuture {
-    handle: MetricsPoolHandle,
+    handle: SmithyMetricsPool,
     polled_tx: std::sync::Arc<Mutex<Option<oneshot::Sender<()>>>>,
     completed: bool,
 }
@@ -108,7 +108,7 @@ impl Service<HttpRequest> for NeverCompletes {
     fn call(&mut self, req: HttpRequest) -> Self::Future {
         let handle = req
             .extensions()
-            .get::<MetricsPoolHandle>()
+            .get::<SmithyMetricsPool>()
             .expect("metrics pool handle is inserted into request extensions")
             .clone();
         CancelRecordingFuture {

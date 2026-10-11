@@ -1,24 +1,25 @@
 ---
 applies_to: ["server"]
 authors: ["jeffzha"]
-references: ["smithy-rs#0000"]
+references: ["smithy-rs#4887"]
 breaking: true
 new_feature: true
 bug_fix: false
 ---
 Add `MetricsPool` support to `aws-smithy-http-server-metrics`. The metrics layer
-now installs a request-scoped `MetricsPool` on the per-request entry and hands
-out a producer handle two ways: through the request extensions
-(`MetricsPoolHandle`) and through the poll-scoped `MetricsPool::current()`.
-Independently-owned middleware, handlers, and libraries can contribute
-heterogeneous child metrics that flatten into the single per-request entry.
-`DefaultMetrics` and structs annotated with `#[smithy_metrics]` gain a flattened
-pool field automatically.
+now stores a `SmithyMetricsPool` producer handle in the request extensions.
+Independently-owned middleware and libraries that cannot name the service's
+metrics entry type can pull it out and contribute heterogeneous child metrics
+that flatten into the single per-request entry when the request finishes.
+Structs annotated with `#[smithy_metrics]` gain the backing pool automatically
+through a single hidden flattened field.
 
-This is a breaking change: `#[smithy_metrics]` now generates a `metrics_pool`
-field, so existing explicit struct literals no longer compile, and `metrics_pool`
-is no longer available as a user-defined field name. For example, this previously
-valid literal now fails because it omits the generated field:
+This is a breaking change on two fronts.
+
+`#[smithy_metrics]` now injects a hidden `__smithy_metrics` field, so existing
+explicit struct literals no longer compile and `__smithy_metrics` is reserved as
+a field name. Construct these structs with `..Default::default()` (or
+`Default::default()`) instead of naming every field:
 
 ```rust
 #[smithy_metrics]
@@ -30,22 +31,10 @@ struct RequestMetrics {
 fn new_metrics() -> RequestMetrics {
     RequestMetrics {
         requests: 1,
-        default_request_metrics: None,
-        default_response_metrics: None,
+        ..Default::default()
     }
 }
 ```
 
-and a struct that declares its own `metrics_pool` field now produces a duplicate
-field:
+The default-metrics entry type was also renamed `DefaultMetrics` -> `SmithyMetrics`.
 
-```rust
-#[smithy_metrics]
-#[metrics]
-struct RequestMetrics {
-    metrics_pool: u64,
-}
-```
-
-Construct these structs with `..Default::default()` (or `Default::default()`)
-instead of naming every field, and rename any user-defined `metrics_pool` field.
