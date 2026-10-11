@@ -535,6 +535,7 @@ dependencies = [
  "hyper-rustls 0.27.10",
  "hyper-util",
  "indexmap 2.14.2",
+ "libc",
  "loom",
  "pin-project-lite",
  "rustls 0.21.12",
