@@ -16,6 +16,11 @@ schema is asked for it and returns the cached value afterwards. Every schema has
 this cache, whether it was generated, written by hand, or built from a model at
 runtime, and cached values are freed when their schema is dropped.
 
+A provider computes its value from the schema through ordinary accessors and
+must not request extensions itself: on a recursive shape that could lead back to
+the schema being initialized. A provider that requests an extension that is not
+yet cached panics instead of deadlocking.
+
 Because of the cache, `Schema` now has interior mutability and a destructor.
 Its constructors and `with_*` setters are still `const fn`, so schemas can still
 be declared as `static`s and referenced from `const`s

@@ -7,7 +7,6 @@
 
 use super::XmlCodecSettings;
 use crate::decode::{self, Document};
-use aws_smithy_schema::member_lookup::{MemberCursor, WireName};
 use aws_smithy_schema::serde::{SerdeError, ShapeDeserializer};
 use aws_smithy_schema::Schema;
 use aws_smithy_types::date_time::Format as TimestampFormat;
@@ -152,10 +151,17 @@ impl<'a> XmlDeserializer<'a> {
         r
     }
 
-    /// Returns a cursor that resolves child element names to members of `schema`,
-    /// matching against @xmlName (if present) or member_name.
-    fn member_cursor<'s>(schema: &'s Schema<'s>) -> MemberCursor<'s> {
-        MemberCursor::new(schema, WireName::XmlName)
+    /// Resolve a child element name to a member schema by matching against
+    /// @xmlName (if present) or member_name. Returns the first matching member, so
+    /// a name shared by several members always resolves to the same one.
+    fn resolve_member<'s>(schema: &'s Schema<'s>, element_name: &str) -> Option<&'s Schema<'s>> {
+        schema.members().iter().copied().find(|m| {
+            if let Some(xml_name) = m.xml_name() {
+                xml_name.value() == element_name
+            } else {
+                m.member_name() == Some(element_name)
+            }
+        })
     }
 
     /// Find the byte slice in `input` that contains the element whose local name
@@ -376,7 +382,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                 //   - `find_element_slice`'s pointer-arithmetic invariant
                 //     requires `el_local` to be a sub-slice of `input`;
                 //     `root.start_el().local()` returns exactly that.
-                //   - The owned `String` is only used to resolve the member,
+                //   - The owned `String` is only used by `resolve_member`,
                 //     after the parser borrows are released. A previous
                 //     version of this code passed the owned `String` to
                 //     `find_element_slice`, silently producing offset=0;
@@ -392,7 +398,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                 // consumes it without firing clippy's `drop_non_drop` lint.
                 drop(root);
                 let _ = doc;
-                if let Some(member) = Self::member_cursor(schema).resolve(&local) {
+                if let Some(member) = Self::resolve_member(schema, &local) {
                     self.dispatch_subslice(sub, |this| consumer(member, this))?;
                 }
                 return Ok(());
@@ -420,9 +426,9 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                 std::collections::HashMap::new();
 
             // Dispatch child elements.
-            let mut members = Self::member_cursor(schema);
             while let Some(mut child_scope) = root.next_tag() {
-                let Some(member) = members.resolve(child_scope.start_el().local()) else {
+                let Some(member) = Self::resolve_member(schema, child_scope.start_el().local())
+                else {
                     continue;
                 };
                 // For non-flattened aggregate members, the child element IS the
@@ -1001,6 +1007,54 @@ mod tests {
             .unwrap();
 
         assert_eq!(name, "Bob");
+    }
+
+    /// A member's own name can collide with another member's `@xmlName`. Every
+    /// occurrence of the shared element resolves to the first matching member, wherever
+    /// it appears and however often it repeats.
+    #[test]
+    fn colliding_element_names_resolve_to_the_first_member() {
+        static STATUS: Schema<'static> = Schema::new_member(
+            shape_id!("ns", "S", "status"),
+            ShapeType::String,
+            "status",
+            0,
+        );
+        static STATUS_TEXT: Schema<'static> = Schema::new_member(
+            shape_id!("ns", "S", "statusText"),
+            ShapeType::String,
+            "statusText",
+            1,
+        )
+        .with_xml_name("status");
+        static OTHER: Schema<'static> =
+            Schema::new_member(shape_id!("ns", "S", "other"), ShapeType::String, "other", 2);
+        static S: Schema<'static> = Schema::new_struct(
+            shape_id!("ns", "S"),
+            ShapeType::Structure,
+            &[&STATUS, &STATUS_TEXT, &OTHER],
+        );
+
+        fn read(xml: &[u8]) -> Vec<(usize, String)> {
+            let mut deser = XmlDeserializer::new(xml, Arc::new(XmlCodecSettings::default()));
+            let mut seen = Vec::new();
+            deser
+                .read_struct(&S, &mut |member, d| {
+                    seen.push((member.member_index().unwrap(), d.read_string(member)?));
+                    Ok(())
+                })
+                .unwrap();
+            seen
+        }
+
+        assert_eq!(
+            read(b"<S><status>a</status><status>b</status></S>"),
+            [(0, "a".to_owned()), (0, "b".to_owned())]
+        );
+        assert_eq!(
+            read(b"<S><other>x</other><status>a</status></S>"),
+            [(2, "x".to_owned()), (0, "a".to_owned())]
+        );
     }
 
     #[test]

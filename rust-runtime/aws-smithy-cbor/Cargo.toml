@@ -31,10 +31,6 @@ num-bigint = "0.4.6"
 criterion = "0.8.2"
 
 [[bench]]
-name = "deserialize"
-harness = false
-
-[[bench]]
 name = "string"
 harness = false
 

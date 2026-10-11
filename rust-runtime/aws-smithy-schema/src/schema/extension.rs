@@ -48,11 +48,12 @@
 //!
 //! # Providers
 //!
-//! A provider must only derive data from the schema it is given. In particular it
-//! must not request the same key for the same schema, which would deadlock, and it
-//! should not eagerly request extensions of other schemas, because a recursive shape
-//! can lead back to the schema being initialized. Ask for a member's extension at
-//! the point it is needed instead.
+//! A provider must derive its value from the schema it is given and the schemas
+//! reachable from it, through ordinary accessors. It must not request extensions:
+//! a recursive shape could lead back to the schema being initialized, which would
+//! otherwise wait on itself forever. A provider that requests an extension that is
+//! not yet cached panics instead, for any key and any schema. Ask for a member's
+//! extension at the point it is needed, outside the provider.
 //!
 //! Values must not depend on per-instance codec settings, because a schema is shared
 //! by every codec instance in the process. Cache every variant a setting can select
@@ -67,6 +68,7 @@
 
 use crate::Schema;
 use std::any::Any;
+use std::cell::Cell;
 use std::fmt;
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -141,10 +143,10 @@ impl<T> fmt::Debug for SchemaExtensionKey<T> {
 /// with one or two keys, so the first chunk is the only one most schemas allocate.
 const CHUNK_LEN: usize = 4;
 
-type Cell = OnceLock<Box<dyn Any + Send + Sync>>;
+type ExtensionCell = OnceLock<Box<dyn Any + Send + Sync>>;
 
 struct Chunk {
-    cells: [Cell; CHUNK_LEN],
+    cells: [ExtensionCell; CHUNK_LEN],
     next: OnceLock<Box<Chunk>>,
 }
 
@@ -178,11 +180,60 @@ impl ExtensionStorage {
             chunk = chunk.next.get_or_init(Chunk::new);
             slot -= CHUNK_LEN;
         }
-        chunk.cells[slot]
-            .get_or_init(|| Box::new((key.provider)(schema)))
+        let cell = &chunk.cells[slot];
+        let value: &(dyn Any + Send + Sync) = match cell.get() {
+            // Deref the box: `Box<dyn Any>` is itself `Any`, so downcasting the box
+            // would test the box's type rather than the value's.
+            Some(value) => &**value,
+            None => initialize(cell, schema, key),
+        };
+        value
             .downcast_ref::<T>()
             .expect("an extension slot is only ever filled by the key that owns it")
     }
+}
+
+thread_local! {
+    /// Whether this thread is running an extension provider.
+    static IN_PROVIDER: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Clears [`IN_PROVIDER`] when the provider returns or panics.
+struct ProviderGuard;
+
+impl Drop for ProviderGuard {
+    fn drop(&mut self) {
+        IN_PROVIDER.with(|in_provider| in_provider.set(false));
+    }
+}
+
+/// Computes and caches the value of an empty cell.
+///
+/// A provider that requests an uncached extension panics here, before it waits on any
+/// cell. Waiting would deadlock if the request led back, through a recursive schema or
+/// another thread's provider, to a cell whose initialization is waiting on this one.
+/// Callers outside a provider still wait for a concurrent initialization, so each value
+/// is computed once.
+#[cold]
+#[inline(never)]
+fn initialize<'c, T: Send + Sync + 'static>(
+    cell: &'c ExtensionCell,
+    schema: &Schema<'_>,
+    key: &SchemaExtensionKey<T>,
+) -> &'c (dyn Any + Send + Sync) {
+    if IN_PROVIDER.with(Cell::get) {
+        panic!(
+            "a schema extension provider requested the uncached extension `{}` for schema `{}`; \
+             providers must derive their value from the schema without requesting extensions",
+            std::any::type_name::<T>(),
+            schema.shape_id().as_str(),
+        );
+    }
+    &**cell.get_or_init(|| {
+        IN_PROVIDER.with(|in_provider| in_provider.set(true));
+        let _guard = ProviderGuard;
+        Box::new((key.provider)(schema))
+    })
 }
 
 impl fmt::Debug for ExtensionStorage {
@@ -296,5 +347,153 @@ mod tests {
             }
         });
         assert_eq!(N.load(Ordering::SeqCst), 1);
+    }
+
+    /// Runs `f` and returns its panic message, failing if it did not panic.
+    fn panic_message(f: impl FnOnce() + std::panic::UnwindSafe) -> String {
+        let payload = std::panic::catch_unwind(f).expect_err("expected a panic");
+        payload
+            .downcast_ref::<String>()
+            .cloned()
+            .or_else(|| payload.downcast_ref::<&str>().map(|s| s.to_string()))
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn a_provider_requesting_its_own_key_panics() {
+        static KEY: SchemaExtensionKey<u8> =
+            SchemaExtensionKey::new(|schema| *schema.extension(&KEY));
+        static S: Schema<'static> = Schema::new(shape_id!("ns", "SelfRef"), ShapeType::String);
+
+        let message = panic_message(|| {
+            let _ = S.extension(&KEY);
+        });
+        assert!(message.contains("uncached extension"), "{message}");
+        assert!(message.contains("ns#SelfRef"), "{message}");
+        // Nothing is cached and the guard is cleared, so the next attempt fails the same way.
+        let message = panic_message(|| {
+            let _ = S.extension(&KEY);
+        });
+        assert!(message.contains("uncached extension"), "{message}");
+    }
+
+    /// The example from review: DynamoDB `AttributeValue` refers to itself through a list
+    /// and a map, and the provider recurses into members.
+    #[test]
+    fn a_recursive_provider_over_a_recursive_schema_panics() {
+        use crate::prelude;
+
+        static AV_S: Schema<'static> = Schema::new_member(
+            shape_id!("com.amazonaws.dynamodb", "AttributeValue", "S"),
+            ShapeType::String,
+            "S",
+            0,
+        );
+        static AV_L: Schema<'static> = Schema::new_member(
+            shape_id!("com.amazonaws.dynamodb", "AttributeValue", "L"),
+            ShapeType::List,
+            "L",
+            1,
+        )
+        .with_list_member(&ATTRIBUTE_VALUE);
+        static AV_M: Schema<'static> = Schema::new_member(
+            shape_id!("com.amazonaws.dynamodb", "AttributeValue", "M"),
+            ShapeType::Map,
+            "M",
+            2,
+        )
+        .with_map_members(&prelude::STRING, &ATTRIBUTE_VALUE);
+        static ATTRIBUTE_VALUE: Schema<'static> = Schema::new_struct(
+            shape_id!("com.amazonaws.dynamodb", "AttributeValue"),
+            ShapeType::Union,
+            &[&AV_S, &AV_L, &AV_M],
+        );
+        static CONTAINS_SENSITIVE: SchemaExtensionKey<bool> = SchemaExtensionKey::new(|schema| {
+            schema.sensitive().is_some()
+                || schema
+                    .members()
+                    .iter()
+                    .any(|m| *m.extension(&CONTAINS_SENSITIVE))
+                || schema
+                    .member()
+                    .is_some_and(|t| *t.extension(&CONTAINS_SENSITIVE))
+                || schema
+                    .key()
+                    .is_some_and(|t| *t.extension(&CONTAINS_SENSITIVE))
+        });
+
+        let message = panic_message(|| {
+            let _ = ATTRIBUTE_VALUE.extension(&CONTAINS_SENSITIVE);
+        });
+        assert!(message.contains("uncached extension"), "{message}");
+    }
+
+    #[test]
+    fn a_cycle_through_two_keys_panics() {
+        static A: SchemaExtensionKey<u8> = SchemaExtensionKey::new(|schema| *schema.extension(&B));
+        static B: SchemaExtensionKey<u8> = SchemaExtensionKey::new(|schema| *schema.extension(&A));
+        static S: Schema<'static> = Schema::new(shape_id!("ns", "TwoKeys"), ShapeType::String);
+
+        let message = panic_message(|| {
+            let _ = S.extension(&A);
+        });
+        assert!(message.contains("uncached extension"), "{message}");
+    }
+
+    /// Two threads each initialize one cell whose provider requests the other's cell.
+    /// Waiting would deadlock; both providers must panic instead.
+    #[test]
+    fn a_cycle_across_threads_panics_instead_of_deadlocking() {
+        use std::sync::Barrier;
+
+        static BOTH_IN_PROVIDERS: Barrier = Barrier::new(2);
+        static S1: Schema<'static> = Schema::new(shape_id!("ns", "Thread1"), ShapeType::String);
+        static S2: Schema<'static> = Schema::new(shape_id!("ns", "Thread2"), ShapeType::String);
+        static A: SchemaExtensionKey<u8> = SchemaExtensionKey::new(|_| {
+            BOTH_IN_PROVIDERS.wait();
+            *S2.extension(&B)
+        });
+        static B: SchemaExtensionKey<u8> = SchemaExtensionKey::new(|_| {
+            BOTH_IN_PROVIDERS.wait();
+            *S1.extension(&A)
+        });
+
+        std::thread::scope(|scope| {
+            let first = scope.spawn(|| *S1.extension(&A));
+            let second = scope.spawn(|| *S2.extension(&B));
+            assert!(first.join().is_err());
+            assert!(second.join().is_err());
+        });
+    }
+
+    /// The guard is checked only when a cell is initialized, keeping it off the cached
+    /// lookup path. This is not a supported provider pattern: whether the value is cached
+    /// depends on access order.
+    #[test]
+    fn a_provider_may_read_an_already_cached_extension() {
+        static BASE: SchemaExtensionKey<u8> = SchemaExtensionKey::new(|_| 2);
+        static DERIVED: SchemaExtensionKey<u8> =
+            SchemaExtensionKey::new(|schema| *schema.extension(&BASE) * 3);
+        static S: Schema<'static> = Schema::new(shape_id!("ns", "Cached"), ShapeType::String);
+
+        assert_eq!(*S.extension(&BASE), 2);
+        assert_eq!(*S.extension(&DERIVED), 6);
+    }
+
+    #[test]
+    fn a_panicking_provider_clears_the_guard() {
+        static FAILS: SchemaExtensionKey<u8> =
+            SchemaExtensionKey::new(|_| panic!("provider failed"));
+        static OK: SchemaExtensionKey<u8> = SchemaExtensionKey::new(|_| 5);
+        static S: Schema<'static> = Schema::new(shape_id!("ns", "Cleared"), ShapeType::String);
+
+        assert_eq!(
+            panic_message(|| {
+                let _ = S.extension(&FAILS);
+            }),
+            "provider failed"
+        );
+        // Not treated as nested: this thread is no longer inside a provider.
+        assert_eq!(*S.extension(&OK), 5);
     }
 }
