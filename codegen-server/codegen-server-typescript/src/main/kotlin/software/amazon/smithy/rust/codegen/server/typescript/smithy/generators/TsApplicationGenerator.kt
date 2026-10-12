@@ -48,7 +48,7 @@ class TsApplicationGenerator(
             "napi_derive" to TsServerCargoDependency.NapiDerive.toType(),
             "tokio" to TsServerCargoDependency.Tokio.toType(),
             "tracing" to TsServerCargoDependency.Tracing.toType(),
-            "tower" to TsServerCargoDependency.Tower.toType(),
+            "tower" to ServerCargoDependency.tower(codegenContext).toType(),
             "tower_http" to TsServerCargoDependency.TowerHttp.toType(),
             "num_cpus" to TsServerCargoDependency.NumCpus.toType(),
             "hyper" to TsServerCargoDependency.Hyper.toType(),

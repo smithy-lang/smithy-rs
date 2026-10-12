@@ -232,13 +232,13 @@ class ServerBuilderGenerator(
     }
 
     private fun renderImplFromConstraintViolationForRequestRejection(writer: RustWriter) {
-        writer.rustTemplate(
-            """
-            #{Converter:W}
-            """,
-            "Converter" to
-                customValidationExceptionWithReasonConversionGenerator.renderImplFromConstraintViolationForRequestRejection(protocol),
-        )
+        val converter =
+            if (codegenContext.usesSchemaHttpSerde) {
+                customValidationExceptionWithReasonConversionGenerator.renderImplFromConstraintViolationForValidationException()
+            } else {
+                customValidationExceptionWithReasonConversionGenerator.renderImplFromConstraintViolationForRequestRejection(protocol)
+            }
+        converter(writer)
     }
 
     private fun renderImplFromBuilderForMaybeConstrained(writer: RustWriter) {
@@ -425,6 +425,11 @@ class ServerBuilderGenerator(
         val memberName = symbolProvider.toMemberName(member)
 
         writer.documentShape(member, model)
+        // The legacy deserializers call these setters. Under `schemaSerde` the schema walkers write the
+        // fields directly, leaving these setters unused on the schema HTTP path.
+        if (codegenContext.settings.codegenConfig.schemaSerde) {
+            Attribute.AllowDeadCode.render(writer)
+        }
         // Setter names will never hit a reserved word and therefore never need escaping.
         writer.rustBlock("pub(crate) fn set_${member.memberName.toSnakeCase()}(mut self, input: $inputType) -> Self") {
             rust(

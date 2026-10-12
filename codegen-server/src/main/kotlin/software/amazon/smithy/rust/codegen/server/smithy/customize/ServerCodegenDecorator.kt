@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CombinedCoreCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CoreCodegenDecorator
@@ -77,6 +78,16 @@ interface ServerCodegenDecorator : CoreCodegenDecorator<ServerCodegenContext, Se
      * pre-applied layers and plugins.
      */
     fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> = emptyList()
+
+    /**
+     * Additional protocol registries for the schema-serde path. Each writable renders a
+     * `&'static aws_smithy_http_server::schema::ProtocolRegistry` expression — typically a
+     * reference to a crate's static registry, which keeps every protocol the crate provides,
+     * and each protocol's ordering constraints, in one place. The built-in registry is always
+     * consulted; a registry registering a protocol another registry (built-ins included)
+     * already registers fails the service build.
+     */
+    fun protocolRegistries(codegenContext: ServerCodegenContext): List<Writable> = emptyList()
 }
 
 /**
@@ -138,6 +149,9 @@ class CombinedServerCodegenDecorator(decorators: List<ServerCodegenDecorator>) :
 
     override fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> =
         orderedDecorators.flatMap { it.configMethods(codegenContext) }
+
+    override fun protocolRegistries(codegenContext: ServerCodegenContext): List<Writable> =
+        orderedDecorators.flatMap { it.protocolRegistries(codegenContext) }
 
     companion object {
         fun fromClasspath(
