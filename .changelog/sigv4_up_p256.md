@@ -1,7 +1,7 @@
 ---
 applies_to: ["aws-sdk-rust"]
 authors: ["jplatte"]
-references: []
+references: ["smithy-rs#4845"]
 breaking: false
 new_feature: false
 bug_fix: false
