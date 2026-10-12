@@ -1555,7 +1555,7 @@ impl OriginCell {
                 provisional,
             );
             let action = OriginAdmission::resolve_h1_match(admission, match_id, candidate);
-            OriginAdmission::run_action_chain(action);
+            OriginAdmission::enqueue_action(action);
             return;
         }
 
@@ -1573,21 +1573,12 @@ impl OriginCell {
         if tracing::level_enabled!(tracing::Level::TRACE) {
             trace_h1_return(cell, connection_id, H1ReturnTrace::LocalDemand);
         }
-        if let Some(admission) = &cell.admission {
-            OriginAdmission::submit_demand_snapshots(
-                admission,
-                cell.id.partition(),
-                installation.demand_updates,
-            );
-        }
-        drop(installation.returned_step);
-        if let Some(waker) = installation.waker {
-            waker.wake();
-        }
-        if cell.admission.is_some() {
-            let revision = cell.state.lock().take_h1_supply_update();
-            cell.submit_h1_supply_update(revision);
-        }
+        Self::finish_waiter_resolution(cell, installation, || {
+            if cell.admission.is_some() {
+                let revision = cell.state.lock().take_h1_supply_update();
+                cell.submit_h1_supply_update(revision);
+            }
+        });
     }
 
     /// Retires an externally owned H1 sender and removes its connection-owning cell record.

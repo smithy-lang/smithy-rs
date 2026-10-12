@@ -39,8 +39,9 @@ use self::waiters::AcquisitionProbe;
 pub(in crate::client::pool) use self::waiters::WaiterId;
 use self::waiters::{AcquisitionQueue, CellCommitError, CellCommitOutcome, DeliveryReservation};
 use super::admission::{
-    AdmissionAction, CapacityLease, DeliveryGuard, DemandSnapshot, H1MatchId, H1SupplyStatus,
-    H2SupplyStatus, OriginAdmission, ProtocolRequirement, SupplyRevision,
+    AdmissionAction, AdmissionBaton, CapacityLease, DeliveryGuard, DemandPublication,
+    DemandSnapshot, H1MatchId, H1SupplyStatus, H2SupplyStatus, OriginAdmission,
+    ProtocolRequirement, SupplyRevision,
 };
 use super::connection::CloseReason;
 #[cfg(test)]
@@ -89,6 +90,8 @@ pub(in crate::client::pool) struct OriginCell {
     eligibility_group: EligibilityGroup,
     /// Origin-wide authority present only when capacity is bounded.
     admission: Option<Arc<OriginAdmission>>,
+    /// Resource-free pending publications cached independently of admission.
+    pub(super) demand_publication: Arc<DemandPublication>,
     /// Partition-owned idle deadline scheduler.
     maintenance: Option<Arc<PartitionMaintenance>>,
     /// Connection lifetimes that may outlive records under `state`.
@@ -450,10 +453,15 @@ impl OriginCell {
         admission: Option<Arc<OriginAdmission>>,
         maintenance: Option<Arc<PartitionMaintenance>>,
     ) -> Self {
+        let demand_publication = admission
+            .as_ref()
+            .map(|admission| admission.demand_publication(partition))
+            .unwrap_or_else(|| Arc::new(DemandPublication::default()));
         Self {
             id: CellId::new(partition, origin),
             eligibility_group,
             admission,
+            demand_publication,
             maintenance,
             connection_stats: Arc::new(CellConnectionStats::default()),
             state: Mutex::new(CellState::default()),
@@ -669,12 +677,46 @@ impl OriginCell {
             )
         };
 
-        if let (Some(admission), Some(snapshot), false) = (&cell.admission, snapshot, h2_visible) {
-            OriginAdmission::submit_demand_snapshot(admission, cell.id.partition(), snapshot);
-        }
+        let baton = cell.record_demand_updates(snapshot.filter(|_| !h2_visible));
         Self::offer_local_h2(cell);
         Self::offer_peer_h2(cell);
+        if let Some(baton) = baton {
+            baton.process_until_quiescent();
+        }
         waiter
+    }
+
+    /// Records demand and opens a baton scope before arbitrary callbacks.
+    ///
+    /// Empty submissions also try to acquire the baton. A new holder finishes
+    /// local cleanup before draining; an existing holder can process concurrently.
+    /// Empty submissions do not request another demand scheduling pass.
+    fn record_demand_updates(
+        &self,
+        snapshots: impl IntoIterator<Item = DemandSnapshot>,
+    ) -> Option<AdmissionBaton> {
+        self.admission.as_ref().and_then(|admission| {
+            OriginAdmission::record_demand_updates(admission, &self.demand_publication, snapshots)
+        })
+    }
+
+    /// Completes publication, resource fallback, and wake outside the cell lock.
+    fn finish_waiter_resolution(
+        cell: &Arc<Self>,
+        installation: waiters::WaiterResolution,
+        before_wake: impl FnOnce(),
+    ) {
+        let baton = cell.record_demand_updates(installation.demand_updates.into_iter().flatten());
+        drop(installation.returned_step);
+        // Publish required supply/cleanup before callbacks or a potentially
+        // long drain. Its detached actions join this already-held baton.
+        before_wake();
+        if let Some(waker) = installation.waker {
+            waker.wake();
+        }
+        if let Some(baton) = baton {
+            baton.process_until_quiescent();
+        }
     }
 
     /// Cancels a waiter and re-examines local idle H1 state atomically.
@@ -725,8 +767,8 @@ impl OriginCell {
             return false;
         };
 
-        if let Some(admission) = &cell.admission {
-            for snapshot in cancelled
+        let baton = cell.record_demand_updates(
+            cancelled
                 .demand_updates
                 .into_iter()
                 .chain(
@@ -735,21 +777,16 @@ impl OriginCell {
                         .into_iter()
                         .flat_map(|(_, install)| install.demand_updates.iter().cloned()),
                 )
-                .flatten()
-            {
-                OriginAdmission::submit_demand_snapshot(admission, cell.id.partition(), snapshot);
-            }
-        }
+                .flatten(),
+        );
 
         // Ready results and any locally rejected event cross the lock boundary
         // before their fallback can re-enter the pool.
         drop(cancelled.returned_steps);
-        if let Some((_, install)) = local_install {
+        let waker = local_install.and_then(|(_, install)| {
             drop(install.returned_step);
-            if let Some(waker) = install.waker {
-                waker.wake();
-            }
-        }
+            install.waker
+        });
 
         let supply_update = {
             let mut state = cell.state.lock();
@@ -761,6 +798,12 @@ impl OriginCell {
         cell.submit_h1_supply_update(supply_update);
         Self::offer_local_h2(cell);
         Self::offer_peer_h2(cell);
+        if let Some(waker) = waker {
+            waker.wake();
+        }
+        if let Some(baton) = baton {
+            baton.process_until_quiescent();
+        }
         true
     }
 
@@ -927,7 +970,7 @@ mod tests {
     use super::*;
     use http_1x::uri::Scheme;
     use std::num::NonZeroUsize;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::Arc as StdArc;
     use std::task::{Wake, Waker};
 
@@ -964,6 +1007,148 @@ mod tests {
         let (admission, cell) = bounded_cell();
         let lease = OriginAdmission::lease_for_test(&admission);
         (admission, cell, lease)
+    }
+
+    #[test]
+    fn local_h1_waiter_wakes_before_baton_publication() {
+        let (admission, cell) = bounded_cell();
+        let lease = OriginAdmission::lease_for_test(&admission);
+        let (connection, _physical) = ConnectionState::bounded(connection_info(1), lease);
+        let selected = OriginCell::insert_selected_h1(&cell, connection, H1Sender::test(11));
+        let waiter = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+        let snapshot = cell
+            .state
+            .lock()
+            .acquisitions
+            .current_demand_snapshot(&cell.eligibility_group)
+            .unwrap();
+        let baton = cell.record_demand_updates([snapshot.clone()]).unwrap();
+        let counter = StdArc::new(WakeCounter(AtomicUsize::new(0)));
+        let waker = Waker::from(counter.clone());
+        assert!(cell
+            .poll_waiter(waiter, &mut Context::from_waker(&waker))
+            .is_pending());
+
+        drop(selected);
+        assert_eq!(1, counter.0.load(Ordering::Relaxed));
+        assert_eq!(
+            Some(snapshot),
+            admission.latest_demand_for_test(cell.id.partition()),
+            "another holder should still own the pending retirement",
+        );
+        let returned = cell
+            .take_ready_h1(waiter)
+            .expect("local sender not committed");
+        assert_eq!(11, returned.test_sender_id());
+        baton.process_until_quiescent();
+        assert_eq!(0, admission.ordered_demand_count_for_test());
+        drop(returned);
+    }
+
+    #[test]
+    fn panicking_local_h1_wake_drains_its_retirement() {
+        struct PanicWake {
+            cell: Arc<OriginCell>,
+            previous_revision: u64,
+        }
+        impl Wake for PanicWake {
+            fn wake(self: StdArc<Self>) {
+                assert!(
+                    self.cell.state.lock().h1_supply_revision.revision > self.previous_revision,
+                    "local wake preceded its changed H1 supply publication",
+                );
+                panic!("local H1 wake");
+            }
+        }
+        let (admission, cell) = bounded_cell();
+        let lease = OriginAdmission::lease_for_test(&admission);
+        let (connection, _physical) = ConnectionState::bounded(connection_info(1), lease);
+        let selected = OriginCell::insert_selected_h1(&cell, connection, H1Sender::test(11));
+        let waiter = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+        let revision = {
+            let mut state = cell.state.lock();
+            // Represent an earlier peer transfer that earned a local turn.
+            // Returning to this waiter consumes it and must publish new supply.
+            let match_id = H1MatchId::for_test(1);
+            assert!(state.h1.reserve_resolving(match_id));
+            assert!(state.h1.complete_peer_transfer(match_id, true));
+            state.take_h1_supply_update()
+        };
+        cell.submit_h1_supply_update(revision);
+        let previous_revision = cell.state.lock().h1_supply_revision.revision;
+        let waker = Waker::from(StdArc::new(PanicWake {
+            cell: cell.clone(),
+            previous_revision,
+        }));
+        assert!(cell
+            .poll_waiter(waiter, &mut Context::from_waker(&waker))
+            .is_pending());
+        let panic =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| drop(selected))).unwrap_err();
+        assert_eq!(Some(&"local H1 wake"), panic.downcast_ref::<&str>());
+        assert_eq!(0, admission.ordered_demand_count_for_test());
+        let returned = cell
+            .take_ready_h1(waiter)
+            .expect("panic lost the local sender");
+        assert_eq!(11, returned.test_sender_id());
+        drop(returned);
+    }
+
+    #[test]
+    fn permit_fallback_waits_for_resolution_without_demand_updates() {
+        struct CompletionWake {
+            completed: StdArc<AtomicBool>,
+            wakes: AtomicUsize,
+        }
+        impl Wake for CompletionWake {
+            fn wake(self: StdArc<Self>) {
+                assert!(
+                    self.completed.load(Ordering::SeqCst),
+                    "permit fallback drained before the local transition finished",
+                );
+                self.wakes.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+        let (admission, cell, peer) =
+            bounded_peer_cells(2, EligibilityGroup::Pool, EligibilityGroup::Pool);
+        let lease = OriginAdmission::lease_for_test(&admission);
+        let (connection, _physical) = ConnectionState::bounded(connection_info(1), lease);
+        let returning = OriginCell::insert_selected_h1(&cell, connection, H1Sender::test(11));
+        let waiter = OriginCell::register_waiter(&cell, ProtocolRequirement::H1Compatible);
+        assert_eq!(0, admission.available_capacity_for_test());
+
+        let peer_waiter = OriginCell::register_waiter(&peer, ProtocolRequirement::H2Required);
+        let completed = StdArc::new(AtomicBool::new(false));
+        let counter = StdArc::new(CompletionWake {
+            completed: completed.clone(),
+            wakes: AtomicUsize::new(0),
+        });
+        let waker = Waker::from(counter.clone());
+        assert!(peer
+            .poll_waiter(peer_waiter, &mut Context::from_waker(&waker))
+            .is_pending());
+
+        let installation = {
+            let mut state = cell.state.lock();
+            let (selected, installation) = state.acquisitions.offer_returned_h1(
+                || AcquisitionOutcome::H1(returning),
+                &cell.eligibility_group,
+            );
+            assert_eq!(Some(waiter), selected);
+            installation
+        };
+        assert!(installation.demand_updates.iter().all(Option::is_none));
+        assert!(matches!(
+            installation.returned_step,
+            Some(AcquisitionStep::StartEstablishment(_))
+        ));
+        OriginCell::finish_waiter_resolution(&cell, installation, || {
+            completed.store(true, Ordering::SeqCst);
+        });
+        assert_eq!(1, counter.wakes.load(Ordering::SeqCst));
+        let peer_lease = OriginCell::take_ready_lease(&peer, peer_waiter).unwrap();
+        drop(peer_lease);
+        drop(cell.take_ready_h1(waiter).unwrap());
     }
 
     fn bounded_peer_cells(
@@ -2039,7 +2224,7 @@ mod tests {
         .expect("first demand did not reserve capacity");
 
         assert!(OriginCell::cancel_waiter(&cell, first));
-        OriginAdmission::run_action_chain(Some(AdmissionAction::Deliver(stale)));
+        OriginAdmission::enqueue_action(Some(AdmissionAction::Deliver(stale)));
 
         let lease = OriginCell::take_ready_lease(&cell, second)
             .expect("replacement demand did not receive refunnelled capacity");
@@ -2080,7 +2265,11 @@ mod tests {
         .expect("stale demand did not reserve capacity");
         let (target_waiter, target_demand) =
             target.register_waiter_without_publish(ProtocolRequirement::H1Compatible);
-        OriginAdmission::submit_demand_snapshot(&admission, target.id().partition(), target_demand);
+        OriginAdmission::submit_demand_for_test(
+            &admission,
+            target.id().partition(),
+            [target_demand],
+        );
 
         // Model cancellation winning in the cell before its retirement
         // publication reaches admission.
@@ -2100,7 +2289,7 @@ mod tests {
             "stale rejection recursively drove its successor"
         );
 
-        OriginAdmission::run_action_chain(Some(next));
+        OriginAdmission::enqueue_action(Some(next));
         drop(
             OriginCell::take_ready_lease(&target, target_waiter)
                 .expect("existing driver did not deliver the successor"),
@@ -2235,7 +2424,7 @@ mod tests {
         )
         .expect("peer demand did not prepare an HTTP/2 route");
 
-        OriginAdmission::run_action_chain(Some(action));
+        OriginAdmission::enqueue_action(Some(action));
         let activation = take_ready_h2(&requesting_cell, waiter);
         assert_eq!(generation, activation.generation());
         drop(activation);
@@ -2324,7 +2513,7 @@ mod tests {
         .expect("peer demand did not prepare a route");
 
         assert!(OriginCell::cancel_waiter(&requesting_cell, waiter));
-        OriginAdmission::run_action_chain(Some(action));
+        OriginAdmission::enqueue_action(Some(action));
 
         assert_eq!(0, requesting_cell.probe().retained);
         assert_eq!(0, admission.ordered_demand_count_for_test());
@@ -2359,7 +2548,7 @@ mod tests {
         ));
         let (second, _second_connection, _second_physical) =
             install_bounded_h2(&admission, &connection_cell, 2);
-        OriginAdmission::run_action_chain(Some(action));
+        OriginAdmission::enqueue_action(Some(action));
 
         let activation = take_ready_h2(&requesting_cell, waiter);
         assert_eq!(second, activation.generation());
@@ -2465,7 +2654,7 @@ mod tests {
             demand,
         )
         .expect("peer demand did not prepare a route");
-        OriginAdmission::run_action_chain(Some(action));
+        OriginAdmission::enqueue_action(Some(action));
         let third = OriginCell::register_waiter(&requesting_cell, ProtocolRequirement::H2Required);
 
         let first_activation = take_ready_h2(&requesting_cell, first);
@@ -2744,7 +2933,7 @@ mod loom_tests {
                     .expect("published demand did not reserve capacity");
 
             let delivering = loom::thread::spawn(move || {
-                OriginAdmission::run_action_chain(Some(AdmissionAction::Deliver(delivery)));
+                OriginAdmission::enqueue_action(Some(AdmissionAction::Deliver(delivery)));
             });
             let returning = loom::thread::spawn(move || drop(returning));
             delivering.join().unwrap();
@@ -2861,7 +3050,7 @@ mod loom_tests {
 
             let probing = loom::thread::Builder::new()
                 .stack_size(16 * 1024)
-                .spawn(move || OriginAdmission::run_action_chain(Some(action)))
+                .spawn(move || OriginAdmission::enqueue_action(Some(action)))
                 .unwrap();
             let cancel_cell = requesting_cell.clone();
             let cancelling = loom::thread::Builder::new()
@@ -2945,7 +3134,7 @@ mod loom_tests {
 
             let probing = loom::thread::Builder::new()
                 .stack_size(16 * 1024)
-                .spawn(move || OriginAdmission::run_action_chain(Some(action)))
+                .spawn(move || OriginAdmission::enqueue_action(Some(action)))
                 .unwrap();
             let cancel_cell = requester.clone();
             let cancelling = loom::thread::Builder::new()
@@ -3063,7 +3252,7 @@ mod loom_tests {
                     probing_count.fetch_add(1, Ordering::SeqCst);
                     probing_started.store(true, Ordering::SeqCst);
                     let fallback = second_probe.run_once_for_test();
-                    OriginAdmission::run_action_chain(fallback);
+                    OriginAdmission::enqueue_action(fallback);
                 })
                 .unwrap();
             let cancel_cell = requester.clone();
@@ -3168,7 +3357,7 @@ mod loom_tests {
 
             let reserving = loom::thread::Builder::new()
                 .stack_size(16 * 1024)
-                .spawn(move || OriginAdmission::run_action_chain(Some(fallback)))
+                .spawn(move || OriginAdmission::enqueue_action(Some(fallback)))
                 .unwrap();
             let returning = loom::thread::Builder::new()
                 .stack_size(16 * 1024)
@@ -3228,7 +3417,7 @@ mod loom_tests {
             )
             .expect("peer demand did not prepare an H1 match");
             let delivering = loom::thread::spawn(move || {
-                OriginAdmission::run_action_chain(Some(install));
+                OriginAdmission::enqueue_action(Some(install));
             });
             let returning = loom::thread::spawn(move || drop(local));
             delivering.join().unwrap();
@@ -3284,7 +3473,7 @@ mod loom_tests {
             )
             .expect("peer demand did not prepare an H1 match");
             let delivering = loom::thread::spawn(move || {
-                OriginAdmission::run_action_chain(Some(install));
+                OriginAdmission::enqueue_action(Some(install));
             });
             let closing = loom::thread::spawn(move || close.close(CloseReason::Poisoned));
             delivering.join().unwrap();
@@ -3389,7 +3578,7 @@ mod loom_tests {
                     .unwrap();
 
             let deliver = loom::thread::spawn(move || {
-                OriginAdmission::run_action_chain(Some(AdmissionAction::Deliver(delivery)));
+                OriginAdmission::enqueue_action(Some(AdmissionAction::Deliver(delivery)));
             });
             let cancel_cell = cell.clone();
             let cancel =
@@ -3471,7 +3660,7 @@ mod loom_tests {
             .expect("peer demand did not prepare a route");
 
             let publishing = loom::thread::spawn(move || {
-                OriginAdmission::run_action_chain(Some(action));
+                OriginAdmission::enqueue_action(Some(action));
             });
             let closing_cell = connection_cell.clone();
             let closing = loom::thread::spawn(move || {
@@ -3521,7 +3710,7 @@ mod loom_tests {
             .expect("peer demand did not prepare a route");
 
             let publishing = loom::thread::spawn(move || {
-                OriginAdmission::run_action_chain(Some(action));
+                OriginAdmission::enqueue_action(Some(action));
             });
             let closing_cell = connection_cell.clone();
             let closing = loom::thread::spawn(move || {

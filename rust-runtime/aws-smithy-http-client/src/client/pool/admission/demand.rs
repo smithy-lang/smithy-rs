@@ -132,7 +132,7 @@ impl DemandSnapshot {
         matches!(self.state, DemandState::Active { .. })
     }
 
-    fn is_newer_than(&self, current: &Self) -> bool {
+    pub(super) fn is_newer_than(&self, current: &Self) -> bool {
         self.id > current.id || (self.id == current.id && self.version > current.version)
     }
 }

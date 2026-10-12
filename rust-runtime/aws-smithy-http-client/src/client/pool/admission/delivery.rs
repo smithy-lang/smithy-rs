@@ -48,7 +48,7 @@ enum DeliveryPayload {
 /// owns the acquisition step.
 pub(in crate::client::pool) struct DeliveryGuard {
     /// Admission authority that owns the assignment and fallback.
-    admission: Arc<OriginAdmission>,
+    pub(super) admission: Arc<OriginAdmission>,
     /// Exact demand excluded from competing admission while the payload crosses.
     assignment: DemandAssignment,
     /// Payload ownership before resolution, after resolution, or after transfer.
@@ -173,7 +173,7 @@ impl DeliveryGuard {
                         None,
                         Some(outcome),
                     );
-                    OriginAdmission::run_action_chain(next);
+                    OriginAdmission::enqueue_action(next);
                     return false;
                 }
             },
@@ -300,7 +300,7 @@ impl Drop for DeliveryGuard {
             return;
         }
         let next = self.settle_state(state, DemandAssignmentOutcome::RetrySamePosition);
-        OriginAdmission::run_action_chain(next);
+        OriginAdmission::enqueue_action(next);
     }
 }
 
@@ -447,7 +447,7 @@ impl Drop for DeliverySettlement {
         };
         let successor = self.successor.take();
         let next = self.settle(kind, DemandAssignmentOutcome::Accepted { successor }, None);
-        OriginAdmission::run_action_chain(next);
+        OriginAdmission::enqueue_action(next);
     }
 }
 
@@ -565,7 +565,7 @@ mod tests {
 
         drop(requesting_partition);
         assert!(origin.cell(&requesting_cell_id).is_none());
-        OriginAdmission::run_action_chain(Some(AdmissionAction::Deliver(delivery)));
+        OriginAdmission::enqueue_action(Some(AdmissionAction::Deliver(delivery)));
 
         let probe = origin.probe();
         assert_eq!(1, probe.available);
