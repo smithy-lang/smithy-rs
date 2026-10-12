@@ -76,6 +76,15 @@ for crate in aws-sdk-dynamodb aws-sdk-s3; do
     checked=$((checked + 1))
     echo -e "${C_YELLOW}## Checking ${crate}${C_RESET}"
 
+    # Deliberately without `sigv4a`, which is the one configuration this check cannot assert.
+    # `sigv4a` has to declare `p256` unconditionally -- Cargo features cannot say "only when
+    # `rustcrypto` is also on" -- and `p256` brings its own `hmac` and `sha2`, so a FIPS build with
+    # `sigv4a` compiles two crates on the forbidden list below by a route nothing can close. Adding
+    # `sigv4a` here would make this check red with no fix available. What keeps that honest is that
+    # the cfg in `aws-sigv4`'s `crypto` module leaves the RustCrypto backend uncompiled in a FIPS
+    # build, so nothing calls them; `aws-sigv4`'s crate docs state it, and a graph is the wrong
+    # instrument for "present but unreachable". Note the asymmetry if you change this: `p256` and
+    # `ecdsa` are exempt by name below, their `hmac` and `sha2` are not.
     fips_args=(-p "${crate}" --no-default-features --features aws-lc-fips -e normal)
     fips_tree="$(cargo tree "${fips_args[@]}" --prefix none 2>/dev/null | sort -u)"
 
@@ -86,28 +95,61 @@ for crate in aws-sdk-dynamodb aws-sdk-s3; do
     fi
 
     for dep in "${FORBIDDEN_IN_FIPS[@]}"; do
+        # Collect every version of it in the graph, since the reverse walk below has to name one.
+        # `cargo tree -i` takes a package spec, and a bare name is an error rather than a match
+        # once a crate has resolved to two versions -- which is not hypothetical here: enabling
+        # `sigv4a` puts `hmac` 0.12 and `sha2` 0.10 in the tree underneath `p256` alongside the
+        # 0.13 and 0.11 the backends declare. Passing the bare name there, and discarding the
+        # error, would leave the walk with no output to match an owner against, so a real
+        # propagation break would be reported as the benign note at the bottom of this loop.
         grep -q "^${dep} " <<<"${fips_tree}" || continue
+        versions=()
+        while read -r version; do
+            [[ -n "${version}" ]] && versions+=("${version#v}")
+        done < <(grep "^${dep} " <<<"${fips_tree}" | awk '{print $2}')
+        # Absent is the `continue` above. Present with nothing parseable is a different thing and
+        # is not something to pass over quietly, for the same reason as the invert failure below.
+        if [[ "${#versions[@]}" -eq 0 ]]; then
+            fail "${crate}: ${dep} is in the FIPS graph but no version could be read for it, so\
+ what pulls it in could not be determined."
+            continue
+        fi
 
-        # Present. Whether that is a failure depends on who reaches it, so walk back up.
-        parents="$(cargo tree "${fips_args[@]}" -i "${dep}" 2>/dev/null)"
-        via_backend=false
-        for owner in "${BACKEND_OWNERS[@]}"; do
-            if grep -q "${owner}" <<<"${parents}"; then
-                via_backend=true
-                fail "${crate}: a FIPS build reaches ${dep} through ${owner}. The backend\
+        for version in "${versions[@]}"; do
+            spec="${dep}@${version}"
+
+            # Present. Whether that is a failure depends on who reaches it, so walk back up.
+            # A failure to walk is itself a failure: this check cannot conclude anything about a
+            # crate it could not invert, and saying nothing would read as a pass.
+            invert_err="$(mktemp)"
+            if ! parents="$(cargo tree "${fips_args[@]}" -i "${spec}" 2>"${invert_err}")"; then
+                fail "${crate}: could not determine what pulls in ${spec}, so its presence in the\
+ FIPS graph is unexplained. cargo said:
+$(cat "${invert_err}")"
+                rm -f "${invert_err}"
+                continue
+            fi
+            rm -f "${invert_err}"
+
+            via_backend=false
+            for owner in "${BACKEND_OWNERS[@]}"; do
+                if grep -q "${owner}" <<<"${parents}"; then
+                    via_backend=true
+                    fail "${crate}: a FIPS build reaches ${spec} through ${owner}. The backend\
  propagation is broken -- check that every declaration on the path sets default-features = false\
  and forwards the backend choice.
 ${parents}"
+                fi
+            done
+
+            # Reached without passing through either backend crate: a known, scoped-out gap, where
+            # a generated crate declares the dependency itself. Reported so the output stays an
+            # honest account of what a FIPS build compiles rather than a bare pass.
+            if [[ "${via_backend}" == "false" ]]; then
+                echo "   note: ${spec} is in the FIPS graph but not via a backend crate (known gap,"
+                echo "         declared directly by a generated crate -- tracked separately)"
             fi
         done
-
-        # Reached without passing through either backend crate: a known, scoped-out gap, where a
-        # generated crate declares the dependency itself. Reported so the output stays an honest
-        # account of what a FIPS build compiles rather than a bare pass.
-        if [[ "${via_backend}" == "false" ]]; then
-            echo "   note: ${dep} is in the FIPS graph but not via a backend crate (known gap,"
-            echo "         declared directly by a generated crate -- tracked separately)"
-        fi
     done
 
     # The other half of the propagation. Making the backend optional means a build that forwards
