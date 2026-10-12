@@ -834,7 +834,7 @@ class ServerServiceGenerator(
                         for (operation in operations) {
                             val field = builderFieldNames.getValue(operation)
                             val name = operationStructNames.getValue(operation)
-                            rustTemplate("if self.$field.is_none() { missing_operation_names.insert(<crate::operation_shape::$name as #{SmithyHttpServer}::operation::OperationShape>::ID, ${("." + field + "()").dq()}); }", *codegenScope)
+                            rustTemplate("if self.$field.is_none() { missing_operation_names.insert(<crate::operation_shape::$name as #{SmithyHttpServer}::operation::SchemaOperationShape>::SCHEMA.shape_id().clone(), ${("." + field + "()").dq()}); }", *codegenScope)
                         }
                         rustTemplate("if !missing_operation_names.is_empty() { return #{Err}(BuildError::MissingOperations(MissingOperationsError { operation_names2setter_methods: missing_operation_names })); }", *codegenScope)
                     }
@@ -1091,10 +1091,9 @@ class ServerServiceGenerator(
                     writable {
                         rustTemplate(
                             """
-                            {
-                                let id = <Self as #{SmithyHttpServer}::service::SchemaServiceShape>::SCHEMA.shape_id();
-                                #{SchemaShapeId}::from_parts(id.as_str(), id.namespace(), id.shape_name())
-                            }
+                            #{SmithyHttpServer}::shape_id::ShapeId::from_schema(
+                                <Self as #{SmithyHttpServer}::service::SchemaServiceShape>::SCHEMA.shape_id()
+                            )
                             """,
                             *codegenScope,
                         )
@@ -1121,7 +1120,7 @@ class ServerServiceGenerator(
             rustTemplate(
                 """
                 impl<S> #{SmithyHttpServer}::service::ServiceShape for $serviceName<S> {
-                    const ID: $shapeIdType = #{ServiceId};
+                    const ID: #{SmithyHttpServer}::shape_id::ShapeId = #{ServiceId};
 
                     const VERSION: Option<&'static str> = #{ServiceVersion};
 

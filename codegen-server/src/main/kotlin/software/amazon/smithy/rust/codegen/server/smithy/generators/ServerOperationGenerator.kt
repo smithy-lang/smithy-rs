@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
@@ -29,7 +28,6 @@ class ServerOperationGenerator(
         arrayOf(
             "SmithyHttpServer" to
                 ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
-            "SchemaShapeId" to RuntimeType.smithySchema(runtimeConfig).resolve("ShapeId"),
         )
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
@@ -57,16 +55,16 @@ class ServerOperationGenerator(
         val responseFmt = generator.responseFmt()
 
         val operationIdAbsolute = operationId.toString().replace("#", "##")
-        val shapeIdType = if (schemaSerde) "#{SchemaShapeId}<'static>" else "#{SmithyHttpServer}::shape_id::ShapeId"
+        // OperationShape is shared with legacy plugins; schema IDs live in SchemaOperationShape::SCHEMA.
+        val shapeIdType = "#{SmithyHttpServer}::shape_id::ShapeId"
         val id =
             if (schemaSerde) {
                 writable {
                     rustTemplate(
                         """
-                        {
-                            let id = <Self as #{SmithyHttpServer}::operation::SchemaOperationShape>::SCHEMA.shape_id();
-                            #{SchemaShapeId}::from_parts(id.as_str(), id.namespace(), id.shape_name())
-                        }
+                        #{SmithyHttpServer}::shape_id::ShapeId::from_schema(
+                            <Self as #{SmithyHttpServer}::operation::SchemaOperationShape>::SCHEMA.shape_id()
+                        )
                         """,
                         *codegenScope,
                     )
