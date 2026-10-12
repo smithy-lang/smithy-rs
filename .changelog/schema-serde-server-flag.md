@@ -2,13 +2,14 @@
 applies_to: ["server"]
 authors: ["drganjoo"]
 references: []
-breaking: false
+breaking: true
 new_feature: true
 bug_fix: false
 ---
 
-Add the `schemaSerde` server codegen setting. When enabled, every generated structure and union
-exposes its `aws-smithy-schema` schema through a `SCHEMA` constant, and the crate gains
-crate-private `schema::operations` and `schema::service` modules holding `OperationSchema` and
-`ServiceSchema` descriptors for the service and its operations. The setting is off by default and
-does not change generated code or runtime behavior when left off.
+- Setting `schemaSerde: true` generates a server SDK that supports multiple protocols.
+- `package.metadata.smithy.protocol` is now an array (e.g. `protocol = ["aws.protocols#restJson1"]`).
+- A new `package.metadata.smithy.codegen-release` key records the code generator's artifact version.
+  The existing `codegen-version` key (the smithy-rs source commit) is unchanged.
+- Codegen settings that differ from their defaults are recorded under `package.metadata.codegen`,
+  and customization settings under `package.metadata.customizationConfig`.
