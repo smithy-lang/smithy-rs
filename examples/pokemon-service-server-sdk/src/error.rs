@@ -437,7 +437,7 @@ impl UnsupportedRegionError {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1534 */
+/* ServerSchemaGenerator.kt:1539 */
 static UNSUPPORTEDREGIONERROR_MEMBER_REGION: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -449,7 +449,7 @@ static UNSUPPORTEDREGIONERROR_MEMBER_REGION: ::aws_smithy_schema::Schema<'static
         "region",
         0,
     );
-/* ServerSchemaGenerator.kt:1434 */
+/* ServerSchemaGenerator.kt:1439 */
 static UNSUPPORTEDREGIONERROR_TRAITS: std::sync::LazyLock<::aws_smithy_schema::TraitMap> =
     std::sync::LazyLock::new(|| {
         let mut map = ::aws_smithy_schema::TraitMap::new();
@@ -472,13 +472,13 @@ static UNSUPPORTEDREGIONERROR_SCHEMA: ::aws_smithy_schema::Schema<'static> =
         &[&UNSUPPORTEDREGIONERROR_MEMBER_REGION],
     )
     .with_traits(&UNSUPPORTEDREGIONERROR_TRAITS);
-/* ServerSchemaGenerator.kt:136 */
+/* ServerSchemaGenerator.kt:138 */
 impl crate::error::UnsupportedRegionError {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> =
         &UNSUPPORTEDREGIONERROR_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:290 */
+/* ServerSchemaGenerator.kt:292 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::error::UnsupportedRegionError {
     fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
         Self::SCHEMA
@@ -545,7 +545,7 @@ impl UnsupportedRegionError {
     ::std::clone::Clone, ::std::cmp::Eq, ::std::cmp::PartialEq, ::std::fmt::Debug, ::std::hash::Hash,
 )]
 pub /* StructureGenerator.kt:201 */ struct ThrottlingError {/* StructureGenerator.kt:201 */}
-/* ServerSchemaGenerator.kt:1434 */
+/* ServerSchemaGenerator.kt:1439 */
 static THROTTLINGERROR_TRAITS: std::sync::LazyLock<::aws_smithy_schema::TraitMap> =
     std::sync::LazyLock::new(|| {
         let mut map = ::aws_smithy_schema::TraitMap::new();
@@ -568,12 +568,12 @@ static THROTTLINGERROR_SCHEMA: ::aws_smithy_schema::Schema<'static> =
         &[],
     )
     .with_traits(&THROTTLINGERROR_TRAITS);
-/* ServerSchemaGenerator.kt:136 */
+/* ServerSchemaGenerator.kt:138 */
 impl crate::error::ThrottlingError {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &THROTTLINGERROR_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:290 */
+/* ServerSchemaGenerator.kt:292 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::error::ThrottlingError {
     fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
         Self::SCHEMA
@@ -652,7 +652,7 @@ impl ValidationException {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1534 */
+/* ServerSchemaGenerator.kt:1539 */
 static VALIDATIONEXCEPTION_MEMBER_MESSAGE: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -664,7 +664,7 @@ static VALIDATIONEXCEPTION_MEMBER_MESSAGE: ::aws_smithy_schema::Schema<'static> 
         "message",
         0,
     );
-/* ServerSchemaGenerator.kt:1296 */
+/* ServerSchemaGenerator.kt:1302 */
 static VALIDATIONEXCEPTION_MEMBER_FIELD_LIST_MEMBER: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -676,7 +676,7 @@ static VALIDATIONEXCEPTION_MEMBER_FIELD_LIST_MEMBER: ::aws_smithy_schema::Schema
         "member",
         0,
     );
-/* ServerSchemaGenerator.kt:1534 */
+/* ServerSchemaGenerator.kt:1539 */
 static VALIDATIONEXCEPTION_MEMBER_FIELD_LIST: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -689,7 +689,7 @@ static VALIDATIONEXCEPTION_MEMBER_FIELD_LIST: ::aws_smithy_schema::Schema<'stati
         1,
     )
     .with_list_member(&VALIDATIONEXCEPTION_MEMBER_FIELD_LIST_MEMBER);
-/* ServerSchemaGenerator.kt:1434 */
+/* ServerSchemaGenerator.kt:1439 */
 static VALIDATIONEXCEPTION_TRAITS: std::sync::LazyLock<::aws_smithy_schema::TraitMap> =
     std::sync::LazyLock::new(|| {
         let mut map = ::aws_smithy_schema::TraitMap::new();
@@ -715,12 +715,12 @@ static VALIDATIONEXCEPTION_SCHEMA: ::aws_smithy_schema::Schema<'static> =
         ],
     )
     .with_traits(&VALIDATIONEXCEPTION_TRAITS);
-/* ServerSchemaGenerator.kt:136 */
+/* ServerSchemaGenerator.kt:138 */
 impl crate::error::ValidationException {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &VALIDATIONEXCEPTION_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:290 */
+/* ServerSchemaGenerator.kt:292 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::error::ValidationException {
     fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
         Self::SCHEMA
@@ -814,7 +814,7 @@ pub /* StructureGenerator.kt:201 */ struct MasterBallUnsuccessful {
     pub message: ::std::option::Option<::std::string::String>,
     /* StructureGenerator.kt:201 */
 }
-/* ServerSchemaGenerator.kt:1534 */
+/* ServerSchemaGenerator.kt:1539 */
 static MASTERBALLUNSUCCESSFUL_MEMBER_MESSAGE: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -826,7 +826,7 @@ static MASTERBALLUNSUCCESSFUL_MEMBER_MESSAGE: ::aws_smithy_schema::Schema<'stati
         "message",
         0,
     );
-/* ServerSchemaGenerator.kt:1434 */
+/* ServerSchemaGenerator.kt:1439 */
 static MASTERBALLUNSUCCESSFUL_TRAITS: std::sync::LazyLock<::aws_smithy_schema::TraitMap> =
     std::sync::LazyLock::new(|| {
         let mut map = ::aws_smithy_schema::TraitMap::new();
@@ -849,13 +849,13 @@ static MASTERBALLUNSUCCESSFUL_SCHEMA: ::aws_smithy_schema::Schema<'static> =
         &[&MASTERBALLUNSUCCESSFUL_MEMBER_MESSAGE],
     )
     .with_traits(&MASTERBALLUNSUCCESSFUL_TRAITS);
-/* ServerSchemaGenerator.kt:136 */
+/* ServerSchemaGenerator.kt:138 */
 impl crate::error::MasterBallUnsuccessful {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> =
         &MASTERBALLUNSUCCESSFUL_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:290 */
+/* ServerSchemaGenerator.kt:292 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::error::MasterBallUnsuccessful {
     fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
         Self::SCHEMA
@@ -993,7 +993,7 @@ impl InvalidPokeballError {
     }
     /* StructureGenerator.kt:135 */
 }
-/* ServerSchemaGenerator.kt:1534 */
+/* ServerSchemaGenerator.kt:1539 */
 static INVALIDPOKEBALLERROR_MEMBER_POKEBALL: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -1005,7 +1005,7 @@ static INVALIDPOKEBALLERROR_MEMBER_POKEBALL: ::aws_smithy_schema::Schema<'static
         "pokeball",
         0,
     );
-/* ServerSchemaGenerator.kt:1434 */
+/* ServerSchemaGenerator.kt:1439 */
 static INVALIDPOKEBALLERROR_TRAITS: std::sync::LazyLock<::aws_smithy_schema::TraitMap> =
     std::sync::LazyLock::new(|| {
         let mut map = ::aws_smithy_schema::TraitMap::new();
@@ -1028,12 +1028,12 @@ static INVALIDPOKEBALLERROR_SCHEMA: ::aws_smithy_schema::Schema<'static> =
         &[&INVALIDPOKEBALLERROR_MEMBER_POKEBALL],
     )
     .with_traits(&INVALIDPOKEBALLERROR_TRAITS);
-/* ServerSchemaGenerator.kt:136 */
+/* ServerSchemaGenerator.kt:138 */
 impl crate::error::InvalidPokeballError {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> = &INVALIDPOKEBALLERROR_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:290 */
+/* ServerSchemaGenerator.kt:292 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::error::InvalidPokeballError {
     fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
         Self::SCHEMA
@@ -1596,7 +1596,7 @@ pub /* StructureGenerator.kt:201 */ struct ResourceNotFoundException {
     pub message: ::std::string::String,
     /* StructureGenerator.kt:201 */
 }
-/* ServerSchemaGenerator.kt:1534 */
+/* ServerSchemaGenerator.kt:1539 */
 static RESOURCENOTFOUNDEXCEPTION_MEMBER_MESSAGE: ::aws_smithy_schema::Schema<'static> =
     ::aws_smithy_schema::Schema::new_member(
         ::aws_smithy_schema::ShapeId::from_parts(
@@ -1608,7 +1608,7 @@ static RESOURCENOTFOUNDEXCEPTION_MEMBER_MESSAGE: ::aws_smithy_schema::Schema<'st
         "message",
         0,
     );
-/* ServerSchemaGenerator.kt:1434 */
+/* ServerSchemaGenerator.kt:1439 */
 static RESOURCENOTFOUNDEXCEPTION_TRAITS: std::sync::LazyLock<::aws_smithy_schema::TraitMap> =
     std::sync::LazyLock::new(|| {
         let mut map = ::aws_smithy_schema::TraitMap::new();
@@ -1617,6 +1617,9 @@ static RESOURCENOTFOUNDEXCEPTION_TRAITS: std::sync::LazyLock<::aws_smithy_schema
                 ::aws_smithy_schema::ShapeId::from_parts("smithy.api#error", "smithy.api", "error"),
                 "client",
             ),
+        ));
+        map.insert(::std::boxed::Box::new(
+            ::aws_smithy_http_server::schema::traits::HttpErrorTrait::new(404),
         ));
         map
     });
@@ -1630,19 +1633,14 @@ static RESOURCENOTFOUNDEXCEPTION_SCHEMA: ::aws_smithy_schema::Schema<'static> =
         ::aws_smithy_schema::ShapeType::Structure,
         &[&RESOURCENOTFOUNDEXCEPTION_MEMBER_MESSAGE],
     )
-    .with_http(::aws_smithy_schema::traits::HttpTrait::new(
-        "",
-        "",
-        ::std::option::Option::Some(404),
-    ))
     .with_traits(&RESOURCENOTFOUNDEXCEPTION_TRAITS);
-/* ServerSchemaGenerator.kt:136 */
+/* ServerSchemaGenerator.kt:138 */
 impl crate::error::ResourceNotFoundException {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> =
         &RESOURCENOTFOUNDEXCEPTION_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:290 */
+/* ServerSchemaGenerator.kt:292 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::error::ResourceNotFoundException {
     fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
         Self::SCHEMA
@@ -1719,7 +1717,7 @@ impl ResourceNotFoundException {
     ::std::clone::Clone, ::std::cmp::Eq, ::std::cmp::PartialEq, ::std::fmt::Debug, ::std::hash::Hash,
 )]
 pub /* StructureGenerator.kt:201 */ struct StorageAccessNotAuthorized {/* StructureGenerator.kt:201 */}
-/* ServerSchemaGenerator.kt:1434 */
+/* ServerSchemaGenerator.kt:1439 */
 static STORAGEACCESSNOTAUTHORIZED_TRAITS: std::sync::LazyLock<::aws_smithy_schema::TraitMap> =
     std::sync::LazyLock::new(|| {
         let mut map = ::aws_smithy_schema::TraitMap::new();
@@ -1728,6 +1726,9 @@ static STORAGEACCESSNOTAUTHORIZED_TRAITS: std::sync::LazyLock<::aws_smithy_schem
                 ::aws_smithy_schema::ShapeId::from_parts("smithy.api#error", "smithy.api", "error"),
                 "client",
             ),
+        ));
+        map.insert(::std::boxed::Box::new(
+            ::aws_smithy_http_server::schema::traits::HttpErrorTrait::new(401),
         ));
         map
     });
@@ -1741,19 +1742,14 @@ static STORAGEACCESSNOTAUTHORIZED_SCHEMA: ::aws_smithy_schema::Schema<'static> =
         ::aws_smithy_schema::ShapeType::Structure,
         &[],
     )
-    .with_http(::aws_smithy_schema::traits::HttpTrait::new(
-        "",
-        "",
-        ::std::option::Option::Some(401),
-    ))
     .with_traits(&STORAGEACCESSNOTAUTHORIZED_TRAITS);
-/* ServerSchemaGenerator.kt:136 */
+/* ServerSchemaGenerator.kt:138 */
 impl crate::error::StorageAccessNotAuthorized {
     /// The schema for this shape.
     pub const SCHEMA: &'static ::aws_smithy_schema::Schema<'static> =
         &STORAGEACCESSNOTAUTHORIZED_SCHEMA;
 }
-/* ServerSchemaGenerator.kt:290 */
+/* ServerSchemaGenerator.kt:292 */
 impl ::aws_smithy_schema::serde::SerializableStruct for crate::error::StorageAccessNotAuthorized {
     fn schema(&self) -> &::aws_smithy_schema::Schema<'_> {
         Self::SCHEMA

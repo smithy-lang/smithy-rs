@@ -206,17 +206,23 @@ internal class ServerSchemaDecoratorTest {
 
     @Test
     fun `error schemas preserve explicit httpError status codes`() {
-        serverIntegrationTest(model, schemaSerdeParams) { _, rustCrate ->
+        serverIntegrationTest(model, schemaSerdeParams) { context, rustCrate ->
             rustCrate.testModule {
-                unitTest(
-                    "http_error_status",
-                    """
-                    let http = crate::error::BadThing::SCHEMA.http().expect("should preserve @httpError");
-                    assert_eq!(http.code(), 400);
-                    assert_eq!(http.method(), "");
-                    assert_eq!(http.uri(), "");
-                    """,
-                )
+                unitTest("http_error_status") {
+                    rustTemplate(
+                        """
+                        let schema = crate::error::BadThing::SCHEMA;
+                        assert!(schema.http().is_none());
+                        let traits = schema.traits().expect("error traits should be recorded");
+                        assert!(traits.contains_fqn("smithy.api##error"));
+                        assert!(traits.contains_fqn("smithy.api##httpError"));
+                        let http_error = #{HttpErrorTrait}::from_schema(schema)
+                            .expect("should preserve typed @httpError");
+                        assert_eq!(http_error.code(), 400);
+                        """,
+                        "HttpErrorTrait" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType().resolve("schema::traits::HttpErrorTrait"),
+                    )
+                }
             }
         }
     }
