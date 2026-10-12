@@ -27,6 +27,8 @@ aws-sdk-dynamodb = { version = "...", default-features = false, features = [
 ] }
 ```
 
+Two stay regardless: `sigv4a` declares `p256`, which brings its own `hmac` and `sha2`, never called because the backend they serve isn't compiled; and `aws-sdk-s3` declares `hmac` and `sha2` to key its S3 Express identity cache. Neither computes request cryptography.
+
 `aws-sigv4` and `aws-smithy-checksums` declare `aws-lc-rs = "1.18"`, matching what `rustls` declares so that signing, checksums and TLS all ask for the same line. If your own manifest pins `aws-lc-rs` below that, it will need raising.
 
 **[Full announcement, including platform support and the limits of the FIPS guarantee](https://github.com/awslabs/aws-sdk-rust/discussions/1464).** Read it before treating a build as end-to-end FIPS: TLS is only made FIPS for the hyper 1.x client, `aws-lc-rs-fips` covers a narrower set of targets than `aws-lc-rs` (notably not i686, WASM, iOS or Android), and `aws-config`'s `credentials-login` DPoP signing is not routed through AWS-LC.
