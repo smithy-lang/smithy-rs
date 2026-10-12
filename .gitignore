@@ -3,6 +3,10 @@
 # Compiled class file
 *.class
 
+# kotlin build dirs
+.kotlin/
+buildSrc/.kotlin/
+
 # Log file
 *.log
 
