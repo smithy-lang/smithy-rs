@@ -14,6 +14,7 @@ pub mod routing;
 mod service;
 pub mod settings;
 mod timestamp;
+pub mod traits;
 
 pub use config::ServiceConfig;
 pub use deserialize::{DeserializableShape, DeserializeError};
