@@ -71,6 +71,20 @@ partition, and installed connections also identify the stable connection and neg
 Statistics distinguish establishment, admitted H1 and H2 state, draining state, active H2 streams, waiters,
 and physically live transports.
 
+## External construction and task submission
+
+`pool::HttpsBuilder` names the existing builder after TLS provider selection.
+An external composition layer can retain it until runtime placement is available,
+then install partitions and invoke the native terminal constructor. The builder's
+`has_explicit_partitions` query lets that layer detect caller-supplied declarations
+before replacing them.
+
+`DriverSpawner::from_fn` accepts a callback that submits each boxed connection-owned
+future to the partition's runtime. The callback may run concurrently on caller
+threads and must return promptly. Task execution, runtime ownership, and shutdown
+remain with the supplied execution capability. The Tokio adapter is one supported
+submission option.
+
 ## Architecture
 
 The architecture proceeds from topology and ownership through local selection,
