@@ -380,6 +380,7 @@ mod tests {
         assert_eq!(dec.integer().unwrap(), 30);
     }
 
+    #[cfg(test)]
     mod struct_prefix {
         use super::*;
 
