@@ -374,7 +374,7 @@ mod tests {
     use aws_smithy_schema::serde::{SerializableStruct, ShapeSerializer};
     use aws_smithy_schema::{shape_id, ShapeType};
 
-    use crate::codec::CborCodec;
+    use crate::codec::{CborCodec, CborCodecSettings};
 
     /// Helper: serialize with CborSerializer, then deserialize with CborDeserializer.
     fn make_deser(f: impl FnOnce(&mut crate::codec::CborSerializer)) -> Vec<u8> {
@@ -383,6 +383,48 @@ mod tests {
         let mut ser = codec.create_serializer();
         f(&mut ser);
         ser.finish()
+    }
+
+    #[test]
+    fn strict_null_struct_members_are_skipped_as_absent() {
+        static X: Schema =
+            Schema::new_member(shape_id!("test", "S", "x"), ShapeType::Integer, "x", 0);
+        static S: Schema = Schema::new_struct(shape_id!("test", "S"), ShapeType::Structure, &[&X]);
+        for strict in [false, true] {
+            let codec = CborCodec::new(CborCodecSettings::default().enforce_strictness(strict));
+            // Strict: the codec consumes the null itself, the consumer never runs
+            // and defaults stay untouched. Lenient: the consumer sees the null and
+            // fails here by requiring an integer.
+            let mut visited = false;
+            let result = codec.create_deserializer(b"\xa1\x61x\xf6").read_struct(
+                &S,
+                &mut |member, deser| {
+                    visited = true;
+                    deser.read_integer(member).map(|_| ())
+                },
+            );
+            assert_eq!(result.is_ok(), strict);
+            assert_eq!(visited, !strict);
+        }
+    }
+
+    #[test]
+    fn strict_top_level_containers() {
+        for input in [
+            vec![0xa0],
+            vec![0xbf, 0xff],
+            vec![0xa1, 0x61, b'x', 0x81, 0xa0],
+            vec![0xbf, 0x61, b'x', 0x9f, 0xbf, 0xff, 0xff, 0xff],
+        ] {
+            for strict in [false, true] {
+                let mut de = CborDeserializer::new(&input, 128).with_strictness(strict);
+                de.read_struct(&STRING, &mut |_, _| Ok(())).unwrap();
+                let mut trailing = input.clone();
+                trailing.push(0);
+                let mut de = CborDeserializer::new(&trailing, 128).with_strictness(strict);
+                assert_eq!(de.read_struct(&STRING, &mut |_, _| Ok(())).is_err(), strict);
+            }
+        }
     }
 
     /// Regression (worklist item 9): a declared container length is untrusted. A truncated
@@ -523,43 +565,6 @@ mod tests {
         let bytes = make_deser(|s| s.write_null(&STRING).unwrap());
         let mut de = CborDeserializer::new(&bytes, 128);
         de.read_null().unwrap();
-    }
-
-    #[test]
-    fn server_null_struct_members_leave_defaults_untouched() {
-        static X: Schema =
-            Schema::new_member(shape_id!("test", "S", "x"), ShapeType::Integer, "x", 0);
-        static S: Schema = Schema::new_struct(shape_id!("test", "S"), ShapeType::Structure, &[&X]);
-        for strict in [false, true] {
-            let mut value = 42;
-            let result = CborDeserializer::new(b"\xa1\x61x\xf6", 128)
-                .with_strictness(strict)
-                .read_struct(&S, &mut |m, d| {
-                    value = d.read_integer(m)?;
-                    Ok(())
-                });
-            assert_eq!(result.is_ok(), strict);
-            assert_eq!(value, 42);
-        }
-    }
-
-    #[test]
-    fn strict_top_level_containers() {
-        for input in [
-            vec![0xa0],
-            vec![0xbf, 0xff],
-            vec![0xa1, 0x61, b'x', 0x81, 0xa0],
-            vec![0xbf, 0x61, b'x', 0x9f, 0xbf, 0xff, 0xff, 0xff],
-        ] {
-            for strict in [false, true] {
-                let mut de = CborDeserializer::new(&input, 128).with_strictness(strict);
-                de.read_struct(&STRING, &mut |_, _| Ok(())).unwrap();
-                let mut trailing = input.clone();
-                trailing.push(0);
-                let mut de = CborDeserializer::new(&trailing, 128).with_strictness(strict);
-                assert_eq!(de.read_struct(&STRING, &mut |_, _| Ok(())).is_err(), strict);
-            }
-        }
     }
 
     #[test]
