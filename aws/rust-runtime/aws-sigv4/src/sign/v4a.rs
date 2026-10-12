@@ -6,11 +6,10 @@
 use aws_smithy_runtime_api::client::identity::Identity;
 use bytes::{BufMut, BytesMut};
 use crypto_bigint::{CheckedAdd, CheckedSub, Encoding, U256};
-use ecdsa::hazmat::{DigestPrimitive, SignPrimitive};
-use ecdsa::signature::digest::Digest as _;
+use ecdsa::hazmat::sign_prehashed_rfc6979;
 use hmac::{digest::FixedOutput, Hmac, KeyInit, Mac};
 use p256::{NistP256, NonZeroScalar};
-use sha2::Sha256;
+use sha2::{Digest as _, Sha256};
 use std::io::Write;
 use std::sync::LazyLock;
 use std::time::SystemTime;
@@ -22,14 +21,6 @@ const P256_PRIVATE_KEY_SIZE: usize = 32;
 /// Shortest input [`calculate_signature`] accepts, mirroring `elliptic_curve::SecretKey::MIN_SIZE`.
 const P256_PRIVATE_KEY_MIN_SIZE: usize = 24;
 
-/// The SHA-256 that `ecdsa` pairs with P-256.
-///
-/// This is deliberately not the [`sha2::Sha256`] used for HMAC above. `p256` depends on an older
-/// `sha2` major than this crate does, so both are in the dependency graph and their `Sha256` types
-/// are distinct and not interchangeable in `ecdsa`'s trait bounds. Naming the curve's own
-/// associated digest is what `ecdsa` does internally (`C::Digest`), which is what keeps the
-/// signature below identical to the one a `SigningKey` would produce.
-type P256Digest = <NistP256 as DigestPrimitive>::Digest;
 static BIG_N_MINUS_2: LazyLock<U256> = LazyLock::new(|| {
     // The N value from section 3.2.1.3 of https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-186.pdf
     // Used as the N value for the algorithm described in section A.2.2 of https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-5.pdf
@@ -67,10 +58,9 @@ pub fn calculate_signature(signing_key: impl AsRef<[u8]>, string_to_sign: &[u8])
     // caller passing its own key. The length check above is what keeps the two accepted ranges
     // identical.
     //
-    // This is the body of `ecdsa`'s `PrehashSigner for SigningKey` with that derivation left out,
+    // This is what `ecdsa`'s `PrehashSigner for SigningKey` does with that derivation left out,
     // so the signature is unchanged: same RFC 6979 deterministic nonce, same empty additional
-    // data. `ecdsa`'s `bits2field` is a copy for a digest the width of the field, which SHA-256
-    // on P-256 is, so hashing straight into `z` is equivalent.
+    // data.
     //
     // Both copies this function owns, `repr` and `scalar`, are wiped on the way out; the
     // `signing_key` slice is the caller's and is left alone. The old code got the wipe for free:
@@ -86,10 +76,8 @@ pub fn calculate_signature(signing_key: impl AsRef<[u8]>, string_to_sign: &[u8])
             .expect("signing key is a valid P-256 private scalar"),
     );
 
-    let z = P256Digest::digest(string_to_sign);
-    let (signature, _recovery_id): (p256::ecdsa::Signature, _) = scalar
-        .try_sign_prehashed_rfc6979::<P256Digest>(&z, &[])
-        .expect("signing cannot fail for a valid scalar and a field-width digest");
+    let z = Sha256::digest(string_to_sign);
+    let (signature, _recovery_id) = sign_prehashed_rfc6979::<NistP256, Sha256>(&scalar, &z, &[]);
 
     hex::encode(signature.to_der().as_bytes())
 }
@@ -282,7 +270,7 @@ mod tests {
     };
     use p256::ecdsa::signature::Signer;
     use p256::ecdsa::{DerSignature, SigningKey};
-    use p256::elliptic_curve::sec1::ToEncodedPoint;
+    use p256::elliptic_curve::sec1::ToSec1Point;
 
     /// `elliptic_curve::SecretKey::MIN_SIZE` is a private associated constant, so the 24 in
     /// [`P256_PRIVATE_KEY_MIN_SIZE`] is a copy this crate cannot reference. Pin both ends of the
@@ -404,7 +392,7 @@ mod tests {
             .expect("derived key is a valid P-256 private key")
             .verifying_key()
             .as_affine()
-            .to_encoded_point(false);
+            .to_sec1_point(false);
         assert_eq!(
             "b6618f6a65740a99e650b33b6b4b5bd0d43b176d721a3edfea7e7d2d56d936b1",
             hex::encode(point.x().expect("uncompressed point has an x coordinate")),
