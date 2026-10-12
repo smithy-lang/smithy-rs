@@ -30,6 +30,7 @@ import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.model.traits.HttpErrorTrait
 import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.model.traits.StreamingTrait
@@ -57,6 +58,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrai
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 
 /**
  * Emits server shape schemas and serialization walkers.
@@ -69,7 +71,7 @@ class ServerSchemaGenerator(
     private val writer: RustWriter,
     private val shape: Shape,
     private val traitFilter: SchemaTraitFilter =
-        SchemaTraitFilter(codegenContext.model, additionalTraits = setOf(ErrorTrait.ID)),
+        SchemaTraitFilter(codegenContext.model, additionalTraits = setOf(ErrorTrait.ID, HttpErrorTrait.ID)),
     private val traitExtension: SchemaTraitExtension = SchemaTraitExtension(),
     /** Override the prefix used for generated static names. Defaults to the symbol name uppercased. */
     val schemaPrefix: String? = null,
@@ -888,10 +890,19 @@ class ServerSchemaGenerator(
                     "ShapeId" to smithySchema.resolve("ShapeId"),
                     "Document" to RuntimeType.smithyTypes(runtimeConfig).resolve("Document"),
                     "traits" to smithySchema.resolve("traits"),
+                    "HttpErrorTrait" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType().resolve("schema::traits::HttpErrorTrait"),
                 )
             for (trait in traits) {
                 // Skip known traits — they're handled by with_*() setters
                 if (knownTraitSetter(trait) != null) continue
+
+                if (trait is HttpErrorTrait) {
+                    rustTemplate(
+                        "map.insert(#{Box}::new(#{HttpErrorTrait}::new(${trait.code})));",
+                        *codegenScope,
+                    )
+                    continue
+                }
 
                 // Check extension for custom rendering
                 val customProvider = traitExtension.providerFor(trait)
@@ -1079,14 +1090,9 @@ class ServerSchemaGenerator(
      * (`deserialize_request` label re-matching); the output schema drives
      * success-status resolution (`serialize_response`: `@httpResponseCode`
      * member if set, else `schema.http().code()`, else 200).
-     * Error shapes carrying `@httpError` expose its status code through the
-     * same metadata, with empty method and URI since errors are responses.
+     * Error shapes carry `@httpError` separately in the fallback trait map.
      */
     private fun httpTraitChain(shape: Shape): String {
-        val httpError = shape.getTrait(software.amazon.smithy.model.traits.HttpErrorTrait::class.java).orElse(null)
-        if (httpError != null) {
-            return "\n    .with_http(#{HttpTrait}::new(\"\", \"\", #{Some}(${httpError.code})))"
-        }
         val operationIndex = software.amazon.smithy.model.knowledge.OperationIndex.of(model)
         for (operation in model.operationShapes) {
             if (operationIndex.getInputShape(operation).orElse(null)?.id == shape.id ||
@@ -1381,7 +1387,6 @@ class ServerSchemaGenerator(
                 "Schema" to smithySchema.resolve("Schema"),
                 "ShapeId" to smithySchema.resolve("ShapeId"),
                 "ShapeType" to smithySchema.resolve("ShapeType"),
-                "HttpTrait" to smithySchema.resolve("traits::HttpTrait"),
                 *RuntimeType.preludeScope,
             )
 
