@@ -151,6 +151,8 @@ object RustReservedWords : ReservedWords {
             "virtual",
             "yield",
             "try",
+            // Reserved since the 2024 edition
+            "gen",
         )
 
     // Some things can't be used as a raw identifier, so we can't use the normal escaping strategy
