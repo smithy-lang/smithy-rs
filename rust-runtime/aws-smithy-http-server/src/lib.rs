@@ -42,6 +42,8 @@ pub(crate) use self::error::Error;
 #[doc(inline)]
 pub use self::request::extension::Extension;
 #[doc(inline)]
+pub use self::shape_id::ShapeId;
+#[doc(inline)]
 pub use tower_http::add_extension::{AddExtension, AddExtensionLayer};
 
 #[cfg(test)]
