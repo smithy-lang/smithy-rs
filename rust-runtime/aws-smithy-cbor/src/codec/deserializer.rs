@@ -137,6 +137,10 @@ impl ShapeDeserializer for CborDeserializer<'_> {
             }
             let key = self.decoder.str().map_err(deser_err)?;
             if self.enforce_strictness && !is_union && self.is_null() {
+                // A null structure member means the member is absent; the consumer
+                // never sees it, so builder defaults stay untouched. Unions are
+                // excluded: a null variant value must reach the consumer to be
+                // rejected there.
                 self.read_null()?;
             } else if let Some(member_schema) = schema.member_schema(&key) {
                 consumer(member_schema, self)?;
