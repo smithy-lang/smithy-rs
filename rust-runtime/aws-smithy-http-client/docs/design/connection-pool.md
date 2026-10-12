@@ -77,7 +77,10 @@ and physically live transports.
 An external composition layer can retain it until runtime placement is available,
 then install partitions and invoke the native terminal constructor. The builder's
 `has_explicit_partitions` query lets that layer detect caller-supplied declarations
-before replacing them.
+before replacing them. `HttpsBuilder::build_https` is available independently of
+provider features, so composition layers can implement HTTPS construction without
+forwarding those features. Callers select a provider through the native TLS API;
+without an enabled provider, the selected builder cannot be constructed.
 
 `DriverSpawner::from_fn` accepts a callback that submits each boxed connection-owned
 future to the partition's runtime. The callback may run concurrently on caller

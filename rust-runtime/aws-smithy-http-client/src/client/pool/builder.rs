@@ -382,6 +382,21 @@ impl Builder<TlsUnset> {
     }
 }
 
+impl Builder<TlsProviderSelected> {
+    /// Builds a pool whose connector performs TLS and ALPN negotiation.
+    pub fn build_https(self) -> Result<ConnectionPool, BuildError> {
+        #[cfg(any(feature = "__rustls", feature = "s2n-tls"))]
+        {
+            self.build_https_enabled()
+        }
+        #[cfg(not(any(feature = "__rustls", feature = "s2n-tls")))]
+        {
+            // Provider has no variants here; exhaustiveness is compiler-checked.
+            match self.tls.provider {}
+        }
+    }
+}
+
 crate::cfg::cfg_tls! {
     impl Builder<TlsProviderSelected> {
         /// Sets provider-specific TLS configuration for HTTPS connections.
@@ -396,8 +411,8 @@ crate::cfg::cfg_tls! {
             self
         }
 
-        /// Builds a pool whose connector performs TLS and ALPN negotiation.
-        pub fn build_https(self) -> Result<ConnectionPool, BuildError> {
+        /// Selects the resolver for the HTTPS transport.
+        fn build_https_enabled(self) -> Result<ConnectionPool, BuildError> {
             let resolver = self.dns_resolver.clone();
             match resolver {
                 Some(resolver) => {
