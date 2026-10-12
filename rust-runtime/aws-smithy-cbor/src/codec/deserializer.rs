@@ -292,13 +292,17 @@ impl ShapeDeserializer for CborDeserializer<'_> {
 
     fn container_size(&self) -> Option<usize> {
         let mut peek = self.decoder.clone();
-        let (declared, min_bytes_per_element) = match peek.datatype().ok()? {
-            Type::Array | Type::ArrayIndef => (peek.list().ok()??, 1),
-            Type::Map | Type::MapIndef => (peek.map().ok()??, 2),
-            _ => return None,
-        };
-        let remaining = self.input_len.saturating_sub(peek.position());
-        Some(Self::prealloc(declared, remaining, min_bytes_per_element))
+        match peek.datatype().ok()? {
+            Type::Array | Type::ArrayIndef => peek.list().ok()?.map(|n| {
+                let remaining = self.input_len.saturating_sub(peek.position());
+                Self::prealloc(n, remaining, 1)
+            }),
+            Type::Map | Type::MapIndef => peek.map().ok()?.map(|n| {
+                let remaining = self.input_len.saturating_sub(peek.position());
+                Self::prealloc(n, remaining, 2)
+            }),
+            _ => None,
+        }
     }
 
     fn read_string_list(&mut self, _schema: &Schema<'_>) -> Result<Vec<String>, SerdeError> {
