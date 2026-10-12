@@ -13,6 +13,10 @@ use std::time::SystemTime;
 use zeroize::Zeroizing;
 
 const ALGORITHM: &[u8] = b"AWS4-ECDSA-P256-SHA256";
+/// Size of a P-256 private scalar in bytes.
+const P256_PRIVATE_KEY_SIZE: usize = 32;
+/// Shortest input [`calculate_signature`] accepts, mirroring `elliptic_curve::SecretKey::MIN_SIZE`.
+const P256_PRIVATE_KEY_MIN_SIZE: usize = 24;
 static BIG_N_MINUS_2: LazyLock<U256> = LazyLock::new(|| {
     // The N value from section 3.2.1.3 of https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-186.pdf
     // Used as the N value for the algorithm described in section A.2.2 of https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-5.pdf
@@ -23,11 +27,34 @@ static BIG_N_MINUS_2: LazyLock<U256> = LazyLock::new(|| {
 });
 
 /// Calculates a Sigv4a signature
+///
+/// `signing_key` is a big-endian P-256 private scalar, as produced by
+/// [`generate_signing_key`].
+///
+/// Shorter input is accepted down to 24 bytes and left-padded with zeroes, which is what the
+/// `SecretKey` this used to go through did.
+///
+/// # Panics
+/// Panics if `signing_key` is not a valid P-256 private key.
 pub fn calculate_signature(signing_key: impl AsRef<[u8]>, string_to_sign: &[u8]) -> String {
-    hex::encode(ecdsa_p256_sha256_sign_der(
-        signing_key.as_ref(),
-        string_to_sign,
-    ))
+    let signing_key = signing_key.as_ref();
+    assert!(
+        (P256_PRIVATE_KEY_MIN_SIZE..=P256_PRIVATE_KEY_SIZE).contains(&signing_key.len()),
+        "a P-256 private scalar is {P256_PRIVATE_KEY_MIN_SIZE} to {P256_PRIVATE_KEY_SIZE} bytes, got {}",
+        signing_key.len()
+    );
+
+    // `SecretKey::from_slice`, which the `SigningKey` path went through, took 24 to 32 bytes and
+    // left-padded anything short, so that path signed a short key rather than rejecting it. Pad
+    // here rather than in a backend, so both backends accept the same range: AWS-LC takes a fixed
+    // 32 bytes and would otherwise refuse a key the RustCrypto arm accepts. The length check above
+    // is what keeps this range identical to `SecretKey`'s.
+    //
+    // `repr` is wiped on the way out. The `signing_key` slice is the caller's and is left alone.
+    let mut repr = Zeroizing::new([0u8; P256_PRIVATE_KEY_SIZE]);
+    repr[P256_PRIVATE_KEY_SIZE - signing_key.len()..].copy_from_slice(signing_key);
+
+    hex::encode(ecdsa_p256_sha256_sign_der(&repr[..], string_to_sign))
 }
 
 /// Generates a signing key for Sigv4a signing.
@@ -62,8 +89,12 @@ pub fn generate_signing_key(access_key: &str, secret_access_key: &str) -> impl A
             let pk = k0
                 .checked_add(&U256::ONE)
                 .expect("k0 is always less than U256::MAX");
-            // The loop's bound on `k0` makes `pk` a valid P-256 private scalar, so the derived
-            // key needs no further validation before it is handed to `calculate_signature`.
+            // Return the scalar itself rather than round-tripping it through a `SigningKey`.
+            // Building one derives the verifying key, which costs a P-256 scalar
+            // multiplication that nothing here uses: the only caller hands these bytes to
+            // `calculate_signature`, and the loop's bound on `k0` already makes `pk` a valid
+            // private scalar. Staying in `Zeroizing` also keeps the key out of a plain
+            // `FieldBytes` that would not be wiped on drop.
             break Zeroizing::new(pk.to_be_bytes());
         }
 
@@ -203,5 +234,190 @@ pub mod signing_params {
                     .ok_or_else(|| BuildError::new("settings are required"))?,
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        calculate_signature, generate_signing_key, P256_PRIVATE_KEY_MIN_SIZE, P256_PRIVATE_KEY_SIZE,
+    };
+    #[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+    use p256::ecdsa::signature::Signer;
+    use p256::ecdsa::signature::Verifier;
+    use p256::ecdsa::{DerSignature, SigningKey};
+    use p256::elliptic_curve::sec1::ToEncodedPoint;
+
+    /// `elliptic_curve::SecretKey::MIN_SIZE` is a private associated constant, so the 24 in
+    /// [`P256_PRIVATE_KEY_MIN_SIZE`] is a copy this crate cannot reference. Pin both ends of the
+    /// range against the `SigningKey` path: if upstream moves that constant, the length check
+    /// above stops matching what `SecretKey::from_slice` accepts, and this fails rather than
+    /// silently diverging.
+    #[test]
+    fn the_accepted_length_range_matches_secret_key() {
+        let key = generate_signing_key("AKIDEXAMPLE", "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY");
+        let full = key.as_ref();
+
+        assert!(
+            SigningKey::from_slice(&full[..P256_PRIVATE_KEY_MIN_SIZE]).is_ok(),
+            "{P256_PRIVATE_KEY_MIN_SIZE} bytes should be the shortest accepted key"
+        );
+        assert!(
+            SigningKey::from_slice(&full[..P256_PRIVATE_KEY_MIN_SIZE - 1]).is_err(),
+            "one byte below {P256_PRIVATE_KEY_MIN_SIZE} should be refused"
+        );
+
+        let too_long = [full, full].concat();
+        assert!(
+            SigningKey::from_slice(&too_long[..P256_PRIVATE_KEY_SIZE + 1]).is_err(),
+            "one byte above {P256_PRIVATE_KEY_SIZE} should be refused"
+        );
+    }
+
+    /// `SecretKey::from_slice` accepts 24 to 32 bytes and left-pads anything short, so the
+    /// `SigningKey` path signed a short key rather than rejecting it. Signing from the scalar
+    /// takes a fixed 32 bytes, so this function pads instead. Every accepted length has to still
+    /// produce what the old path produced, since a caller may pass its own key.
+    ///
+    /// Byte-for-byte equality with that path only holds when RustCrypto is the backend, which is
+    /// why this is gated: AWS-LC draws a random `k` rather than RFC 6979's deterministic one, so
+    /// its signatures differ run to run and can only be checked by verifying them.
+    #[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+    #[test]
+    fn short_keys_match_the_signing_key_path() {
+        let key = generate_signing_key("AKIDEXAMPLE", "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY");
+        let string_to_sign = b"AWS4-ECDSA-P256-SHA256\n20260101T000000Z";
+
+        for len in P256_PRIVATE_KEY_MIN_SIZE..=P256_PRIVATE_KEY_SIZE {
+            let short = &key.as_ref()[..len];
+            let expected: DerSignature = SigningKey::from_slice(short)
+                .expect("a left-padded short key is a valid P-256 private key")
+                .sign(string_to_sign);
+            assert_eq!(
+                hex::encode(expected.as_bytes()),
+                calculate_signature(short, string_to_sign),
+                "signature diverged for a {len}-byte key"
+            );
+        }
+    }
+
+    /// The padding itself is backend-independent -- it is in [`calculate_signature`], not in a
+    /// backend -- but `short_keys_match_the_signing_key_path` can only check it where signatures
+    /// are deterministic. Cover every accepted length on whichever backend is selected by
+    /// verifying the signature rather than comparing bytes, which is all AWS-LC's random `k`
+    /// allows. Weaker than that equality, and the only short-key coverage under AWS-LC.
+    #[test]
+    fn short_keys_verify_under_the_key_they_pad_to() {
+        let key = generate_signing_key("AKIDEXAMPLE", "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY");
+        let string_to_sign = b"AWS4-ECDSA-P256-SHA256\n20260101T000000Z";
+
+        for len in P256_PRIVATE_KEY_MIN_SIZE..=P256_PRIVATE_KEY_SIZE {
+            let short = &key.as_ref()[..len];
+            // `SecretKey::from_slice` left-pads, so this is the public key of the 32-byte scalar
+            // `calculate_signature` pads to. A signature verifying under it is what shows the two
+            // pad the same way.
+            let verifying_key = *SigningKey::from_slice(short)
+                .expect("a left-padded short key is a valid P-256 private key")
+                .verifying_key();
+            let signature = hex::decode(calculate_signature(short, string_to_sign))
+                .expect("calculate_signature returns hex");
+            verifying_key
+                .verify(
+                    string_to_sign,
+                    &DerSignature::try_from(signature.as_slice())
+                        .expect("signature must be DER encoded"),
+                )
+                .unwrap_or_else(|_| panic!("signature did not verify for a {len}-byte key"));
+        }
+    }
+
+    #[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+    const CREDENTIALS: &[(&str, &str)] = &[
+        (
+            "AKIAIOSFODNN7EXAMPLE",
+            "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        ),
+        ("AKIDEXAMPLE", "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY"),
+        (
+            "AKIAIOSFODNN7EXAMPLF",
+            "je7MtGbClwBF/2Zp9Utk/h3yCo8nvbEXAMPLEKEY",
+        ),
+    ];
+
+    #[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+    const STRINGS_TO_SIGN: &[&[u8]] = &[
+        b"",
+        b"AWS4-ECDSA-P256-SHA256\n20260101T000000Z\n20260101/lambda/aws4_request\n\
+          a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+        &[0xff; 64],
+    ];
+
+    /// Signing from the private scalar has to agree with signing through a `SigningKey`, byte for
+    /// byte, across every credential and string to sign below. That equality is the whole
+    /// argument for skipping the verifying-key derivation: the only thing dropped is a scalar
+    /// multiplication whose result signing never reads.
+    ///
+    /// It says nothing about the derivation itself, since both sides start from the same
+    /// `generate_signing_key` output and a change there moves both;
+    /// `derived_key_matches_the_published_test_vector` is what pins that. Nor does it cover short
+    /// keys, which `short_keys_match_the_signing_key_path` does.
+    ///
+    /// Gated for the same reason as that test: only the RustCrypto backend signs deterministically.
+    #[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+    #[test]
+    fn signature_matches_the_signing_key_path() {
+        for (access_key, secret_key) in CREDENTIALS {
+            let key = generate_signing_key(access_key, secret_key);
+            for string_to_sign in STRINGS_TO_SIGN {
+                let expected: DerSignature = SigningKey::from_slice(key.as_ref())
+                    .expect("derived key is a valid P-256 private key")
+                    .sign(string_to_sign);
+                assert_eq!(
+                    hex::encode(expected.as_bytes()),
+                    calculate_signature(&key, string_to_sign),
+                    "signature diverged for access key {access_key}"
+                );
+            }
+        }
+    }
+
+    /// Pins the key derivation to the suite's published key.
+    ///
+    /// Every `aws-signing-test-suite/v4a/*/public-key.json` in this crate holds the same public
+    /// key, and the scalar the KDF derives for `AKIDEXAMPLE` is its private half. The X and Y
+    /// asserted below are the values in those files; the private scalar is not published
+    /// anywhere, so it is asserted as the value that derives them.
+    ///
+    /// Nothing else in the crate pins this. The suite tests in `http_request::test` verify each
+    /// signature with a key derived from this same output, so a change to the derivation moves
+    /// both sides and they still pass; that file carries a standing `TODO(sigv4a)` about using
+    /// `public-key.json` as the verifying key instead. A round trip through
+    /// `SigningKey::from_slice` and `to_bytes` cannot pin it either: that pair returns what it is
+    /// given, so it compares the key against itself.
+    #[test]
+    fn derived_key_matches_the_published_test_vector() {
+        let key = generate_signing_key("AKIDEXAMPLE", "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY");
+
+        assert_eq!(
+            "7efc8c0e65a324242818c5a50c891c6060b6a00717b7ba3cbe3c5d765be9259c",
+            hex::encode(key.as_ref()),
+            "the derived signing key changed"
+        );
+
+        let point = SigningKey::from_slice(key.as_ref())
+            .expect("derived key is a valid P-256 private key")
+            .verifying_key()
+            .as_affine()
+            .to_encoded_point(false);
+        assert_eq!(
+            "b6618f6a65740a99e650b33b6b4b5bd0d43b176d721a3edfea7e7d2d56d936b1",
+            hex::encode(point.x().expect("uncompressed point has an x coordinate")),
+            "public key no longer matches the test suite's public-key.json"
+        );
+        assert_eq!(
+            "865ed22a7eadc9c5cb9d2cbaca1b3699139fedc5043dc6661864218330c8e518",
+            hex::encode(point.y().expect("uncompressed point has a y coordinate")),
+            "public key no longer matches the test suite's public-key.json"
+        );
     }
 }

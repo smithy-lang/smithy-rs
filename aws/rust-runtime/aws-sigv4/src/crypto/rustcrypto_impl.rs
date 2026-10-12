@@ -37,6 +37,16 @@ pub(crate) fn sha256(data: &[u8]) -> [u8; SHA256_OUTPUT_SIZE] {
     hasher.finalize_fixed().into()
 }
 
+/// The SHA-256 that `ecdsa` pairs with P-256.
+///
+/// This is deliberately not the [`sha2::Sha256`] this module uses for HMAC and SHA-256 above.
+/// `p256` depends on an older `sha2` major than this crate does, so both are in the dependency
+/// graph and their `Sha256` types are distinct and not interchangeable in `ecdsa`'s trait bounds.
+/// Naming the curve's own associated digest is what `ecdsa` does internally (`C::Digest`), which is
+/// what keeps the signature below identical to the one a `SigningKey` would produce.
+#[cfg(feature = "sigv4a")]
+type P256Digest = <p256::NistP256 as ecdsa::hazmat::DigestPrimitive>::Digest;
+
 /// Signs `message` with `private_key` using ECDSA-P256-SHA256, returning a DER-encoded signature.
 ///
 /// `private_key` is a big-endian P-256 private scalar, as produced by
@@ -46,10 +56,44 @@ pub(crate) fn sha256(data: &[u8]) -> [u8; SHA256_OUTPUT_SIZE] {
 /// Panics if `private_key` is not a valid P-256 private key.
 #[cfg(feature = "sigv4a")]
 pub(crate) fn ecdsa_p256_sha256_sign_der(private_key: &[u8], message: &[u8]) -> Vec<u8> {
-    use p256::ecdsa::signature::Signer;
-    use p256::ecdsa::{DerSignature, SigningKey};
+    use ecdsa::hazmat::SignPrimitive;
+    use ecdsa::signature::digest::Digest as _;
+    use p256::NonZeroScalar;
+    use zeroize::Zeroizing;
 
-    let signing_key = SigningKey::from_slice(private_key).unwrap();
-    let signature: DerSignature = signing_key.sign(message);
-    signature.as_bytes().to_vec()
+    /// Size in bytes of a P-256 private scalar, which `NonZeroScalar::from_repr` takes a fixed
+    /// amount of. The caller is what pads anything shorter.
+    const P256_PRIVATE_KEY_SIZE: usize = 32;
+
+    // Sign from the private scalar rather than from a `SigningKey`. Constructing one derives the
+    // verifying key, and that costs a P-256 scalar multiplication as expensive as the signature
+    // itself while signing never reads it. `NonZeroScalar::from_repr` range-checks the scalar
+    // exactly as the `SecretKey` behind `SigningKey` does -- both reject zero and anything at or
+    // above the group order.
+    //
+    // This is the body of `ecdsa`'s `PrehashSigner for SigningKey` with that derivation left out,
+    // so the signature is unchanged: same RFC 6979 deterministic nonce, same empty additional
+    // data. `ecdsa`'s `bits2field` is a copy for a digest the width of the field, which SHA-256
+    // on P-256 is, so hashing straight into `z` is equivalent.
+    //
+    // Both copies this function owns, `repr` and `scalar`, are wiped on the way out; the
+    // `private_key` slice is the caller's and is left alone. `SigningKey` got the wipe for free:
+    // it implements `ZeroizeOnDrop` and its `Drop` zeroizes the secret scalar, whereas
+    // `NonZeroScalar` implements `Zeroize` but has no `Drop`, so dropping one leaves the scalar in
+    // memory. `Zeroizing` supplies the `Drop` that type is missing. The `FieldBytes` that
+    // `from_repr` takes by value is still an unwiped stack copy; that one is not reachable through
+    // this API.
+    let repr = Zeroizing::new(
+        <[u8; P256_PRIVATE_KEY_SIZE]>::try_from(private_key)
+            .expect("a P-256 private scalar is 32 bytes"),
+    );
+    let scalar = Zeroizing::new(
+        Option::<NonZeroScalar>::from(NonZeroScalar::from_repr((*repr).into()))
+            .expect("signing key is a valid P-256 private scalar"),
+    );
+    let z = P256Digest::digest(message);
+    let (signature, _recovery_id): (p256::ecdsa::Signature, _) = scalar
+        .try_sign_prehashed_rfc6979::<P256Digest>(&z, &[])
+        .expect("signing cannot fail for a valid scalar and a field-width digest");
+    signature.to_der().as_bytes().to_vec()
 }

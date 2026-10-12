@@ -40,11 +40,11 @@ fi
 # RustCrypto backends of `aws-sigv4` and `aws-smithy-checksums`; `ring` and `aws-lc-sys` are the
 # other two crypto libraries that reach an SDK binary, neither of which is the validated module.
 #
-# `crypto-bigint`, `subtle` and `p256` are deliberately absent from this list. They are RustCrypto
-# crates that a `sigv4a` FIPS build still compiles, and that is understood and documented: the
-# first two do the integer math of the SigV4a key derivation defined by the signing spec, and
-# `p256` is no longer called but cannot be dropped, because `sigv4a` has to keep declaring it and
-# Cargo features cannot express "only when `rustcrypto` is also on".
+# `crypto-bigint`, `subtle`, `p256` and `ecdsa` are deliberately absent from this list. They are
+# RustCrypto crates that a `sigv4a` FIPS build still compiles, and that is understood and
+# documented: the first two do the integer math of the SigV4a key derivation defined by the signing
+# spec, and the last two are no longer called but cannot be dropped, because `sigv4a` has to keep
+# declaring them and Cargo features cannot express "only when `rustcrypto` is also on".
 FORBIDDEN_IN_FIPS=(hmac sha2 sha1 md-5 ring aws-lc-sys)
 
 # The two crates that own a RustCrypto backend. A forbidden crate reached through either of them is

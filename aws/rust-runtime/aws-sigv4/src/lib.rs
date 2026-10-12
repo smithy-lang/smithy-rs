@@ -56,21 +56,29 @@
 //! defaults on keeps both crates compiled, because `rustcrypto` is one of them — the AWS-LC
 //! backend still wins at the call site, by the precedence above.
 //!
-//! `sigv4a` behaves differently. It declares `p256`, `crypto-bigint`, `subtle` and `zeroize`
-//! unconditionally, so enabling it compiles them under every backend, and `p256` brings its own
-//! copies of `hmac` and `sha2`. Adding `sigv4a` to the command above therefore reintroduces that
-//! chain. Under an AWS-LC backend none of it performs FIPS-relevant cryptography:
+//! `sigv4a` behaves differently. It declares `p256`, `ecdsa`, `crypto-bigint`, `subtle` and
+//! `zeroize` unconditionally, so enabling it compiles them under every backend, and `p256` brings
+//! its own copies of `hmac` and `sha2`. Adding `sigv4a` to the command above therefore
+//! reintroduces that chain. Under an AWS-LC backend none of it performs FIPS-relevant
+//! cryptography:
 //!
-//! - `p256` is the ECDSA implementation only for the `rustcrypto` backend; the signing path does
-//!   not reach it otherwise. It stays unconditional because a feature cannot be made conditional
-//!   on another feature being absent.
+//! - `p256` and `ecdsa` are the ECDSA implementation only for the `rustcrypto` backend; the
+//!   signing path does not reach them otherwise. They stay unconditional because a feature cannot
+//!   be made conditional on another feature being absent. `ecdsa` is declared directly only so
+//!   that `SignPrimitive` can be named; `p256` puts it in the tree either way.
 //! - `crypto-bigint` is used on every backend, for the 256-bit integer math in
 //!   [`sign::v4a::generate_signing_key`]. That is the key derivation the SigV4a specification
 //!   defines, not a cryptographic primitive.
 //!
-//! Signing output is unchanged by the choice of backend. SigV4 signatures are deterministic and
-//! verified against the shared signing test suite on both; SigV4a signatures are
-//! non-deterministic by construction and are verified, not compared.
+//! SigV4 output is unchanged by the choice of backend. HMAC-SHA256 is deterministic, and both
+//! backends are held to the same known-answer vectors and to the shared signing test suite.
+//!
+//! SigV4a output is not. ECDSA leaves the choice of per-signature nonce to the implementation, and
+//! the backends differ. RustCrypto derives it from the private scalar and the message digest per
+//! RFC 6979, so the same inputs always produce the same signature and [`sign::v4a`]'s tests pin
+//! those bytes. AWS-LC's is not reproducible: signing one string to sign twice yields two
+//! different signatures, so the suite verifies them rather than comparing. Both are valid
+//! signatures over the same string to sign, and a verifier accepts either.
 
 #![allow(clippy::derive_partial_eq_without_eq)]
 #![warn(
