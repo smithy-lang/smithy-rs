@@ -65,6 +65,17 @@ internal class ServerServiceGeneratorTest {
                         ids.sort_unstable();
                         assert_eq!(ids, ["aws.protocols##awsJson1_0", "aws.protocols##restJson1"]);
                     }
+
+                    ##[test]
+                    fn missing_handlers_report_schema_operation_ids() {
+                        let config = crate::ExampleConfig::builder().build();
+                        let error = crate::Example::builder(config).build().err().expect("handlers are missing");
+                        let message = error.to_string();
+                        assert!(message.contains("test##Ping"));
+                        assert!(message.contains("test##BuildInner"));
+                        assert!(message.contains(".ping()"));
+                        assert!(message.contains(".build_inner()"));
+                    }
                     """,
                     "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
                     *RuntimeType.preludeScope,
@@ -86,13 +97,13 @@ internal class ServerServiceGeneratorTest {
                         assert_eq!(schema.shape_id().as_str(), "test##Example");
                         assert_eq!(schema.operations().len(), 2);
                         assert!(::std::ptr::eq(sdk::ServiceProtocols::protocols(), schema.protocols()));
-                        let service_id: #{ShapeId}<'static> = <sdk::Example as #{Server}::service::ServiceShape>::ID;
-                        assert_eq!(&service_id, schema.shape_id());
+                        let service_id: #{Server}::ShapeId = <sdk::Example as #{Server}::service::ServiceShape>::ID;
+                        assert_eq!(service_id.absolute(), schema.shape_id().as_str());
                         type Operations = <sdk::Example as #{Server}::service::ServiceShape>::Operations;
                         let operation_id: #{ShapeId}<'static> = Operations::Ping.shape_id();
-                        let typed_operation_id: #{ShapeId}<'static> =
+                        let typed_operation_id: #{Server}::ShapeId =
                             <sdk::operation_shape::Ping as #{Server}::operation::OperationShape>::ID;
-                        assert_eq!(operation_id, typed_operation_id);
+                        assert_eq!(operation_id.as_str(), typed_operation_id.absolute());
                         assert_eq!(
                             &operation_id,
                             <sdk::operation_shape::Ping as #{Server}::operation::SchemaOperationShape>::SCHEMA.shape_id(),
@@ -104,7 +115,7 @@ internal class ServerServiceGeneratorTest {
                 )
             }
         }.forEach { generatedServer ->
-            generatedServer.path.resolve("src").toFile().walkTopDown()
+            generatedServer.path.resolve("src/schema").toFile().walkTopDown()
                 .filter { it.extension == "rs" }
                 .forEach { file ->
                     assert(!file.readText().contains("aws_smithy_http_server::shape_id::")) { file.path }

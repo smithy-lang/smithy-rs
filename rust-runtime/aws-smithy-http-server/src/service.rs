@@ -66,14 +66,14 @@
 //!
 //! [Smithy service]: https://smithy.io/2.0/spec/service-types.html#service
 
-use aws_smithy_schema::ShapeId;
+use crate::shape_id::ShapeId;
 
 /// Models the [Smithy Service shape].
 ///
 /// [Smithy Service shape]: https://smithy.io/2.0/spec/service-types.html#service
 pub trait ServiceShape {
     /// The [`ShapeId`] of the service.
-    const ID: ShapeId<'static>;
+    const ID: ShapeId;
 
     /// The version of the service.
     const VERSION: Option<&'static str>;

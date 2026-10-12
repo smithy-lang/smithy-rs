@@ -110,14 +110,6 @@ impl std::borrow::Borrow<str> for ShapeId<'_> {
 }
 
 impl<'a> ShapeId<'a> {
-    /// Compatibility constructor for server APIs using already-split shape ID components.
-    ///
-    /// The parts must be consistent. Prefer [`shape_id!`] for literal IDs.
-    #[doc(hidden)]
-    pub const fn new(absolute: &'a str, namespace: &'a str, name: &'a str) -> Self {
-        Self::from_parts(absolute, namespace, name)
-    }
-
     /// Creates a `ShapeId` from its already-split component strings.
     ///
     /// `const`-callable, so the [`shape_id!`] macro and codegen use it for
@@ -167,11 +159,6 @@ impl<'a> ShapeId<'a> {
         self.fqn
     }
 
-    /// Returns the fully qualified ID using the server API's accessor name.
-    pub const fn absolute(&self) -> &'a str {
-        self.as_str()
-    }
-
     /// Returns the namespace portion of the ShapeId.
     ///
     /// Lifetime is `'a` — see [`Self::as_str`] for rationale.
@@ -184,11 +171,6 @@ impl<'a> ShapeId<'a> {
     /// Lifetime is `'a` — see [`Self::as_str`] for rationale.
     pub const fn shape_name(&self) -> &'a str {
         self.shape_name
-    }
-
-    /// Returns the shape name using the server API's accessor name.
-    pub const fn name(&self) -> &'a str {
-        self.shape_name()
     }
 
     /// Returns the member name if this is a member shape ID.
