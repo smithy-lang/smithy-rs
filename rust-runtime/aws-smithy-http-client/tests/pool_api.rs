@@ -26,19 +26,25 @@ fn callback_partitions_are_available_without_a_test_feature() {
     assert!(pool::Client::new(&pool).is_err());
 }
 
+struct HttpsConstruction {
+    transport: pool::HttpsBuilder,
+}
+
+impl HttpsConstruction {
+    fn build(self) -> Result<ConnectionPool, pool::BuildError> {
+        self.transport.build_https()
+    }
+}
+
+#[test]
+fn external_https_constructor_is_available_without_provider_features() {
+    let _: fn(HttpsConstruction) -> Result<ConnectionPool, pool::BuildError> =
+        HttpsConstruction::build;
+}
+
 #[cfg(feature = "rustls-ring")]
 #[test]
 fn external_constructor_can_store_and_build_the_https_alias() {
-    struct Construction {
-        transport: pool::HttpsBuilder,
-    }
-
-    impl Construction {
-        fn build(self) -> Result<ConnectionPool, pool::BuildError> {
-            self.transport.build_https()
-        }
-    }
-
     let id = PartitionId::from_index(1);
     let transport = ConnectionPool::builder()
         .idle_timeout(None)
@@ -47,6 +53,6 @@ fn external_constructor_can_store_and_build_the_https_alias() {
             aws_smithy_http_client::tls::rustls_provider::CryptoMode::Ring,
         ));
     assert!(transport.has_explicit_partitions());
-    let pool = Construction { transport }.build().unwrap();
+    let pool = HttpsConstruction { transport }.build().unwrap();
     assert!(pool::Client::from_partition(&pool, id).is_ok());
 }
