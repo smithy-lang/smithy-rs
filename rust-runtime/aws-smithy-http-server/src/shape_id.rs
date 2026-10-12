@@ -26,7 +26,7 @@ pub type ShapeId = aws_smithy_schema::ShapeId<'static>;
 
 #[cfg(test)]
 mod tests {
-    use super::ShapeId;
+    use crate::ShapeId;
 
     #[test]
     fn legacy_shape_id_api_uses_the_shared_schema_type() {
