@@ -1001,7 +1001,7 @@ impl H1Supply {
 /// Detached probe of one supplier cell for an immediately idle H1 sender.
 pub(in crate::client::pool) struct H1IdleProbeAction {
     /// Admission authority that owns the retained H1 match.
-    admission: Arc<OriginAdmission>,
+    pub(super) admission: Arc<OriginAdmission>,
     /// Probe identity retained until the supplier reply is settled.
     prepared: Option<PreparedH1IdleProbe>,
 }
@@ -1041,13 +1041,13 @@ impl Drop for H1IdleProbeAction {
             supplier.current_h1_supply_revision()
         });
         let next = settle_idle_probe_miss(&self.admission, prepared.match_id, outcome);
-        OriginAdmission::run_action_chain(next);
+        OriginAdmission::enqueue_action(next);
     }
 }
 
 /// Reservation crossing from admission to one supplier cell.
 pub(in crate::client::pool) struct H1ReservationAction {
-    admission: Arc<OriginAdmission>,
+    pub(super) admission: Arc<OriginAdmission>,
     prepared: Option<PreparedH1Reservation>,
 }
 
@@ -1083,14 +1083,14 @@ impl Drop for H1ReservationAction {
             });
             let next =
                 OriginAdmission::settle_h1_match(&self.admission, prepared.match_id, outcome);
-            OriginAdmission::run_action_chain(next);
+            OriginAdmission::enqueue_action(next);
         }
     }
 }
 
 /// Cancellation crossing for an installed supplier reservation.
 pub(in crate::client::pool) struct H1CancellationAction {
-    admission: Arc<OriginAdmission>,
+    pub(super) admission: Arc<OriginAdmission>,
     prepared: Option<PreparedH1Cancellation>,
 }
 
@@ -1122,7 +1122,7 @@ impl Drop for H1CancellationAction {
             });
             let next =
                 OriginAdmission::settle_h1_match(&self.admission, prepared.match_id, outcome);
-            OriginAdmission::run_action_chain(next);
+            OriginAdmission::enqueue_action(next);
         }
     }
 }
@@ -1174,8 +1174,9 @@ impl H1Candidate {
         }
     }
 
-    /// Returns the provisional sender to its supplier without independently
-    /// running the admission action chain.
+    /// Returns the provisional sender to its supplier.
+    ///
+    /// The caller settles the outcome and schedules any successor.
     pub(super) fn reject(mut self) -> H1SupplyOutcome {
         let Some(provisional) = self.provisional.take() else {
             unreachable!("HTTP/1 candidate consumed more than once");
@@ -1242,13 +1243,13 @@ impl Drop for H1Candidate {
             }
         };
         let next = OriginAdmission::settle_h1_match(&self.admission, self.match_id, outcome);
-        OriginAdmission::run_action_chain(next);
+        OriginAdmission::enqueue_action(next);
     }
 }
 
 /// Exact provisional H1 sender selected to close for bounded capacity.
 pub(in crate::client::pool) struct H1CapacityReclaim {
-    admission: Arc<OriginAdmission>,
+    pub(super) admission: Arc<OriginAdmission>,
     requester: PartitionId,
     match_id: H1MatchId,
     candidate: Option<H1Candidate>,
@@ -1294,7 +1295,7 @@ impl H1CapacityReclaim {
 
 /// Supplier-cell settlement after an irreversible sender transfer.
 pub(in crate::client::pool) struct H1SupplierSettlement {
-    admission: Arc<OriginAdmission>,
+    pub(super) admission: Arc<OriginAdmission>,
     match_id: H1MatchId,
     supplier: PartitionId,
     transferred: bool,
@@ -1336,7 +1337,7 @@ impl Drop for H1SupplierSettlement {
             supplier.complete_h1_match(self.match_id, self.transferred)
         });
         let next = OriginAdmission::settle_h1_match(&self.admission, self.match_id, outcome);
-        OriginAdmission::run_action_chain(next);
+        OriginAdmission::enqueue_action(next);
     }
 }
 
@@ -1364,7 +1365,7 @@ pub(super) fn apply_supply_revision(
             .apply_revision(supplier, eligibility_group, revision);
         OriginAdmission::prepare_action(admission, &mut state)
     };
-    OriginAdmission::run_action_chain(action);
+    OriginAdmission::enqueue_action(action);
 }
 
 pub(super) fn reject_returned_match(
@@ -1378,7 +1379,7 @@ pub(super) fn reject_returned_match(
         match_id,
         H1SupplyOutcome::supplier_live(supplier, revision),
     );
-    OriginAdmission::run_action_chain(action);
+    OriginAdmission::enqueue_action(action);
 }
 
 /// Settles one supplier-cell idle probe against its retained match.
@@ -1523,8 +1524,8 @@ pub(super) fn settle_match(
     OriginAdmission::prepare_action(admission, &mut state)
 }
 
-/// Returns a provisional sender and keeps successor work in the caller's
-/// action chain instead of re-entering it through `H1Candidate::drop`.
+/// Returns a provisional sender and returns any successor to the caller,
+/// avoiding cleanup enqueueing through `H1Candidate::drop`.
 fn reject_candidate(
     admission: &Arc<OriginAdmission>,
     match_id: H1MatchId,
@@ -1631,6 +1632,56 @@ mod tests {
                 .expect("supplier group disappeared")
                 .len()
         );
+    }
+
+    #[test]
+    fn folded_retirement_preserves_retained_match_cancellation() {
+        let requester = cell(3);
+        let group = EligibilityGroup::Pool;
+        let histories = [
+            vec![
+                DemandSnapshot::inactive(DemandId::from_u64(1), SnapshotVersion::INITIAL.next()),
+                DemandSnapshot::active(
+                    DemandId::from_u64(2),
+                    SnapshotVersion::INITIAL,
+                    ProtocolRequirement::H1Compatible,
+                    group.clone(),
+                ),
+                DemandSnapshot::inactive(DemandId::from_u64(2), SnapshotVersion::INITIAL.next()),
+                DemandSnapshot::active(
+                    DemandId::from_u64(3),
+                    SnapshotVersion::INITIAL,
+                    ProtocolRequirement::H1Compatible,
+                    group.clone(),
+                ),
+            ],
+            vec![
+                DemandSnapshot::inactive(DemandId::from_u64(1), SnapshotVersion::INITIAL.next()),
+                DemandSnapshot::active(
+                    DemandId::from_u64(1),
+                    SnapshotVersion::INITIAL.next().next(),
+                    ProtocolRequirement::H1Compatible,
+                    group.clone(),
+                ),
+            ],
+        ];
+        for history in histories {
+            for updates in [history.clone(), super::super::baton::fold_for_test(history)] {
+                let mut demand = schedule(requester, group.clone());
+                let mut supply = H1Supply::default();
+                supply.apply_revision(cell(1), group.clone(), supply_revision(1, true, false));
+                let prepared = supply.prepare_match(&demand).unwrap();
+                assert!(matches!(prepared, PreparedH1Match::Reserve(_)));
+                let id = prepared.match_id();
+                supply.settle_reservation(id, false).unwrap();
+                for snapshot in updates {
+                    demand.apply_snapshot(requester, snapshot);
+                    supply.reconcile_requester(&requester, &demand);
+                }
+                assert!(supply.matches[&id].cancelled);
+                assert_eq!(id, supply.prepare_cancellation().unwrap().match_id);
+            }
+        }
     }
 
     #[test]

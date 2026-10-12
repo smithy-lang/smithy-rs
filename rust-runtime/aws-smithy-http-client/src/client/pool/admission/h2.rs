@@ -676,7 +676,7 @@ impl H2Supply {
 /// Identity-only route installation with a terminal admission fallback.
 pub(in crate::client::pool) struct H2RouteGuard {
     /// Admission owner of the assigned demand and indexed supply.
-    admission: Arc<OriginAdmission>,
+    pub(super) admission: Arc<OriginAdmission>,
     /// Identities revalidated across the unlocked cell transitions.
     prepared: PreparedH2Route,
     /// Terminal acknowledgement submitted if the crossing unwinds.
@@ -771,14 +771,14 @@ impl Drop for H2RouteGuard {
         };
         let next = OriginAdmission::settle_h2_route(&self.admission, &self.prepared, None, result);
         self.trace("guard_drop");
-        OriginAdmission::run_action_chain(next);
+        OriginAdmission::enqueue_action(next);
     }
 }
 
 /// Exact idle-generation crossing with an admission repair fallback.
 pub(in crate::client::pool) struct H2CapacityReclaim {
     /// Admission authority that owns the reclaim reservation.
-    admission: Arc<OriginAdmission>,
+    pub(super) admission: Arc<OriginAdmission>,
     /// Prepared reclaim still owned by this fallback.
     prepared: Option<PreparedH2Reclaim>,
 }
@@ -846,7 +846,7 @@ impl Drop for H2CapacityReclaim {
             outcome = "guard_drop",
             "HTTP/2 idle reclaim completed"
         );
-        OriginAdmission::run_action_chain(next);
+        OriginAdmission::enqueue_action(next);
     }
 }
 
@@ -864,7 +864,7 @@ pub(super) fn apply_supply_revision(
         h2_supply.apply_revision(supplier, eligibility_group, revision, demand);
         OriginAdmission::prepare_action(admission, &mut state)
     };
-    OriginAdmission::run_action_chain(action);
+    OriginAdmission::enqueue_action(action);
 }
 
 pub(super) fn settle_route(
@@ -946,6 +946,45 @@ mod tests {
                 idle: true,
             },
         )
+    }
+
+    #[test]
+    fn folded_head_changes_preserve_h2_route_selection() {
+        let requester = partition(1);
+        let supplier = partition(2);
+        let group = EligibilityGroup::Pool;
+        let history = vec![
+            DemandSnapshot::inactive(DemandId::from_u64(0), SnapshotVersion::INITIAL.next()),
+            demand(1, group.clone()),
+            DemandSnapshot::inactive(DemandId::from_u64(1), SnapshotVersion::INITIAL.next()),
+            demand(2, group.clone()),
+        ];
+        let mut selected = Vec::new();
+        for updates in [history.clone(), super::super::baton::fold_for_test(history)] {
+            let mut schedule = DemandSchedule::default();
+            schedule.apply_snapshot(requester, demand(0, group.clone()));
+            let mut supply = H2Supply::default();
+            supply.apply_revision(
+                supplier,
+                group.clone(),
+                accepting(1, generation(1)),
+                &schedule,
+            );
+            for snapshot in updates {
+                schedule.apply_snapshot(requester, snapshot);
+                supply.reconcile_group(&group, &schedule);
+            }
+            let route = supply
+                .prepare_route(&mut schedule, DemandAssignmentId(0))
+                .unwrap();
+            selected.push((
+                route.assignment,
+                route.supplier,
+                route.generation,
+                route.eligibility_group,
+            ));
+        }
+        assert_eq!(selected[0], selected[1]);
     }
 
     #[test]

@@ -7,7 +7,7 @@
 
 use ::std::ops::{Deref, DerefMut};
 
-pub(crate) use ::std::sync::atomic::{AtomicBool, Ordering};
+pub(crate) use ::std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 pub(crate) use ::std::sync::Arc;
 
 /// Non-owning reference used by coordination registries.

@@ -1247,18 +1247,19 @@ impl OriginCell {
     }
 
     /// Runs publication, fallback, and wake work after the cell lock is released.
-    fn run_waiter_resolution(cell: &Arc<Self>, resolution: Option<WaiterResolution>) {
-        let Some(resolution) = resolution else {
-            return;
-        };
-        if let Some(admission) = &cell.admission {
-            for snapshot in resolution.demand_updates.into_iter().flatten() {
-                OriginAdmission::submit_demand_snapshot(admission, cell.id.partition(), snapshot);
+    fn run_waiter_resolution(
+        cell: &Arc<Self>,
+        resolution: Option<WaiterResolution>,
+        before_wake: impl FnOnce(),
+    ) {
+        if let Some(resolution) = resolution {
+            Self::finish_waiter_resolution(cell, resolution, before_wake);
+        } else {
+            let baton = cell.record_demand_updates([]);
+            before_wake();
+            if let Some(baton) = baton {
+                baton.process_until_quiescent();
             }
-        }
-        drop(resolution.returned_step);
-        if let Some(waker) = resolution.waker {
-            waker.wake();
         }
     }
 
@@ -1275,10 +1276,17 @@ impl OriginCell {
     }
 
     /// Publishes the current local demand after its last H2 route disappears.
-    fn publish_current_demand(cell: &Arc<Self>, snapshot: Option<DemandSnapshot>) {
-        if let (Some(admission), Some(snapshot)) = (&cell.admission, snapshot) {
-            OriginAdmission::submit_demand_snapshot(admission, cell.id.partition(), snapshot);
+    fn publish_current_demand<T>(
+        cell: &Arc<Self>,
+        snapshot: Option<DemandSnapshot>,
+        finish: impl FnOnce() -> T,
+    ) -> T {
+        let baton = cell.record_demand_updates(snapshot);
+        let result = finish();
+        if let Some(baton) = baton {
+            baton.process_until_quiescent();
         }
+        result
     }
 
     /// Advances a generation gate after one activation accepts or cancels.
@@ -1294,9 +1302,10 @@ impl OriginCell {
             let revision = state.take_h2_supply_update();
             (install, revision)
         };
-        drop(returned_step);
-        Self::submit_h2_supply_update(cell, revision);
-        Self::run_waiter_resolution(cell, install);
+        Self::run_waiter_resolution(cell, install, || {
+            drop(returned_step);
+            Self::submit_h2_supply_update(cell, revision);
+        });
     }
 
     /// Offers the accepting local generation to one queued acquisition.
@@ -1309,9 +1318,10 @@ impl OriginCell {
             let revision = state.take_h2_supply_update();
             (install, revision)
         };
-        drop(returned_step);
-        Self::submit_h2_supply_update(cell, revision);
-        Self::run_waiter_resolution(cell, install);
+        Self::run_waiter_resolution(cell, install, || {
+            drop(returned_step);
+            Self::submit_h2_supply_update(cell, revision);
+        });
     }
 
     /// Returns whether one exact connection generation still accepts activations.
@@ -1377,12 +1387,8 @@ impl OriginCell {
                     state.assert_consistent();
                     snapshot
                 };
-                if let (Some(admission), Some(snapshot)) = (&cell.admission, snapshot) {
-                    OriginAdmission::submit_demand_snapshot(
-                        admission,
-                        cell.id.partition(),
-                        snapshot,
-                    );
+                if let Some(baton) = cell.record_demand_updates(snapshot) {
+                    baton.process_until_quiescent();
                 }
                 return;
             };
@@ -1430,12 +1436,15 @@ impl OriginCell {
                     waiter.is_some().then_some(install)
                 }
             };
-            drop(activation);
-            drop(returned_step);
             if install.is_some() {
-                Self::run_waiter_resolution(cell, install);
+                Self::run_waiter_resolution(cell, install, || {
+                    drop(activation);
+                    drop(returned_step);
+                });
                 return;
             }
+            drop(activation);
+            drop(returned_step);
         }
     }
 
@@ -1572,7 +1581,7 @@ impl OriginCell {
             state.assert_consistent();
             snapshot
         };
-        Self::publish_current_demand(cell, snapshot);
+        Self::publish_current_demand(cell, snapshot, || ());
     }
 
     /// Places a post-ALPN waiter behind an already accepting generation.
@@ -1595,9 +1604,10 @@ impl OriginCell {
             let revision = state.take_h2_supply_update();
             (install, revision)
         };
-        drop(returned_step);
-        Self::submit_h2_supply_update(cell, revision);
-        Self::run_waiter_resolution(cell, install);
+        Self::run_waiter_resolution(cell, install, || {
+            drop(returned_step);
+            Self::submit_h2_supply_update(cell, revision);
+        });
         H2GenerationJoinOutcome::Joined
     }
 
@@ -1637,12 +1647,13 @@ impl OriginCell {
             let revision = state.take_h2_supply_update();
             (completion, install, revision)
         };
-        drop(returned_step);
-        Self::submit_h2_supply_update(cell, revision);
-        Self::run_waiter_resolution(cell, install);
-        if completion.is_ok() {
-            cell.notify_maintenance(idle_deadline);
-        }
+        Self::run_waiter_resolution(cell, install, || {
+            drop(returned_step);
+            Self::submit_h2_supply_update(cell, revision);
+            if completion.is_ok() {
+                cell.notify_maintenance(idle_deadline);
+            }
+        });
         completion
     }
 
@@ -1700,9 +1711,10 @@ impl OriginCell {
             "idle HTTP/2 reclaim detached pending generation waiters"
         );
         let connection_id = connection.id();
-        drop(removed_generation);
-        Self::publish_current_demand(cell, demand);
-        let reclaimed = connection.logical_close(CloseReason::Reclaimed);
+        let reclaimed = Self::publish_current_demand(cell, demand, || {
+            drop(removed_generation);
+            connection.logical_close(CloseReason::Reclaimed)
+        });
         (revision, reclaimed.then_some(connection_id))
     }
 
@@ -1737,13 +1749,14 @@ impl OriginCell {
             pending_waiters,
             removed_generation,
         } = detached;
-        drop(removed_generation);
-        Self::submit_h2_supply_update(cell, revision);
-        Self::publish_current_demand(cell, demand);
-        for waiter in pending_waiters {
-            cell.complete_establishment(waiter, AcquisitionOutcome::RetryAcquisition);
-        }
-        connection.logical_close(reason)
+        Self::publish_current_demand(cell, demand, || {
+            drop(removed_generation);
+            Self::submit_h2_supply_update(cell, revision);
+            for waiter in pending_waiters {
+                cell.complete_establishment(waiter, AcquisitionOutcome::RetryAcquisition);
+            }
+            connection.logical_close(reason)
+        })
     }
 
     /// Returns the exact accepting generation for peer routing.

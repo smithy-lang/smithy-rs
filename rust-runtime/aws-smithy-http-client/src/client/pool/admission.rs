@@ -12,9 +12,11 @@
 //!
 //! A bounded acquisition moves through the layer in this order:
 //!
-//! 1. A cell submits a complete [`DemandSnapshot`] after releasing its lock.
-//! 2. [`DemandSchedule`] replaces that partition snapshot and links active
-//!    demand in the origin order and its eligibility-group order.
+//! 1. A cell records complete [`DemandSnapshot`] updates in its cached
+//!    [`DemandPublication`] after releasing its lock.
+//! 2. One caller holds the [`AdmissionBaton`] and applies pending publications
+//!    under the admission lock. [`DemandSchedule`] replaces each partition's
+//!    snapshot and links active demand in the origin and eligibility-group orders.
 //! 3. Capacity delivery and HTTP/1 matching select from the origin head.
 //!    HTTP/2 route matching pairs a group head with peer supply.
 //! 4. The selected demand becomes a [`DemandAssignment`] while a resource
@@ -44,6 +46,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::num::NonZeroUsize;
 
+mod baton;
 mod delivery;
 mod demand;
 mod h1;
@@ -63,6 +66,8 @@ use self::h1::{
 };
 use self::h2::{H2CapacityReclaim, H2RouteGuard, H2Supply, PreparedH2Reclaim, PreparedH2Route};
 use self::order::{IntrusiveLinks, IntrusiveOrder};
+use baton::AdmissionProcessing;
+pub(in crate::client::pool) use baton::{AdmissionBaton, DemandPublication};
 pub(in crate::client::pool) use delivery::DeliveryGuard;
 pub(in crate::client::pool) use h1::{
     H1Candidate, H1MatchId, H1SupplyStatus, PreparedH1IdleProbe, PreparedH1Reservation,
@@ -109,6 +114,8 @@ pub(in crate::client::pool) struct OriginAdmission {
     can_reclaim_h2_for_h1: bool,
     /// Capacity, demand, and supply state for this origin.
     state: Mutex<AdmissionState>,
+    /// Pending demand and detached actions processed by one caller-held baton.
+    processing: AdmissionProcessing,
 }
 
 impl OriginAdmission {
@@ -118,6 +125,7 @@ impl OriginAdmission {
             origin,
             can_reclaim_h2_for_h1: policy.can_reclaim_h2_for_h1(),
             state: Mutex::new(AdmissionState::new(policy.connection_limit())),
+            processing: AdmissionProcessing::default(),
         })
     }
 
@@ -183,41 +191,45 @@ impl OriginAdmission {
         }
     }
 
-    /// Submits a complete demand snapshot and runs resulting detached actions.
-    pub(in crate::client::pool) fn submit_demand_snapshot(
-        admission: &Arc<Self>,
+    /// Returns the shared pending-demand slot for this partition.
+    ///
+    /// Concurrent construction of the same cell uses the same slot. The cell
+    /// caches it so each publication avoids the slot directory lock.
+    pub(in crate::client::pool) fn demand_publication(
+        &self,
         requester: PartitionId,
-        snapshot: DemandSnapshot,
-    ) {
-        let action = {
-            let mut state = admission.state.lock();
-            state.apply_demand_snapshot(requester, snapshot);
-            Self::prepare_action(admission, &mut state)
-        };
-        Self::run_action_chain(action);
+    ) -> Arc<DemandPublication> {
+        self.processing.slot(requester)
     }
 
-    /// Publishes a local handoff's retirement and successor as one transition.
+    /// Records demand updates and tries to acquire the admission baton.
     ///
-    /// Apply both complete snapshots in order before preparing detached work.
-    /// The current successor remains subject to the existing identity checks,
-    /// assignment settlement, and scheduling order.
-    pub(in crate::client::pool) fn submit_demand_snapshots(
+    /// The caller releases its cell lock first. Recording uses the publication
+    /// slot's mutex, without taking the origin admission lock. A new holder
+    /// finishes its local transition before processing; an existing holder can
+    /// observe these updates concurrently.
+    pub(in crate::client::pool) fn record_demand_updates(
+        admission: &Arc<Self>,
+        publication: &DemandPublication,
+        snapshots: impl IntoIterator<Item = DemandSnapshot>,
+    ) -> Option<AdmissionBaton> {
+        AdmissionProcessing::record(admission, publication, snapshots)
+    }
+
+    /// Exercises production publication and processing without a cell transition.
+    ///
+    /// A new holder drains before returning. If another holder exists, that
+    /// caller processes the submitted work.
+    #[cfg(test)]
+    pub(super) fn submit_demand_for_test(
         admission: &Arc<Self>,
         requester: PartitionId,
-        snapshots: [Option<DemandSnapshot>; 2],
+        snapshots: impl IntoIterator<Item = DemandSnapshot>,
     ) {
-        if snapshots.iter().all(Option::is_none) {
-            return;
+        let publication = admission.processing.slot(requester);
+        if let Some(baton) = Self::record_demand_updates(admission, &publication, snapshots) {
+            baton.process_until_quiescent();
         }
-        let action = {
-            let mut state = admission.state.lock();
-            for snapshot in snapshots.into_iter().flatten() {
-                state.apply_demand_snapshot(requester, snapshot);
-            }
-            Self::prepare_action(admission, &mut state)
-        };
-        Self::run_action_chain(action);
     }
 
     /// Selects at most one action while admission is locked.
@@ -225,9 +237,9 @@ impl OriginAdmission {
     /// Cancellation cleanup runs first, followed by available capacity,
     /// a compatible peer HTTP/2 route, HTTP/1 reuse, and idle-H2 reclaim. The
     /// returned action owns everything needed to run after releasing the
-    /// admission lock. Its completion may prepare a successor for the caller's
-    /// action chain. A guard dropped outside that chain may start another
-    /// chain, but admission and cell locks are never nested.
+    /// admission lock. The baton holder runs one action at a time, queuing any
+    /// successor. Guard cleanup queues work through the same ingress. Admission
+    /// and cell locks are never nested.
     fn prepare_action(origin: &Arc<Self>, state: &mut AdmissionState) -> Option<AdmissionAction> {
         if let Some(cancellation) = state.h1_supply.prepare_cancellation() {
             return Some(AdmissionAction::CancelH1Reservation(
@@ -280,20 +292,14 @@ impl OriginAdmission {
         cell.and_then(|cell| cell.upgrade())
     }
 
-    /// Runs one detached action chain until no completion prepares a successor.
-    pub(in crate::client::pool) fn run_action_chain(mut action: Option<AdmissionAction>) {
-        while let Some(current) = action {
-            action = match current {
-                AdmissionAction::Deliver(delivery) => delivery.deliver(),
-                AdmissionAction::ProbeH1Supplier(probe) => probe.probe_supplier(),
-                AdmissionAction::ReserveH1Supplier(reservation) => reservation.reserve_supplier(),
-                AdmissionAction::CancelH1Reservation(cancellation) => {
-                    cancellation.cancel_reservation()
-                }
-                AdmissionAction::SettleH1Supplier(settlement) => settlement.settle_supplier(),
-                AdmissionAction::AttachH2Route(route) => route.attach_route(),
-                AdmissionAction::ReclaimCapacity(reclaim) => reclaim.reclaim_capacity(),
-            };
+    /// Enqueues detached work for the caller-held baton.
+    ///
+    /// A new holder drains until quiescent. Under an existing holder this
+    /// returns after enqueueing; guards retain exact ownership until execution.
+    pub(in crate::client::pool) fn enqueue_action(action: Option<AdmissionAction>) {
+        if let Some(action) = action {
+            let admission = action.admission().clone();
+            AdmissionProcessing::enqueue_action(&admission, action);
         }
     }
 
@@ -310,7 +316,7 @@ impl OriginAdmission {
             state.return_permit(permit);
             Self::prepare_action(origin, &mut state)
         };
-        Self::run_action_chain(action);
+        Self::enqueue_action(action);
     }
 
     /// Settles one demand assignment and returns an unused capacity permit.
@@ -490,6 +496,15 @@ impl OriginAdmission {
         self.state.lock().demand.len()
     }
 
+    #[cfg(test)]
+    pub(super) fn latest_demand_for_test(&self, requester: PartitionId) -> Option<DemandSnapshot> {
+        self.state
+            .lock()
+            .demand
+            .latest_for_test(&requester)
+            .cloned()
+    }
+
     #[cfg(all(test, smithy_http_client_loom))]
     pub(super) fn clear_modeled_cells_for_test(&self) {
         // Loom has no modeled Weak, so its synchronization facade retains
@@ -518,9 +533,21 @@ pub(super) enum AdmissionAction {
 }
 
 impl AdmissionAction {
+    fn admission(&self) -> &Arc<OriginAdmission> {
+        match self {
+            Self::Deliver(action) => &action.admission,
+            Self::ProbeH1Supplier(action) => &action.admission,
+            Self::ReserveH1Supplier(action) => &action.admission,
+            Self::CancelH1Reservation(action) => &action.admission,
+            Self::SettleH1Supplier(action) => &action.admission,
+            Self::AttachH2Route(action) => &action.admission,
+            Self::ReclaimCapacity(CapacityReclaim::FromH1(action)) => &action.admission,
+            Self::ReclaimCapacity(CapacityReclaim::FromH2(action)) => &action.admission,
+        }
+    }
+
     /// Advances one crossing without recursively driving its successor.
-    #[cfg(all(test, smithy_http_client_loom))]
-    pub(super) fn run_once_for_test(self) -> Option<Self> {
+    fn run_once(self) -> Option<Self> {
         match self {
             Self::Deliver(delivery) => delivery.deliver(),
             Self::ProbeH1Supplier(probe) => probe.probe_supplier(),
@@ -530,6 +557,11 @@ impl AdmissionAction {
             Self::AttachH2Route(route) => route.attach_route(),
             Self::ReclaimCapacity(reclaim) => reclaim.reclaim_capacity(),
         }
+    }
+
+    #[cfg(all(test, smithy_http_client_loom))]
+    pub(super) fn run_once_for_test(self) -> Option<Self> {
+        self.run_once()
     }
 }
 
@@ -814,17 +846,14 @@ mod tests {
         let held = origin.state.lock().take_permit().unwrap();
         let first = PartitionId::from_index(1);
         let second = PartitionId::from_index(2);
-        OriginAdmission::submit_demand_snapshot(&origin, first, demand(1));
-        OriginAdmission::submit_demand_snapshot(&origin, second, demand(1));
-        OriginAdmission::submit_demand_snapshots(
+        OriginAdmission::submit_demand_for_test(&origin, first, [demand(1)]);
+        OriginAdmission::submit_demand_for_test(&origin, second, [demand(1)]);
+        OriginAdmission::submit_demand_for_test(
             &origin,
             first,
             [
-                Some(DemandSnapshot::inactive(
-                    DemandId::from_u64(1),
-                    SnapshotVersion::INITIAL.next(),
-                )),
-                Some(demand(2)),
+                DemandSnapshot::inactive(DemandId::from_u64(1), SnapshotVersion::INITIAL.next()),
+                demand(2),
             ],
         );
         let mut state = origin.state.lock();
@@ -858,15 +887,12 @@ mod tests {
             state.apply_demand_snapshot(first, demand(1));
             state.prepare_capacity_delivery().unwrap()
         };
-        OriginAdmission::submit_demand_snapshots(
+        OriginAdmission::submit_demand_for_test(
             &origin,
             first,
             [
-                Some(DemandSnapshot::inactive(
-                    DemandId::from_u64(1),
-                    SnapshotVersion::INITIAL.next(),
-                )),
-                Some(demand(2)),
+                DemandSnapshot::inactive(DemandId::from_u64(1), SnapshotVersion::INITIAL.next()),
+                demand(2),
             ],
         );
         let mut state = origin.state.lock();
@@ -902,16 +928,13 @@ mod tests {
         let first = PartitionId::from_index(1);
         let cancelled =
             DemandSnapshot::inactive(DemandId::from_u64(2), SnapshotVersion::INITIAL.next());
-        OriginAdmission::submit_demand_snapshot(&origin, first, cancelled.clone());
-        OriginAdmission::submit_demand_snapshots(
+        OriginAdmission::submit_demand_for_test(&origin, first, [cancelled.clone()]);
+        OriginAdmission::submit_demand_for_test(
             &origin,
             first,
             [
-                Some(DemandSnapshot::inactive(
-                    DemandId::from_u64(1),
-                    SnapshotVersion::INITIAL.next(),
-                )),
-                Some(demand(2)),
+                DemandSnapshot::inactive(DemandId::from_u64(1), SnapshotVersion::INITIAL.next()),
+                demand(2),
             ],
         );
         let mut state = origin.state.lock();
@@ -1154,20 +1177,20 @@ mod loom_tests {
             });
             let publishing_origin = origin.clone();
             let publishing = loom::thread::spawn(move || {
-                OriginAdmission::submit_demand_snapshots(
+                OriginAdmission::submit_demand_for_test(
                     &publishing_origin,
                     id(),
                     [
-                        Some(DemandSnapshot::inactive(
+                        DemandSnapshot::inactive(
                             DemandId::from_u64(1),
                             SnapshotVersion::INITIAL.next(),
-                        )),
-                        Some(DemandSnapshot::active(
+                        ),
+                        DemandSnapshot::active(
                             DemandId::from_u64(2),
                             SnapshotVersion::INITIAL,
                             ProtocolRequirement::H1Compatible,
                             EligibilityGroup::Pool,
-                        )),
+                        ),
                     ],
                 );
             });
