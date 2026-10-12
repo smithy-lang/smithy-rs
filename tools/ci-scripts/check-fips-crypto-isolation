@@ -36,9 +36,10 @@ if [[ ! -f "Cargo.toml" ]]; then
     exit 1
 fi
 
-# The crates whose presence in a FIPS graph is a failure. `hmac`, `sha2`, `sha1` and `md-5` are the
-# RustCrypto backends of `aws-sigv4` and `aws-smithy-checksums`; `ring` and `aws-lc-sys` are the
-# other two crypto libraries that reach an SDK binary, neither of which is the validated module.
+# The crates to account for in a FIPS graph. `hmac`, `sha2`, `sha1` and `md-5` are the RustCrypto
+# backends of `aws-sigv4` and `aws-smithy-checksums`; `ring` and `aws-lc-sys` are the other two
+# crypto libraries that reach an SDK binary, neither of which is the validated module. Presence
+# alone is not the failure -- who reaches them is, which is what the reverse tree below decides.
 #
 # `crypto-bigint`, `subtle`, `p256` and `ecdsa` are deliberately absent from this list. They are
 # RustCrypto crates that a `sigv4a` FIPS build still compiles, and that is understood and
@@ -48,10 +49,17 @@ fi
 FORBIDDEN_IN_FIPS=(hmac sha2 sha1 md-5 ring aws-lc-sys)
 
 # The two crates that own a RustCrypto backend. A forbidden crate reached through either of them is
-# a propagation failure; the same crate declared directly by a service crate is a known gap, scoped
-# out of this design and tracked separately. Distinguishing the two is the point of the reverse
-# tree below -- an allowlist of (service, crate) pairs would pass a propagation regression that
-# happened to land on an already-listed pair.
+# a propagation failure.
+#
+# The same crate declared directly by a service crate is not a compliance finding. The only case
+# today is `aws-sdk-s3`, which HMACs the credential pair under a `fastrand` salt to key an
+# in-memory LRU of S3 Express session credentials; the code there is explicit that the salt need
+# not be cryptographically secure and that the point is to obfuscate a map key rather than to
+# protect anything. Nothing on a signing or checksum path, so routing it through AWS-LC would not
+# change what a FIPS build guarantees -- it is dependency hygiene, and reported as such below.
+#
+# Distinguishing the two is the point of the reverse tree -- an allowlist of (service, crate) pairs
+# would pass a propagation regression that happened to land on an already-listed pair.
 BACKEND_OWNERS=(aws-sigv4 aws-smithy-checksums)
 
 failures=0
@@ -142,12 +150,14 @@ ${parents}"
                 fi
             done
 
-            # Reached without passing through either backend crate: a known, scoped-out gap, where
-            # a generated crate declares the dependency itself. Reported so the output stays an
-            # honest account of what a FIPS build compiles rather than a bare pass.
+            # Reached without passing through either backend crate, so the service crate declares
+            # it itself. Not a compliance finding -- see BACKEND_OWNERS above -- but reported so
+            # the output stays an honest account of what a FIPS build compiles rather than a bare
+            # pass.
             if [[ "${via_backend}" == "false" ]]; then
-                echo "   note: ${spec} is in the FIPS graph but not via a backend crate (known gap,"
-                echo "         declared directly by a generated crate -- tracked separately)"
+                echo "   note: ${spec} is in the FIPS graph, declared by the service crate rather"
+                echo "         than reached through a backend. Not a compliance finding; it is not"
+                echo "         on a signing or checksum path. See BACKEND_OWNERS in this script."
             fi
         done
     done

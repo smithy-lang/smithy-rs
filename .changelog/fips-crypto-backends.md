@@ -27,7 +27,7 @@ aws-sdk-dynamodb = { version = "...", default-features = false, features = [
 ] }
 ```
 
-Two stay regardless: `sigv4a` declares `p256`, which brings its own `hmac` and `sha2`, never called because the backend they serve isn't compiled; and `aws-sdk-s3` declares `hmac` and `sha2` to key its S3 Express identity cache. Neither computes request cryptography.
+Two stay regardless: `sigv4a` declares `p256`, which brings its own `hmac` and `sha2`, never called because the backend they serve isn't compiled; and `aws-sdk-s3` declares `hmac` and `sha2` to key an in-memory cache, which obfuscates rather than protects. Neither signs a request or computes a checksum.
 
 `aws-sigv4` and `aws-smithy-checksums` declare `aws-lc-rs = "1.18"`, matching what `rustls` declares so that signing, checksums and TLS all ask for the same line. If your own manifest pins `aws-lc-rs` below that, it will need raising.
 
