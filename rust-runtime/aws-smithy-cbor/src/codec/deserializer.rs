@@ -35,6 +35,13 @@ impl<'a> CborDeserializer<'a> {
         }
     }
 
+    /// Returns the current byte offset relative to the input slice supplied at construction.
+    ///
+    /// Calling this method does not advance the deserializer.
+    pub fn position(&self) -> usize {
+        self.decoder.position()
+    }
+
     pub(crate) fn with_strictness(mut self, value: bool) -> Self {
         self.enforce_strictness = value;
         self
