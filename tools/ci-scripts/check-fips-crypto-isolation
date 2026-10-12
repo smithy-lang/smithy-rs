@@ -57,6 +57,7 @@ FORBIDDEN_IN_FIPS=(hmac sha2 sha1 md-5 ring aws-lc-sys)
 # not be cryptographically secure and that the point is to obfuscate a map key rather than to
 # protect anything. Nothing on a signing or checksum path, so routing it through AWS-LC would not
 # change what a FIPS build guarantees -- it is dependency hygiene, and reported as such below.
+# Tracked in smithy-rs#4909.
 #
 # Distinguishing the two is the point of the reverse tree -- an allowlist of (service, crate) pairs
 # would pass a propagation regression that happened to land on an already-listed pair.
@@ -157,7 +158,7 @@ ${parents}"
             if [[ "${via_backend}" == "false" ]]; then
                 echo "   note: ${spec} is in the FIPS graph, declared by the service crate rather"
                 echo "         than reached through a backend. Not a compliance finding; it is not"
-                echo "         on a signing or checksum path. See BACKEND_OWNERS in this script."
+                echo "         on a signing or checksum path. smithy-rs#4909 tracks removing it."
             fi
         done
     done
