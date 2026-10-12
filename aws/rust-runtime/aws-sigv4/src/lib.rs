@@ -57,18 +57,23 @@
 //! backend still wins at the call site, by the precedence above.
 //!
 //! `sigv4a` behaves differently. It declares `p256`, `ecdsa`, `crypto-bigint`, `subtle` and
-//! `zeroize` unconditionally, so enabling it compiles them under every backend, and `p256` brings
-//! its own copies of `hmac` and `sha2`. Adding `sigv4a` to the command above therefore
+//! `zeroize` unconditionally, so enabling it compiles them under every backend, and `ecdsa` pulls
+//! `hmac` and `sha2` back in underneath it. Adding `sigv4a` to the command above therefore
 //! reintroduces that chain. Under an AWS-LC backend none of it performs FIPS-relevant
 //! cryptography:
 //!
 //! - `p256` and `ecdsa` are the ECDSA implementation only for the `rustcrypto` backend; the
 //!   signing path does not reach them otherwise. They stay unconditional because a feature cannot
 //!   be made conditional on another feature being absent. `ecdsa` is declared directly only so
-//!   that `SignPrimitive` can be named; `p256` puts it in the tree either way.
+//!   that `hazmat::sign_prehashed_rfc6979` can be named; `p256` puts it in the tree either way.
+//! - `hmac` and `sha2` arrive through `ecdsa`'s RFC 6979 nonce derivation and through `p256`. They
+//!   resolve to the same versions this crate declares for its own backend, so they are one copy
+//!   each rather than two -- but a FIPS build leaves this crate's declarations off and still
+//!   compiles them for `p256`, so `sigv4a` is what puts them in that build.
 //! - `crypto-bigint` is used on every backend, for the 256-bit integer math in
 //!   [`sign::v4a::generate_signing_key`]. That is the key derivation the SigV4a specification
-//!   defines, not a cryptographic primitive.
+//!   defines, not a cryptographic primitive. Two majors resolve here: the 0.5 this crate declares
+//!   for that KDF, and the 0.7 that `elliptic-curve` depends on.
 //!
 //! SigV4 output is unchanged by the choice of backend. HMAC-SHA256 is deterministic, and both
 //! backends are held to the same known-answer vectors and to the shared signing test suite.

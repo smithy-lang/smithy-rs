@@ -87,8 +87,10 @@ for crate in aws-sdk-dynamodb aws-sdk-s3; do
 
     # Deliberately without `sigv4a`, which is the one configuration this check cannot assert.
     # `sigv4a` has to declare `p256` unconditionally -- Cargo features cannot say "only when
-    # `rustcrypto` is also on" -- and `p256` brings its own `hmac` and `sha2`, so a FIPS build with
-    # `sigv4a` compiles two crates on the forbidden list below by a route nothing can close. Adding
+    # `rustcrypto` is also on" -- and `ecdsa` underneath it pulls in `hmac` and `sha2`, so a FIPS
+    # build with `sigv4a` compiles two crates on the forbidden list below by a route nothing can
+    # close. They are the same versions this crate declares for its own backend, which a FIPS build
+    # leaves off, so one copy each reached only through `p256`. Adding
     # `sigv4a` here would make this check red with no fix available. What keeps that honest is that
     # the cfg in `aws-sigv4`'s `crypto` module leaves the RustCrypto backend uncompiled in a FIPS
     # build, so nothing calls them; `aws-sigv4`'s crate docs state it, and a graph is the wrong

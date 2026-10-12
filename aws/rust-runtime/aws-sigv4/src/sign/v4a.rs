@@ -246,7 +246,7 @@ mod tests {
     use p256::ecdsa::signature::Signer;
     use p256::ecdsa::signature::Verifier;
     use p256::ecdsa::{DerSignature, SigningKey};
-    use p256::elliptic_curve::sec1::ToEncodedPoint;
+    use p256::elliptic_curve::sec1::ToSec1Point;
 
     /// `elliptic_curve::SecretKey::MIN_SIZE` is a private associated constant, so the 24 in
     /// [`P256_PRIVATE_KEY_MIN_SIZE`] is a copy this crate cannot reference. Pin both ends of the
@@ -408,7 +408,7 @@ mod tests {
             .expect("derived key is a valid P-256 private key")
             .verifying_key()
             .as_affine()
-            .to_encoded_point(false);
+            .to_sec1_point(false);
         assert_eq!(
             "b6618f6a65740a99e650b33b6b4b5bd0d43b176d721a3edfea7e7d2d56d936b1",
             hex::encode(point.x().expect("uncompressed point has an x coordinate")),
