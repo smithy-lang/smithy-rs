@@ -356,17 +356,17 @@ impl<E: std::error::Error + 'static> std::error::Error for CollectBodyError<E> {
 /// Passing `limit == 0` disables the check and collects the entire body (the
 /// historical behavior, *not* recommended — see the security notes on the
 /// `customizationConfig.protocols.global.requestBodyMaxBytes` setting).
-/// Collection yields after 64 ready frame polls, including empty frames and trailers.
+/// Collection yields after 32 ready frame polls, including empty frames and trailers.
 #[doc(hidden)]
 pub async fn collect_body_limited<B>(body: B, limit: usize) -> Result<Bytes, CollectBodyError<B::Error>>
 where
     B: HttpBody,
 {
-    collect_body_limited_with_frame_budget(body, limit, DEFAULT_FRAME_BUDGET).await
+    collect_body_limited_with_frame_budget(body, limit, DEFAULT_CHUNK_BUDGET).await
 }
 
-/// Default number of ready frame polls before body collection yields.
-pub(crate) const DEFAULT_FRAME_BUDGET: NonZeroUsize = NonZeroUsize::new(64).unwrap();
+/// Default number of consecutive ready body polls before collection or streaming yields.
+pub(crate) const DEFAULT_CHUNK_BUDGET: NonZeroUsize = NonZeroUsize::new(32).unwrap();
 
 /// Collect a body with a byte limit and a positive budget of ready frame polls.
 ///
@@ -472,7 +472,7 @@ where
 
 /// Default number of consecutive ready body polls before a streaming request yields.
 #[doc(hidden)]
-pub const DEFAULT_STREAMING_CHUNK_BUDGET: NonZeroUsize = NonZeroUsize::new(32).unwrap();
+pub const DEFAULT_STREAMING_CHUNK_BUDGET: NonZeroUsize = DEFAULT_CHUNK_BUDGET;
 
 pin_project_lite::pin_project! {
     /// An HTTP body that yields after a bounded number of consecutive ready polls.
@@ -637,7 +637,7 @@ mod tests {
                 let wakes = Arc::new(WakeCount(AtomicUsize::new(0)));
                 let waker = Waker::from(wakes.clone());
                 let mut cx = Context::from_waker(&waker);
-                let expected_budget = budget.map(NonZeroUsize::get).unwrap_or(64);
+                let expected_budget = budget.map(NonZeroUsize::get).unwrap_or(DEFAULT_CHUNK_BUDGET.get());
                 let mut yields = 0;
                 loop {
                     match future.as_mut().poll(&mut cx) {
@@ -1111,7 +1111,7 @@ mod tests {
                 Ok(http_body::Frame::trailers(trailers.clone())),
             ];
             let body = http_body_util::StreamBody::new(futures_util::stream::iter(frames));
-            let (bytes, actual_trailers) = collect_body_limited_with_trailers(body, limit, DEFAULT_FRAME_BUDGET)
+            let (bytes, actual_trailers) = collect_body_limited_with_trailers(body, limit, DEFAULT_CHUNK_BUDGET)
                 .await
                 .unwrap();
             assert_eq!(bytes, "payload");

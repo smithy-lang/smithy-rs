@@ -610,7 +610,7 @@ where
 {
     let limit = config.max_bytes.map(NonZeroUsize::get).unwrap_or(0);
     let collect = async move {
-        collect_body_limited_with_trailers(body, limit, crate::body::DEFAULT_FRAME_BUDGET)
+        collect_body_limited_with_trailers(body, limit, crate::body::DEFAULT_CHUNK_BUDGET)
             .await
             .map_err(|err| match err {
                 CollectBodyError::Body(err) => RequestBodyCollectionError::Body(err),
