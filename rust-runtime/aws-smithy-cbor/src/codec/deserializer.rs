@@ -332,6 +332,7 @@ impl ShapeDeserializer for CborDeserializer<'_> {
         let mut out = std::collections::HashMap::with_capacity(Self::prealloc(
             len.unwrap_or(0),
             self.remaining(),
+            // Each CBOR map entry needs at least one byte for its key and one for its value.
             2,
         ));
         let mut i = 0;
