@@ -107,6 +107,12 @@ pub struct Builder<Tls = TlsUnset> {
     tls: Tls,
 }
 
+/// Connection-pool builder with a TLS provider selected.
+///
+/// Created by [`Builder::tls_provider`]. HTTPS construction requires an enabled
+/// TLS provider feature.
+pub type HttpsBuilder = Builder<TlsProviderSelected>;
+
 impl Default for Builder<TlsUnset> {
     fn default() -> Self {
         Self {
@@ -270,6 +276,15 @@ impl<Tls> Builder<Tls> {
     pub fn set_connection_reuse_scope(&mut self, scope: ConnectionReuseScope) -> &mut Self {
         self.reuse_scope = scope;
         self
+    }
+
+    /// Returns whether an explicit partition set is configured.
+    ///
+    /// An explicitly supplied empty set also returns `true`. Clearing the set
+    /// with [`Self::set_partitions`] and `None` restores anonymous partition
+    /// construction.
+    pub fn has_explicit_partitions(&self) -> bool {
+        self.partitions.is_some()
     }
 
     /// Declares the complete explicit partition set.
