@@ -22,6 +22,8 @@ mod ec2_query_errors;
 mod event_receiver;
 #[allow(unused)]
 mod event_stream_message_timeout;
+#[allow(unused)]
+mod event_stream_poll_budget;
 #[allow(dead_code)]
 mod idempotency_token;
 #[allow(dead_code)]

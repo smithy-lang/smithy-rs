@@ -486,9 +486,13 @@ internal class RequestBodyReadTimeoutTest {
             objectNode(
                 """
                 {
-                    "requestBodyReadTimeouts": {
-                        "perOperation": {
-                            "test#StreamingUpload": "30m"
+                    "protocols": {
+                        "global": {
+                            "requestBodyReadTimeouts": {
+                                "perOperation": {
+                                    "test#StreamingUpload": "30m"
+                                }
+                            }
                         }
                     }
                 }
@@ -527,9 +531,13 @@ internal class RequestBodyReadTimeoutTest {
             objectNode(
                 """
                 {
-                    "requestBodyReadTimeouts": {
-                        "defaultNonPayload": "15s",
-                        "defaultPayload": "5m"
+                    "protocols": {
+                        "global": {
+                            "requestBodyReadTimeouts": {
+                                "defaultNonPayload": "15s",
+                                "defaultPayload": "5m"
+                            }
+                        }
                     }
                 }
                 """,
@@ -553,13 +561,17 @@ internal class RequestBodyReadTimeoutTest {
             objectNode(
                 """
                 {
-                    "requestBodyReadTimeouts": {
-                        "defaultNonPayload": "10 s",
-                        "defaultPayload": "1h",
-                        "perOperation": {
-                            "test#Echo": "300000ms",
-                            "test#Health": "5m",
-                            "test#Upload": "120s"
+                    "protocols": {
+                        "global": {
+                            "requestBodyReadTimeouts": {
+                                "defaultNonPayload": "10 s",
+                                "defaultPayload": "1h",
+                                "perOperation": {
+                                    "test#Echo": "300000ms",
+                                    "test#Health": "5m",
+                                    "test#Upload": "120s"
+                                }
+                            }
                         }
                     }
                 }
@@ -584,9 +596,13 @@ internal class RequestBodyReadTimeoutTest {
             objectNode(
                 """
                 {
-                    "requestBodyReadTimeouts": {
-                        "defaultNonPayload": 0,
-                        "defaultPayload": 0
+                    "protocols": {
+                        "global": {
+                            "requestBodyReadTimeouts": {
+                                "defaultNonPayload": 0,
+                                "defaultPayload": 0
+                            }
+                        }
                     }
                 }
                 """,
@@ -610,11 +626,15 @@ internal class RequestBodyReadTimeoutTest {
             objectNode(
                 """
                 {
-                    "requestBodyReadTimeouts": {
-                        "defaultNonPayload": "1m",
-                        "defaultPayload": "1m",
-                        "perOperation": {
-                            "test#Echo": 0
+                    "protocols": {
+                        "global": {
+                            "requestBodyReadTimeouts": {
+                                "defaultNonPayload": "1m",
+                                "defaultPayload": "1m",
+                                "perOperation": {
+                                    "test#Echo": 0
+                                }
+                            }
                         }
                     }
                 }
@@ -639,11 +659,15 @@ internal class RequestBodyReadTimeoutTest {
             objectNode(
                 """
                 {
-                    "requestBodyReadTimeouts": {
-                        "defaultNonPayload": 0,
-                        "defaultPayload": 0,
-                        "perOperation": {
-                            "test#Echo": "5m"
+                    "protocols": {
+                        "global": {
+                            "requestBodyReadTimeouts": {
+                                "defaultNonPayload": 0,
+                                "defaultPayload": 0,
+                                "perOperation": {
+                                    "test#Echo": "5m"
+                                }
+                            }
                         }
                     }
                 }
@@ -668,9 +692,13 @@ internal class RequestBodyReadTimeoutTest {
             objectNode(
                 """
                 {
-                    "requestBodyReadTimeouts": {
-                        "perOperation": {
-                            "test#Echo": "5m"
+                    "protocols": {
+                        "global": {
+                            "requestBodyReadTimeouts": {
+                                "perOperation": {
+                                    "test#Echo": "5m"
+                                }
+                            }
                         }
                     }
                 }
@@ -709,8 +737,12 @@ internal class RequestBodyReadTimeoutTest {
             objectNode(
                 """
                 {
-                    "requestBodyReadTimeouts": {
-                        "defaultNonPayload": 3000
+                    "protocols": {
+                        "global": {
+                            "requestBodyReadTimeouts": {
+                                "defaultNonPayload": 3000
+                            }
+                        }
                     }
                 }
                 """,
@@ -731,8 +763,12 @@ internal class RequestBodyReadTimeoutTest {
             objectNode(
                 """
                 {
-                    "requestBodyReadTimeouts": {
-                        "defaultNonPayload": "3000"
+                    "protocols": {
+                        "global": {
+                            "requestBodyReadTimeouts": {
+                                "defaultNonPayload": "3000"
+                            }
+                        }
                     }
                 }
                 """,
@@ -753,8 +789,12 @@ internal class RequestBodyReadTimeoutTest {
             objectNode(
                 """
                 {
-                    "requestBodyReadTimeouts": {
-                        "defaultNonPayload": "3d"
+                    "protocols": {
+                        "global": {
+                            "requestBodyReadTimeouts": {
+                                "defaultNonPayload": "3d"
+                            }
+                        }
                     }
                 }
                 """,
@@ -775,11 +815,15 @@ internal class RequestBodyReadTimeoutTest {
             objectNode(
                 """
                 {
-                    "requestBodyReadTimeouts": {
-                        "defaultNonPayload": "10s",
-                        "defaultPayload": "1m",
-                        "perOperation": {
-                            "test#Missing": "30s"
+                    "protocols": {
+                        "global": {
+                            "requestBodyReadTimeouts": {
+                                "defaultNonPayload": "10s",
+                                "defaultPayload": "1m",
+                                "perOperation": {
+                                    "test#Missing": "30s"
+                                }
+                            }
                         }
                     }
                 }
@@ -800,13 +844,17 @@ internal class RequestBodyReadTimeoutTest {
             """
             {
                 "customizationConfig": {
-                    "requestBodyReadTimeouts": {
-                        "defaultNonPayload": "10s",
-                        "defaultPayload": "1m",
-                        "perOperation": {
-                            "test#Echo": "5m",
-                            "test#Health": "30s",
-                            "test#Upload": "2m"
+                    "protocols": {
+                        "global": {
+                            "requestBodyReadTimeouts": {
+                                "defaultNonPayload": "10s",
+                                "defaultPayload": "1m",
+                                "perOperation": {
+                                    "test#Echo": "5m",
+                                    "test#Health": "30s",
+                                    "test#Upload": "2m"
+                                }
+                            }
                         }
                     }
                 }
@@ -819,9 +867,13 @@ internal class RequestBodyReadTimeoutTest {
             """
             {
                 "customizationConfig": {
-                    "requestBodyReadTimeouts": {
-                        "defaultNonPayload": 0,
-                        "defaultPayload": 0
+                    "protocols": {
+                        "global": {
+                            "requestBodyReadTimeouts": {
+                                "defaultNonPayload": 0,
+                                "defaultPayload": 0
+                            }
+                        }
                     }
                 }
             }
@@ -833,11 +885,15 @@ internal class RequestBodyReadTimeoutTest {
             """
             {
                 "customizationConfig": {
-                    "requestBodyReadTimeouts": {
-                        "defaultNonPayload": "100ms",
-                        "defaultPayload": "100ms",
-                        "perOperation": {
-                            "test#Echo": 0
+                    "protocols": {
+                        "global": {
+                            "requestBodyReadTimeouts": {
+                                "defaultNonPayload": "100ms",
+                                "defaultPayload": "100ms",
+                                "perOperation": {
+                                    "test#Echo": 0
+                                }
+                            }
                         }
                     }
                 }
@@ -850,11 +906,15 @@ internal class RequestBodyReadTimeoutTest {
             """
             {
                 "customizationConfig": {
-                    "requestBodyReadTimeouts": {
-                        "defaultNonPayload": "2s",
-                        "defaultPayload": "100ms",
-                        "perOperation": {
-                            "test#Echo": "100ms"
+                    "protocols": {
+                        "global": {
+                            "requestBodyReadTimeouts": {
+                                "defaultNonPayload": "2s",
+                                "defaultPayload": "100ms",
+                                "perOperation": {
+                                    "test#Echo": "100ms"
+                                }
+                            }
                         }
                     }
                 }

@@ -51,6 +51,8 @@ data class ServerRustSettings(
     override val minimumSupportedRustVersion: String? = null,
     override val customizationConfig: ObjectNode?,
     val requestBodyReadTimeouts: RequestBodyReadTimeouts,
+    val eventStreamReadPollBudget: Int = ProtocolReadSettings.DEFAULT_EVENT_STREAM_READ_POLL_BUDGET,
+    val eventStreamTimeouts: EventStreamTimeouts = EventStreamTimeouts.fromCustomizationConfig(customizationConfig, requestBodyReadTimeouts),
 ) : CoreRustSettings(
         service,
         moduleName,
@@ -102,6 +104,11 @@ data class ServerRustSettings(
                         coreRustSettings.service,
                         coreRustSettings.customizationConfig,
                     ),
+                eventStreamReadPollBudget =
+                    ProtocolReadSettings.eventStreamReadPollBudget(
+                        coreRustSettings.customizationConfig,
+                        codegenSettingsNode.orElse(null),
+                    ),
             )
         }
     }
@@ -151,17 +158,18 @@ data class RequestBodyReadTimeouts(
         /** Event stream message timeouts are disabled unless explicitly configured. */
         const val DEFAULT_EVENT_STREAM_MESSAGE_TIMEOUT_MILLIS = 0L
 
-        private fun parseTimeoutMillis(
+        /** Parses a duration with an explicit unit into milliseconds, or `0` to disable the timeout. */
+        internal fun parseTimeoutConvertedToMillis(
             node: Node,
             configPath: String,
         ): Long =
             when {
                 node.isNumberNode && node.expectNumberNode().value.toDouble() == 0.0 -> 0
-                node.isStringNode -> parseTimeoutMillisString(node.expectStringNode().value, configPath)
+                node.isStringNode -> parseTimeoutStringConvertedToMillis(node.expectStringNode().value, configPath)
                 else -> throw invalidTimeout(configPath)
             }
 
-        private fun parseTimeoutMillisString(
+        private fun parseTimeoutStringConvertedToMillis(
             value: String,
             configPath: String,
         ): Long {
@@ -198,24 +206,31 @@ data class RequestBodyReadTimeouts(
             serviceId: ShapeId,
             customizationConfig: ObjectNode?,
         ): RequestBodyReadTimeouts {
-            val config = customizationConfig?.getObjectMember(CONFIG_KEY)?.orElse(null)
+            val (configNode, configPath) =
+                ProtocolReadSettings.resolve(
+                    customizationConfig,
+                    CONFIG_KEY,
+                    customizationConfig,
+                    "customizationConfig.$CONFIG_KEY",
+                )
+            val config = ProtocolReadSettings.expectObject(configNode, configPath)
             val defaultNonPayloadMillis =
                 config
                     ?.getMember(DEFAULT_NON_PAYLOAD_KEY)
-                    ?.map { parseTimeoutMillis(it, "customizationConfig.$CONFIG_KEY.$DEFAULT_NON_PAYLOAD_KEY") }
+                    ?.map { parseTimeoutConvertedToMillis(it, "$configPath.$DEFAULT_NON_PAYLOAD_KEY") }
                     ?.orElse(null)
                     ?: DEFAULT_NON_PAYLOAD_REQUEST_BODY_READ_TIMEOUT_MILLIS
             val defaultPayloadMillis =
                 config
                     ?.getMember(DEFAULT_PAYLOAD_KEY)
-                    ?.map { parseTimeoutMillis(it, "customizationConfig.$CONFIG_KEY.$DEFAULT_PAYLOAD_KEY") }
+                    ?.map { parseTimeoutConvertedToMillis(it, "$configPath.$DEFAULT_PAYLOAD_KEY") }
                     ?.orElse(null)
                     ?: DEFAULT_REQUEST_BODY_READ_TIMEOUT_MILLIS
             val defaultEventStreamMessageMillis =
                 config
                     ?.getMember(DEFAULT_EVENT_STREAM_MESSAGE_KEY)
                     ?.map {
-                        parseTimeoutMillis(it, "customizationConfig.$CONFIG_KEY.$DEFAULT_EVENT_STREAM_MESSAGE_KEY")
+                        parseTimeoutConvertedToMillis(it, "$configPath.$DEFAULT_EVENT_STREAM_MESSAGE_KEY")
                     }
                     ?.orElse(null)
                     ?: DEFAULT_EVENT_STREAM_MESSAGE_TIMEOUT_MILLIS
@@ -275,7 +290,7 @@ data class RequestBodyReadTimeouts(
                         val operationId = ShapeId.from(key.value)
                         if (operationId !in containedOperationIds) {
                             throw CodegenException(
-                                "`customizationConfig.$CONFIG_KEY.$PER_OPERATION_KEY` contains `$operationId`, " +
+                                "`$configPath.$PER_OPERATION_KEY` contains `$operationId`, " +
                                     "which is not an operation attached to service `$serviceId`",
                             )
                         }
@@ -284,14 +299,14 @@ data class RequestBodyReadTimeouts(
                         // blobs) have no frame boundaries and remain unsupported.
                         if (operationId in streamingOperationIds && operationId !in eventStreamInputOperationIds) {
                             throw CodegenException(
-                                "`customizationConfig.$CONFIG_KEY.$PER_OPERATION_KEY` contains streaming operation " +
+                                "`$configPath.$PER_OPERATION_KEY` contains streaming operation " +
                                     "`$operationId`, but request body read timeouts are not supported for streaming inputs",
                             )
                         }
                         operationId to
-                            parseTimeoutMillis(
+                            parseTimeoutConvertedToMillis(
                                 value,
-                                "customizationConfig.$CONFIG_KEY.$PER_OPERATION_KEY.$operationId",
+                                "$configPath.$PER_OPERATION_KEY.$operationId",
                             )
                     }?.toMap()
                     ?: emptyMap()
@@ -420,6 +435,8 @@ data class ServerCodegenConfig(
                 "allowMissingUnionVariant",
                 HTTP_1X_CONFIG_KEY,
                 REQUEST_BODY_MAX_BYTES_CONFIG_KEY,
+                // Legacy path; ProtocolReadSettings reads it only when the global setting is absent.
+                ProtocolReadSettings.EVENT_STREAM_READ_POLL_BUDGET_KEY,
                 RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY,
             )
 
