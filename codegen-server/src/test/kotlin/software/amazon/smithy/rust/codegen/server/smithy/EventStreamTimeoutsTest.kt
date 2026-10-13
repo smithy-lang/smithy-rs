@@ -31,6 +31,7 @@ internal class EventStreamTimeoutsTest {
             input := {
                 @required
                 events: Events
+                ${if (protocol == "smithy.protocols#rpcv2Cbor") "metadata: String" else ""}
             }
             output := {}
         }
@@ -180,11 +181,6 @@ internal class EventStreamTimeoutsTest {
             val error = assertThrows<CodegenException> { settings(json) }
             check(error.message!!.contains("customizationConfig.protocols.global.eventStreamTimeouts"))
         }
-    }
-
-    @Test
-    fun `aws json initial and event deadlines work in generated code`() {
-        checkRpcDeadlines("aws.protocols#awsJson1_1")
     }
 
     @Test

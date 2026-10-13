@@ -48,7 +48,10 @@ class ServerRequestBindingGenerator(
                     codegenContext,
                 ),
                 ServerEventStreamPollBudgetHttpBindingCustomization(codegenContext),
-                ServerEventStreamMessageTimeoutHttpBindingCustomization(codegenContext, protocol.httpBindingResolver.isRpcProtocol()),
+                ServerEventStreamMessageTimeoutHttpBindingCustomization(
+                    codegenContext,
+                    protocol.httpBindingResolver.handlesEventStreamInitialRequest(operationShape),
+                ),
             ) + additionalHttpBindingCustomizations,
         )
 

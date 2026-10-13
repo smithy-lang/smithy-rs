@@ -979,7 +979,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                 }
                             val readInitialRequest =
                                 writable {
-                                    if (httpBindingResolver.isRpcProtocol()) {
+                                    if (httpBindingResolver.handlesEventStreamInitialRequest(operationShape)) {
                                         rustTemplate(
                                             """
                                             let mut receiver = receiver;

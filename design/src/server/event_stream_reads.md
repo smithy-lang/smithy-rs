@@ -72,7 +72,8 @@ Event stream timeouts have their own object,
 `customizationConfig.protocols.global.eventStreamTimeouts`, with three independent
 values:
 
-- `initialMessage` applies to the RPC initial-message read before the handler runs.
+- `initialMessage` applies to the RPC initial-message read before the handler runs
+  when the operation input has non-stream fields carried in that message.
   Its deadline starts when that read is set up, before waiting for the first byte,
   and runs until the entire initial frame arrives. Receiving its first bytes does
   not reset the deadline. If the value is `10s` and the first bytes arrive after
@@ -82,7 +83,9 @@ values:
   arrives.
 - `idle` bounds waiting between a complete frame and the next event's first bytes.
   It defaults to `1h`. REST streams also use it while waiting for their first event;
-  RPC streams start it after the initial frame completes. First bytes end the idle
+  RPC streams with initial-message fields start it after the initial frame completes.
+  RPC inputs containing only an event stream use it while waiting for their first event,
+  just like REST streams. First bytes end the idle
   deadline and start `messageCompletion`, when configured. Empty body chunks do not
   reset the idle deadline.
 
@@ -95,26 +98,27 @@ have an event stream input.
 
 REST event streams have no pre-handler initial-message read. `initialMessage`
 does not apply to them; `messageCompletion` covers their first event and all later
-events. On RPC streams, the initial frame uses only `initialMessage`, even when
+events. RPC inputs containing only an event stream also enter the handler without
+reading a frame first; `initialMessage` does not apply to these operations.
+On RPC streams with initial-message fields, the initial frame uses only `initialMessage`, even when
 its deadline is disabled. The event deadline never shortens the initial deadline.
-After the initial frame completes, the same timer is reused for event deadlines.
 The RPC initial read examines the first wire frame. If an optional `initial-request`
 message is omitted, the first event is read during that phase and uses the initial
 deadline; its already-complete frame is then buffered for the handler.
 
-The previous paths, `codegen.eventStreamReadPollBudget` and
-`customizationConfig.requestBodyReadTimeouts`, remain supported as fallbacks.
-Each global key takes precedence over its previous path. A global
-`requestBodyReadTimeouts` object replaces the complete legacy timeout object;
+The alternate paths, `codegen.eventStreamReadPollBudget` and
+`customizationConfig.requestBodyReadTimeouts`, are accepted as fallbacks.
+Each global key takes precedence over its alternate path. A global
+`requestBodyReadTimeouts` object replaces the complete alternate timeout object;
 omitted fields use the built-in defaults. An empty global timeout object therefore
 selects all built-in defaults. Explicit `0` values are honored. Invalid global
-values fail generation even when the legacy value is valid.
+values fail generation even when the alternate value is valid.
 
-The legacy `requestBodyReadTimeouts.defaultEventStreamMessage` and scalar
-`perOperation` entries for event stream operations remain completion-timeout
+The `requestBodyReadTimeouts.defaultEventStreamMessage` and scalar
+`perOperation` entries for event stream operations are accepted as completion-timeout
 fallbacks when `eventStreamTimeouts` is absent. They never enable an initial-read
 deadline. The one-hour idle default applies even when the new object is absent.
-An explicit `eventStreamTimeouts` object supersedes these legacy event settings
+An explicit `eventStreamTimeouts` object supersedes these alternate event settings
 as a whole; an empty object disables initial and completion deadlines while
 retaining the one-hour idle deadline.
 Use `requestBodyReadTimeouts` for non-streaming request bodies.

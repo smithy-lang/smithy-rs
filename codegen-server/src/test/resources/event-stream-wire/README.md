@@ -27,9 +27,12 @@ Prepared Rust test binaries can also be run directly, for example:
 codegen-server/build/event-stream-wire/json_tests event_stream_timeouts_over_tcp --nocapture
 ```
 
-The 34 scenarios cover REST JSON, AWS JSON 1.1, and RPC v2 CBOR. They check:
+The 38 scenarios cover REST JSON, AWS JSON 1.1, and RPC v2 CBOR. They check:
 
 - Initial expiry before the handler is invoked.
+- RPC inputs with only an event stream enter the handler without an initial read:
+  first-event idle and completion errors reach the handler, and a first event
+  arriving after the configured initial deadline is accepted within its idle deadline.
 - Completion expiry during slow-drip frames, including a split length prefix.
 - Idle expiry before the first event and between complete events.
 - Timely events across multiple windows without conflicting deadlines.
@@ -51,3 +54,8 @@ Test configuration uses a 300 ms RPC initial deadline, a 200 ms completion
 deadline, and a 1 s global idle deadline. `PublishEvents` and `RetryEvents`
 override idle to 400 ms; `NoIdleEvents` disables it. Production defaults are
 unchanged, and the TCP scenarios use real wall-clock time.
+
+RPC v2 CBOR operations used for initial-read checks have an optional non-stream
+input field. AWS JSON's server generator currently rejects combining non-stream
+input fields with an event stream, so its checks use stream-only inputs.
+`NoInitialEvents` has only the event stream and uses a 400 ms idle override.

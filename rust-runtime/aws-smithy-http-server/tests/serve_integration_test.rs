@@ -579,15 +579,15 @@ async fn test_mixed_protocol_concurrent_connections() {
 }
 
 #[tokio::test]
-async fn test_serve_defaults_to_8192_connections() {
+async fn test_serve_defaults_to_16k_connections() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("failed to bind");
     let server = aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(ok_service)));
 
     assert!(
-        format!("{server:?}").contains("max_connections: Some(8192)"),
-        "serve should default to 8192 concurrent connections"
+        format!("{server:?}").contains("max_connections: Some(16384)"),
+        "serve should default to 16,384 concurrent connections"
     );
 }
 

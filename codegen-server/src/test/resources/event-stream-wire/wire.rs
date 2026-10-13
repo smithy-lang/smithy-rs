@@ -5,11 +5,12 @@
 
 use crate::event_stream_message_timeout::MessageTimeoutError;
 use crate::input::{
-    GlobalIdleEventsInput, HealthInput, NoIdleEventsInput, PublishEventsInput, RetryEventsInput,
+    GlobalIdleEventsInput, HealthInput, NoIdleEventsInput, NoInitialEventsInput,
+    PublishEventsInput, RetryEventsInput,
 };
 use crate::output::{
-    GlobalIdleEventsOutput, HealthOutput, NoIdleEventsOutput, PublishEventsOutput,
-    RetryEventsOutput,
+    GlobalIdleEventsOutput, HealthOutput, NoIdleEventsOutput, NoInitialEventsOutput,
+    PublishEventsOutput, RetryEventsOutput,
 };
 use aws_smithy_types::event_stream::{Header, HeaderValue, Message};
 use bytes::Bytes;
@@ -56,19 +57,18 @@ async fn events(
             Err(error) => {
                 let error = MessageTimeoutError::find_in_chain(&error)
                     .unwrap_or_else(|| panic!("unexpected stream error: {error:?}"));
-                assert!(
-                    !error.is_initial_message(),
-                    "initial expiry must stay before the handler"
-                );
+                let outcome = match error {
+                    MessageTimeoutError::InitialMessage { .. } => {
+                        panic!("initial expiry must stay before the handler")
+                    }
+                    MessageTimeoutError::MessageCompletion { .. } => "completion",
+                    MessageTimeoutError::Idle { .. } => "idle",
+                };
                 if retry && !retried {
                     retried = true;
                     continue;
                 }
-                break if error.is_idle() {
-                    "idle"
-                } else {
-                    "completion"
-                };
+                break outcome;
             }
         }
     };
@@ -99,6 +99,10 @@ async fn start_server() -> (SocketAddr, AbortTask) {
         .global_idle_events(|input: GlobalIdleEventsInput| async move {
             let (count, outcome) = events(input.events, false).await;
             Ok::<_, crate::error::GlobalIdleEventsError>(GlobalIdleEventsOutput { count, outcome })
+        })
+        .no_initial_events(|input: NoInitialEventsInput| async move {
+            let (count, outcome) = events(input.events, false).await;
+            Ok::<_, crate::error::NoInitialEventsError>(NoInitialEventsOutput { count, outcome })
         })
         .health(health)
         .build_unchecked();
@@ -270,7 +274,7 @@ impl WireClient {
     }
 
     async fn initial(&self, protocol: WireProtocol) {
-        if protocol != WireProtocol::Rest {
+        if protocol == WireProtocol::Cbor {
             self.send(protocol.frame(true)).await;
         }
     }
@@ -339,7 +343,7 @@ async fn wire_scenarios(protocol: WireProtocol) {
         passed += 1;
         println!("PASS {} {name}", protocol.name());
     };
-    if protocol != WireProtocol::Rest {
+    if protocol == WireProtocol::Cbor {
         for partial in [false, true] {
             let calls = HANDLER_CALLS.load(Ordering::SeqCst);
             let client = WireClient::connect(addr, protocol, "PublishEvents", true).await;
@@ -356,6 +360,29 @@ async fn wire_scenarios(protocol: WireProtocol) {
                 "initial_no_bytes_rejected_before_handler"
             });
         }
+    }
+    if protocol != WireProtocol::Rest {
+        let client = WireClient::connect(addr, protocol, "NoInitialEvents", true).await;
+        let started = Instant::now();
+        client
+            .expect_after(started, ms(400), Some(("idle", 0)), false)
+            .await;
+        pass("stream_only_RPC_idle_before_first_event_reaches_handler");
+
+        let client = WireClient::connect(addr, protocol, "NoInitialEvents", true).await;
+        let started = Instant::now();
+        client.send(protocol.frame(false).slice(..2)).await;
+        client
+            .expect_after(started, ms(200), Some(("completion", 0)), false)
+            .await;
+        pass("stream_only_RPC_partial_first_event_timeout_reaches_handler");
+
+        let mut client = WireClient::connect(addr, protocol, "NoInitialEvents", true).await;
+        client.pending_for(ms(350)).await;
+        client.send(protocol.frame(false)).await;
+        client.finish();
+        client.expect(Some(("eof", 1)), false).await;
+        pass("stream_only_RPC_first_event_after_initial_deadline_is_accepted");
     }
     let client = WireClient::connect(addr, protocol, "PublishEvents", true).await;
     let started = Instant::now();
@@ -447,10 +474,10 @@ async fn wire_scenarios(protocol: WireProtocol) {
     pass("idle_expiry_releases_connection_slot_and_server_still_serves_requests");
     assert_eq!(
         passed,
-        if protocol == WireProtocol::Rest {
-            10
-        } else {
-            12
+        match protocol {
+            WireProtocol::Rest => 10,
+            WireProtocol::Json => 13,
+            WireProtocol::Cbor => 15,
         }
     );
     println!(

@@ -82,7 +82,7 @@
 //!
 //! ### Limiting Concurrent Connections
 //!
-//! `serve` limits concurrently accepted connections to 8192 by default. Configure
+//! `serve` limits concurrently accepted connections to 16,384 by default. Configure
 //! or disable the limit on the server future:
 //!
 //! ```rust,ignore
@@ -299,7 +299,7 @@ use self::listener::ConnectionLimit;
 pub use self::listener::{ConnLimiter, ConnLimiterIo, Listener, ListenerExt, TapIo};
 
 /// Default maximum number of concurrently accepted TCP connections.
-pub const DEFAULT_MAX_CONNECTIONS: usize = 8192;
+pub const DEFAULT_MAX_CONNECTIONS: usize = 16_384;
 
 // ============================================================================
 // Type Bounds Documentation
@@ -452,7 +452,7 @@ where
 
 /// Serve the service with the supplied listener.
 ///
-/// By default, this limits concurrently accepted connections to 8192. Use
+/// By default, this limits concurrently accepted connections to 16,384. Use
 /// [`Serve::max_connections`] to configure the limit or
 /// [`Serve::disable_connection_limit`] to disable it.
 ///
@@ -652,7 +652,7 @@ where
 
     /// Set the maximum number of concurrently accepted connections.
     ///
-    /// The default limit is 8192. Once the limit is reached, `serve` stops
+    /// The default limit is 16,384. Once the limit is reached, `serve` stops
     /// accepting connections until an existing connection closes.
     pub fn max_connections(mut self, max: usize) -> Self {
         self.max_connections = Some(max);
@@ -864,7 +864,7 @@ impl<L: Listener, M, S, F, B> ServeWithGracefulShutdown<L, M, S, F, B> {
 
     /// Set the maximum number of concurrently accepted connections.
     ///
-    /// The default limit is 8192. Once the limit is reached, `serve` stops
+    /// The default limit is 16,384. Once the limit is reached, `serve` stops
     /// accepting connections until an existing connection closes.
     pub fn max_connections(mut self, max: usize) -> Self {
         self.max_connections = Some(max);

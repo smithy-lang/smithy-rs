@@ -67,27 +67,34 @@ use std::time::Duration;
 /// timeout window. Propagating the error out of the handler ends request processing;
 /// the timeout does not itself close the transport connection.
 #[derive(Debug)]
-pub struct MessageTimeoutError {
-    timeout: Duration,
-    initial_message: bool,
-    idle: bool,
+pub enum MessageTimeoutError {
+    /// The RPC initial frame did not arrive completely before its deadline.
+    InitialMessage { timeout: Duration },
+    /// An event frame started arriving but did not complete before its deadline.
+    MessageCompletion { timeout: Duration },
+    /// The next event's first bytes did not arrive before the idle deadline.
+    Idle { timeout: Duration },
 }
 
 impl MessageTimeoutError {
     /// The configured initial-message, completion, or idle timeout that expired.
     pub fn timeout(&self) -> Duration {
-        self.timeout
+        match self {
+            Self::InitialMessage { timeout }
+            | Self::MessageCompletion { timeout }
+            | Self::Idle { timeout } => *timeout,
+        }
     }
 
     /// Whether this deadline covered the RPC initial read, including its first-byte wait.
     /// Generated servers reject these errors before invoking the operation handler.
     pub fn is_initial_message(&self) -> bool {
-        self.initial_message
+        matches!(self, Self::InitialMessage { .. })
     }
 
     /// Whether the deadline expired while waiting for the next event's first bytes.
     pub fn is_idle(&self) -> bool {
-        self.idle
+        matches!(self, Self::Idle { .. })
     }
 
     /// Searches `err` and its source chain for a `MessageTimeoutError`.
@@ -108,25 +115,23 @@ impl MessageTimeoutError {
 
 impl fmt::Display for MessageTimeoutError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.initial_message {
-            return write!(
+        match self {
+            Self::InitialMessage { timeout } => write!(
                 f,
                 "the RPC initial message didn't complete within the configured timeout ({:?}), including waiting for its first bytes",
-                self.timeout
-            );
-        }
-        if self.idle {
-            return write!(
+                timeout
+            ),
+            Self::Idle { timeout } => write!(
                 f,
                 "an event stream remained idle waiting for the next message within the configured timeout ({:?})",
-                self.timeout
-            );
+                timeout
+            ),
+            Self::MessageCompletion { timeout } => write!(
+                f,
+                "an event stream message started arriving, but didn't complete within the configured timeout ({:?})",
+                timeout
+            ),
         }
-        write!(
-            f,
-            "an event stream message started arriving, but didn't complete within the configured timeout ({:?})",
-            self.timeout
-        )
     }
 }
 
@@ -313,17 +318,20 @@ impl http_body_1x::Body for MessageTimeoutBody {
             {
                 *this.armed = false;
                 let timeout = timeout.expect("an armed timer has a configured timeout");
+                let error = if *this.reading_initial {
+                    MessageTimeoutError::InitialMessage { timeout }
+                } else if mid_frame {
+                    MessageTimeoutError::MessageCompletion { timeout }
+                } else {
+                    MessageTimeoutError::Idle { timeout }
+                };
                 tracing::debug!(
                     timeout_millis = timeout.as_millis() as u64,
-                    initial_message = *this.reading_initial,
-                    idle = !*this.reading_initial && !mid_frame,
+                    initial_message = error.is_initial_message(),
+                    idle = error.is_idle(),
                     "event stream message read timed out"
                 );
-                return Poll::Ready(Some(Err(Box::new(MessageTimeoutError {
-                    timeout,
-                    initial_message: *this.reading_initial,
-                    idle: !*this.reading_initial && !mid_frame,
-                }))));
+                return Poll::Ready(Some(Err(Box::new(error))));
             }
         }
         match this.inner.poll_frame(cx) {
@@ -466,6 +474,7 @@ mod tests {
         let error = body.frame().await.unwrap().unwrap_err();
         let error = MessageTimeoutError::find_in_chain(error.as_ref()).unwrap();
         assert!(error.is_initial_message());
+        assert!(matches!(error, MessageTimeoutError::InitialMessage { .. }));
         assert_eq!(error.timeout(), Duration::from_millis(100));
         assert_eq!(start.elapsed(), Duration::from_millis(100));
     }
@@ -529,6 +538,10 @@ mod tests {
         let error = body.frame().await.unwrap().unwrap_err();
         let error = MessageTimeoutError::find_in_chain(error.as_ref()).unwrap();
         assert!(!error.is_initial_message());
+        assert!(matches!(
+            error,
+            MessageTimeoutError::MessageCompletion { .. }
+        ));
         assert_eq!(error.timeout(), Duration::from_millis(20));
         assert_eq!(start.elapsed(), Duration::from_millis(1220));
     }
@@ -646,6 +659,7 @@ mod tests {
             let error = body.frame().await.unwrap().unwrap_err();
             let error = MessageTimeoutError::find_in_chain(error.as_ref()).unwrap();
             assert!(error.is_idle());
+            assert!(matches!(error, MessageTimeoutError::Idle { .. }));
             assert!(!error.is_initial_message());
             assert_eq!(error.timeout(), Duration::from_secs(3600));
             assert_eq!(start.elapsed(), Duration::from_secs(3600));

@@ -69,13 +69,19 @@ internal class EventStreamTimeoutWireTest {
                 val output = Files.readString(artifacts.resolve("$protocol-results.txt"))
                 check(process.exitValue() == 0) { "$protocol Rust TCP tests failed:\n$output" }
                 val scenarios = output.lineSequence().count { it.startsWith("PASS $protocol ") && !it.contains(" all ") }
-                check(scenarios == if (protocol == "rest") 10 else 12) { "Missing scenarios for $protocol:\n$output" }
+                val expectedScenarios =
+                    when (protocol) {
+                        "rest" -> 10
+                        "json" -> 13
+                        else -> 15
+                    }
+                check(scenarios == expectedScenarios) { "Missing scenarios for $protocol:\n$output" }
             }
             val elapsed = (System.nanoTime() - started) / 1_000_000_000.0
             val output =
                 listOf("rest", "json", "cbor").joinToString("\n") {
                     Files.readString(artifacts.resolve("$it-results.txt"))
-                } + "\nPASS all 34 Rust TCP scenarios in ${elapsed}s (limit 10s)\n"
+                } + "\nPASS all 38 Rust TCP scenarios in ${elapsed}s (limit 10s)\n"
             Files.writeString(artifacts.resolve("results.txt"), output)
             println(output)
         } finally {
@@ -94,13 +100,14 @@ internal class EventStreamTimeoutWireTest {
         artifacts: Path,
     ) {
         val payload = if (wireProtocol == "rest") "@httpPayload" else ""
+        val initialFields = if (wireProtocol == "cbor") "metadata: String" else ""
         val model =
             """
             ${'$'}version: "2.0"
             namespace test
             use $protocol
             @${protocol.substringAfter("#")}
-            service WireService { operations: [PublishEvents, RetryEvents, NoIdleEvents, GlobalIdleEvents, Health] }
+            service WireService { operations: [PublishEvents, RetryEvents, NoIdleEvents, GlobalIdleEvents, NoInitialEvents, Health] }
             @http(uri: "/PublishEvents", method: "POST")
             operation PublishEvents { input: EventsInput, output: EventsOutput }
             @http(uri: "/RetryEvents", method: "POST")
@@ -109,7 +116,10 @@ internal class EventStreamTimeoutWireTest {
             operation NoIdleEvents { input: EventsInput, output: EventsOutput }
             @http(uri: "/GlobalIdleEvents", method: "POST")
             operation GlobalIdleEvents { input: EventsInput, output: EventsOutput }
-            structure EventsInput { @required $payload events: Events }
+            @http(uri: "/NoInitialEvents", method: "POST")
+            operation NoInitialEvents { input: NoInitialInput, output: EventsOutput }
+            structure NoInitialInput { @required $payload events: Events }
+            structure EventsInput { @required $payload events: Events, $initialFields }
             structure EventsOutput { @required count: Integer, @required outcome: String }
             @streaming
             union Events { event: Event }
@@ -134,7 +144,8 @@ internal class EventStreamTimeoutWireTest {
                                                 "perOperation": {
                                                     "test#PublishEvents": {"idle": "400ms"},
                                                     "test#RetryEvents": {"idle": "400ms"},
-                                                    "test#NoIdleEvents": {"idle": 0}
+                                                    "test#NoIdleEvents": {"idle": 0},
+                                                    "test#NoInitialEvents": {"idle": "400ms"}
                                                 }
                                             }
                                         }
