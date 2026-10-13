@@ -136,7 +136,7 @@ internal class EventStreamTimeoutWireTest {
                             {
                                 "customizationConfig": {
                                     "protocols": {
-                                        "global": {
+                                        "common": {
                                             "eventStreamTimeouts": {
                                                 "initialMessage": "300ms",
                                                 "messageCompletion": "200ms",

@@ -13,7 +13,7 @@ Teams configure the budget in the `rust-server-codegen` plugin's settings in
 {
   "customizationConfig": {
     "protocols": {
-      "global": {
+      "common": {
         "eventStreamReadPollBudget": 64
       }
     }
@@ -40,7 +40,7 @@ both independently:
 {
   "customizationConfig": {
     "protocols": {
-      "global": {
+      "common": {
         "eventStreamReadPollBudget": 32,
         "requestBodyReadTimeouts": {
           "defaultNonPayload": "5m",
@@ -63,13 +63,13 @@ both independently:
 }
 ```
 
-The global protocol section also contains the request body read timeout
+The common protocol section also contains the request body read timeout
 configuration for non-streaming operations. `defaultNonPayload` defaults to `5m`;
 `defaultPayload` defaults to `1h`. A `perOperation` entry overrides the applicable
 default for non-streaming operations. Setting a timeout to `0` disables it.
 
 Event stream timeouts have their own object,
-`customizationConfig.protocols.global.eventStreamTimeouts`, with three independent
+`customizationConfig.protocols.common.eventStreamTimeouts`, with three independent
 values:
 
 - `initialMessage` applies to the RPC initial-message read before the handler runs
@@ -93,7 +93,7 @@ values:
 accept durations with an explicit `ms`, `s`, `m`, or `h` unit, or `0` to disable,
 and can be overridden independently under `perOperation`.
 An operation override of `0` disables just that deadline; an omitted value uses
-the corresponding global default. Operation IDs must belong to this service and
+the corresponding common default. Operation IDs must belong to this service and
 have an event stream input.
 
 REST event streams have no pre-handler initial-message read. `initialMessage`
@@ -108,10 +108,10 @@ deadline; its already-complete frame is then buffered for the handler.
 
 The alternate paths, `codegen.eventStreamReadPollBudget` and
 `customizationConfig.requestBodyReadTimeouts`, are accepted as fallbacks.
-Each global key takes precedence over its alternate path. A global
+Each common key takes precedence over its alternate path. A common
 `requestBodyReadTimeouts` object replaces the complete alternate timeout object;
-omitted fields use the built-in defaults. An empty global timeout object therefore
-selects all built-in defaults. Explicit `0` values are honored. Invalid global
+omitted fields use the built-in defaults. An empty common timeout object therefore
+selects all built-in defaults. Explicit `0` values are honored. Invalid common
 values fail generation even when the alternate value is valid.
 
 The `requestBodyReadTimeouts.defaultEventStreamMessage` and scalar

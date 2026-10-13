@@ -62,7 +62,7 @@ internal class EventStreamTimeoutsTest {
                     "moduleAuthors": ["test"],
                     "customizationConfig": {
                         "protocols": {
-                            "global": {
+                            "common": {
                                 "eventStreamTimeouts": $global
                                 ${if (legacy != null) ""","requestBodyReadTimeouts": $legacy""" else ""}
                             }
@@ -179,7 +179,7 @@ internal class EventStreamTimeoutsTest {
             """{"perOperation": {"test#PublishEvents": {"completion": "10s"}}}""",
         )) {
             val error = assertThrows<CodegenException> { settings(json) }
-            check(error.message!!.contains("customizationConfig.protocols.global.eventStreamTimeouts"))
+            check(error.message!!.contains("customizationConfig.protocols.common.eventStreamTimeouts"))
         }
     }
 
@@ -198,7 +198,7 @@ internal class EventStreamTimeoutsTest {
                         {
                             "customizationConfig": {
                                 "protocols": {
-                                    "global": {
+                                    "common": {
                                         "eventStreamTimeouts": {
                                             "initialMessage": "500ms",
                                             "messageCompletion": "20ms",

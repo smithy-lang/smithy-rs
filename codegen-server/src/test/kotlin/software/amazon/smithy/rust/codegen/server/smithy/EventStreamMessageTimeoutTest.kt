@@ -116,7 +116,7 @@ internal class EventStreamMessageTimeoutTest {
                     """
                     {
                         "protocols": {
-                            "global": {
+                            "common": {
                                 "requestBodyReadTimeouts": {
                                     "defaultEventStreamMessage": "30s"
                                 }
@@ -143,7 +143,7 @@ internal class EventStreamMessageTimeoutTest {
                     """
                     {
                         "protocols": {
-                            "global": {
+                            "common": {
                                 "requestBodyReadTimeouts": {
                                     "defaultEventStreamMessage": "30s",
                                     "perOperation": {
@@ -170,7 +170,7 @@ internal class EventStreamMessageTimeoutTest {
                     """
                     {
                         "protocols": {
-                            "global": {
+                            "common": {
                                 "requestBodyReadTimeouts": {
                                     "defaultEventStreamMessage": "30s",
                                     "perOperation": {
@@ -198,7 +198,7 @@ internal class EventStreamMessageTimeoutTest {
                         """
                         {
                             "protocols": {
-                                "global": {
+                                "common": {
                                     "requestBodyReadTimeouts": {
                                         "perOperation": {
                                             "test#StreamingUpload": "30s"
@@ -382,7 +382,7 @@ internal class EventStreamMessageTimeoutTest {
     fun `generated code omits the timeout wrapper when all deadlines are disabled`() {
         val settings =
             objectNode(
-                """{"customizationConfig": {"protocols": {"global": {"eventStreamTimeouts": {"idle": 0}}}}}""",
+                """{"customizationConfig": {"protocols": {"common": {"eventStreamTimeouts": {"idle": 0}}}}}""",
             )
         val generatedServers = serverIntegrationTest(model, IntegrationTestParams(additionalSettings = settings))
         generatedServers.forEach { generatedServer ->
@@ -401,7 +401,7 @@ internal class EventStreamMessageTimeoutTest {
             {
                 "customizationConfig": {
                     "protocols": {
-                        "global": {
+                        "common": {
                             "eventStreamTimeouts": {
                                 "messageCompletion": "45s"
                             }

@@ -53,7 +53,7 @@ internal class EventStreamPollBudgetTest {
     fun `invalid poll budgets fail code generation`() {
         for (value in listOf("-1", "1.5", "2147483648", "9223372036854775808", "\"32\"", "true", "null")) {
             val error = assertThrows<CodegenException> { config("""{"eventStreamReadPollBudget": $value}""") }
-            check(error.message!!.contains("customizationConfig.protocols.global.eventStreamReadPollBudget"))
+            check(error.message!!.contains("customizationConfig.protocols.common.eventStreamReadPollBudget"))
         }
     }
 
@@ -69,7 +69,7 @@ internal class EventStreamPollBudgetTest {
             {
                 "customizationConfig": {
                     "protocols": {
-                        "global": {
+                        "common": {
                             "eventStreamReadPollBudget": 3,
                             "eventStreamTimeouts": {"messageCompletion": "30s"}
                         }
@@ -85,14 +85,14 @@ internal class EventStreamPollBudgetTest {
     @Test
     fun `zero disables forced yielding in generated receiver`() {
         checkGeneratedBudget(
-            """{"customizationConfig": {"protocols": {"global": {"eventStreamReadPollBudget": 0}}}}""",
+            """{"customizationConfig": {"protocols": {"common": {"eventStreamReadPollBudget": 0}}}}""",
             64,
             false,
         )
     }
 
     @Test
-    fun `legacy poll budget remains supported and global value takes precedence`() {
+    fun `legacy poll budget remains supported and common value takes precedence`() {
         check(settings("""{"codegen": {"eventStreamReadPollBudget": 7}}""").eventStreamReadPollBudget == 7)
         checkGeneratedBudget("""{"codegen": {"eventStreamReadPollBudget": 3}}""", 3, false)
         val effective =
@@ -101,7 +101,7 @@ internal class EventStreamPollBudgetTest {
                 {
                     "codegen": {"eventStreamReadPollBudget": 7},
                     "customizationConfig": {
-                        "protocols": {"global": {"eventStreamReadPollBudget": 0}}
+                        "protocols": {"common": {"eventStreamReadPollBudget": 0}}
                     }
                 }
                 """,
@@ -116,7 +116,7 @@ internal class EventStreamPollBudgetTest {
                 {
                     "codegen": {"eventStreamReadPollBudget": 7},
                     "customizationConfig": {
-                        "protocols": {"global": {"eventStreamReadPollBudget": null}}
+                        "protocols": {"common": {"eventStreamReadPollBudget": null}}
                     }
                 }
                 """,
@@ -125,20 +125,20 @@ internal class EventStreamPollBudgetTest {
     }
 
     @Test
-    fun `global timeout configuration supersedes the complete legacy timeout object`() {
+    fun `common timeout configuration supersedes the complete legacy timeout object`() {
         val legacy = """{"defaultNonPayload": "7s", "defaultPayload": "8s", "defaultEventStreamMessage": "9s"}"""
         val legacySettings = settings("""{"customizationConfig": {"requestBodyReadTimeouts": $legacy}}""")
         check(legacySettings.requestBodyReadTimeouts.defaultNonPayloadMillis == 7_000L)
         check(legacySettings.requestBodyReadTimeouts.defaultPayloadMillis == 8_000L)
         check(legacySettings.requestBodyReadTimeouts.defaultEventStreamMessageMillis == 9_000L)
-        for (global in listOf("{}", """{"defaultEventStreamMessage": 0}""")) {
+        for (common in listOf("{}", """{"defaultEventStreamMessage": 0}""")) {
             val effective =
                 settings(
                     """
                     {
                         "customizationConfig": {
                             "requestBodyReadTimeouts": $legacy,
-                            "protocols": {"global": {"requestBodyReadTimeouts": $global}}
+                            "protocols": {"common": {"requestBodyReadTimeouts": $common}}
                         }
                     }
                     """,
@@ -149,20 +149,20 @@ internal class EventStreamPollBudgetTest {
         }
         val unrelated =
             settings(
-                """{"customizationConfig": {"requestBodyReadTimeouts": $legacy, "protocols": {"global": {"otherSetting": true}}}}""",
+                """{"customizationConfig": {"requestBodyReadTimeouts": $legacy, "protocols": {"common": {"otherSetting": true}}}}""",
             )
         check(unrelated.requestBodyReadTimeouts.defaultEventStreamMessageMillis == 9_000L)
     }
 
     @Test
-    fun `malformed global protocol configuration is rejected`() {
+    fun `malformed common protocol configuration is rejected`() {
         for (json in listOf(
             """{"protocols": null}""",
             """{"protocols": []}""",
-            """{"protocols": {"global": true}}""",
-            """{"protocols": {"global": {"requestBodyReadTimeouts": null}}}""",
-            """{"protocols": {"global": {"requestBodyReadTimeouts": "30s"}}}""",
-            """{"protocols": {"global": {"requestBodyReadTimeouts": {"defaultEventStreamMessage": -1}}}}""",
+            """{"protocols": {"common": true}}""",
+            """{"protocols": {"common": {"requestBodyReadTimeouts": null}}}""",
+            """{"protocols": {"common": {"requestBodyReadTimeouts": "30s"}}}""",
+            """{"protocols": {"common": {"requestBodyReadTimeouts": {"defaultEventStreamMessage": -1}}}}""",
         )) {
             val error = assertThrows<CodegenException> { settings("""{"customizationConfig": $json}""") }
             check(error.message!!.contains("customizationConfig.protocols"))
@@ -170,7 +170,7 @@ internal class EventStreamPollBudgetTest {
     }
 
     private fun config(json: String): ServerRustSettings =
-        settings("""{"customizationConfig": {"protocols": {"global": $json}}}""")
+        settings("""{"customizationConfig": {"protocols": {"common": $json}}}""")
 
     private fun settings(json: String): ServerRustSettings =
         ServerRustSettings.from(

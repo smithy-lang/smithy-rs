@@ -23,10 +23,10 @@ Configure the `rust-server-codegen` plugin in `smithy-build.json`:
 {
   "customizationConfig": {
     "protocols": {
-      "global": {
+      "common": {
         "requestBodyReadTimeouts": {
-          "defaultNonPayload": "5min",
-          "defaultPayload": "1hr"
+          "defaultNonPayload": "5m",
+          "defaultPayload": "1h"
         },
         "eventStreamTimeouts": {
           "initialMessage": "10s",

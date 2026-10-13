@@ -10,9 +10,9 @@ import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
 import java.util.logging.Logger
 
-/** Shared request-read settings in the same global protocol section as the decoupled server. */
+/** Request-read settings shared by all protocols served by the generated service. */
 internal object ProtocolReadSettings {
-    const val GLOBAL_PATH = "customizationConfig.protocols.global"
+    const val COMMON_PATH = "customizationConfig.protocols.common"
     const val EVENT_STREAM_READ_POLL_BUDGET_KEY = "eventStreamReadPollBudget"
     const val DEFAULT_EVENT_STREAM_READ_POLL_BUDGET = 32
 
@@ -30,8 +30,8 @@ internal object ProtocolReadSettings {
     }
 
     /**
-     * The global value takes precedence, including explicit zero or an empty timeout object.
-     * Legacy configuration is read only when the corresponding global key is absent.
+     * The common value takes precedence, including explicit zero or an empty timeout object.
+     * Legacy configuration is read only when the corresponding common key is absent.
      */
     fun resolve(
         customizationConfig: ObjectNode?,
@@ -44,16 +44,16 @@ internal object ProtocolReadSettings {
                 customizationConfig?.getMember("protocols")?.orElse(null),
                 "customizationConfig.protocols",
             )
-        val global = expectObject(protocols?.getMember("global")?.orElse(null), GLOBAL_PATH)
-        val value = global?.getMember(key)?.orElse(null)
+        val common = expectObject(protocols?.getMember("common")?.orElse(null), COMMON_PATH)
+        val value = common?.getMember(key)?.orElse(null)
         val legacyValue = legacyConfig?.getMember(key)?.orElse(null)
         if (value != null) {
             if (legacyValue != null) {
                 Logger.getLogger("ServerRustSettings").warning(
-                    "Both `$legacyPath` and `$GLOBAL_PATH.$key` are set; using `$GLOBAL_PATH.$key`.",
+                    "Both `$legacyPath` and `$COMMON_PATH.$key` are set; using `$COMMON_PATH.$key`.",
                 )
             }
-            return value to "$GLOBAL_PATH.$key"
+            return value to "$COMMON_PATH.$key"
         }
         return legacyValue to legacyPath
     }

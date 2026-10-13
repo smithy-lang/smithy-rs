@@ -42,7 +42,7 @@ data class EventStreamTimeouts(
 
     companion object {
         const val DEFAULT_IDLE_TIMEOUT_MILLIS = 3_600_000L
-        const val CONFIG_PATH = "${ProtocolReadSettings.GLOBAL_PATH}.eventStreamTimeouts"
+        const val CONFIG_PATH = "${ProtocolReadSettings.COMMON_PATH}.eventStreamTimeouts"
 
         fun fromCustomizationConfig(
             customizationConfig: ObjectNode?,

@@ -435,7 +435,7 @@ data class ServerCodegenConfig(
                 "allowMissingUnionVariant",
                 HTTP_1X_CONFIG_KEY,
                 REQUEST_BODY_MAX_BYTES_CONFIG_KEY,
-                // Legacy path; ProtocolReadSettings reads it only when the global setting is absent.
+                // Legacy path; ProtocolReadSettings reads it only when the common setting is absent.
                 ProtocolReadSettings.EVENT_STREAM_READ_POLL_BUDGET_KEY,
                 RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY,
             )
