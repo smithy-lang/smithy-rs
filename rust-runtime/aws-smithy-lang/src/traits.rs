@@ -174,22 +174,25 @@ impl TraitCodec for Documentation {
     }
 }
 
-/// `@error`: whether the client or server is at fault.
+/// The `@error` trait: whether the client or server is at fault.
+///
+/// Named for the trait's value rather than `Error`, which would shadow
+/// [`std::error::Error`] in glob imports.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Error {
+pub enum ErrorFault {
     /// `"client"`
     Client,
     /// `"server"`
     Server,
 }
 
-impl TraitCodec for Error {
+impl TraitCodec for ErrorFault {
     const ID: &'static str = ERROR;
 
     fn from_node(value: &Node) -> Result<Self, TraitDecodeError> {
         match value.as_str() {
-            Some("client") => Ok(Error::Client),
-            Some("server") => Ok(Error::Server),
+            Some("client") => Ok(ErrorFault::Client),
+            Some("server") => Ok(ErrorFault::Server),
             _ => Err(TraitDecodeError::new(
                 r#"expected the string "client" or "server""#,
             )),
@@ -198,8 +201,8 @@ impl TraitCodec for Error {
 
     fn to_node(&self) -> Node {
         Node::from(match self {
-            Error::Client => "client",
-            Error::Server => "server",
+            ErrorFault::Client => "client",
+            ErrorFault::Server => "server",
         })
     }
 }
@@ -268,8 +271,8 @@ mod tests {
         check(Input);
         check(Output);
         check(Documentation("hi".into()));
-        check(Error::Client);
-        check(Error::Server);
+        check(ErrorFault::Client);
+        check(ErrorFault::Server);
         check(TraitDefinition::default());
         check(EnumValue::String("A".into()));
         check(EnumValue::Int(-3));
@@ -284,7 +287,7 @@ mod tests {
             err.to_string(),
             "invalid `smithy.api#documentation` trait value: expected string node but found boolean"
         );
-        assert!(decode::<Error>(Some(&Node::from("neither"))).is_err());
+        assert!(decode::<ErrorFault>(Some(&Node::from("neither"))).is_err());
         assert!(decode::<Required>(Some(&Node::Null)).is_err());
         assert!(decode::<EnumValue>(Some(&Node::from(u64::MAX))).is_err());
         assert!(decode::<Required>(None).unwrap().is_none());

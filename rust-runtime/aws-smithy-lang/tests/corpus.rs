@@ -79,7 +79,7 @@ fn corpus_inspection() {
         let service = services[0];
 
         // Every operation in the service closure resolves with structure input/output.
-        let closure: Vec<_> = Walker::new(&model).walk(*service).collect();
+        let closure: Vec<_> = Walker::new().walk(service).collect();
         assert!(closure.len() > service.operations().len(), "{name}");
         for shape in &closure {
             if let Some(operation) = shape.as_operation() {

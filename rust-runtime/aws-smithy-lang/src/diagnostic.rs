@@ -58,6 +58,9 @@ pub enum DiagnosticCode {
     InvalidTrait,
     /// A shape violates a structural rule (empty union, duplicate enum value, cycles, ...).
     InvalidShape,
+    /// An unordered set of shape references (such as service `operations`) lists the same
+    /// shape more than once.
+    DuplicateReference,
 }
 
 /// A location within a model source.
@@ -213,42 +216,101 @@ impl fmt::Display for Diagnostic {
 }
 
 /// An ordered collection of diagnostics.
+///
+/// Collections built while loading are bounded by
+/// [`ModelLoader::max_diagnostics`](crate::ModelLoader::max_diagnostics). Once the limit is
+/// reached, one final [`DiagnosticCode::ResourceLimit`] error records that further diagnostics
+/// were omitted.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct DiagnosticSet(Vec<Diagnostic>);
+pub struct DiagnosticSet {
+    diagnostics: Vec<Diagnostic>,
+    /// Maximum diagnostics recorded through `push`.
+    limit: Option<usize>,
+    /// Diagnostics recorded through `push`.
+    bounded: usize,
+    /// Number of diagnostics dropped because of `limit`.
+    omitted: usize,
+}
 
 impl DiagnosticSet {
-    pub(crate) fn push(&mut self, diagnostic: Diagnostic) {
-        self.0.push(diagnostic);
+    pub(crate) fn with_limit(limit: usize) -> Self {
+        Self {
+            limit: Some(limit),
+            ..Self::default()
+        }
     }
 
-    /// The number of diagnostics.
+    /// Records `diagnostic`, or drops it if the limit has been reached. The first dropped
+    /// diagnostic is replaced with a truncation notice so the set still reports an error.
+    pub(crate) fn push(&mut self, diagnostic: Diagnostic) {
+        match self.limit {
+            Some(limit) if self.bounded >= limit => {
+                if self.omitted == 0 {
+                    self.diagnostics.push(Diagnostic::error(
+                        DiagnosticCode::ResourceLimit,
+                        format!(
+                            "diagnostic limit of {limit} reached; further diagnostics were omitted"
+                        ),
+                        diagnostic.source,
+                    ));
+                }
+                self.omitted += 1;
+            }
+            _ => {
+                self.bounded += 1;
+                self.diagnostics.push(diagnostic);
+            }
+        }
+    }
+
+    /// Records `diagnostic` regardless of the limit. Used for the single fatal diagnostic
+    /// that explains why parsing stopped.
+    pub(crate) fn push_unbounded(&mut self, diagnostic: Diagnostic) {
+        self.diagnostics.push(diagnostic);
+    }
+
+    /// The number of retained diagnostics.
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.diagnostics.len()
     }
 
     /// Returns `true` if there are no diagnostics.
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.diagnostics.is_empty()
     }
 
-    /// Iterates all diagnostics in the order they were produced.
+    /// Iterates all retained diagnostics in the order they were produced.
     pub fn iter(&self) -> std::slice::Iter<'_, Diagnostic> {
-        self.0.iter()
+        self.diagnostics.iter()
     }
 
     /// Returns `true` if any diagnostic has [`Severity::Error`].
     pub fn has_errors(&self) -> bool {
-        self.0.iter().any(|d| d.severity == Severity::Error)
+        self.diagnostics
+            .iter()
+            .any(|d| d.severity == Severity::Error)
     }
 
     /// Iterates error diagnostics.
     pub fn errors(&self) -> impl Iterator<Item = &Diagnostic> {
-        self.0.iter().filter(|d| d.severity == Severity::Error)
+        self.diagnostics
+            .iter()
+            .filter(|d| d.severity == Severity::Error)
     }
 
     /// Returns `true` if any diagnostic has `code`.
     pub fn contains_code(&self, code: DiagnosticCode) -> bool {
-        self.0.iter().any(|d| d.code == code)
+        self.diagnostics.iter().any(|d| d.code == code)
+    }
+
+    /// Returns `true` if diagnostics were dropped because the configured limit was reached.
+    pub fn is_truncated(&self) -> bool {
+        self.omitted > 0
+    }
+
+    /// The number of diagnostics dropped because the configured limit was reached.
+    pub fn omitted(&self) -> usize {
+        self.omitted
     }
 }
 
@@ -257,7 +319,7 @@ impl<'a> IntoIterator for &'a DiagnosticSet {
     type IntoIter = std::slice::Iter<'a, Diagnostic>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.0.iter()
+        self.diagnostics.iter()
     }
 }
 

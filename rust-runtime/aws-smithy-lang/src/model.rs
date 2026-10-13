@@ -172,17 +172,19 @@ impl Model {
         self.shapes().filter(move |s| s.shape_type() == shape_type)
     }
 
-    /// Root shapes and members that have `trait_id` applied.
-    pub fn shapes_with_trait(&self, trait_id: &str) -> impl Iterator<Item = ShapeRef<'_>> + '_ {
-        let trait_id = trait_id.to_owned();
+    /// Root shapes and members that have `trait_id` (a [`ShapeId`] or `&str`) applied.
+    pub fn shapes_with_trait<'a>(
+        &'a self,
+        trait_id: &'a (impl AsRef<str> + ?Sized),
+    ) -> impl Iterator<Item = ShapeRef<'a>> + 'a {
+        let trait_id: &'a str = trait_id.as_ref();
         self.shapes().flat_map(move |shape| {
-            let root = shape.has_trait(&trait_id).then_some(ShapeRef::Shape(shape));
-            let trait_id = trait_id.clone();
+            let root = shape.has_trait(trait_id).then_some(ShapeRef::Shape(shape));
             root.into_iter().chain(
                 shape
                     .members()
                     .iter()
-                    .filter(move |m| m.has_trait(&trait_id))
+                    .filter(move |m| m.has_trait(trait_id))
                     .map(ShapeRef::Member),
             )
         })
@@ -442,6 +444,13 @@ mod tests {
             values,
             [EnumValue::String("RED"), EnumValue::String("green")]
         );
+        // RED omits @enumValue: its effective value is synthesized, its declared value absent.
+        let declared: Vec<_> = color
+            .members()
+            .iter()
+            .map(|m| m.declared_enum_value())
+            .collect();
+        assert_eq!(declared, [None, Some(EnumValue::String("green"))]);
         let level = model
             .expect_shape("ex#Level")
             .unwrap()
@@ -451,12 +460,17 @@ mod tests {
             level.member("LOW").unwrap().enum_value(),
             Some(EnumValue::Int(1))
         );
+        assert_eq!(
+            level.member("LOW").unwrap().declared_enum_value(),
+            Some(EnumValue::Int(1))
+        );
         let list = model
             .expect_shape("ex#List")
             .unwrap()
             .expect_list()
             .unwrap();
         assert_eq!(list.member().enum_value(), None);
+        assert_eq!(list.member().declared_enum_value(), None);
     }
 
     #[test]
@@ -475,8 +489,23 @@ mod tests {
         );
         let oops = model.expect_shape("ex#Oops").unwrap();
         assert_eq!(
-            oops.get_trait_as::<traits::Error>().unwrap(),
-            Some(traits::Error::Client)
+            oops.get_trait_as::<traits::ErrorFault>().unwrap(),
+            Some(traits::ErrorFault::Client)
+        );
+
+        // Trait lookup accepts a `ShapeId` as well as a string, on every view.
+        let doc_id: ShapeId = traits::DOCUMENTATION.parse().unwrap();
+        assert!(service.has_trait(&doc_id));
+        assert!(service.get_trait(doc_id.clone()).is_some());
+        assert!(service.traits().contains(&doc_id));
+        let service_view = service.expect_shape().unwrap().expect_service().unwrap();
+        assert!(service_view.has_trait(&doc_id));
+        assert_eq!(service_view.id(), service.id());
+        assert_eq!(service_view.shape_type(), ShapeType::Service);
+        assert_eq!(service_view.as_shape().id(), service.id());
+        assert_eq!(
+            model.shapes_with_trait(&doc_id).count(),
+            model.shapes_with_trait(traits::DOCUMENTATION).count()
         );
 
         let required: Vec<_> = model

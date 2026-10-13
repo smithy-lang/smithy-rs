@@ -6,28 +6,31 @@
 //! `StructuralV1` validation.
 //!
 //! The loader has already enforced the JSON AST grammar, supported version and features,
-//! absolute IDs, identifiers, and the prelude namespace (rules 1 and 2 in part). This module
-//! enforces the rest:
+//! absolute IDs, identifiers, and that user shapes do not redefine the prelude namespace. This
+//! module enforces the rest:
 //!
 //! 1. Shape IDs are case-insensitively unique across the document and prelude.
-//! 3. Every member target and kind-specific reference resolves to a root shape.
-//! 4. Members target data shapes, never services, resources, operations, members, or trait
+//! 2. Every member target and kind-specific reference resolves to a root shape, and no such
+//!    ordinary reference targets a trait definition: trait definitions can only be referenced
+//!    by applying them. (The loader also rejects repeated entries in unordered reference sets
+//!    such as service `operations`.)
+//! 3. Members target data shapes, never services, resources, operations, members, or trait
 //!    definitions.
-//! 5. An applied trait that resolves to a shape resolves to a trait definition. Missing
+//! 4. An applied trait that resolves to a shape resolves to a trait definition. Missing
 //!    definitions are errors only with `require_trait_definitions`.
-//! 6. Map keys target `string` or `enum`. (Lists and maps having their members is
+//! 5. Map keys target `string` or `enum`. (Lists and maps having their members is
 //!    guaranteed by the loader.)
-//! 7. Structure members are case-insensitively unique.
-//! 8. Unions are non-empty with case-insensitively unique members.
-//! 9. Enums and intEnums are non-empty, members target `smithy.api#Unit`, and effective
+//! 6. Structure members are case-insensitively unique.
+//! 7. Unions are non-empty with case-insensitively unique members.
+//! 8. Enums and intEnums are non-empty, members target `smithy.api#Unit`, and effective
 //!    values are valid and unique.
-//! 10. Service operations, resources, errors, and renames are valid.
-//! 11. Operation input/output target structures and errors target `@error` structures.
-//! 12. Resource identifiers, properties, lifecycle operations, operations, and children are
+//! 9. Service operations, resources, errors, and renames are valid.
+//! 10. Operation input/output target structures and errors target `@error` structures.
+//! 11. Resource identifiers, properties, lifecycle operations, operations, and children are
 //!     valid, and resource containment is acyclic.
-//! 13. `smithy.api#Unit` is only targeted by operation input/output and union, enum, and
+//! 12. `smithy.api#Unit` is only targeted by operation input/output and union, enum, and
 //!     intEnum members.
-//! 14. Member IDs belong to their containers. This holds by construction: the loader derives
+//! 13. Member IDs belong to their containers. This holds by construction: the loader derives
 //!     every member ID from its container.
 //!
 //! Only document shapes are validated. The embedded prelude is trusted, and a unit test
@@ -55,7 +58,7 @@ pub(crate) fn validate(
         document,
         prelude,
         require_trait_definitions: options.require_trait_definitions,
-        diagnostics: DiagnosticSet::default(),
+        diagnostics: DiagnosticSet::with_limit(options.max_diagnostics),
     };
     validator.shape_id_case_conflicts();
     for shape in document.shapes.values() {
@@ -127,6 +130,30 @@ impl<'a> Validator<'a> {
         target
     }
 
+    /// Resolves an ordinary (non-trait-application) reference. Trait definitions may only be
+    /// referenced by applying them, so targeting one is an error. Returns `None` if the
+    /// reference is unresolved or targets a trait definition.
+    fn ordinary_reference(
+        &mut self,
+        id: &ShapeId,
+        location: &SourceLocation,
+        what: &str,
+    ) -> Option<&'a ShapeDecl> {
+        let target = self.reference(id, location)?;
+        if target.traits.contains_key(traits::TRAIT) {
+            self.error(
+                DiagnosticCode::InvalidTarget,
+                format!(
+                    "{what} targets trait definition `{id}`; trait definitions can only be \
+                     referenced by applying them"
+                ),
+                location.clone(),
+            );
+            return None;
+        }
+        Some(target)
+    }
+
     /// Resolves a reference that must target one of `allowed`.
     fn expect(
         &mut self,
@@ -135,7 +162,7 @@ impl<'a> Validator<'a> {
         allowed: &[ShapeType],
         what: &str,
     ) -> Option<&'a ShapeDecl> {
-        let target = self.reference(id, &location)?;
+        let target = self.ordinary_reference(id, &location, what)?;
         let actual = target.shape_type();
         if allowed.contains(&actual) {
             Some(target)
@@ -274,7 +301,8 @@ impl<'a> Validator<'a> {
     fn member(&mut self, container: &ShapeDecl, member: &MemberDecl) {
         self.applied_traits(&member.traits, &member.source);
         let location = member.source.child("/target");
-        let Some(target) = self.reference(&member.target, &location) else {
+        let what = format!("member `{}`", member.id);
+        let Some(target) = self.ordinary_reference(&member.target, &location, &what) else {
             return;
         };
         let container_type = container.shape_type();
@@ -310,15 +338,6 @@ impl<'a> Validator<'a> {
                 DiagnosticCode::InvalidTarget,
                 format!(
                     "member `{}` targets {target_type} `{}`; members must target data shapes",
-                    member.id, member.target
-                ),
-                location,
-            );
-        } else if target.traits.contains_key(traits::TRAIT) {
-            self.error(
-                DiagnosticCode::InvalidTarget,
-                format!(
-                    "member `{}` targets trait definition `{}`; members cannot target traits",
                     member.id, member.target
                 ),
                 location,
@@ -512,7 +531,8 @@ impl<'a> Validator<'a> {
                 "/properties/{}/target",
                 escape_pointer_token(name)
             ));
-            let Some(target) = self.reference(id, &location) else {
+            let what = format!("resource property `{name}`");
+            let Some(target) = self.ordinary_reference(id, &location, &what) else {
                 continue;
             };
             if !is_data_shape(target.shape_type()) || id == unit_id() {
@@ -672,6 +692,22 @@ mod tests {
     }
 
     #[test]
+    fn underscore_digit_identifiers_are_valid_everywhere() {
+        // `IdentifierStart = (1*"_" (ALPHA / DIGIT)) / ALPHA`: namespaces, shape names, member
+        // names, resource identifier/property names, and rename values may all be `_1`-style.
+        let json = r#"{"smithy":"2.0","shapes":{
+            "_1.a#_2":{"type":"structure","members":{"_3":{"target":"smithy.api#String"},
+                       "__4x":{"target":"smithy.api#Integer"}}},
+            "_1.a#Svc":{"type":"service","resources":[{"target":"_1.a#R"}],"rename":{"_1.a#_2":"_5"}},
+            "_1.a#R":{"type":"resource","identifiers":{"_6":{"target":"smithy.api#String"}},
+                      "properties":{"_7":{"target":"_1.a#_2"}}}
+        }}"#;
+        let model = ModelLoader::new().load_str("t.json", json).unwrap();
+        let shape = model.expect_shape("_1.a#_2$_3").unwrap();
+        assert_eq!(shape.id().member(), Some("_3"));
+    }
+
+    #[test]
     fn unresolved_and_member_references() {
         assert_eq!(
             check(r#""a#S":{"type":"structure","members":{"m":{"target":"a#Missing"}}}"#),
@@ -733,6 +769,78 @@ mod tests {
             check_with(ModelLoader::new().require_trait_definitions(true), unknown),
             one(InvalidTrait, "/shapes/a#S/traits/x#unknown")
         );
+    }
+
+    #[test]
+    fn ordinary_references_cannot_target_trait_definitions() {
+        // Each trait definition has an otherwise-valid kind for the position referencing it.
+        let defs = r#"
+            "a#TStr":{"type":"string","traits":{"smithy.api#trait":{}}},
+            "a#TStruct":{"type":"structure","traits":{"smithy.api#trait":{}}},
+            "a#TErr":{"type":"structure","traits":{"smithy.api#trait":{},"smithy.api#error":"client"}},
+            "a#TOp":{"type":"operation","traits":{"smithy.api#trait":{}}},
+            "a#TRes":{"type":"resource","traits":{"smithy.api#trait":{}}}
+        "#;
+        let cases = [
+            (
+                r#""a#L":{"type":"list","member":{"target":"a#TStr"}}"#,
+                "/shapes/a#L/member/target",
+            ),
+            (
+                r#""a#Op":{"type":"operation","input":{"target":"a#TStruct"}}"#,
+                "/shapes/a#Op/input/target",
+            ),
+            (
+                r#""a#Op":{"type":"operation","output":{"target":"a#TStruct"}}"#,
+                "/shapes/a#Op/output/target",
+            ),
+            (
+                r#""a#Op":{"type":"operation","errors":[{"target":"a#TErr"}]}"#,
+                "/shapes/a#Op/errors/0/target",
+            ),
+            (
+                r#""a#Svc":{"type":"service","errors":[{"target":"a#TErr"}]}"#,
+                "/shapes/a#Svc/errors/0/target",
+            ),
+            (
+                r#""a#Svc":{"type":"service","operations":[{"target":"a#TOp"}]}"#,
+                "/shapes/a#Svc/operations/0/target",
+            ),
+            (
+                r#""a#Svc":{"type":"service","resources":[{"target":"a#TRes"}]}"#,
+                "/shapes/a#Svc/resources/0/target",
+            ),
+            (
+                r#""a#R":{"type":"resource","identifiers":{"id":{"target":"a#TStr"}}}"#,
+                "/shapes/a#R/identifiers/id/target",
+            ),
+            (
+                r#""a#R":{"type":"resource","properties":{"p":{"target":"a#TStruct"}}}"#,
+                "/shapes/a#R/properties/p/target",
+            ),
+            (
+                r#""a#R":{"type":"resource","read":{"target":"a#TOp"}}"#,
+                "/shapes/a#R/read/target",
+            ),
+            (
+                r#""a#R":{"type":"resource","operations":[{"target":"a#TOp"}]}"#,
+                "/shapes/a#R/operations/0/target",
+            ),
+            (
+                r#""a#R":{"type":"resource","resources":[{"target":"a#TRes"}]}"#,
+                "/shapes/a#R/resources/0/target",
+            ),
+        ];
+        for (shape, pointer) in cases {
+            assert_eq!(
+                check(&format!("{defs},{shape}")),
+                one(InvalidTarget, pointer),
+                "{shape}"
+            );
+        }
+        // Applying the definitions is the permitted way to reference them.
+        let applied = r#""a#S":{"type":"string","traits":{"a#TStr":"x","a#TStruct":{}}}"#;
+        assert_eq!(check(&format!("{defs},{applied}")), []);
     }
 
     #[test]

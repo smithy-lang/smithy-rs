@@ -45,7 +45,7 @@ use crate::shape_id::ShapeId;
 use indexmap::IndexMap;
 use serde::de::{self, DeserializeSeed, MapAccess, Visitor};
 use std::cell::RefCell;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::io::Read;
 use std::path::Path;
@@ -56,8 +56,16 @@ pub(crate) const MIXIN_TRAIT: &str = "smithy.api#mixin";
 
 const DEFAULT_MAX_INPUT_BYTES: u64 = 256 * 1024 * 1024;
 const DEFAULT_MAX_SHAPES: usize = 1_000_000;
-// Below serde_json's own recursion limit (128) so the configured limit is what fires.
-const DEFAULT_MAX_DEPTH: usize = 100;
+/// The deepest document nesting the loader supports.
+///
+/// Depth counts every object and array from the document root. serde_json's own recursion
+/// guard stops at 128; keeping the configured limit at or below this value guarantees the
+/// loader's limit fires first, so deep input is always reported as `ResourceLimit` rather than
+/// as a JSON syntax error.
+pub(crate) const MAX_SUPPORTED_DEPTH: usize = 100;
+const DEFAULT_MAX_DEPTH: usize = MAX_SUPPORTED_DEPTH;
+/// Far above anything a real model produces, but bounds memory for adversarial input.
+const DEFAULT_MAX_DIAGNOSTICS: usize = 1_000;
 
 /// Options for loading a model.
 ///
@@ -70,6 +78,7 @@ pub struct ModelLoader {
     pub(crate) max_input_bytes: u64,
     pub(crate) max_shapes: usize,
     pub(crate) max_depth: usize,
+    pub(crate) max_diagnostics: usize,
 }
 
 impl Default for ModelLoader {
@@ -80,6 +89,7 @@ impl Default for ModelLoader {
             max_input_bytes: DEFAULT_MAX_INPUT_BYTES,
             max_shapes: DEFAULT_MAX_SHAPES,
             max_depth: DEFAULT_MAX_DEPTH,
+            max_diagnostics: DEFAULT_MAX_DIAGNOSTICS,
         }
     }
 }
@@ -115,9 +125,24 @@ impl ModelLoader {
         self
     }
 
-    /// The maximum JSON nesting depth.
+    /// The maximum JSON nesting depth of the document, counting every object and array from
+    /// the root.
+    ///
+    /// Values above the supported maximum of 100 are clamped to it, because deeper input would
+    /// otherwise be rejected by serde_json's recursion guard (128) as a JSON syntax error
+    /// instead of a [`ResourceLimit`](crate::diagnostic::DiagnosticCode::ResourceLimit).
     pub fn max_depth(mut self, max: usize) -> Self {
-        self.max_depth = max;
+        self.max_depth = max.min(MAX_SUPPORTED_DEPTH);
+        self
+    }
+
+    /// The maximum number of diagnostics to collect from one load.
+    ///
+    /// Further diagnostics are dropped and replaced by a single
+    /// [`ResourceLimit`](crate::diagnostic::DiagnosticCode::ResourceLimit) error; see
+    /// [`DiagnosticSet::is_truncated`]. Loading still fails when the limit is reached.
+    pub fn max_diagnostics(mut self, max: usize) -> Self {
+        self.max_diagnostics = max;
         self
     }
 
@@ -195,7 +220,7 @@ impl ModelLoader {
             options: self,
             source: source.clone(),
             ctx: ParseContext::new(self.max_depth),
-            diagnostics: RefCell::default(),
+            diagnostics: RefCell::new(DiagnosticSet::with_limit(self.max_diagnostics)),
             interner: RefCell::default(),
             version: RefCell::default(),
             document: RefCell::default(),
@@ -225,7 +250,7 @@ impl ModelLoader {
                 }
                 None => (DiagnosticCode::JsonSyntax, err.to_string()),
             };
-            diagnostics.push(Diagnostic::error(code, message, Some(location)));
+            diagnostics.push_unbounded(Diagnostic::error(code, message, Some(location)));
             return Err(match abort {
                 Some(ParseAbort::DepthLimit(_) | ParseAbort::ShapeLimit(_)) => {
                     LoadError::resource_limit(diagnostics)
@@ -411,12 +436,33 @@ impl State<'_> {
             );
             return None;
         };
-        let refs: Vec<_> = elements
-            .iter()
-            .enumerate()
-            .map(|(i, element)| self.shape_ref(element, location.child(&format!("/{i}"))))
-            .collect();
-        refs.into_iter().collect()
+        let mut ok = true;
+        let mut refs: Vec<ShapeId> = Vec::with_capacity(elements.len());
+        let mut first_index: HashMap<ShapeId, usize> = HashMap::with_capacity(elements.len());
+        for (i, element) in elements.iter().enumerate() {
+            let element_location = location.child(&format!("/{i}"));
+            let Some(id) = self.shape_ref(element, element_location.clone()) else {
+                ok = false;
+                continue;
+            };
+            // These lists are unordered sets in Smithy; a repeated entry is a modeling error,
+            // not something to normalize silently.
+            if let Some(&first) = first_index.get(&id) {
+                self.diagnostics.borrow_mut().push(
+                    Diagnostic::error(
+                        DiagnosticCode::DuplicateReference,
+                        format!("`{key}` lists `{id}` more than once"),
+                        Some(element_location),
+                    )
+                    .with_related(location.child(&format!("/{first}"))),
+                );
+                ok = false;
+                continue;
+            }
+            first_index.insert(id.clone(), i);
+            refs.push(id);
+        }
+        ok.then_some(refs)
     }
 
     /// An object of identifier names to shape references (resource identifiers/properties).
@@ -1024,6 +1070,43 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_reference_set_entries() {
+        let cases = [
+            ("service", "operations"),
+            ("service", "resources"),
+            ("service", "errors"),
+            ("operation", "errors"),
+            ("resource", "operations"),
+            ("resource", "collectionOperations"),
+            ("resource", "resources"),
+        ];
+        for (kind, key) in cases {
+            let json = doc(&format!(
+                r#""a#S":{{"type":"{kind}","{key}":[{{"target":"a#X"}},{{"target":"a#Y"}},{{"target":"a#X"}}]}}"#
+            ));
+            let err = parse(&json).unwrap_err();
+            assert!(err.is_invalid_model(), "{kind} {key}");
+            assert_eq!(
+                codes(&err),
+                [DiagnosticCode::DuplicateReference],
+                "{kind} {key}"
+            );
+            assert_eq!(pointers(&err), [format!("/shapes/a#S/{key}/2")]);
+            let diagnostic = err.diagnostics().iter().next().unwrap();
+            let related: Vec<_> = diagnostic
+                .related()
+                .iter()
+                .filter_map(|l| l.pointer())
+                .collect();
+            assert_eq!(related, [format!("/shapes/a#S/{key}/0")]);
+        }
+        // Distinct entries are fine.
+        let json =
+            doc(r#""a#S":{"type":"operation","errors":[{"target":"a#X"},{"target":"a#Y"}]}"#);
+        assert!(parse(&json).is_ok());
+    }
+
+    #[test]
     fn duplicate_keys() {
         for json in [
             r#"{"smithy":"2.0","smithy":"2.0"}"#.to_string(),
@@ -1196,6 +1279,89 @@ mod tests {
             .is_resource_limit());
         let exact = ModelLoader::new().max_input_bytes(two.len() as u64);
         assert!(exact.parse_reader("t", two.as_bytes()).is_ok());
+    }
+
+    #[test]
+    fn depth_limit_is_always_a_resource_limit() {
+        // Depth counts every container from the root: the document and `metadata` objects are
+        // two levels, so `arrays` nested arrays reach a total depth of `arrays + 2`.
+        let metadata = |arrays: usize| {
+            format!(
+                r#"{{"smithy":"2.0","metadata":{{"x":{}0{}}}}}"#,
+                "[".repeat(arrays),
+                "]".repeat(arrays)
+            )
+        };
+        let member_trait = |arrays: usize| {
+            doc(&format!(
+                r#""a#S":{{"type":"structure","members":{{"m":{{"target":"a#S","traits":{{"a#t":{}0{}}}}}}}}}"#,
+                "[".repeat(arrays),
+                "]".repeat(arrays)
+            ))
+        };
+        assert!(parse(&metadata(MAX_SUPPORTED_DEPTH - 2)).is_ok());
+        assert!(parse(&metadata(MAX_SUPPORTED_DEPTH - 1))
+            .unwrap_err()
+            .is_resource_limit());
+        // Before clamping, a large configured limit let serde_json's recursion guard (128)
+        // fire first, misreporting the input as a JSON syntax error.
+        for loader in [ModelLoader::new(), ModelLoader::new().max_depth(1000)] {
+            for input in [metadata(200), member_trait(126), member_trait(200)] {
+                let err = loader.parse_str("t", &input).unwrap_err();
+                assert!(err.is_resource_limit(), "{err}");
+                assert_eq!(codes(&err), [DiagnosticCode::ResourceLimit]);
+            }
+        }
+        let shallow = ModelLoader::new().max_depth(4);
+        assert!(shallow.parse_str("t", &metadata(2)).is_ok());
+        assert!(shallow
+            .parse_str("t", &metadata(3))
+            .unwrap_err()
+            .is_resource_limit());
+    }
+
+    #[test]
+    fn diagnostics_are_bounded() {
+        // Each shape has an invalid ID, producing one diagnostic per shape.
+        let shapes: Vec<_> = (0..50)
+            .map(|i| format!(r#""bad{i}":{{"type":"string"}}"#))
+            .collect();
+        let json = doc(&shapes.join(","));
+        let err = parse(&json).unwrap_err();
+        assert_eq!(err.diagnostics().len(), 50);
+        assert!(!err.diagnostics().is_truncated());
+
+        let err = ModelLoader::new()
+            .max_diagnostics(10)
+            .parse_str("t", &json)
+            .unwrap_err();
+        let diagnostics = err.diagnostics();
+        assert_eq!(diagnostics.len(), 11);
+        assert!(diagnostics.is_truncated());
+        assert_eq!(diagnostics.omitted(), 40);
+        assert_eq!(
+            diagnostics.iter().last().unwrap().code(),
+            DiagnosticCode::ResourceLimit
+        );
+        assert!(err.is_invalid_model());
+
+        // Validation diagnostics are bounded too, and any error still means no model.
+        let refs: Vec<_> = (0..50)
+            .map(|i| format!(r#""a#S{i}":{{"type":"list","member":{{"target":"a#Missing"}}}}"#))
+            .collect();
+        let err = ModelLoader::new()
+            .max_diagnostics(5)
+            .load_str("t", &doc(&refs.join(",")))
+            .unwrap_err();
+        assert_eq!(err.diagnostics().len(), 6);
+        assert!(err.diagnostics().is_truncated());
+
+        // Even a zero limit reports why loading failed.
+        let err = ModelLoader::new()
+            .max_diagnostics(0)
+            .parse_str("t", &json)
+            .unwrap_err();
+        assert_eq!(codes(&err), [DiagnosticCode::ResourceLimit]);
     }
 
     #[test]

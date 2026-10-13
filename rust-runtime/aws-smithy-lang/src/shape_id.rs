@@ -153,16 +153,28 @@ impl ShapeId {
     }
 }
 
-/// `identifier = *"_" ALPHA *(ALPHA / DIGIT / "_")`
+/// Smithy identifier grammar (https://smithy.io/2.0/spec/model.html#shape-id-abnf):
+///
+/// ```text
+/// Identifier      = IdentifierStart *IdentifierChars
+/// IdentifierStart = (1*"_" (ALPHA / DIGIT)) / ALPHA
+/// IdentifierChars = ALPHA / DIGIT / "_"
+/// ```
+///
+/// A digit may follow one or more leading underscores (`_1`), but an identifier without
+/// leading underscores must start with a letter.
 fn is_valid_identifier(value: &str) -> bool {
     let bytes = value.as_bytes();
-    let start = bytes.iter().take_while(|b| **b == b'_').count();
-    match bytes.get(start) {
-        Some(b) if b.is_ascii_alphabetic() => bytes[start + 1..]
-            .iter()
-            .all(|b| b.is_ascii_alphanumeric() || *b == b'_'),
+    let underscores = bytes.iter().take_while(|b| **b == b'_').count();
+    let starts_ok = match bytes.get(underscores) {
+        Some(b) if b.is_ascii_alphabetic() => true,
+        Some(b) if b.is_ascii_digit() => underscores > 0,
         _ => false,
-    }
+    };
+    starts_ok
+        && bytes[underscores + 1..]
+            .iter()
+            .all(|b| b.is_ascii_alphanumeric() || *b == b'_')
 }
 
 fn is_valid_namespace(value: &str) -> bool {
@@ -298,19 +310,108 @@ mod tests {
 
     #[test]
     fn grammar() {
-        for ok in ["a#B", "__a.b_1#_C2", "a.b.c#D$e", "A#a$_x1"] {
+        for ok in [
+            "a#B",
+            "__a.b_1#_C2",
+            "a.b.c#D$e",
+            "A#a$_x1",
+            "a#B$_1x",
+            "a#_1",
+            "_1.a#B",
+            "a#B$_1",
+            "a#_0foo",
+            "a#__2x",
+            "_9._8#__7$_6",
+        ] {
             assert!(ShapeId::new(ok).is_ok(), "{ok}");
         }
         for bad in [
             "", "#A", "a#", "a#B$", "a#$b", "a.#B", ".a#B", "a..b#C", "1a#B", "a#1B", "a#_",
-            "a#B$c$d", "a#B#C", "a#B c", "a#B$_1x", "a#B-c", "a#Bé", "a", "a#B$1",
+            "a#__", "a#B$c$d", "a#B#C", "a#B c", "a#B-c", "a#Bé", "a", "a#B$1", "a#B$_", "a#B$_-",
+            "1.a#B",
         ] {
             assert!(ShapeId::new(bad).is_err(), "{bad}");
         }
+        assert!(ShapeId::is_valid_identifier("_1"));
+        assert!(!ShapeId::is_valid_identifier("1"));
+        assert!(ShapeId::is_valid_namespace("_1.a"));
         assert!(ShapeId::from_parts("a", "B", Some("c")).is_ok());
         assert!(ShapeId::from_parts("a", "B#", None).is_err());
         assert_eq!(ShapeId::from_relative("a.b", "C").unwrap(), "a.b#C");
         assert_eq!(ShapeId::from_relative("a.b", "x#C").unwrap(), "x#C");
+    }
+
+    mod properties {
+        use super::*;
+        use proptest::prelude::*;
+        use std::collections::hash_map::DefaultHasher;
+
+        /// Independent transcription of the Smithy ABNF used as an oracle.
+        fn abnf_identifier(value: &str) -> bool {
+            let chars: Vec<char> = value.chars().collect();
+            let mut i = 0;
+            while i < chars.len() && chars[i] == '_' {
+                i += 1;
+            }
+            let start = match chars.get(i) {
+                Some(c) if c.is_ascii_alphabetic() => true,
+                Some(c) if c.is_ascii_digit() => i > 0,
+                _ => false,
+            };
+            start
+                && chars[i + 1..]
+                    .iter()
+                    .all(|c| c.is_ascii_alphanumeric() || *c == '_')
+        }
+
+        fn identifier() -> impl Strategy<Value = String> {
+            prop_oneof![
+                "[A-Za-z][A-Za-z0-9_]{0,8}",
+                "_{1,3}[A-Za-z0-9][A-Za-z0-9_]{0,8}",
+            ]
+        }
+
+        fn namespace() -> impl Strategy<Value = String> {
+            prop::collection::vec(identifier(), 1..4).prop_map(|parts| parts.join("."))
+        }
+
+        fn hash_of<T: Hash + ?Sized>(value: &T) -> u64 {
+            let mut hasher = DefaultHasher::new();
+            value.hash(&mut hasher);
+            hasher.finish()
+        }
+
+        proptest! {
+            #[test]
+            fn identifier_matches_abnf(value in "[A-Za-z0-9_.#$ -]{0,10}") {
+                prop_assert_eq!(is_valid_identifier(&value), abnf_identifier(&value));
+            }
+
+            #[test]
+            fn generated_ids_round_trip(
+                ns in namespace(),
+                name in identifier(),
+                member in prop::option::of(identifier()),
+            ) {
+                let text = match &member {
+                    Some(m) => format!("{ns}#{name}${m}"),
+                    None => format!("{ns}#{name}"),
+                };
+                let id = ShapeId::new(&text).unwrap();
+                prop_assert_eq!(id.to_string(), text.clone());
+                prop_assert_eq!(id.namespace(), ns.as_str());
+                prop_assert_eq!(id.name(), name.as_str());
+                prop_assert_eq!(id.member(), member.as_deref());
+                prop_assert_eq!(&ShapeId::from_parts(&ns, &name, member.as_deref()).unwrap(), &id);
+                let reparsed: ShapeId = id.to_string().parse().unwrap();
+                prop_assert_eq!(&reparsed, &id);
+                // `Borrow<str>` requires hashing identically to the borrowed string.
+                prop_assert_eq!(hash_of(&id), hash_of(text.as_str()));
+                let mut map = HashMap::new();
+                map.insert(id.clone(), ());
+                prop_assert!(map.contains_key(text.as_str()));
+            }
+        }
     }
 
     #[test]

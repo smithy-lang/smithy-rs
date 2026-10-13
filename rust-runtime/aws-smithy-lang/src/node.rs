@@ -166,6 +166,20 @@ impl Node {
             _ => {}
         }
     }
+
+    /// Serializes this node as compact JSON, keeping object keys in insertion order.
+    ///
+    /// Numbers use their canonical spelling (`1e2` is written as `100.0`). Call
+    /// [`with_sorted_keys`](Self::with_sorted_keys) first for output independent of key order.
+    pub fn to_json_string(&self) -> String {
+        // Infallible: keys are strings and numbers are finite.
+        serde_json::to_string(&NodeSer(self)).expect("nodes always serialize")
+    }
+
+    /// Serializes this node as indented JSON. See [`to_json_string`](Self::to_json_string).
+    pub fn to_json_string_pretty(&self) -> String {
+        serde_json::to_string_pretty(&NodeSer(self)).expect("nodes always serialize")
+    }
 }
 
 fn unescape_pointer_token(token: &str) -> Option<String> {
@@ -525,11 +539,66 @@ pub(crate) enum ParseAbort {
     ShapeLimit(usize),
 }
 
+/// Map key serde_json uses to tunnel numbers through `visit_map` when its additive
+/// `arbitrary_precision` feature is enabled anywhere in the dependency graph.
+const ARBITRARY_PRECISION_TOKEN: &str = "$serde_json::private::Number";
+
+/// Returns `true` if serde_json was compiled with `arbitrary_precision`.
+///
+/// Cargo feature unification means a downstream crate can enable that feature without this
+/// crate's knowledge. In that mode serde_json reports every non-integer number, and every integer
+/// outside `i64`/`u64`, as a one-entry map keyed by [`ARBITRARY_PRECISION_TOKEN`]. Detecting the
+/// mode lets the node parser decode those numbers while still treating an object that merely
+/// uses that key as an ordinary object when the feature is off.
+fn serde_json_arbitrary_precision() -> bool {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        struct Probe;
+        impl<'de> Visitor<'de> for Probe {
+            type Value = bool;
+            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("a number")
+            }
+            fn visit_f64<E>(self, _: f64) -> Result<bool, E> {
+                Ok(false)
+            }
+            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<bool, A::Error> {
+                // Drain the entry so the deserializer stays consistent.
+                while map.next_entry::<String, String>()?.is_some() {}
+                Ok(true)
+            }
+        }
+        let mut de = serde_json::Deserializer::from_str("0.5");
+        de::Deserializer::deserialize_any(&mut de, Probe).unwrap_or(false)
+    })
+}
+
+/// Converts the textual number serde_json reports in `arbitrary_precision` mode into a
+/// [`Number`] with the same representation the default build would have produced: exact
+/// `i64`/`u64` integers where they fit, otherwise a finite `f64`.
+fn parse_number_text<E: de::Error>(text: &str) -> Result<Number, E> {
+    let is_integer = !text.contains(['.', 'e', 'E']);
+    if is_integer {
+        if let Ok(value) = text.parse::<u64>() {
+            return Ok(Number::from(value));
+        }
+        if let Ok(value) = text.parse::<i64>() {
+            return Ok(Number::from(value));
+        }
+    }
+    text.parse::<f64>()
+        .ok()
+        .and_then(Number::from_f64)
+        .ok_or_else(|| E::custom("number out of range"))
+}
+
 /// Shared state for one parse: limits and the first structural abort reason.
 #[derive(Debug)]
 pub(crate) struct ParseContext {
     pub(crate) max_depth: usize,
     pub(crate) abort: RefCell<Option<ParseAbort>>,
+    /// Whether maps keyed by [`ARBITRARY_PRECISION_TOKEN`] are serde_json numbers.
+    arbitrary_precision: bool,
 }
 
 impl ParseContext {
@@ -537,6 +606,7 @@ impl ParseContext {
         Self {
             max_depth,
             abort: RefCell::new(None),
+            arbitrary_precision: serde_json_arbitrary_precision(),
         }
     }
 
@@ -624,14 +694,26 @@ impl<'de> Visitor<'de> for NodeSeed<'_> {
     }
 
     fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Node, A::Error> {
+        let Some(first) = map.next_key::<String>()? else {
+            self.child::<A::Error>()?;
+            return Ok(Node::Object(NodeObject::default()));
+        };
+        if self.ctx.arbitrary_precision && first == ARBITRARY_PRECISION_TOKEN {
+            // serde_json's arbitrary_precision number protocol: one entry holding the number's
+            // source text. This is a scalar, so it does not count toward the depth limit.
+            let text = map.next_value::<String>()?;
+            return parse_number_text(&text).map(Node::Number);
+        }
         let child = self.child()?;
         let mut out = IndexMap::new();
-        while let Some(key) = map.next_key::<String>()? {
-            if out.contains_key(&key) {
-                return Err(self.ctx.fail(ParseAbort::DuplicateKey(key)));
+        let mut key = Some(first);
+        while let Some(k) = key {
+            if out.contains_key(&k) {
+                return Err(self.ctx.fail(ParseAbort::DuplicateKey(k)));
             }
             let value = map.next_value_seed(NodeSeed { ..child })?;
-            out.insert(key, value);
+            out.insert(k, value);
+            key = map.next_key::<String>()?;
         }
         Ok(Node::Object(NodeObject(out)))
     }
@@ -681,14 +763,65 @@ mod tests {
         let min = parse_node(&i64::MIN.to_string()).unwrap();
         assert_eq!(min.as_number().unwrap().as_i64(), Some(i64::MIN));
         assert!(parse_node("1e999").is_err());
-        assert_eq!(parse_node("1e2").unwrap().to_string_json(), "100.0");
-        assert_eq!(parse_node("-5").unwrap().to_string_json(), "-5");
+        assert_eq!(parse_node("1e2").unwrap().to_json_string(), "100.0");
+        assert_eq!(parse_node("-5").unwrap().to_json_string(), "-5");
     }
 
-    impl Node {
-        fn to_string_json(&self) -> String {
-            serde_json::to_string(&NodeSer(self)).unwrap()
+    /// Feeds `entries` to the node visitor as a map, as serde_json does for numbers when its
+    /// `arbitrary_precision` feature is unified into the build.
+    fn visit_token_map(
+        arbitrary_precision: bool,
+        entries: &[(&str, &str)],
+    ) -> Result<Node, String> {
+        let mut ctx = ParseContext::new(64);
+        ctx.arbitrary_precision = arbitrary_precision;
+        let map = de::value::MapDeserializer::<_, de::value::Error>::new(
+            entries.iter().map(|(k, v)| (k.to_string(), v.to_string())),
+        );
+        NodeSeed {
+            ctx: &ctx,
+            depth: 0,
         }
+        .visit_map(map)
+        .map_err(|e| e.to_string())
+    }
+
+    #[test]
+    fn arbitrary_precision_numbers_are_numbers() {
+        let token = ARBITRARY_PRECISION_TOKEN;
+        let number = |text: &str| visit_token_map(true, &[(token, text)]).unwrap();
+        // In range integers stay exact; out-of-range integers become f64 like the default build.
+        assert_eq!(number("42"), Node::from(42i64));
+        assert_eq!(number("-42"), Node::from(-42i64));
+        let big = number("18446744073709551616");
+        assert!(big.as_number().unwrap().is_float(), "{big:?}");
+        assert_eq!(big.to_json_string(), "1.8446744073709552e19");
+        assert_eq!(
+            number("-9223372036854775809").as_number().unwrap().as_f64(),
+            -9.223372036854776e18
+        );
+        assert_eq!(number("1.5"), parse_node("1.5").unwrap());
+        assert_eq!(number("1e2"), parse_node("1e2").unwrap());
+        assert_eq!(number("-0.0"), parse_node("0.0").unwrap());
+        assert!(visit_token_map(true, &[(token, "1e999")]).is_err());
+    }
+
+    #[test]
+    fn arbitrary_precision_token_is_an_ordinary_key_when_feature_is_off() {
+        let token = ARBITRARY_PRECISION_TOKEN;
+        let node = visit_token_map(false, &[(token, "1")]).unwrap();
+        assert_eq!(node.as_object().unwrap().get(token), Some(&Node::from("1")));
+        // With the feature on, a token key that is not first is still an ordinary key.
+        let node = visit_token_map(true, &[("a", "1"), (token, "2")]).unwrap();
+        assert_eq!(node.as_object().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn large_integers_follow_the_f64_policy_in_any_feature_state() {
+        // Passes whether or not `arbitrary_precision` is unified into this build.
+        let big = parse_node("18446744073709551616").unwrap();
+        assert!(big.as_number().unwrap().is_float(), "{big:?}");
+        assert!(parse_node("1.5").unwrap().as_number().unwrap().is_float());
     }
 
     #[test]
@@ -729,7 +862,7 @@ mod tests {
         assert_eq!(hash_of(&a), hash_of(&b));
         assert_ne!(a, c);
         assert_eq!(
-            b.with_sorted_keys().to_string_json(),
+            b.with_sorted_keys().to_json_string(),
             r#"{"a":1,"b":[1,2]}"#
         );
     }
@@ -769,8 +902,9 @@ mod tests {
     proptest! {
         #[test]
         fn json_round_trip(node in arb_node()) {
-            let json = serde_json::to_string(&NodeSer(&node)).unwrap();
+            let json = node.to_json_string();
             let back = parse_node(&json).unwrap();
+            prop_assert_eq!(&parse_node(&node.to_json_string_pretty()).unwrap(), &node);
             prop_assert_eq!(&back, &node);
             prop_assert_eq!(hash_of(&back), hash_of(&node));
         }

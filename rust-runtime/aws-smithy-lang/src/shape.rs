@@ -61,7 +61,10 @@ pub enum ShapeType {
 
 impl ShapeType {
     /// Every shape type, in declaration order.
-    pub const ALL: [ShapeType; 23] = [
+    ///
+    /// Note: This is a slice rather than an array so that adding a variant
+    /// to this `#[non_exhaustive]` enum does not change the constant's type.
+    pub const ALL: &'static [ShapeType] = &[
         ShapeType::Blob,
         ShapeType::Boolean,
         ShapeType::Document,
@@ -231,14 +234,14 @@ impl<'a> Traits<'a> {
         self.map.is_empty()
     }
 
-    /// The value of a trait, by absolute shape ID.
-    pub fn get(&self, id: &str) -> Option<&'a Node> {
-        self.map.get(id)
+    /// The value of a trait, by absolute shape ID (a [`ShapeId`] or `&str`).
+    pub fn get(&self, id: impl AsRef<str>) -> Option<&'a Node> {
+        self.map.get(id.as_ref())
     }
 
     /// Returns `true` if the trait is applied.
-    pub fn contains(&self, id: &str) -> bool {
-        self.map.contains_key(id)
+    pub fn contains(&self, id: impl AsRef<str>) -> bool {
+        self.map.contains_key(id.as_ref())
     }
 
     /// Decodes a trait with a [`TraitCodec`]. Returns `Ok(None)` if the trait is not applied.
@@ -328,14 +331,14 @@ impl<'a> ShapeView<'a> {
         }
     }
 
-    /// The value of a trait, by absolute shape ID.
-    pub fn get_trait(&self, id: &str) -> Option<&'a Node> {
-        self.decl.traits.get(id)
+    /// The value of a trait, by absolute shape ID (a [`ShapeId`] or `&str`).
+    pub fn get_trait(&self, id: impl AsRef<str>) -> Option<&'a Node> {
+        self.decl.traits.get(id.as_ref())
     }
 
     /// Returns `true` if the trait is applied.
-    pub fn has_trait(&self, id: &str) -> bool {
-        self.decl.traits.contains_key(id)
+    pub fn has_trait(&self, id: impl AsRef<str>) -> bool {
+        self.decl.traits.contains_key(id.as_ref())
     }
 
     /// Decodes a trait with a [`TraitCodec`]. Returns `Ok(None)` if the trait is not applied.
@@ -502,14 +505,14 @@ impl<'a> MemberView<'a> {
         }
     }
 
-    /// The value of a trait, by absolute shape ID.
-    pub fn get_trait(&self, id: &str) -> Option<&'a Node> {
-        self.decl.traits.get(id)
+    /// The value of a trait, by absolute shape ID (a [`ShapeId`] or `&str`).
+    pub fn get_trait(&self, id: impl AsRef<str>) -> Option<&'a Node> {
+        self.decl.traits.get(id.as_ref())
     }
 
     /// Returns `true` if the trait is applied.
-    pub fn has_trait(&self, id: &str) -> bool {
-        self.decl.traits.contains_key(id)
+    pub fn has_trait(&self, id: impl AsRef<str>) -> bool {
+        self.decl.traits.contains_key(id.as_ref())
     }
 
     /// Decodes a trait with a [`TraitCodec`]. Returns `Ok(None)` if the trait is not applied.
@@ -523,6 +526,9 @@ impl<'a> MemberView<'a> {
     }
 
     /// The effective enum value for `enum` and `intEnum` members; `None` for other members.
+    ///
+    /// An `enum` member that omits `@enumValue` has its member name as its effective value. Use
+    /// [`declared_enum_value`](Self::declared_enum_value) to see what was actually written.
     pub fn enum_value(&self) -> Option<EnumValue<'a>> {
         let explicit = self.get_trait(traits::ENUM_VALUE);
         match self.container.kind {
@@ -531,6 +537,19 @@ impl<'a> MemberView<'a> {
                 None => Some(EnumValue::String(self.name())),
             },
             DeclKind::IntEnum(_) => explicit?.as_number()?.as_i64().map(EnumValue::Int),
+            _ => None,
+        }
+    }
+
+    /// The explicitly declared `@enumValue` of an `enum` or `intEnum` member, or `None` if it
+    /// was omitted or this is not an enum member. Unlike [`enum_value`](Self::enum_value), an
+    /// omitted `enum` value is not synthesized from the member name.
+    pub fn declared_enum_value(&self) -> Option<EnumValue<'a>> {
+        match self.container.kind {
+            DeclKind::Enum(_) | DeclKind::IntEnum(_) => {
+                self.get_trait(traits::ENUM_VALUE)?;
+                self.enum_value()
+            }
             _ => None,
         }
     }
@@ -607,13 +626,13 @@ impl<'a> ShapeRef<'a> {
         }
     }
 
-    /// The value of a trait, by absolute shape ID.
-    pub fn get_trait(&self, id: &str) -> Option<&'a Node> {
+    /// The value of a trait, by absolute shape ID (a [`ShapeId`] or `&str`).
+    pub fn get_trait(&self, id: impl AsRef<str>) -> Option<&'a Node> {
         self.traits().get(id)
     }
 
     /// Returns `true` if the trait is applied.
-    pub fn has_trait(&self, id: &str) -> bool {
+    pub fn has_trait(&self, id: impl AsRef<str>) -> bool {
         self.traits().contains(id)
     }
 
@@ -702,23 +721,76 @@ macro_rules! refined_view {
         $(
             $(#[$doc])*
             ///
-            /// Dereferences to [`ShapeView`] for common accessors.
+            /// Common shape accessors are available directly; [`as_shape`](Self::as_shape)
+            /// returns the underlying [`ShapeView`] for everything else.
             #[derive(Clone, Copy, Debug)]
             pub struct $name<'a> {
                 shape: ShapeView<'a>,
             }
 
-            impl<'a> std::ops::Deref for $name<'a> {
-                type Target = ShapeView<'a>;
+            impl<'a> $name<'a> {
+                /// The underlying untyped shape view.
+                pub fn as_shape(&self) -> ShapeView<'a> {
+                    self.shape
+                }
 
-                fn deref(&self) -> &ShapeView<'a> {
-                    &self.shape
+                /// The shape ID.
+                pub fn id(&self) -> &'a ShapeId {
+                    self.shape.id()
+                }
+
+                /// The shape type.
+                pub fn shape_type(&self) -> ShapeType {
+                    self.shape.shape_type()
+                }
+
+                /// The applied traits.
+                pub fn traits(&self) -> Traits<'a> {
+                    self.shape.traits()
+                }
+
+                /// The value of a trait, by absolute shape ID (a [`ShapeId`] or `&str`).
+                pub fn get_trait(&self, id: impl AsRef<str>) -> Option<&'a Node> {
+                    self.shape.get_trait(id)
+                }
+
+                /// Returns `true` if the trait is applied.
+                pub fn has_trait(&self, id: impl AsRef<str>) -> bool {
+                    self.shape.has_trait(id)
+                }
+
+                /// Decodes a trait with a [`TraitCodec`]. Returns `Ok(None)` if the trait is
+                /// not applied.
+                pub fn get_trait_as<T: TraitCodec>(&self) -> Result<Option<T>, TraitDecodeError> {
+                    self.shape.get_trait_as()
+                }
+
+                /// Where the shape was declared.
+                pub fn source(&self) -> &'a SourceLocation {
+                    self.shape.source()
+                }
+
+                /// Returns `true` if this is a prelude shape.
+                pub fn is_prelude(&self) -> bool {
+                    self.shape.is_prelude()
+                }
+
+                /// The shape's members, uniformly (empty for services, resources, and
+                /// operations).
+                pub fn members(&self) -> MembersView<'a> {
+                    self.shape.members()
                 }
             }
 
             impl<'a> From<$name<'a>> for ShapeView<'a> {
                 fn from(value: $name<'a>) -> Self {
                     value.shape
+                }
+            }
+
+            impl<'a> From<$name<'a>> for ShapeRef<'a> {
+                fn from(value: $name<'a>) -> Self {
+                    ShapeRef::Shape(value.shape)
                 }
             }
         )*
@@ -745,6 +817,21 @@ refined_view! {
     /// A `resource` shape.
     ResourceView;
 }
+
+macro_rules! named_member_lookup {
+    ($($name:ident),*) => {
+        $(
+            impl<'a> $name<'a> {
+                /// A member by name.
+                pub fn member(&self, name: &str) -> Option<MemberView<'a>> {
+                    self.shape.member(name)
+                }
+            }
+        )*
+    };
+}
+
+named_member_lookup!(StructureView, UnionView, EnumView, IntEnumView);
 
 impl<'a> ListView<'a> {
     /// The `member` member.

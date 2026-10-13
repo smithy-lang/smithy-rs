@@ -5,14 +5,15 @@
 
 //! Outgoing shape relationships and forward traversal.
 //!
-//! Every ordinary reference in a [`Model`] resolves, so each [`Relationship`] always has a
+//! Every ordinary reference in a [`Model`](crate::Model) resolves, so each [`Relationship`] always has a
 //! target. Applied traits are not relationships: trait definitions may be absent.
 
-use crate::model::{Model, ModelData};
+use crate::model::ModelData;
 use crate::shape::{MemberView, ShapeRef, ShapeView};
 use crate::shape_id::ShapeId;
 use std::collections::HashSet;
 use std::fmt;
+use std::marker::PhantomData;
 
 /// The kind of a [`Relationship`].
 #[non_exhaustive]
@@ -196,7 +197,7 @@ impl<'a> MemberView<'a> {
 ///     "ex#PingInput": {"type": "structure", "members": {"s": {"target": "smithy.api#String"}}}
 /// }}"#)?;
 /// let service = model.expect_shape("ex#Service")?;
-/// let closure: Vec<_> = Walker::new(&model)
+/// let closure: Vec<_> = Walker::new()
 ///     .filter(|rel| rel.kind() != RelationshipType::Output)
 ///     .walk(service)
 ///     .filter(|shape| !shape.is_member())
@@ -206,17 +207,23 @@ impl<'a> MemberView<'a> {
 /// # Ok::<_, Box<dyn std::error::Error>>(())
 /// ```
 pub struct Walker<'m, F = fn(&Relationship<'m>) -> bool> {
-    _model: &'m Model,
     predicate: F,
+    _shapes: PhantomData<ShapeRef<'m>>,
 }
 
 impl<'m> Walker<'m> {
     /// A walker that follows every relationship.
-    pub fn new(model: &'m Model) -> Self {
+    pub fn new() -> Self {
         Self {
-            _model: model,
             predicate: |_| true,
+            _shapes: PhantomData,
         }
+    }
+}
+
+impl Default for Walker<'_> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -224,14 +231,14 @@ impl<'m, F: Fn(&Relationship<'m>) -> bool> Walker<'m, F> {
     /// Only follows relationships for which `predicate` returns `true`.
     pub fn filter<G: Fn(&Relationship<'m>) -> bool>(self, predicate: G) -> Walker<'m, G> {
         Walker {
-            _model: self._model,
             predicate,
+            _shapes: PhantomData,
         }
     }
 
     /// Iterates shapes reachable from `start` in depth-first preorder, starting with `start`.
     ///
-    /// `start` must come from the same model as this walker.
+    /// Traversal stays within `start`'s model.
     pub fn walk(&self, start: impl Into<ShapeRef<'m>>) -> Walk<'m, '_, F> {
         Walk {
             predicate: &self.predicate,
@@ -289,6 +296,7 @@ impl<F> fmt::Debug for Walk<'_, '_, F> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::Model;
     use RelationshipType::*;
 
     const MODEL: &str = r#"{"smithy":"2.0","shapes":{
@@ -391,7 +399,7 @@ mod tests {
     #[test]
     fn walker_preorder_and_cycles() {
         let model = model();
-        let walker = Walker::new(&model);
+        let walker = Walker::new();
         // `a#In$next` targets its own container: the cycle is visited once.
         assert_eq!(
             walk_ids(&model, &walker, "a#In"),
@@ -429,12 +437,12 @@ mod tests {
     #[test]
     fn walker_predicate() {
         let model = model();
-        let services_and_resources = Walker::new(&model).filter(|r| matches!(r.kind(), Resource));
+        let services_and_resources = Walker::new().filter(|r| matches!(r.kind(), Resource));
         assert_eq!(
             walk_ids(&model, &services_and_resources, "a#Svc"),
             ["a#Svc", "a#R", "a#Child", "a#Grandchild"]
         );
-        let no_errors = Walker::new(&model).filter(|r| r.kind() != Error);
+        let no_errors = Walker::new().filter(|r| r.kind() != Error);
         assert!(!walk_ids(&model, &no_errors, "a#Svc").contains(&"a#Err".to_owned()));
     }
 
@@ -450,7 +458,7 @@ mod tests {
         }
         let json = format!(r#"{{"smithy":"2.0","shapes":{{{}}}}}"#, shapes.join(","));
         let model = Model::from_json_str("deep", &json).unwrap();
-        let count = Walker::new(&model)
+        let count = Walker::new()
             .walk(model.expect_shape("a#S0").unwrap())
             .count();
         assert_eq!(count, depth * 2);
@@ -460,7 +468,7 @@ mod tests {
     fn send_sync() {
         fn assert<T: Send + Sync>(_: &T) {}
         let model = model();
-        let walker = Walker::new(&model);
+        let walker = Walker::new();
         assert(&walker);
         assert(&walker.walk(model.expect_shape("a#Svc").unwrap()));
         assert(

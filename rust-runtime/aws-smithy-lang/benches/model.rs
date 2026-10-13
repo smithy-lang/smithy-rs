@@ -55,8 +55,8 @@ fn bench(c: &mut Criterion) {
     let mut group = c.benchmark_group("service_closure");
     for (name, model) in &models {
         let service = model.services().next().expect("one service per model");
-        group.bench_with_input(BenchmarkId::from_parameter(name), model, |b, model| {
-            b.iter(|| Walker::new(model).walk(*black_box(service)).count())
+        group.bench_with_input(BenchmarkId::from_parameter(name), &service, |b, service| {
+            b.iter(|| Walker::new().walk(black_box(*service)).count())
         });
     }
     group.finish();
