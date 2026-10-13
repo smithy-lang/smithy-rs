@@ -20,8 +20,50 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 internal class RequestBodyReadTimeoutTest {
+    @Test
+    fun `timeout parser preserves units and disabled values`() {
+        val cases =
+            mapOf(
+                "0" to Duration.ZERO,
+                "\"0ms\"" to Duration.ZERO,
+                "\"1500ms\"" to 1500.milliseconds,
+                "\"15s\"" to 15.seconds,
+                "\"5m\"" to 5.minutes,
+                "\"1h\"" to 1.hours,
+                "\" 5 m \"" to 5.minutes,
+            )
+        for ((json, expected) in cases) {
+            val actual = RequestBodyReadTimeouts.parseTimeout(Node.parse(json), "timeout")
+            check(actual == expected)
+        }
+        val largeDuration = RequestBodyReadTimeouts.parseTimeout(Node.from("1000000000000001ms"), "timeout")
+        check(largeDuration.inWholeMilliseconds == 1_000_000_000_000_001L)
+    }
+
+    @Test
+    fun `timeout values exceeding the finite duration range are rejected`() {
+        for (value in listOf(
+            "9223372036854775807ms",
+            "9223372036854775807s",
+            "9223372036854775807m",
+            "9223372036854775807h",
+            "9223372036854775808ms",
+        )) {
+            val error =
+                assertThrows<CodegenException> {
+                    RequestBodyReadTimeouts.parseTimeout(Node.from(value), "timeout")
+                }
+            check(error.message == "`timeout` exceeds the maximum supported duration")
+        }
+    }
+
     private val model =
         """
         ${'$'}version: "2.0"
@@ -477,7 +519,7 @@ internal class RequestBodyReadTimeoutTest {
                 null,
             )
 
-        check(config.timeoutMillisFor(ShapeId.from("test#StreamingUpload")) == null)
+        check(config.timeoutFor(ShapeId.from("test#StreamingUpload")) == null)
     }
 
     @Test
@@ -520,9 +562,9 @@ internal class RequestBodyReadTimeoutTest {
                 null,
             )
 
-        check(config.timeoutMillisFor(ShapeId.from("test#Echo")) == 300_000L)
-        check(config.timeoutMillisFor(ShapeId.from("test#Health")) == 300_000L)
-        check(config.timeoutMillisFor(ShapeId.from("test#Upload")) == 3_600_000L)
+        check(config.timeoutFor(ShapeId.from("test#Echo")) == 5.minutes)
+        check(config.timeoutFor(ShapeId.from("test#Health")) == 5.minutes)
+        check(config.timeoutFor(ShapeId.from("test#Upload")) == 1.hours)
     }
 
     @Test
@@ -550,9 +592,9 @@ internal class RequestBodyReadTimeoutTest {
                 customizationConfig,
             )
 
-        check(config.timeoutMillisFor(ShapeId.from("test#Echo")) == 15_000L)
-        check(config.timeoutMillisFor(ShapeId.from("test#Health")) == 15_000L)
-        check(config.timeoutMillisFor(ShapeId.from("test#Upload")) == 300_000L)
+        check(config.timeoutFor(ShapeId.from("test#Echo")) == 15.seconds)
+        check(config.timeoutFor(ShapeId.from("test#Health")) == 15.seconds)
+        check(config.timeoutFor(ShapeId.from("test#Upload")) == 5.minutes)
     }
 
     @Test
@@ -585,9 +627,9 @@ internal class RequestBodyReadTimeoutTest {
                 customizationConfig,
             )
 
-        check(config.timeoutMillisFor(ShapeId.from("test#Echo")) == 300_000L)
-        check(config.timeoutMillisFor(ShapeId.from("test#Health")) == 300_000L)
-        check(config.timeoutMillisFor(ShapeId.from("test#Upload")) == 120_000L)
+        check(config.timeoutFor(ShapeId.from("test#Echo")) == 5.minutes)
+        check(config.timeoutFor(ShapeId.from("test#Health")) == 5.minutes)
+        check(config.timeoutFor(ShapeId.from("test#Upload")) == 2.minutes)
     }
 
     @Test
@@ -615,9 +657,9 @@ internal class RequestBodyReadTimeoutTest {
                 customizationConfig,
             )
 
-        check(config.timeoutMillisFor(ShapeId.from("test#Echo")) == null)
-        check(config.timeoutMillisFor(ShapeId.from("test#Health")) == null)
-        check(config.timeoutMillisFor(ShapeId.from("test#Upload")) == null)
+        check(config.timeoutFor(ShapeId.from("test#Echo")) == null)
+        check(config.timeoutFor(ShapeId.from("test#Health")) == null)
+        check(config.timeoutFor(ShapeId.from("test#Upload")) == null)
     }
 
     @Test
@@ -648,9 +690,9 @@ internal class RequestBodyReadTimeoutTest {
                 customizationConfig,
             )
 
-        check(config.timeoutMillisFor(ShapeId.from("test#Echo")) == null)
-        check(config.timeoutMillisFor(ShapeId.from("test#Health")) == 60_000L)
-        check(config.timeoutMillisFor(ShapeId.from("test#Upload")) == 60_000L)
+        check(config.timeoutFor(ShapeId.from("test#Echo")) == null)
+        check(config.timeoutFor(ShapeId.from("test#Health")) == 1.minutes)
+        check(config.timeoutFor(ShapeId.from("test#Upload")) == 1.minutes)
     }
 
     @Test
@@ -681,9 +723,9 @@ internal class RequestBodyReadTimeoutTest {
                 customizationConfig,
             )
 
-        check(config.timeoutMillisFor(ShapeId.from("test#Echo")) == 300_000L)
-        check(config.timeoutMillisFor(ShapeId.from("test#Health")) == null)
-        check(config.timeoutMillisFor(ShapeId.from("test#Upload")) == null)
+        check(config.timeoutFor(ShapeId.from("test#Echo")) == 5.minutes)
+        check(config.timeoutFor(ShapeId.from("test#Health")) == null)
+        check(config.timeoutFor(ShapeId.from("test#Upload")) == null)
     }
 
     @Test
@@ -712,9 +754,9 @@ internal class RequestBodyReadTimeoutTest {
                 customizationConfig,
             )
 
-        check(config.timeoutMillisFor(ShapeId.from("test#Echo")) == 420_000L)
-        check(config.timeoutMillisFor(ShapeId.from("test#Health")) == 300_000L)
-        check(config.timeoutMillisFor(ShapeId.from("test#Upload")) == 3_600_000L)
+        check(config.timeoutFor(ShapeId.from("test#Echo")) == 7.minutes)
+        check(config.timeoutFor(ShapeId.from("test#Health")) == 5.minutes)
+        check(config.timeoutFor(ShapeId.from("test#Upload")) == 1.hours)
     }
 
     @Test
@@ -726,9 +768,9 @@ internal class RequestBodyReadTimeoutTest {
                 readTimeoutSettings().expectObjectMember("customizationConfig"),
             )
 
-        check(config.timeoutMillisFor(ShapeId.from("test#Echo")) == 300_000L)
-        check(config.timeoutMillisFor(ShapeId.from("test#Health")) == 30_000L)
-        check(config.timeoutMillisFor(ShapeId.from("test#Upload")) == 120_000L)
+        check(config.timeoutFor(ShapeId.from("test#Echo")) == 5.minutes)
+        check(config.timeoutFor(ShapeId.from("test#Health")) == 30.seconds)
+        check(config.timeoutFor(ShapeId.from("test#Upload")) == 2.minutes)
     }
 
     @Test

@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
+import kotlin.time.Duration.Companion.seconds
 
 internal class EventStreamMessageTimeoutTest {
     private val model =
@@ -99,11 +100,11 @@ internal class EventStreamMessageTimeoutTest {
                 null,
             )
 
-        check(config.eventStreamMessageTimeoutMillisFor(ShapeId.from("test#PublishEvents")) == null)
+        check(config.eventStreamMessageTimeoutFor(ShapeId.from("test#PublishEvents")) == null)
         // Event stream operations still get no whole-body read deadline
-        check(config.timeoutMillisFor(ShapeId.from("test#PublishEvents")) == null)
+        check(config.timeoutFor(ShapeId.from("test#PublishEvents")) == null)
         // The message timeout never applies to non-event-stream operations
-        check(config.eventStreamMessageTimeoutMillisFor(ShapeId.from("test#Echo")) == null)
+        check(config.eventStreamMessageTimeoutFor(ShapeId.from("test#Echo")) == null)
     }
 
     @Test
@@ -127,10 +128,10 @@ internal class EventStreamMessageTimeoutTest {
                 ),
             )
 
-        check(config.eventStreamMessageTimeoutMillisFor(ShapeId.from("test#PublishEvents")) == 30_000L)
-        check(config.eventStreamMessageTimeoutMillisFor(ShapeId.from("test#Echo")) == null)
+        check(config.eventStreamMessageTimeoutFor(ShapeId.from("test#PublishEvents")) == 30.seconds)
+        check(config.eventStreamMessageTimeoutFor(ShapeId.from("test#Echo")) == null)
         // The event stream message timeout doesn't enable the whole-body deadline for streaming operations
-        check(config.timeoutMillisFor(ShapeId.from("test#PublishEvents")) == null)
+        check(config.timeoutFor(ShapeId.from("test#PublishEvents")) == null)
     }
 
     @Test
@@ -157,7 +158,7 @@ internal class EventStreamMessageTimeoutTest {
                 ),
             )
 
-        check(config.eventStreamMessageTimeoutMillisFor(ShapeId.from("test#PublishEvents")) == 5_000L)
+        check(config.eventStreamMessageTimeoutFor(ShapeId.from("test#PublishEvents")) == 5.seconds)
     }
 
     @Test
@@ -184,7 +185,7 @@ internal class EventStreamMessageTimeoutTest {
                 ),
             )
 
-        check(config.eventStreamMessageTimeoutMillisFor(ShapeId.from("test#PublishEvents")) == null)
+        check(config.eventStreamMessageTimeoutFor(ShapeId.from("test#PublishEvents")) == null)
     }
 
     @Test

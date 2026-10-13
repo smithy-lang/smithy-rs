@@ -177,18 +177,18 @@ class ServerServiceGenerator(
                         )
                     }
 
-                val requestBodyReadTimeoutMillis =
-                    codegenContext.settings.requestBodyReadTimeouts.timeoutMillisFor(operationShape.id)
+                val requestBodyReadTimeout =
+                    codegenContext.settings.requestBodyReadTimeouts.timeoutFor(operationShape.id)
                 val operationId = operationShape.id.toString().replace("#", "##")
                 val httpPluginInputTy = upgradeOutputTy(writable { rust("ModelPl::Output") })
                 val upgradePlugin =
-                    if (requestBodyReadTimeoutMillis != null) {
+                    if (requestBodyReadTimeout != null) {
                         writable {
                             rustTemplate(
                                 """
                                 #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new()
                                     .with_request_body_read_timeout(
-                                        std::time::Duration::from_millis(${requestBodyReadTimeoutMillis}u64),
+                                        std::time::Duration::from_millis(${requestBodyReadTimeout.inWholeMilliseconds}u64),
                                         "$operationId",
                                     )
                                 """,

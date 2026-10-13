@@ -28,6 +28,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
+import kotlin.time.Duration
 
 class ServerRequestBindingGenerator(
     val protocol: ServerProtocol,
@@ -154,18 +155,18 @@ class ServerEventStreamMessageTimeoutHttpBindingCustomization(
             is HttpBindingSection.WrapEventStreamRequestBody ->
                 writable {
                     val timeouts = codegenContext.settings.eventStreamTimeouts
-                    val messageMillis = timeouts.messageCompletionMillisFor(section.operationShape.id)
-                    val idleMillis = timeouts.idleMillisFor(section.operationShape.id)
-                    val initialMillis =
-                        if (readsInitialMessage) timeouts.initialMessageMillisFor(section.operationShape.id) else null
-                    if (messageMillis != null || initialMillis != null || idleMillis != null) {
-                        fun duration(value: Long?): Writable =
+                    val messageTimeout = timeouts.messageCompletionTimeoutFor(section.operationShape.id)
+                    val idleTimeout = timeouts.idleTimeoutFor(section.operationShape.id)
+                    val initialTimeout =
+                        if (readsInitialMessage) timeouts.initialMessageTimeoutFor(section.operationShape.id) else null
+                    if (messageTimeout != null || initialTimeout != null || idleTimeout != null) {
+                        fun duration(value: Duration?): Writable =
                             writable {
                                 if (value == null) {
                                     rustTemplate("#{None}", *RuntimeType.preludeScope)
                                 } else {
                                     rustTemplate(
-                                        "#{Some}(#{Duration}::from_millis(${value}u64))",
+                                        "#{Some}(#{Duration}::from_millis(${value.inWholeMilliseconds}u64))",
                                         *RuntimeType.preludeScope,
                                         "Duration" to RuntimeType.std.resolve("time::Duration"),
                                     )
@@ -181,9 +182,9 @@ class ServerEventStreamMessageTimeoutHttpBindingCustomization(
                                 $readsInitialMessage,
                             );
                             """,
-                            "initialTimeout" to duration(initialMillis),
-                            "messageTimeout" to duration(messageMillis),
-                            "idleTimeout" to duration(idleMillis),
+                            "initialTimeout" to duration(initialTimeout),
+                            "messageTimeout" to duration(messageTimeout),
+                            "idleTimeout" to duration(idleTimeout),
                             "wrap_with_event_stream_timeouts" to
                                 eventStreamMessageTimeoutModule(codegenContext.runtimeConfig)
                                     .resolve("wrap_with_event_stream_timeouts"),

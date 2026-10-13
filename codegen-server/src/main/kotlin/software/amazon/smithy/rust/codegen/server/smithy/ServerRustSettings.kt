@@ -23,6 +23,11 @@ import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import java.util.Optional
 import java.util.logging.Logger
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 /*
  * [ServerRustSettings] and [ServerCodegenConfig] classes.
@@ -115,23 +120,23 @@ data class ServerRustSettings(
 }
 
 data class RequestBodyReadTimeouts(
-    val defaultNonPayloadMillis: Long,
-    val defaultPayloadMillis: Long,
-    val defaultEventStreamMessageMillis: Long,
-    val perOperationMillis: Map<ShapeId, Long>,
+    val defaultNonPayloadTimeout: Duration,
+    val defaultPayloadTimeout: Duration,
+    val defaultEventStreamMessageTimeout: Duration,
+    val perOperation: Map<ShapeId, Duration>,
     val payloadOperationIds: Set<ShapeId>,
     val streamingOperationIds: Set<ShapeId>,
     val eventStreamInputOperationIds: Set<ShapeId>,
 ) {
-    fun timeoutMillisFor(operationId: ShapeId): Long? =
+    fun timeoutFor(operationId: ShapeId): Duration? =
         if (operationId in streamingOperationIds) {
             null
         } else {
             (
-                perOperationMillis[operationId]
-                    ?: if (operationId in payloadOperationIds) defaultPayloadMillis else defaultNonPayloadMillis
+                perOperation[operationId]
+                    ?: if (operationId in payloadOperationIds) defaultPayloadTimeout else defaultNonPayloadTimeout
             )
-                .takeIf { it > 0 }
+                .takeIf { it > Duration.ZERO }
         }
 
     /**
@@ -139,9 +144,9 @@ data class RequestBodyReadTimeouts(
      * bytes of a message arrive, the complete message frame must arrive within this duration.
      * Returns `null` (no deadline) for non-event-stream operations, or when disabled (`0`).
      */
-    fun eventStreamMessageTimeoutMillisFor(operationId: ShapeId): Long? =
+    fun eventStreamMessageTimeoutFor(operationId: ShapeId): Duration? =
         if (operationId in eventStreamInputOperationIds) {
-            (perOperationMillis[operationId] ?: defaultEventStreamMessageMillis).takeIf { it > 0 }
+            (perOperation[operationId] ?: defaultEventStreamMessageTimeout).takeIf { it > Duration.ZERO }
         } else {
             null
         }
@@ -152,42 +157,45 @@ data class RequestBodyReadTimeouts(
         private const val DEFAULT_PAYLOAD_KEY = "defaultPayload"
         private const val DEFAULT_EVENT_STREAM_MESSAGE_KEY = "defaultEventStreamMessage"
         private const val PER_OPERATION_KEY = "perOperation"
-        const val DEFAULT_NON_PAYLOAD_REQUEST_BODY_READ_TIMEOUT_MILLIS = 300_000L
-        const val DEFAULT_REQUEST_BODY_READ_TIMEOUT_MILLIS = 3_600_000L
+        val DEFAULT_NON_PAYLOAD_REQUEST_BODY_READ_TIMEOUT = 5.minutes
+        val DEFAULT_REQUEST_BODY_READ_TIMEOUT = 1.hours
 
         /** Event stream message timeouts are disabled unless explicitly configured. */
-        const val DEFAULT_EVENT_STREAM_MESSAGE_TIMEOUT_MILLIS = 0L
+        val DEFAULT_EVENT_STREAM_MESSAGE_TIMEOUT = Duration.ZERO
 
-        /** Parses a duration with an explicit unit into milliseconds, or `0` to disable the timeout. */
-        internal fun parseTimeoutConvertedToMillis(
+        /** Parses a duration with an explicit unit, or `0` to disable the timeout. */
+        internal fun parseTimeout(
             node: Node,
             configPath: String,
-        ): Long =
+        ): Duration =
             when {
-                node.isNumberNode && node.expectNumberNode().value.toDouble() == 0.0 -> 0
-                node.isStringNode -> parseTimeoutStringConvertedToMillis(node.expectStringNode().value, configPath)
+                node.isNumberNode && node.expectNumberNode().value.toDouble() == 0.0 -> Duration.ZERO
+                node.isStringNode -> parseTimeoutString(node.expectStringNode().value, configPath)
                 else -> throw invalidTimeout(configPath)
             }
 
-        private fun parseTimeoutStringConvertedToMillis(
+        private fun parseTimeoutString(
             value: String,
             configPath: String,
-        ): Long {
+        ): Duration {
             val trimmed = value.trim()
             val match =
                 TIMEOUT_VALUE_REGEX.matchEntire(trimmed)
                     ?: throw invalidTimeout(configPath)
             return try {
                 val amount = match.groupValues[1].toLong()
-                when (match.groupValues[2]) {
-                    "ms" -> amount
-                    "s" -> Math.multiplyExact(amount, 1000L)
-                    "m" -> Math.multiplyExact(amount, 60_000L)
-                    "h" -> Math.multiplyExact(amount, 3_600_000L)
-                    else -> throw invalidTimeout(configPath)
+                val duration =
+                    when (match.groupValues[2]) {
+                        "ms" -> amount.milliseconds
+                        "s" -> amount.seconds
+                        "m" -> amount.minutes
+                        "h" -> amount.hours
+                        else -> throw invalidTimeout(configPath)
+                    }
+                if (duration.isInfinite()) {
+                    throw CodegenException("`$configPath` exceeds the maximum supported duration")
                 }
-            } catch (_: ArithmeticException) {
-                throw CodegenException("`$configPath` exceeds the maximum supported duration")
+                duration
             } catch (_: NumberFormatException) {
                 throw CodegenException("`$configPath` exceeds the maximum supported duration")
             }
@@ -214,26 +222,26 @@ data class RequestBodyReadTimeouts(
                     "customizationConfig.$CONFIG_KEY",
                 )
             val config = ProtocolReadSettings.expectObject(configNode, configPath)
-            val defaultNonPayloadMillis =
+            val defaultNonPayloadTimeout =
                 config
                     ?.getMember(DEFAULT_NON_PAYLOAD_KEY)
-                    ?.map { parseTimeoutConvertedToMillis(it, "$configPath.$DEFAULT_NON_PAYLOAD_KEY") }
+                    ?.map { parseTimeout(it, "$configPath.$DEFAULT_NON_PAYLOAD_KEY") }
                     ?.orElse(null)
-                    ?: DEFAULT_NON_PAYLOAD_REQUEST_BODY_READ_TIMEOUT_MILLIS
-            val defaultPayloadMillis =
+                    ?: DEFAULT_NON_PAYLOAD_REQUEST_BODY_READ_TIMEOUT
+            val defaultPayloadTimeout =
                 config
                     ?.getMember(DEFAULT_PAYLOAD_KEY)
-                    ?.map { parseTimeoutConvertedToMillis(it, "$configPath.$DEFAULT_PAYLOAD_KEY") }
+                    ?.map { parseTimeout(it, "$configPath.$DEFAULT_PAYLOAD_KEY") }
                     ?.orElse(null)
-                    ?: DEFAULT_REQUEST_BODY_READ_TIMEOUT_MILLIS
-            val defaultEventStreamMessageMillis =
+                    ?: DEFAULT_REQUEST_BODY_READ_TIMEOUT
+            val defaultEventStreamMessageTimeout =
                 config
                     ?.getMember(DEFAULT_EVENT_STREAM_MESSAGE_KEY)
                     ?.map {
-                        parseTimeoutConvertedToMillis(it, "$configPath.$DEFAULT_EVENT_STREAM_MESSAGE_KEY")
+                        parseTimeout(it, "$configPath.$DEFAULT_EVENT_STREAM_MESSAGE_KEY")
                     }
                     ?.orElse(null)
-                    ?: DEFAULT_EVENT_STREAM_MESSAGE_TIMEOUT_MILLIS
+                    ?: DEFAULT_EVENT_STREAM_MESSAGE_TIMEOUT
 
             val service = model.expectShape(serviceId, ServiceShape::class.java)
             val containedOperations = TopDownIndex.of(model).getContainedOperations(service)
@@ -281,7 +289,7 @@ data class RequestBodyReadTimeouts(
                     }
                     .map { it.id }
                     .toSet()
-            val perOperationMillis =
+            val perOperation =
                 config
                     ?.getObjectMember(PER_OPERATION_KEY)
                     ?.orElse(null)
@@ -304,7 +312,7 @@ data class RequestBodyReadTimeouts(
                             )
                         }
                         operationId to
-                            parseTimeoutConvertedToMillis(
+                            parseTimeout(
                                 value,
                                 "$configPath.$PER_OPERATION_KEY.$operationId",
                             )
@@ -312,10 +320,10 @@ data class RequestBodyReadTimeouts(
                     ?: emptyMap()
 
             return RequestBodyReadTimeouts(
-                defaultNonPayloadMillis,
-                defaultPayloadMillis,
-                defaultEventStreamMessageMillis,
-                perOperationMillis,
+                defaultNonPayloadTimeout,
+                defaultPayloadTimeout,
+                defaultEventStreamMessageTimeout,
+                perOperation,
                 payloadOperationIds,
                 streamingOperationIds,
                 eventStreamInputOperationIds,

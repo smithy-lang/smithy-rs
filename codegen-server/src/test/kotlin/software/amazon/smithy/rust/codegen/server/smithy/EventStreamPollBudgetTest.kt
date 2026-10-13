@@ -17,6 +17,10 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 internal class EventStreamPollBudgetTest {
     private val model =
@@ -128,9 +132,9 @@ internal class EventStreamPollBudgetTest {
     fun `common timeout configuration supersedes the complete legacy timeout object`() {
         val legacy = """{"defaultNonPayload": "7s", "defaultPayload": "8s", "defaultEventStreamMessage": "9s"}"""
         val legacySettings = settings("""{"customizationConfig": {"requestBodyReadTimeouts": $legacy}}""")
-        check(legacySettings.requestBodyReadTimeouts.defaultNonPayloadMillis == 7_000L)
-        check(legacySettings.requestBodyReadTimeouts.defaultPayloadMillis == 8_000L)
-        check(legacySettings.requestBodyReadTimeouts.defaultEventStreamMessageMillis == 9_000L)
+        check(legacySettings.requestBodyReadTimeouts.defaultNonPayloadTimeout == 7.seconds)
+        check(legacySettings.requestBodyReadTimeouts.defaultPayloadTimeout == 8.seconds)
+        check(legacySettings.requestBodyReadTimeouts.defaultEventStreamMessageTimeout == 9.seconds)
         for (common in listOf("{}", """{"defaultEventStreamMessage": 0}""")) {
             val effective =
                 settings(
@@ -143,15 +147,15 @@ internal class EventStreamPollBudgetTest {
                     }
                     """,
                 )
-            check(effective.requestBodyReadTimeouts.defaultNonPayloadMillis == 300_000L)
-            check(effective.requestBodyReadTimeouts.defaultPayloadMillis == 3_600_000L)
-            check(effective.requestBodyReadTimeouts.defaultEventStreamMessageMillis == 0L)
+            check(effective.requestBodyReadTimeouts.defaultNonPayloadTimeout == 5.minutes)
+            check(effective.requestBodyReadTimeouts.defaultPayloadTimeout == 1.hours)
+            check(effective.requestBodyReadTimeouts.defaultEventStreamMessageTimeout == Duration.ZERO)
         }
         val unrelated =
             settings(
                 """{"customizationConfig": {"requestBodyReadTimeouts": $legacy, "protocols": {"common": {"otherSetting": true}}}}""",
             )
-        check(unrelated.requestBodyReadTimeouts.defaultEventStreamMessageMillis == 9_000L)
+        check(unrelated.requestBodyReadTimeouts.defaultEventStreamMessageTimeout == 9.seconds)
     }
 
     @Test

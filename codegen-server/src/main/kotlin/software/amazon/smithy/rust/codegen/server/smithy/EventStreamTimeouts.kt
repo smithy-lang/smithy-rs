@@ -8,40 +8,41 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.ShapeId
+import kotlin.time.Duration
 
-/** Independent RPC initial-message, per-event completion, and idle deadlines, in milliseconds. */
+/** Independent RPC initial-message, per-event completion, and idle deadlines. */
 data class EventStreamTimeouts(
-    val initialMessageMillis: Long,
-    val messageCompletionMillis: Long,
-    val idleMillis: Long,
+    val initialMessageTimeout: Duration,
+    val messageCompletionTimeout: Duration,
+    val idleTimeout: Duration,
     val perOperation: Map<ShapeId, OperationTimeouts>,
     val eventStreamInputOperationIds: Set<ShapeId>,
 ) {
-    data class OperationTimeouts(val initialMessageMillis: Long?, val messageCompletionMillis: Long?, val idleMillis: Long?)
+    data class OperationTimeouts(val initialMessageTimeout: Duration?, val messageCompletionTimeout: Duration?, val idleTimeout: Duration?)
 
-    fun initialMessageMillisFor(operationId: ShapeId): Long? =
+    fun initialMessageTimeoutFor(operationId: ShapeId): Duration? =
         if (operationId in eventStreamInputOperationIds) {
-            (perOperation[operationId]?.initialMessageMillis ?: initialMessageMillis).takeIf { it > 0 }
+            (perOperation[operationId]?.initialMessageTimeout ?: initialMessageTimeout).takeIf { it > Duration.ZERO }
         } else {
             null
         }
 
-    fun messageCompletionMillisFor(operationId: ShapeId): Long? =
+    fun messageCompletionTimeoutFor(operationId: ShapeId): Duration? =
         if (operationId in eventStreamInputOperationIds) {
-            (perOperation[operationId]?.messageCompletionMillis ?: messageCompletionMillis).takeIf { it > 0 }
+            (perOperation[operationId]?.messageCompletionTimeout ?: messageCompletionTimeout).takeIf { it > Duration.ZERO }
         } else {
             null
         }
 
-    fun idleMillisFor(operationId: ShapeId): Long? =
+    fun idleTimeoutFor(operationId: ShapeId): Duration? =
         if (operationId in eventStreamInputOperationIds) {
-            (perOperation[operationId]?.idleMillis ?: idleMillis).takeIf { it > 0 }
+            (perOperation[operationId]?.idleTimeout ?: idleTimeout).takeIf { it > Duration.ZERO }
         } else {
             null
         }
 
     companion object {
-        const val DEFAULT_IDLE_TIMEOUT_MILLIS = 0L
+        val DEFAULT_IDLE_TIMEOUT = Duration.ZERO
         const val CONFIG_PATH = "${ProtocolReadSettings.COMMON_PATH}.eventStreamTimeouts"
 
         fun fromCustomizationConfig(
@@ -54,10 +55,10 @@ data class EventStreamTimeouts(
             if (config == null) {
                 // Legacy message settings still configure event completion, never the initial read.
                 return EventStreamTimeouts(
-                    0,
-                    legacyTimeouts.defaultEventStreamMessageMillis,
-                    DEFAULT_IDLE_TIMEOUT_MILLIS,
-                    legacyTimeouts.perOperationMillis
+                    Duration.ZERO,
+                    legacyTimeouts.defaultEventStreamMessageTimeout,
+                    DEFAULT_IDLE_TIMEOUT,
+                    legacyTimeouts.perOperation
                         .filterKeys { it in legacyTimeouts.eventStreamInputOperationIds }
                         .mapValues { (_, timeout) -> OperationTimeouts(null, timeout, null) },
                     legacyTimeouts.eventStreamInputOperationIds,
@@ -90,9 +91,9 @@ data class EventStreamTimeouts(
                         )
                 }?.toMap().orEmpty()
             return EventStreamTimeouts(
-                duration(config, "initialMessage", path) ?: 0,
-                duration(config, "messageCompletion", path) ?: 0,
-                duration(config, "idle", path) ?: DEFAULT_IDLE_TIMEOUT_MILLIS,
+                duration(config, "initialMessage", path) ?: Duration.ZERO,
+                duration(config, "messageCompletion", path) ?: Duration.ZERO,
+                duration(config, "idle", path) ?: DEFAULT_IDLE_TIMEOUT,
                 overrides,
                 legacyTimeouts.eventStreamInputOperationIds,
             )
@@ -102,8 +103,7 @@ data class EventStreamTimeouts(
             config: ObjectNode,
             key: String,
             path: String,
-        ): Long? =
-            config.getMember(key).map { RequestBodyReadTimeouts.parseTimeoutConvertedToMillis(it, "$path.$key") }.orElse(null)
+        ): Duration? = config.getMember(key).map { RequestBodyReadTimeouts.parseTimeout(it, "$path.$key") }.orElse(null)
 
         private fun validateKeys(
             config: ObjectNode,
