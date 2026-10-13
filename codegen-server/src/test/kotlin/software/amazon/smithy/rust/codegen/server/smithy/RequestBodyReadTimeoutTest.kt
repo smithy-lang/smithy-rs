@@ -520,8 +520,8 @@ internal class RequestBodyReadTimeoutTest {
                 null,
             )
 
-        check(config.timeoutMillisFor(ShapeId.from("test#Echo")) == 60_000L)
-        check(config.timeoutMillisFor(ShapeId.from("test#Health")) == 60_000L)
+        check(config.timeoutMillisFor(ShapeId.from("test#Echo")) == 300_000L)
+        check(config.timeoutMillisFor(ShapeId.from("test#Health")) == 300_000L)
         check(config.timeoutMillisFor(ShapeId.from("test#Upload")) == 3_600_000L)
     }
 
@@ -696,7 +696,7 @@ internal class RequestBodyReadTimeoutTest {
                         "global": {
                             "requestBodyReadTimeouts": {
                                 "perOperation": {
-                                    "test#Echo": "5m"
+                                    "test#Echo": "7m"
                                 }
                             }
                         }
@@ -712,8 +712,8 @@ internal class RequestBodyReadTimeoutTest {
                 customizationConfig,
             )
 
-        check(config.timeoutMillisFor(ShapeId.from("test#Echo")) == 300_000L)
-        check(config.timeoutMillisFor(ShapeId.from("test#Health")) == 60_000L)
+        check(config.timeoutMillisFor(ShapeId.from("test#Echo")) == 420_000L)
+        check(config.timeoutMillisFor(ShapeId.from("test#Health")) == 300_000L)
         check(config.timeoutMillisFor(ShapeId.from("test#Upload")) == 3_600_000L)
     }
 

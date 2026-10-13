@@ -143,7 +143,7 @@ internal class EventStreamPollBudgetTest {
                     }
                     """,
                 )
-            check(effective.requestBodyReadTimeouts.defaultNonPayloadMillis == 60_000L)
+            check(effective.requestBodyReadTimeouts.defaultNonPayloadMillis == 300_000L)
             check(effective.requestBodyReadTimeouts.defaultPayloadMillis == 3_600_000L)
             check(effective.requestBodyReadTimeouts.defaultEventStreamMessageMillis == 0L)
         }

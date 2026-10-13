@@ -43,7 +43,7 @@ both independently:
       "global": {
         "eventStreamReadPollBudget": 32,
         "requestBodyReadTimeouts": {
-          "defaultNonPayload": "1m",
+          "defaultNonPayload": "5m",
           "defaultPayload": "1h"
         },
         "eventStreamTimeouts": {
@@ -64,7 +64,7 @@ both independently:
 ```
 
 The global protocol section also contains the request body read timeout
-configuration for non-streaming operations. `defaultNonPayload` defaults to `1m`;
+configuration for non-streaming operations. `defaultNonPayload` defaults to `5m`;
 `defaultPayload` defaults to `1h`. A `perOperation` entry overrides the applicable
 default for non-streaming operations. Setting a timeout to `0` disables it.
 

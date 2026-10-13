@@ -152,7 +152,7 @@ data class RequestBodyReadTimeouts(
         private const val DEFAULT_PAYLOAD_KEY = "defaultPayload"
         private const val DEFAULT_EVENT_STREAM_MESSAGE_KEY = "defaultEventStreamMessage"
         private const val PER_OPERATION_KEY = "perOperation"
-        const val DEFAULT_NON_PAYLOAD_REQUEST_BODY_READ_TIMEOUT_MILLIS = 60_000L
+        const val DEFAULT_NON_PAYLOAD_REQUEST_BODY_READ_TIMEOUT_MILLIS = 300_000L
         const val DEFAULT_REQUEST_BODY_READ_TIMEOUT_MILLIS = 3_600_000L
 
         /** Event stream message timeouts are disabled unless explicitly configured. */
