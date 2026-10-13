@@ -37,8 +37,9 @@ runtime on first establishment and may be used across that runtime's worker thre
 
 A request that can neither reuse nor create a connection parks without polling. Under the stated executor
 and connection-progress assumptions, scheduling is work-conserving among eligible waiters, later arrivals
-do not bypass a committed waiter indefinitely, and each resource grant performs work bounded independently
-of waiter and partition count.
+do not bypass a committed waiter indefinitely, and resource selection uses maintained heads and indexes.
+Publication processing and caller occupancy have separate costs and progress assumptions, defined under
+[Caller-held admission baton](#caller-held-admission-baton).
 
 The guarantee applies while an eligible reusable connection, a reclaimable HTTP/1 transition, or a
 released permit can become reachable. [Liveness](#liveness) defines the progress assumptions and the
@@ -46,20 +47,21 @@ cross-scope HTTP/2 condition in which no such resource becomes reachable.
 
 ### Local reuse is partition-local and bounded
 
-A local reuse hit performs bounded work independent of partition count. It consults no origin-wide
+A direct local selection hit performs bounded work independent of partition count. It consults no origin-wide
 coordination and reads no other partition's state. An unbounded origin constructs no admission, peer-index,
-or cross-partition ordering machinery; cross-partition coordination begins only after local reuse misses on
-a bounded origin with no free capacity.
+or cross-partition ordering machinery. A bounded miss, queued waiter completion, or connection return
+may publish demand or supply and process origin admission; these are separate from direct selection.
 
 ### Coordination cost is bounded
 
-Pool locks are never nested. Admission selects from maintained origin or
-eligibility-group indexes rather than scanning partitions or connections, and
-each detached action performs bounded work before it either settles or produces
-one successor. Cross-partition H2 reuse moves generation identity, not transport
-ownership. Changes that claim to preserve local-path cost must show that they add
-no origin-wide coordination, partition-wide scan, or shared allocation to a
-steady local reuse hit.
+Pool locks are never nested. Admission resource selection uses maintained origin or
+eligibility-group indexes. A separate publication-processing round scans registered partition slots,
+applies their pending snapshots, and executes at most one detached action. Each action either settles
+or produces one successor. The scan costs O(registered partitions); this is not a partition-independent
+bound on the whole grant path or caller drain. Cross-partition H2 reuse moves generation identity,
+not transport ownership. Changes that claim to preserve local-selection cost must show that they add
+no origin-wide coordination, partition-wide scan, or shared allocation to a steady local selection hit.
+Bounded waiter completion and connection return may publish demand and process the shared baton.
 
 ### Pool behavior and state are observable
 
@@ -944,6 +946,66 @@ complete replacements for the same ID, so a delayed active publication cannot ov
 inactive snapshot retires the demand. When it must queue, each active demand joins the applicable scheduling
 orders at their tails; checked identity allocation does not reuse a demand ID after wraparound.
 
+#### Caller-held admission baton
+
+Each bounded cell caches a stable `DemandPublication` slot for its partition. Publishers record
+complete snapshots under that slot's lock after releasing the cell lock. A slot coalesces the newest
+retirement and newest replacement, applying retirement first. Keeping retirement separately preserves
+the cancellation and ordering effects that retaining only the latest active snapshot would lose.
+Snapshot identity and version still determine whether admission accepts a publication.
+
+`AdmissionProcessing` owns the slot directory, detached action queue, and atomic baton state.
+The `HELD` bit elects one `AdmissionBaton`; `PENDING` requests a scheduling pass. Recording sets
+both bits in one SeqCst RMW after publishing its slot. An empty local transition can acquire `HELD`
+without requesting another pass, covering resource cleanup produced later in that transition.
+Detached actions enter the same queue, including actions produced by typed guard fallback.
+
+A bounded publisher retains a borrowed `BatonScope` through required resource fallback, supply
+publication, and local wakes. `scope.process()` closes that local phase. An initially elected holder
+processes; an outermost ready nonholder may nominate itself against an eligible holder. Ordinary
+losing publication needs no admission Arc clone or nominee allocation. An existing processor may
+observe the snapshots before the publisher finishes local completion. The local wake ordering does
+not promise that a current-thread runtime polls the awakened task before processing returns.
+
+One processing round refreshes the registered slots, rotates the starting partition, extracts their
+pending snapshots, applies them under admission, and runs at most one detached action outside locks.
+The action's successor joins the shared queue before the next round. Directory, slot, admission,
+action, and handoff locks are never nested. Connection capacity, exact assignments, and supply
+remain authoritative in admission and the cells; the baton transfers processing authority alone.
+
+After three complete rounds in one ownership turn, the holder enables nomination. Three is the
+initial experimental batching policy, not a proven optimum. One ready contender B can claim the
+successor position under a small handoff mutex. B waits synchronously outside all coordination
+locks, spinning briefly then yielding its OS thread; there is no independent executor.
+Thread-local scope tracking prevents nomination from nested local completion and from callbacks
+inside any admission processor, including another origin. Such callers publish and return.
+
+Before consuming `PENDING` for its next round, eligible holder A takes a SeqCst RMW boundary
+snapshot. If B's accepted nomination precedes that snapshot, A validates and grants it under
+handoff control. If acceptance follows the decision, at most the one already committed round runs
+before grant. A disarms before B's grant becomes visible. The grant preserves concurrent `PENDING`,
+keeps all resource-owning actions in admission, carries the scan cursor, and assigns a new ownership
+generation. B starts a fresh round count; it cannot immediately circulate the baton without doing work.
+Initial election and short drains do not acquire handoff control to initialize unused identity metadata.
+
+Quiet release and nomination serialize under the same control lock once handoff identity exists.
+If nomination wins, A grants even when currently quiet. If release wins, a ready contender may
+claim ordinary idle ownership. Without an accepted successor, A continues to drain or uses checked
+`HELD -> 0` release; a racing publication either prevents release or elects a new holder.
+A withdrawn nominee clears its position. If grant wins against withdrawal, its guard must process
+fallback. The disarmed predecessor cannot clear or process under the successor's generation.
+
+Dropping an elected guard processes recorded work. A supported action-callback panic declines an
+ungranted nominee and disables new nomination while the original caller synchronously drains cleanup,
+releases ownership, and resumes the first panic. The same recovery applies during local unwinding.
+Recovery does not finish an interrupted cleanup closure, repair arbitrary invariant failures, or prevent
+destructor double-panic aborts. It has no normal handoff bound.
+
+The handoff bound is conditional on a ready contender accepting continuation and both threads
+making progress. It bounds rounds after acceptance, not mutex waits, arbitrary callback duration,
+or descheduling, and provides no fairness guarantee among all contenders. Without a successor,
+sustained publication may still occupy a current-thread runtime until quiescence.
+
 #### Bounded miss
 
 A bounded miss registers local demand before it asks admission to act. This ordering makes a waiter visible
@@ -1204,11 +1266,12 @@ before the supplier cell becomes selectable again. Dropping a `DeliveryGuard`
 returns the permit to admission. Fallbacks run no connector, protocol, wake, or
 listener code while a pool lock is held.
 
-A fallback invoked from `Drop` may synchronously acquire a bounded sequence of pool locks to publish its
-terminal state, but it holds at most one pool lock at a time. Each lock transition produces the next typed
-action only after releasing the previous lock, and each action retains an idempotent fallback until the next
-domain owns the terminal state. The chain performs no await, retry loop, connector or protocol work, or work
-proportional to waiter or partition count, and schedules wakes or callbacks only after releasing its lock.
+A fallback invoked from `Drop` holds at most one pool lock at a time. Each lock transition produces
+the next typed action after releasing the previous lock, and each action retains an idempotent fallback
+until the next domain owns the terminal state. Individual actions perform bounded state-machine work
+and invoke wakes outside pool locks. Their ingress may acquire the caller-held baton and synchronously
+process multiple rounds, including partition-slot scans. This drain performs no await or connector I/O;
+its occupancy follows the baton handoff and recovery rules above.
 
 Pool coordination uses a crate-level synchronization facade so production and Loom tests compile the same
 lock-bearing code. Production lock wrappers retain access to guarded state after standard-library poisoning so
@@ -1597,8 +1660,8 @@ cross-cell transfer, but repeated H1 matches cannot keep that cell or an older p
 Within a cell, the generation gate offers a newly visible H2 generation to already committed compatible
 waiters in bounded oldest-first turns before later direct arrivals. Scheduling is work-conserving among
 eligible waiters: if a resource a waiter could use is free, some eligible waiter is served rather than the
-resource sitting idle. Each choice is a dequeue or stored-head comparison, so the work to grant one resource
-does not grow with the number of waiters or partitions.
+resource sitting idle. Each resource choice is a dequeue or stored-head comparison. Publication rounds
+scan registered partition slots; scheduling selection cost does not describe the entire processing turn.
 
 Progress requires that a permit become reachable: an eligible connection returns reusable, an
 HTTP/1 connection becomes reclaimable, or a permit is released. It is not promised while every permit for the
@@ -1614,8 +1677,11 @@ serve a waiter. A waiter in this state parks until eligibility or capacity chang
   bounded overtake.
 * **Work-conserving service** [liveness] — while an eligible waiter and a resource it may use both exist,
   some eligible waiter is served.
-* **Bounded grant work** [optimization] — the work to grant one resource does not grow with the waiter or
-  partition count.
+* **Bounded resource selection** [optimization] — selecting one resource uses maintained heads and indexes.
+  Publication scanning and repeated processing are accounted separately.
+* **Accepted continuation** [liveness] — a nominated successor receives processing ownership before the
+  predecessor starts more than one further committed round. This requires thread and callback progress
+  and excludes synchronous panic recovery; it is not a runtime-wide fairness or wall-clock guarantee.
 
 ### Dispatching and completing a request
 
