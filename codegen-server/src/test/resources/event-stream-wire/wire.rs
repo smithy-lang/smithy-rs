@@ -44,7 +44,7 @@ async fn events(
     >,
     retry: bool,
 ) -> (i32, String) {
-    HANDLER_CALLS.fetch_add(1, Ordering::SeqCst);
+    HANDLER_CALLS.fetch_add(1, Ordering::Release);
     let mut count = 0;
     let mut retried = false;
     let outcome = loop {
@@ -345,7 +345,7 @@ async fn wire_scenarios(protocol: WireProtocol) {
     };
     if protocol == WireProtocol::Cbor {
         for partial in [false, true] {
-            let calls = HANDLER_CALLS.load(Ordering::SeqCst);
+            let calls = HANDLER_CALLS.load(Ordering::Acquire);
             let client = WireClient::connect(addr, protocol, "PublishEvents", true).await;
             let start = Instant::now();
             if partial {
@@ -353,7 +353,7 @@ async fn wire_scenarios(protocol: WireProtocol) {
                 client.send(protocol.frame(true).slice(..2)).await;
             }
             client.expect_after(start, ms(300), None, true).await;
-            assert_eq!(HANDLER_CALLS.load(Ordering::SeqCst), calls);
+            assert_eq!(HANDLER_CALLS.load(Ordering::Acquire), calls);
             pass(if partial {
                 "initial_partial_rejected_before_handler"
             } else {
@@ -362,27 +362,27 @@ async fn wire_scenarios(protocol: WireProtocol) {
         }
     }
     if protocol != WireProtocol::Rest {
-        let calls = HANDLER_CALLS.load(Ordering::SeqCst);
+        let calls = HANDLER_CALLS.load(Ordering::Acquire);
         let client = WireClient::connect(addr, protocol, "NoInitialEvents", true).await;
         let started = Instant::now();
         client.expect_after(started, ms(300), None, true).await;
-        assert_eq!(HANDLER_CALLS.load(Ordering::SeqCst), calls);
+        assert_eq!(HANDLER_CALLS.load(Ordering::Acquire), calls);
         pass("stream_only_RPC_missing_first_frame_rejected_before_handler");
 
         let client = WireClient::connect(addr, protocol, "NoInitialEvents", true).await;
         let started = Instant::now();
         client.send(protocol.frame(false).slice(..2)).await;
         client.expect_after(started, ms(300), None, true).await;
-        assert_eq!(HANDLER_CALLS.load(Ordering::SeqCst), calls);
+        assert_eq!(HANDLER_CALLS.load(Ordering::Acquire), calls);
         pass("stream_only_RPC_partial_first_frame_uses_initial_deadline");
 
         let mut client = WireClient::connect(addr, protocol, "NoInitialEvents", true).await;
         client.pending_for(ms(250)).await;
-        assert_eq!(HANDLER_CALLS.load(Ordering::SeqCst), calls);
+        assert_eq!(HANDLER_CALLS.load(Ordering::Acquire), calls);
         client.send(protocol.frame(false)).await;
         client.finish();
         client.expect(Some(("eof", 1)), false).await;
-        assert_eq!(HANDLER_CALLS.load(Ordering::SeqCst), calls + 1);
+        assert_eq!(HANDLER_CALLS.load(Ordering::Acquire), calls + 1);
         pass("stream_only_RPC_first_event_is_buffered_before_handler");
     }
     let client = WireClient::connect(addr, protocol, "PublishEvents", true).await;
