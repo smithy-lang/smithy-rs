@@ -304,15 +304,14 @@ internal class EventStreamMessageTimeoutTest {
     }
 
     @Test
-    fun `generated code applies a one hour idle timeout by default`() {
+    fun `generated code leaves first event wait and gaps unbounded by default`() {
         val generatedServers =
             serverIntegrationTest(model) { codegenContext, rustCrate ->
                 rustCrate.testModule {
-                    tokioTest("default_idle_deadline_bounds_first_event_wait_and_gaps_after_events") {
+                    tokioTest("default_idle_deadline_is_disabled_before_first_event_and_between_events") {
                         rustTemplate(
                             """
                         use #{SmithyHttpServer}::request::FromRequest;
-                        use crate::event_stream_message_timeout::MessageTimeoutError;
                         struct IdleBody { first: #{Option}<#{Bytes}> }
                         impl #{Body1x}::Body for IdleBody {
                             type Data = #{Bytes};
@@ -347,14 +346,13 @@ internal class EventStreamMessageTimeoutTest {
                                 let event = input.events.recv().await.unwrap().unwrap();
                                 assert_eq!(event.as_event().unwrap().data(), #{Some}("hello"));
                             }
-                            let start = tokio::time::Instant::now();
-                            let error = input.events.recv().await.unwrap_err();
-                            let timeout = MessageTimeoutError::find_in_chain(&error).unwrap();
-                            assert!(timeout.is_idle());
-                            assert_eq!(timeout.timeout(), std::time::Duration::from_secs(3600));
-                            let elapsed = start.elapsed();
-                            assert!(elapsed >= std::time::Duration::from_secs(3600));
-                            assert!(elapsed <= std::time::Duration::from_millis(3_600_001));
+                            assert!(
+                                tokio::time::timeout(
+                                    std::time::Duration::from_secs(7200),
+                                    input.events.recv(),
+                                ).await.is_err(),
+                                "recv must remain pending beyond the former one-hour idle default",
+                            );
                         }
                         """,
                             *RuntimeType.preludeScope,
@@ -371,10 +369,9 @@ internal class EventStreamMessageTimeoutTest {
             }
         generatedServers.forEach { generatedServer ->
             val protocolSerde = protocolSerdeContents(generatedServer.path)
-            check(protocolSerde.contains("wrap_with_event_stream_timeouts(")) {
-                "the event stream idle timeout must be on by default"
+            check(!protocolSerde.contains("wrap_with_event_stream_timeouts(")) {
+                "event stream deadlines must be disabled by default"
             }
-            check(protocolSerde.contains("from_millis(3600000u64)"))
         }
     }
 

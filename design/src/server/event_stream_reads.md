@@ -82,14 +82,14 @@ values:
   starts when that message's first bytes are read and ends when the complete frame
   arrives.
 - `idle` bounds waiting between a complete frame and the next event's first bytes.
-  It defaults to `1h`. REST streams also use it while waiting for their first event;
+  It defaults to `0` (disabled). When configured, REST streams also use it while waiting for their first event;
   RPC streams with initial-message fields start it after the initial frame completes.
   RPC inputs containing only an event stream use it while waiting for their first event,
   just like REST streams. First bytes end the idle
   deadline and start `messageCompletion`, when configured. Empty body chunks do not
   reset the idle deadline.
 
-`initialMessage` and `messageCompletion` default to `0` (disabled). All three values
+`initialMessage`, `messageCompletion`, and `idle` default to `0` (disabled). All three values
 accept durations with an explicit `ms`, `s`, `m`, or `h` unit, or `0` to disable,
 and can be overridden independently under `perOperation`.
 An operation override of `0` disables just that deadline; an omitted value uses
@@ -117,10 +117,9 @@ values fail generation even when the alternate value is valid.
 The `requestBodyReadTimeouts.defaultEventStreamMessage` and scalar
 `perOperation` entries for event stream operations are accepted as completion-timeout
 fallbacks when `eventStreamTimeouts` is absent. They never enable an initial-read
-deadline. The one-hour idle default applies even when the new object is absent.
+deadline. The idle deadline remains disabled when the new object is absent.
 An explicit `eventStreamTimeouts` object supersedes these alternate event settings
-as a whole; an empty object disables initial and completion deadlines while
-retaining the one-hour idle deadline.
+as a whole; an empty object disables all three event stream deadlines.
 Use `requestBodyReadTimeouts` for non-streaming request bodies.
 
 When configured, the message deadline

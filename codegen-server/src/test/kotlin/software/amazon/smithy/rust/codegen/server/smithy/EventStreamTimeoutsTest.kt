@@ -74,18 +74,20 @@ internal class EventStreamTimeoutsTest {
         )
 
     @Test
-    fun `initial and completion values are independent and disabled by default`() {
+    fun `all event stream deadlines are independent and disabled by default`() {
         val defaults = settings("{}").eventStreamTimeouts
         check(defaults.initialMessageMillisFor(publish) == null)
         check(defaults.messageCompletionMillisFor(publish) == null)
-        check(defaults.idleMillisFor(publish) == 3_600_000L)
+        check(defaults.idleMillisFor(publish) == null)
         check(defaults.idleMillisFor(echo) == null)
         val initialOnly = settings("""{"initialMessage": "10s"}""").eventStreamTimeouts
         check(initialOnly.initialMessageMillisFor(publish) == 10_000L)
         check(initialOnly.messageCompletionMillisFor(publish) == null)
+        check(initialOnly.idleMillisFor(publish) == null)
         val completionOnly = settings("""{"messageCompletion": "30s"}""").eventStreamTimeouts
         check(completionOnly.initialMessageMillisFor(publish) == null)
         check(completionOnly.messageCompletionMillisFor(publish) == 30_000L)
+        check(completionOnly.idleMillisFor(publish) == null)
         check(initialOnly.initialMessageMillisFor(echo) == null)
         check(completionOnly.messageCompletionMillisFor(echo) == null)
     }
@@ -127,7 +129,7 @@ internal class EventStreamTimeoutsTest {
         val fallback = EventStreamTimeouts.fromCustomizationConfig(null, serviceSettings.requestBodyReadTimeouts)
         check(fallback.initialMessageMillisFor(publish) == null)
         check(fallback.messageCompletionMillisFor(publish) == 5_000L)
-        check(fallback.idleMillisFor(publish) == 3_600_000L)
+        check(fallback.idleMillisFor(publish) == null)
     }
 
     @Test
@@ -144,8 +146,9 @@ internal class EventStreamTimeoutsTest {
         check(disabled.idleMillisFor(publish) == null)
         val override =
             settings(
-                """{"idle": 0, "perOperation": {"test#PublishEvents": {"idle": "10s"}}}""",
+                """{"perOperation": {"test#PublishEvents": {"idle": "10s"}}}""",
             ).eventStreamTimeouts
+        check(override.idleMillis == 0L)
         check(override.idleMillisFor(publish) == 10_000L)
         val inherited =
             settings(

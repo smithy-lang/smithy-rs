@@ -51,9 +51,10 @@ have abort-on-drop guards, and the wrapper terminates unfinished test processes
 on failure or deadline expiry.
 
 Test configuration uses a 300 ms RPC initial deadline, a 200 ms completion
-deadline, and a 1 s global idle deadline. `PublishEvents` and `RetryEvents`
-override idle to 400 ms; `NoIdleEvents` disables it. Production defaults are
-unchanged, and the TCP scenarios use real wall-clock time.
+deadline, and a 1 s common idle deadline. `PublishEvents` and `RetryEvents`
+override idle to 400 ms; `NoIdleEvents` disables it. All event stream deadlines
+are disabled by default in production; these TCP scenarios explicitly enable
+them and use real wall-clock time.
 
 RPC v2 CBOR operations used for initial-read checks have an optional non-stream
 input field. AWS JSON's server generator currently rejects combining non-stream

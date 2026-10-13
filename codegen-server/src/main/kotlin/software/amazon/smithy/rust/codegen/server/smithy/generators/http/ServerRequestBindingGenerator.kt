@@ -213,8 +213,9 @@ class ServerEventStreamMessageTimeoutHttpBindingCustomization(
 
                         RPC initial reads have a separate deadline starting before their first bytes
                         arrive. Initial-message timeouts are request rejections before the handler runs.
-                        A separate idle deadline defaults to one hour between complete messages and
-                        the next message's first bytes. `MessageTimeoutError::is_idle()` identifies it.
+                        A separate idle deadline bounds waiting between complete messages and the
+                        next message's first bytes. `MessageTimeoutError::is_idle()` identifies it.
+                        All event stream deadlines are disabled by default.
 
                         Deadlines are checked before reading more body frames. Time spent between
                         polls counts toward the deadline, even when the remaining bytes are buffered.
