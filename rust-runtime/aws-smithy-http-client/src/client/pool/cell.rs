@@ -39,9 +39,9 @@ use self::waiters::AcquisitionProbe;
 pub(in crate::client::pool) use self::waiters::WaiterId;
 use self::waiters::{AcquisitionQueue, CellCommitError, CellCommitOutcome, DeliveryReservation};
 use super::admission::{
-    AdmissionAction, AdmissionBaton, CapacityLease, DeliveryGuard, DemandPublication,
-    DemandSnapshot, H1MatchId, H1SupplyStatus, H2SupplyStatus, OriginAdmission,
-    ProtocolRequirement, SupplyRevision,
+    AdmissionAction, BatonScope, CapacityLease, DeliveryGuard, DemandPublication, DemandSnapshot,
+    H1MatchId, H1SupplyStatus, H2SupplyStatus, OriginAdmission, ProtocolRequirement,
+    SupplyRevision,
 };
 use super::connection::CloseReason;
 #[cfg(test)]
@@ -677,11 +677,11 @@ impl OriginCell {
             )
         };
 
-        let baton = cell.record_demand_updates(snapshot.filter(|_| !h2_visible));
+        let scope = cell.record_demand_updates(snapshot.filter(|_| !h2_visible));
         Self::offer_local_h2(cell);
         Self::offer_peer_h2(cell);
-        if let Some(baton) = baton {
-            baton.process_until_quiescent();
+        if let Some(scope) = scope {
+            scope.process();
         }
         waiter
     }
@@ -689,13 +689,15 @@ impl OriginCell {
     /// Records demand and opens a baton scope before arbitrary callbacks.
     ///
     /// Empty submissions also try to acquire the baton. A new holder finishes
-    /// local cleanup before draining; an existing holder can process concurrently.
+    /// local cleanup before processing; an existing holder can process concurrently.
     /// Empty submissions do not request another demand scheduling pass.
+    /// At the final boundary the scope can nominate a ready successor, so it
+    /// must span all required resource fallback, supply publication, and wakes.
     fn record_demand_updates(
         &self,
         snapshots: impl IntoIterator<Item = DemandSnapshot>,
-    ) -> Option<AdmissionBaton> {
-        self.admission.as_ref().and_then(|admission| {
+    ) -> Option<BatonScope<'_>> {
+        self.admission.as_ref().map(|admission| {
             OriginAdmission::record_demand_updates(admission, &self.demand_publication, snapshots)
         })
     }
@@ -706,7 +708,7 @@ impl OriginCell {
         installation: waiters::WaiterResolution,
         before_wake: impl FnOnce(),
     ) {
-        let baton = cell.record_demand_updates(installation.demand_updates.into_iter().flatten());
+        let scope = cell.record_demand_updates(installation.demand_updates.into_iter().flatten());
         drop(installation.returned_step);
         // Publish required supply/cleanup before callbacks or a potentially
         // long drain. Its detached actions join this already-held baton.
@@ -714,8 +716,8 @@ impl OriginCell {
         if let Some(waker) = installation.waker {
             waker.wake();
         }
-        if let Some(baton) = baton {
-            baton.process_until_quiescent();
+        if let Some(scope) = scope {
+            scope.process();
         }
     }
 
@@ -767,7 +769,7 @@ impl OriginCell {
             return false;
         };
 
-        let baton = cell.record_demand_updates(
+        let scope = cell.record_demand_updates(
             cancelled
                 .demand_updates
                 .into_iter()
@@ -801,8 +803,8 @@ impl OriginCell {
         if let Some(waker) = waker {
             waker.wake();
         }
-        if let Some(baton) = baton {
-            baton.process_until_quiescent();
+        if let Some(scope) = scope {
+            scope.process();
         }
         true
     }
@@ -1022,7 +1024,7 @@ mod tests {
             .acquisitions
             .current_demand_snapshot(&cell.eligibility_group)
             .unwrap();
-        let baton = cell.record_demand_updates([snapshot.clone()]).unwrap();
+        let scope = cell.record_demand_updates([snapshot.clone()]).unwrap();
         let counter = StdArc::new(WakeCounter(AtomicUsize::new(0)));
         let waker = Waker::from(counter.clone());
         assert!(cell
@@ -1040,7 +1042,7 @@ mod tests {
             .take_ready_h1(waiter)
             .expect("local sender not committed");
         assert_eq!(11, returned.test_sender_id());
-        baton.process_until_quiescent();
+        scope.process();
         assert_eq!(0, admission.ordered_demand_count_for_test());
         drop(returned);
     }

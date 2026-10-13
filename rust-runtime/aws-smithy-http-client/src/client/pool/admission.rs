@@ -14,7 +14,7 @@
 //!
 //! 1. A cell records complete [`DemandSnapshot`] updates in its cached
 //!    [`DemandPublication`] after releasing its lock.
-//! 2. One caller holds the [`AdmissionBaton`] and applies pending publications
+//! 2. One caller holds the [`baton::AdmissionBaton`] and applies pending publications
 //!    under the admission lock. [`DemandSchedule`] replaces each partition's
 //!    snapshot and links active demand in the origin and eligibility-group orders.
 //! 3. Capacity delivery and HTTP/1 matching select from the origin head.
@@ -67,7 +67,7 @@ use self::h1::{
 use self::h2::{H2CapacityReclaim, H2RouteGuard, H2Supply, PreparedH2Reclaim, PreparedH2Route};
 use self::order::{IntrusiveLinks, IntrusiveOrder};
 use baton::AdmissionProcessing;
-pub(in crate::client::pool) use baton::{AdmissionBaton, DemandPublication};
+pub(in crate::client::pool) use baton::{BatonScope, DemandPublication};
 pub(in crate::client::pool) use delivery::DeliveryGuard;
 pub(in crate::client::pool) use h1::{
     H1Candidate, H1MatchId, H1SupplyStatus, PreparedH1IdleProbe, PreparedH1Reservation,
@@ -202,24 +202,25 @@ impl OriginAdmission {
         self.processing.slot(requester)
     }
 
-    /// Records demand updates and tries to acquire the admission baton.
+    /// Records demand and opens a local-completion scope for the admission baton.
     ///
     /// The caller releases its cell lock first. Recording uses the publication
     /// slot's mutex, without taking the origin admission lock. A new holder
     /// finishes its local transition before processing; an existing holder can
-    /// observe these updates concurrently.
-    pub(in crate::client::pool) fn record_demand_updates(
-        admission: &Arc<Self>,
+    /// observe these updates concurrently. After cleanup and wakes, `process`
+    /// may nominate this ready caller against an eligible holder.
+    pub(in crate::client::pool) fn record_demand_updates<'a>(
+        admission: &'a Arc<Self>,
         publication: &DemandPublication,
         snapshots: impl IntoIterator<Item = DemandSnapshot>,
-    ) -> Option<AdmissionBaton> {
-        AdmissionProcessing::record(admission, publication, snapshots)
+    ) -> BatonScope<'a> {
+        BatonScope::record(admission, publication, snapshots)
     }
 
     /// Exercises production publication and processing without a cell transition.
     ///
-    /// A new holder drains before returning. If another holder exists, that
-    /// caller processes the submitted work.
+    /// This has no local cleanup. It follows the production scope, including
+    /// contender nomination when an eligible holder exists.
     #[cfg(test)]
     pub(super) fn submit_demand_for_test(
         admission: &Arc<Self>,
@@ -227,9 +228,7 @@ impl OriginAdmission {
         snapshots: impl IntoIterator<Item = DemandSnapshot>,
     ) {
         let publication = admission.processing.slot(requester);
-        if let Some(baton) = Self::record_demand_updates(admission, &publication, snapshots) {
-            baton.process_until_quiescent();
-        }
+        Self::record_demand_updates(admission, &publication, snapshots).process();
     }
 
     /// Selects at most one action while admission is locked.

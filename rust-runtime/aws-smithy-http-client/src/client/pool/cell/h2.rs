@@ -1255,10 +1255,10 @@ impl OriginCell {
         if let Some(resolution) = resolution {
             Self::finish_waiter_resolution(cell, resolution, before_wake);
         } else {
-            let baton = cell.record_demand_updates([]);
+            let scope = cell.record_demand_updates([]);
             before_wake();
-            if let Some(baton) = baton {
-                baton.process_until_quiescent();
+            if let Some(scope) = scope {
+                scope.process();
             }
         }
     }
@@ -1281,10 +1281,10 @@ impl OriginCell {
         snapshot: Option<DemandSnapshot>,
         finish: impl FnOnce() -> T,
     ) -> T {
-        let baton = cell.record_demand_updates(snapshot);
+        let scope = cell.record_demand_updates(snapshot);
         let result = finish();
-        if let Some(baton) = baton {
-            baton.process_until_quiescent();
+        if let Some(scope) = scope {
+            scope.process();
         }
         result
     }
@@ -1387,8 +1387,8 @@ impl OriginCell {
                     state.assert_consistent();
                     snapshot
                 };
-                if let Some(baton) = cell.record_demand_updates(snapshot) {
-                    baton.process_until_quiescent();
+                if let Some(scope) = cell.record_demand_updates(snapshot) {
+                    scope.process();
                 }
                 return;
             };
