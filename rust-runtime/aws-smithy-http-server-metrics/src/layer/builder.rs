@@ -4,21 +4,12 @@
  */
 
 use std::marker::PhantomData;
-use std::sync::Arc;
-use std::sync::Mutex;
 
 use metrique::DefaultSink;
-use metrique::OnParentDrop;
-use metrique::Slot;
 
-use crate::default::DefaultMetricsExtension;
 use crate::default::DefaultMetricsServiceState;
-use crate::default::DefaultRequestMetrics;
 use crate::default::DefaultRequestMetricsConfig;
-use crate::default::DefaultRequestMetricsExtension;
-use crate::default::DefaultResponseMetrics;
 use crate::default::DefaultResponseMetricsConfig;
-use crate::default::DefaultResponseMetricsExtension;
 use crate::layer::MetricsLayer;
 use crate::layer::SmithyMetrics;
 use crate::traits::InitMetrics;
@@ -233,39 +224,12 @@ macro_rules! impl_build_for_state {
                      req_config: DefaultRequestMetricsConfig,
                      res_config: DefaultResponseMetricsConfig,
                      service_state: DefaultMetricsServiceState| {
-                        metrics.default_request_metrics =
-                            Some(Slot::new(DefaultRequestMetrics::default()));
-                        metrics.default_response_metrics =
-                            Some(Slot::new(DefaultResponseMetrics::default()));
-
-                        let default_req_metrics_slotguard = metrics
-                            .default_request_metrics
-                            .as_mut()
-                            .and_then(|slot| slot.open(OnParentDrop::Discard))
-                            .expect(
-                                "unreachable: the option is set to a created slot in this scope",
-                            );
-                        let default_res_metrics_slotguard = metrics
-                            .default_response_metrics
-                            .as_mut()
-                            .and_then(|slot| slot.open(OnParentDrop::Discard))
-                            .expect(
-                                "unreachable: the option is set to a created slot in this scope",
-                            );
-
-                        let ext = DefaultMetricsExtension {
-                            request_ext: DefaultRequestMetricsExtension {
-                                metrics: Arc::new(Mutex::new(default_req_metrics_slotguard)),
-                                config: req_config,
-                            },
-                            response_ext: DefaultResponseMetricsExtension {
-                                metrics: Arc::new(Mutex::new(default_res_metrics_slotguard)),
-                                config: res_config,
-                            },
+                        metrics.__macro_init_default_metrics(
+                            req,
+                            req_config,
+                            res_config,
                             service_state,
-                        };
-
-                        req.extensions_mut().insert(ext);
+                        );
                     };
 
                 MetricsLayer {

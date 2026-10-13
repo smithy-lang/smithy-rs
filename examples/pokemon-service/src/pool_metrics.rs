@@ -20,9 +20,10 @@ use metrique::unit::Millisecond;
 use metrique::unit_of_work::metrics;
 use tower::{Layer, Service};
 
-/// Middleware timing contributed to the per-request metrics entry through the
-/// pool. Prefixing with `middleware` keeps these field names from colliding with
-/// the service's own metrics; here it emits as `middleware_time`.
+/// Timing of the middleware's own synchronous work, contributed to the
+/// per-request metrics entry through the pool. Prefixing with `middleware` keeps
+/// these field names from colliding with the service's own metrics; here it emits
+/// as `middleware_time`.
 #[metrics]
 #[derive(Default)]
 struct MiddlewareMetrics {
@@ -43,7 +44,7 @@ impl<S> Layer<S> for PoolContributingLayer {
 }
 
 /// Reads [`SmithyMetricsPool`] from the request extensions and contributes a
-/// timing metric for the time spent in the inner service.
+/// timing metric for the middleware's own synchronous work.
 #[derive(Clone)]
 pub struct PoolContributingService<S> {
     inner: S,
@@ -62,13 +63,20 @@ where
     }
 
     fn call(&mut self, req: http::Request<B>) -> Self::Future {
+        let timer = Timer::start_now();
         // Independently-owned middleware cannot name the service's metrics entry
-        // type, so it pulls the pool handle out of the request extensions and
-        // appends a prefixed child metric that flattens into the request's entry.
-        if let Some(pool) = req.extensions().get::<SmithyMetricsPool>() {
-            pool.with_prefix(["middleware"]).append(MiddlewareMetrics {
-                time: Timer::start_now(),
-            });
+        // type, so it pulls the pool handle out of the request extensions.
+        let pool = req.extensions().get::<SmithyMetricsPool>().cloned();
+
+        // ...the middleware's own synchronous work, e.g. validating or rewriting
+        // headers on `req`, would go here...
+
+        // `append` closes the metric immediately, so the timer measures exactly
+        // the synchronous work above. The closed child flattens into the
+        // request's entry when the pool closes at the end of the request.
+        if let Some(pool) = pool {
+            pool.with_prefix(["middleware"])
+                .append(MiddlewareMetrics { time: timer });
         }
         self.inner.call(req)
     }

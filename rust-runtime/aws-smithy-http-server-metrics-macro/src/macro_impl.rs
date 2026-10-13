@@ -158,37 +158,12 @@ fn generate_ext_trait_impl(
                             req_config: aws_smithy_http_server_metrics::default::DefaultRequestMetricsConfig,
                             res_config: aws_smithy_http_server_metrics::default::DefaultResponseMetricsConfig,
                             service_state: aws_smithy_http_server_metrics::default::DefaultMetricsServiceState| {
-                                metrics.__smithy_metrics.default_request_metrics =
-                                    Some(metrique::Slot::new(aws_smithy_http_server_metrics::default::DefaultRequestMetrics::default()));
-                                metrics.__smithy_metrics.default_response_metrics =
-                                    Some(metrique::Slot::new(aws_smithy_http_server_metrics::default::DefaultResponseMetrics::default()));
-
-                                let default_req_metrics_slotguard = metrics
-                                    .__smithy_metrics
-                                    .default_request_metrics
-                                    .as_mut()
-                                    .and_then(|slot| slot.open(metrique::OnParentDrop::Discard))
-                                    .expect(
-                                        "unreachable: the option is set to a created slot in this scope",
-                                    );
-                                let default_res_metrics_slotguard = metrics
-                                    .__smithy_metrics
-                                    .default_response_metrics
-                                    .as_mut()
-                                    .and_then(|slot| slot.open(metrique::OnParentDrop::Discard))
-                                    .expect(
-                                        "unreachable: the option is set to a created slot in this scope",
-                                    );
-
-                                let ext = aws_smithy_http_server_metrics::default::DefaultMetricsExtension::__macro_new(
-                                    std::sync::Arc::new(std::sync::Mutex::new(default_req_metrics_slotguard)),
-                                    std::sync::Arc::new(std::sync::Mutex::new(default_res_metrics_slotguard)),
+                                metrics.__smithy_metrics.__macro_init_default_metrics(
+                                    req,
                                     req_config,
                                     res_config,
                                     service_state,
                                 );
-
-                                req.extensions_mut().insert(ext);
 
                                 #(#operation_insertions)*
                             };
