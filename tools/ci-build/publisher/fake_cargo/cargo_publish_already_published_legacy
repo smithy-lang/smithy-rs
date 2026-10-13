@@ -1,0 +1,5 @@
+#!/bin/bash
+# The older, unwrapped form. Still seen from some registry/cargo combinations, and it is the shape
+# the matcher used to require, so it stays covered.
+echo 'error: crate version `0.0.22-alpha` is already uploaded'
+exit 1

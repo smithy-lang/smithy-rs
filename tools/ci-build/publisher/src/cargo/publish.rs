@@ -47,8 +47,13 @@ impl ShellOperation for Publish {
         let (stdout, stderr) = output_text(&output);
 
         if !output.status.success() {
+            // Matched without the `error: ` prefix on purpose. cargo wraps this in a registry
+            // error -- `(status 400 Bad Request): crate version `x` is already uploaded` -- so the
+            // prefix is never adjacent and a prefixed match never fires, which turned a retry of
+            // an already-published crate into a hard failure. Only the registry's own sentence is
+            // stable, so that is all we match.
             let already_uploaded_msg = format!(
-                "error: crate version `{}` is already uploaded",
+                "crate version `{}` is already uploaded",
                 self.package_handle.expect_version()
             );
             if stdout.contains(&already_uploaded_msg) || stderr.contains(&already_uploaded_msg) {
@@ -123,5 +128,39 @@ mod tests {
         .spawn()
         .await
         .unwrap();
+    }
+
+    /// The unwrapped form, which is what the matcher used to require. Both shapes have to pass,
+    /// because matching only the wrapped one would trade this bug for its mirror image.
+    #[tokio::test]
+    async fn publish_fails_already_uploaded_legacy_message() {
+        Publish {
+            program: "./fake_cargo/cargo_publish_already_published_legacy",
+            package_handle: PackageHandle::new(
+                "aws-sdk-dynamodb",
+                Version::parse("0.0.22-alpha").ok(),
+            ),
+            package_path: env::current_dir().unwrap(),
+        }
+        .spawn()
+        .await
+        .unwrap();
+    }
+
+    /// A different crate's duplicate must not read as this one's. The matcher interpolates the
+    /// version, so a fixture naming another version has to still fail.
+    #[tokio::test]
+    async fn publish_fails_when_another_version_is_already_uploaded() {
+        let result = Publish {
+            program: "./fake_cargo/cargo_publish_already_published",
+            package_handle: PackageHandle::new(
+                "aws-sdk-dynamodb",
+                Version::parse("0.0.23-alpha").ok(),
+            ),
+            package_path: env::current_dir().unwrap(),
+        }
+        .spawn()
+        .await;
+        assert!(result.is_err(), "expected error, got {result:?}");
     }
 }
