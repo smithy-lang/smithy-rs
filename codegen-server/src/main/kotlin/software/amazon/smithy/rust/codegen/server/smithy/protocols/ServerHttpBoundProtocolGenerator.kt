@@ -5,10 +5,11 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
+import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
+import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.node.ExpectationNotMetException
-import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.MapShape
@@ -180,6 +181,8 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
     private val httpBindingResolver = protocol.httpBindingResolver
+    private val legacyResponseBindings = codegenContext.settings.protocolResponseSettings.legacyResponseBindings(codegenContext.protocol)
+    private val isAwsJson = codegenContext.protocol == AwsJson1_0Trait.ID || codegenContext.protocol == AwsJson1_1Trait.ID
     private val protocolFunctions = ProtocolFunctions(codegenContext)
 
     fun withHttpBindingCustomizations(
@@ -523,9 +526,13 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             }
                         }
                     }
+                    // AWS JSON derives error status from @error; @httpError is a REST binding.
                     val status =
-                        variantShape.getTrait<HttpErrorTrait>()?.code
-                            ?: errorTrait.defaultHttpStatusCode
+                        if (isAwsJson && !legacyResponseBindings) {
+                            errorTrait.defaultHttpStatusCode
+                        } else {
+                            variantShape.getTrait<HttpErrorTrait>()?.code ?: errorTrait.defaultHttpStatusCode
+                        }
 
                     serverRenderContentLengthHeader()
 
@@ -550,16 +557,13 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         Attribute.AllowUnusedMut.render(this)
         rustTemplate("let mut builder = #{http}::Response::builder();", *codegenScope)
         serverRenderResponseHeaders(operationShape)
-        // Fallback to the default code of `@http`, which should be 200.
-        val httpTraitDefaultStatusCode =
-            HttpTrait.builder()
-                .method("GET")
-                .uri(UriPattern.parse("/")) // Required to build
-                .build()
-                .code
-        check(httpTraitDefaultStatusCode == 200)
+        // Use the protocol's status, except when preserving historical AWS JSON responses.
         val httpTraitStatusCode =
-            operationShape.getTrait<HttpTrait>()?.code ?: httpTraitDefaultStatusCode
+            if (legacyResponseBindings) {
+                operationShape.getTrait<HttpTrait>()?.code ?: 200
+            } else {
+                httpBindingResolver.httpTrait(operationShape).code
+            }
         bindings.find { it.location == HttpLocation.RESPONSE_CODE }?.let {
             serverRenderResponseCodeBinding(it, httpTraitStatusCode)(this)
         }
@@ -670,18 +674,20 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         operationShape: OperationShape,
         errorShape: StructureShape? = null,
     ) {
-        val bindingGenerator =
-            ServerResponseBindingGenerator(protocol, codegenContext, operationShape)
-        val addHeadersFn = bindingGenerator.generateAddHeadersFn(errorShape ?: operationShape)
-        if (addHeadersFn != null) {
-            // Notice that we need to borrow the output only for output shapes but not for error shapes.
-            val outputOwnedOrBorrowed = if (errorShape == null) "&output" else "output"
-            rust(
-                """
-                builder = #{T}($outputOwnedOrBorrowed, builder)?;
-                """,
-                addHeadersFn,
-            )
+        // RPC header-bound members belong in the document, including on modeled errors.
+        if (!httpBindingResolver.isRpcProtocol() || legacyResponseBindings) {
+            val bindingGenerator =
+                ServerResponseBindingGenerator(protocol, codegenContext, operationShape)
+            val addHeadersFn = bindingGenerator.generateAddHeadersFn(errorShape ?: operationShape)
+            if (addHeadersFn != null) {
+                val outputOwnedOrBorrowed = if (errorShape == null) "&output" else "output"
+                rust(
+                    """
+                    builder = #{T}($outputOwnedOrBorrowed, builder)?;
+                    """,
+                    addHeadersFn,
+                )
+            }
         }
 
         // Set the `Content-Type` header *after* the response bindings headers have been set,
