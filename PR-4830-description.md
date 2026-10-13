@@ -8,9 +8,9 @@ Add configurable timeouts for:
   - Expiry returns `408 Request Timeout`, with `Connection: close` for HTTP/1.x.
 
 - **Event streams**
-  - **a. Initial message:** Covers waiting for and completing an initial frame, where the RPC operation has initial-message fields. Expiry rejects the request before the handler runs. **Disabled by default.**
+  - **a. Initial message:** Covers the existing pre-handler first-frame read on RPC event streams, including inputs with only an event stream. Expiry rejects the request before the handler runs. **Disabled by default.**
   - **b. Message completion:** Covers completing an event frame after its first bytes arrive. Slow-drip bytes do not reset the deadline. **Disabled by default.**
-  - **c. Idle:** Covers waiting for the first event on streams without an initial read, and waiting between events. **Disabled by default.**
+  - **c. Idle:** Covers waiting for the first event on REST streams, and waiting between events after the RPC first-frame read. **Disabled by default.**
   - Completion and idle expiry return `MessageTimeoutError` through the handler's `recv()`. The handler can retry or end processing.
 
 Also default `serve` to **16,384 concurrent TCP connections**, configurable through `.max_connections(...)`.

@@ -30,11 +30,11 @@ codegen-server/build/event-stream-wire/json_tests event_stream_timeouts_over_tcp
 The 38 scenarios cover REST JSON, AWS JSON 1.1, and RPC v2 CBOR. They check:
 
 - Initial expiry before the handler is invoked.
-- RPC inputs with only an event stream enter the handler without an initial read:
-  first-event idle and completion errors reach the handler, and a first event
-  arriving after the configured initial deadline is accepted within its idle deadline.
+- RPC inputs with only an event stream preserve the pre-handler first-frame read:
+  missing or incomplete first frames use the initial deadline and reject before
+  the handler, while a complete first ordinary event is buffered for the handler.
 - Completion expiry during slow-drip frames, including a split length prefix.
-- Idle expiry before the first event and between complete events.
+- Idle expiry before the first REST event, after the RPC first-frame read, and between complete events.
 - Timely events across multiple windows without conflicting deadlines.
 - Inherited settings, operation overrides, and disabled idle deadlines.
 - Handler retries after idle/completion expiry, preserving partial frame bytes.
@@ -59,4 +59,5 @@ them and use real wall-clock time.
 RPC v2 CBOR operations used for initial-read checks have an optional non-stream
 input field. AWS JSON's server generator currently rejects combining non-stream
 input fields with an event stream, so its checks use stream-only inputs.
-`NoInitialEvents` has only the event stream and uses a 400 ms idle override.
+`NoInitialEvents` has only the event stream and still reads its first frame before
+the handler. Its 400 ms idle override applies after that frame.

@@ -274,7 +274,7 @@ impl WireClient {
     }
 
     async fn initial(&self, protocol: WireProtocol) {
-        if protocol == WireProtocol::Cbor {
+        if protocol != WireProtocol::Rest {
             self.send(protocol.frame(true)).await;
         }
     }
@@ -362,27 +362,28 @@ async fn wire_scenarios(protocol: WireProtocol) {
         }
     }
     if protocol != WireProtocol::Rest {
+        let calls = HANDLER_CALLS.load(Ordering::SeqCst);
         let client = WireClient::connect(addr, protocol, "NoInitialEvents", true).await;
         let started = Instant::now();
-        client
-            .expect_after(started, ms(400), Some(("idle", 0)), false)
-            .await;
-        pass("stream_only_RPC_idle_before_first_event_reaches_handler");
+        client.expect_after(started, ms(300), None, true).await;
+        assert_eq!(HANDLER_CALLS.load(Ordering::SeqCst), calls);
+        pass("stream_only_RPC_missing_first_frame_rejected_before_handler");
 
         let client = WireClient::connect(addr, protocol, "NoInitialEvents", true).await;
         let started = Instant::now();
         client.send(protocol.frame(false).slice(..2)).await;
-        client
-            .expect_after(started, ms(200), Some(("completion", 0)), false)
-            .await;
-        pass("stream_only_RPC_partial_first_event_timeout_reaches_handler");
+        client.expect_after(started, ms(300), None, true).await;
+        assert_eq!(HANDLER_CALLS.load(Ordering::SeqCst), calls);
+        pass("stream_only_RPC_partial_first_frame_uses_initial_deadline");
 
         let mut client = WireClient::connect(addr, protocol, "NoInitialEvents", true).await;
-        client.pending_for(ms(350)).await;
+        client.pending_for(ms(250)).await;
+        assert_eq!(HANDLER_CALLS.load(Ordering::SeqCst), calls);
         client.send(protocol.frame(false)).await;
         client.finish();
         client.expect(Some(("eof", 1)), false).await;
-        pass("stream_only_RPC_first_event_after_initial_deadline_is_accepted");
+        assert_eq!(HANDLER_CALLS.load(Ordering::SeqCst), calls + 1);
+        pass("stream_only_RPC_first_event_is_buffered_before_handler");
     }
     let client = WireClient::connect(addr, protocol, "PublishEvents", true).await;
     let started = Instant::now();
