@@ -209,7 +209,7 @@ impl<C: Codec> RestProtocol<C> {
         schema: &Schema<'_>,
         error: &dyn SerializableStruct,
         status: u16,
-        content_type: &'static str,
+        content_type: Option<&str>,
     ) -> Result<Response, SerdeError> {
         let parts = self.error_plans.serialize(
             codec,
@@ -218,7 +218,7 @@ impl<C: Codec> RestProtocol<C> {
             ResponseBindings::Rest,
             ResponseValueKind::ModeledError,
         )?;
-        assemble_response(parts, status, Some(content_type))
+        assemble_response(parts, status, content_type)
     }
 
     pub(crate) fn serialize_streaming_response(

@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -127,6 +128,15 @@ open class ServerOperationErrorGenerator(
                 rustBlock("fn status_code(&self) -> u16") {
                     delegateToVariants(errors, errorSymbol) { rust("#T::status_code(_inner)", httpModeledError) }
                 }
+                rustTemplate(
+                    """
+                    fn operation_schema(&self) -> #{Option}<&#{Server}::schema::OperationSchema<'_>> {
+                        #{Some}(<crate::operation_shape::${symbol.name} as #{Server}::operation::SchemaOperationShape>::SCHEMA)
+                    }
+                    """,
+                    *RuntimeType.preludeScope,
+                    "Server" to server,
+                )
             }
         }
 

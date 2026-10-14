@@ -158,13 +158,18 @@ impl ServerProtocol for RestXmlProtocol {
     fn serialize_error(&self, error: &dyn HttpModeledError) -> Response {
         // restXml carries no discriminator: the error structure is the body.
         let schema = error.schema();
+        // Legacy can omit this header, depending on the operation's success output.
+        let content_type = match error.operation_schema() {
+            Some(operation) => self.inner.response_content_type(operation.output()),
+            None => Some(CONTENT_TYPE),
+        };
         self.inner
             .serialize_modeled_error(
                 &ResponseXmlCodec::new(self.inner.codec(), schema),
                 schema,
                 error,
                 error.status_code(),
-                CONTENT_TYPE,
+                content_type,
             )
             .map(|response| stamp_error_extension(response, schema.shape_id().shape_name()))
             .unwrap_or_else(serialization_failure)
