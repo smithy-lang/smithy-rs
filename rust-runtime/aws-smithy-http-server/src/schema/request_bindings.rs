@@ -181,6 +181,9 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
                 }
             } else if let Some(prefix) = member.http_prefix_headers() {
                 let prefix = prefix.value();
+                let trim_string_values = member
+                    .member()
+                    .is_some_and(|value| value.shape_type() == ShapeType::String && value.media_type().is_none());
                 // Each header name once, in order of first appearance (`Headers::iter_bytes` yields
                 // one entry per value).
                 let mut seen: HashSet<&str> = HashSet::new();
@@ -191,7 +194,7 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
                     .filter(|name| seen.insert(*name));
                 let mut entries: Vec<(&str, Vec<&str>)> = Vec::new();
                 for (suffix, full_name) in aws_smithy_http::header::headers_for_prefix(names, prefix) {
-                    let values: Vec<&str> = self
+                    let mut values: Vec<&str> = self
                         .headers
                         .get_all_bytes(full_name)
                         .map(header_text)
@@ -200,6 +203,13 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
                         return Err(SerdeError::invalid_input(
                             "expected a single prefix header value but found multiple",
                         ));
+                    }
+                    if trim_string_values {
+                        // Match legacy one_or_none_bytes for plain strings and enums.
+                        // Normalize here so the shared map reader preserves query whitespace.
+                        for value in &mut values {
+                            *value = value.trim();
+                        }
                     }
                     if !values.is_empty() {
                         entries.push((suffix, values));
@@ -1712,6 +1722,62 @@ mod tests {
                 })
                 .unwrap();
             assert_eq!(seen, 2);
+        }
+    }
+
+    #[test]
+    fn prefix_header_strings_trim_whitespace_without_changing_query_maps() {
+        let prefix = Schema::new_member(
+            ShapeId::from_parts("test#Prefix$meta", "test", "Prefix"),
+            ShapeType::Map,
+            "meta",
+            0,
+        )
+        .with_map_members(&HP_STRING, &HP_STRING)
+        .with_http_prefix_headers("X-Meta-");
+        let query = Schema::new_member(
+            ShapeId::from_parts("test#Prefix$params", "test", "Prefix"),
+            ShapeType::Map,
+            "params",
+            1,
+        )
+        .with_map_members(&HP_STRING, &HP_STRING)
+        .with_http_query_params();
+        let members = [&prefix, &query];
+        let schema = Schema::new_struct(
+            ShapeId::from_parts("test#Prefix", "test", "Prefix"),
+            ShapeType::Structure,
+            &members,
+        );
+        for (raw, expected) in [
+            ("  red  ", "red"),
+            (" \t red \t ", "red"),
+            (" \t ", ""),
+            ("", ""),
+            (" red \t blue ", "red \t blue"),
+            (" \" red, blue \" ", "\" red, blue \""),
+            ("\u{a0}red\u{2003}", "red"),
+        ] {
+            let codec = json_codec();
+            let (uri, headers) = request_parts("/prefix?q=%20query%20", &[("x-meta-key", raw)]);
+            let mut deser = RestRequestDeserializer::new(&codec, &uri, &headers, b"");
+            let mut values = Vec::new();
+            deser
+                .read_struct(&schema, &mut |member, d| {
+                    d.read_map(member, &mut |key, d| {
+                        values.push((member.member_index(), key, d.read_string(&HP_STRING)?));
+                        Ok(())
+                    })
+                })
+                .unwrap();
+            assert_eq!(
+                values,
+                [
+                    (Some(0), "key".to_owned(), expected.to_owned()),
+                    (Some(1), "q".to_owned(), " query ".to_owned()),
+                ],
+                "{raw:?}"
+            );
         }
     }
 
