@@ -181,6 +181,18 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
                 }
             } else if let Some(prefix) = member.http_prefix_headers() {
                 let prefix = prefix.value();
+                if let Some(value_schema) = member
+                    .member()
+                    .filter(|value| value.shape_type() == ShapeType::String && value.media_type().is_some())
+                {
+                    let mut deser = MediaHeaderMapDeserializer {
+                        headers: self.headers,
+                        prefix,
+                        value_schema,
+                    };
+                    consumer(member, &mut deser)?;
+                    continue;
+                }
                 let trim_string_values = member
                     .member()
                     .is_some_and(|value| value.shape_type() == ShapeType::String && value.media_type().is_none());
@@ -971,6 +983,74 @@ impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
 // Prefix headers and query-params maps
 // ============================================================================
 
+/// Reads media-typed prefix headers one entry at a time, preserving legacy parsing order.
+/// Uses the header reader for tokenization, base64 decoding, UTF-8 and cardinality.
+struct MediaHeaderMapDeserializer<'a> {
+    headers: &'a Headers,
+    prefix: &'a str,
+    value_schema: &'a Schema<'a>,
+}
+
+impl ShapeDeserializer for MediaHeaderMapDeserializer<'_> {
+    unsupported_read_struct!("media-typed prefix headers are a map");
+
+    fn read_map(
+        &mut self,
+        _schema: &Schema<'_>,
+        consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        let mut seen = HashSet::new();
+        let names = self
+            .headers
+            .iter_bytes()
+            .map(|(name, _)| name)
+            .filter(|name| seen.insert(*name));
+        for (suffix, full_name) in aws_smithy_http::header::headers_for_prefix(names, self.prefix) {
+            // Count parsed tokens rather than physical header instances: an empty
+            // instance contributes no token, but a quoted empty string contributes one.
+            let mut value =
+                HeaderValuesDeserializer::try_new_bytes(self.headers.get_all_bytes(full_name), self.value_schema)?
+                    // Reject an all-empty value set instead of reproducing the legacy panic.
+                    .ok_or_else(|| SerdeError::invalid_input("expected one item but found 0"))?;
+            consumer(suffix.to_owned(), &mut value)?;
+        }
+        Ok(())
+    }
+
+    fn read_list(
+        &mut self,
+        _schema: &Schema<'_>,
+        _consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        Err(SerdeError::unsupported("media-typed prefix headers are a map"))
+    }
+
+    unsupported_reads! {
+        "media-typed prefix headers are a map";
+        read_boolean -> bool,
+        read_byte -> i8,
+        read_short -> i16,
+        read_integer -> i32,
+        read_long -> i64,
+        read_float -> f32,
+        read_double -> f64,
+        read_big_integer -> BigInteger,
+        read_big_decimal -> BigDecimal,
+        read_string -> String,
+        read_blob -> Blob,
+        read_timestamp -> DateTime,
+        read_document -> Document,
+    }
+
+    fn is_null(&self) -> bool {
+        false
+    }
+
+    fn container_size(&self) -> Option<usize> {
+        None
+    }
+}
+
 /// Deserializer over borrowed, decoded entries for a query-params or prefix-header map.
 /// Strings are allocated only when returning owned keys and values to the consumer.
 ///
@@ -1722,6 +1802,58 @@ mod tests {
                 })
                 .unwrap();
             assert_eq!(seen, 2);
+        }
+    }
+
+    #[test]
+    fn media_type_prefix_headers_decode_and_validate_values() {
+        let prefix = Schema::new_member(
+            ShapeId::from_parts("test#MediaPrefix$meta", "test", "MediaPrefix"),
+            ShapeType::Map,
+            "meta",
+            0,
+        )
+        .with_map_members(&HP_STRING, &HP_JSON_MEMBER)
+        .with_http_prefix_headers("x-media-");
+        let members = [&prefix];
+        let schema = Schema::new_struct(
+            ShapeId::from_parts("test#MediaPrefix", "test", "MediaPrefix"),
+            ShapeType::Structure,
+            &members,
+        );
+        let read = |values: &[&str]| {
+            let codec = json_codec();
+            let headers: Vec<_> = values.iter().map(|value| ("x-media-key", *value)).collect();
+            let (uri, headers) = request_parts("/prefix", &headers);
+            let mut deser = RestRequestDeserializer::new(&codec, &uri, &headers, b"");
+            let mut output = Vec::new();
+            deser.read_struct(&schema, &mut |member, d| {
+                d.read_map(member, &mut |key, d| {
+                    output.push((key, d.read_string(&HP_JSON_MEMBER)?));
+                    Ok(())
+                })
+            })?;
+            Ok::<_, SerdeError>(output)
+        };
+        assert!(read(&[]).unwrap().is_empty());
+        for values in [vec![""], vec!["", ""]] {
+            let error = read(&values).unwrap_err();
+            assert!(error.to_string().contains("expected one item but found 0"));
+        }
+        for (values, expected) in [
+            (vec!["e30="], "{}"),
+            (vec!["\"e30=\""], "{}"),
+            (vec!["", "e30="], "{}"),
+            (vec!["e30=", ""], "{}"),
+            (vec!["IHgg"], " x "),
+            (vec!["Y2Fmw6k="], "caf\u{e9}"),
+            (vec!["\"\""], ""),
+            (vec![" \t "], ""),
+        ] {
+            assert_eq!(read(&values).unwrap(), [("key".to_owned(), expected.to_owned())]);
+        }
+        for values in [vec!["!"], vec!["/w=="], vec!["e30=,e30="], vec!["e30=", "e30="]] {
+            assert!(read(&values).is_err(), "{values:?}");
         }
     }
 
