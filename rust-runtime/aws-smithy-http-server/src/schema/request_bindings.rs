@@ -2156,18 +2156,18 @@ mod tests {
         &SP_TARGET_MEMBERS,
     );
 
-    /// Reads a payload the way generated code does (`null` → unset). `Ok(Some(true))` = set.
+    /// Reads a payload the way generated code does (Document `null` stays present). `Ok(Some(true))` = set.
     fn read_payload(input: &Schema<'_>, body: &[u8]) -> Result<Option<bool>, SerdeError> {
         let codec = json_codec();
         let (uri, headers) = request_parts("/sp", &[]);
         let mut deser = RestRequestDeserializer::new(&codec, &uri, &headers, body);
         let mut set = None;
         deser.read_struct(input, &mut |member, d| {
-            if d.is_null() {
-                d.read_null()?;
-            } else if member.shape_type() == ShapeType::Document {
+            if member.shape_type() == ShapeType::Document {
                 d.read_document(member)?;
                 set = Some(true);
+            } else if d.is_null() {
+                d.read_null()?;
             } else {
                 d.read_struct(&SP_TARGET, &mut |_, _| Ok(()))?;
                 set = Some(true);
@@ -2190,7 +2190,10 @@ mod tests {
         }
         assert_eq!(read_payload(&SP_INPUT, b"").unwrap(), None);
         assert_eq!(read_payload(&SP_INPUT, b"{}").unwrap(), Some(true));
-        assert!(read_payload(&SP_DOC_INPUT, b"null").is_ok());
+        assert_eq!(read_payload(&SP_DOC_INPUT, b"").unwrap(), None);
+        for body in [&b"null"[..], b" null", b"\n null \n"] {
+            assert_eq!(read_payload(&SP_DOC_INPUT, body).unwrap(), Some(true));
+        }
     }
 
     /// Legacy percent-decodes string and timestamp labels but parses number and boolean labels
