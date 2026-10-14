@@ -29,6 +29,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -213,7 +214,9 @@ class ServerSchemaDeserializeGenerator(
                             } else {
                                 "builder.$fieldName = Some(${memberValueExpr(member)});"
                             }
-                        if (symbolProvider.toSymbol(member).isOptional()) {
+                        // A Document payload's JSON null is a value; an empty body is handled by the request deserializer.
+                        val documentPayload = member.hasTrait<HttpPayloadTrait>() && model.expectShape(member.target) is DocumentShape
+                        if (symbolProvider.toSymbol(member).isOptional() && !documentPayload) {
                             rust("Some($index) => { if deser.is_null() { deser.read_null()?; } else { $assignment } }")
                         } else {
                             rust("Some($index) => { $assignment }")
@@ -277,7 +280,9 @@ class ServerSchemaDeserializeGenerator(
                             } else {
                                 "builder.$fieldName = Some(${memberValueExpr(member)});"
                             }
-                        if (symbolProvider.toSymbol(member).isOptional()) {
+                        // A Document payload's JSON null is a value; an empty body is handled by the request deserializer.
+                        val documentPayload = member.hasTrait<HttpPayloadTrait>() && model.expectShape(member.target) is DocumentShape
+                        if (symbolProvider.toSymbol(member).isOptional() && !documentPayload) {
                             rust("Some($index) => { if deser.is_null() { deser.read_null()?; } else { $assignment } }")
                         } else {
                             rust("Some($index) => { $assignment }")
