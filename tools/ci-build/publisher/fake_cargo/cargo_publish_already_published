@@ -1,3 +1,10 @@
 #!/bin/bash
-echo 'error: crate version `0.0.22-alpha` is already uploaded'
+# What cargo actually prints when the coordinate already exists: the registry's sentence arrives
+# wrapped in a `Caused by` block, on stderr, with no `error: ` prefix adjacent to it.
+cat >&2 <<'EOF'
+error: failed to publish to registry at https://crates.io/
+
+Caused by:
+  the remote server responded with an error (status 400 Bad Request): crate version `0.0.22-alpha` is already uploaded
+EOF
 exit 1
