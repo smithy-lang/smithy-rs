@@ -90,7 +90,7 @@ name = "base64"
 harness = false
 
 [target."cfg(aws_sdk_unstable)".dependencies.serde]
-version = "1.0.228"
+version = "1.0.229"
 features = ["derive"]
 
 [lints.rust]
