@@ -509,7 +509,13 @@ impl ShapeSerializer for XmlSerializer {
             // surface), consume it here. Only applies at the document root —
             // nested struct calls always have at least one open frame.
             let root_override = if self.frames.is_empty() {
-                self.next_root_xml_name.take()
+                self.next_root_xml_name.take().or_else(|| {
+                    schema
+                        .traits()
+                        .and_then(|traits| traits.get_fqn("smithy.api#error"))
+                        .and(self.settings.error_root_name)
+                        .map(str::to_owned)
+                })
             } else {
                 None
             };
@@ -994,6 +1000,102 @@ mod tests {
         let mut ser = XmlSerializer::new(Arc::new(XmlCodecSettings::default()));
         write(&mut ser).expect("serialization failed");
         String::from_utf8(<XmlSerializer as FinishSerializer>::finish(ser)).unwrap()
+    }
+
+    #[test]
+    fn nested_collections_use_member_and_map_value_schemas() {
+        static CELL: Schema<'static> = Schema::new_member(
+            shape_id!("test", "NestedCollectionsMatrixListMemberList", "member"),
+            ShapeType::Short,
+            "member",
+            0,
+        );
+        static ROW: Schema<'static> = Schema::new_member(
+            shape_id!("test", "NestedCollectionsMatrixList", "member"),
+            ShapeType::List,
+            "member",
+            0,
+        )
+        .with_list_member(&CELL);
+        static MATRIX: Schema<'static> = Schema::new_member(
+            shape_id!("test", "NestedCollections", "matrix"),
+            ShapeType::List,
+            "matrix",
+            0,
+        )
+        .with_list_member(&ROW);
+        static KEY: Schema<'static> = Schema::new_member(
+            shape_id!("test", "NestedCollectionsValuesMap", "key"),
+            ShapeType::String,
+            "key",
+            0,
+        );
+        static FLAG: Schema<'static> = Schema::new_member(
+            shape_id!("test", "NestedCollectionsValuesMapValueList", "member"),
+            ShapeType::Boolean,
+            "member",
+            0,
+        );
+        static VALUE: Schema<'static> = Schema::new_member(
+            shape_id!("test", "NestedCollectionsValuesMap", "value"),
+            ShapeType::List,
+            "value",
+            1,
+        )
+        .with_list_member(&FLAG);
+        static VALUES: Schema<'static> = Schema::new_member(
+            shape_id!("test", "NestedCollections", "values"),
+            ShapeType::Map,
+            "values",
+            1,
+        )
+        .with_map_members(&KEY, &VALUE);
+        static COLLECTIONS: Schema<'static> = Schema::new_struct(
+            shape_id!("test", "NestedCollections"),
+            ShapeType::Structure,
+            &[&MATRIX, &VALUES],
+        );
+        struct NestedCollections {
+            matrix: Vec<Vec<i16>>,
+            values: std::collections::HashMap<String, Vec<bool>>,
+        }
+        impl SerializableStruct for NestedCollections {
+            fn schema(&self) -> &Schema<'_> {
+                &COLLECTIONS
+            }
+
+            fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                ser.write_list(&MATRIX, &|ser| {
+                    for row in &self.matrix {
+                        ser.write_list(&ROW, &|ser| {
+                            for cell in row {
+                                ser.write_short(&CELL, *cell)?;
+                            }
+                            Ok(())
+                        })?;
+                    }
+                    Ok(())
+                })?;
+                ser.write_map(&VALUES, &|ser| {
+                    for (key, flags) in &self.values {
+                        ser.write_string(&KEY, key)?;
+                        ser.write_list(&VALUE, &|ser| {
+                            for flag in flags {
+                                ser.write_boolean(&FLAG, *flag)?;
+                            }
+                            Ok(())
+                        })?;
+                    }
+                    Ok(())
+                })
+            }
+        }
+        let value = NestedCollections {
+            matrix: vec![vec![1, 2]],
+            values: std::collections::HashMap::from([("flags".into(), vec![false, true])]),
+        };
+        let output = serialize(|ser| ser.write_struct(&COLLECTIONS, &value));
+        assert_eq!(output, "<NestedCollections><matrix><member><member>1</member><member>2</member></member></matrix><values><entry><key>flags</key><value><member>false</member><member>true</member></value></entry></values></NestedCollections>");
     }
 
     #[test]
