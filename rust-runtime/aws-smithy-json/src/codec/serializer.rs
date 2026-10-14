@@ -467,38 +467,28 @@ impl ShapeSerializer for JsonSerializer {
 
     fn write_float(&mut self, schema: &Schema<'_>, value: f32) -> Result<(), SerdeError> {
         self.prefix(schema);
-        if value.is_nan() {
-            self.output.push_str("\"NaN\"");
-            Ok(())
-        } else if value.is_infinite() {
-            if value.is_sign_positive() {
-                self.output.push_str("\"Infinity\"");
-            } else {
-                self.output.push_str("\"-Infinity\"");
-            }
-            Ok(())
+        let mut encoder = Encoder::from(value);
+        if value.is_finite() {
+            self.output.push_str(encoder.encode());
         } else {
-            self.output.push_str(Encoder::from(value).encode());
-            Ok(())
+            self.output.push('"');
+            self.output.push_str(encoder.encode());
+            self.output.push('"');
         }
+        Ok(())
     }
 
     fn write_double(&mut self, schema: &Schema<'_>, value: f64) -> Result<(), SerdeError> {
         self.prefix(schema);
-        if value.is_nan() {
-            self.output.push_str("\"NaN\"");
-            Ok(())
-        } else if value.is_infinite() {
-            if value.is_sign_positive() {
-                self.output.push_str("\"Infinity\"");
-            } else {
-                self.output.push_str("\"-Infinity\"");
-            }
-            Ok(())
+        let mut encoder = Encoder::from(value);
+        if value.is_finite() {
+            self.output.push_str(encoder.encode());
         } else {
-            self.output.push_str(Encoder::from(value).encode());
-            Ok(())
+            self.output.push('"');
+            self.output.push_str(encoder.encode());
+            self.output.push('"');
         }
+        Ok(())
     }
 
     fn write_big_integer(
@@ -620,35 +610,35 @@ mod tests {
 
     #[test]
     fn floats_preserve_decimal_points_and_original_precision() {
-        let list_schema = Schema::new(
+        let list = Schema::new(
             aws_smithy_schema::shape_id!("test", "Floats"),
             ShapeType::List,
         );
         let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
-        ser.write_list(&list_schema, &|s| {
-            s.write_float(&FLOAT, 1.0)?;
-            s.write_double(&DOUBLE, 1.0)?;
-            s.write_float(&FLOAT, 0.0)?;
-            s.write_double(&DOUBLE, 0.0)?;
-            s.write_float(&FLOAT, -0.0)?;
-            s.write_double(&DOUBLE, -0.0)?;
-            s.write_float(&FLOAT, 1.01)?;
-            s.write_double(&DOUBLE, 1.01)?;
-            s.write_float(&FLOAT, 3.15)?;
-            s.write_double(&DOUBLE, 3.15)?;
-            s.write_float(&FLOAT, f32::NAN)?;
-            s.write_double(&DOUBLE, f64::NAN)?;
-            s.write_float(&FLOAT, f32::INFINITY)?;
-            s.write_double(&DOUBLE, f64::INFINITY)?;
-            s.write_float(&FLOAT, f32::NEG_INFINITY)?;
-            s.write_double(&DOUBLE, f64::NEG_INFINITY)?;
+        ser.write_list(&list, &|ser| {
+            ser.write_float(&FLOAT, 1.0)?;
+            ser.write_double(&DOUBLE, 1.0)?;
+            ser.write_float(&FLOAT, 0.0)?;
+            ser.write_double(&DOUBLE, 0.0)?;
+            ser.write_float(&FLOAT, -0.0)?;
+            ser.write_double(&DOUBLE, -0.0)?;
+            ser.write_float(&FLOAT, 1.01)?;
+            ser.write_double(&DOUBLE, 1.01)?;
+            ser.write_float(&FLOAT, 3.15)?;
+            ser.write_double(&DOUBLE, 3.15)?;
+            ser.write_float(&FLOAT, f32::INFINITY)?;
+            ser.write_float(&FLOAT, f32::NEG_INFINITY)?;
+            ser.write_float(&FLOAT, f32::NAN)?;
+            ser.write_double(&DOUBLE, f64::INFINITY)?;
+            ser.write_double(&DOUBLE, f64::NEG_INFINITY)?;
+            ser.write_double(&DOUBLE, f64::NAN)?;
             Ok(())
         })
         .unwrap();
-        // Compare wire bytes: parsing JSON would hide the missing decimal points.
+        let output = String::from_utf8(ser.finish()).unwrap();
         assert_eq!(
-            String::from_utf8(ser.finish()).unwrap(),
-            r#"[1.0,1.0,0.0,0.0,-0.0,-0.0,1.01,1.01,3.15,3.15,"NaN","NaN","Infinity","Infinity","-Infinity","-Infinity"]"#
+            output,
+            r#"[1.0,1.0,0.0,0.0,-0.0,-0.0,1.01,1.01,3.15,3.15,"Infinity","-Infinity","NaN","Infinity","-Infinity","NaN"]"#
         );
     }
 
