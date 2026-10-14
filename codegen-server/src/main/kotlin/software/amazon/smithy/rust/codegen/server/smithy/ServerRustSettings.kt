@@ -56,6 +56,8 @@ data class ServerRustSettings(
         minimumSupportedRustVersion,
         customizationConfig,
     ) {
+    internal val protocolResponseSettings = ServerProtocolResponseSettings.from(customizationConfig)
+
     companion object {
         fun from(
             model: Model,
