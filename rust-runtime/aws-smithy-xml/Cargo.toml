@@ -17,7 +17,7 @@ xmlparser = "0.13.5"
 [dev-dependencies]
 aws-smithy-protocol-test = { path = "../aws-smithy-protocol-test" }
 base64 = "0.13.0"
-proptest = "1"
+proptest = "1.11.0"
 
 [package.metadata.docs.rs]
 all-features = true
