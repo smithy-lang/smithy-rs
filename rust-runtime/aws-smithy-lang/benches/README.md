@@ -1,6 +1,6 @@
 # Benchmarks
 
-`model.rs` measures three operations on the SQS, S3, and EC2 models from
+`model.rs` measures these operations on the SQS, S3, and EC2 models from
 `aws/sdk/aws-models`:
 
 - `parse`: `Model::from_json_slice` from in-memory bytes. This includes prelude injection
@@ -36,3 +36,16 @@ Times are criterion medians.
 | EC2   | 6.35 MB  | 109.3 ms (55 MiB/s)   |  9.65 ms | 8.95 ms |
 
 EC2 parses at roughly half the throughput of S3. The cause has not been profiled.
+
+## Knowledge-index baseline
+
+Same machine, toolchain, and fixture commit as above; crate commit `1cb221fdd` plus the
+uncommitted knowledge indexes. Measured with `--warm-up-time 1 --measurement-time 3`.
+
+| Model | `relationship_index_build` | `contained_operations` | `incoming_relationships` | `input_bindings` | `parent_chain` |
+| ----- | -------------------------: | ---------------------: | -----------------------: | ---------------: | -------------: |
+| SQS   |  0.26 ms |   3.2 µs | 0.66 µs | 0.10 µs |  1.7 µs |
+| S3    |  1.31 ms |  15.1 µs | 0.68 µs | 0.11 µs |  7.8 µs |
+| EC2   | 11.96 ms | 108.3 µs | 0.68 µs | 0.11 µs | 37.1 µs |
+
+`service_closure` was re-measured in the same run at 0.13 ms, 1.02 ms, and 10.06 ms.

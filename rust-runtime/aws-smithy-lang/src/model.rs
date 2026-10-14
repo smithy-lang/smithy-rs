@@ -7,6 +7,7 @@
 
 use crate::ast::{Document, ShapeDecl};
 use crate::diagnostic::LoadError;
+use crate::knowledge::{Knowledge, KnowledgeCache};
 use crate::loader::ModelLoader;
 use crate::node::{Node, NodeObject};
 use crate::shape::{
@@ -32,12 +33,40 @@ pub(crate) fn unit_id() -> &'static ShapeId {
 /// `document` is the declaration layer: exactly what the document declared. In `0.1` the
 /// resolved (effective) view is computed directly from declarations because `apply` and
 /// mixins are rejected. A separate resolution index will be added alongside them.
+///
+/// `knowledge` holds lazily computed derived facts. It only stores owned IDs and indices, never
+/// references into the model, and is ignored by the writer and by [`Model::equivalent`].
 pub(crate) struct ModelData {
     pub(crate) document: Document,
     pub(crate) prelude: Option<&'static Document>,
+    pub(crate) knowledge: KnowledgeCache,
 }
 
 impl ModelData {
+    /// The number of root shapes, including the prelude.
+    pub(crate) fn root_count(&self) -> usize {
+        self.document.shapes.len() + self.prelude.map_or(0, |p| p.shapes.len())
+    }
+
+    /// The position of a root shape in [`declarations`](Self::declarations) order.
+    pub(crate) fn root_position(&self, id: &str) -> Option<usize> {
+        if let Some(position) = self.document.shapes.get_index_of(id) {
+            return Some(position);
+        }
+        Some(self.document.shapes.len() + self.prelude?.shapes.get_index_of(id)?)
+    }
+
+    /// The root shape at a position in [`declarations`](Self::declarations) order.
+    pub(crate) fn root_at(&self, position: usize) -> &ShapeDecl {
+        let document = self.document.shapes.len();
+        if position < document {
+            &self.document.shapes[position]
+        } else {
+            let prelude = self.prelude.expect("root positions are in range");
+            &prelude.shapes[position - document]
+        }
+    }
+
     /// A root shape declaration from the document or the prelude.
     pub(crate) fn root(&self, id: &str) -> Option<&ShapeDecl> {
         self.document
@@ -150,7 +179,16 @@ impl Model {
 
     /// The number of root shapes, including the prelude.
     pub fn len(&self) -> usize {
-        self.data.document.shapes.len() + self.data.prelude.map_or(0, |p| p.shapes.len())
+        self.data.root_count()
+    }
+
+    /// Derived, cached knowledge about the model: complete service and resource closures,
+    /// operation knowledge, parent lookups, and incoming relationships.
+    ///
+    /// Indexes are computed on first use and shared by every clone of this model. See the
+    /// [`knowledge`](crate::knowledge) module.
+    pub fn knowledge(&self) -> Knowledge<'_> {
+        Knowledge::new(&self.data)
     }
 
     /// Returns `true` if the model has no root shapes (only possible without the prelude).
@@ -266,7 +304,11 @@ impl ModelLoader {
             return Err(LoadError::invalid_model(diagnostics));
         }
         Ok(Model {
-            data: Arc::new(ModelData { document, prelude }),
+            data: Arc::new(ModelData {
+                document,
+                prelude,
+                knowledge: KnowledgeCache::default(),
+            }),
         })
     }
 }
@@ -336,17 +378,24 @@ mod tests {
         assert_eq!(service.version(), Some("2024-01-01"));
         assert_eq!(service.renamed("ex#Name"), Some("ThingName"));
         assert_eq!(
-            service.errors().map(ShapeId::as_str).collect::<Vec<_>>(),
+            service
+                .common_errors()
+                .map(ShapeId::as_str)
+                .collect::<Vec<_>>(),
             ["ex#Oops"]
         );
         let ops: Vec<_> = service
-            .operations()
-            .map(|id| {
-                let op = model.expect_shape(id).unwrap().expect_operation().unwrap();
-                (op.input().to_string(), op.output().to_string())
-            })
+            .contained_operations()
+            .map(|op| (op.input().to_string(), op.output().to_string()))
             .collect();
         assert_eq!(ops, [("ex#GetThingInput".into(), "smithy.api#Unit".into())]);
+        assert_eq!(
+            service
+                .direct_operations()
+                .map(ShapeId::as_str)
+                .collect::<Vec<_>>(),
+            ["ex#GetThing"]
+        );
         let op = model
             .expect_shape("ex#GetThing")
             .unwrap()

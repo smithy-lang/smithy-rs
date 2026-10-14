@@ -602,6 +602,13 @@ macro_rules! ref_refinements {
 }
 
 impl<'a> ShapeRef<'a> {
+    pub(crate) fn data(&self) -> &'a ModelData {
+        match self {
+            ShapeRef::Shape(s) => s.data,
+            ShapeRef::Member(m) => m.data,
+        }
+    }
+
     /// The shape or member ID.
     pub fn id(&self) -> &'a ShapeId {
         match self {
@@ -874,18 +881,29 @@ impl<'a> ServiceView<'a> {
         self.decl().version.as_deref()
     }
 
-    /// Operations bound directly to the service.
-    pub fn operations(&self) -> impl ExactSizeIterator<Item = &'a ShapeId> + 'a {
+    /// **Declaration-only:** operations listed directly in the service's `operations`.
+    ///
+    /// This omits operations bound through resources, including resource lifecycle and
+    /// collection operations. Use [`contained_operations`](Self::contained_operations) for every
+    /// operation in the service.
+    pub fn direct_operations(&self) -> impl ExactSizeIterator<Item = &'a ShapeId> + 'a {
         self.decl().operations.iter()
     }
 
-    /// Resources bound directly to the service.
-    pub fn resources(&self) -> impl ExactSizeIterator<Item = &'a ShapeId> + 'a {
+    /// **Declaration-only:** resources listed directly in the service's `resources`.
+    ///
+    /// This omits nested child resources. Use
+    /// [`contained_resources`](Self::contained_resources) for every resource in the service.
+    pub fn direct_resources(&self) -> impl ExactSizeIterator<Item = &'a ShapeId> + 'a {
         self.decl().resources.iter()
     }
 
-    /// Errors common to every operation of the service.
-    pub fn errors(&self) -> impl ExactSizeIterator<Item = &'a ShapeId> + 'a {
+    /// **Declaration-only:** the service's common `errors`, which every contained operation can
+    /// also return.
+    ///
+    /// Use [`OperationKnowledge::errors_in`](crate::knowledge::OperationKnowledge::errors_in)
+    /// for the complete errors of an operation within this service.
+    pub fn common_errors(&self) -> impl ExactSizeIterator<Item = &'a ShapeId> + 'a {
         self.decl().errors.iter()
     }
 
@@ -941,8 +959,12 @@ impl<'a> OperationView<'a> {
         self.resolve(self.output())
     }
 
-    /// Errors the operation can return.
-    pub fn errors(&self) -> impl ExactSizeIterator<Item = &'a ShapeId> + 'a {
+    /// **Declaration-only:** errors listed directly in the operation's `errors`.
+    ///
+    /// This omits the common errors of the service the operation is used in. Use
+    /// [`OperationKnowledge::errors_in`](crate::knowledge::OperationKnowledge::errors_in) for
+    /// the complete errors of the operation within a service.
+    pub fn direct_errors(&self) -> impl ExactSizeIterator<Item = &'a ShapeId> + 'a {
         self.decl().errors.iter()
     }
 
@@ -1004,18 +1026,30 @@ impl<'a> ResourceView<'a> {
         self.decl().list.as_ref()
     }
 
-    /// Non-lifecycle instance operations.
-    pub fn operations(&self) -> impl ExactSizeIterator<Item = &'a ShapeId> + 'a {
+    /// **Declaration-only:** non-lifecycle instance operations listed in the resource's
+    /// `operations`.
+    ///
+    /// This omits lifecycle operations, collection operations, and operations of child
+    /// resources. Use [`contained_operations`](Self::contained_operations) for every operation in
+    /// the resource.
+    pub fn direct_operations(&self) -> impl ExactSizeIterator<Item = &'a ShapeId> + 'a {
         self.decl().operations.iter()
     }
 
-    /// Non-lifecycle collection operations.
-    pub fn collection_operations(&self) -> impl ExactSizeIterator<Item = &'a ShapeId> + 'a {
+    /// **Declaration-only:** non-lifecycle collection operations listed in the resource's
+    /// `collectionOperations`.
+    ///
+    /// Use [`contained_operations`](Self::contained_operations) for every operation in the
+    /// resource.
+    pub fn direct_collection_operations(&self) -> impl ExactSizeIterator<Item = &'a ShapeId> + 'a {
         self.decl().collection_operations.iter()
     }
 
-    /// Child resources.
-    pub fn resources(&self) -> impl ExactSizeIterator<Item = &'a ShapeId> + 'a {
+    /// **Declaration-only:** child resources listed directly in the resource's `resources`.
+    ///
+    /// This omits grandchildren and deeper descendants. Use
+    /// [`contained_resources`](Self::contained_resources) for every nested resource.
+    pub fn child_resources(&self) -> impl ExactSizeIterator<Item = &'a ShapeId> + 'a {
         self.decl().resources.iter()
     }
 }

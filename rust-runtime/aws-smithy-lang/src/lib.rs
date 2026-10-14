@@ -16,18 +16,25 @@
 //! let json = r#"{
 //!     "smithy": "2.0",
 //!     "shapes": {
-//!         "ex#Service": {"type": "service", "operations": [{"target": "ex#Ping"}]},
-//!         "ex#Ping": {"type": "operation"}
+//!         "ex#Service": {"type": "service", "resources": [{"target": "ex#Thing"}]},
+//!         "ex#Thing": {"type": "resource", "read": {"target": "ex#GetThing"}},
+//!         "ex#GetThing": {"type": "operation"}
 //!     }
 //! }"#;
 //! let model = Model::from_json_str("model.json", json)?;
 //! let service = model.expect_shape("ex#Service")?.expect_service()?;
-//! for operation_id in service.operations() {
-//!     let operation = model.expect_shape(operation_id)?.expect_operation()?;
-//!     println!("{operation_id} -> {}", operation.input());
+//! // Every operation in the service, including those bound through resources.
+//! for operation in service.contained_operations() {
+//!     println!("{} -> {}", operation.id(), operation.input());
 //! }
+//! assert_eq!(service.contained_operations().len(), 1);
 //! # Ok::<_, Box<dyn std::error::Error>>(())
 //! ```
+//!
+//! Service and resource views distinguish *declaration-only* accessors such as
+//! `direct_operations` from complete queries such as `contained_operations`. The
+//! [`knowledge`] module provides the complete queries, as well as operation errors within a
+//! service, service-scoped parents, and incoming relationships.
 //!
 //! [Smithy 2.0 JSON AST]: https://smithy.io/2.0/spec/json-ast.html
 
@@ -42,6 +49,7 @@
 )]
 
 pub mod diagnostic;
+pub mod knowledge;
 pub mod node;
 pub mod shape;
 pub mod traits;

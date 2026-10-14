@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Parse, write, and service-closure traversal benchmarks for SQS, S3, and EC2.
+//! Parse, write, traversal, and knowledge-index benchmarks for SQS, S3, and EC2.
 //! See `benches/README.md` for methodology and the recorded baseline.
 
 use aws_smithy_lang::traversal::Walker;
 use aws_smithy_lang::{Model, ModelWriter};
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
 use std::hint::black_box;
 use std::path::PathBuf;
 
@@ -57,6 +57,88 @@ fn bench(c: &mut Criterion) {
         let service = model.services().next().expect("one service per model");
         group.bench_with_input(BenchmarkId::from_parameter(name), &service, |b, service| {
             b.iter(|| Walker::new().walk(black_box(*service)).count())
+        });
+    }
+    group.finish();
+
+    // Building the relationship index needs a model whose cache is still empty.
+    let mut group = c.benchmark_group("relationship_index_build");
+    for (name, bytes) in &inputs {
+        group.bench_with_input(BenchmarkId::from_parameter(name), bytes, |b, bytes| {
+            b.iter_batched(
+                || Model::from_json_slice(name, bytes).unwrap(),
+                |model| {
+                    black_box(model.knowledge().relationships());
+                    model
+                },
+                BatchSize::LargeInput,
+            )
+        });
+    }
+    group.finish();
+
+    // The remaining queries run against an initialized cache.
+    for (_, model) in &models {
+        model.knowledge().relationships();
+    }
+
+    let mut group = c.benchmark_group("contained_operations");
+    for (name, model) in &models {
+        let service = model.services().next().unwrap();
+        group.bench_with_input(BenchmarkId::from_parameter(name), &service, |b, service| {
+            b.iter(|| black_box(*service).contained_operations().len())
+        });
+    }
+    group.finish();
+
+    let mut group = c.benchmark_group("incoming_relationships");
+    for (name, model) in &models {
+        let relationships = model.knowledge().relationships();
+        group.bench_function(BenchmarkId::from_parameter(name), |b| {
+            b.iter(|| {
+                relationships
+                    .get_incoming(black_box("smithy.api#String"))
+                    .unwrap()
+                    .count()
+            })
+        });
+    }
+    group.finish();
+
+    let mut group = c.benchmark_group("input_bindings");
+    for (name, model) in &models {
+        let service = model.services().next().unwrap();
+        let input = service.contained_operations().next().unwrap().input();
+        let operations = model.knowledge().operations();
+        group.bench_function(BenchmarkId::from_parameter(name), |b| {
+            b.iter(|| operations.input_bindings(black_box(input)).unwrap().len())
+        });
+    }
+    group.finish();
+
+    let mut group = c.benchmark_group("parent_chain");
+    for (name, model) in &models {
+        let service = model.services().next().unwrap();
+        // The deepest operation, to measure the slowest chain lookup.
+        let bottom_up = model.knowledge().bottom_up();
+        let operation = service
+            .contained_operations()
+            .max_by_key(|op| {
+                bottom_up
+                    .parent_chain(service.id(), op.id())
+                    .ok()
+                    .flatten()
+                    .map_or(0, |chain| chain.len())
+            })
+            .unwrap();
+        group.bench_function(BenchmarkId::from_parameter(name), |b| {
+            b.iter(|| {
+                bottom_up
+                    .parent_chain(service.id(), black_box(operation.id()))
+                    .unwrap()
+                    .unwrap()
+                    .len()
+            })
         });
     }
     group.finish();

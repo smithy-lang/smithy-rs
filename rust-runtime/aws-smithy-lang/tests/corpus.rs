@@ -80,12 +80,12 @@ fn corpus_inspection() {
 
         // Every operation in the service closure resolves with structure input/output.
         let closure: Vec<_> = Walker::new().walk(service).collect();
-        assert!(closure.len() > service.operations().len(), "{name}");
+        assert!(closure.len() > service.direct_operations().len(), "{name}");
         for shape in &closure {
             if let Some(operation) = shape.as_operation() {
                 assert!(operation.input_shape().is_structure(), "{name}");
                 assert!(operation.output_shape().is_structure(), "{name}");
-                for error in operation.errors() {
+                for error in operation.direct_errors() {
                     assert!(model
                         .expect_shape(error)
                         .unwrap()
@@ -135,4 +135,131 @@ fn corpus_inspection() {
         prelude_targets > 0,
         "expected members targeting prelude shapes"
     );
+}
+
+#[test]
+fn corpus_knowledge_invariants() {
+    use aws_smithy_lang::traversal::RelationshipType;
+    use std::collections::{BTreeMap, BTreeSet};
+
+    for path in corpus() {
+        let model = load(&path);
+        let name = path.display();
+        let knowledge = model.knowledge();
+        let service = model.services().next().unwrap();
+        let operations = knowledge.operations();
+        let bottom_up = knowledge.bottom_up();
+
+        // Top-down matches an uncached walk restricted to containment edges.
+        let walked: BTreeSet<String> = Walker::new()
+            .filter(|r| r.kind().is_containment())
+            .walk(service)
+            .skip(1)
+            .map(|s| s.id().to_string())
+            .collect();
+        let contained: Vec<_> = service.contained_operations().collect();
+        let contained_ids: Vec<String> = contained.iter().map(|o| o.id().to_string()).collect();
+        let resource_ids: Vec<String> = service
+            .contained_resources()
+            .map(|r| r.id().to_string())
+            .collect();
+        let mut sorted = contained_ids.clone();
+        sorted.sort();
+        assert_eq!(
+            contained_ids, sorted,
+            "{name}: contained operations are sorted"
+        );
+        let both: BTreeSet<String> = contained_ids.iter().chain(&resource_ids).cloned().collect();
+        assert_eq!(both, walked, "{name}");
+        assert_eq!(
+            both.len(),
+            contained_ids.len() + resource_ids.len(),
+            "{name}"
+        );
+        for direct in service.direct_operations() {
+            assert!(contained_ids.contains(&direct.to_string()), "{name}");
+        }
+        for direct in service.direct_resources() {
+            assert!(resource_ids.contains(&direct.to_string()), "{name}");
+        }
+        assert!(!contained.is_empty(), "{name}");
+
+        for operation in &contained {
+            // Effective errors resolve to @error structures and include every direct error.
+            let knowledge = operations.get(operation.id()).unwrap();
+            let errors: Vec<_> = knowledge.errors_in(service.id()).unwrap().collect();
+            assert!(
+                errors.iter().all(|e| e.has_trait("smithy.api#error")),
+                "{name}"
+            );
+            assert!(
+                errors.len() >= operation.direct_errors().len(),
+                "{name}: {}",
+                operation.id()
+            );
+            // Reverse bindings point back to the operation.
+            for binding in [
+                operations.input_bindings(operation.input()).unwrap(),
+                operations.output_bindings(operation.output()).unwrap(),
+            ] {
+                let ids: Vec<_> = binding.map(|o| o.id().clone()).collect();
+                assert!(ids.contains(operation.id()), "{name}: {}", operation.id());
+            }
+            assert!(operations.is_input_structure(operation.input()), "{name}");
+            assert!(operations.is_output_structure(operation.output()), "{name}");
+        }
+
+        // Every contained entity has a service-scoped parent that is itself in the service.
+        for id in contained_ids.iter().chain(&resource_ids) {
+            let bindings: Vec<_> = bottom_up
+                .get_direct_bindings(service.id(), id)
+                .unwrap()
+                .collect();
+            assert!(!bindings.is_empty(), "{name}: {id}");
+            for binding in bindings {
+                let parent = binding.parent().id().to_string();
+                assert!(
+                    parent == service.id().as_str() || resource_ids.contains(&parent),
+                    "{name}: {id} -> {parent}"
+                );
+                assert!(binding.kind().is_containment(), "{name}");
+            }
+            if let Ok(Some(chain)) = bottom_up.parent_chain(service.id(), id) {
+                assert_eq!(chain.service().id(), service.id(), "{name}");
+            }
+        }
+
+        // Reverse relationship counts equal forward counts by kind.
+        let relationships = knowledge.relationships();
+        let mut forward: BTreeMap<String, usize> = BTreeMap::new();
+        let mut reverse: BTreeMap<String, usize> = BTreeMap::new();
+        for shape in model.shapes() {
+            let refs = std::iter::once(aws_smithy_lang::ShapeRef::Shape(shape)).chain(
+                shape
+                    .members()
+                    .iter()
+                    .map(aws_smithy_lang::ShapeRef::Member),
+            );
+            for shape in refs {
+                for r in relationships.get_outgoing(shape.id()).unwrap() {
+                    *forward.entry(format!("{:?}", r.kind())).or_default() += 1;
+                }
+                for r in relationships.get_incoming(shape.id()).unwrap() {
+                    *reverse.entry(format!("{:?}", r.kind())).or_default() += 1;
+                }
+            }
+        }
+        assert_eq!(forward, reverse, "{name}");
+        assert!(
+            forward[&format!("{:?}", RelationshipType::Input)] > 0,
+            "{name}"
+        );
+
+        // Repeated queries are identical.
+        let again: Vec<String> = service
+            .contained_operations()
+            .map(|o| o.id().to_string())
+            .collect();
+        assert_eq!(again, contained_ids, "{name}");
+    }
 }

@@ -3,11 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Outgoing shape relationships and forward traversal.
+//! Shape relationships and forward traversal.
 //!
 //! Every ordinary reference in a [`Model`](crate::Model) resolves, so each [`Relationship`] always has a
 //! target. Applied traits are not relationships: trait definitions may be absent.
+//!
+//! [`Walker`] is the general-purpose graph primitive. For standard Smithy questions, such as
+//! every operation in a service, prefer the [`knowledge`](crate::knowledge) indexes: a custom
+//! walker predicate can easily omit a lifecycle or collection binding.
 
+use crate::knowledge::{RelationshipIndex, Relationships};
 use crate::model::ModelData;
 use crate::shape::{MemberView, ShapeRef, ShapeView};
 use crate::shape_id::ShapeId;
@@ -55,6 +60,32 @@ pub enum RelationshipType {
     MemberTarget,
 }
 
+impl RelationshipType {
+    /// Returns `true` for edges that bind an operation to a service or resource: `Operation`,
+    /// `CollectionOperation`, and the `Create`, `Put`, `Read`, `Update`, `Delete`, and `List`
+    /// lifecycle bindings.
+    pub fn is_operation_binding(self) -> bool {
+        use RelationshipType::*;
+        matches!(
+            self,
+            Operation | CollectionOperation | Create | Put | Read | Update | Delete | List
+        )
+    }
+
+    /// Returns `true` for edges that define service and resource containment: every
+    /// [operation binding](Self::is_operation_binding), plus `Resource`.
+    ///
+    /// These are exactly the edges [`TopDownIndex`](crate::knowledge::TopDownIndex) follows.
+    pub fn is_containment(self) -> bool {
+        self == RelationshipType::Resource || self.is_operation_binding()
+    }
+
+    /// A stable rank used to order edges that share a source.
+    pub(crate) fn rank(self) -> u8 {
+        self as u8
+    }
+}
+
 /// A directed edge from one shape or member to another.
 #[derive(Clone, Copy)]
 pub struct Relationship<'a> {
@@ -64,6 +95,14 @@ pub struct Relationship<'a> {
 }
 
 impl<'a> Relationship<'a> {
+    pub(crate) fn new(source: ShapeRef<'a>, kind: RelationshipType, target: ShapeRef<'a>) -> Self {
+        Self {
+            source,
+            kind,
+            target,
+        }
+    }
+
     /// The shape or member the edge starts from.
     pub fn source(&self) -> ShapeRef<'a> {
         self.source
@@ -130,13 +169,13 @@ pub(crate) fn relationships<'a>(shape: ShapeRef<'a>) -> Vec<Relationship<'a>> {
     };
     use RelationshipType::*;
     if let Some(service) = view.as_service() {
-        push_all(Operation, &mut service.operations());
-        push_all(Resource, &mut service.resources());
-        push_all(Error, &mut service.errors());
+        push_all(Operation, &mut service.direct_operations());
+        push_all(Resource, &mut service.direct_resources());
+        push_all(Error, &mut service.common_errors());
     } else if let Some(operation) = view.as_operation() {
         push_all(Input, &mut std::iter::once(operation.input()));
         push_all(Output, &mut std::iter::once(operation.output()));
-        push_all(Error, &mut operation.errors());
+        push_all(Error, &mut operation.direct_errors());
     } else if let Some(resource) = view.as_resource() {
         push_all(Identifier, &mut resource.identifiers().map(|(_, id)| id));
         push_all(Property, &mut resource.properties().map(|(_, id)| id));
@@ -150,9 +189,12 @@ pub(crate) fn relationships<'a>(shape: ShapeRef<'a>) -> Vec<Relationship<'a>> {
         ] {
             push_all(kind, &mut id.into_iter());
         }
-        push_all(Operation, &mut resource.operations());
-        push_all(CollectionOperation, &mut resource.collection_operations());
-        push_all(Resource, &mut resource.resources());
+        push_all(Operation, &mut resource.direct_operations());
+        push_all(
+            CollectionOperation,
+            &mut resource.direct_collection_operations(),
+        );
+        push_all(Resource, &mut resource.child_resources());
     }
     for member in view.members().iter() {
         push(Member, ShapeRef::Member(member));
@@ -162,22 +204,42 @@ pub(crate) fn relationships<'a>(shape: ShapeRef<'a>) -> Vec<Relationship<'a>> {
 
 impl<'a> ShapeRef<'a> {
     /// Outgoing relationships, in a deterministic order following the JSON AST.
-    pub fn relationships(&self) -> impl ExactSizeIterator<Item = Relationship<'a>> + 'a {
-        relationships(*self).into_iter()
+    ///
+    /// Served from the model's cached [`RelationshipIndex`].
+    pub fn relationships(&self) -> Relationships<'a> {
+        RelationshipIndex::new(self.data()).outgoing_of(*self)
+    }
+
+    /// Incoming relationships: every edge whose target is this shape or member, sorted by
+    /// source ID and then by relationship kind. Each edge keeps its original direction.
+    ///
+    /// Served from the model's cached [`RelationshipIndex`].
+    pub fn incoming_relationships(&self) -> Relationships<'a> {
+        RelationshipIndex::new(self.data()).incoming_of(*self)
     }
 }
 
 impl<'a> ShapeView<'a> {
     /// Outgoing relationships, in a deterministic order following the JSON AST.
-    pub fn relationships(&self) -> impl ExactSizeIterator<Item = Relationship<'a>> + 'a {
+    pub fn relationships(&self) -> Relationships<'a> {
         ShapeRef::Shape(*self).relationships()
+    }
+
+    /// Incoming relationships, sorted by source ID and then by relationship kind.
+    pub fn incoming_relationships(&self) -> Relationships<'a> {
+        ShapeRef::Shape(*self).incoming_relationships()
     }
 }
 
 impl<'a> MemberView<'a> {
     /// Outgoing relationships: the container, then the target.
-    pub fn relationships(&self) -> impl ExactSizeIterator<Item = Relationship<'a>> + 'a {
+    pub fn relationships(&self) -> Relationships<'a> {
         ShapeRef::Member(*self).relationships()
+    }
+
+    /// Incoming relationships: the container's `Member` edge to this member.
+    pub fn incoming_relationships(&self) -> Relationships<'a> {
+        ShapeRef::Member(*self).incoming_relationships()
     }
 }
 

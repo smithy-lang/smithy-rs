@@ -66,6 +66,36 @@ impl ShapeDecl {
         }
     }
 
+    /// The position of a member in [`members`](Self::members) order.
+    pub(crate) fn member_position(&self, name: &str) -> Option<usize> {
+        match &self.kind {
+            DeclKind::List { .. } => (name == "member").then_some(0),
+            DeclKind::Map { .. } => match name {
+                "key" => Some(0),
+                "value" => Some(1),
+                _ => None,
+            },
+            DeclKind::Structure(m)
+            | DeclKind::Union(m)
+            | DeclKind::Enum(m)
+            | DeclKind::IntEnum(m) => m.get_index_of(name),
+            _ => None,
+        }
+    }
+
+    /// The member at a position in [`members`](Self::members) order.
+    pub(crate) fn member_at(&self, position: usize) -> Option<&MemberDecl> {
+        match &self.kind {
+            DeclKind::List { member } => (position == 0).then_some(member),
+            DeclKind::Map { key, value } => [key, value].get(position).copied(),
+            DeclKind::Structure(m)
+            | DeclKind::Union(m)
+            | DeclKind::Enum(m)
+            | DeclKind::IntEnum(m) => m.get_index(position).map(|(_, member)| member),
+            _ => None,
+        }
+    }
+
     pub(crate) fn member_count(&self) -> usize {
         match &self.kind {
             DeclKind::List { .. } => 1,
