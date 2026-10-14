@@ -388,6 +388,9 @@ pub(crate) fn extract_labels<'t>(template: &'t str, path: &str) -> Result<Vec<(&
     let template_segs: Vec<Seg<'t>> = template_path
         .strip_prefix('/')
         .unwrap_or(template_path)
+        // Match Smithy's UriPattern.segments, which the legacy generated parser uses.
+        // Only normalize the template: trailing request slashes belong to greedy labels.
+        .trim_end_matches('/')
         .split('/')
         .map(|s| {
             if let Some(inner) = s.strip_prefix('{').and_then(|s| s.strip_suffix('}')) {
@@ -2271,6 +2274,33 @@ mod tests {
         }
         // Excluded bindings are still parsed as unknown values, validating JSON syntax.
         assert!(collect(&uri, &headers, br#"{"token":[1,]}"#).is_err());
+    }
+
+    #[test]
+    fn trailing_template_slashes_do_not_change_label_captures() {
+        for template in ["/pets/{name}/", "/pets/{name}/?enabled"] {
+            assert_eq!(
+                extract_labels(template, "/pets/rex").unwrap(),
+                [("name", "rex".to_owned())]
+            );
+            assert!(extract_labels(template, "/pets/rex/").is_err());
+        }
+        for (path, expected) in [
+            ("/data/a/b", "a/b"),
+            ("/data/a/b/", "a/b/"),
+            ("/data/a//b", "a//b"),
+            ("/data//a/", "/a/"),
+            ("/data/", ""),
+        ] {
+            assert_eq!(
+                extract_labels("/data/{key+}/", path).unwrap(),
+                [("key", expected.to_owned())]
+            );
+        }
+        assert_eq!(
+            extract_labels("/data/{key+}/meta/", "/data/a//meta").unwrap(),
+            [("key", "a/".to_owned())]
+        );
     }
 
     #[test]
