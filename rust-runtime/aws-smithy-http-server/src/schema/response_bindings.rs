@@ -294,6 +294,7 @@ enum ResponseMemberPlan {
     },
     PrefixHeaders {
         prefix: String,
+        media_type: bool,
         key_sensitive: bool,
         value_sensitive: bool,
     },
@@ -410,6 +411,7 @@ fn compile_member_plan(
     if let Some(prefix) = schema.http_prefix_headers() {
         return Ok(ResponseMemberPlan::PrefixHeaders {
             prefix: prefix.value().to_string(),
+            media_type: schema.member().is_some_and(|value| value.media_type().is_some()),
             key_sensitive: container_sensitive
                 || schema.sensitive().is_some()
                 || schema.key().is_some_and(|key| key.sensitive().is_some()),
@@ -753,12 +755,14 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
         }
         if let ResponseMemberPlan::PrefixHeaders {
             prefix,
+            media_type,
             key_sensitive,
             value_sensitive,
         } = self.plan.member(schema)
         {
             let mut collector = PrefixHeaderCollector {
                 prefix,
+                media_type: *media_type,
                 sink: &mut self.captured.headers,
                 pending_key: None,
                 key_sensitive: *key_sensitive,
@@ -997,6 +1001,7 @@ impl ShapeSerializer for HeaderListCollector<'_> {
 /// binding rules.
 struct PrefixHeaderCollector<'a> {
     prefix: &'a str,
+    media_type: bool,
     sink: &'a mut CapturedHeaders,
     pending_key: Option<String>,
     key_sensitive: bool,
@@ -1032,7 +1037,13 @@ impl ShapeSerializer for PrefixHeaderCollector<'_> {
                         header_diagnostic(&full_name, self.key_sensitive)
                     ))
                 })?;
-                let header_value = header_value(value, self.value_sensitive)?;
+                // The map's value schema supplies mediaType even when the string-map
+                // serialization helper passes the plain string schema for each entry.
+                let header_value = if self.media_type {
+                    header_value(&aws_smithy_types::base64::encode(value), self.value_sensitive)?
+                } else {
+                    header_value(value, self.value_sensitive)?
+                };
                 self.sink.push((name, header_value));
                 Ok(())
             }
