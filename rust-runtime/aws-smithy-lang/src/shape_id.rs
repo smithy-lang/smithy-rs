@@ -153,7 +153,7 @@ impl ShapeId {
     }
 }
 
-/// Smithy identifier grammar (https://smithy.io/2.0/spec/model.html#shape-id-abnf):
+/// Smithy identifier grammar (<https://smithy.io/2.0/spec/model.html#shape-id-abnf>):
 ///
 /// ```text
 /// Identifier      = IdentifierStart *IdentifierChars
