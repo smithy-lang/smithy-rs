@@ -1,7 +1,7 @@
 ---
 applies_to: ["client", "server", "aws-sdk-rust"]
 authors: ["FalkWoldmann"]
-references: ["smithy-rs#700"]
+references: ["smithy-rs#4916"]
 breaking: false
 new_feature: false
 bug_fix: false
