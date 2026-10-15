@@ -188,7 +188,7 @@ fn serialization_allocation_counts() {
             }),
         ),
         (
-            "aws_json_1_1 serialize_error (header bindings)",
+            "aws_json_1_1 serialize_error (document body)",
             measure(calls, || {
                 std::hint::black_box(aws_json.serialize_error(&BoundError));
             }),
@@ -200,14 +200,14 @@ fn serialization_allocation_counts() {
             }),
         ),
         (
-            "aws_json_1_1 serialize_response (header bindings)",
+            "aws_json_1_1 serialize_response (document body)",
             measure(calls, || {
                 std::hint::black_box(aws_json.serialize_response(&BOUND_OUTPUT, &BoundOutput));
             }),
         ),
     ];
-    // Default-constructed protocols have no prepared plans: the same calls compile their plan
-    // per response. The gap to the cases above is the allocation cost of plan compilation.
+    // Default-constructed REST protocols compile binding plans per response. AWS JSON
+    // always serializes a document and does not prepare REST binding plans.
     let rest_json_uncached = RestJson1Protocol::default();
     let aws_json_uncached = AwsJson1_1Protocol::default();
     let uncached: [(&str, (u64, u64)); 4] = [
@@ -218,7 +218,7 @@ fn serialization_allocation_counts() {
             }),
         ),
         (
-            "aws_json_1_1 serialize_error (uncached plan)",
+            "aws_json_1_1 serialize_error (default protocol)",
             measure(calls, || {
                 std::hint::black_box(aws_json_uncached.serialize_error(&BoundError));
             }),
@@ -230,7 +230,7 @@ fn serialization_allocation_counts() {
             }),
         ),
         (
-            "aws_json_1_1 serialize_response (uncached plan)",
+            "aws_json_1_1 serialize_response (default protocol)",
             measure(calls, || {
                 std::hint::black_box(aws_json_uncached.serialize_response(&BOUND_OUTPUT, &BoundOutput));
             }),

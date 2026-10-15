@@ -8,9 +8,7 @@
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 
-use aws_smithy_http_server::schema::protocol::{
-    AwsJson1_0Protocol, AwsJson1_1Protocol, RestJson1Protocol, RestXmlProtocol,
-};
+use aws_smithy_http_server::schema::protocol::{RestJson1Protocol, RestXmlProtocol};
 use aws_smithy_http_server::schema::ServerProtocol;
 use aws_smithy_runtime_api::http::Request;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer};
@@ -74,7 +72,7 @@ impl Write for LogWriter {
 }
 
 #[test]
-fn sensitive_header_diagnostics_are_redacted_across_protocols() {
+fn sensitive_header_diagnostics_are_redacted_across_rest_protocols() {
     let secret_string = member(ShapeType::String).with_sensitive();
     let bindings = [
         member(ShapeType::String).with_http_header("x-secret").with_sensitive(),
@@ -106,8 +104,6 @@ fn sensitive_header_diagnostics_are_redacted_across_protocols() {
     let protocols: Vec<Box<dyn ServerProtocol>> = vec![
         Box::new(RestJson1Protocol::default()),
         Box::new(RestXmlProtocol::default()),
-        Box::new(AwsJson1_0Protocol::default()),
-        Box::new(AwsJson1_1Protocol::default()),
     ];
     for protocol in protocols {
         for (binding, container_sensitive) in bindings

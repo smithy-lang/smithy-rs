@@ -6,9 +6,7 @@
 //! Media-typed list headers retain legacy base64 encoding and round-trip through request bindings.
 
 use aws_smithy_http_server::body::empty;
-use aws_smithy_http_server::schema::protocol::{
-    AwsJson1_0Protocol, AwsJson1_1Protocol, RestJson1Protocol, RestXmlProtocol,
-};
+use aws_smithy_http_server::schema::protocol::{RestJson1Protocol, RestXmlProtocol};
 use aws_smithy_http_server::schema::{HttpModeledError, ServerProtocol};
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::{prelude, shape_id, Schema, ShapeType};
@@ -107,12 +105,10 @@ fn header_values<'a>(headers: &'a http::HeaderMap, name: &str) -> Vec<&'a str> {
         .collect()
 }
 
-fn protocols() -> Vec<Box<dyn ServerProtocol>> {
+fn rest_protocols() -> Vec<Box<dyn ServerProtocol>> {
     vec![
         Box::new(RestJson1Protocol::default()),
         Box::new(RestXmlProtocol::default()),
-        Box::new(AwsJson1_0Protocol::default()),
-        Box::new(AwsJson1_1Protocol::default()),
     ]
 }
 
@@ -126,7 +122,7 @@ fn media_list_elements_are_base64_encoded_in_outputs_errors_and_streaming_heads(
             &["YSxi", "YSJi", "bGluZQpicmVhaw==", "c25vd21hbiDimIM="],
         ),
     ];
-    for protocol in protocols() {
+    for protocol in rest_protocols() {
         for &(raw, expected) in cases {
             for prelude_elements in [false, true] {
                 let mut value = MediaOutput::new(raw);
@@ -153,7 +149,7 @@ fn media_list_elements_are_base64_encoded_in_outputs_errors_and_streaming_heads(
 
 #[test]
 fn empty_media_list_elements_are_omitted_like_legacy() {
-    for protocol in protocols() {
+    for protocol in rest_protocols() {
         for (raw, expected) in [
             (&[][..], &[][..]),
             (&[""][..], &[][..]),

@@ -580,7 +580,7 @@ async fn streaming_responses_carry_the_head_only() {
         response.headers().get("content-type").unwrap(),
         "application/x-amz-json-1.0"
     );
-    assert_eq!(response.headers().get("x-tag").unwrap(), "tagged");
+    assert!(response.headers().get("x-tag").is_none());
     assert_eq!(body_bytes(response).await.as_ref(), b"frames");
     let response = RPC_V2_CBOR.serialize_streaming_response(&STREAM_OUT, &StreamOutput, &EVENTS_MEMBER, Some(body()));
     assert_eq!(
@@ -1229,18 +1229,9 @@ async fn middleware_structs_are_framed_like_operation_outputs() {
             assert_eq!(status, http::StatusCode::IM_A_TEAPOT, "{id}");
             assert_eq!(headers.get("x-tag").unwrap(), "brewing", "{id}");
         } else {
-            // AWS JSON honors modeled success statuses; CBOR ignores HTTP bindings.
-            let expected = if id.starts_with("aws.protocols#awsJson") {
-                http::StatusCode::IM_A_TEAPOT
-            } else {
-                http::StatusCode::OK
-            };
-            assert_eq!(status, expected, "{id}");
-            assert_eq!(
-                headers.contains_key("x-tag"),
-                id.starts_with("aws.protocols#awsJson"),
-                "{id}"
-            );
+            // RPC protocols ignore the REST status and header bindings.
+            assert_eq!(status, http::StatusCode::OK, "{id}");
+            assert!(!headers.contains_key("x-tag"), "{id}");
         }
 
         // The same struct serialized as the output of an operation with the same schema.
@@ -1508,12 +1499,7 @@ impl HttpModeledError for BadHeaderError {
 fn an_invalid_error_header_name_degrades_to_the_serialization_failure_response() {
     // A dynamic (unregistered) error schema cannot be validated at build; serializing it
     // must produce the protocol's serialization-failure response, never a panic.
-    for protocol in [
-        &*REST_JSON as &dyn ServerProtocol,
-        &*REST_XML,
-        &*AWS_JSON_10,
-        &*AWS_JSON_11,
-    ] {
+    for protocol in [&*REST_JSON as &dyn ServerProtocol, &*REST_XML] {
         let response = protocol.serialize_error(&BadHeaderError);
         assert!(
             response.status().is_client_error() || response.status().is_server_error(),
@@ -1525,7 +1511,7 @@ fn an_invalid_error_header_name_degrades_to_the_serialization_failure_response()
 }
 
 #[test]
-fn registered_schemas_with_invalid_metadata_fail_the_protocol_build() {
+fn registered_schemas_with_invalid_rest_metadata_fail_only_rest_protocol_builds() {
     use crate::schema::{MetadataRoutedProtocol, OperationSchema, ProtocolBuildContext, ServiceSchema};
     // An operation declaring the invalid-header error: the factory must refuse to build.
     static BAD_ERRORS: [&Schema<'static>; 1] = [&BAD_HEADER_ERROR];
@@ -1548,9 +1534,8 @@ fn registered_schemas_with_invalid_metadata_fail_the_protocol_build() {
         let ctx = ProtocolBuildContext::new(service);
         assert!(RestJson1Protocol::from_build_context(&ctx).is_err());
         assert!(RestXmlProtocol::from_build_context(&ctx).is_err());
+        // AWS JSON ignores the REST header names and media types.
+        assert!(AwsJson1_0Protocol::from_build_context(&ctx).is_ok());
+        assert!(AwsJson1_1Protocol::from_build_context(&ctx).is_ok());
     }
-    // AWS JSON applies REST header bindings to its responses, so it validates them too.
-    let ctx = ProtocolBuildContext::new(&BAD_ERROR_SERVICE);
-    assert!(AwsJson1_0Protocol::from_build_context(&ctx).is_err());
-    assert!(AwsJson1_1Protocol::from_build_context(&ctx).is_err());
 }
