@@ -7,7 +7,7 @@
 
 use aws_smithy_lang::shape::ShapeExpectationError;
 use aws_smithy_lang::traits::TraitDecodeError;
-use aws_smithy_lang::{InvalidShapeIdError, LoadError, Model, ModelWriter, WriteError};
+use aws_smithy_lang::{AstWriter, InvalidShapeIdError, LoadError, Model, WriteError};
 use aws_smithy_runtime_api::client::result::SdkError;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use std::error::Error;
@@ -78,7 +78,7 @@ fn io_source_chain() {
         }
     }
     let model = Model::from_json_str("m", r#"{"smithy":"2.0"}"#).unwrap();
-    let err = ModelWriter::new().write(&model, Failing).unwrap_err();
+    let err = AstWriter::new().write(&model, Failing).unwrap_err();
     let rendered = DisplayErrorContext(&err).to_string();
     assert!(rendered.contains("disk full"), "{rendered}");
 }

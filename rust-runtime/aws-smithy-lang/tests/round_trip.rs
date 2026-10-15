@@ -5,7 +5,7 @@
 
 //! Writer output is independent of semantically unordered input order.
 
-use aws_smithy_lang::{Model, ModelWriter};
+use aws_smithy_lang::{AstWriter, Model};
 use proptest::prelude::*;
 
 fn object(entries: &[String]) -> String {
@@ -165,17 +165,23 @@ proptest! {
     fn output_is_independent_of_unordered_input(order in arb_order()) {
         let baseline = Model::from_json_str("baseline", &build(&identity())).unwrap();
         let model = Model::from_json_str("shuffled", &build(&order)).unwrap();
-        for writer in [ModelWriter::new(), ModelWriter::new().pretty(true)] {
+        let canonical = AstWriter::new().canonical(true);
+        for writer in [canonical.clone(), canonical.pretty(true)] {
             prop_assert_eq!(writer.to_string(&model).unwrap(), writer.to_string(&baseline).unwrap());
         }
         prop_assert!(model.equivalent(&baseline));
+        // Default output follows the input order, and reloads to an equivalent model.
+        let out = AstWriter::new().to_string(&model).unwrap();
+        let reloaded = Model::from_json_str("reloaded", &out).unwrap();
+        prop_assert!(reloaded.equivalent(&model));
+        prop_assert_eq!(AstWriter::new().to_string(&reloaded).unwrap(), out);
     }
 }
 
 #[test]
 fn member_and_array_order_are_preserved() {
     let model = Model::from_json_str("t", &build(&identity())).unwrap();
-    let out = ModelWriter::new().to_string(&model).unwrap();
+    let out = AstWriter::new().canonical(true).to_string(&model).unwrap();
     assert!(out.contains(r#""members":{"z":{"target":"a#Str"},"a":{"target":"a#Str"}}"#));
     assert!(out.contains(r#""z":[3,1,2]"#));
     assert!(out.contains(r#""y":[2,1]"#));

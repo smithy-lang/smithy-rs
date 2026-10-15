@@ -3,245 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Shape relationships and forward traversal.
-//!
-//! Every ordinary reference in a [`Model`](crate::Model) resolves, so each [`Relationship`] always has a
-//! target. Applied traits are not relationships: trait definitions may be absent.
+//! Forward traversal over [relationships](crate::relationships).
 //!
 //! [`Walker`] is the general-purpose graph primitive. For standard Smithy questions, such as
 //! every operation in a service, prefer the [`knowledge`](crate::knowledge) indexes: a custom
 //! walker predicate can easily omit a lifecycle or collection binding.
 
-use crate::knowledge::{RelationshipIndex, Relationships};
-use crate::model::ModelData;
-use crate::shape::{MemberView, ShapeRef, ShapeView};
+use crate::relationships::{relationships, Relationship};
+use crate::shape::ShapeRef;
 use crate::shape_id::ShapeId;
 use std::collections::HashSet;
 use std::fmt;
 use std::marker::PhantomData;
-
-/// The kind of a [`Relationship`].
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum RelationshipType {
-    /// A service or resource to an operation in its `operations`.
-    Operation,
-    /// A resource to an operation in its `collectionOperations`.
-    CollectionOperation,
-    /// A service or resource to a resource in its `resources`.
-    Resource,
-    /// A service or operation to an error structure in its `errors`.
-    Error,
-    /// A resource to its `create` operation.
-    Create,
-    /// A resource to its `put` operation.
-    Put,
-    /// A resource to its `read` operation.
-    Read,
-    /// A resource to its `update` operation.
-    Update,
-    /// A resource to its `delete` operation.
-    Delete,
-    /// A resource to its `list` operation.
-    List,
-    /// A resource to the target of one of its `identifiers`.
-    Identifier,
-    /// A resource to the target of one of its `properties`.
-    Property,
-    /// An operation to its input structure (`smithy.api#Unit` when omitted).
-    Input,
-    /// An operation to its output structure (`smithy.api#Unit` when omitted).
-    Output,
-    /// A list, map, structure, union, enum, or intEnum to one of its members.
-    Member,
-    /// A member to the shape that contains it.
-    MemberContainer,
-    /// A member to its target shape.
-    MemberTarget,
-}
-
-impl RelationshipType {
-    /// Returns `true` for edges that bind an operation to a service or resource: `Operation`,
-    /// `CollectionOperation`, and the `Create`, `Put`, `Read`, `Update`, `Delete`, and `List`
-    /// lifecycle bindings.
-    pub fn is_operation_binding(self) -> bool {
-        use RelationshipType::*;
-        matches!(
-            self,
-            Operation | CollectionOperation | Create | Put | Read | Update | Delete | List
-        )
-    }
-
-    /// Returns `true` for edges that define service and resource containment: every
-    /// [operation binding](Self::is_operation_binding), plus `Resource`.
-    ///
-    /// These are exactly the edges [`TopDownIndex`](crate::knowledge::TopDownIndex) follows.
-    pub fn is_containment(self) -> bool {
-        self == RelationshipType::Resource || self.is_operation_binding()
-    }
-
-    /// A stable rank used to order edges that share a source.
-    pub(crate) fn rank(self) -> u8 {
-        self as u8
-    }
-}
-
-/// A directed edge from one shape or member to another.
-#[derive(Clone, Copy)]
-pub struct Relationship<'a> {
-    source: ShapeRef<'a>,
-    kind: RelationshipType,
-    target: ShapeRef<'a>,
-}
-
-impl<'a> Relationship<'a> {
-    pub(crate) fn new(source: ShapeRef<'a>, kind: RelationshipType, target: ShapeRef<'a>) -> Self {
-        Self {
-            source,
-            kind,
-            target,
-        }
-    }
-
-    /// The shape or member the edge starts from.
-    pub fn source(&self) -> ShapeRef<'a> {
-        self.source
-    }
-
-    /// The kind of edge.
-    pub fn kind(&self) -> RelationshipType {
-        self.kind
-    }
-
-    /// The ID of the target.
-    pub fn target_id(&self) -> &'a ShapeId {
-        self.target.id()
-    }
-
-    /// The target shape or member. Always resolved.
-    pub fn target(&self) -> ShapeRef<'a> {
-        self.target
-    }
-}
-
-impl fmt::Debug for Relationship<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{} -[{:?}]-> {}",
-            self.source.id(),
-            self.kind,
-            self.target.id()
-        )
-    }
-}
-
-fn root<'a>(data: &'a ModelData, id: &ShapeId) -> ShapeRef<'a> {
-    let decl = data
-        .root(id.as_str())
-        .expect("validated models only contain resolved references");
-    ShapeRef::Shape(ShapeView::new(data, decl))
-}
-
-/// Outgoing relationships of `shape`, in a deterministic order following the JSON AST.
-pub(crate) fn relationships<'a>(shape: ShapeRef<'a>) -> Vec<Relationship<'a>> {
-    let mut out = Vec::new();
-    let mut push = |kind, target| {
-        out.push(Relationship {
-            source: shape,
-            kind,
-            target,
-        })
-    };
-    let view = match shape {
-        ShapeRef::Member(member) => {
-            push(RelationshipType::MemberContainer, member.container().into());
-            push(RelationshipType::MemberTarget, member.target_shape().into());
-            return out;
-        }
-        ShapeRef::Shape(view) => view,
-    };
-    let data = view.data;
-    let mut push_all = |kind, ids: &mut dyn Iterator<Item = &'a ShapeId>| {
-        for id in ids {
-            push(kind, root(data, id));
-        }
-    };
-    use RelationshipType::*;
-    if let Some(service) = view.as_service() {
-        push_all(Operation, &mut service.direct_operations());
-        push_all(Resource, &mut service.direct_resources());
-        push_all(Error, &mut service.common_errors());
-    } else if let Some(operation) = view.as_operation() {
-        push_all(Input, &mut std::iter::once(operation.input()));
-        push_all(Output, &mut std::iter::once(operation.output()));
-        push_all(Error, &mut operation.direct_errors());
-    } else if let Some(resource) = view.as_resource() {
-        push_all(Identifier, &mut resource.identifiers().map(|(_, id)| id));
-        push_all(Property, &mut resource.properties().map(|(_, id)| id));
-        for (kind, id) in [
-            (Create, resource.create()),
-            (Put, resource.put()),
-            (Read, resource.read()),
-            (Update, resource.update()),
-            (Delete, resource.delete()),
-            (List, resource.list()),
-        ] {
-            push_all(kind, &mut id.into_iter());
-        }
-        push_all(Operation, &mut resource.direct_operations());
-        push_all(
-            CollectionOperation,
-            &mut resource.direct_collection_operations(),
-        );
-        push_all(Resource, &mut resource.child_resources());
-    }
-    for member in view.members().iter() {
-        push(Member, ShapeRef::Member(member));
-    }
-    out
-}
-
-impl<'a> ShapeRef<'a> {
-    /// Outgoing relationships, in a deterministic order following the JSON AST.
-    ///
-    /// Served from the model's cached [`RelationshipIndex`].
-    pub fn relationships(&self) -> Relationships<'a> {
-        RelationshipIndex::new(self.data()).outgoing_of(*self)
-    }
-
-    /// Incoming relationships: every edge whose target is this shape or member, sorted by
-    /// source ID and then by relationship kind. Each edge keeps its original direction.
-    ///
-    /// Served from the model's cached [`RelationshipIndex`].
-    pub fn incoming_relationships(&self) -> Relationships<'a> {
-        RelationshipIndex::new(self.data()).incoming_of(*self)
-    }
-}
-
-impl<'a> ShapeView<'a> {
-    /// Outgoing relationships, in a deterministic order following the JSON AST.
-    pub fn relationships(&self) -> Relationships<'a> {
-        ShapeRef::Shape(*self).relationships()
-    }
-
-    /// Incoming relationships, sorted by source ID and then by relationship kind.
-    pub fn incoming_relationships(&self) -> Relationships<'a> {
-        ShapeRef::Shape(*self).incoming_relationships()
-    }
-}
-
-impl<'a> MemberView<'a> {
-    /// Outgoing relationships: the container, then the target.
-    pub fn relationships(&self) -> Relationships<'a> {
-        ShapeRef::Member(*self).relationships()
-    }
-
-    /// Incoming relationships: the container's `Member` edge to this member.
-    pub fn incoming_relationships(&self) -> Relationships<'a> {
-        ShapeRef::Member(*self).incoming_relationships()
-    }
-}
 
 /// Forward depth-first traversal over unique reachable shapes and members.
 ///
@@ -250,7 +23,8 @@ impl<'a> MemberView<'a> {
 /// recursive shapes and deep models cannot overflow the call stack.
 ///
 /// ```
-/// use aws_smithy_lang::traversal::{RelationshipType, Walker};
+/// use aws_smithy_lang::relationships::RelationshipType;
+/// use aws_smithy_lang::traversal::Walker;
 /// use aws_smithy_lang::Model;
 ///
 /// let model = Model::from_json_str("m", r#"{"smithy": "2.0", "shapes": {
@@ -359,7 +133,7 @@ impl<F> fmt::Debug for Walk<'_, '_, F> {
 mod tests {
     use super::*;
     use crate::model::Model;
-    use RelationshipType::*;
+    use crate::relationships::RelationshipType::{self, *};
 
     const MODEL: &str = r#"{"smithy":"2.0","shapes":{
         "a#Svc":{"type":"service","operations":[{"target":"a#Op"}],"resources":[{"target":"a#R"}],

@@ -5,14 +5,15 @@
 
 //! Complete service and resource closures.
 
-use super::{Iter, RelationshipIndex};
+use super::Iter;
+use crate::relationships::RelationshipIndex;
 use crate::shape::{OperationView, ResourceView, ServiceView, ShapeType};
 use std::collections::HashSet;
 use std::fmt;
 
 /// Every operation and resource contained in a service or resource.
 ///
-/// Containment follows only [containment relationships](crate::traversal::RelationshipType::is_containment):
+/// Containment follows only [containment relationships](crate::relationships::RelationshipType::is_containment):
 /// directly bound operations, resource lifecycle operations (`create`, `put`, `read`, `update`,
 /// `delete`, and `list`), instance and collection operations, and child resources, recursively.
 /// The starting service or resource is excluded. Results are deduplicated and sorted by shape

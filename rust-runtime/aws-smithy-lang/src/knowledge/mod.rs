@@ -83,16 +83,14 @@
 
 mod bottom_up;
 mod operations;
-mod relationships;
 mod top_down;
 
 pub use bottom_up::{AmbiguousParentError, BottomUpIndex, EntityView, ParentBinding, ParentChain};
 pub use operations::{OperationIndex, OperationKnowledge};
-pub use relationships::{RelationshipIndex, Relationships};
 pub use top_down::TopDownIndex;
 
 use crate::model::ModelData;
-use relationships::RelationshipData;
+use crate::relationships::{RelationshipData, RelationshipIndex};
 use std::fmt;
 use std::iter::FusedIterator;
 use std::sync::OnceLock;
@@ -104,7 +102,7 @@ pub(crate) struct KnowledgeCache {
 }
 
 impl KnowledgeCache {
-    fn relationships<'m>(&'m self, data: &ModelData) -> &'m RelationshipData {
+    pub(crate) fn relationships<'m>(&'m self, data: &ModelData) -> &'m RelationshipData {
         self.relationships
             .get_or_init(|| RelationshipData::build(data))
     }

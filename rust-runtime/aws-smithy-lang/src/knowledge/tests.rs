@@ -5,9 +5,9 @@
 
 use super::*;
 use crate::model::Model;
+use crate::relationships::RelationshipType::{self, *};
 use crate::shape::{OperationView, ShapeRef};
 use crate::shape_id::ShapeId;
-use crate::traversal::RelationshipType::{self, *};
 use proptest::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -554,7 +554,7 @@ fn assert_symmetric(model: &Model) {
     let mut outgoing = BTreeMap::new();
     let mut incoming = BTreeMap::new();
     let count = |map: &mut BTreeMap<(String, u8, String), usize>,
-                 r: crate::traversal::Relationship<'_>| {
+                 r: crate::relationships::Relationship<'_>| {
         *map.entry((
             r.source().id().to_string(),
             r.kind().rank(),
@@ -568,7 +568,7 @@ fn assert_symmetric(model: &Model) {
         all.extend(shape.members().iter().map(ShapeRef::Member));
     }
     for shape in &all {
-        let direct: Vec<_> = crate::traversal::relationships(*shape)
+        let direct: Vec<_> = crate::relationships::relationships(*shape)
             .into_iter()
             .map(|r| format!("{r:?}"))
             .collect();

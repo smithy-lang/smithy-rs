@@ -6,7 +6,7 @@
 //! Positive and malformed fixtures for every Smithy 2.0 shape kind.
 
 use aws_smithy_lang::diagnostic::DiagnosticCode;
-use aws_smithy_lang::{Model, ModelWriter, ShapeType};
+use aws_smithy_lang::{AstWriter, Model, ShapeType};
 
 fn document(shapes: &str) -> String {
     format!(r#"{{"smithy":"2.0","shapes":{{{shapes}}}}}"#)
@@ -40,7 +40,7 @@ fn accepts(shapes: &str, id: &str, shape_type: ShapeType) -> Model {
         shape_type,
         "{shapes}"
     );
-    let out = ModelWriter::new().to_string(&model).unwrap();
+    let out = AstWriter::new().to_string(&model).unwrap();
     assert!(
         model.equivalent(&Model::from_json_str("rt", &out).unwrap()),
         "{shapes}"

@@ -6,7 +6,7 @@
 //! Malformed input never panics and never produces a partial model.
 
 use aws_smithy_lang::diagnostic::{DiagnosticCode, Severity};
-use aws_smithy_lang::{LoadError, Model, ModelLoader, ModelWriter};
+use aws_smithy_lang::{AstWriter, LoadError, Model};
 use proptest::prelude::*;
 
 const VALID: &str = r#"{"smithy":"2.0","metadata":{"m":[1,{"x":null}]},"shapes":{
@@ -25,7 +25,7 @@ fn check(input: &[u8]) -> Result<Model, LoadError> {
     let result = Model::from_json_slice("fuzz", input);
     match &result {
         Ok(model) => {
-            let out = ModelWriter::new().to_string(model).unwrap();
+            let out = AstWriter::new().to_string(model).unwrap();
             let reloaded = Model::from_json_str("reload", &out).expect("written output reloads");
             assert!(model.equivalent(&reloaded));
         }
@@ -148,27 +148,35 @@ fn configured_limits() {
     assert!(err.is_resource_limit());
     let err = Model::from_json_reader("deep", deep.as_bytes()).unwrap_err();
     assert!(err.is_resource_limit());
-    assert!(ModelLoader::new()
+    assert!(Model::assembler()
         .max_depth(3)
-        .load_str("v", VALID)
+        .add_json_str("v", VALID)
+        .assemble()
+        .into_result()
         .unwrap_err()
         .is_resource_limit());
-    assert!(ModelLoader::new()
+    assert!(Model::assembler()
         .max_shapes(3)
-        .load_str("v", VALID)
+        .add_json_str("v", VALID)
+        .assemble()
+        .into_result()
         .unwrap_err()
         .is_resource_limit());
-    assert!(ModelLoader::new()
+    assert!(Model::assembler()
         .max_input_bytes(64)
-        .load_reader("v", VALID.as_bytes())
+        .add_json_reader("v", VALID.as_bytes())
+        .assemble()
+        .into_result()
         .unwrap_err()
         .is_resource_limit());
 
     // An endless reader is bounded by the byte limit rather than read forever.
     let endless = std::io::repeat(b' ');
-    let err = ModelLoader::new()
+    let err = Model::assembler()
         .max_input_bytes(1 << 16)
-        .load_reader("endless", endless)
+        .add_json_reader("endless", endless)
+        .assemble()
+        .into_result()
         .unwrap_err();
     assert!(err.is_resource_limit());
 }

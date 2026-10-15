@@ -5,74 +5,64 @@
 
 //! The immutable [`Model`].
 
-use crate::ast::{Document, ShapeDecl};
+use crate::assembler::ModelAssembler;
 use crate::diagnostic::LoadError;
 use crate::knowledge::{Knowledge, KnowledgeCache};
-use crate::loader::ModelLoader;
 use crate::node::{Node, NodeObject};
 use crate::shape::{
-    MemberView, OperationView, ResourceView, ServiceView, ShapeExpectationError, ShapeRef,
+    MemberView, OperationView, ResourceView, ServiceView, Shape, ShapeExpectationError, ShapeRef,
     ShapeType, ShapeView,
 };
 use crate::shape_id::ShapeId;
-use crate::{prelude, validate};
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use std::fmt;
 use std::io::Read;
 use std::path::Path;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
-/// `smithy.api#Unit`, the normalized target of an omitted operation input or output.
-pub(crate) fn unit_id() -> &'static ShapeId {
-    static UNIT: OnceLock<ShapeId> = OnceLock::new();
-    UNIT.get_or_init(|| ShapeId::new("smithy.api#Unit").expect("valid shape ID"))
-}
-
-/// Model storage.
+/// Model storage: owned semantic shapes and metadata.
 ///
-/// `document` is the declaration layer: exactly what the document declared. In `0.1` the
-/// resolved (effective) view is computed directly from declarations because `apply` and
-/// mixins are rejected. A separate resolution index will be added alongside them.
+/// `shapes` holds the model's own shapes in assembly order: sources in the order they were
+/// added, and each source's shapes in its order. The shared, read-only prelude is referenced
+/// rather than copied.
 ///
 /// `knowledge` holds lazily computed derived facts. It only stores owned IDs and indices, never
 /// references into the model, and is ignored by the writer and by [`Model::equivalent`].
 pub(crate) struct ModelData {
-    pub(crate) document: Document,
-    pub(crate) prelude: Option<&'static Document>,
+    pub(crate) shapes: IndexMap<ShapeId, Shape>,
+    pub(crate) metadata: NodeObject,
+    pub(crate) prelude: Option<&'static IndexMap<ShapeId, Shape>>,
     pub(crate) knowledge: KnowledgeCache,
 }
 
 impl ModelData {
     /// The number of root shapes, including the prelude.
     pub(crate) fn root_count(&self) -> usize {
-        self.document.shapes.len() + self.prelude.map_or(0, |p| p.shapes.len())
+        self.shapes.len() + self.prelude.map_or(0, IndexMap::len)
     }
 
     /// The position of a root shape in [`declarations`](Self::declarations) order.
     pub(crate) fn root_position(&self, id: &str) -> Option<usize> {
-        if let Some(position) = self.document.shapes.get_index_of(id) {
+        if let Some(position) = self.shapes.get_index_of(id) {
             return Some(position);
         }
-        Some(self.document.shapes.len() + self.prelude?.shapes.get_index_of(id)?)
+        Some(self.shapes.len() + self.prelude?.get_index_of(id)?)
     }
 
     /// The root shape at a position in [`declarations`](Self::declarations) order.
-    pub(crate) fn root_at(&self, position: usize) -> &ShapeDecl {
-        let document = self.document.shapes.len();
-        if position < document {
-            &self.document.shapes[position]
+    pub(crate) fn root_at(&self, position: usize) -> &Shape {
+        let own = self.shapes.len();
+        if position < own {
+            &self.shapes[position]
         } else {
             let prelude = self.prelude.expect("root positions are in range");
-            &prelude.shapes[position - document]
+            &prelude[position - own]
         }
     }
 
-    /// A root shape declaration from the document or the prelude.
-    pub(crate) fn root(&self, id: &str) -> Option<&ShapeDecl> {
-        self.document
-            .shapes
-            .get(id)
-            .or_else(|| self.prelude?.shapes.get(id))
+    /// A root shape from the model or the prelude.
+    pub(crate) fn root(&self, id: &str) -> Option<&Shape> {
+        self.shapes.get(id).or_else(|| self.prelude?.get(id))
     }
 
     pub(crate) fn lookup(&self, id: &str) -> Option<ShapeRef<'_>> {
@@ -80,50 +70,73 @@ impl ModelData {
             None => Some(ShapeRef::Shape(ShapeView::new(self, self.root(id)?))),
             Some((root, member)) => {
                 let container = self.root(root)?;
-                let decl = container.member(member)?;
-                Some(ShapeRef::Member(MemberView::new(self, container, decl)))
+                let member = container.member(member)?;
+                Some(ShapeRef::Member(MemberView::new(self, container, member)))
             }
         }
     }
 
-    pub(crate) fn declarations(&self) -> impl Iterator<Item = &ShapeDecl> {
-        self.document
-            .shapes
+    /// Every root shape: the model's own shapes, then the prelude.
+    pub(crate) fn declarations(&self) -> impl Iterator<Item = &Shape> {
+        self.shapes
             .values()
-            .chain(self.prelude.into_iter().flat_map(|p| p.shapes.values()))
+            .chain(self.prelude.into_iter().flat_map(IndexMap::values))
     }
 }
 
 /// An immutable, structurally valid Smithy model.
 ///
-/// A `Model` is only returned when loading produced no errors, so every ordinary shape
+/// A `Model` is only produced when assembly reports no errors, so every ordinary shape
 /// reference in it resolves. Cloning is cheap.
+///
+/// Load a single JSON AST document with [`Model::from_json_str`] and friends, or use
+/// [`Model::assembler`] to combine several documents, existing models, and shapes built in
+/// code.
 #[derive(Clone)]
 pub struct Model {
     data: Arc<ModelData>,
 }
 
 impl Model {
+    pub(crate) fn from_data(data: ModelData) -> Self {
+        Self {
+            data: Arc::new(data),
+        }
+    }
+
+    /// A [`ModelAssembler`] with default options.
+    pub fn assembler() -> ModelAssembler {
+        ModelAssembler::new()
+    }
+
     /// Loads a model from a JSON AST string with default options. `source` labels
     /// diagnostics, for example with a file name.
     pub fn from_json_str(source: &str, input: &str) -> Result<Model, LoadError> {
-        ModelLoader::new().load_str(source, input)
+        Self::from_json_slice(source, input.as_bytes())
     }
 
     /// Loads a model from JSON AST bytes with default options.
     pub fn from_json_slice(source: &str, input: &[u8]) -> Result<Model, LoadError> {
-        ModelLoader::new().load_slice(source, input)
+        ModelAssembler::new()
+            .assemble_with_borrowed(source, input)
+            .into_result()
     }
 
     /// Loads a model from a reader with default options. The reader is consumed during the
     /// call and is not retained.
     pub fn from_json_reader(source: &str, reader: impl Read) -> Result<Model, LoadError> {
-        ModelLoader::new().load_reader(source, reader)
+        ModelAssembler::new()
+            .add_json_reader(source, reader)
+            .assemble()
+            .into_result()
     }
 
     /// Loads a model from a file with default options.
     pub fn from_json_file(path: impl AsRef<Path>) -> Result<Model, LoadError> {
-        ModelLoader::new().load_file(path)
+        ModelAssembler::new()
+            .add_json_file(path)
+            .assemble()
+            .into_result()
     }
 
     pub(crate) fn data(&self) -> &ModelData {
@@ -147,20 +160,19 @@ impl Model {
         self.get_shape(id).is_some()
     }
 
-    /// Every root shape: document declarations in source order, then prelude shapes.
+    /// Every root shape: the model's own shapes in assembly order, then prelude shapes.
     pub fn shapes(&self) -> impl Iterator<Item = ShapeView<'_>> + '_ {
         let data = &*self.data;
         data.declarations()
-            .map(move |decl| ShapeView::new(data, decl))
+            .map(move |shape| ShapeView::new(data, shape))
     }
 
-    /// Root shapes declared by the document, in source order.
+    /// The model's own root shapes (excluding the prelude), in assembly order.
     pub fn non_prelude_shapes(&self) -> impl ExactSizeIterator<Item = ShapeView<'_>> + '_ {
         let data = &*self.data;
-        data.document
-            .shapes
+        data.shapes
             .values()
-            .map(move |decl| ShapeView::new(data, decl))
+            .map(move |shape| ShapeView::new(data, shape))
     }
 
     /// Prelude shapes; empty when the prelude is disabled.
@@ -168,13 +180,13 @@ impl Model {
         let data = &*self.data;
         data.prelude
             .into_iter()
-            .flat_map(|p| p.shapes.values())
-            .map(move |decl| ShapeView::new(data, decl))
+            .flat_map(IndexMap::values)
+            .map(move |shape| ShapeView::new(data, shape))
     }
 
     /// Every root shape ID, in the same order as [`Model::shapes`].
     pub fn shape_ids(&self) -> impl Iterator<Item = &ShapeId> + '_ {
-        self.data.declarations().map(|decl| &decl.id)
+        self.data.declarations().map(Shape::id)
     }
 
     /// The number of root shapes, including the prelude.
@@ -243,14 +255,14 @@ impl Model {
         self.shapes().filter_map(|s| s.as_resource())
     }
 
-    /// The document's metadata.
+    /// The model's metadata, in assembly order.
     pub fn metadata(&self) -> &NodeObject {
-        &self.data.document.metadata
+        &self.data.metadata
     }
 
     /// A metadata value by key.
     pub fn metadata_value(&self, key: &str) -> Option<&Node> {
-        self.data.document.metadata.get(key)
+        self.data.metadata.get(key)
     }
 
     /// Every distinct trait ID applied to any shape or member, in order of first use.
@@ -264,52 +276,33 @@ impl Model {
         }
         ids.into_iter()
     }
+
+    /// Returns `true` if both models have the same semantic content.
+    ///
+    /// Shapes and metadata are compared as values, independent of assembly order and of the
+    /// writer's output order: source locations, version spelling, map and object key order,
+    /// and the order of unordered reference sets are ignored. Member order and trait/metadata
+    /// array order are significant. An omitted enum value equals an explicit value equal to the
+    /// member name, and an omitted operation input/output equals an explicit
+    /// `smithy.api#Unit`. Models with and without the prelude are never equivalent.
+    pub fn equivalent(&self, other: &Model) -> bool {
+        let (a, b) = (&*self.data, &*other.data);
+        self.has_prelude() == other.has_prelude()
+            && a.metadata == b.metadata
+            && a.shapes.len() == b.shapes.len()
+            && a.shapes
+                .iter()
+                .all(|(id, shape)| b.shapes.get(id) == Some(shape))
+    }
 }
 
 impl fmt::Debug for Model {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Model")
-            .field("shapes", &self.data.document.shapes.len())
+            .field("shapes", &self.data.shapes.len())
             .field("prelude", &self.has_prelude())
-            .field("metadata_keys", &self.data.document.metadata.len())
+            .field("metadata_keys", &self.data.metadata.len())
             .finish()
-    }
-}
-
-impl ModelLoader {
-    /// Loads a model from a JSON AST string.
-    pub fn load_str(&self, source: &str, input: &str) -> Result<Model, LoadError> {
-        self.build(self.parse_str(source, input)?)
-    }
-
-    /// Loads a model from JSON AST bytes.
-    pub fn load_slice(&self, source: &str, input: &[u8]) -> Result<Model, LoadError> {
-        self.build(self.parse_slice(source, input)?)
-    }
-
-    /// Loads a model from a reader, consuming it during the call.
-    pub fn load_reader(&self, source: &str, reader: impl Read) -> Result<Model, LoadError> {
-        self.build(self.parse_reader(source, reader)?)
-    }
-
-    /// Loads a model from a file.
-    pub fn load_file(&self, path: impl AsRef<Path>) -> Result<Model, LoadError> {
-        self.build(self.parse_file(path.as_ref())?)
-    }
-
-    fn build(&self, document: Document) -> Result<Model, LoadError> {
-        let prelude = self.prelude.then(prelude::prelude);
-        let diagnostics = validate::validate(&document, prelude, self);
-        if diagnostics.has_errors() {
-            return Err(LoadError::invalid_model(diagnostics));
-        }
-        Ok(Model {
-            data: Arc::new(ModelData {
-                document,
-                prelude,
-                knowledge: KnowledgeCache::default(),
-            }),
-        })
     }
 }
 
@@ -533,7 +526,7 @@ mod tests {
         assert_eq!(service.get_trait_as::<traits::Required>().unwrap(), None);
         let applied: Vec<_> = service.traits().iter().collect();
         assert_eq!(
-            applied[0].source().pointer(),
+            applied[0].source_location().pointer(),
             Some("/shapes/ex#Service/traits/smithy.api#documentation")
         );
         let oops = model.expect_shape("ex#Oops").unwrap();
@@ -543,7 +536,10 @@ mod tests {
         );
 
         // Trait lookup accepts a `ShapeId` as well as a string, on every view.
-        let doc_id: ShapeId = traits::DOCUMENTATION.parse().unwrap();
+        let doc_id: ShapeId = traits::DOCUMENTATION;
+        // Relative names resolve to the prelude.
+        assert!(service.has_trait("documentation"));
+        assert!(!service.has_trait("required"));
         assert!(service.has_trait(&doc_id));
         assert!(service.get_trait(doc_id.clone()).is_some());
         assert!(service.traits().contains(&doc_id));
@@ -554,17 +550,17 @@ mod tests {
         assert_eq!(service_view.as_shape().id(), service.id());
         assert_eq!(
             model.shapes_with_trait(&doc_id).count(),
-            model.shapes_with_trait(traits::DOCUMENTATION).count()
+            model.shapes_with_trait("smithy.api#documentation").count()
         );
 
         let required: Vec<_> = model
-            .shapes_with_trait(traits::REQUIRED)
+            .shapes_with_trait(&traits::REQUIRED)
             .map(|s| s.id().to_string())
             .collect();
         // Prelude members with @required are included as well.
         assert!(required.contains(&"ex#GetThingInput$name".to_string()));
         let errors: Vec<_> = model
-            .shapes_with_trait(traits::ERROR)
+            .shapes_with_trait(&traits::ERROR)
             .filter(|s| !s.id().namespace().starts_with("smithy"))
             .map(|s| s.id().to_string())
             .collect();
@@ -586,7 +582,7 @@ mod tests {
         );
         assert_eq!(
             model.metadata_value("suppressions"),
-            Some(&Node::Array(vec![]))
+            Some(&Node::from(Vec::<Node>::new()))
         );
     }
 
@@ -594,13 +590,13 @@ mod tests {
     fn custom_codec() {
         struct Retries(u64);
         impl TraitCodec for Retries {
-            const ID: &'static str = "ex#retries";
+            const ID: ShapeId = ShapeId::from_static("ex#retries");
             fn from_node(value: &Node) -> Result<Self, TraitDecodeError> {
                 value
                     .as_number()
                     .and_then(|n| n.as_u64())
                     .map(Retries)
-                    .ok_or_else(|| TraitDecodeError::new("expected a non-negative integer"))
+                    .ok_or_else(|| TraitDecodeError::at(value, "expected a non-negative integer"))
             }
             fn to_node(&self) -> Node {
                 Node::from(self.0)
@@ -618,7 +614,11 @@ mod tests {
             .get_trait_as::<Retries>()
             .err()
             .unwrap();
-        assert_eq!(err.trait_id(), Some("ex#retries"));
+        assert_eq!(err.trait_id().unwrap(), "ex#retries");
+        assert_eq!(
+            err.source_location().pointer(),
+            Some("/shapes/ex#B/traits/ex#retries")
+        );
     }
 
     #[test]
@@ -634,12 +634,14 @@ mod tests {
         assert!(ids[10..].iter().all(|id| id.starts_with("smithy.api#")));
         assert!(model.contains_shape("smithy.api#String"));
 
-        let bare = ModelLoader::new()
+        let bare = Model::assembler()
             .disable_prelude()
-            .load_str(
+            .add_json_str(
                 "m",
                 r#"{"smithy":"2.0","shapes":{"a#B":{"type":"string"}}}"#,
             )
+            .assemble()
+            .into_result()
             .unwrap();
         assert!(!bare.has_prelude());
         assert_eq!(bare.len(), 1);

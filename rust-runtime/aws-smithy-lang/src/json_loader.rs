@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Smithy JSON AST loading.
+//! Private Smithy JSON AST parser used by [`ModelAssembler`](crate::ModelAssembler).
 //!
 //! The document is parsed with a streaming visitor. Each shape is read as a generic
 //! [`Node`] (rejecting duplicate keys and excessive nesting) and converted into a typed
@@ -28,19 +28,21 @@
 //! - **Explicit unsupported features.** `apply`, `set`, mixins, and `@mixin` declarations
 //!   produce `UnsupportedFeature`. They are neither silently accepted nor mixed in with
 //!   ordinary unknown-field errors.
-//! - **No public serde surface.** The declaration types in `ast` are crate-private, so their
-//!   representation can change, for example when assembly and mixin support land, without
-//!   breaking callers or committing to a serde data format.
+//! - **No serde surface.** JSON is converted directly into the crate's owned semantic
+//!   [`Shape`] types, the same types callers build in code. Nothing about
+//!   the JSON AST encoding leaks into the model or the public API.
 
-use crate::ast::{
-    DeclKind, Document, MemberDecl, Members, OperationDecl, ResourceDecl, ServiceDecl, ShapeDecl,
-    TraitMap,
-};
 use crate::diagnostic::{
-    escape_pointer_token, Diagnostic, DiagnosticCode, DiagnosticSet, LoadError, SourceLocation,
+    escape_pointer_token, push_pointer_token, Diagnostic, DiagnosticCode, DiagnosticSet, LoadError,
+    Position, SourceLocation,
 };
-use crate::node::{Node, NodeObject, NodeSeed, ParseAbort, ParseContext};
-use crate::shape::ShapeType;
+use crate::node::{KeySeed, Node, NodeObject, NodeSeed, NodeValue, ParseAbort, ParseContext};
+use crate::shape::owned::Common;
+use crate::shape::{
+    EnumShape, IntEnumShape, ListShape, MapShape, MemberShape, Members, OperationShape,
+    ResourceShape, ServiceShape, Shape, ShapeType, SimpleShape, StructureShape, TraitMap,
+    UnionShape,
+};
 use crate::shape_id::ShapeId;
 use indexmap::IndexMap;
 use serde::de::{self, DeserializeSeed, MapAccess, Visitor};
@@ -51,11 +53,8 @@ use std::io::Read;
 use std::path::Path;
 use std::sync::Arc;
 
-pub(crate) const PRELUDE_NAMESPACE: &str = "smithy.api";
-pub(crate) const MIXIN_TRAIT: &str = "smithy.api#mixin";
-
-const DEFAULT_MAX_INPUT_BYTES: u64 = 256 * 1024 * 1024;
-const DEFAULT_MAX_SHAPES: usize = 1_000_000;
+pub(crate) const DEFAULT_MAX_INPUT_BYTES: u64 = 256 * 1024 * 1024;
+pub(crate) const DEFAULT_MAX_SHAPES: usize = 1_000_000;
 /// The deepest document nesting the loader supports.
 ///
 /// Depth counts every object and array from the document root. serde_json's own recursion
@@ -63,29 +62,29 @@ const DEFAULT_MAX_SHAPES: usize = 1_000_000;
 /// loader's limit fires first, so deep input is always reported as `ResourceLimit` rather than
 /// as a JSON syntax error.
 pub(crate) const MAX_SUPPORTED_DEPTH: usize = 100;
-const DEFAULT_MAX_DEPTH: usize = MAX_SUPPORTED_DEPTH;
+pub(crate) const DEFAULT_MAX_DEPTH: usize = MAX_SUPPORTED_DEPTH;
 /// Far above anything a real model produces, but bounds memory for adversarial input.
-const DEFAULT_MAX_DIAGNOSTICS: usize = 1_000;
+pub(crate) const DEFAULT_MAX_DIAGNOSTICS: usize = 1_000;
 
-/// Options for loading a model.
-///
-/// The defaults inject the Smithy prelude, allow applied traits whose definitions are
-/// absent, and use resource limits far above the largest AWS models.
+/// One parsed JSON AST document.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct Document {
+    pub(crate) metadata: NodeObject,
+    pub(crate) shapes: IndexMap<ShapeId, Shape>,
+}
+
+/// Parser limits, configured through [`ModelAssembler`](crate::ModelAssembler).
 #[derive(Debug, Clone)]
-pub struct ModelLoader {
-    pub(crate) prelude: bool,
-    pub(crate) require_trait_definitions: bool,
+pub(crate) struct JsonLoader {
     pub(crate) max_input_bytes: u64,
     pub(crate) max_shapes: usize,
     pub(crate) max_depth: usize,
     pub(crate) max_diagnostics: usize,
 }
 
-impl Default for ModelLoader {
+impl Default for JsonLoader {
     fn default() -> Self {
         Self {
-            prelude: true,
-            require_trait_definitions: false,
             max_input_bytes: DEFAULT_MAX_INPUT_BYTES,
             max_shapes: DEFAULT_MAX_SHAPES,
             max_depth: DEFAULT_MAX_DEPTH,
@@ -94,58 +93,7 @@ impl Default for ModelLoader {
     }
 }
 
-impl ModelLoader {
-    /// Creates a loader with default options.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Does not inject the prelude. References to `smithy.api` shapes then fail to resolve
-    /// unless the document defines them.
-    pub fn disable_prelude(mut self) -> Self {
-        self.prelude = false;
-        self
-    }
-
-    /// Requires every applied trait to resolve to a trait definition.
-    pub fn require_trait_definitions(mut self, require: bool) -> Self {
-        self.require_trait_definitions = require;
-        self
-    }
-
-    /// The maximum number of input bytes.
-    pub fn max_input_bytes(mut self, max: u64) -> Self {
-        self.max_input_bytes = max;
-        self
-    }
-
-    /// The maximum number of top-level shapes in a document.
-    pub fn max_shapes(mut self, max: usize) -> Self {
-        self.max_shapes = max;
-        self
-    }
-
-    /// The maximum JSON nesting depth of the document, counting every object and array from
-    /// the root.
-    ///
-    /// Values above the supported maximum of 100 are clamped to it, because deeper input would
-    /// otherwise be rejected by serde_json's recursion guard (128) as a JSON syntax error
-    /// instead of a [`ResourceLimit`](crate::diagnostic::DiagnosticCode::ResourceLimit).
-    pub fn max_depth(mut self, max: usize) -> Self {
-        self.max_depth = max.min(MAX_SUPPORTED_DEPTH);
-        self
-    }
-
-    /// The maximum number of diagnostics to collect from one load.
-    ///
-    /// Further diagnostics are dropped and replaced by a single
-    /// [`ResourceLimit`](crate::diagnostic::DiagnosticCode::ResourceLimit) error; see
-    /// [`DiagnosticSet::is_truncated`]. Loading still fails when the limit is reached.
-    pub fn max_diagnostics(mut self, max: usize) -> Self {
-        self.max_diagnostics = max;
-        self
-    }
-
+impl JsonLoader {
     pub(crate) fn parse_str(&self, source: &str, input: &str) -> Result<Document, LoadError> {
         self.parse_slice(source, input.as_bytes())
     }
@@ -155,7 +103,7 @@ impl ModelLoader {
         if input.len() as u64 > self.max_input_bytes {
             return Err(self.input_too_large(&source));
         }
-        self.parse(source, serde_json::Deserializer::from_slice(input))
+        self.parse(source, input)
     }
 
     pub(crate) fn parse_reader(
@@ -163,7 +111,6 @@ impl ModelLoader {
         source: &str,
         reader: impl Read,
     ) -> Result<Document, LoadError> {
-        let source_arc: Arc<str> = Arc::from(source);
         // Buffering is much faster than serde_json's byte-at-a-time reader, and `take`
         // ensures an unbounded reader is never retained beyond the limit.
         let mut buffer = Vec::new();
@@ -171,15 +118,20 @@ impl ModelLoader {
             .take(self.max_input_bytes.saturating_add(1))
             .read_to_end(&mut buffer)
         {
-            let mut diagnostics = DiagnosticSet::default();
-            diagnostics.push(Diagnostic::error(
-                DiagnosticCode::Io,
-                format!("failed to read model: {err}"),
-                Some(SourceLocation::new(source_arc)),
-            ));
-            return Err(LoadError::io(err, diagnostics));
+            return Err(Self::read_error(source, err));
         }
         self.parse_slice(source, &buffer)
+    }
+
+    /// The error for a reader that failed.
+    pub(crate) fn read_error(source: &str, err: std::io::Error) -> LoadError {
+        let mut diagnostics = DiagnosticSet::default();
+        diagnostics.push(Diagnostic::error_at(
+            DiagnosticCode::Io,
+            format!("failed to read model: {err}"),
+            Some(SourceLocation::new(Arc::from(source))),
+        ));
+        LoadError::io(err, diagnostics)
     }
 
     pub(crate) fn parse_file(&self, path: &Path) -> Result<Document, LoadError> {
@@ -188,7 +140,7 @@ impl ModelLoader {
             Ok(file) => self.parse_reader(&source, file),
             Err(err) => {
                 let mut diagnostics = DiagnosticSet::default();
-                diagnostics.push(Diagnostic::error(
+                diagnostics.push(Diagnostic::error_at(
                     DiagnosticCode::Io,
                     format!("failed to open model: {err}"),
                     Some(SourceLocation::new(Arc::from(source))),
@@ -200,7 +152,7 @@ impl ModelLoader {
 
     fn input_too_large(&self, source: &Arc<str>) -> LoadError {
         let mut diagnostics = DiagnosticSet::default();
-        diagnostics.push(Diagnostic::error(
+        diagnostics.push(Diagnostic::error_at(
             DiagnosticCode::ResourceLimit,
             format!(
                 "input exceeds the maximum of {} bytes",
@@ -211,15 +163,12 @@ impl ModelLoader {
         LoadError::resource_limit(diagnostics)
     }
 
-    fn parse<'de, R: serde_json::de::Read<'de>>(
-        &self,
-        source: Arc<str>,
-        mut de: serde_json::Deserializer<R>,
-    ) -> Result<Document, LoadError> {
+    fn parse(&self, source: Arc<str>, input: &[u8]) -> Result<Document, LoadError> {
+        let mut de = serde_json::Deserializer::from_slice(input);
         let state = State {
             options: self,
             source: source.clone(),
-            ctx: ParseContext::new(self.max_depth),
+            ctx: ParseContext::new(self.max_depth, input),
             diagnostics: RefCell::new(DiagnosticSet::with_limit(self.max_diagnostics)),
             interner: RefCell::default(),
             version: RefCell::default(),
@@ -246,11 +195,11 @@ impl ModelLoader {
                     format!("duplicate object key `{key}`"),
                 ),
                 Some(ParseAbort::DepthLimit(_) | ParseAbort::ShapeLimit(_)) => {
-                    (DiagnosticCode::ResourceLimit, err.to_string())
+                    (DiagnosticCode::ResourceLimit, syntax_message(&err))
                 }
-                None => (DiagnosticCode::JsonSyntax, err.to_string()),
+                None => (DiagnosticCode::JsonSyntax, syntax_message(&err)),
             };
-            diagnostics.push_unbounded(Diagnostic::error(code, message, Some(location)));
+            diagnostics.push_unbounded(Diagnostic::error_at(code, message, Some(location)));
             return Err(match abort {
                 Some(ParseAbort::DepthLimit(_) | ParseAbort::ShapeLimit(_)) => {
                     LoadError::resource_limit(diagnostics)
@@ -259,25 +208,30 @@ impl ModelLoader {
             });
         }
 
-        let root = SourceLocation::with_pointer(&source, String::new());
-        match version.into_inner() {
-            Some(Node::String(v)) if v == "2" || v == "2.0" => {}
-            Some(Node::String(v)) => {
+        let root = SourceLocation::with_pointer(&source, String::new(), None);
+        let version = version.into_inner();
+        let version_location = root.child_at("/smithy", version.as_ref().and_then(Node::position));
+        match version.map(Node::into_value) {
+            Some(NodeValue::String(v)) if v == "2" || v == "2.0" => {}
+            Some(NodeValue::String(v)) => {
                 // Other diagnostics may be artifacts of a different grammar; report only this.
                 let mut only = DiagnosticSet::default();
-                only.push(Diagnostic::error(
+                only.push(Diagnostic::error_at(
                     DiagnosticCode::UnsupportedVersion,
                     format!("unsupported Smithy version `{v}`; only `2` and `2.0` are supported"),
-                    Some(root.child("/smithy")),
+                    Some(version_location.clone()),
                 ));
                 return Err(LoadError::invalid_model(only));
             }
-            Some(other) => diagnostics.push(Diagnostic::error(
+            Some(other) => diagnostics.push(Diagnostic::error_at(
                 DiagnosticCode::InvalidProperty,
-                format!("`smithy` must be a string, found {}", other.type_name()),
-                Some(root.child("/smithy")),
+                format!(
+                    "`smithy` must be a string, found {}",
+                    Node::new(other).type_name()
+                ),
+                Some(version_location),
             )),
-            None => diagnostics.push(Diagnostic::error(
+            None => diagnostics.push(Diagnostic::error_at(
                 DiagnosticCode::MissingProperty,
                 "missing `smithy` version property",
                 Some(root),
@@ -292,10 +246,21 @@ impl ModelLoader {
     }
 }
 
+/// serde_json's message without its ` at line L column C` suffix, which the diagnostic's
+/// location already records.
+fn syntax_message(err: &serde_json::Error) -> String {
+    let message = err.to_string();
+    let suffix = format!(" at line {} column {}", err.line(), err.column());
+    match message.strip_suffix(&suffix) {
+        Some(stripped) => stripped.to_owned(),
+        None => message,
+    }
+}
+
 struct State<'o> {
-    options: &'o ModelLoader,
+    options: &'o JsonLoader,
     source: Arc<str>,
-    ctx: ParseContext,
+    ctx: ParseContext<'o>,
     diagnostics: RefCell<DiagnosticSet>,
     interner: RefCell<HashSet<ShapeId>>,
     version: RefCell<Option<Node>>,
@@ -303,14 +268,14 @@ struct State<'o> {
 }
 
 impl State<'_> {
-    fn at(&self, pointer: String) -> SourceLocation {
-        SourceLocation::with_pointer(&self.source, pointer)
+    fn at(&self, pointer: String, position: Option<Position>) -> SourceLocation {
+        SourceLocation::with_pointer(&self.source, pointer, position)
     }
 
     fn error(&self, code: DiagnosticCode, message: impl Into<String>, location: SourceLocation) {
         self.diagnostics
             .borrow_mut()
-            .push(Diagnostic::error(code, message, Some(location)));
+            .push(Diagnostic::error_at(code, message, Some(location)));
     }
 
     /// Parses and interns an absolute shape ID so repeated targets share one allocation.
@@ -325,8 +290,8 @@ impl State<'_> {
     }
 
     fn shape_id_value(&self, node: &Node, location: SourceLocation) -> Option<ShapeId> {
-        match node {
-            Node::String(value) => {
+        match node.as_str() {
+            Some(value) => {
                 let id = self.intern(value);
                 if id.is_none() {
                     self.error(
@@ -337,10 +302,10 @@ impl State<'_> {
                 }
                 id
             }
-            other => {
+            None => {
                 self.error(
                     DiagnosticCode::InvalidProperty,
-                    format!("expected a shape ID string, found {}", other.type_name()),
+                    format!("expected a shape ID string, found {}", node.type_name()),
                     location,
                 );
                 None
@@ -373,12 +338,12 @@ impl State<'_> {
         location: &SourceLocation,
     ) -> bool {
         let mut ok = true;
-        for key in object.keys() {
+        for (key, value) in object.iter() {
             if !allowed.contains(&key) {
                 self.error(
                     DiagnosticCode::UnknownProperty,
                     format!("unknown property `{key}` in {what}"),
-                    location.child(&format!("/{}", escape_pointer_token(key))),
+                    location.child_at(&format!("/{}", escape_pointer_token(key)), value.position()),
                 );
                 ok = false;
             }
@@ -391,7 +356,7 @@ impl State<'_> {
         let object = self.expect_object(node, "a shape reference", &location)?;
         let ok = self.check_properties(object, &["target"], "a shape reference", &location);
         let target = match object.get("target") {
-            Some(target) => self.shape_id_value(target, location.child("/target")),
+            Some(target) => self.shape_id_value(target, target.source_location().clone()),
             None => {
                 self.error(
                     DiagnosticCode::MissingProperty,
@@ -404,30 +369,20 @@ impl State<'_> {
         target.filter(|_| ok)
     }
 
-    fn optional_ref(
-        &self,
-        object: &NodeObject,
-        key: &str,
-        location: &SourceLocation,
-    ) -> Option<Option<ShapeId>> {
+    fn optional_ref(&self, object: &NodeObject, key: &str) -> Option<Option<ShapeId>> {
         match object.get(key) {
             None => Some(None),
             Some(node) => self
-                .shape_ref(node, location.child(&format!("/{key}")))
+                .shape_ref(node, node.source_location().clone())
                 .map(Some),
         }
     }
 
-    fn ref_list(
-        &self,
-        object: &NodeObject,
-        key: &str,
-        location: &SourceLocation,
-    ) -> Option<Vec<ShapeId>> {
+    fn ref_list(&self, object: &NodeObject, key: &str) -> Option<Vec<ShapeId>> {
         let Some(node) = object.get(key) else {
             return Some(Vec::new());
         };
-        let location = location.child(&format!("/{key}"));
+        let location = node.source_location().clone();
         let Some(elements) = node.as_array() else {
             self.error(
                 DiagnosticCode::InvalidProperty,
@@ -440,7 +395,7 @@ impl State<'_> {
         let mut refs: Vec<ShapeId> = Vec::with_capacity(elements.len());
         let mut first_index: HashMap<ShapeId, usize> = HashMap::with_capacity(elements.len());
         for (i, element) in elements.iter().enumerate() {
-            let element_location = location.child(&format!("/{i}"));
+            let element_location = element.source_location().clone();
             let Some(id) = self.shape_ref(element, element_location.clone()) else {
                 ok = false;
                 continue;
@@ -449,12 +404,12 @@ impl State<'_> {
             // not something to normalize silently.
             if let Some(&first) = first_index.get(&id) {
                 self.diagnostics.borrow_mut().push(
-                    Diagnostic::error(
+                    Diagnostic::error_at(
                         DiagnosticCode::DuplicateReference,
                         format!("`{key}` lists `{id}` more than once"),
                         Some(element_location),
                     )
-                    .with_related(location.child(&format!("/{first}"))),
+                    .with_related(elements[first].source_location().clone()),
                 );
                 ok = false;
                 continue;
@@ -466,21 +421,16 @@ impl State<'_> {
     }
 
     /// An object of identifier names to shape references (resource identifiers/properties).
-    fn ref_map(
-        &self,
-        object: &NodeObject,
-        key: &str,
-        location: &SourceLocation,
-    ) -> Option<IndexMap<String, ShapeId>> {
+    fn ref_map(&self, object: &NodeObject, key: &str) -> Option<IndexMap<String, ShapeId>> {
         let Some(node) = object.get(key) else {
             return Some(IndexMap::new());
         };
-        let location = location.child(&format!("/{key}"));
+        let location = node.source_location().clone();
         let entries = self.expect_object(node, &format!("`{key}`"), &location)?;
         let mut ok = true;
         let mut out = IndexMap::new();
         for (name, value) in entries.iter() {
-            let entry_location = location.child(&format!("/{}", escape_pointer_token(name)));
+            let entry_location = value.source_location().clone();
             if !ShapeId::is_valid_identifier(name) {
                 self.error(
                     DiagnosticCode::InvalidProperty,
@@ -499,15 +449,16 @@ impl State<'_> {
         ok.then_some(out)
     }
 
-    fn traits(&self, node: Option<Node>, location: &SourceLocation) -> Option<TraitMap> {
+    fn traits(&self, node: Option<Node>) -> Option<TraitMap> {
         let Some(node) = node else {
             return Some(TraitMap::new());
         };
-        let location = location.child("/traits");
-        let Node::Object(object) = node else {
+        let location = node.source_location().clone();
+        let type_name = node.type_name();
+        let NodeValue::Object(object) = node.into_value() else {
             self.error(
                 DiagnosticCode::InvalidProperty,
-                format!("`traits` must be an object, found {}", node.type_name()),
+                format!("`traits` must be an object, found {type_name}"),
                 location,
             );
             return None;
@@ -523,7 +474,7 @@ impl State<'_> {
                     self.error(
                         DiagnosticCode::InvalidShapeId,
                         format!("trait `{key}` is not an absolute root shape ID"),
-                        location.child(&format!("/{}", escape_pointer_token(&key))),
+                        value.source_location().clone(),
                     );
                     ok = false;
                 }
@@ -538,7 +489,7 @@ impl State<'_> {
         name: &str,
         node: Node,
         location: SourceLocation,
-    ) -> Option<MemberDecl> {
+    ) -> Option<MemberShape> {
         let Ok(id) = container.with_member(name) else {
             self.error(
                 DiagnosticCode::InvalidShapeId,
@@ -547,20 +498,18 @@ impl State<'_> {
             );
             return None;
         };
-        let Node::Object(mut object) = node else {
+        let type_name = node.type_name();
+        let NodeValue::Object(mut object) = node.into_value() else {
             self.error(
                 DiagnosticCode::InvalidProperty,
-                format!(
-                    "member `{name}` must be an object, found {}",
-                    node.type_name()
-                ),
+                format!("member `{name}` must be an object, found {type_name}"),
                 location,
             );
             return None;
         };
         let ok = self.check_properties(&object, &["target", "traits"], "a member", &location);
         let target = match object.get("target") {
-            Some(target) => self.shape_id_value(target, location.child("/target")),
+            Some(target) => self.shape_id_value(target, target.source_location().clone()),
             None => {
                 self.error(
                     DiagnosticCode::MissingProperty,
@@ -570,11 +519,11 @@ impl State<'_> {
                 None
             }
         };
-        let traits = self.traits(object.remove("traits"), &location);
+        let traits = self.traits(object.remove("traits"));
         if !ok {
             return None;
         }
-        Some(MemberDecl {
+        Some(MemberShape {
             id,
             target: target?,
             traits: traits?,
@@ -588,9 +537,12 @@ impl State<'_> {
         key: &str,
         container: &ShapeId,
         location: &SourceLocation,
-    ) -> Option<MemberDecl> {
+    ) -> Option<MemberShape> {
         match object.remove(key) {
-            Some(node) => self.member(container, key, node, location.child(&format!("/{key}"))),
+            Some(node) => {
+                let location = node.source_location().clone();
+                self.member(container, key, node, location)
+            }
             None => {
                 self.error(
                     DiagnosticCode::MissingProperty,
@@ -602,20 +554,16 @@ impl State<'_> {
         }
     }
 
-    fn named_members(
-        &self,
-        object: &mut NodeObject,
-        container: &ShapeId,
-        location: &SourceLocation,
-    ) -> Option<Members> {
+    fn named_members(&self, object: &mut NodeObject, container: &ShapeId) -> Option<Members> {
         let Some(node) = object.remove("members") else {
             return Some(Members::new());
         };
-        let location = location.child("/members");
-        let Node::Object(entries) = node else {
+        let location = node.source_location().clone();
+        let type_name = node.type_name();
+        let NodeValue::Object(entries) = node.into_value() else {
             self.error(
                 DiagnosticCode::InvalidProperty,
-                format!("`members` must be an object, found {}", node.type_name()),
+                format!("`members` must be an object, found {type_name}"),
                 location,
             );
             return None;
@@ -623,7 +571,7 @@ impl State<'_> {
         let mut ok = true;
         let mut members = Members::with_capacity(entries.len());
         for (name, value) in entries.into_entries() {
-            let member_location = location.child(&format!("/{}", escape_pointer_token(&name)));
+            let member_location = value.source_location().clone();
             match self.member(container, &name, value, member_location) {
                 Some(member) => {
                     members.insert(name, member);
@@ -634,40 +582,31 @@ impl State<'_> {
         ok.then_some(members)
     }
 
-    fn optional_string(
-        &self,
-        object: &NodeObject,
-        key: &str,
-        location: &SourceLocation,
-    ) -> Option<Option<String>> {
+    fn optional_string(&self, object: &NodeObject, key: &str) -> Option<Option<String>> {
         match object.get(key) {
             None => Some(None),
-            Some(Node::String(value)) => Some(Some(value.clone())),
+            Some(node) if node.as_str().is_some() => node.as_str().map(|v| Some(v.to_owned())),
             Some(other) => {
                 self.error(
                     DiagnosticCode::InvalidProperty,
                     format!("`{key}` must be a string, found {}", other.type_name()),
-                    location.child(&format!("/{key}")),
+                    other.source_location().clone(),
                 );
                 None
             }
         }
     }
 
-    fn rename(
-        &self,
-        object: &NodeObject,
-        location: &SourceLocation,
-    ) -> Option<IndexMap<ShapeId, String>> {
+    fn rename(&self, object: &NodeObject) -> Option<IndexMap<ShapeId, String>> {
         let Some(node) = object.get("rename") else {
             return Some(IndexMap::new());
         };
-        let location = location.child("/rename");
+        let location = node.source_location().clone();
         let entries = self.expect_object(node, "`rename`", &location)?;
         let mut ok = true;
         let mut out = IndexMap::new();
         for (key, value) in entries.iter() {
-            let entry_location = location.child(&format!("/{}", escape_pointer_token(key)));
+            let entry_location = value.source_location().clone();
             let id = self.intern(key);
             if id.is_none() {
                 self.error(
@@ -694,8 +633,14 @@ impl State<'_> {
         ok.then_some(out)
     }
 
-    fn convert_shape(&self, key: &str, node: Node) -> Option<ShapeDecl> {
-        let location = self.at(format!("/shapes/{}", escape_pointer_token(key)));
+    fn convert_shape(&self, key: &str, mut node: Node) -> Option<Shape> {
+        // One location table covers the shape, its members, references, and trait values.
+        let mut pointer = String::with_capacity(8 + key.len());
+        pointer.push_str("/shapes/");
+        push_pointer_token(&mut pointer, key);
+        let position = node.position();
+        node.assign_locations(&self.source, &mut pointer, position);
+        let location = node.source_location().clone();
         let id = match self.intern(key) {
             Some(id) if !id.is_member() => id,
             _ => {
@@ -707,22 +652,27 @@ impl State<'_> {
                 return None;
             }
         };
-        let Node::Object(mut object) = node else {
+        let type_name = node.type_name();
+        let NodeValue::Object(mut object) = node.into_value() else {
             self.error(
                 DiagnosticCode::InvalidProperty,
-                format!("shape `{id}` must be an object, found {}", node.type_name()),
+                format!("shape `{id}` must be an object, found {type_name}"),
                 location,
             );
             return None;
         };
-        let shape_type = match object.get("type") {
-            Some(Node::String(name)) => {
-                match name.as_str() {
+        let property = |name: &str| match object.get(name) {
+            Some(value) => value.source_location().clone(),
+            None => location.child(&format!("/{name}")),
+        };
+        let shape_type = match object.get("type").map(|t| (t, t.as_str())) {
+            Some((_, Some(name))) => {
+                match name {
                     "apply" => {
                         self.error(
                             DiagnosticCode::UnsupportedFeature,
                             format!("`apply` to `{id}` is not supported"),
-                            location.child("/type"),
+                            property("type"),
                         );
                         return None;
                     }
@@ -730,7 +680,7 @@ impl State<'_> {
                         self.error(
                         DiagnosticCode::UnsupportedFeature,
                         format!("`{id}` uses the Smithy 1.0 `set` type; use a list with @uniqueItems"),
-                        location.child("/type"),
+                        property("type"),
                     );
                         return None;
                     }
@@ -740,18 +690,18 @@ impl State<'_> {
                             self.error(
                                 DiagnosticCode::UnknownShapeType,
                                 format!("unknown shape type `{name}` for `{id}`"),
-                                location.child("/type"),
+                                property("type"),
                             );
                             return None;
                         }
                     },
                 }
             }
-            Some(other) => {
+            Some((other, None)) => {
                 self.error(
                     DiagnosticCode::InvalidProperty,
                     format!("`type` must be a string, found {}", other.type_name()),
-                    location.child("/type"),
+                    property("type"),
                 );
                 return None;
             }
@@ -766,15 +716,6 @@ impl State<'_> {
         };
 
         let mut ok = true;
-        if self.options.prelude && id.namespace() == PRELUDE_NAMESPACE {
-            self.error(
-                DiagnosticCode::PreludeConflict,
-                format!("`{id}` cannot be defined in the prelude namespace `{PRELUDE_NAMESPACE}`"),
-                location.clone(),
-            );
-            ok = false;
-        }
-
         let mut allowed = vec!["type", "traits", "mixins"];
         allowed.extend_from_slice(kind_properties(shape_type));
         ok &= self.check_properties(
@@ -784,80 +725,91 @@ impl State<'_> {
             &location,
         );
 
-        match object.get("mixins") {
+        match object.get("mixins").map(|m| (m, m.as_array())) {
             None => {}
-            Some(Node::Array(mixins)) if mixins.is_empty() => {}
-            Some(Node::Array(_)) => {
+            Some((_, Some([]))) => {}
+            Some((_, Some(_))) => {
                 self.error(
                     DiagnosticCode::UnsupportedFeature,
                     format!("`{id}` uses mixins, which are not supported"),
-                    location.child("/mixins"),
+                    property("mixins"),
                 );
                 ok = false;
             }
-            Some(other) => {
+            Some((other, None)) => {
                 self.error(
                     DiagnosticCode::InvalidProperty,
                     format!("`mixins` must be an array, found {}", other.type_name()),
-                    location.child("/mixins"),
+                    property("mixins"),
                 );
                 ok = false;
             }
         }
 
-        let traits = self.traits(object.remove("traits"), &location);
-        if traits.as_ref().is_some_and(|t| t.contains_key(MIXIN_TRAIT)) {
-            self.error(
-                DiagnosticCode::UnsupportedFeature,
-                format!("`{id}` is a mixin (`{MIXIN_TRAIT}`), which is not supported"),
-                location.child(&format!("/traits/{MIXIN_TRAIT}")),
-            );
-            ok = false;
-        }
-
-        let kind = self.kind(shape_type, &id, &mut object, &location);
-        if !ok {
+        let traits = self.traits(object.remove("traits"));
+        let traits_ok = traits.is_some();
+        let common = Common {
+            id: id.clone(),
+            traits: traits.unwrap_or_default(),
+            source: location.clone(),
+        };
+        let shape = self.kind(shape_type, common, &mut object, &location);
+        if !ok || !traits_ok {
             return None;
         }
-        Some(ShapeDecl {
-            id,
-            kind: kind?,
-            traits: traits?,
-            source: location,
-        })
+        shape
     }
 
     fn kind(
         &self,
         shape_type: ShapeType,
-        id: &ShapeId,
+        common: Common,
         object: &mut NodeObject,
         location: &SourceLocation,
-    ) -> Option<DeclKind> {
+    ) -> Option<Shape> {
+        let id = &common.id.clone();
         Some(match shape_type {
-            t if t.is_simple() => DeclKind::Simple(t),
-            ShapeType::List => DeclKind::List {
+            t if t.is_simple() => Shape::Simple(SimpleShape {
+                common,
+                shape_type: t,
+            }),
+            ShapeType::List => Shape::List(ListShape {
                 member: self.required_member(object, "member", id, location)?,
-            },
+                common,
+            }),
             ShapeType::Map => {
                 let key = self.required_member(object, "key", id, location);
                 let value = self.required_member(object, "value", id, location);
-                DeclKind::Map {
+                Shape::Map(MapShape {
+                    common,
                     key: key?,
                     value: value?,
-                }
+                })
             }
-            ShapeType::Structure => DeclKind::Structure(self.named_members(object, id, location)?),
-            ShapeType::Union => DeclKind::Union(self.named_members(object, id, location)?),
-            ShapeType::Enum => DeclKind::Enum(self.named_members(object, id, location)?),
-            ShapeType::IntEnum => DeclKind::IntEnum(self.named_members(object, id, location)?),
+            ShapeType::Structure => Shape::Structure(StructureShape {
+                members: self.named_members(object, id)?,
+                common,
+            }),
+            ShapeType::Union => Shape::Union(UnionShape {
+                members: self.named_members(object, id)?,
+                common,
+            }),
+            ShapeType::Enum => Shape::Enum(EnumShape {
+                members: self.named_members(object, id)?,
+                common,
+            }),
+            ShapeType::IntEnum => Shape::IntEnum(IntEnumShape {
+                members: self.named_members(object, id)?,
+                common,
+            }),
             ShapeType::Service => {
-                let version = self.optional_string(object, "version", location);
-                let operations = self.ref_list(object, "operations", location);
-                let resources = self.ref_list(object, "resources", location);
-                let errors = self.ref_list(object, "errors", location);
-                let rename = self.rename(object, location);
-                DeclKind::Service(ServiceDecl {
+                let version = self.optional_string(object, "version");
+                let operations = self.ref_list(object, "operations");
+                let resources = self.ref_list(object, "resources");
+                let errors = self.ref_list(object, "errors");
+                let rename = self.rename(object);
+                Shape::Service(ServiceShape {
+                    common,
                     version: version?,
                     operations: operations?,
                     resources: resources?,
@@ -866,28 +818,30 @@ impl State<'_> {
                 })
             }
             ShapeType::Operation => {
-                let input = self.optional_ref(object, "input", location);
-                let output = self.optional_ref(object, "output", location);
-                let errors = self.ref_list(object, "errors", location);
-                DeclKind::Operation(OperationDecl {
+                let input = self.optional_ref(object, "input");
+                let output = self.optional_ref(object, "output");
+                let errors = self.ref_list(object, "errors");
+                Shape::Operation(OperationShape {
+                    common,
                     input: input?,
                     output: output?,
                     errors: errors?,
                 })
             }
             ShapeType::Resource => {
-                let identifiers = self.ref_map(object, "identifiers", location);
-                let properties = self.ref_map(object, "properties", location);
-                let create = self.optional_ref(object, "create", location);
-                let put = self.optional_ref(object, "put", location);
-                let read = self.optional_ref(object, "read", location);
-                let update = self.optional_ref(object, "update", location);
-                let delete = self.optional_ref(object, "delete", location);
-                let list = self.optional_ref(object, "list", location);
-                let operations = self.ref_list(object, "operations", location);
-                let collection_operations = self.ref_list(object, "collectionOperations", location);
-                let resources = self.ref_list(object, "resources", location);
-                DeclKind::Resource(ResourceDecl {
+                let identifiers = self.ref_map(object, "identifiers");
+                let properties = self.ref_map(object, "properties");
+                let create = self.optional_ref(object, "create");
+                let put = self.optional_ref(object, "put");
+                let read = self.optional_ref(object, "read");
+                let update = self.optional_ref(object, "update");
+                let delete = self.optional_ref(object, "delete");
+                let list = self.optional_ref(object, "list");
+                let operations = self.ref_list(object, "operations");
+                let collection_operations = self.ref_list(object, "collectionOperations");
+                let resources = self.ref_list(object, "resources");
+                Shape::Resource(ResourceShape {
+                    common,
                     identifiers: identifiers?,
                     properties: properties?,
                     create: create?,
@@ -957,30 +911,41 @@ impl<'de> Visitor<'de> for DocumentSeed<'_, '_> {
         let state = self.state;
         let ctx = &state.ctx;
         let mut seen = HashSet::new();
-        while let Some(key) = map.next_key::<String>()? {
+        while let Some((key, position)) = map.next_key_seed(KeySeed { ctx })? {
             if !seen.insert(key.clone()) {
                 return Err(ctx.fail(ParseAbort::DuplicateKey(key)));
             }
             match key.as_str() {
                 "smithy" => {
                     let value = map.next_value_seed(NodeSeed { ctx, depth: 1 })?;
-                    *state.version.borrow_mut() = Some(value);
+                    *state.version.borrow_mut() = Some(value.with_position(position));
                 }
-                "metadata" => match map.next_value_seed(NodeSeed { ctx, depth: 1 })? {
-                    Node::Object(metadata) => state.document.borrow_mut().metadata = metadata,
-                    other => state.error(
-                        DiagnosticCode::InvalidProperty,
-                        format!("`metadata` must be an object, found {}", other.type_name()),
-                        state.at("/metadata".into()),
-                    ),
-                },
+                "metadata" => {
+                    let mut metadata = map.next_value_seed(NodeSeed { ctx, depth: 1 })?;
+                    let type_name = metadata.type_name();
+                    metadata.assign_locations(
+                        &state.source,
+                        &mut String::from("/metadata"),
+                        position,
+                    );
+                    match metadata.into_value() {
+                        NodeValue::Object(metadata) => {
+                            state.document.borrow_mut().metadata = metadata
+                        }
+                        _ => state.error(
+                            DiagnosticCode::InvalidProperty,
+                            format!("`metadata` must be an object, found {type_name}"),
+                            state.at("/metadata".into(), position),
+                        ),
+                    }
+                }
                 "shapes" => map.next_value_seed(ShapesSeed { state })?,
                 _ => {
                     map.next_value_seed(NodeSeed { ctx, depth: 1 })?;
                     state.error(
                         DiagnosticCode::UnknownProperty,
                         format!("unknown top-level property `{key}`"),
-                        state.at(format!("/{}", escape_pointer_token(&key))),
+                        state.at(format!("/{}", escape_pointer_token(&key)), position),
                     );
                 }
             }
@@ -1012,20 +977,22 @@ impl<'de> Visitor<'de> for ShapesSeed<'_, '_> {
         let state = self.state;
         let ctx = &state.ctx;
         let mut seen = HashSet::new();
-        while let Some(key) = map.next_key::<String>()? {
+        while let Some((key, position)) = map.next_key_seed(KeySeed { ctx })? {
             if seen.contains(&key) {
                 return Err(ctx.fail(ParseAbort::DuplicateKey(key)));
             }
             if seen.len() >= state.options.max_shapes {
                 return Err(ctx.fail(ParseAbort::ShapeLimit(state.options.max_shapes)));
             }
-            let node = map.next_value_seed(NodeSeed { ctx, depth: 2 })?;
+            let node = map
+                .next_value_seed(NodeSeed { ctx, depth: 2 })?
+                .with_position(position);
             if let Some(shape) = state.convert_shape(&key, node) {
                 state
                     .document
                     .borrow_mut()
                     .shapes
-                    .insert(shape.id.clone(), shape);
+                    .insert(shape.id().clone(), shape);
             }
             seen.insert(key);
         }
@@ -1038,7 +1005,11 @@ mod tests {
     use super::*;
 
     fn parse(json: &str) -> Result<Document, LoadError> {
-        ModelLoader::new().parse_str("test.json", json)
+        JsonLoader::default().parse_str("test.json", json)
+    }
+
+    fn loader() -> JsonLoader {
+        JsonLoader::default()
     }
 
     fn codes(err: &LoadError) -> Vec<DiagnosticCode> {
@@ -1154,6 +1125,17 @@ mod tests {
     }
 
     #[test]
+    fn metadata_values_have_locations() {
+        let document = parse(r#"{"smithy":"2.0","metadata":{"a/b":[{"c":1}]}}"#).unwrap();
+        let value = document.metadata.get("a/b").unwrap();
+        assert_eq!(value.source_location().pointer(), Some("/metadata/a~1b"));
+        assert_eq!(
+            value.pointer("/0/c").unwrap().source_location().pointer(),
+            Some("/metadata/a~1b/0/c")
+        );
+    }
+
+    #[test]
     fn unsupported_features() {
         for (shapes, pointer) in [
             (
@@ -1163,10 +1145,6 @@ mod tests {
             (
                 r#""a#A":{"type":"structure","mixins":[{"target":"a#M"}]}"#,
                 "/shapes/a#A/mixins",
-            ),
-            (
-                r#""a#M":{"type":"structure","traits":{"smithy.api#mixin":{}}}"#,
-                "/shapes/a#M/traits/smithy.api#mixin",
             ),
             (
                 r#""a#S":{"type":"set","member":{"target":"a#A"}}"#,
@@ -1242,17 +1220,6 @@ mod tests {
     }
 
     #[test]
-    fn prelude_namespace() {
-        let json = doc(r#""smithy.api#String":{"type":"string"}"#);
-        let err = parse(&json).unwrap_err();
-        assert_eq!(codes(&err), [DiagnosticCode::PreludeConflict]);
-        assert!(ModelLoader::new()
-            .disable_prelude()
-            .parse_str("p", &json)
-            .is_ok());
-    }
-
-    #[test]
     fn resource_limits() {
         let deep = format!(
             r#"{{"smithy":"2.0","metadata":{{"x":{}1{}}}}}"#,
@@ -1264,20 +1231,30 @@ mod tests {
         assert_eq!(codes(&err), [DiagnosticCode::ResourceLimit]);
 
         let two = doc(r#""a#A":{"type":"string"},"a#B":{"type":"string"}"#);
-        let loader = ModelLoader::new().max_shapes(1);
+        let loader = JsonLoader {
+            max_shapes: 1,
+            ..loader()
+        };
         assert!(loader.parse_str("t", &two).unwrap_err().is_resource_limit());
-        assert!(ModelLoader::new()
-            .max_shapes(2)
-            .parse_str("t", &two)
-            .is_ok());
+        let loader = JsonLoader {
+            max_shapes: 2,
+            ..JsonLoader::default()
+        };
+        assert!(loader.parse_str("t", &two).is_ok());
 
-        let loader = ModelLoader::new().max_input_bytes(10);
+        let loader = JsonLoader {
+            max_input_bytes: 10,
+            ..JsonLoader::default()
+        };
         assert!(loader.parse_str("t", &two).unwrap_err().is_resource_limit());
         assert!(loader
             .parse_reader("t", two.as_bytes())
             .unwrap_err()
             .is_resource_limit());
-        let exact = ModelLoader::new().max_input_bytes(two.len() as u64);
+        let exact = JsonLoader {
+            max_input_bytes: two.len() as u64,
+            ..JsonLoader::default()
+        };
         assert!(exact.parse_reader("t", two.as_bytes()).is_ok());
     }
 
@@ -1303,16 +1280,17 @@ mod tests {
         assert!(parse(&metadata(MAX_SUPPORTED_DEPTH - 1))
             .unwrap_err()
             .is_resource_limit());
-        // Before clamping, a large configured limit let serde_json's recursion guard (128)
-        // fire first, misreporting the input as a JSON syntax error.
-        for loader in [ModelLoader::new(), ModelLoader::new().max_depth(1000)] {
-            for input in [metadata(200), member_trait(126), member_trait(200)] {
-                let err = loader.parse_str("t", &input).unwrap_err();
-                assert!(err.is_resource_limit(), "{err}");
-                assert_eq!(codes(&err), [DiagnosticCode::ResourceLimit]);
-            }
+        // The assembler clamps configured depths to `MAX_SUPPORTED_DEPTH`, so serde_json's
+        // recursion guard (128) never fires first and misreports deep input as JSON syntax.
+        for input in [metadata(200), member_trait(126), member_trait(200)] {
+            let err = loader().parse_str("t", &input).unwrap_err();
+            assert!(err.is_resource_limit(), "{err}");
+            assert_eq!(codes(&err), [DiagnosticCode::ResourceLimit]);
         }
-        let shallow = ModelLoader::new().max_depth(4);
+        let shallow = JsonLoader {
+            max_depth: 4,
+            ..JsonLoader::default()
+        };
         assert!(shallow.parse_str("t", &metadata(2)).is_ok());
         assert!(shallow
             .parse_str("t", &metadata(3))
@@ -1331,10 +1309,12 @@ mod tests {
         assert_eq!(err.diagnostics().len(), 50);
         assert!(!err.diagnostics().is_truncated());
 
-        let err = ModelLoader::new()
-            .max_diagnostics(10)
-            .parse_str("t", &json)
-            .unwrap_err();
+        let err = JsonLoader {
+            max_diagnostics: 10,
+            ..JsonLoader::default()
+        }
+        .parse_str("t", &json)
+        .unwrap_err();
         let diagnostics = err.diagnostics();
         assert_eq!(diagnostics.len(), 11);
         assert!(diagnostics.is_truncated());
@@ -1345,22 +1325,13 @@ mod tests {
         );
         assert!(err.is_invalid_model());
 
-        // Validation diagnostics are bounded too, and any error still means no model.
-        let refs: Vec<_> = (0..50)
-            .map(|i| format!(r#""a#S{i}":{{"type":"list","member":{{"target":"a#Missing"}}}}"#))
-            .collect();
-        let err = ModelLoader::new()
-            .max_diagnostics(5)
-            .load_str("t", &doc(&refs.join(",")))
-            .unwrap_err();
-        assert_eq!(err.diagnostics().len(), 6);
-        assert!(err.diagnostics().is_truncated());
-
         // Even a zero limit reports why loading failed.
-        let err = ModelLoader::new()
-            .max_diagnostics(0)
-            .parse_str("t", &json)
-            .unwrap_err();
+        let err = JsonLoader {
+            max_diagnostics: 0,
+            ..JsonLoader::default()
+        }
+        .parse_str("t", &json)
+        .unwrap_err();
         assert_eq!(codes(&err), [DiagnosticCode::ResourceLimit]);
     }
 
@@ -1372,10 +1343,10 @@ mod tests {
                 Err(std::io::Error::other("boom"))
             }
         }
-        let err = ModelLoader::new().parse_reader("r", Failing).unwrap_err();
+        let err = loader().parse_reader("r", Failing).unwrap_err();
         assert!(err.is_io());
         assert_eq!(codes(&err), [DiagnosticCode::Io]);
-        let err = ModelLoader::new()
+        let err = loader()
             .parse_file(Path::new("/definitely/not/here.json"))
             .unwrap_err();
         assert!(err.is_io());
@@ -1408,31 +1379,30 @@ mod tests {
         let structure = &document.shapes["a#S"];
         let names: Vec<_> = structure.members().map(|m| m.name()).collect();
         assert_eq!(names, ["z", "a"]);
-        assert_eq!(structure.member("a").unwrap().id, "a#S$a");
+        assert_eq!(structure.member("a").unwrap().id(), "a#S$a");
         let map = &document.shapes["a#M"];
-        let names: Vec<_> = map.members().map(|m| m.id.as_str()).collect();
+        let names: Vec<_> = map.members().map(|m| m.id().as_str()).collect();
         assert_eq!(names, ["a#M$key", "a#M$value"]);
-        let DeclKind::Operation(op) = &document.shapes["a#Op"].kind else {
-            panic!()
-        };
-        assert_eq!(op.input.as_ref().unwrap(), "a#S");
-        assert!(op.output.is_none());
-        let DeclKind::Service(service) = &document.shapes["a#Svc"].kind else {
-            panic!()
-        };
+        let op = document.shapes["a#Op"].as_operation().unwrap();
+        assert_eq!(op.declared_input().unwrap(), "a#S");
+        assert!(op.declared_output().is_none());
+        let service = document.shapes["a#Svc"].as_service().unwrap();
         assert_eq!(service.rename["a#S"], "Renamed");
-        let DeclKind::Resource(resource) = &document.shapes["a#R"].kind else {
-            panic!()
-        };
+        let resource = document.shapes["a#R"].as_resource().unwrap();
         assert_eq!(resource.identifiers["id"], "smithy.api#String");
-        assert_eq!(resource.read.as_ref().unwrap(), "a#Op");
+        assert_eq!(resource.read().unwrap(), "a#Op");
+        let trait_value = &document.shapes["a#Blob"].common().traits["a#t"];
+        let nested = trait_value.pointer("/1/b").unwrap();
+        assert!(nested.is_null());
+        // Every trait value records its own JSON Pointer.
         assert_eq!(
-            document.shapes["a#Blob"].traits["a#t"].pointer("/1/b"),
-            Some(&Node::Null)
+            nested.source_location().pointer(),
+            Some("/shapes/a#Blob/traits/a#t/1/b")
         );
+        assert_eq!(nested.source_location().source(), "test.json");
         // Repeated targets share one allocation.
         let a = &document.shapes["a#S"].member("z").unwrap().target;
         let b = &document.shapes["a#M"].member("value").unwrap().target;
-        assert!(Arc::ptr_eq(a.arc(), b.arc()));
+        assert!(a.shares_allocation(b));
     }
 }

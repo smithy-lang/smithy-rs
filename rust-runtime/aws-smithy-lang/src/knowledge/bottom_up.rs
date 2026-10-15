@@ -5,10 +5,11 @@
 
 //! Service-scoped parents of operations and resources.
 
-use super::{Iter, RelationshipIndex, TopDownIndex};
+use super::{Iter, TopDownIndex};
+use crate::relationships::RelationshipIndex;
+use crate::relationships::RelationshipType;
 use crate::shape::{ResourceView, ServiceView, ShapeRef, ShapeType, ShapeView};
 use crate::shape_id::ShapeId;
-use crate::traversal::RelationshipType;
 use std::collections::HashSet;
 use std::fmt;
 

@@ -5,12 +5,12 @@
 
 //! Operation input, output, errors, and reverse bindings.
 
-use super::{Iter, RelationshipIndex, TopDownIndex};
-use crate::model::unit_id;
+use super::{Iter, TopDownIndex};
+use crate::relationships::RelationshipIndex;
+use crate::relationships::RelationshipType;
 use crate::shape::{MembersView, OperationView, ShapeRef, ShapeType, StructureView};
 use crate::shape_id::ShapeId;
 use crate::traits;
-use crate::traversal::RelationshipType;
 use indexmap::IndexSet;
 use std::fmt;
 
@@ -78,11 +78,11 @@ impl<'m> OperationIndex<'m> {
         self.is_io_structure(structure.as_ref(), RelationshipType::Output, traits::OUTPUT)
     }
 
-    fn is_io_structure(&self, id: &str, kind: RelationshipType, marker: &str) -> bool {
+    fn is_io_structure(&self, id: &str, kind: RelationshipType, marker: ShapeId) -> bool {
         let Some(node) = self.structure(id) else {
             return false;
         };
-        self.relationships.shape(node).has_trait(marker)
+        self.relationships.shape(node).has_trait(&marker)
             || self.bindings(node, kind).next().is_some()
     }
 
@@ -151,12 +151,12 @@ impl<'m> OperationKnowledge<'m> {
 
     /// The input structure, or `None` if it is `smithy.api#Unit`.
     pub fn meaningful_input(&self) -> Option<StructureView<'m>> {
-        Some(self.input_shape()).filter(|s| s.id() != unit_id())
+        Some(self.input_shape()).filter(|s| s.id() != crate::prelude::unit_id())
     }
 
     /// The output structure, or `None` if it is `smithy.api#Unit`.
     pub fn meaningful_output(&self) -> Option<StructureView<'m>> {
-        Some(self.output_shape()).filter(|s| s.id() != unit_id())
+        Some(self.output_shape()).filter(|s| s.id() != crate::prelude::unit_id())
     }
 
     /// The input members in declaration order; empty for `smithy.api#Unit`.

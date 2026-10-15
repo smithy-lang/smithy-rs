@@ -7,7 +7,7 @@
 
 use aws_smithy_lang::traits::{Documentation, DOCUMENTATION};
 use aws_smithy_lang::traversal::Walker;
-use aws_smithy_lang::{Model, ModelWriter, ShapeType};
+use aws_smithy_lang::{AstWriter, Model, ShapeType};
 use std::path::PathBuf;
 
 /// Every JSON object in the corpus with top-level `smithy` and `shapes` properties.
@@ -38,7 +38,7 @@ fn load(path: &PathBuf) -> Model {
 fn corpus_loads_and_round_trips() {
     let paths = corpus();
     assert!(!paths.is_empty(), "no corpus models found");
-    let writer = ModelWriter::new();
+    let writer = AstWriter::new();
     let mut shapes = 0;
     for path in &paths {
         let model = load(path);
@@ -61,11 +61,61 @@ fn corpus_loads_and_round_trips() {
             path.display()
         );
 
-        let pretty = ModelWriter::new().pretty(true).to_string(&model).unwrap();
+        let pretty = AstWriter::new().pretty(true).to_string(&model).unwrap();
         assert!(model.equivalent(&Model::from_json_str("pretty", &pretty).unwrap()));
     }
     // Logged as a baseline; the corpus changes over time, so this is not asserted.
     println!("corpus: {} models, {shapes} document shapes", paths.len());
+}
+
+#[test]
+fn corpus_assembles_into_one_model() {
+    let paths = corpus();
+    let mut assembler = Model::assembler();
+    let mut expected = std::collections::HashMap::new();
+    for path in &paths {
+        let model = load(path);
+        for shape in model.non_prelude_shapes() {
+            expected.insert(shape.id().clone(), shape.shape().clone());
+        }
+        assembler = assembler.add_json_file(path);
+    }
+    let validated = assembler.assemble();
+    let errors: Vec<_> = validated
+        .diagnostics()
+        .errors()
+        .map(|d| d.to_string())
+        .collect();
+    assert!(errors.is_empty(), "{}", errors.join("\n"));
+    // Shapes shared by several models merge when equal; nothing else is reported.
+    for diagnostic in validated.diagnostics() {
+        assert_eq!(
+            diagnostic.code(),
+            aws_smithy_lang::diagnostic::DiagnosticCode::DuplicateDefinition,
+            "{diagnostic}"
+        );
+    }
+    let combined = validated.into_result().unwrap();
+    assert_eq!(combined.services().count(), paths.len());
+    assert_eq!(combined.non_prelude_shapes().len(), expected.len());
+    for shape in combined.non_prelude_shapes() {
+        assert_eq!(
+            Some(shape.shape()),
+            expected.get(shape.id()),
+            "{}",
+            shape.id()
+        );
+    }
+
+    // The combined model also round-trips, and can be re-assembled from itself.
+    let json = AstWriter::new().to_string(&combined).unwrap();
+    assert!(combined.equivalent(&Model::from_json_str("combined", &json).unwrap()));
+    let again = Model::assembler()
+        .add_model(&combined)
+        .assemble()
+        .into_result()
+        .unwrap();
+    assert!(again.equivalent(&combined));
 }
 
 #[test]
@@ -113,7 +163,7 @@ fn corpus_inspection() {
             .count();
 
         // Generic traits are preserved and typed decoding works where present.
-        for shape in model.shapes_with_trait(DOCUMENTATION).take(20) {
+        for shape in model.shapes_with_trait(&DOCUMENTATION).take(20) {
             let documentation = shape.get_trait_as::<Documentation>().unwrap().unwrap();
             assert_eq!(
                 Some(documentation.0.as_str()),
@@ -139,7 +189,7 @@ fn corpus_inspection() {
 
 #[test]
 fn corpus_knowledge_invariants() {
-    use aws_smithy_lang::traversal::RelationshipType;
+    use aws_smithy_lang::relationships::RelationshipType;
     use std::collections::{BTreeMap, BTreeSet};
 
     for path in corpus() {

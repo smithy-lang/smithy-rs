@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Load, inspect, traverse, and serialize Smithy 2.0 JSON AST models.
+//! Load, build, inspect, validate, traverse, and serialize Smithy 2.0 models.
 //!
-//! Version `0.1` loads a single [Smithy 2.0 JSON AST] document, injects the Smithy prelude,
-//! and validates the result under the `StructuralV1` profile. Every loaded [`Model`] is
-//! immutable and every ordinary shape reference in it resolves. Documents using `apply` or
-//! mixins are rejected with [`DiagnosticCode::UnsupportedFeature`](diagnostic::DiagnosticCode).
+//! A [`Model`] is an immutable collection of owned semantic [shapes](shape::Shape), produced by
+//! a [`ModelAssembler`] from any mix of [Smithy 2.0 JSON AST] documents, existing models, and
+//! shapes built in code. Assembly injects the Smithy prelude, merges the inputs, and
+//! [validates](validation) the result; every ordinary shape reference in a `Model` resolves.
 //!
 //! ```
 //! use aws_smithy_lang::Model;
@@ -31,10 +31,29 @@
 //! # Ok::<_, Box<dyn std::error::Error>>(())
 //! ```
 //!
+//! Models can also be built in code and combined with loaded documents:
+//!
+//! ```
+//! use aws_smithy_lang::shape::{OperationShape, ServiceShape};
+//! use aws_smithy_lang::{AstWriter, Model};
+//!
+//! let model = Model::assembler()
+//!     .add_shape(ServiceShape::builder("ex#Service").add_operation("ex#Ping").build()?)
+//!     .add_shape(OperationShape::builder("ex#Ping").build()?)
+//!     .assemble()
+//!     .into_result()?;
+//! let json = AstWriter::new().to_string(&model)?;
+//! assert!(json.starts_with(r#"{"smithy":"2.0","shapes":{"ex#Service""#));
+//! # Ok::<_, Box<dyn std::error::Error>>(())
+//! ```
+//!
 //! Service and resource views distinguish *declaration-only* accessors such as
 //! `direct_operations` from complete queries such as `contained_operations`. The
 //! [`knowledge`] module provides the complete queries, as well as operation errors within a
 //! service, service-scoped parents, and incoming relationships.
+//!
+//! Inputs using `apply` or mixins are rejected with
+//! [`DiagnosticCode::UnsupportedFeature`](diagnostic::DiagnosticCode).
 //!
 //! [Smithy 2.0 JSON AST]: https://smithy.io/2.0/spec/json-ast.html
 
@@ -51,22 +70,24 @@
 pub mod diagnostic;
 pub mod knowledge;
 pub mod node;
+pub mod prelude;
+pub mod relationships;
 pub mod shape;
 pub mod traits;
 pub mod traversal;
+pub mod validation;
 
-mod ast;
-mod loader;
+mod assembler;
+mod ast_writer;
+mod json_loader;
 mod model;
-mod prelude;
 mod shape_id;
-mod validate;
-mod writer;
 
-pub use diagnostic::{LoadError, WriteError};
-pub use loader::ModelLoader;
+pub use assembler::ModelAssembler;
+pub use ast_writer::AstWriter;
+pub use diagnostic::{LoadError, SourceLocation, WriteError};
 pub use model::Model;
-pub use node::{Node, NodeObject, Number};
-pub use shape::{ShapeRef, ShapeType};
-pub use shape_id::{InvalidShapeIdError, ShapeId};
-pub use writer::ModelWriter;
+pub use node::{Node, NodeObject, NodeValue, Number};
+pub use shape::{Shape, ShapeRef, ShapeType};
+pub use shape_id::{IntoShapeId, InvalidShapeIdError, ShapeId};
+pub use validation::{Validated, Validator};

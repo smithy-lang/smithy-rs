@@ -2,7 +2,7 @@
 name = "aws-smithy-lang"
 version = "0.1.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
-description = "Load, inspect, traverse, and serialize Smithy 2.0 JSON AST models."
+description = "Load, build, inspect, validate, traverse, and serialize Smithy 2.0 models."
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"

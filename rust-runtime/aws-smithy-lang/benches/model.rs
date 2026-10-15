@@ -7,7 +7,7 @@
 //! See `benches/README.md` for methodology and the recorded baseline.
 
 use aws_smithy_lang::traversal::Walker;
-use aws_smithy_lang::{Model, ModelWriter};
+use aws_smithy_lang::{traits, AstWriter, Model, ShapeId};
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
 use std::hint::black_box;
 use std::path::PathBuf;
@@ -39,7 +39,7 @@ fn bench(c: &mut Criterion) {
         .collect();
 
     let mut group = c.benchmark_group("write");
-    let writer = ModelWriter::new();
+    let writer = AstWriter::new();
     for (name, model) in &models {
         group.bench_with_input(BenchmarkId::from_parameter(name), model, |b, model| {
             let mut out = Vec::with_capacity(8 << 20);
@@ -144,5 +144,52 @@ fn bench(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench);
+/// Shape ID construction and trait lookup
+fn ids_and_traits(c: &mut Criterion) {
+    let mut group = c.benchmark_group("shape_id");
+    group.bench_function("parse", |b| {
+        b.iter(|| ShapeId::new(black_box("com.amazonaws.s3#PutObjectRequest")).unwrap())
+    });
+    group.bench_function("from_parts", |b| {
+        b.iter(|| {
+            ShapeId::from_parts(
+                black_box("com.amazonaws.s3"),
+                black_box("PutObjectRequest"),
+                None,
+            )
+            .unwrap()
+        })
+    });
+    let root = ShapeId::new("com.amazonaws.s3#PutObjectRequest").unwrap();
+    group.bench_function("with_member", |b| {
+        b.iter(|| black_box(&root).with_member(black_box("Bucket")).unwrap())
+    });
+    group.bench_function("namespace", |b| {
+        b.iter(|| black_box(&root).namespace().len())
+    });
+    group.finish();
+
+    // Trait lookup on every root shape and member of S3, by ShapeId and by &str.
+    let model = Model::from_json_slice("s3", &read("s3")).unwrap();
+    let mut group = c.benchmark_group("trait_lookup/s3");
+    let count = |has: &dyn Fn(&aws_smithy_lang::ShapeRef<'_>) -> bool| {
+        model
+            .shapes()
+            .flat_map(|s| {
+                std::iter::once(aws_smithy_lang::ShapeRef::from(s))
+                    .chain(s.members().iter().map(Into::into))
+            })
+            .filter(|s| has(s))
+            .count()
+    };
+    group.bench_function("shape_id", |b| {
+        b.iter(|| count(&|s| s.has_trait(black_box(&traits::DOCUMENTATION))))
+    });
+    group.bench_function("str", |b| {
+        b.iter(|| count(&|s| s.has_trait(black_box("smithy.api#documentation"))))
+    });
+    group.finish();
+}
+
+criterion_group!(benches, bench, ids_and_traits);
 criterion_main!(benches);

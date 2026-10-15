@@ -3,176 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Shape types and borrowed shape views.
+//! Borrowed views of shapes in a [`Model`](crate::Model).
 
+use super::ShapeType;
 use std::fmt;
 
-/// The type of a shape, used for filtering and refinement.
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum ShapeType {
-    /// `blob`
-    Blob,
-    /// `boolean`
-    Boolean,
-    /// `document`
-    Document,
-    /// `string`
-    String,
-    /// `byte`
-    Byte,
-    /// `short`
-    Short,
-    /// `integer`
-    Integer,
-    /// `long`
-    Long,
-    /// `float`
-    Float,
-    /// `double`
-    Double,
-    /// `bigInteger`
-    BigInteger,
-    /// `bigDecimal`
-    BigDecimal,
-    /// `timestamp`
-    Timestamp,
-    /// `list`
-    List,
-    /// `map`
-    Map,
-    /// `structure`
-    Structure,
-    /// `union`
-    Union,
-    /// `enum`
-    Enum,
-    /// `intEnum`
-    IntEnum,
-    /// `service`
-    Service,
-    /// `resource`
-    Resource,
-    /// `operation`
-    Operation,
-    /// `member`
-    Member,
-}
-
-impl ShapeType {
-    /// Every shape type, in declaration order.
-    ///
-    /// Note: This is a slice rather than an array so that adding a variant
-    /// to this `#[non_exhaustive]` enum does not change the constant's type.
-    pub const ALL: &'static [ShapeType] = &[
-        ShapeType::Blob,
-        ShapeType::Boolean,
-        ShapeType::Document,
-        ShapeType::String,
-        ShapeType::Byte,
-        ShapeType::Short,
-        ShapeType::Integer,
-        ShapeType::Long,
-        ShapeType::Float,
-        ShapeType::Double,
-        ShapeType::BigInteger,
-        ShapeType::BigDecimal,
-        ShapeType::Timestamp,
-        ShapeType::List,
-        ShapeType::Map,
-        ShapeType::Structure,
-        ShapeType::Union,
-        ShapeType::Enum,
-        ShapeType::IntEnum,
-        ShapeType::Service,
-        ShapeType::Resource,
-        ShapeType::Operation,
-        ShapeType::Member,
-    ];
-
-    /// The JSON AST `type` name, such as `bigInteger`.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            ShapeType::Blob => "blob",
-            ShapeType::Boolean => "boolean",
-            ShapeType::Document => "document",
-            ShapeType::String => "string",
-            ShapeType::Byte => "byte",
-            ShapeType::Short => "short",
-            ShapeType::Integer => "integer",
-            ShapeType::Long => "long",
-            ShapeType::Float => "float",
-            ShapeType::Double => "double",
-            ShapeType::BigInteger => "bigInteger",
-            ShapeType::BigDecimal => "bigDecimal",
-            ShapeType::Timestamp => "timestamp",
-            ShapeType::List => "list",
-            ShapeType::Map => "map",
-            ShapeType::Structure => "structure",
-            ShapeType::Union => "union",
-            ShapeType::Enum => "enum",
-            ShapeType::IntEnum => "intEnum",
-            ShapeType::Service => "service",
-            ShapeType::Resource => "resource",
-            ShapeType::Operation => "operation",
-            ShapeType::Member => "member",
-        }
-    }
-
-    /// Parses a root-shape JSON AST `type` name. `member` is not a root shape type.
-    pub(crate) fn from_root_name(name: &str) -> Option<Self> {
-        Self::ALL
-            .iter()
-            .copied()
-            .find(|t| *t != ShapeType::Member && t.as_str() == name)
-    }
-
-    /// Returns `true` for the simple (non-aggregate, non-service) shape types.
-    pub fn is_simple(self) -> bool {
-        matches!(
-            self,
-            ShapeType::Blob
-                | ShapeType::Boolean
-                | ShapeType::Document
-                | ShapeType::String
-                | ShapeType::Byte
-                | ShapeType::Short
-                | ShapeType::Integer
-                | ShapeType::Long
-                | ShapeType::Float
-                | ShapeType::Double
-                | ShapeType::BigInteger
-                | ShapeType::BigDecimal
-                | ShapeType::Timestamp
-        )
-    }
-
-    /// Returns `true` for service, resource, and operation.
-    pub fn is_service_shape(self) -> bool {
-        matches!(
-            self,
-            ShapeType::Service | ShapeType::Resource | ShapeType::Operation
-        )
-    }
-}
-
-impl fmt::Display for ShapeType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-// ---------------------------------------------------------------------------------------------
-// Views
-// ---------------------------------------------------------------------------------------------
-
-use crate::ast::{
-    DeclKind, MemberDecl, OperationDecl, ResourceDecl, ServiceDecl, ShapeDecl, TraitMap,
+use super::owned::{
+    EnumShape, IntEnumShape, ListShape, MapShape, MemberShape, OperationShape, ResourceShape,
+    ServiceShape, Shape, StructureShape, TraitMap, UnionShape,
 };
-use crate::diagnostic::{escape_pointer_token, SourceLocation};
-use crate::loader::PRELUDE_NAMESPACE;
-use crate::model::{unit_id, ModelData};
+use crate::diagnostic::{fmt_located, SourceLocation};
+use crate::model::ModelData;
 use crate::node::Node;
+use crate::prelude;
 use crate::shape_id::ShapeId;
 use crate::traits::{self, TraitCodec, TraitDecodeError};
 
@@ -187,13 +30,18 @@ macro_rules! shape_refinements {
 
             #[doc = concat!("Returns a [`", stringify!($view), "`] if this is a `", stringify!($ty), "` shape.")]
             pub fn $as(&self) -> Option<$view<'a>> {
-                self.$is().then(|| $view { shape: self.shape() })
+                self.$is().then_some($view { shape: *self })
             }
 
             #[doc = concat!("Returns a [`", stringify!($view), "`], or an error if this is not a `", stringify!($ty), "` shape.")]
             pub fn $expect(&self) -> Result<$view<'a>, ShapeExpectationError> {
                 self.$as().ok_or_else(|| {
-                    ShapeExpectationError::wrong_type(self.id(), ShapeType::$ty, self.shape_type())
+                    ShapeExpectationError::wrong_type(
+                        self.id(),
+                        ShapeType::$ty,
+                        self.shape_type(),
+                        self.source_location(),
+                    )
                 })
             }
         )*
@@ -216,14 +64,21 @@ macro_rules! all_refinements {
     };
 }
 
-/// The applied traits of a shape or member, in source order.
+/// The applied traits of a shape or member, in insertion order.
+///
+/// Lookups take an absolute trait ID (a [`ShapeId`] or `&str`). A relative name without a
+/// namespace, such as `"required"`, resolves to the prelude (`smithy.api#required`), matching
+/// Java Smithy.
 #[derive(Clone, Copy)]
 pub struct Traits<'a> {
     map: &'a TraitMap,
-    owner: &'a SourceLocation,
 }
 
 impl<'a> Traits<'a> {
+    pub(crate) fn new(map: &'a TraitMap) -> Self {
+        Self { map }
+    }
+
     /// The number of applied traits.
     pub fn len(&self) -> usize {
         self.map.len()
@@ -234,27 +89,26 @@ impl<'a> Traits<'a> {
         self.map.is_empty()
     }
 
-    /// The value of a trait, by absolute shape ID (a [`ShapeId`] or `&str`).
+    /// The value of a trait.
     pub fn get(&self, id: impl AsRef<str>) -> Option<&'a Node> {
-        self.map.get(id.as_ref())
+        traits::find(self.map, id.as_ref()).map(|(_, value)| value)
     }
 
     /// Returns `true` if the trait is applied.
     pub fn contains(&self, id: impl AsRef<str>) -> bool {
-        self.map.contains_key(id.as_ref())
+        traits::find(self.map, id.as_ref()).is_some()
     }
 
     /// Decodes a trait with a [`TraitCodec`]. Returns `Ok(None)` if the trait is not applied.
     pub fn get_as<T: TraitCodec>(&self) -> Result<Option<T>, TraitDecodeError> {
-        traits::decode(self.get(T::ID))
+        traits::decode(self.map.get(&T::ID))
     }
 
     /// Iterates applied traits.
     pub fn iter(&self) -> impl ExactSizeIterator<Item = AppliedTrait<'a>> + 'a {
-        let owner = self.owner;
         self.map
             .iter()
-            .map(move |(id, value)| AppliedTrait { id, value, owner })
+            .map(|(id, value)| AppliedTrait { id, value })
     }
 
     /// Iterates applied trait IDs.
@@ -274,7 +128,6 @@ impl fmt::Debug for Traits<'_> {
 pub struct AppliedTrait<'a> {
     id: &'a ShapeId,
     value: &'a Node,
-    owner: &'a SourceLocation,
 }
 
 impl<'a> AppliedTrait<'a> {
@@ -288,12 +141,9 @@ impl<'a> AppliedTrait<'a> {
         self.value
     }
 
-    /// Where the trait was applied.
-    pub fn source(&self) -> SourceLocation {
-        self.owner.child(&format!(
-            "/traits/{}",
-            escape_pointer_token(self.id.as_str())
-        ))
+    /// Where the trait was applied: the location of its value.
+    pub fn source_location(&self) -> &'a SourceLocation {
+        self.value.source_location()
     }
 }
 
@@ -301,44 +151,43 @@ impl<'a> AppliedTrait<'a> {
 #[derive(Clone, Copy)]
 pub struct ShapeView<'a> {
     pub(crate) data: &'a ModelData,
-    pub(crate) decl: &'a ShapeDecl,
+    pub(crate) shape: &'a Shape,
 }
 
 impl<'a> ShapeView<'a> {
-    pub(crate) fn new(data: &'a ModelData, decl: &'a ShapeDecl) -> Self {
-        Self { data, decl }
+    pub(crate) fn new(data: &'a ModelData, shape: &'a Shape) -> Self {
+        Self { data, shape }
     }
 
-    fn shape(&self) -> ShapeView<'a> {
-        *self
+    /// The owned shape this view borrows. Clone it to build a modified copy with
+    /// `to_builder`.
+    pub fn shape(&self) -> &'a Shape {
+        self.shape
     }
 
     /// The shape ID.
     pub fn id(&self) -> &'a ShapeId {
-        &self.decl.id
+        self.shape.id()
     }
 
     /// The shape type.
     pub fn shape_type(&self) -> ShapeType {
-        self.decl.shape_type()
+        self.shape.shape_type()
     }
 
     /// The applied traits.
     pub fn traits(&self) -> Traits<'a> {
-        Traits {
-            map: &self.decl.traits,
-            owner: &self.decl.source,
-        }
+        Traits::new(&self.shape.common().traits)
     }
 
     /// The value of a trait, by absolute shape ID (a [`ShapeId`] or `&str`).
     pub fn get_trait(&self, id: impl AsRef<str>) -> Option<&'a Node> {
-        self.decl.traits.get(id.as_ref())
+        self.traits().get(id)
     }
 
     /// Returns `true` if the trait is applied.
     pub fn has_trait(&self, id: impl AsRef<str>) -> bool {
-        self.decl.traits.contains_key(id.as_ref())
+        self.traits().contains(id)
     }
 
     /// Decodes a trait with a [`TraitCodec`]. Returns `Ok(None)` if the trait is not applied.
@@ -346,14 +195,19 @@ impl<'a> ShapeView<'a> {
         self.traits().get_as()
     }
 
-    /// Where the shape was declared.
-    pub fn source(&self) -> &'a SourceLocation {
-        &self.decl.source
+    /// Where the shape was declared, or [`SourceLocation::none`] for shapes built in code.
+    pub fn source_location(&self) -> &'a SourceLocation {
+        self.shape.source_location()
     }
 
     /// Returns `true` if this shape comes from the injected Smithy prelude.
+    ///
+    /// Without the prelude (see
+    /// [`ModelAssembler::disable_prelude`](crate::ModelAssembler::disable_prelude)), a model may
+    /// define its own `smithy.api` shapes; those are not prelude shapes. Use
+    /// [`prelude::is_prelude_shape`] to check only the namespace.
     pub fn is_prelude(&self) -> bool {
-        self.data.prelude.is_some() && self.decl.id.namespace() == PRELUDE_NAMESPACE
+        self.data.prelude.is_some() && prelude::is_prelude_shape(self.id())
     }
 
     /// The members: a list's `member`, a map's `key` and `value`, or named members in
@@ -361,7 +215,7 @@ impl<'a> ShapeView<'a> {
     pub fn members(&self) -> MembersView<'a> {
         MembersView {
             data: self.data,
-            decl: Some(self.decl),
+            shape: Some(self.shape),
         }
     }
 
@@ -386,13 +240,13 @@ impl fmt::Debug for ShapeView<'_> {
 #[derive(Clone, Copy)]
 pub struct MembersView<'a> {
     data: &'a ModelData,
-    decl: Option<&'a ShapeDecl>,
+    shape: Option<&'a Shape>,
 }
 
 impl<'a> MembersView<'a> {
     /// The number of members.
     pub fn len(&self) -> usize {
-        self.decl.map_or(0, ShapeDecl::member_count)
+        self.shape.map_or(0, Shape::member_count)
     }
 
     /// Returns `true` if there are no members.
@@ -402,32 +256,26 @@ impl<'a> MembersView<'a> {
 
     /// A member by name.
     pub fn get(&self, name: &str) -> Option<MemberView<'a>> {
-        let container = self.decl?;
-        let decl = container.member(name)?;
-        Some(MemberView {
-            data: self.data,
-            container,
-            decl,
-        })
+        let container = self.shape?;
+        let member = container.member(name)?;
+        Some(MemberView::new(self.data, container, member))
     }
 
     /// Iterates members in order.
     pub fn iter(&self) -> impl Iterator<Item = MemberView<'a>> + 'a {
         let data = self.data;
-        self.decl.into_iter().flat_map(move |container| {
-            container.members().map(move |decl| MemberView {
-                data,
-                container,
-                decl,
-            })
+        self.shape.into_iter().flat_map(move |container| {
+            container
+                .members()
+                .map(move |member| MemberView::new(data, container, member))
         })
     }
 
     /// Iterates member names in order.
     pub fn names(&self) -> impl Iterator<Item = &'a str> + 'a {
-        self.decl
+        self.shape
             .into_iter()
-            .flat_map(|container| container.members().map(MemberDecl::name))
+            .flat_map(|container| container.members().map(MemberShape::name))
     }
 
     /// Iterates `(name, member)` pairs in order.
@@ -451,45 +299,57 @@ pub enum EnumValue<'a> {
     Int(i64),
 }
 
-/// A member of a list, map, structure, union, enum, or intEnum.
+/// A member of a list, map, structure, union, enum, or intEnum, within a [`Model`](crate::Model).
+///
+/// A `MemberView` is a read-only cursor: a `Copy` value holding three borrows (the model, the
+/// containing shape, and the member). It can move to related shapes, such as
+/// [`container`](Self::container) and [`target_shape`](Self::target_shape), because the model
+/// is immutable and every reference resolves. It is not a zipper: it cannot replace the member
+/// or rebuild the surrounding shape. To change a member, build a new one from
+/// [`shape`](Self::shape) with [`MemberShape::to_builder`] and assemble a new model.
 #[derive(Clone, Copy)]
 pub struct MemberView<'a> {
     data: &'a ModelData,
-    container: &'a ShapeDecl,
-    decl: &'a MemberDecl,
+    container: &'a Shape,
+    member: &'a MemberShape,
 }
 
 impl<'a> MemberView<'a> {
-    pub(crate) fn new(data: &'a ModelData, container: &'a ShapeDecl, decl: &'a MemberDecl) -> Self {
+    pub(crate) fn new(data: &'a ModelData, container: &'a Shape, member: &'a MemberShape) -> Self {
         Self {
             data,
             container,
-            decl,
+            member,
         }
+    }
+
+    /// The owned member this view borrows.
+    pub fn shape(&self) -> &'a MemberShape {
+        self.member
     }
 
     /// The member ID, such as `com.example#Shape$member`.
     pub fn id(&self) -> &'a ShapeId {
-        &self.decl.id
+        self.member.id()
     }
 
     /// The member name.
     pub fn name(&self) -> &'a str {
-        self.decl.name()
+        self.member.name()
     }
 
     /// The target shape ID.
     pub fn target(&self) -> &'a ShapeId {
-        &self.decl.target
+        self.member.target()
     }
 
-    /// The target shape. Every member of a loaded model has a resolved target.
+    /// The target shape. Every member of a model has a resolved target.
     pub fn target_shape(&self) -> ShapeView<'a> {
-        let decl = self
+        let shape = self
             .data
-            .root(self.decl.target.as_str())
-            .expect("validated models only contain resolved member targets");
-        ShapeView::new(self.data, decl)
+            .root(self.member.target.as_str())
+            .expect("models only contain resolved member targets");
+        ShapeView::new(self.data, shape)
     }
 
     /// The shape containing this member.
@@ -499,20 +359,17 @@ impl<'a> MemberView<'a> {
 
     /// The applied traits.
     pub fn traits(&self) -> Traits<'a> {
-        Traits {
-            map: &self.decl.traits,
-            owner: &self.decl.source,
-        }
+        Traits::new(&self.member.traits)
     }
 
     /// The value of a trait, by absolute shape ID (a [`ShapeId`] or `&str`).
     pub fn get_trait(&self, id: impl AsRef<str>) -> Option<&'a Node> {
-        self.decl.traits.get(id.as_ref())
+        self.traits().get(id)
     }
 
     /// Returns `true` if the trait is applied.
     pub fn has_trait(&self, id: impl AsRef<str>) -> bool {
-        self.decl.traits.contains_key(id.as_ref())
+        self.traits().contains(id)
     }
 
     /// Decodes a trait with a [`TraitCodec`]. Returns `Ok(None)` if the trait is not applied.
@@ -520,9 +377,9 @@ impl<'a> MemberView<'a> {
         self.traits().get_as()
     }
 
-    /// Where the member was declared.
-    pub fn source(&self) -> &'a SourceLocation {
-        &self.decl.source
+    /// Where the member was declared, or [`SourceLocation::none`] for members built in code.
+    pub fn source_location(&self) -> &'a SourceLocation {
+        self.member.source_location()
     }
 
     /// The effective enum value for `enum` and `intEnum` members; `None` for other members.
@@ -530,13 +387,13 @@ impl<'a> MemberView<'a> {
     /// An `enum` member that omits `@enumValue` has its member name as its effective value. Use
     /// [`declared_enum_value`](Self::declared_enum_value) to see what was actually written.
     pub fn enum_value(&self) -> Option<EnumValue<'a>> {
-        let explicit = self.get_trait(traits::ENUM_VALUE);
-        match self.container.kind {
-            DeclKind::Enum(_) => match explicit {
+        let explicit = self.member.traits.get(&traits::ENUM_VALUE);
+        match self.container {
+            Shape::Enum(_) => match explicit {
                 Some(node) => node.as_str().map(EnumValue::String),
                 None => Some(EnumValue::String(self.name())),
             },
-            DeclKind::IntEnum(_) => explicit?.as_number()?.as_i64().map(EnumValue::Int),
+            Shape::IntEnum(_) => explicit?.as_number()?.as_i64().map(EnumValue::Int),
             _ => None,
         }
     }
@@ -545,9 +402,9 @@ impl<'a> MemberView<'a> {
     /// was omitted or this is not an enum member. Unlike [`enum_value`](Self::enum_value), an
     /// omitted `enum` value is not synthesized from the member name.
     pub fn declared_enum_value(&self) -> Option<EnumValue<'a>> {
-        match self.container.kind {
-            DeclKind::Enum(_) | DeclKind::IntEnum(_) => {
-                self.get_trait(traits::ENUM_VALUE)?;
+        match self.container {
+            Shape::Enum(_) | Shape::IntEnum(_) => {
+                self.member.traits.get(&traits::ENUM_VALUE)?;
                 self.enum_value()
             }
             _ => None,
@@ -594,6 +451,7 @@ macro_rules! ref_refinements {
                         member.id(),
                         ShapeType::$ty,
                         ShapeType::Member,
+                        member.source_location(),
                     )),
                 }
             }
@@ -648,11 +506,11 @@ impl<'a> ShapeRef<'a> {
         self.traits().get_as()
     }
 
-    /// Where the shape or member was declared.
-    pub fn source(&self) -> &'a SourceLocation {
+    /// Where the shape or member was declared, or [`SourceLocation::none`].
+    pub fn source_location(&self) -> &'a SourceLocation {
         match self {
-            ShapeRef::Shape(s) => s.source(),
-            ShapeRef::Member(m) => m.source(),
+            ShapeRef::Shape(s) => s.source_location(),
+            ShapeRef::Member(m) => m.source_location(),
         }
     }
 
@@ -662,7 +520,7 @@ impl<'a> ShapeRef<'a> {
             ShapeRef::Shape(s) => s.members(),
             ShapeRef::Member(m) => MembersView {
                 data: m.data,
-                decl: None,
+                shape: None,
             },
         }
     }
@@ -692,7 +550,9 @@ impl<'a> ShapeRef<'a> {
     pub fn expect_shape(&self) -> Result<ShapeView<'a>, ShapeExpectationError> {
         match self {
             ShapeRef::Shape(s) => Ok(*s),
-            ShapeRef::Member(m) => Err(ShapeExpectationError::not_root(m.id())),
+            ShapeRef::Member(m) => {
+                Err(ShapeExpectationError::not_root(m.id(), m.source_location()))
+            }
         }
     }
 
@@ -704,6 +564,7 @@ impl<'a> ShapeRef<'a> {
                 s.id(),
                 ShapeType::Member,
                 s.shape_type(),
+                s.source_location(),
             )),
         }
     }
@@ -772,9 +633,9 @@ macro_rules! refined_view {
                     self.shape.get_trait_as()
                 }
 
-                /// Where the shape was declared.
-                pub fn source(&self) -> &'a SourceLocation {
-                    self.shape.source()
+                /// Where the shape was declared, or [`SourceLocation::none`].
+                pub fn source_location(&self) -> &'a SourceLocation {
+                    self.shape.source_location()
                 }
 
                 /// Returns `true` if this is a prelude shape.
@@ -840,40 +701,56 @@ macro_rules! named_member_lookup {
 
 named_member_lookup!(StructureView, UnionView, EnumView, IntEnumView);
 
+macro_rules! typed_shape {
+    ($($view:ident => $variant:ident($ty:ident);)*) => {
+        $(
+            impl<'a> $view<'a> {
+                #[doc = concat!("The owned [`", stringify!($ty), "`] this view borrows.")]
+                pub fn shape(&self) -> &'a $ty {
+                    match self.shape.shape {
+                        Shape::$variant(shape) => shape,
+                        _ => unreachable!(concat!(stringify!($view), " always wraps a ", stringify!($variant))),
+                    }
+                }
+            }
+        )*
+    };
+}
+
+typed_shape! {
+    ListView => List(ListShape);
+    MapView => Map(MapShape);
+    StructureView => Structure(StructureShape);
+    UnionView => Union(UnionShape);
+    EnumView => Enum(EnumShape);
+    IntEnumView => IntEnum(IntEnumShape);
+    ServiceView => Service(ServiceShape);
+    OperationView => Operation(OperationShape);
+    ResourceView => Resource(ResourceShape);
+}
+
 impl<'a> ListView<'a> {
     /// The `member` member.
     pub fn member(&self) -> MemberView<'a> {
-        let DeclKind::List { member } = &self.shape.decl.kind else {
-            unreachable!("ListView always wraps a list")
-        };
-        MemberView::new(self.shape.data, self.shape.decl, member)
+        MemberView::new(self.shape.data, self.shape.shape, &self.shape().member)
     }
 }
 
 impl<'a> MapView<'a> {
     /// The `key` member.
     pub fn key(&self) -> MemberView<'a> {
-        let DeclKind::Map { key, .. } = &self.shape.decl.kind else {
-            unreachable!("MapView always wraps a map")
-        };
-        MemberView::new(self.shape.data, self.shape.decl, key)
+        MemberView::new(self.shape.data, self.shape.shape, &self.shape().key)
     }
 
     /// The `value` member.
     pub fn value(&self) -> MemberView<'a> {
-        let DeclKind::Map { value, .. } = &self.shape.decl.kind else {
-            unreachable!("MapView always wraps a map")
-        };
-        MemberView::new(self.shape.data, self.shape.decl, value)
+        MemberView::new(self.shape.data, self.shape.shape, &self.shape().value)
     }
 }
 
 impl<'a> ServiceView<'a> {
-    fn decl(&self) -> &'a ServiceDecl {
-        let DeclKind::Service(service) = &self.shape.decl.kind else {
-            unreachable!("ServiceView always wraps a service")
-        };
-        service
+    fn decl(&self) -> &'a ServiceShape {
+        self.shape()
     }
 
     /// The service version, if declared.
@@ -922,21 +799,18 @@ impl<'a> ServiceView<'a> {
 }
 
 impl<'a> OperationView<'a> {
-    fn decl(&self) -> &'a OperationDecl {
-        let DeclKind::Operation(operation) = &self.shape.decl.kind else {
-            unreachable!("OperationView always wraps an operation")
-        };
-        operation
+    fn decl(&self) -> &'a OperationShape {
+        self.shape()
     }
 
     /// The input structure; `smithy.api#Unit` when omitted.
     pub fn input(&self) -> &'a ShapeId {
-        self.decl().input.as_ref().unwrap_or_else(|| unit_id())
+        self.decl().input()
     }
 
     /// The output structure; `smithy.api#Unit` when omitted.
     pub fn output(&self) -> &'a ShapeId {
-        self.decl().output.as_ref().unwrap_or_else(|| unit_id())
+        self.decl().output()
     }
 
     /// The input as declared, or `None` if the document omitted it.
@@ -969,21 +843,18 @@ impl<'a> OperationView<'a> {
     }
 
     fn resolve(&self, id: &ShapeId) -> ShapeView<'a> {
-        let decl = self
+        let shape = self
             .shape
             .data
             .root(id.as_str())
-            .expect("validated models only contain resolved operation references");
-        ShapeView::new(self.shape.data, decl)
+            .expect("models only contain resolved operation references");
+        ShapeView::new(self.shape.data, shape)
     }
 }
 
 impl<'a> ResourceView<'a> {
-    fn decl(&self) -> &'a ResourceDecl {
-        let DeclKind::Resource(resource) = &self.shape.decl.kind else {
-            unreachable!("ResourceView always wraps a resource")
-        };
-        resource
+    fn decl(&self) -> &'a ResourceShape {
+        self.shape()
     }
 
     /// Identifier names and their target shapes.
@@ -1059,6 +930,7 @@ impl<'a> ResourceView<'a> {
 pub struct ShapeExpectationError {
     id: String,
     kind: ExpectationKind,
+    location: SourceLocation,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1076,21 +948,35 @@ impl ShapeExpectationError {
         Self {
             id: id.to_owned(),
             kind: ExpectationKind::NotFound,
+            location: SourceLocation::none(),
         }
     }
 
-    fn not_root(id: &ShapeId) -> Self {
+    fn not_root(id: &ShapeId, location: &SourceLocation) -> Self {
         Self {
             id: id.to_string(),
             kind: ExpectationKind::NotRoot,
+            location: location.clone(),
         }
     }
 
-    fn wrong_type(id: &ShapeId, expected: ShapeType, actual: ShapeType) -> Self {
+    fn wrong_type(
+        id: &ShapeId,
+        expected: ShapeType,
+        actual: ShapeType,
+        location: &SourceLocation,
+    ) -> Self {
         Self {
             id: id.to_string(),
             kind: ExpectationKind::WrongType { expected, actual },
+            location: location.clone(),
         }
+    }
+
+    /// Where the shape that was found is defined, or [`SourceLocation::none`] if no shape was
+    /// found or it was built in code.
+    pub fn source_location(&self) -> &SourceLocation {
+        &self.location
     }
 
     /// The shape ID that was looked up.
@@ -1123,16 +1009,19 @@ impl ShapeExpectationError {
 
 impl fmt::Display for ShapeExpectationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let id = &self.id;
         match &self.kind {
-            ExpectationKind::NotFound => write!(f, "shape `{}` not found", self.id),
-            ExpectationKind::NotRoot => write!(f, "`{}` is a member, not a root shape", self.id),
-            ExpectationKind::WrongType { expected, actual } => {
-                write!(
-                    f,
-                    "expected `{}` to be a {expected}, but it is a {actual}",
-                    self.id
-                )
-            }
+            ExpectationKind::NotFound => write!(f, "shape `{id}` not found"),
+            ExpectationKind::NotRoot => fmt_located(
+                f,
+                &self.location,
+                format_args!("`{id}` is a member, not a root shape"),
+            ),
+            ExpectationKind::WrongType { expected, actual } => fmt_located(
+                f,
+                &self.location,
+                format_args!("expected `{id}` to be a {expected}, but it is a {actual}"),
+            ),
         }
     }
 }

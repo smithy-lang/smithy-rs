@@ -5,20 +5,47 @@
 
 //! Smithy node values: the JSON-like data model used by metadata and trait values.
 
+use crate::diagnostic::{fmt_located, push_pointer_token, LocationTable, Position, SourceLocation};
 use indexmap::IndexMap;
 use serde::de::{self, DeserializeSeed, MapAccess, SeqAccess, Visitor};
 use serde::ser::{SerializeMap, SerializeSeq};
 use serde::{Serialize, Serializer};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::hash_map::DefaultHasher;
 use std::fmt;
 use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
-/// A Smithy node value.
+/// A Smithy node value: the JSON-like data model used by metadata and trait values.
 ///
-/// Equality and hashing of objects are independent of key order; arrays are ordered.
+/// A node pairs a [`NodeValue`] with the [`SourceLocation`] it was loaded from. Nodes loaded
+/// from a model record the JSON Pointer of every nested value, so trait codecs and validators
+/// can report exactly which value is wrong. Nodes created in code have
+/// [`SourceLocation::none`] unless one is attached with
+/// [`with_source_location`](Self::with_source_location).
+///
+/// Equality and hashing ignore source locations. Object equality and hashing are independent
+/// of key order; arrays are ordered.
+///
+/// ```
+/// use aws_smithy_lang::node::{Node, NodeValue};
+///
+/// let node = Node::from(vec![Node::from("a"), Node::from(1i64)]);
+/// match node.value() {
+///     NodeValue::Array(items) => assert_eq!(items[0].as_str(), Some("a")),
+///     _ => unreachable!(),
+/// }
+/// assert!(node.source_location().is_none());
+/// ```
+#[derive(Clone)]
+pub struct Node {
+    value: NodeValue,
+    location: SourceLocation,
+}
+
+/// The value of a [`Node`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Node {
+pub enum NodeValue {
     /// `null`
     Null,
     /// `true` or `false`
@@ -34,47 +61,82 @@ pub enum Node {
 }
 
 impl Node {
-    /// Returns `true` for [`Node::Null`].
+    /// Creates a node with no source location.
+    pub fn new(value: NodeValue) -> Self {
+        Self {
+            value,
+            location: SourceLocation::none(),
+        }
+    }
+
+    /// A `null` node.
+    pub fn null() -> Self {
+        Self::new(NodeValue::Null)
+    }
+
+    /// Returns this node with `location` as its source location. Nested values keep their own
+    /// locations.
+    pub fn with_source_location(mut self, location: SourceLocation) -> Self {
+        self.location = location;
+        self
+    }
+
+    /// The value.
+    pub fn value(&self) -> &NodeValue {
+        &self.value
+    }
+
+    /// Consumes the node, returning its value.
+    pub fn into_value(self) -> NodeValue {
+        self.value
+    }
+
+    /// Where this value was loaded from, or [`SourceLocation::none`].
+    pub fn source_location(&self) -> &SourceLocation {
+        &self.location
+    }
+
+    /// Returns `true` for a `null` node.
     pub fn is_null(&self) -> bool {
-        matches!(self, Node::Null)
+        matches!(self.value, NodeValue::Null)
     }
 
     /// The boolean value, if this is a boolean.
     pub fn as_bool(&self) -> Option<bool> {
-        match self {
-            Node::Bool(b) => Some(*b),
+        match self.value {
+            NodeValue::Bool(b) => Some(b),
             _ => None,
         }
     }
 
     /// The number, if this is a number.
     pub fn as_number(&self) -> Option<&Number> {
-        match self {
-            Node::Number(n) => Some(n),
+        match &self.value {
+            NodeValue::Number(n) => Some(n),
             _ => None,
         }
     }
 
     /// The string, if this is a string.
     pub fn as_str(&self) -> Option<&str> {
-        match self {
-            Node::String(s) => Some(s),
+        match &self.value {
+            NodeValue::String(s) => Some(s),
             _ => None,
         }
     }
 
     /// The elements, if this is an array.
     pub fn as_array(&self) -> Option<&[Node]> {
-        match self {
-            Node::Array(a) => Some(a),
+        match &self.value {
+            NodeValue::Array(a) => Some(a),
             _ => None,
         }
     }
 
     /// The object, if this is an object.
     pub fn as_object(&self) -> Option<&NodeObject> {
-        match self {
-            Node::Object(o) => Some(o),
+        match &self.value {
+            NodeValue::Object(o) => Some(o),
             _ => None,
         }
     }
@@ -106,13 +168,13 @@ impl Node {
 
     /// The name of this node's type: `null`, `boolean`, `number`, `string`, `array`, or `object`.
     pub fn type_name(&self) -> &'static str {
-        match self {
-            Node::Null => "null",
-            Node::Bool(_) => "boolean",
-            Node::Number(_) => "number",
-            Node::String(_) => "string",
-            Node::Array(_) => "array",
-            Node::Object(_) => "object",
+        match self.value {
+            NodeValue::Null => "null",
+            NodeValue::Bool(_) => "boolean",
+            NodeValue::Number(_) => "number",
+            NodeValue::String(_) => "string",
+            NodeValue::Array(_) => "array",
+            NodeValue::Object(_) => "object",
         }
     }
 
@@ -120,6 +182,7 @@ impl Node {
         NodeTypeError {
             expected,
             actual: self.type_name(),
+            location: self.location.clone(),
         }
     }
 
@@ -134,9 +197,9 @@ impl Node {
         let mut current = self;
         for token in rest.split('/') {
             let token = unescape_pointer_token(token)?;
-            current = match current {
-                Node::Object(object) => object.get(&token)?,
-                Node::Array(array) => {
+            current = match &current.value {
+                NodeValue::Object(object) => object.get(&token)?,
+                NodeValue::Array(array) => {
                     if token.len() > 1 && token.starts_with('0') {
                         return None;
                     }
@@ -157,9 +220,9 @@ impl Node {
 
     /// Sorts every nested object's keys in place.
     pub fn sort_keys(&mut self) {
-        match self {
-            Node::Array(array) => array.iter_mut().for_each(Node::sort_keys),
-            Node::Object(object) => {
+        match &mut self.value {
+            NodeValue::Array(array) => array.iter_mut().for_each(Node::sort_keys),
+            NodeValue::Object(object) => {
                 object.0.sort_unstable_keys();
                 object.0.values_mut().for_each(Node::sort_keys);
             }
@@ -180,6 +243,131 @@ impl Node {
     pub fn to_json_string_pretty(&self) -> String {
         serde_json::to_string_pretty(&NodeSer(self)).expect("nodes always serialize")
     }
+
+    /// Records the JSON Pointer of this node and every nested value, relative to `pointer`.
+    ///
+    /// All the pointers share one table, so this allocates a constant number of times
+    /// regardless of how many values the tree contains.
+    /// Gives this node and every nested value a location in `source` at `pointer`.
+    ///
+    /// Each value keeps the line and column recorded while parsing; values without one use
+    /// the closest enclosing value's position, falling back to `inherited`.
+    pub(crate) fn assign_locations(
+        &mut self,
+        source: &Arc<str>,
+        pointer: &mut String,
+        inherited: Option<Position>,
+    ) {
+        let position = self.location.position().or(inherited);
+        if !matches!(self.value, NodeValue::Array(_) | NodeValue::Object(_)) {
+            // A scalar needs one location, not a table.
+            self.location = SourceLocation::with_pointer(source, pointer.clone(), position);
+            return;
+        }
+        let mut table = LocationTable::new(source.clone());
+        self.collect_pointers(&mut table, pointer, position);
+        let table = Arc::new(table);
+        let mut next = 0;
+        self.set_locations(&table, &mut next);
+    }
+
+    /// Records pointers in preorder: this node, then its elements or entries.
+    fn collect_pointers(
+        &self,
+        table: &mut LocationTable,
+        pointer: &mut String,
+        inherited: Option<Position>,
+    ) {
+        let position = self.location.position().or(inherited);
+        table.push(pointer, position);
+        let len = pointer.len();
+        match &self.value {
+            NodeValue::Array(array) => {
+                let mut digits = itoa_buffer();
+                for (i, element) in array.iter().enumerate() {
+                    pointer.push('/');
+                    pointer.push_str(format_index(&mut digits, i));
+                    element.collect_pointers(table, pointer, position);
+                    pointer.truncate(len);
+                }
+            }
+            NodeValue::Object(object) => {
+                for (key, value) in object.0.iter() {
+                    pointer.push('/');
+                    push_pointer_token(pointer, key);
+                    value.collect_pointers(table, pointer, position);
+                    pointer.truncate(len);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// The line and column recorded while parsing, or of this node's location.
+    pub(crate) fn position(&self) -> Option<Position> {
+        self.location.position()
+    }
+
+    /// Records a parse-time position, completed later by [`assign_locations`](Self::assign_locations).
+    pub(crate) fn with_position(mut self, position: Option<Position>) -> Self {
+        if let Some(position) = position {
+            self.location = SourceLocation::pending(position);
+        }
+        self
+    }
+
+    /// Assigns table entries in the same preorder as [`collect_pointers`](Self::collect_pointers).
+    fn set_locations(&mut self, table: &Arc<LocationTable>, next: &mut u32) {
+        self.location = LocationTable::location(table, *next);
+        *next += 1;
+        match &mut self.value {
+            NodeValue::Array(array) => array.iter_mut().for_each(|e| e.set_locations(table, next)),
+            NodeValue::Object(object) => object
+                .0
+                .values_mut()
+                .for_each(|v| v.set_locations(table, next)),
+            _ => {}
+        }
+    }
+}
+
+fn itoa_buffer() -> [u8; 20] {
+    [0; 20]
+}
+
+/// Formats `value` in decimal into `buffer` without allocating.
+fn format_index(buffer: &mut [u8; 20], mut value: usize) -> &str {
+    let mut i = buffer.len();
+    loop {
+        i -= 1;
+        buffer[i] = b'0' + (value % 10) as u8;
+        value /= 10;
+        if value == 0 {
+            break;
+        }
+    }
+    std::str::from_utf8(&buffer[i..]).expect("ASCII digits")
+}
+
+impl PartialEq for Node {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
+impl Eq for Node {}
+
+impl Hash for Node {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.value.hash(state)
+    }
+}
+
+impl fmt::Debug for Node {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Locations are omitted to keep nested output readable; see `source_location`.
+        fmt::Debug::fmt(&self.value, f)
+    }
 }
 
 fn unescape_pointer_token(token: &str) -> Option<String> {
@@ -199,51 +387,57 @@ fn unescape_pointer_token(token: &str) -> Option<String> {
     Some(out)
 }
 
+impl From<NodeValue> for Node {
+    fn from(value: NodeValue) -> Self {
+        Node::new(value)
+    }
+}
+
 impl From<bool> for Node {
     fn from(value: bool) -> Self {
-        Node::Bool(value)
+        Node::new(NodeValue::Bool(value))
     }
 }
 
 impl From<&str> for Node {
     fn from(value: &str) -> Self {
-        Node::String(value.to_owned())
+        Node::new(NodeValue::String(value.to_owned()))
     }
 }
 
 impl From<String> for Node {
     fn from(value: String) -> Self {
-        Node::String(value)
+        Node::new(NodeValue::String(value))
     }
 }
 
 impl From<Number> for Node {
     fn from(value: Number) -> Self {
-        Node::Number(value)
+        Node::new(NodeValue::Number(value))
     }
 }
 
 impl From<i64> for Node {
     fn from(value: i64) -> Self {
-        Node::Number(Number::from(value))
+        Node::from(Number::from(value))
     }
 }
 
 impl From<u64> for Node {
     fn from(value: u64) -> Self {
-        Node::Number(Number::from(value))
+        Node::from(Number::from(value))
     }
 }
 
 impl From<Vec<Node>> for Node {
     fn from(value: Vec<Node>) -> Self {
-        Node::Array(value)
+        Node::new(NodeValue::Array(value))
     }
 }
 
 impl From<NodeObject> for Node {
     fn from(value: NodeObject) -> Self {
-        Node::Object(value)
+        Node::new(NodeValue::Object(value))
     }
 }
 
@@ -252,9 +446,15 @@ impl From<NodeObject> for Node {
 pub struct NodeTypeError {
     expected: &'static str,
     actual: &'static str,
+    location: SourceLocation,
 }
 
 impl NodeTypeError {
+    /// Where the offending node was loaded from, or [`SourceLocation::none`].
+    pub fn source_location(&self) -> &SourceLocation {
+        &self.location
+    }
+
     /// The required node type.
     pub fn expected(&self) -> &'static str {
         self.expected
@@ -268,10 +468,10 @@ impl NodeTypeError {
 
 impl fmt::Display for NodeTypeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
+        fmt_located(
             f,
-            "expected {} node but found {}",
-            self.expected, self.actual
+            &self.location,
+            format_args!("expected {} node but found {}", self.expected, self.actual),
         )
     }
 }
@@ -500,23 +700,23 @@ pub(crate) struct NodeSer<'a>(pub(crate) &'a Node);
 
 impl Serialize for NodeSer<'_> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        match self.0 {
-            Node::Null => serializer.serialize_unit(),
-            Node::Bool(b) => serializer.serialize_bool(*b),
-            Node::Number(n) => match n.0 {
+        match &self.0.value {
+            NodeValue::Null => serializer.serialize_unit(),
+            NodeValue::Bool(b) => serializer.serialize_bool(*b),
+            NodeValue::Number(n) => match n.0 {
                 NumberRepr::PosInt(v) => serializer.serialize_u64(v),
                 NumberRepr::NegInt(v) => serializer.serialize_i64(v),
                 NumberRepr::Float(v) => serializer.serialize_f64(v),
             },
-            Node::String(s) => serializer.serialize_str(s),
-            Node::Array(array) => {
+            NodeValue::String(s) => serializer.serialize_str(s),
+            NodeValue::Array(array) => {
                 let mut seq = serializer.serialize_seq(Some(array.len()))?;
                 for element in array {
                     seq.serialize_element(&NodeSer(element))?;
                 }
                 seq.end()
             }
-            Node::Object(object) => {
+            NodeValue::Object(object) => {
                 let mut map = serializer.serialize_map(Some(object.len()))?;
                 for (k, v) in &object.0 {
                     map.serialize_entry(k, &NodeSer(v))?;
@@ -592,21 +792,86 @@ fn parse_number_text<E: de::Error>(text: &str) -> Result<Number, E> {
         .ok_or_else(|| E::custom("number out of range"))
 }
 
-/// Shared state for one parse: limits and the first structural abort reason.
+/// Shared state for one parse: limits, the first structural abort reason, and the input used
+/// to turn borrowed keys and strings into line and column positions.
 #[derive(Debug)]
-pub(crate) struct ParseContext {
+pub(crate) struct ParseContext<'i> {
     pub(crate) max_depth: usize,
     pub(crate) abort: RefCell<Option<ParseAbort>>,
     /// Whether maps keyed by [`ARBITRARY_PRECISION_TOKEN`] are serde_json numbers.
     arbitrary_precision: bool,
+    input: &'i [u8],
+    lines: Cell<LineCursor>,
 }
 
-impl ParseContext {
-    pub(crate) fn new(max_depth: usize) -> Self {
+/// The line containing the last position computed. Parsing moves forward, so counting
+/// newlines from here makes computing every position O(input) in total.
+#[derive(Debug, Clone, Copy)]
+struct LineCursor {
+    offset: usize,
+    line: u32,
+    line_start: usize,
+}
+
+impl LineCursor {
+    const START: Self = Self {
+        offset: 0,
+        line: 1,
+        line_start: 0,
+    };
+}
+
+impl<'i> ParseContext<'i> {
+    /// `input` is the document being parsed; strings borrowed from it get positions.
+    pub(crate) fn new(max_depth: usize, input: &'i [u8]) -> Self {
         Self {
             max_depth,
             abort: RefCell::new(None),
             arbitrary_precision: serde_json_arbitrary_precision(),
+            input,
+            lines: Cell::new(LineCursor::START),
+        }
+    }
+
+    /// The position of the opening quote of `text`, a string serde_json borrowed from the
+    /// input. Returns `None` for strings that were unescaped into a separate buffer.
+    pub(crate) fn position_of(&self, text: &str) -> Option<Position> {
+        let base = self.input.as_ptr() as usize;
+        let start = (text.as_ptr() as usize).checked_sub(base)?;
+        if start == 0 || start + text.len() > self.input.len() {
+            return None;
+        }
+        Some(self.position_at(start - 1))
+    }
+
+    fn position_at(&self, offset: usize) -> Position {
+        let mut cursor = self.lines.get();
+        if offset < cursor.offset {
+            cursor = LineCursor::START;
+        }
+        let skipped = &self.input[cursor.offset..offset];
+        let newlines = skipped.iter().filter(|&&b| b == b'\n').count();
+        if newlines > 0 {
+            cursor.line = cursor
+                .line
+                .saturating_add(u32::try_from(newlines).unwrap_or(u32::MAX));
+            let last = skipped
+                .iter()
+                .rposition(|&b| b == b'\n')
+                .expect("counted a newline");
+            cursor.line_start = cursor.offset + last + 1;
+        }
+        cursor.offset = offset;
+        self.lines.set(cursor);
+        // Columns count characters: every byte that is not a UTF-8 continuation byte.
+        let column = self.input[cursor.line_start..offset]
+            .iter()
+            .filter(|&&b| b & 0xC0 != 0x80)
+            .count()
+            + 1;
+        Position {
+            line: cursor.line,
+            column: u32::try_from(column).unwrap_or(u32::MAX),
         }
     }
 
@@ -622,9 +887,47 @@ impl ParseContext {
 }
 
 /// Deserializes a [`Node`] at `depth`, rejecting duplicate keys and excessive nesting.
+///
+/// Values introduced by an object key get the key's position; strings in arrays get their own.
 pub(crate) struct NodeSeed<'c> {
-    pub(crate) ctx: &'c ParseContext,
+    pub(crate) ctx: &'c ParseContext<'c>,
     pub(crate) depth: usize,
+}
+
+/// Deserializes an object key with its position, when serde_json borrowed it from the input.
+pub(crate) struct KeySeed<'c> {
+    pub(crate) ctx: &'c ParseContext<'c>,
+}
+
+impl<'de> DeserializeSeed<'de> for KeySeed<'_> {
+    type Value = (String, Option<Position>);
+
+    fn deserialize<D: de::Deserializer<'de>>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error> {
+        deserializer.deserialize_str(self)
+    }
+}
+
+impl<'de> Visitor<'de> for KeySeed<'_> {
+    type Value = (String, Option<Position>);
+
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("an object key")
+    }
+
+    fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E> {
+        Ok((v.to_owned(), self.ctx.position_of(v)))
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E> {
+        Ok((v.to_owned(), None))
+    }
+
+    fn visit_string<E>(self, v: String) -> Result<Self::Value, E> {
+        Ok((v, None))
+    }
 }
 
 impl<'de> DeserializeSeed<'de> for NodeSeed<'_> {
@@ -655,33 +958,37 @@ impl<'de> Visitor<'de> for NodeSeed<'_> {
     }
 
     fn visit_unit<E>(self) -> Result<Node, E> {
-        Ok(Node::Null)
+        Ok(Node::null())
     }
 
     fn visit_bool<E>(self, v: bool) -> Result<Node, E> {
-        Ok(Node::Bool(v))
+        Ok(Node::from(v))
     }
 
     fn visit_i64<E>(self, v: i64) -> Result<Node, E> {
-        Ok(Node::Number(Number::from(v)))
+        Ok(Node::from(Number::from(v)))
     }
 
     fn visit_u64<E>(self, v: u64) -> Result<Node, E> {
-        Ok(Node::Number(Number::from(v)))
+        Ok(Node::from(Number::from(v)))
     }
 
     fn visit_f64<E: de::Error>(self, v: f64) -> Result<Node, E> {
         Number::from_f64(v)
-            .map(Node::Number)
+            .map(Node::from)
             .ok_or_else(|| E::custom("non-finite number"))
     }
 
+    fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Node, E> {
+        Ok(Node::from(v).with_position(self.ctx.position_of(v)))
+    }
+
     fn visit_str<E>(self, v: &str) -> Result<Node, E> {
-        Ok(Node::String(v.to_owned()))
+        Ok(Node::from(v))
     }
 
     fn visit_string<E>(self, v: String) -> Result<Node, E> {
-        Ok(Node::String(v))
+        Ok(Node::from(v))
     }
 
     fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Node, A::Error> {
@@ -690,38 +997,42 @@ impl<'de> Visitor<'de> for NodeSeed<'_> {
         while let Some(value) = seq.next_element_seed(NodeSeed { ..child })? {
             out.push(value);
         }
-        Ok(Node::Array(out))
+        Ok(Node::from(out))
     }
 
     fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Node, A::Error> {
-        let Some(first) = map.next_key::<String>()? else {
+        let ctx = self.ctx;
+        let Some((first, first_position)) = map.next_key_seed(KeySeed { ctx })? else {
             self.child::<A::Error>()?;
-            return Ok(Node::Object(NodeObject::default()));
+            return Ok(Node::from(NodeObject::default()));
         };
         if self.ctx.arbitrary_precision && first == ARBITRARY_PRECISION_TOKEN {
             // serde_json's arbitrary_precision number protocol: one entry holding the number's
             // source text. This is a scalar, so it does not count toward the depth limit.
             let text = map.next_value::<String>()?;
-            return parse_number_text(&text).map(Node::Number);
+            return parse_number_text(&text).map(Node::from);
         }
         let child = self.child()?;
         let mut out = IndexMap::new();
-        let mut key = Some(first);
-        while let Some(k) = key {
+        let mut key = Some((first, first_position));
+        while let Some((k, position)) = key {
             if out.contains_key(&k) {
                 return Err(self.ctx.fail(ParseAbort::DuplicateKey(k)));
             }
-            let value = map.next_value_seed(NodeSeed { ..child })?;
+            let value = map
+                .next_value_seed(NodeSeed { ..child })?
+                .with_position(position);
             out.insert(k, value);
-            key = map.next_key::<String>()?;
+            key = map.next_key_seed(KeySeed { ctx })?;
         }
-        Ok(Node::Object(NodeObject(out)))
+        // An object without a key of its own (an array element) is positioned at its first key.
+        Ok(Node::from(NodeObject(out)).with_position(first_position))
     }
 }
 
 #[cfg(test)]
 pub(crate) fn parse_node(json: &str) -> Result<Node, serde_json::Error> {
-    let ctx = ParseContext::new(64);
+    let ctx = ParseContext::new(64, json.as_bytes());
     let mut de = serde_json::Deserializer::from_str(json);
     let node = NodeSeed {
         ctx: &ctx,
@@ -773,7 +1084,7 @@ mod tests {
         arbitrary_precision: bool,
         entries: &[(&str, &str)],
     ) -> Result<Node, String> {
-        let mut ctx = ParseContext::new(64);
+        let mut ctx = ParseContext::new(64, &[]);
         ctx.arbitrary_precision = arbitrary_precision;
         let map = de::value::MapDeserializer::<_, de::value::Error>::new(
             entries.iter().map(|(k, v)| (k.to_string(), v.to_string())),
@@ -834,7 +1145,7 @@ mod tests {
 
     #[test]
     fn depth_limit() {
-        let ctx = ParseContext::new(3);
+        let ctx = ParseContext::new(3, b"[[[[1]]]]");
         let mut de = serde_json::Deserializer::from_str("[[[[1]]]]");
         assert!(NodeSeed {
             ctx: &ctx,
@@ -843,7 +1154,7 @@ mod tests {
         .deserialize(&mut de)
         .is_err());
         assert_eq!(*ctx.abort.borrow(), Some(ParseAbort::DepthLimit(3)));
-        let ctx = ParseContext::new(3);
+        let ctx = ParseContext::new(3, b"[[[1]]]");
         let mut de = serde_json::Deserializer::from_str("[[[1]]]");
         assert!(NodeSeed {
             ctx: &ctx,
@@ -851,6 +1162,25 @@ mod tests {
         }
         .deserialize(&mut de)
         .is_ok());
+    }
+
+    #[test]
+    fn locations_are_assigned_and_ignored_by_equality() {
+        let mut node = parse_node(r#"{"a/b":[1,{"c":true}]}"#).unwrap();
+        let plain = node.clone();
+        node.assign_locations(&Arc::from("m.json"), &mut String::from("/metadata/x"), None);
+        let nested = node.pointer("/a~1b/1/c").unwrap();
+        assert_eq!(nested.source_location().source(), "m.json");
+        assert_eq!(
+            nested.source_location().pointer(),
+            Some("/metadata/x/a~1b/1/c")
+        );
+        assert_eq!(node.source_location().pointer(), Some("/metadata/x"));
+        assert_eq!(node, plain);
+        assert_eq!(hash_of(&node), hash_of(&plain));
+        let err = nested.expect_str().unwrap_err();
+        assert_eq!(err.source_location(), nested.source_location());
+        assert!(plain.source_location().is_none());
     }
 
     #[test]
@@ -871,7 +1201,7 @@ mod tests {
     fn pointers_and_accessors() {
         let n = parse_node(r#"{"a/b":{"~x":[10,true,null]}}"#).unwrap();
         assert_eq!(n.pointer(""), Some(&n));
-        assert_eq!(n.pointer("/a~1b/~0x/1"), Some(&Node::Bool(true)));
+        assert_eq!(n.pointer("/a~1b/~0x/1"), Some(&Node::from(true)));
         assert!(n.pointer("/a~1b/~0x/01").is_none());
         assert!(n.pointer("/a~1b/~2").is_none());
         assert!(n.pointer("a").is_none());
@@ -883,18 +1213,18 @@ mod tests {
 
     fn arb_node() -> impl Strategy<Value = Node> {
         let leaf = prop_oneof![
-            Just(Node::Null),
-            any::<bool>().prop_map(Node::Bool),
+            Just(Node::null()),
+            any::<bool>().prop_map(Node::from),
             any::<i64>().prop_map(Node::from),
             any::<u64>().prop_map(Node::from),
-            (-1e300f64..1e300).prop_map(|f| Node::Number(Number::from_f64(f).unwrap())),
-            ".{0,8}".prop_map(Node::String),
+            (-1e300f64..1e300).prop_map(|f| Node::from(Number::from_f64(f).unwrap())),
+            ".{0,8}".prop_map(Node::from),
         ];
         leaf.prop_recursive(4, 32, 6, |inner| {
             prop_oneof![
-                prop::collection::vec(inner.clone(), 0..6).prop_map(Node::Array),
+                prop::collection::vec(inner.clone(), 0..6).prop_map(Node::from),
                 prop::collection::vec(("[a-c]{0,2}", inner), 0..6)
-                    .prop_map(|entries| Node::Object(entries.into_iter().collect())),
+                    .prop_map(|entries| Node::from(entries.into_iter().collect::<NodeObject>())),
             ]
         })
     }
