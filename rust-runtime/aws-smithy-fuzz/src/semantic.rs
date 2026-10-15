@@ -10,24 +10,8 @@
 //! encoding choices (definite versus indefinite lengths, integer widths, map entry order), or the order of
 //! differently-named XML sibling elements.
 //!
-//! Set `SMITHY_FUZZ_IGNORE_UNROUTED` when the first target serves one protocol and the others serve more, to
-//! accept the two differences that follow from that alone:
-//! - A request the first target does not route to an operation: another target may route it through a
-//!   protocol the first one does not serve.
-//! - A request the first target rejects before invoking a handler and another target does not route: a
-//!   multi-protocol server that finds no protocol to claim a request cannot frame the rejection the way
-//!   the single protocol does.
-//!
-//! A request whose handler the first target invokes must still reach the same handler in every target,
-//! except for the explicitly recorded X1 XML lookup without Content-Type.
-//!
-//! In semantic mode, F1 corrupt initial event-stream rejections, strict-claim
-//! rejections and deferred CBOR routing errors are
-//! classified separately as expected compatibility divergences. F1 and deferred CBOR
-//! cases require rejection before either handler runs. X1 permits the recorded legacy
-//! lookup handler to run; the candidate must still return the exact neutral rejection.
-//! F3 permits only the recorded XML modeled event-error decoding difference with
-//! unchanged successful HTTP responses; server-error responses remain failures.
+//! Routing differences and recognized compatibility regressions remain failures.
+//! Classifiers supply diagnostic labels only and never change agreement.
 
 use aws_smithy_fuzz::{FuzzResult, HttpRequest};
 use cbor_diag::DataItem;
@@ -39,27 +23,17 @@ fn enabled() -> bool {
     *ENABLED.get_or_init(|| std::env::var_os("SMITHY_FUZZ_SEMANTIC_COMPARE").is_some())
 }
 
-fn ignore_unrouted() -> bool {
-    static ENABLED: OnceLock<bool> = OnceLock::new();
-    *ENABLED.get_or_init(|| std::env::var_os("SMITHY_FUZZ_IGNORE_UNROUTED").is_some())
-}
-
 /// Whether the target rejected the request in routing: no handler ran, and the status is the router's.
 fn unrouted(result: &FuzzResult) -> bool {
     result.input.is_none() && matches!(result.response.status, 404 | 405)
 }
 
-/// Whether the target rejected the request as the client's fault before any handler ran.
-fn rejected(result: &FuzzResult) -> bool {
-    result.input.is_none() && (400..500).contains(&result.response.status)
-}
-
 /// Whether a target's result for a request agrees with the first target's result for it.
 pub(crate) fn results_agree(a: &FuzzResult, b: &FuzzResult) -> bool {
-    compare_results(a, b, enabled(), ignore_unrouted())
+    compare_results(a, b, enabled())
 }
 
-/// Gives the reason for a narrowly recognized intentional compatibility difference.
+/// Gives a diagnostic label for a narrowly recognized compatibility regression.
 /// `baseline` is always the first (legacy) target, never whichever result is compared first.
 pub(crate) fn expected_compatibility_divergence(
     request: &HttpRequest,
@@ -69,46 +43,10 @@ pub(crate) fn expected_compatibility_divergence(
     enabled()
         .then(|| {
             classify_initial_frame_divergence(request, baseline, candidate)
-                .or_else(|| classify_xml_missing_content_type(request, baseline, candidate))
                 .or_else(|| classify_xml_event_error(request, baseline, candidate))
                 .or_else(|| classify_claim_divergence(request, baseline, candidate))
         })
         .flatten()
-}
-
-/// X1 is deliberately limited to the live-verified Pokemon lookup, not arbitrary lost dispatch.
-fn classify_xml_missing_content_type(
-    request: &HttpRequest,
-    baseline: &FuzzResult,
-    candidate: &FuzzResult,
-) -> Option<&'static str> {
-    let path = request.uri.split('?').next()?;
-    let species = path.strip_prefix("/pokemon-species/")?;
-    if request.method != "GET"
-        || species.is_empty()
-        || species.contains('/')
-        || !request.body.is_empty()
-        || request
-            .headers
-            .keys()
-            .any(|name| name.eq_ignore_ascii_case("content-type"))
-        || !baseline
-            .input
-            .as_deref()
-            .is_some_and(|input| input.starts_with("GetPokemonSpeciesInput {"))
-        || !matches!(baseline.response.status, 200 | 404)
-        || !valid_content_length(baseline)
-        || !valid_content_length(candidate)
-        || headers(&baseline.response.headers).get("content-type") != Some(&"application/xml")
-        || canonical_xml(&baseline.response.body).is_none()
-        || candidate.input.is_some()
-        || candidate.response.status != 404
-        || candidate.response.body != b"<UnknownOperationException/>\n"
-        || !headers(&candidate.response.headers).is_empty()
-    {
-        return None;
-    }
-    Some("X1: restXml Pokemon lookup without Content-Type; strict claiming declines the legacy request")
 }
 
 /// F3: only the recorded single XML exception and its exact handler difference.
@@ -177,9 +115,7 @@ fn classify_xml_event_error(
     {
         return None;
     }
-    Some(
-        "F3: restXml modeled event-error framing; preserve schema shape-root encoding and decoding",
-    )
+    Some("F3: restXml modeled event-error framing differs from legacy")
 }
 
 fn classify_initial_frame_divergence(
@@ -333,10 +269,7 @@ fn classify_claim_divergence(
     })
 }
 
-fn compare_results(a: &FuzzResult, b: &FuzzResult, semantic: bool, ignore_routing: bool) -> bool {
-    if ignore_routing && rejected(a) && (unrouted(b) || (unrouted(a) && rejected(b))) {
-        return true;
-    }
+fn compare_results(a: &FuzzResult, b: &FuzzResult, semantic: bool) -> bool {
     if !semantic {
         return a.response == b.response;
     }
@@ -609,12 +542,13 @@ mod tests {
             "deferred CBOR routing rejection: serialized unknown-operation 404 instead of legacy empty 404"
         ));
         for expected in [&neutral, &cbor] {
+            assert!(!super::compare_results(&baseline, expected, true));
             let mut accepted = baseline.clone();
             accepted.input = Some("handler ran".into());
             accepted.response.status = 200;
             assert_eq!(classify(&accepted, expected), None);
             // Historical routing suppression must not hide lost handler dispatch either.
-            assert!(!super::compare_results(&accepted, expected, true, true));
+            assert!(!super::compare_results(&accepted, expected, true));
             for status in [200, 400, 403, 405, 500] {
                 let mut wrong = expected.clone();
                 wrong.response.status = status;
@@ -653,16 +587,17 @@ mod tests {
     }
 
     #[test]
-    fn xml_claim_divergence_contract() {
+    fn lost_headerless_xml_dispatch_is_a_compatibility_failure() {
         let cases: serde_json::Value =
             serde_json::from_str(include_str!("../tests/xml-claim-divergences.json")).unwrap();
         for case in cases.as_array().unwrap() {
-            let request = serde_json::from_value(case["request"].clone()).unwrap();
+            if !case["known"].as_bool().unwrap() {
+                continue;
+            }
             let baseline = serde_json::from_value(case["baseline"].clone()).unwrap();
             let candidate = serde_json::from_value(case["candidate"].clone()).unwrap();
-            assert_eq!(
-                super::classify_xml_missing_content_type(&request, &baseline, &candidate).is_some(),
-                case["known"].as_bool().unwrap(),
+            assert!(
+                !super::compare_results(&baseline, &candidate, true),
                 "{}",
                 case["name"]
             );
@@ -684,6 +619,13 @@ mod tests {
                 "{}",
                 case["name"]
             );
+            if case["known"].as_bool().unwrap() {
+                assert!(
+                    !super::compare_results(&baseline, &candidate, true),
+                    "{}",
+                    case["name"]
+                );
+            }
         }
     }
 
@@ -701,6 +643,13 @@ mod tests {
                 "{}",
                 case["name"]
             );
+            if case["known"].as_bool().unwrap() {
+                assert!(
+                    !super::compare_results(&baseline, &candidate, true),
+                    "{}",
+                    case["name"]
+                );
+            }
         }
     }
 
@@ -712,13 +661,13 @@ mod tests {
             let a = serde_json::from_value(case["a"].clone()).unwrap();
             let b = serde_json::from_value(case["b"].clone()).unwrap();
             assert_eq!(
-                super::compare_results(&a, &b, true, false),
+                super::compare_results(&a, &b, true),
                 case["agree"].as_bool().unwrap(),
                 "{}",
                 case["name"]
             );
             assert_eq!(
-                super::compare_results(&a, &b, false, false),
+                super::compare_results(&a, &b, false),
                 a.response == b.response
             );
         }

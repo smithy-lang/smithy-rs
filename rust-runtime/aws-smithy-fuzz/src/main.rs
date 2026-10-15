@@ -873,7 +873,7 @@ fn replay(
                     } => {
                         f.pad(result)?;
                         if let Some(reason) = expected_divergence {
-                            write!(f, "\nExpected compatibility divergence: {reason}")?;
+                            write!(f, "\nRecognized compatibility regression: {reason}")?;
                         }
                         Ok(())
                     }
@@ -987,13 +987,14 @@ fn enter_fuzz_loop(libraries: Vec<FuzzTarget>, mut log: Option<BufWriter<fs::Fil
                             result,
                         ) {
                             if let Some(log) = &mut log {
-                                writeln!(log, "expected compatibility divergence: {reason}")
+                                writeln!(log, "recognized compatibility regression: {reason}")
                                     .unwrap();
                             }
-                            continue;
                         }
                         if check_for_nondeterminism(data, &libraries) {
-                            break;
+                            eprintln!(
+                                "comparison also produced nondeterministic results on replay"
+                            );
                         }
                         panic!("inconsistent results: {:#?}", results);
                     }
