@@ -429,7 +429,7 @@ class ServerSchemaGenerator(
                     val elementWrite = elementWriteExpr(target, memberSchemaRef, elementTarget, "item")
                     if (isSparse) {
                         """
-                        ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                        ser.write_list_with_length(&$memberSchemaRef, (${iterSource(target, varName)}).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                             for item in ${iterSource(target, varName)} {
                                 match item {
                                     Some(item) => { $elementWrite }
@@ -441,7 +441,7 @@ class ServerSchemaGenerator(
                         """
                     } else {
                         """
-                        ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                        ser.write_list_with_length(&$memberSchemaRef, (${iterSource(target, varName)}).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                             for item in ${iterSource(target, varName)} {
                                 $elementWrite
                             }
@@ -467,7 +467,7 @@ class ServerSchemaGenerator(
                     val valueWrite = mapValueWriteExpr(target, memberSchemaRef, valueTarget, "value")
                     if (isSparse) {
                         """
-                        ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                        ser.write_map_with_length(&$memberSchemaRef, (${iterSource(target, varName)}).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                             for (key, value) in ${iterSource(target, varName)} {
                                 ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
                                 match value {
@@ -480,7 +480,7 @@ class ServerSchemaGenerator(
                         """
                     } else {
                         """
-                        ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                        ser.write_map_with_length(&$memberSchemaRef, (${iterSource(target, varName)}).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                             for (key, value) in ${iterSource(target, varName)} {
                                 ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
                                 $valueWrite
@@ -546,9 +546,13 @@ class ServerSchemaGenerator(
                 val isSparse = target.hasTrait(SparseTrait::class.java)
                 val elementTarget = model.expectShape(target.member.target)
                 val elementWrite = elementWriteExpr(target, memberSchemaRef, elementTarget, "item")
-                if (isSparse) {
+                // The helper takes &[i32]. Check the resolved member type so
+                // constrained integer newtypes retain the generic serializer.
+                if (!isSparse && symbolProvider.toSymbol(target.member).rustType() == RustType.Integer(32)) {
+                    "ser.write_integer_list(&$memberSchemaRef, ${iterSource(target, "val")})?;"
+                } else if (isSparse) {
                     """
-                    ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_list_with_length(&$memberSchemaRef, (${iterSource(target, "val")}).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for item in ${iterSource(target, "val")} {
                             match item {
                                 Some(item) => { $elementWrite }
@@ -560,7 +564,7 @@ class ServerSchemaGenerator(
                     """
                 } else {
                     """
-                    ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_list_with_length(&$memberSchemaRef, (${iterSource(target, "val")}).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for item in ${iterSource(target, "val")} {
                             $elementWrite
                         }
@@ -578,7 +582,7 @@ class ServerSchemaGenerator(
                 val valueWrite = mapValueWriteExpr(target, memberSchemaRef, valueTarget, "value")
                 if (isSparse) {
                     """
-                    ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_map_with_length(&$memberSchemaRef, (${iterSource(target, "val")}).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for (key, value) in ${iterSource(target, "val")} {
                             ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
                             match value {
@@ -591,7 +595,7 @@ class ServerSchemaGenerator(
                     """
                 } else {
                     """
-                    ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_map_with_length(&$memberSchemaRef, (${iterSource(target, "val")}).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for (key, value) in ${iterSource(target, "val")} {
                             ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
                             $valueWrite
@@ -671,7 +675,7 @@ class ServerSchemaGenerator(
                 val valueWrite = mapValueWriteExpr(target, nextRef, valueTarget, "value")
                 if (isSparse) {
                     """
-                    ser.write_map($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_map_with_length($schemaExpr, (${iterSource(target, varName)}).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for (key, value) in ${iterSource(target, varName)} {
                             ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
                             match value {
@@ -684,7 +688,7 @@ class ServerSchemaGenerator(
                     """
                 } else {
                     """
-                    ser.write_map($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_map_with_length($schemaExpr, (${iterSource(target, varName)}).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for (key, value) in ${iterSource(target, varName)} {
                             ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
                             $valueWrite
@@ -708,7 +712,7 @@ class ServerSchemaGenerator(
                 val elementWrite = elementWriteExpr(target, nextRef, elementTarget, "item")
                 if (isSparse) {
                     """
-                    ser.write_list($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_list_with_length($schemaExpr, (${iterSource(target, varName)}).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for item in ${iterSource(target, varName)} {
                             match item {
                                 Some(item) => { $elementWrite }
@@ -720,7 +724,7 @@ class ServerSchemaGenerator(
                     """
                 } else {
                     """
-                    ser.write_list($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_list_with_length($schemaExpr, (${iterSource(target, varName)}).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for item in ${iterSource(target, varName)} {
                             $elementWrite
                         }
@@ -801,7 +805,7 @@ class ServerSchemaGenerator(
                 val innerValueWrite = mapValueWriteExpr(target, nextRef, valueTarget, "value")
                 if (isSparse) {
                     """
-                    ser.write_map($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_map_with_length($schemaExpr, (${iterSource(target, varName)}).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for (key, value) in ${iterSource(target, varName)} {
                             ser.write_string(&$prelude::STRING, $keyExpr)?;
                             match value {
@@ -814,7 +818,7 @@ class ServerSchemaGenerator(
                     """
                 } else {
                     """
-                    ser.write_map($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_map_with_length($schemaExpr, (${iterSource(target, varName)}).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for (key, value) in ${iterSource(target, varName)} {
                             ser.write_string(&$prelude::STRING, $keyExpr)?;
                             $innerValueWrite
@@ -838,7 +842,7 @@ class ServerSchemaGenerator(
                 val elementWrite = elementWriteExpr(target, nextRef, elementTarget, "item")
                 if (isSparse) {
                     """
-                    ser.write_list($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_list_with_length($schemaExpr, (${iterSource(target, varName)}).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for item in ${iterSource(target, varName)} {
                             match item {
                                 Some(item) => { $elementWrite }
@@ -850,7 +854,7 @@ class ServerSchemaGenerator(
                     """
                 } else {
                     """
-                    ser.write_list($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_list_with_length($schemaExpr, (${iterSource(target, varName)}).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for item in ${iterSource(target, varName)} {
                             $elementWrite
                         }

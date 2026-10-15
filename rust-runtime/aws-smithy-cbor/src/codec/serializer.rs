@@ -41,6 +41,7 @@ pub struct CborSerializer {
     encoder: crate::Encoder,
     container_stack: Vec<Container>,
     struct_prefix: Option<StructPrefix>,
+    use_definite_lengths: bool,
 }
 
 impl CborSerializer {
@@ -49,7 +50,13 @@ impl CborSerializer {
             encoder: crate::Encoder::new(Vec::new()),
             container_stack: Vec::new(),
             struct_prefix: None,
+            use_definite_lengths: false,
         }
+    }
+
+    pub(crate) fn with_definite_lengths(mut self, value: bool) -> Self {
+        self.use_definite_lengths = value;
+        self
     }
 
     /// Installs a callback that writes members into each currently open structure
@@ -126,6 +133,40 @@ impl ShapeSerializer for CborSerializer {
         Ok(())
     }
 
+    fn write_list_with_length(
+        &mut self,
+        schema: &Schema<'_>,
+        length: usize,
+        write_elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        if !self.use_definite_lengths {
+            return self.write_list(schema, write_elements);
+        }
+        self.write_member_key(schema);
+        self.encoder.array(length);
+        self.container_stack.push(Container::List);
+        let result = write_elements(self);
+        self.container_stack.pop();
+        result
+    }
+
+    fn write_map_with_length(
+        &mut self,
+        schema: &Schema<'_>,
+        length: usize,
+        write_entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        if !self.use_definite_lengths {
+            return self.write_map(schema, write_entries);
+        }
+        self.write_member_key(schema);
+        self.encoder.map(length);
+        self.container_stack.push(Container::Map);
+        let result = write_entries(self);
+        self.container_stack.pop();
+        result
+    }
+
     fn write_boolean(&mut self, schema: &Schema<'_>, value: bool) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.boolean(value);
@@ -147,6 +188,28 @@ impl ShapeSerializer for CborSerializer {
     fn write_integer(&mut self, schema: &Schema<'_>, value: i32) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.integer(value);
+        Ok(())
+    }
+
+    fn write_integer_list(
+        &mut self,
+        schema: &Schema<'_>,
+        values: &[i32],
+    ) -> Result<(), SerdeError> {
+        self.write_member_key(schema);
+        if self.use_definite_lengths {
+            self.encoder.array(values.len());
+        } else {
+            self.encoder.begin_array();
+        }
+        // Integer writes cannot fail or call back into the serializer, so
+        // neither per-element dispatch nor a new container state is needed.
+        for value in values {
+            self.encoder.integer(*value);
+        }
+        if !self.use_definite_lengths {
+            self.encoder.end();
+        }
         Ok(())
     }
 
@@ -343,6 +406,223 @@ mod tests {
         assert_eq!(dec.integer().unwrap(), 1);
         assert_eq!(dec.integer().unwrap(), 2);
         assert_eq!(dec.integer().unwrap(), 3);
+    }
+
+    #[test]
+    fn known_collection_lengths_are_opt_in() {
+        let schema = Schema::new(shape_id!("test", "List"), ShapeType::List);
+        for (enabled, expected) in [
+            (false, vec![0x9f, 1, 2, 3, 0xff]),
+            (true, vec![0x83, 1, 2, 3]),
+        ] {
+            let codec = CborCodec::new(
+                crate::codec::CborCodecSettings::default().use_definite_lengths(enabled),
+            );
+            let mut ser = codec.create_serializer();
+            ser.write_integer_list(&schema, &[1, 2, 3]).unwrap();
+            assert_eq!(ser.finish(), expected);
+        }
+    }
+
+    #[test]
+    fn integer_list_helper_matches_generic_writes_in_each_container() {
+        static VALUES: Schema = Schema::new_member(
+            shape_id!("test", "Value", "values"),
+            ShapeType::List,
+            "values",
+            0,
+        );
+        static NESTED: Schema = Schema::new_member(
+            shape_id!("test", "Value", "nested"),
+            ShapeType::List,
+            "nested",
+            1,
+        );
+        static MAP: Schema =
+            Schema::new_member(shape_id!("test", "Value", "map"), ShapeType::Map, "map", 2);
+        static AFTER: Schema = Schema::new_member(
+            shape_id!("test", "Value", "after"),
+            ShapeType::Integer,
+            "after",
+            3,
+        );
+        static VALUE: Schema = Schema::new_struct(
+            shape_id!("test", "Value"),
+            ShapeType::Structure,
+            &[&VALUES, &NESTED, &MAP, &AFTER],
+        );
+
+        struct Value<'a> {
+            values: &'a [i32],
+            helper: bool,
+        }
+        impl Value<'_> {
+            fn write_values(
+                &self,
+                ser: &mut dyn ShapeSerializer,
+                schema: &Schema<'_>,
+            ) -> Result<(), SerdeError> {
+                if self.helper {
+                    ser.write_integer_list(schema, self.values)
+                } else {
+                    ser.write_list_with_length(schema, self.values.len(), &|ser| {
+                        for value in self.values {
+                            ser.write_integer(&INTEGER, *value)?;
+                        }
+                        Ok(())
+                    })
+                }
+            }
+        }
+        impl SerializableStruct for Value<'_> {
+            fn schema(&self) -> &Schema<'_> {
+                &VALUE
+            }
+
+            fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                self.write_values(ser, &VALUES)?;
+                ser.write_list_with_length(&NESTED, 1, &|ser| self.write_values(ser, &VALUES))?;
+                ser.write_map_with_length(&MAP, 1, &|ser| {
+                    ser.write_string(&STRING, "key")?;
+                    self.write_values(ser, &VALUES)
+                })?;
+                ser.write_integer(&AFTER, 17)
+            }
+        }
+
+        let integers = [i32::MIN, -25, -1, 0, 23, 24, i32::MAX];
+        for enabled in [false, true] {
+            let codec = CborCodec::new(
+                crate::codec::CborCodecSettings::default().use_definite_lengths(enabled),
+            );
+            for length in [0, 1, 23, 24, 255, 256] {
+                let values: Vec<_> = integers.into_iter().cycle().take(length).collect();
+                let mut generic = codec.create_serializer();
+                generic
+                    .write_struct(
+                        &VALUE,
+                        &Value {
+                            values: &values,
+                            helper: false,
+                        },
+                    )
+                    .unwrap();
+                let mut helper = codec.create_serializer();
+                helper
+                    .write_struct(
+                        &VALUE,
+                        &Value {
+                            values: &values,
+                            helper: true,
+                        },
+                    )
+                    .unwrap();
+                assert_eq!(
+                    helper.finish(),
+                    generic.finish(),
+                    "enabled={enabled}, length={length}"
+                );
+
+                // Independently compare the top-level array with the direct encoder.
+                let mut helper = codec.create_serializer();
+                helper.write_integer_list(&VALUES, &values).unwrap();
+                let mut encoder = crate::Encoder::new(Vec::new());
+                if enabled {
+                    encoder.array(length);
+                } else {
+                    encoder.begin_array();
+                }
+                for value in &values {
+                    encoder.integer(*value);
+                }
+                if !enabled {
+                    encoder.end();
+                }
+                assert_eq!(helper.finish(), encoder.into_writer());
+            }
+        }
+    }
+
+    #[test]
+    fn definite_collections_match_legacy_encoder_at_length_boundaries() {
+        let list = Schema::new(shape_id!("test", "List"), ShapeType::List);
+        let map = Schema::new(shape_id!("test", "Map"), ShapeType::Map);
+        let codec =
+            CborCodec::new(crate::codec::CborCodecSettings::default().use_definite_lengths(true));
+        for length in [0, 1, 23, 24, 255, 256] {
+            let mut ser = codec.create_serializer();
+            ser.write_list_with_length(&list, length, &|ser| {
+                for _ in 0..length {
+                    ser.write_null(&STRING)?;
+                }
+                Ok(())
+            })
+            .unwrap();
+            let mut legacy = crate::Encoder::new(Vec::new());
+            legacy.array(length);
+            for _ in 0..length {
+                legacy.null();
+            }
+            assert_eq!(ser.finish(), legacy.into_writer());
+
+            let mut ser = codec.create_serializer();
+            ser.write_map_with_length(&map, length, &|ser| {
+                for i in 0..length {
+                    ser.write_string(&STRING, &i.to_string())?;
+                    ser.write_null(&STRING)?;
+                }
+                Ok(())
+            })
+            .unwrap();
+            let mut legacy = crate::Encoder::new(Vec::new());
+            legacy.map(length);
+            for i in 0..length {
+                legacy.str(&i.to_string()).null();
+            }
+            assert_eq!(ser.finish(), legacy.into_writer());
+        }
+    }
+
+    #[test]
+    fn definite_nested_collections_preserve_keys_and_unknown_lengths() {
+        static VALUES: Schema = Schema::new_member(
+            shape_id!("test", "Value", "values"),
+            ShapeType::List,
+            "values",
+            0,
+        );
+        static MAP: Schema = Schema::new(shape_id!("test", "Map"), ShapeType::Map);
+        static VALUE: Schema =
+            Schema::new_struct(shape_id!("test", "Value"), ShapeType::Structure, &[&VALUES]);
+        struct Value;
+        impl SerializableStruct for Value {
+            fn schema(&self) -> &Schema<'_> {
+                &VALUE
+            }
+            fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                ser.write_list_with_length(&VALUES, 2, &|ser| {
+                    ser.write_map_with_length(&MAP, 1, &|ser| {
+                        ser.write_string(&STRING, "key")?;
+                        ser.write_null(&STRING)
+                    })?;
+                    ser.write_list(&VALUES, &|ser| ser.write_integer(&INTEGER, 7))
+                })
+            }
+        }
+        let codec =
+            CborCodec::new(crate::codec::CborCodecSettings::default().use_definite_lengths(true));
+        let mut ser = codec.create_serializer();
+        ser.write_struct(&VALUE, &Value).unwrap();
+        let mut legacy = crate::Encoder::new(Vec::new());
+        legacy
+            .begin_map()
+            .str("values")
+            .array(2)
+            .map(1)
+            .str("key")
+            .null();
+        legacy.begin_array().integer(7).end().end();
+        assert_eq!(ser.finish(), legacy.into_writer());
     }
 
     #[test]

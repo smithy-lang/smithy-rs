@@ -59,7 +59,9 @@ pub(crate) struct RpcV2CborSerde(CborCodec);
 impl Default for RpcV2CborSerde {
     fn default() -> Self {
         Self(CborCodec::new(
-            aws_smithy_cbor::codec::CborCodecSettings::default().enforce_strictness(true),
+            aws_smithy_cbor::codec::CborCodecSettings::default()
+                .enforce_strictness(true)
+                .use_definite_lengths(true),
         ))
     }
 }
