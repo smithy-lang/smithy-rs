@@ -59,6 +59,7 @@ object CrateSet {
             "aws-smithy-async",
             "aws-smithy-cbor",
             "aws-smithy-checksums",
+            "aws-smithy-client-metrics",
             "aws-smithy-compression",
             "aws-smithy-dns",
             "aws-smithy-eventstream",

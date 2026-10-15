@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 
 const CRATES_TO_BE_USED_DIRECTLY: &[&str] = [
     "aws-config",
+    "aws-smithy-client-metrics",
     "aws-smithy-types-convert",
     "aws-smithy-mocks",
     "aws-smithy-mocks-experimental",

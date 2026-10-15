@@ -6,3 +6,5 @@ aws-smithy-http-client -> chacha20
 aws-smithy-runtime -> chacha20
 aws-smithy-dns -> chacha20
 aws-smithy-cbor -> minicbor-derive
+aws-smithy-client-metrics -> allocator-api2
+aws-smithy-client-metrics -> chacha20
