@@ -512,18 +512,8 @@ class ServerSchemaGenerator(
         memberSchemaRef: String,
         member: software.amazon.smithy.model.shapes.MemberShape? = null,
     ): String {
-        // For @httpPayload struct/union members, pass the target's own SCHEMA so
-        // codecs use its proper name (with @xmlName, etc.) instead of the member
-        // schema's member_name. JSON output is unchanged (no member_name → no
-        // field-key prefix); XML now emits the correct root element name.
-        val isHttpPayload =
-            member?.hasTrait(software.amazon.smithy.model.traits.HttpPayloadTrait::class.java) == true
-        val structSchemaRef =
-            if (isHttpPayload) {
-                "${symbolProvider.toSymbol(target).fullName}::SCHEMA"
-            } else {
-                "&$memberSchemaRef"
-            }
+        // Keep the member schema even for @httpPayload: RPC codecs need its field key.
+        // The REST splitter selects the target schema when the value is the whole body.
         return when (target) {
             is BooleanShape -> "ser.write_boolean(&$memberSchemaRef, *val)?;"
             is ByteShape -> "ser.write_byte(&$memberSchemaRef, ${numberValueExpr(target, "val")})?;"
@@ -616,8 +606,8 @@ class ServerSchemaGenerator(
                 }
             }
 
-            is StructureShape -> "ser.write_struct($structSchemaRef, val)?;"
-            is UnionShape -> "ser.write_struct($structSchemaRef, val)?;"
+            is StructureShape -> "ser.write_struct(&$memberSchemaRef, val)?;"
+            is UnionShape -> "ser.write_struct(&$memberSchemaRef, val)?;"
             else -> "todo!(\"schema: unsupported shape type for serialization\");"
         }
     }
